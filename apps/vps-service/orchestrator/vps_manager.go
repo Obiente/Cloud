@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	"github.com/moby/moby/client"
+	"gorm.io/gorm"
 )
 
 // LogWriter is an interface for writing provisioning logs
@@ -254,8 +257,8 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		macAddress = generateMACAddress()
 
 		// Request IP allocation from gateway with timeout
-		// Use a separate context with timeout to prevent hanging
-		allocCtx, allocCancel := context.WithTimeout(ctx, 10*time.Second)
+		// Use independent context to avoid HTTP request timeout issues
+		allocCtx, allocCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer allocCancel()
 		
 		logger.Info("[VPSManager] Requesting IP allocation from gateway for VPS %s (MAC: %s)", config.VPSID, macAddress)
@@ -274,15 +277,22 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	}
 
 	// Provision VM via Proxmox API
+	// Use independent context with generous timeout to avoid HTTP request context cancellation
+	// The HTTP request context may have a shorter timeout, but VM creation can take 1-2 minutes
 	writeLog("Creating server...", false)
 	logger.Info("[VPSManager] Starting VM provisioning via Proxmox for VPS %s", config.VPSID)
 	var createResult *CreateVMResult
-	createResult, err = proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication, logWriter)
+	vmCtx, vmCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer vmCancel()
+	createResult, err = proxmoxClient.CreateVM(vmCtx, config, org.AllowInterVMCommunication, logWriter)
 	if err != nil {
 		// If VM creation fails, update VPS status to FAILED and release the allocated IP
 		database.DB.Model(&database.VPSInstance{}).Where("id = ?", config.VPSID).Update("status", 7) // FAILED
 		if vm.gatewayClient != nil && allocatedIP != "" {
-			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
+			// Use independent context for IP release
+			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer releaseCancel()
+			if releaseErr := vm.gatewayClient.ReleaseIP(releaseCtx, config.VPSID); releaseErr != nil {
 				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
 			}
 		}
@@ -292,6 +302,8 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	vmID := createResult.VMID
 	rootPassword := createResult.Password
 	nodeName := createResult.NodeName
+	
+	logger.Info("[VPSManager] Received CreateVMResult: VMID=%s, Password length=%d, NodeName=%s", vmID, len(rootPassword), nodeName)
 
 	// Get actual VM status from Proxmox and map to our status enum
 	vmIDInt := 0
@@ -304,7 +316,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	if nodeName == "" {
 		// Fallback: find the node if not returned (shouldn't happen, but be safe)
 		var err error
-		nodeName, err = proxmoxClient.FindVMNode(ctx, vmIDInt)
+		nodeName, err = proxmoxClient.FindVMNode(vmCtx, vmIDInt)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
 		}
@@ -317,7 +329,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	retryDelay := 500 * time.Millisecond
 	
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		status, statusErr := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
+		status, statusErr := proxmoxClient.GetVMStatus(vmCtx, nodeName, vmIDInt)
 		if statusErr == nil {
 			// Successfully got VM status
 			proxmoxStatus = status
@@ -1441,4 +1453,457 @@ func mapProxmoxStatusToVPSStatus(proxmoxStatus string) int32 {
 		// This handles cases where VM is still initializing
 		return 1 // CREATING
 	}
+}
+
+// ImportVPSResult represents the result of importing a single VPS
+type ImportVPSResult struct {
+	VPS     *database.VPSInstance
+	Error   error
+	Skipped bool // True if VPS was skipped (already exists or doesn't belong to org)
+}
+
+// ImportVPS imports missing VPS instances from Proxmox that belong to the specified organization
+// This function:
+// 1. Lists all VMs from Proxmox
+// 2. Filters by description containing "Managed by Obiente Cloud"
+// 3. Parses VPS ID and Org ID from description
+// 4. Verifies org ID matches the requesting organization (SECURITY: prevents importing VPS from other orgs)
+// 5. Checks if VPS already exists in DB
+// 6. Gets VM config to extract resource specs
+// 7. Imports missing VPS with proper ownership
+func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]ImportVPSResult, error) {
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	// List all VMs from Proxmox
+	logger.Info("[VPSManager] Listing all VMs from Proxmox for import")
+	vms, err := proxmoxClient.ListAllVMsWithDescriptions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list VMs from Proxmox: %w", err)
+	}
+
+	logger.Info("[VPSManager] Found %d VMs in Proxmox, filtering for Obiente Cloud managed VMs", len(vms))
+
+	var results []ImportVPSResult
+	importedCount := 0
+	skippedCount := 0
+
+	// Process each VM
+	for _, proxmoxVM := range vms {
+		// Skip VMs without Obiente Cloud description
+		if !strings.Contains(proxmoxVM.Description, "Managed by Obiente Cloud") {
+			continue
+		}
+
+		// Parse description to extract VPS ID and Org ID
+		vpsID, orgID, displayName, creatorID, ok := parseVPSDescription(proxmoxVM.Description)
+		if !ok {
+			logger.Warn("[VPSManager] Failed to parse VPS description for VM %d: %s", proxmoxVM.VMID, proxmoxVM.Description)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("failed to parse VPS description"),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
+		// SECURITY: Verify organization ID matches (prevents importing VPS from other organizations)
+		if orgID != organizationID {
+			logger.Debug("[VPSManager] Skipping VM %d (VPS %s): belongs to org %s, not %s", proxmoxVM.VMID, vpsID, orgID, organizationID)
+			results = append(results, ImportVPSResult{
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
+		// Check if VPS already exists in database
+		var existingVPS database.VPSInstance
+		err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&existingVPS).Error
+		if err == nil {
+			// VPS already exists, skip
+			logger.Debug("[VPSManager] VPS %s already exists in database, skipping", vpsID)
+			results = append(results, ImportVPSResult{
+				VPS:     &existingVPS,
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// Database error
+			logger.Warn("[VPSManager] Database error checking for VPS %s: %v", vpsID, err)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("database error: %w", err),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
+		// VPS doesn't exist, import it
+		logger.Info("[VPSManager] Importing VPS %s (VM %d) from Proxmox", vpsID, proxmoxVM.VMID)
+
+		// Get VM config to extract resource specifications
+		vmConfig, err := proxmoxClient.GetVMConfig(ctx, proxmoxVM.NodeName, proxmoxVM.VMID)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to get VM config for VM %d: %v", proxmoxVM.VMID, err)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("failed to get VM config: %w", err),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
+		// Extract resource specifications from VM config
+		cpuCores := int32(1)
+		if cores, ok := vmConfig["cores"].(float64); ok {
+			cpuCores = int32(cores)
+		} else if cores, ok := vmConfig["cores"].(int); ok {
+			cpuCores = int32(cores)
+		}
+
+		memoryMB := int64(512)
+		if memory, ok := vmConfig["memory"].(float64); ok {
+			memoryMB = int64(memory)
+		} else if memory, ok := vmConfig["memory"].(int); ok {
+			memoryMB = int64(memory)
+		}
+		memoryBytes := memoryMB * 1024 * 1024
+
+		// Extract disk size from disk configuration
+		diskBytes := int64(20 * 1024 * 1024 * 1024) // Default 20GB
+		for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+			if diskConfig, ok := vmConfig[diskKey].(string); ok && diskConfig != "" {
+				// Parse disk size from config (e.g., "local-lvm:vm-100-disk-0,size=50G")
+				if strings.Contains(diskConfig, "size=") {
+					sizePart := strings.Split(diskConfig, "size=")
+					if len(sizePart) > 1 {
+						sizeStr := strings.TrimSpace(sizePart[1])
+						// Remove any trailing commas or other parameters
+						if idx := strings.Index(sizeStr, ","); idx != -1 {
+							sizeStr = sizeStr[:idx]
+						}
+						// Parse size (e.g., "50G" -> 50 * 1024^3 bytes)
+						var sizeValue float64
+						var unit string
+						if _, err := fmt.Sscanf(sizeStr, "%f%s", &sizeValue, &unit); err == nil {
+							switch strings.ToUpper(unit) {
+							case "G", "GB":
+								diskBytes = int64(sizeValue * 1024 * 1024 * 1024)
+							case "M", "MB":
+								diskBytes = int64(sizeValue * 1024 * 1024)
+							case "T", "TB":
+								diskBytes = int64(sizeValue * 1024 * 1024 * 1024 * 1024)
+							}
+						}
+					}
+				}
+				break // Use first disk found
+			}
+		}
+
+		// Extract region from node name using PROXMOX_REGION_NODES mapping
+		region := ""
+		if proxmoxVM.NodeName != "" {
+			// Parse region-to-node mapping and create reverse lookup (node -> region)
+			// Need to parse the env var directly to handle multiple nodes per region (comma-separated)
+			envValue := os.Getenv("PROXMOX_REGION_NODES")
+			if envValue != "" {
+				// Parse semicolon-separated region mappings
+				regionStrings := strings.Split(envValue, ";")
+				for _, regionStr := range regionStrings {
+					regionStr = strings.TrimSpace(regionStr)
+					if regionStr == "" {
+						continue
+					}
+
+					// Parse "regionID:nodeName" or "regionID:node1,node2" format
+					if strings.Contains(regionStr, ":") {
+						parts := strings.SplitN(regionStr, ":", 2)
+						if len(parts) == 2 {
+							regionID := strings.TrimSpace(parts[0])
+							nodeNamesStr := strings.TrimSpace(parts[1])
+							// Handle comma-separated node names (multiple nodes per region)
+							nodeNames := strings.Split(nodeNamesStr, ",")
+							for _, nodeName := range nodeNames {
+								nodeName = strings.TrimSpace(nodeName)
+								if nodeName == proxmoxVM.NodeName {
+									region = regionID
+									logger.Info("[VPSManager] Mapped node %s to region %s for VPS %s", proxmoxVM.NodeName, region, vpsID)
+									break
+								}
+							}
+							if region != "" {
+								break
+							}
+						}
+					}
+				}
+			}
+			if region == "" {
+				logger.Debug("[VPSManager] No region mapping found for node %s, leaving region empty for VPS %s", proxmoxVM.NodeName, vpsID)
+			}
+		}
+
+		// Extract image by checking templates on the node and matching to known patterns
+		image := int32(0) // VPS_IMAGE_UNSPECIFIED
+		// Try to find templates on the node and match their names to known image patterns
+		// This helps identify which OS template was used to create this VM
+		templatesResp, templatesErr := proxmoxClient.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", proxmoxVM.NodeName), nil)
+		if templatesErr == nil && templatesResp != nil && templatesResp.StatusCode == http.StatusOK {
+			defer templatesResp.Body.Close()
+			var templatesData struct {
+				Data []struct {
+					Vmid     int    `json:"vmid"`
+					Name     string `json:"name"`
+					Template int    `json:"template"`
+				} `json:"data"`
+			}
+			if err := json.NewDecoder(templatesResp.Body).Decode(&templatesData); err == nil {
+				// Check each template to see if it matches known patterns
+				// Template names follow patterns: "ubuntu-22.04-standard", "ubuntu-24.04-standard", etc.
+				for _, tmpl := range templatesData.Data {
+					if tmpl.Template == 1 {
+						templateName := strings.ToLower(tmpl.Name)
+						// Match template names to image enum values
+						if strings.Contains(templateName, "ubuntu-22.04") || strings.Contains(templateName, "ubuntu22.04") {
+							image = 1 // UBUNTU_22_04
+							logger.Info("[VPSManager] Found template '%s' matching UBUNTU_22_04 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						} else if strings.Contains(templateName, "ubuntu-24.04") || strings.Contains(templateName, "ubuntu24.04") {
+							image = 2 // UBUNTU_24_04
+							logger.Info("[VPSManager] Found template '%s' matching UBUNTU_24_04 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						} else if strings.Contains(templateName, "debian-12") || strings.Contains(templateName, "debian12") {
+							image = 3 // DEBIAN_12
+							logger.Info("[VPSManager] Found template '%s' matching DEBIAN_12 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						} else if strings.Contains(templateName, "debian-13") || strings.Contains(templateName, "debian13") {
+							image = 4 // DEBIAN_13
+							logger.Info("[VPSManager] Found template '%s' matching DEBIAN_13 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						} else if strings.Contains(templateName, "rocky") || strings.Contains(templateName, "rockylinux") {
+							image = 5 // ROCKY_LINUX_9
+							logger.Info("[VPSManager] Found template '%s' matching ROCKY_LINUX_9 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						} else if strings.Contains(templateName, "alma") || strings.Contains(templateName, "almalinux") {
+							image = 6 // ALMA_LINUX_9
+							logger.Info("[VPSManager] Found template '%s' matching ALMA_LINUX_9 for VM %d", tmpl.Name, proxmoxVM.VMID)
+							break
+						}
+					}
+				}
+			}
+		}
+		
+		// If we couldn't determine from templates, try VM name as fallback
+		if image == 0 {
+			vmName := strings.ToLower(proxmoxVM.Name)
+			if strings.Contains(vmName, "ubuntu-22.04") || strings.Contains(vmName, "ubuntu22") {
+				image = 1 // UBUNTU_22_04
+				logger.Info("[VPSManager] Matched VM name '%s' to UBUNTU_22_04 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			} else if strings.Contains(vmName, "ubuntu-24.04") || strings.Contains(vmName, "ubuntu24") {
+				image = 2 // UBUNTU_24_04
+				logger.Info("[VPSManager] Matched VM name '%s' to UBUNTU_24_04 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			} else if strings.Contains(vmName, "debian-12") || strings.Contains(vmName, "debian12") {
+				image = 3 // DEBIAN_12
+				logger.Info("[VPSManager] Matched VM name '%s' to DEBIAN_12 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			} else if strings.Contains(vmName, "debian-13") || strings.Contains(vmName, "debian13") {
+				image = 4 // DEBIAN_13
+				logger.Info("[VPSManager] Matched VM name '%s' to DEBIAN_13 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			} else if strings.Contains(vmName, "rocky") || strings.Contains(vmName, "rockylinux") {
+				image = 5 // ROCKY_LINUX_9
+				logger.Info("[VPSManager] Matched VM name '%s' to ROCKY_LINUX_9 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			} else if strings.Contains(vmName, "alma") || strings.Contains(vmName, "almalinux") {
+				image = 6 // ALMA_LINUX_9
+				logger.Info("[VPSManager] Matched VM name '%s' to ALMA_LINUX_9 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
+			}
+		}
+		
+		if image == 0 {
+			logger.Debug("[VPSManager] Could not determine image for VM %d (name: %s), leaving as UNSPECIFIED", proxmoxVM.VMID, proxmoxVM.Name)
+		}
+
+		// Extract size (default to empty)
+		size := ""
+
+		// Map Proxmox status to VPS status
+		vpsStatus := mapProxmoxStatusToVPSStatus(proxmoxVM.Status)
+
+		// Create VPS instance record
+		vmIDStr := fmt.Sprintf("%d", proxmoxVM.VMID)
+		vpsInstance := &database.VPSInstance{
+			ID:             vpsID,
+			Name:           displayName,
+			Description:    nil, // Description is not stored in DB, only in Proxmox
+			Status:         vpsStatus,
+			Region:         region,
+			Image:          image,
+			ImageID:        nil,
+			Size:           size,
+			CPUCores:       cpuCores,
+			MemoryBytes:    memoryBytes,
+			DiskBytes:      diskBytes,
+			InstanceID:     &vmIDStr,
+			NodeID:         nil,
+			SSHKeyID:       nil,
+			OrganizationID: organizationID,
+			CreatedBy:      creatorID,
+			CreatedAt:      time.Now(), // Use current time as we don't know actual creation time
+			UpdatedAt:      time.Now(),
+			Metadata:       "{}",
+			IPv4Addresses:  "[]",
+			IPv6Addresses:  "[]",
+		}
+
+		// Save to database
+		if err := database.DB.Create(vpsInstance).Error; err != nil {
+			logger.Warn("[VPSManager] Failed to create VPS record for %s: %v", vpsID, err)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("failed to create VPS record: %w", err),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
+		logger.Info("[VPSManager] Successfully imported VPS %s (VM %d) from Proxmox", vpsID, proxmoxVM.VMID)
+		results = append(results, ImportVPSResult{
+			VPS:     vpsInstance,
+			Skipped: false,
+		})
+		importedCount++
+	}
+
+	logger.Info("[VPSManager] Import completed: %d imported, %d skipped", importedCount, skippedCount)
+	return results, nil
+}
+
+// SyncAllVPSStatuses syncs status for all VPS instances from Proxmox
+// This is used for periodic background sync to detect deleted VPSs
+// Returns a map of VPS IDs that were marked as DELETED (oldStatus -> newStatus)
+func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32, error) {
+	// Get all VPS instances that have an instance ID (are provisioned)
+	var vpsInstances []database.VPSInstance
+	if err := database.DB.Where("instance_id IS NOT NULL AND deleted_at IS NULL").Find(&vpsInstances).Error; err != nil {
+		return nil, fmt.Errorf("failed to get VPS instances: %w", err)
+	}
+
+	logger.Info("[VPSManager] Syncing status for %d VPS instances", len(vpsInstances))
+
+	syncedCount := 0
+	deletedCount := 0
+	errorCount := 0
+	deletedVPSs := make(map[string]int32) // vpsID -> oldStatus
+
+	for _, vps := range vpsInstances {
+		// Get old status for notification purposes
+		oldStatus := vps.Status
+
+		// Sync status (this will mark as DELETED if VM doesn't exist)
+		if err := vm.SyncVPSStatusFromProxmox(ctx, vps.ID); err != nil {
+			// Log error but continue with other VPSs
+			logger.Warn("[VPSManager] Failed to sync VPS %s: %v", vps.ID, err)
+			errorCount++
+			continue
+		}
+
+		// Check if status changed to DELETED
+		var updatedVPS database.VPSInstance
+		if err := database.DB.Where("id = ?", vps.ID).First(&updatedVPS).Error; err == nil {
+			if updatedVPS.Status == 9 && oldStatus != 9 { // DELETED
+				deletedCount++
+				deletedVPSs[vps.ID] = oldStatus
+				logger.Info("[VPSManager] VPS %s marked as DELETED during sync", vps.ID)
+			} else if updatedVPS.Status != oldStatus {
+				syncedCount++
+			}
+		}
+	}
+
+	logger.Info("[VPSManager] Sync completed: %d synced, %d marked as deleted, %d errors", syncedCount, deletedCount, errorCount)
+	return deletedVPSs, nil
+}
+
+// ImportMissingVPSForAllOrgs imports missing VPS instances for all organizations
+// This is used for periodic background sync to import VPSs that exist in Proxmox but not in the database
+func (vm *VPSManager) ImportMissingVPSForAllOrgs(ctx context.Context) error {
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	// List all VMs from Proxmox
+	logger.Info("[VPSManager] Listing all VMs from Proxmox for import")
+	vms, err := proxmoxClient.ListAllVMsWithDescriptions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list VMs from Proxmox: %w", err)
+	}
+
+	logger.Info("[VPSManager] Found %d VMs in Proxmox, filtering for Obiente Cloud managed VMs", len(vms))
+
+	// Collect unique organization IDs from VMs that are managed by Obiente Cloud
+	orgIDSet := make(map[string]bool)
+	for _, proxmoxVM := range vms {
+		// Skip VMs without Obiente Cloud description
+		if !strings.Contains(proxmoxVM.Description, "Managed by Obiente Cloud") {
+			continue
+		}
+
+		// Parse description to extract Org ID
+		_, orgID, _, _, ok := parseVPSDescription(proxmoxVM.Description)
+		if ok && orgID != "" {
+			orgIDSet[orgID] = true
+		}
+	}
+
+	// Convert set to slice
+	var orgIDs []string
+	for orgID := range orgIDSet {
+		orgIDs = append(orgIDs, orgID)
+	}
+
+	if len(orgIDs) == 0 {
+		logger.Debug("[VPSManager] No organizations found in Proxmox VMs for import")
+		return nil
+	}
+
+	logger.Info("[VPSManager] Importing missing VPSs for %d organizations found in Proxmox", len(orgIDs))
+
+	totalImported := 0
+	totalSkipped := 0
+
+	for _, orgID := range orgIDs {
+		results, err := vm.ImportVPS(ctx, orgID)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to import VPSs for org %s: %v", orgID, err)
+			continue
+		}
+
+		for _, result := range results {
+			if result.Error != nil {
+				logger.Warn("[VPSManager] Import error for org %s: %v", orgID, result.Error)
+			} else if result.Skipped {
+				totalSkipped++
+			} else if result.VPS != nil {
+				totalImported++
+			}
+		}
+	}
+
+	logger.Info("[VPSManager] Import for all orgs completed: %d imported, %d skipped", totalImported, totalSkipped)
+	return nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,10 +18,12 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
-	vpssvc "vps-service/internal/service"
-	orchestrator "vps-service/orchestrator"
+	vpssvc "github.com/obiente/cloud/apps/vps-service/internal/service"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
 	"connectrpc.com/connect"
@@ -32,7 +35,7 @@ import (
 
 const (
 	readHeaderTimeout       = 10 * time.Second
-	writeTimeout            = 30 * time.Second
+	writeTimeout            = 6 * time.Minute // Increased for VPS creation which can take 1-2 minutes
 	idleTimeout             = 2 * time.Minute
 	gracefulShutdownMessage = "shutting down server"
 )
@@ -188,6 +191,19 @@ func main() {
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Start background sync jobs if VPS manager is available
+	if vpsManager != nil {
+		// Start periodic VPS status sync (every 5 minutes)
+		// This detects VPSs that were deleted from Proxmox and marks them as DELETED
+		go startVPSStatusSync(shutdownCtx, vpsManager)
+		logger.Info("✓ VPS status sync service started")
+
+		// Start periodic VPS import (every 15 minutes)
+		// This imports VPSs that exist in Proxmox but are missing from the database
+		go startVPSImportSync(shutdownCtx, vpsManager)
+		logger.Info("✓ VPS import sync service started")
+	}
+
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
@@ -217,6 +233,129 @@ func main() {
 			logger.Warn("Error during server shutdown: %v", err)
 		} else {
 			logger.Info(gracefulShutdownMessage)
+		}
+	}
+}
+
+// startVPSStatusSync starts the periodic VPS status sync background service
+// This syncs all VPS statuses from Proxmox to detect deleted VPSs
+func startVPSStatusSync(ctx context.Context, vpsManager *orchestrator.VPSManager) {
+	// Run every 5 minutes
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	// Run once on startup (after a short delay to ensure DB is ready)
+	time.Sleep(10 * time.Second)
+	syncCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	deletedVPSs, err := vpsManager.SyncAllVPSStatuses(syncCtx)
+	cancel()
+	if err != nil {
+		logger.Warn("[VPS Status Sync] Error on startup sync: %v", err)
+	} else {
+		// Send notifications for deleted VPSs
+		sendDeletedVPSNotifications(context.Background(), deletedVPSs)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[VPS Status Sync] Status sync service stopped")
+			return
+		case <-ticker.C:
+			syncCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			deletedVPSs, err := vpsManager.SyncAllVPSStatuses(syncCtx)
+			cancel()
+			if err != nil {
+				logger.Warn("[VPS Status Sync] Error during periodic sync: %v", err)
+			} else {
+				// Send notifications for deleted VPSs
+				sendDeletedVPSNotifications(context.Background(), deletedVPSs)
+			}
+		}
+	}
+}
+
+// sendDeletedVPSNotifications sends notifications for VPSs that were marked as deleted
+func sendDeletedVPSNotifications(ctx context.Context, deletedVPSs map[string]int32) {
+	if len(deletedVPSs) == 0 {
+		return
+	}
+
+	for vpsID, oldStatus := range deletedVPSs {
+		var vps database.VPSInstance
+		if err := database.DB.Where("id = ?", vpsID).First(&vps).Error; err != nil {
+			logger.Warn("[VPS Status Sync] Failed to get VPS %s for notification: %v", vpsID, err)
+			continue
+		}
+
+		// Only send notification if status changed to DELETED (9)
+		if vps.Status == 9 && oldStatus != 9 {
+			title := fmt.Sprintf("VPS Removed: %s", vps.Name)
+			message := fmt.Sprintf("Your VPS instance '%s' was detected as deleted from the infrastructure. It has been marked as deleted in the system.", vps.Name)
+
+			metadata := map[string]string{
+				"vps_id":         vps.ID,
+				"vps_name":       vps.Name,
+				"vps_status":     fmt.Sprintf("%d", vps.Status),
+				"deletion_source": "infrastructure",
+				"event_type":     "vps_deleted_from_proxmox",
+			}
+			if vps.InstanceID != nil {
+				metadata["vm_id"] = *vps.InstanceID
+			}
+
+			// Send notification to VPS creator
+			if vps.CreatedBy != "" {
+				actionURL := fmt.Sprintf("/vps/%s", vps.ID)
+				actionLabel := "View VPS"
+				orgID := vps.OrganizationID
+				if err := notifications.CreateNotificationForUser(
+					ctx,
+					vps.CreatedBy,
+					&orgID,
+					notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM,
+					notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+					title,
+					message,
+					&actionURL,
+					&actionLabel,
+					metadata,
+				); err != nil {
+					logger.Warn("[VPS Status Sync] Failed to send notification for deleted VPS %s: %v", vpsID, err)
+				} else {
+					logger.Info("[VPS Status Sync] Sent notification for deleted VPS %s", vpsID)
+				}
+			}
+		}
+	}
+}
+
+// startVPSImportSync starts the periodic VPS import background service
+// This imports VPSs that exist in Proxmox but are missing from the database
+func startVPSImportSync(ctx context.Context, vpsManager *orchestrator.VPSManager) {
+	// Run every 15 minutes
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+
+	// Run once on startup (after a short delay to ensure DB is ready)
+	time.Sleep(15 * time.Second)
+	importCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if err := vpsManager.ImportMissingVPSForAllOrgs(importCtx); err != nil {
+		logger.Warn("[VPS Import Sync] Error on startup import: %v", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[VPS Import Sync] Import sync service stopped")
+			return
+		case <-ticker.C:
+			importCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			if err := vpsManager.ImportMissingVPSForAllOrgs(importCtx); err != nil {
+				logger.Warn("[VPS Import Sync] Error during periodic import: %v", err)
+			}
+			cancel()
 		}
 	}
 }

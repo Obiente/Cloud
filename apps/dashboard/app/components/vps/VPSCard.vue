@@ -11,6 +11,16 @@
   >
     <template #actions>
             <OuiButton
+              v-if="canRetry"
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleRetry"
+              title="Retry Creation"
+            >
+              <ArrowPathIcon class="h-4 w-4" />
+            </OuiButton>
+            <OuiButton
               v-if="canStart"
               variant="ghost"
               size="sm"
@@ -47,6 +57,16 @@
               icon-only
               @click.stop="handleDelete"
               title="Delete"
+            >
+              <TrashIcon class="h-4 w-4" />
+            </OuiButton>
+            <OuiButton
+              v-if="canDeleteDeleted"
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleDelete"
+              title="Delete Record"
             >
               <TrashIcon class="h-4 w-4" />
             </OuiButton>
@@ -176,7 +196,8 @@
   });
   const emit = defineEmits<{
     refresh: [];
-    delete: [];
+    delete: [vps: VPSInstance];
+    retry: [vps: VPSInstance];
   }>();
 
   const client = useConnectClient(VPSService);
@@ -422,6 +443,14 @@
     if (props.loading || !props.vps) return false;
     return props.vps.status === VPSStatus.RUNNING;
   });
+  const canRetry = computed(() => {
+    if (props.loading || !props.vps) return false;
+    return props.vps.status === VPSStatus.FAILED;
+  });
+  const canDeleteDeleted = computed(() => {
+    if (props.loading || !props.vps) return false;
+    return props.vps.status === VPSStatus.DELETED;
+  });
 
   const formatMemory = (bytes: bigint | number | undefined) => {
     if (!bytes) return "0 GB";
@@ -539,11 +568,23 @@
     }
   };
 
+  const handleRetry = () => {
+    if (!props.vps) return;
+    emit("retry", props.vps);
+  };
+
   const handleDelete = async () => {
     if (!props.vps) return;
+    
+    const isDeleted = props.vps.status === VPSStatus.DELETED;
+    const title = isDeleted ? "Delete VPS Record" : "Delete VPS Instance";
+    const message = isDeleted
+      ? `Are you sure you want to permanently delete the record for "${props.vps.name}"? The VPS has already been removed from the infrastructure. This action cannot be undone.`
+      : `Are you sure you want to delete "${props.vps.name}"? This action cannot be undone.`;
+    
     const confirmed = await showConfirm({
-      title: "Delete VPS Instance",
-      message: `Are you sure you want to delete "${props.vps.name}"? This action cannot be undone.`,
+      title,
+      message,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       variant: "danger",
@@ -557,7 +598,7 @@
         vpsId: props.vps.id,
         force: false,
       });
-      emit("delete");
+      emit("delete", props.vps);
     } catch (error) {
       await showAlert({
         title: "Failed to delete VPS",

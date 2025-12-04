@@ -177,14 +177,14 @@ func (s *Service) notifyVPSFailed(ctx context.Context, vps *database.VPSInstance
 	s.notifyVPSEvent(ctx, vps, "vps_failed", notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH, title, message, metadata)
 }
 
-// notifyVPSDeletedFromProxmox sends a notification when a VPS is detected as deleted from Proxmox
+// notifyVPSDeletedFromProxmox sends a notification when a VPS is detected as deleted from the infrastructure
 func (s *Service) notifyVPSDeletedFromProxmox(ctx context.Context, vps *database.VPSInstance) {
 	title := fmt.Sprintf("VPS Removed: %s", vps.Name)
-	message := fmt.Sprintf("Your VPS instance '%s' was detected as deleted from Proxmox. It has been marked as deleted in the system.", vps.Name)
+	message := fmt.Sprintf("Your VPS instance '%s' was detected as deleted from the infrastructure. It has been marked as deleted in the system.", vps.Name)
 	
 	metadata := map[string]string{
 		"vps_status": fmt.Sprintf("%d", vps.Status),
-		"deletion_source": "proxmox",
+		"deletion_source": "infrastructure",
 	}
 
 	s.notifyVPSEvent(ctx, vps, "vps_deleted_from_proxmox", notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH, title, message, metadata)

@@ -976,6 +976,29 @@ PROXMOX_STORAGE_POOL=ceph-pool  # Ceph storage
 
 ⚠️ **Important:** For template-based VMs (linked clones), `PROXMOX_STORAGE_POOL` does **not** affect the cloned disk. Linked clones inherit the template's storage pool. This setting only applies to VMs created without templates (ISO installation), new disks created when templates have no disk, or additional disks. To use a different storage pool for cloned VMs, create your template on the desired storage pool.
 
+#### LVM Thin Storage and Partition Table Handling
+
+When moving disks to LVM thin storage, Obiente Cloud automatically uses `qemu-img convert` instead of Proxmox's native `move_disk` API. This prevents partition table corruption that can occur when Proxmox moves disks to LVM thin volumes.
+
+**Why This Is Needed:**
+
+Proxmox's `move_disk` operation can corrupt partition tables when moving disks to LVM thin storage. This happens because:
+- LVM thin volumes are block devices, not files
+- The partition table metadata can be lost or corrupted during the move
+- This causes VMs to fail to boot after storage migration
+
+**How We Handle It:**
+
+- **Automatic Detection**: The system automatically detects when the target storage is LVM thin
+- **qemu-img Convert**: Uses `qemu-img convert` to preserve partition table integrity during the move
+- **Transparent Operation**: The VM is automatically stopped during the move and restarted afterward
+- **Other Storage Types**: For non-LVM thin storage, we use Proxmox's native `move_disk` API (which handles these cases correctly)
+
+**Requirements:**
+
+- SSH access to the Proxmox node must be configured (`PROXMOX_SSH_HOST`, `PROXMOX_SSH_USER`, `PROXMOX_SSH_KEY_PATH` or `PROXMOX_SSH_KEY_DATA`)
+- The VM will be temporarily stopped during the disk move operation
+
 ## Related Documentation
 
 - [VPS Gateway Setup Guide](vps-gateway-setup.md) - Detailed guide for setting up the vps-gateway service

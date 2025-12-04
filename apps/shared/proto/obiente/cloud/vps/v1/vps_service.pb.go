@@ -4710,6 +4710,119 @@ func (x *VPSLogLine) GetTimestamp() *timestamppb.Timestamp {
 	return nil
 }
 
+// Import VPS messages
+type ImportVPSRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"` // Organization to import VPS for (must match VPS ownership)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ImportVPSRequest) Reset() {
+	*x = ImportVPSRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportVPSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportVPSRequest) ProtoMessage() {}
+
+func (x *ImportVPSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportVPSRequest.ProtoReflect.Descriptor instead.
+func (*ImportVPSRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *ImportVPSRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type ImportVPSResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ImportedCount int32                  `protobuf:"varint,1,opt,name=imported_count,json=importedCount,proto3" json:"imported_count,omitempty"` // Number of VPS instances imported
+	ImportedVps   []*VPSInstance         `protobuf:"bytes,2,rep,name=imported_vps,json=importedVps,proto3" json:"imported_vps,omitempty"`        // List of imported VPS instances
+	SkippedCount  int32                  `protobuf:"varint,3,opt,name=skipped_count,json=skippedCount,proto3" json:"skipped_count,omitempty"`    // Number of VPS instances skipped (already exist or don't belong to org)
+	Errors        []string               `protobuf:"bytes,4,rep,name=errors,proto3" json:"errors,omitempty"`                                     // Any errors encountered during import
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportVPSResponse) Reset() {
+	*x = ImportVPSResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportVPSResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportVPSResponse) ProtoMessage() {}
+
+func (x *ImportVPSResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportVPSResponse.ProtoReflect.Descriptor instead.
+func (*ImportVPSResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *ImportVPSResponse) GetImportedCount() int32 {
+	if x != nil {
+		return x.ImportedCount
+	}
+	return 0
+}
+
+func (x *ImportVPSResponse) GetImportedVps() []*VPSInstance {
+	if x != nil {
+		return x.ImportedVps
+	}
+	return nil
+}
+
+func (x *ImportVPSResponse) GetSkippedCount() int32 {
+	if x != nil {
+		return x.SkippedCount
+	}
+	return 0
+}
+
+func (x *ImportVPSResponse) GetErrors() []string {
+	if x != nil {
+		return x.Errors
+	}
+	return nil
+}
+
 var File_obiente_cloud_vps_v1_vps_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
@@ -5140,7 +5253,14 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x06stderr\x18\x02 \x01(\bR\x06stderr\x12\x1f\n" +
 	"\vline_number\x18\x03 \x01(\x05R\n" +
 	"lineNumber\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp*\xb0\x01\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\";\n" +
+	"\x10ImportVPSRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\xbd\x01\n" +
+	"\x11ImportVPSResponse\x12%\n" +
+	"\x0eimported_count\x18\x01 \x01(\x05R\rimportedCount\x12D\n" +
+	"\fimported_vps\x18\x02 \x03(\v2!.obiente.cloud.vps.v1.VPSInstanceR\vimportedVps\x12#\n" +
+	"\rskipped_count\x18\x03 \x01(\x05R\fskippedCount\x12\x16\n" +
+	"\x06errors\x18\x04 \x03(\tR\x06errors*\xb0\x01\n" +
 	"\tVPSStatus\x12\x1a\n" +
 	"\x16VPS_STATUS_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bCREATING\x10\x01\x12\f\n" +
@@ -5183,7 +5303,7 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x04ICMP\x10\x03\x12\n" +
 	"\n" +
 	"\x06ICMPV6\x10\x04\x12\a\n" +
-	"\x03ALL\x10\x052\xf9\x17\n" +
+	"\x03ALL\x10\x052\xd7\x18\n" +
 	"\n" +
 	"VPSService\x12V\n" +
 	"\aListVPS\x12$.obiente.cloud.vps.v1.ListVPSRequest\x1a%.obiente.cloud.vps.v1.ListVPSResponse\x12\\\n" +
@@ -5214,7 +5334,8 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\fRemoveSSHKey\x12).obiente.cloud.vps.v1.RemoveSSHKeyRequest\x1a*.obiente.cloud.vps.v1.RemoveSSHKeyResponse\x12q\n" +
 	"\x10ResetVPSPassword\x12-.obiente.cloud.vps.v1.ResetVPSPasswordRequest\x1a..obiente.cloud.vps.v1.ResetVPSPasswordResponse\x12n\n" +
 	"\x0fReinitializeVPS\x12,.obiente.cloud.vps.v1.ReinitializeVPSRequest\x1a-.obiente.cloud.vps.v1.ReinitializeVPSResponse\x12_\n" +
-	"\rStreamVPSLogs\x12*.obiente.cloud.vps.v1.StreamVPSLogsRequest\x1a .obiente.cloud.vps.v1.VPSLogLine0\x01BGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
+	"\rStreamVPSLogs\x12*.obiente.cloud.vps.v1.StreamVPSLogsRequest\x1a .obiente.cloud.vps.v1.VPSLogLine0\x01\x12\\\n" +
+	"\tImportVPS\x12&.obiente.cloud.vps.v1.ImportVPSRequest\x1a'.obiente.cloud.vps.v1.ImportVPSResponseBGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_vps_v1_vps_service_proto_rawDescOnce sync.Once
@@ -5229,7 +5350,7 @@ func file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_vps_v1_vps_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 70)
+var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 72)
 var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(VPSStatus)(0),                        // 0: obiente.cloud.vps.v1.VPSStatus
 	(VPSImage)(0),                         // 1: obiente.cloud.vps.v1.VPSImage
@@ -5303,46 +5424,48 @@ var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(*ReinitializeVPSResponse)(nil),       // 69: obiente.cloud.vps.v1.ReinitializeVPSResponse
 	(*StreamVPSLogsRequest)(nil),          // 70: obiente.cloud.vps.v1.StreamVPSLogsRequest
 	(*VPSLogLine)(nil),                    // 71: obiente.cloud.vps.v1.VPSLogLine
-	nil,                                   // 72: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
-	nil,                                   // 73: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
-	nil,                                   // 74: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	(*v1.Pagination)(nil),                 // 75: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),         // 76: google.protobuf.Timestamp
-	(*v1.VPSSize)(nil),                    // 77: obiente.cloud.common.v1.VPSSize
+	(*ImportVPSRequest)(nil),              // 72: obiente.cloud.vps.v1.ImportVPSRequest
+	(*ImportVPSResponse)(nil),             // 73: obiente.cloud.vps.v1.ImportVPSResponse
+	nil,                                   // 74: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	nil,                                   // 75: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	nil,                                   // 76: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	(*v1.Pagination)(nil),                 // 77: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),         // 78: google.protobuf.Timestamp
+	(*v1.VPSSize)(nil),                    // 79: obiente.cloud.common.v1.VPSSize
 }
 var file_obiente_cloud_vps_v1_vps_service_proto_depIdxs = []int32{
 	0,  // 0: obiente.cloud.vps.v1.ListVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
 	40, // 1: obiente.cloud.vps.v1.ListVPSResponse.vps_instances:type_name -> obiente.cloud.vps.v1.VPSInstance
-	75, // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	77, // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	1,  // 3: obiente.cloud.vps.v1.CreateVPSRequest.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	72, // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	74, // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
 	8,  // 5: obiente.cloud.vps.v1.CreateVPSRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
 	9,  // 6: obiente.cloud.vps.v1.CloudInitConfig.users:type_name -> obiente.cloud.vps.v1.CloudInitUser
 	10, // 7: obiente.cloud.vps.v1.CloudInitConfig.write_files:type_name -> obiente.cloud.vps.v1.CloudInitWriteFile
 	40, // 8: obiente.cloud.vps.v1.CreateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 9: obiente.cloud.vps.v1.GetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	73, // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	75, // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
 	40, // 11: obiente.cloud.vps.v1.UpdateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 12: obiente.cloud.vps.v1.StartVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 13: obiente.cloud.vps.v1.StopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 14: obiente.cloud.vps.v1.RebootVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	0,  // 15: obiente.cloud.vps.v1.VPSStatusUpdate.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	76, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	76, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	76, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	78, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	78, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	78, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
 	29, // 19: obiente.cloud.vps.v1.GetVPSMetricsResponse.metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
-	76, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
+	78, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
 	32, // 21: obiente.cloud.vps.v1.GetVPSUsageResponse.current:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
 	32, // 22: obiente.cloud.vps.v1.GetVPSUsageResponse.estimated_monthly:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
-	77, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
+	79, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
 	39, // 24: obiente.cloud.vps.v1.ListVPSRegionsResponse.regions:type_name -> obiente.cloud.vps.v1.VPSRegion
 	0,  // 25: obiente.cloud.vps.v1.VPSInstance.status:type_name -> obiente.cloud.vps.v1.VPSStatus
 	1,  // 26: obiente.cloud.vps.v1.VPSInstance.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	74, // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	76, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
-	76, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
-	76, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
-	76, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
+	76, // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	78, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
+	78, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
+	78, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
+	78, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
 	29, // 32: obiente.cloud.vps.v1.VPSInstance.current_metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
 	55, // 33: obiente.cloud.vps.v1.ListFirewallRulesResponse.rules:type_name -> obiente.cloud.vps.v1.FirewallRule
 	55, // 34: obiente.cloud.vps.v1.GetFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
@@ -5356,76 +5479,79 @@ var file_obiente_cloud_vps_v1_vps_service_proto_depIdxs = []int32{
 	2,  // 42: obiente.cloud.vps.v1.FirewallRule.action:type_name -> obiente.cloud.vps.v1.FirewallAction
 	3,  // 43: obiente.cloud.vps.v1.FirewallRule.type:type_name -> obiente.cloud.vps.v1.FirewallDirection
 	4,  // 44: obiente.cloud.vps.v1.FirewallRule.protocol:type_name -> obiente.cloud.vps.v1.FirewallProtocol
-	76, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
-	76, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
+	78, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
+	78, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
 	57, // 47: obiente.cloud.vps.v1.ListSSHKeysResponse.keys:type_name -> obiente.cloud.vps.v1.SSHKey
 	57, // 48: obiente.cloud.vps.v1.AddSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
 	57, // 49: obiente.cloud.vps.v1.UpdateSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
 	40, // 50: obiente.cloud.vps.v1.ReinitializeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	76, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
-	5,  // 52: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
-	7,  // 53: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
-	12, // 54: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
-	14, // 55: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
-	16, // 56: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
-	18, // 57: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
-	20, // 58: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
-	22, // 59: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
-	24, // 60: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
-	26, // 61: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
-	28, // 62: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
-	30, // 63: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
-	33, // 64: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
-	35, // 65: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
-	37, // 66: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
-	41, // 67: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
-	43, // 68: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
-	45, // 69: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
-	47, // 70: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
-	49, // 71: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
-	51, // 72: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
-	53, // 73: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
-	58, // 74: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
-	60, // 75: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
-	62, // 76: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
-	64, // 77: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
-	66, // 78: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
-	68, // 79: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
-	70, // 80: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
-	6,  // 81: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
-	11, // 82: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
-	13, // 83: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
-	15, // 84: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
-	17, // 85: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
-	19, // 86: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
-	21, // 87: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
-	23, // 88: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
-	25, // 89: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
-	27, // 90: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
-	29, // 91: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
-	31, // 92: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
-	34, // 93: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
-	36, // 94: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
-	38, // 95: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
-	42, // 96: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
-	44, // 97: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
-	46, // 98: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
-	48, // 99: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
-	50, // 100: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
-	52, // 101: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
-	54, // 102: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
-	59, // 103: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
-	61, // 104: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
-	63, // 105: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
-	65, // 106: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
-	67, // 107: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
-	69, // 108: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
-	71, // 109: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
-	81, // [81:110] is the sub-list for method output_type
-	52, // [52:81] is the sub-list for method input_type
-	52, // [52:52] is the sub-list for extension type_name
-	52, // [52:52] is the sub-list for extension extendee
-	0,  // [0:52] is the sub-list for field type_name
+	78, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	40, // 52: obiente.cloud.vps.v1.ImportVPSResponse.imported_vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	5,  // 53: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
+	7,  // 54: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
+	12, // 55: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
+	14, // 56: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
+	16, // 57: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
+	18, // 58: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
+	20, // 59: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
+	22, // 60: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
+	24, // 61: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
+	26, // 62: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
+	28, // 63: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
+	30, // 64: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
+	33, // 65: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
+	35, // 66: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
+	37, // 67: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
+	41, // 68: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
+	43, // 69: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
+	45, // 70: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
+	47, // 71: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
+	49, // 72: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
+	51, // 73: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
+	53, // 74: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
+	58, // 75: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
+	60, // 76: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
+	62, // 77: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
+	64, // 78: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
+	66, // 79: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
+	68, // 80: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
+	70, // 81: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
+	72, // 82: obiente.cloud.vps.v1.VPSService.ImportVPS:input_type -> obiente.cloud.vps.v1.ImportVPSRequest
+	6,  // 83: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
+	11, // 84: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
+	13, // 85: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
+	15, // 86: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
+	17, // 87: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
+	19, // 88: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
+	21, // 89: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
+	23, // 90: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
+	25, // 91: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
+	27, // 92: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
+	29, // 93: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
+	31, // 94: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
+	34, // 95: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
+	36, // 96: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
+	38, // 97: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
+	42, // 98: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
+	44, // 99: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
+	46, // 100: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
+	48, // 101: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
+	50, // 102: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
+	52, // 103: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
+	54, // 104: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
+	59, // 105: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
+	61, // 106: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
+	63, // 107: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
+	65, // 108: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
+	67, // 109: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
+	69, // 110: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
+	71, // 111: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
+	73, // 112: obiente.cloud.vps.v1.VPSService.ImportVPS:output_type -> obiente.cloud.vps.v1.ImportVPSResponse
+	83, // [83:113] is the sub-list for method output_type
+	53, // [53:83] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_vps_v1_vps_service_proto_init() }
@@ -5459,7 +5585,7 @@ func file_obiente_cloud_vps_v1_vps_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc), len(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   70,
+			NumMessages:   72,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

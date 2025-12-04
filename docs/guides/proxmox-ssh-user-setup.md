@@ -1,15 +1,15 @@
-# Proxmox SSH User Setup for Snippet Writing
+# Proxmox SSH User Setup for Snippet Writing and Disk Operations
 
-This guide explains how to set up a dedicated SSH user (`obiente-cloud`) on your Proxmox node for writing cloud-init snippet files.
+This guide explains how to set up a dedicated SSH user (`obiente-cloud`) on your Proxmox node for writing cloud-init snippet files and performing disk operations (e.g., `qemu-img convert` for LVM thin storage).
 
 ## Why a Dedicated User?
 
 Using a dedicated user with minimal permissions is a security best practice:
 
-- **Principle of Least Privilege**: The user only has permissions to write snippet files, nothing else
+- **Principle of Least Privilege**: The user only has permissions for required operations (snippet writing and disk operations)
 - **Separation of Concerns**: API token permissions are separate from file system permissions
-- **Audit Trail**: All snippet writes are traceable to the `obiente-cloud` user
-- **Security Isolation**: If the SSH key is compromised, the attacker can only write snippet files, not access VMs or other Proxmox resources
+- **Audit Trail**: All operations are traceable to the `obiente-cloud` user
+- **Security Isolation**: If the SSH key is compromised, the attacker has limited access scope
 
 ## Prerequisites
 
@@ -70,6 +70,106 @@ sudo chmod 755 "$SNIPPETS_DIR"
 
 **Important**: The snippets directory must be readable by Proxmox (typically the `www-data` user or `root`), so we use `755` permissions. Files written to this directory will be created with `644` permissions (readable by all, writable by owner).
 
+## Step 3.5: Configure Permissions for Disk Operations
+
+The `obiente-cloud` user needs permissions to execute `qemu-img convert` for disk operations on LVM thin storage. The code automatically constructs disk paths from volume IDs, so no additional tools are required. The user needs access to:
+- Read disk images from directory storage (e.g., `/var/lib/vz/images/`)
+- Write to LVM volumes (e.g., `/dev/pve/vm-XXX-disk-0`)
+
+**Option A: Add User to Disk Group and Configure Directory Access with ACLs**
+
+This is the recommended approach when sudo is not available. We use both group ownership and ACLs to ensure new files get correct permissions:
+
+```bash
+# 1. Install ACL tools if not already installed (required for default permissions)
+apt-get update && apt-get install -y acl
+
+# 2. Create a group for vz images access (if it doesn't exist)
+groupadd -f vz-images || true
+
+# 3. Add obiente-cloud to both disk and vz-images groups
+usermod -a -G disk,vz-images obiente-cloud
+
+# 4. Change group ownership of /var/lib/vz/images to vz-images
+# Note: Some template/base images may have immutable attributes and cannot be changed
+# Use -f flag to suppress errors for files that cannot be changed
+chgrp -Rf vz-images /var/lib/vz/images
+
+# 5. Set group read/write permissions on /var/lib/vz/images
+# Note: Template files may fail, but new VM disk images will have correct permissions
+chmod -Rf g+rw /var/lib/vz/images
+
+# 6. Set setgid bit so new files inherit the group
+find /var/lib/vz/images -type d -exec chmod g+s {} \;
+
+# 7. Set ACLs with default permissions (CRITICAL - ensures new files get group write)
+# This overrides Proxmox's umask and ensures new files are created with correct permissions
+# -m sets ACLs on existing files/directories, -d sets default ACLs for new files/directories
+setfacl -R -m g:vz-images:rwx /var/lib/vz/images
+setfacl -R -d -m g:vz-images:rwx /var/lib/vz/images  # Default ACL for new files/directories
+
+# 8. Fix permissions for all existing VM directories (important for VMs created before this setup)
+for dir in /var/lib/vz/images/*/; do
+    if [ -d "$dir" ] && [[ "$dir" =~ /[0-9]+/$ ]]; then  # Only process VM ID directories
+        chgrp vz-images "$dir" 2>/dev/null || true
+        chmod g+w "$dir" 2>/dev/null || true
+        chmod g+s "$dir" 2>/dev/null || true
+        setfacl -m g:vz-images:rwx "$dir" 2>/dev/null || true
+        setfacl -d -m g:vz-images:rwx "$dir" 2>/dev/null || true
+        chgrp vz-images "$dir"/* 2>/dev/null || true
+        chmod g+r "$dir"/* 2>/dev/null || true
+        chmod g+w "$dir"/*.raw "$dir"/*.qcow2 2>/dev/null || true
+    fi
+done
+
+# 9. Verify group membership
+groups obiente-cloud
+# Should show: obiente-cloud : obiente-cloud disk vz-images
+
+# 10. Verify permissions
+ls -ld /var/lib/vz/images
+# Should show: drwxrwsr-x or drwxrwxr-x root:vz-images (with setgid bit)
+stat -c "%a" /var/lib/vz/images
+# Should show a number ending in 2, 3, 6, or 7 (e.g., 2775) indicating setgid is set
+
+# 11. Verify ACLs
+getfacl /var/lib/vz/images | grep vz-images
+# Should show ACL entries for vz-images group (obiente-cloud user inherits via group membership)
+```
+
+**Important**: 
+- After adding the user to groups, **restart your API service** so it establishes a new SSH connection with updated group membership. Groups are only applied to new sessions.
+- If you see "Operation not permitted" errors when changing group ownership, this is normal for template/base images that may have immutable attributes or be in use. The `-f` flag suppresses these errors.
+- **ACLs with default permissions are critical** - they ensure that new files created by Proxmox will have group write permissions, even if Proxmox uses a restrictive umask. Without default ACLs, new VMs may be created with `-rw-r-----` instead of `-rw-rw----`.
+- The loop in step 8 fixes permissions for existing VM directories that may have been created before this setup was applied.
+
+**Option B: Direct Ownership (Less Secure, Not Recommended)**
+
+As a last resort, you can change ownership directly (not recommended for production):
+
+```bash
+# Change ownership of /var/lib/vz/images to obiente-cloud
+chown -R obiente-cloud:obiente-cloud /var/lib/vz/images
+```
+
+**Note**: Option A (disk group + vz-images group with ACLs) is the recommended approach as it provides the necessary permissions while maintaining security boundaries and ensures new files are created with correct permissions via default ACLs.
+
+**Testing Permissions**
+
+After configuring permissions, test that the user can access LVM volumes and `qemu-img`:
+
+```bash
+# Test qemu-img access (if a test volume exists)
+ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "/usr/bin/qemu-img info /dev/pve/vm-100-disk-0"
+
+# Should output disk information without permission errors
+
+# Test that the user can read LVM volumes
+ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "ls -la /dev/pve/ | head -5"
+
+# Should list LVM volumes without permission errors
+```
+
 ## Step 4: Generate SSH Key Pair
 
 Generate an SSH key pair for the `obiente-cloud` user:
@@ -118,6 +218,12 @@ ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "whoami"
 ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "/bin/sh -c 'echo test > /var/lib/vz/snippets/test.txt && cat /var/lib/vz/snippets/test.txt && rm /var/lib/vz/snippets/test.txt'"
 
 # Should output: test
+
+# Test disk operation permissions (if you have a test VM with disk)
+# Replace vm-100-disk-0 with an actual volume ID from your Proxmox
+ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "/usr/bin/qemu-img info /dev/pve/vm-100-disk-0"
+
+# Should output a path like: /dev/pve/vm-100-disk-0 (or show permission error if not configured)
 ```
 
 ## Step 7: Configure Environment Variables
@@ -188,6 +294,19 @@ After configuring the environment variables, restart your API service and verify
 - Verify `obiente-cloud` user owns the snippets directory: `ls -la /var/lib/vz/snippets`
 - Check directory permissions: `stat /var/lib/vz/snippets`
 - Ensure directory is writable: `sudo chmod 755 /var/lib/vz/snippets`
+
+### Disk Operation Permission Errors
+
+**Error**: `failed to convert disk: permission denied` or `qemu-img: Could not open ... Permission denied`
+
+**Solutions**:
+- Verify user is in both `disk` and `vz-images` groups: `groups obiente-cloud` (should include both `disk` and `vz-images`)
+- Verify ACLs are set with default permissions: `getfacl /var/lib/vz/images | grep vz-images`
+- Check that new VM directories have correct permissions: `ls -la /var/lib/vz/images/VM_ID/` (should show `-rw-rw----` for disk files, not `-rw-r-----`)
+- If new VMs are created with wrong permissions, ensure default ACLs are set: `setfacl -R -d -m g:vz-images:rwx /var/lib/vz/images`
+- Fix permissions for existing VM directories by running the loop from step 8 in Option A
+- Test direct access to LVM volume: `ssh -i key obiente-cloud@host "ls -l /dev/pve/vm-100-disk-0"`
+- After adding to groups or changing permissions, **restart your API service** so it establishes a new SSH connection with updated group membership
 
 ### Wrong Snippets Path
 

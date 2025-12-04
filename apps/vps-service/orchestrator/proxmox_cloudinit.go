@@ -197,7 +197,7 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += "\n"
 
 	// Package management
-	packageUpdate := true
+	packageUpdate := false
 	packageUpgrade := false
 	if config.CloudInit != nil {
 		if config.CloudInit.PackageUpdate != nil {
@@ -210,8 +210,6 @@ func generateCloudInitUserData(config *VPSConfig) string {
 
 	userData += fmt.Sprintf("package_update: %v\n", packageUpdate)
 	userData += fmt.Sprintf("package_upgrade: %v\n", packageUpgrade)
-
-	// Packages
 	packages := []string{"curl", "wget", "htop", "openssh-server", "qemu-guest-agent"}
 	if config.CloudInit != nil && len(config.CloudInit.Packages) > 0 {
 		packages = append(packages, config.CloudInit.Packages...)
@@ -548,69 +546,16 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	// Runcmd - install SSH + guest agent and run any user commands
 	userData += "runcmd:\n"
 
-	// Default commands (always include)
-	// Update package lists - this is critical for package installation
-	userData += "  - |\n"
-	userData += "    set -e\n"
-	userData += "    echo \"Updating package lists...\"\n"
-	userData += "    apt-get update || yum update || dnf update || true\n"
-	userData += "  \n"
-	
-	// Install SSH server and guest agent with proper error handling
-	userData += "  - |\n"
-	userData += "    set -e\n"
-	userData += "    echo \"Installing openssh-server and qemu-guest-agent...\"\n"
-	userData += "    if command -v apt-get >/dev/null 2>&1; then\n"
-	userData += "      apt-get install -y openssh-server qemu-guest-agent\n"
-	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
-	userData += "      yum install -y openssh-server qemu-guest-agent\n"
-	userData += "    elif command -v dnf >/dev/null 2>&1; then\n"
-	userData += "      dnf install -y openssh-server qemu-guest-agent\n"
-	userData += "    else\n"
-	userData += "      echo \"ERROR: No package manager found (apt-get, yum, or dnf)\"\n"
-	userData += "      exit 1\n"
-	userData += "    fi\n"
-	userData += "    echo \"Successfully installed openssh-server and qemu-guest-agent\"\n"
-	userData += "  \n"
-	
-	// Enable and start SSH
-	userData += "  - |\n"
-	userData += "    set -e\n"
-	userData += "    echo \"Enabling and starting SSH...\"\n"
-	userData += "    systemctl enable ssh || systemctl enable sshd || true\n"
-	userData += "    systemctl start ssh || systemctl start sshd || true\n"
-	userData += "    echo \"SSH service started\"\n"
-	userData += "  \n"
-
-	// Restart SSH to apply AcceptEnv configuration for real IP forwarding
-	// Only restart if we added/modified the SSH config
-	if needsSSHRestart {
-		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	// Generate OS-specific runcmd commands based on image type
+	// Image enum: 1=Ubuntu 22.04, 2=Ubuntu 24.04, 3=Debian 12, 4=Debian 13, 5=Rocky 9, 6=Alma 9
+	switch config.Image {
+	case 1, 2, 3, 4: // Ubuntu/Debian (apt-based)
+		userData += generateUbuntuDebianRuncmd(config, needsSSHRestart)
+	case 5, 6: // Rocky/Alma Linux (yum/dnf-based)
+		userData += generateRockyAlmaRuncmd(config, needsSSHRestart)
+	default: // Generic/fallback (try to detect package manager)
+		userData += generateGenericRuncmd(config, needsSSHRestart)
 	}
-
-	// Enable and start guest agent with verification
-	userData += "  - |\n"
-	userData += "    set -e\n"
-	userData += "    echo \"Enabling and starting qemu-guest-agent...\"\n"
-	userData += "    # Verify package is installed\n"
-	userData += "    if ! command -v qemu-ga >/dev/null 2>&1 && ! systemctl list-unit-files | grep -q qemu-guest-agent; then\n"
-	userData += "      echo \"WARNING: qemu-guest-agent package not found, attempting to reinstall...\"\n"
-	userData += "      apt-get install -y qemu-guest-agent || yum install -y qemu-guest-agent || dnf install -y qemu-guest-agent || true\n"
-	userData += "    fi\n"
-	userData += "    # Enable and start the service\n"
-	userData += "    systemctl enable qemu-guest-agent || true\n"
-	userData += "    systemctl start qemu-guest-agent || true\n"
-	userData += "    # Verify it's running\n"
-	userData += "    if systemctl is-active --quiet qemu-guest-agent; then\n"
-	userData += "      echo \"qemu-guest-agent is running\"\n"
-	userData += "    else\n"
-	userData += "      echo \"WARNING: qemu-guest-agent failed to start, checking status...\"\n"
-	userData += "      systemctl status qemu-guest-agent || true\n"
-	userData += "      # Try to start it again after a short delay\n"
-	userData += "      sleep 2\n"
-	userData += "      systemctl start qemu-guest-agent || true\n"
-	userData += "    fi\n"
-	userData += "  \n"
 
 	// Custom runcmd commands
 	if config.CloudInit != nil && len(config.CloudInit.Runcmd) > 0 {
@@ -1053,5 +998,226 @@ func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string,
 
 	logger.Debug("[ProxmoxClient] Successfully read snippet file via SSH: %s (%d bytes)", filePath, len(content))
 	return content, nil
+}
+
+// generateUbuntuDebianRuncmd generates runcmd commands for Ubuntu and Debian (apt-based)
+func generateUbuntuDebianRuncmd(config *VPSConfig, needsSSHRestart bool) string {
+	userData := ""
+
+	userData += "  - |\n"
+	userData += "    echo \"Installing openssh-server and qemu-guest-agent (Ubuntu/Debian)...\"\n"
+	userData += "    apt-get install -y --no-update openssh-server qemu-guest-agent 2>/dev/null || {\n"
+	userData += "      echo \"Direct install failed, updating package lists and retrying...\"\n"
+	userData += "      sleep 5\n"
+	userData += "      apt-get update || echo \"WARNING: apt-get update failed, continuing anyway\"\n"
+	userData += "      apt-get install -y openssh-server || echo \"WARNING: openssh-server installation failed\"\n"
+	userData += "      apt-get install -y qemu-guest-agent || echo \"WARNING: qemu-guest-agent not available\"\n"
+	userData += "    }\n"
+	userData += "    if dpkg -l qemu-guest-agent 2>/dev/null | grep -q '^ii'; then\n"
+	userData += "      echo \"qemu-guest-agent package verified installed\"\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent package not installed\"\n"
+	userData += "    fi\n"
+	userData += "  \n"
+
+	// Enable and start SSH
+	userData += "  - |\n"
+	userData += "    echo \"Enabling and starting SSH (Ubuntu/Debian)...\"\n"
+	userData += "    systemctl enable ssh || systemctl enable sshd || true\n"
+	userData += "    systemctl start ssh || systemctl start sshd || true\n"
+	userData += "    echo \"SSH service configuration completed\"\n"
+	userData += "  \n"
+
+	// Restart SSH if needed
+	if needsSSHRestart {
+		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	}
+
+	// Configure qemu-guest-agent with more robust startup
+	userData += "  - |\n"
+	userData += "    echo \"Configuring qemu-guest-agent (Ubuntu/Debian)...\"\n"
+	userData += "    # Wait for systemd to be fully ready\n"
+	userData += "    sleep 2\n"
+	userData += "    if systemctl list-unit-files 2>/dev/null | grep -q qemu-guest-agent; then\n"
+	userData += "      systemctl enable qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to enable qemu-guest-agent\"\n"
+	userData += "      # Stop if running to ensure clean start\n"
+	userData += "      systemctl stop qemu-guest-agent 2>/dev/null || true\n"
+	userData += "      sleep 1\n"
+	userData += "      systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to start qemu-guest-agent\"\n"
+	userData += "      # Verify it's running\n"
+	userData += "      sleep 2\n"
+	userData += "      if systemctl is-active --quiet qemu-guest-agent 2>/dev/null; then\n"
+	userData += "        echo \"qemu-guest-agent is running successfully\"\n"
+	userData += "      else\n"
+	userData += "        echo \"WARNING: qemu-guest-agent is not running, checking status...\"\n"
+	userData += "        systemctl status qemu-guest-agent 2>&1 || true\n"
+	userData += "        # One more retry\n"
+	userData += "        sleep 3\n"
+	userData += "        systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: qemu-guest-agent still not running\"\n"
+	userData += "      fi\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent service not found (package may not be installed)\"\n"
+	userData += "      echo \"Checking if package exists...\"\n"
+	userData += "      dpkg -l | grep -i qemu || echo \"No qemu packages found\"\n"
+	userData += "    fi\n"
+	userData += "    echo \"Guest agent configuration completed\"\n"
+	userData += "  \n"
+
+	return userData
+}
+
+// generateRockyAlmaRuncmd generates runcmd commands for Rocky Linux and Alma Linux (yum/dnf-based)
+func generateRockyAlmaRuncmd(config *VPSConfig, needsSSHRestart bool) string {
+	userData := ""
+
+	// Update package lists
+	userData += "  - |\n"
+	userData += "    echo \"Updating package lists (Rocky/Alma Linux)...\"\n"
+	userData += "    if command -v dnf >/dev/null 2>&1; then\n"
+	userData += "      dnf update -y || true\n"
+	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "      yum update -y || true\n"
+	userData += "    fi\n"
+	userData += "    echo \"Package lists updated\"\n"
+	userData += "  \n"
+
+	// Install SSH server and guest agent
+	userData += "  - |\n"
+	userData += "    echo \"Installing openssh-server and qemu-guest-agent (Rocky/Alma Linux)...\"\n"
+	userData += "    if command -v dnf >/dev/null 2>&1; then\n"
+	userData += "      dnf install -y openssh-server qemu-guest-agent && echo \"Packages installed\" || echo \"WARNING: Package installation failed\"\n"
+	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "      yum install -y openssh-server qemu-guest-agent && echo \"Packages installed\" || echo \"WARNING: Package installation failed\"\n"
+	userData += "    fi\n"
+	userData += "  \n"
+
+	// Enable and start SSH
+	userData += "  - |\n"
+	userData += "    echo \"Enabling and starting SSH (Rocky/Alma Linux)...\"\n"
+	userData += "    systemctl enable sshd || systemctl enable ssh || true\n"
+	userData += "    systemctl start sshd || systemctl start ssh || true\n"
+	userData += "    echo \"SSH service configuration completed\"\n"
+	userData += "  \n"
+
+	// Restart SSH if needed
+	if needsSSHRestart {
+		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	}
+
+	// Configure qemu-guest-agent
+	userData += "  - |\n"
+	userData += "    echo \"Configuring qemu-guest-agent (Rocky/Alma Linux)...\"\n"
+	userData += "    if systemctl list-unit-files 2>/dev/null | grep -q qemu-guest-agent; then\n"
+	userData += "      systemctl enable qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to enable qemu-guest-agent\"\n"
+	userData += "      systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to start qemu-guest-agent\"\n"
+	userData += "      if systemctl is-active --quiet qemu-guest-agent 2>/dev/null; then\n"
+	userData += "        echo \"qemu-guest-agent is running\"\n"
+	userData += "      else\n"
+	userData += "        echo \"WARNING: qemu-guest-agent is not running (this is non-critical)\"\n"
+	userData += "        sleep 2\n"
+	userData += "        systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: qemu-guest-agent still not running\"\n"
+	userData += "      fi\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent service not found (package may not be installed)\"\n"
+	userData += "    fi\n"
+	userData += "    echo \"Guest agent configuration completed\"\n"
+	userData += "  \n"
+
+	return userData
+}
+
+// generateGenericRuncmd generates runcmd commands for unknown OS (tries to detect package manager)
+func generateGenericRuncmd(config *VPSConfig, needsSSHRestart bool) string {
+	userData := ""
+
+	// Update package lists - try to detect package manager
+	userData += "  - |\n"
+	userData += "    echo \"Updating package lists (generic OS detection)...\"\n"
+	userData += "    if command -v apt-get >/dev/null 2>&1; then\n"
+	userData += "      # Ensure universe repository is enabled on Ubuntu\n"
+	userData += "      if [ -f /etc/apt/sources.list ]; then\n"
+	userData += "        sed -i '/^#.*universe/s/^#//' /etc/apt/sources.list || true\n"
+	userData += "        sed -i '/^#.*universe/s/^#//' /etc/apt/sources.list.d/*.list 2>/dev/null || true\n"
+	userData += "      fi\n"
+	userData += "      # Skip apt-get update by default to avoid DNS/network issues\n"
+	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "      yum update -y || true\n"
+	userData += "    elif command -v dnf >/dev/null 2>&1; then\n"
+	userData += "      dnf update -y || true\n"
+	userData += "    fi\n"
+	userData += "    echo \"Package lists updated (or skipped if not needed)\"\n"
+	userData += "  \n"
+
+	// Install SSH server and guest agent
+	userData += "  - |\n"
+	userData += "    echo \"Installing openssh-server and qemu-guest-agent (generic OS detection)...\"\n"
+	userData += "    INSTALLED=0\n"
+	userData += "    if command -v apt-get >/dev/null 2>&1; then\n"
+	userData += "      apt-get install -y openssh-server && INSTALLED=1 || echo \"WARNING: openssh-server installation failed\"\n"
+	userData += "      apt-get install -y qemu-guest-agent && echo \"qemu-guest-agent installed\" || echo \"WARNING: qemu-guest-agent not available\"\n"
+	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "      yum install -y openssh-server qemu-guest-agent && INSTALLED=1 || echo \"WARNING: Package installation failed\"\n"
+	userData += "    elif command -v dnf >/dev/null 2>&1; then\n"
+	userData += "      dnf install -y openssh-server qemu-guest-agent && INSTALLED=1 || echo \"WARNING: Package installation failed\"\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: No package manager found (apt-get, yum, or dnf) - packages may already be installed\"\n"
+	userData += "    fi\n"
+	userData += "    if [ $INSTALLED -eq 1 ]; then\n"
+	userData += "      echo \"Successfully installed openssh-server\"\n"
+	userData += "    else\n"
+	userData += "      echo \"Packages may already be installed or installation failed - continuing anyway\"\n"
+	userData += "    fi\n"
+	userData += "  \n"
+
+	// Enable and start SSH
+	userData += "  - |\n"
+	userData += "    echo \"Enabling and starting SSH (generic OS detection)...\"\n"
+	userData += "    systemctl enable ssh || systemctl enable sshd || true\n"
+	userData += "    systemctl start ssh || systemctl start sshd || true\n"
+	userData += "    echo \"SSH service configuration completed\"\n"
+	userData += "  \n"
+
+	// Restart SSH if needed
+	if needsSSHRestart {
+		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	}
+
+	// Configure qemu-guest-agent
+	userData += "  - |\n"
+	userData += "    echo \"Configuring qemu-guest-agent (generic OS detection)...\"\n"
+	userData += "    if command -v qemu-ga >/dev/null 2>&1 || systemctl list-unit-files 2>/dev/null | grep -q qemu-guest-agent; then\n"
+	userData += "      echo \"qemu-guest-agent is already installed\"\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent package not found, attempting to install...\"\n"
+	userData += "      if command -v apt-get >/dev/null 2>&1; then\n"
+	userData += "        if [ -f /etc/apt/sources.list ]; then\n"
+	userData += "          sed -i '/^#.*universe/s/^#//' /etc/apt/sources.list || true\n"
+	userData += "          sed -i '/^#.*universe/s/^#//' /etc/apt/sources.list.d/*.list 2>/dev/null || true\n"
+	userData += "          # Skip apt-get update by default to avoid DNS/network issues\n"
+	userData += "        fi\n"
+	userData += "        apt-get install -y qemu-guest-agent || echo \"WARNING: Failed to install qemu-guest-agent\"\n"
+	userData += "      elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "        yum install -y qemu-guest-agent || echo \"WARNING: Failed to install qemu-guest-agent\"\n"
+	userData += "      elif command -v dnf >/dev/null 2>&1; then\n"
+	userData += "        dnf install -y qemu-guest-agent || echo \"WARNING: Failed to install qemu-guest-agent\"\n"
+	userData += "      fi\n"
+	userData += "    fi\n"
+	userData += "    if systemctl list-unit-files 2>/dev/null | grep -q qemu-guest-agent; then\n"
+	userData += "      systemctl enable qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to enable qemu-guest-agent\"\n"
+	userData += "      systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: Failed to start qemu-guest-agent\"\n"
+	userData += "      if systemctl is-active --quiet qemu-guest-agent 2>/dev/null; then\n"
+	userData += "        echo \"qemu-guest-agent is running\"\n"
+	userData += "      else\n"
+	userData += "        echo \"WARNING: qemu-guest-agent is not running (this is non-critical)\"\n"
+	userData += "        sleep 2\n"
+	userData += "        systemctl start qemu-guest-agent 2>/dev/null || echo \"WARNING: qemu-guest-agent still not running\"\n"
+	userData += "      fi\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent service not found (package may not be installed)\"\n"
+	userData += "    fi\n"
+	userData += "    echo \"Guest agent configuration completed\"\n"
+	userData += "  \n"
+
+	return userData
 }
 

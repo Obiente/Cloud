@@ -120,12 +120,14 @@
           :vps="vps"
           @refresh="refreshVPS"
           @delete="handleDelete"
+          @retry="handleRetry"
         />
       </OuiGrid>
 
       <!-- Create VPS Dialog -->
       <CreateVPSDialog
         v-model="showCreateDialog"
+        :initial-values="retryVPSValues"
         @created="handleVPSCreated"
       />
     </OuiStack>
@@ -139,7 +141,7 @@
     PlusIcon,
     MagnifyingGlassIcon,
   } from "@heroicons/vue/24/outline";
-  import { VPSService, VPSStatus } from "@obiente/proto";
+  import { VPSService, VPSStatus, type VPSInstance } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import { useDocumentVisibility } from "@vueuse/core";
@@ -147,6 +149,7 @@
   import VPSCard from "~/components/vps/VPSCard.vue";
   import CreateVPSDialog from "~/components/vps/CreateVPSDialog.vue";
   import OuiSkeleton from "~/components/oui/Skeleton.vue";
+  import { useToast } from "~/composables/useToast";
 
   definePageMeta({
     layout: "default",
@@ -155,6 +158,7 @@
 
   const client = useConnectClient(VPSService);
   const organizationId = useOrganizationId();
+  const { toast } = useToast();
 
   // Filters
   const searchQuery = ref("");
@@ -162,6 +166,13 @@
   const regionFilter = ref("");
   const showCreateDialog = ref(false);
   const listError = ref<Error | null>(null);
+  const retryVPSValues = ref<{
+    name?: string;
+    description?: string;
+    region?: string;
+    image?: number;
+    size?: string;
+  } | null>(null);
 
   const statusFilterOptions = [
     { label: "All Status", value: "" },
@@ -340,12 +351,54 @@
   });
 
   // Handlers
-  const handleVPSCreated = () => {
+  const handleVPSCreated = async () => {
     showCreateDialog.value = false;
-    refreshVPS();
+    retryVPSValues.value = null; // Clear retry values after creation
+    // Wait a brief moment for backend to create the VPS record, then refresh
+    // Use refreshVPSWithoutClearing to avoid clearing existing data during refresh
+    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      await refreshVPSWithoutClearing();
+    } catch (error) {
+      // If refresh fails, try again after a longer delay
+      // The VPS might still be creating and not yet available
+      console.warn("Initial refresh failed, retrying after delay:", error);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        await refreshVPSWithoutClearing();
+      } catch (retryError) {
+        console.error("Retry refresh also failed:", retryError);
+        // Don't show error to user - periodic refresh will pick it up
+      }
+    }
   };
 
-  const handleDelete = () => {
-    refreshVPS();
+  const handleDelete = async (deletedVPS?: VPSInstance) => {
+    // Optimistically update status to DELETING for immediate UI feedback
+    if (deletedVPS && vpsInstances.value) {
+      const index = vpsInstances.value.findIndex((v) => v.id === deletedVPS.id);
+      if (index !== -1) {
+        // Create a new object with updated status
+        // Use type assertion since we're modifying a protobuf Message type
+        vpsInstances.value[index] = {
+          ...vpsInstances.value[index],
+          status: VPSStatus.DELETING,
+        } as VPSInstance;
+      }
+    }
+    // Then refresh to get actual status from backend
+    await refreshVPS();
+  };
+
+  const handleRetry = (vps: VPSInstance) => {
+    // Extract values from failed VPS to pre-fill the form
+    retryVPSValues.value = {
+      name: vps.name || "",
+      description: vps.description || "",
+      region: vps.region || "",
+      image: vps.image || undefined,
+      size: vps.size || "",
+    };
+    showCreateDialog.value = true;
   };
 </script>

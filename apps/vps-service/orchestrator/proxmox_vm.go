@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -28,41 +29,182 @@ type CreateVMResult struct {
 	NodeName string // Node where the VM was created
 }
 
-// buildVPSDescription builds a comprehensive description for VPS notes in Proxmox
+// buildVPSDescription builds a comprehensive HTML description for VPS notes in Proxmox
+// Uses HTML with data attributes for easy parsing and visual formatting
 func buildVPSDescription(config *VPSConfig) string {
-	var parts []string
+	var htmlBuilder strings.Builder
 
-	// Base information
-	parts = append(parts, fmt.Sprintf("Managed by Obiente Cloud - VPS ID: %s, Display Name: %s", config.VPSID, config.Name))
+	// HTML header with styling
+	htmlBuilder.WriteString(`<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333;">`)
 
-	// Organization information
+	// Header section
+	htmlBuilder.WriteString(`<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 16px; border-radius: 6px; margin-bottom: 12px;">`)
+	htmlBuilder.WriteString(`<strong style="font-size: 14px;">☁️ Managed by Obiente Cloud</strong>`)
+	htmlBuilder.WriteString(`</div>`)
+
+	// Escape HTML special characters for security
+	vpsIDEscaped := html.EscapeString(config.VPSID)
+	nameEscaped := html.EscapeString(config.Name)
+
+	// Main information section
+	htmlBuilder.WriteString(`<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin-bottom: 12px;">`)
+	htmlBuilder.WriteString(`<div style="margin-bottom: 8px;"><strong>VPS ID:</strong> <code data-vps-id="` + vpsIDEscaped + `" style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Courier New', monospace;">` + vpsIDEscaped + `</code></div>`)
+	htmlBuilder.WriteString(`<div><strong>Display Name:</strong> <span data-display-name="` + nameEscaped + `">` + nameEscaped + `</span></div>`)
+	htmlBuilder.WriteString(`</div>`)
+
+	// Organization section
 	if config.OrganizationID != "" {
-		orgInfo := fmt.Sprintf("Org ID: %s", config.OrganizationID)
+		orgIDEscaped := html.EscapeString(config.OrganizationID)
+		htmlBuilder.WriteString(`<div style="background: #fff; border-left: 3px solid #667eea; padding: 10px 12px; margin-bottom: 8px; border-radius: 3px;">`)
+		htmlBuilder.WriteString(`<div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">ORGANIZATION</div>`)
+		htmlBuilder.WriteString(`<div><strong>ID:</strong> <code data-org-id="` + orgIDEscaped + `" style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Courier New', monospace;">` + orgIDEscaped + `</code></div>`)
 		if config.OrganizationName != nil && *config.OrganizationName != "" {
-			orgInfo += fmt.Sprintf(", Org Name: %s", *config.OrganizationName)
+			orgNameEscaped := html.EscapeString(*config.OrganizationName)
+			htmlBuilder.WriteString(`<div style="margin-top: 4px;"><strong>Name:</strong> <span data-org-name="` + orgNameEscaped + `">` + orgNameEscaped + `</span></div>`)
 		}
-		parts = append(parts, orgInfo)
+		htmlBuilder.WriteString(`</div>`)
 	}
 
-	// Creator information
+	// Creator section
 	if config.CreatedBy != "" {
-		creatorInfo := fmt.Sprintf("Creator ID: %s", config.CreatedBy)
+		creatorIDEscaped := html.EscapeString(config.CreatedBy)
+		htmlBuilder.WriteString(`<div style="background: #fff; border-left: 3px solid #28a745; padding: 10px 12px; margin-bottom: 8px; border-radius: 3px;">`)
+		htmlBuilder.WriteString(`<div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">CREATOR</div>`)
+		htmlBuilder.WriteString(`<div><strong>ID:</strong> <code data-creator-id="` + creatorIDEscaped + `" style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Courier New', monospace;">` + creatorIDEscaped + `</code></div>`)
 		if config.CreatorName != nil && *config.CreatorName != "" {
-			creatorInfo += fmt.Sprintf(", Creator Name: %s", *config.CreatorName)
+			creatorNameEscaped := html.EscapeString(*config.CreatorName)
+			htmlBuilder.WriteString(`<div style="margin-top: 4px;"><strong>Name:</strong> <span data-creator-name="` + creatorNameEscaped + `">` + creatorNameEscaped + `</span></div>`)
 		}
-		parts = append(parts, creatorInfo)
+		htmlBuilder.WriteString(`</div>`)
 	}
 
-	// Owner information (always show if available, even if same as creator)
-	if config.OwnerID != nil && *config.OwnerID != "" {
-		ownerInfo := fmt.Sprintf("Owner ID: %s", *config.OwnerID)
+	// Owner section (if different from creator)
+	if config.OwnerID != nil && *config.OwnerID != "" && *config.OwnerID != config.CreatedBy {
+		ownerIDEscaped := html.EscapeString(*config.OwnerID)
+		htmlBuilder.WriteString(`<div style="background: #fff; border-left: 3px solid #ffc107; padding: 10px 12px; margin-bottom: 8px; border-radius: 3px;">`)
+		htmlBuilder.WriteString(`<div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">OWNER</div>`)
+		htmlBuilder.WriteString(`<div><strong>ID:</strong> <code data-owner-id="` + ownerIDEscaped + `" style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', 'Courier New', monospace;">` + ownerIDEscaped + `</code></div>`)
 		if config.OwnerName != nil && *config.OwnerName != "" {
-			ownerInfo += fmt.Sprintf(", Owner Name: %s", *config.OwnerName)
+			ownerNameEscaped := html.EscapeString(*config.OwnerName)
+			htmlBuilder.WriteString(`<div style="margin-top: 4px;"><strong>Name:</strong> <span data-owner-name="` + ownerNameEscaped + `">` + ownerNameEscaped + `</span></div>`)
 		}
-		parts = append(parts, ownerInfo)
+		htmlBuilder.WriteString(`</div>`)
 	}
 
-	return strings.Join(parts, " | ")
+	htmlBuilder.WriteString(`</div>`)
+
+	return htmlBuilder.String()
+}
+
+// parseVPSDescription parses a VPS description from Proxmox and extracts VPS ID and Organization ID
+// Returns (vpsID, orgID, displayName, creatorID, ok)
+// Supports both HTML format (with data attributes) and legacy text format for backward compatibility
+func parseVPSDescription(description string) (vpsID, orgID, displayName, creatorID string, ok bool) {
+	if !strings.Contains(description, "Managed by Obiente Cloud") {
+		return "", "", "", "", false
+	}
+
+	// Try HTML format first (new format with data attributes)
+	if strings.Contains(description, "data-vps-id=") {
+		// Extract VPS ID from data attribute
+		vpsIDStart := strings.Index(description, `data-vps-id="`)
+		if vpsIDStart != -1 {
+			vpsIDStart += len(`data-vps-id="`)
+			vpsIDEnd := strings.Index(description[vpsIDStart:], `"`)
+			if vpsIDEnd != -1 {
+				vpsID = strings.TrimSpace(description[vpsIDStart : vpsIDStart+vpsIDEnd])
+			}
+		}
+
+		// Extract display name from data attribute
+		displayNameStart := strings.Index(description, `data-display-name="`)
+		if displayNameStart != -1 {
+			displayNameStart += len(`data-display-name="`)
+			displayNameEnd := strings.Index(description[displayNameStart:], `"`)
+			if displayNameEnd != -1 {
+				displayName = strings.TrimSpace(description[displayNameStart : displayNameStart+displayNameEnd])
+			}
+		}
+
+		// Extract organization ID from data attribute
+		orgIDStart := strings.Index(description, `data-org-id="`)
+		if orgIDStart != -1 {
+			orgIDStart += len(`data-org-id="`)
+			orgIDEnd := strings.Index(description[orgIDStart:], `"`)
+			if orgIDEnd != -1 {
+				orgID = strings.TrimSpace(description[orgIDStart : orgIDStart+orgIDEnd])
+			}
+		}
+
+		// Extract creator ID from data attribute
+		creatorIDStart := strings.Index(description, `data-creator-id="`)
+		if creatorIDStart != -1 {
+			creatorIDStart += len(`data-creator-id="`)
+			creatorIDEnd := strings.Index(description[creatorIDStart:], `"`)
+			if creatorIDEnd != -1 {
+				creatorID = strings.TrimSpace(description[creatorIDStart : creatorIDStart+creatorIDEnd])
+			}
+		}
+
+		if vpsID != "" && orgID != "" {
+			return vpsID, orgID, displayName, creatorID, true
+		}
+	}
+
+	// Fall back to legacy text format parsing for backward compatibility
+	// Legacy format: "Managed by Obiente Cloud - VPS ID: {vpsID}, Display Name: {name} | Org ID: {orgID}, ..."
+	parts := strings.Split(description, " | ")
+	if len(parts) == 0 {
+		return "", "", "", "", false
+	}
+
+	// Parse first part: "Managed by Obiente Cloud - VPS ID: {vpsID}, Display Name: {name}"
+	firstPart := parts[0]
+	if strings.Contains(firstPart, "VPS ID:") {
+		vpsIDStart := strings.Index(firstPart, "VPS ID:") + len("VPS ID:")
+		vpsIDEnd := strings.Index(firstPart[vpsIDStart:], ",")
+		if vpsIDEnd == -1 {
+			vpsIDEnd = len(firstPart)
+		} else {
+			vpsIDEnd += vpsIDStart
+		}
+		vpsID = strings.TrimSpace(firstPart[vpsIDStart:vpsIDEnd])
+	}
+
+	if strings.Contains(firstPart, "Display Name:") {
+		nameStart := strings.Index(firstPart, "Display Name:") + len("Display Name:")
+		displayName = strings.TrimSpace(firstPart[nameStart:])
+	}
+
+	// Parse organization ID from other parts: "Org ID: {orgID}, ..."
+	for _, part := range parts {
+		if strings.Contains(part, "Org ID:") {
+			orgIDStart := strings.Index(part, "Org ID:") + len("Org ID:")
+			orgIDEnd := strings.Index(part[orgIDStart:], ",")
+			if orgIDEnd == -1 {
+				orgIDEnd = len(part)
+			} else {
+				orgIDEnd += orgIDStart
+			}
+			orgID = strings.TrimSpace(part[orgIDStart:orgIDEnd])
+		}
+		if strings.Contains(part, "Creator ID:") {
+			creatorIDStart := strings.Index(part, "Creator ID:") + len("Creator ID:")
+			creatorIDEnd := strings.Index(part[creatorIDStart:], ",")
+			if creatorIDEnd == -1 {
+				creatorIDEnd = len(part)
+			} else {
+				creatorIDEnd += creatorIDStart
+			}
+			creatorID = strings.TrimSpace(part[creatorIDStart:creatorIDEnd])
+		}
+	}
+
+	if vpsID == "" || orgID == "" {
+		return "", "", "", "", false
+	}
+
+	return vpsID, orgID, displayName, creatorID, true
 }
 
 // getMapKeys extracts keys from a map
@@ -340,13 +482,59 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 				// Linked clones only work safely when:
 				// 1. Template storage matches desired storage (linked clones inherit template storage)
 				// 2. Template storage type supports linked clones (directory storage only, not lvmthin/lvm/zfs)
-				// For cross-storage clones (e.g. template on 'local', VM on 'local-lvmthin'),
-				// let Proxmox handle a full clone directly to the target storage instead of
-				// doing a linked clone + manual disk move. This ensures the disk contents and
-				// partition table are copied correctly and avoids empty/invalid disks.
+				// For cross-storage clones to LVM thin, we need to use a two-step process:
+				// clone to template storage first, then use qemu-img convert to move to LVM thin
+				// to preserve partition table integrity.
 				useFullClone := false
-				if templateStorage != "" && templateStorage != storage {
-					// Template storage doesn't match desired storage - need full clone
+				needsQemuImgConvert := false
+
+				// Check target storage type
+				targetStorageInfo, targetStorageErr := pc.getStorageInfo(ctx, nodeName, storage)
+				if targetStorageErr == nil && targetStorageInfo != nil {
+					if st, ok := targetStorageInfo["type"].(string); ok {
+						// If target is LVM thin, we need to use qemu-img convert to preserve partition table
+						if st == "lvmthin" || st == "lvm-thin" {
+							needsQemuImgConvert = true
+							logger.Info("[ProxmoxClient] Target storage '%s' is LVM thin, will use qemu-img convert to preserve partition table", storage)
+						}
+					}
+				}
+
+				// For LVM thin targets, always clone to a directory storage first, then convert
+				// This avoids permission issues with linked clones and ensures we can access the disk
+				var intermediateStorage string
+				if needsQemuImgConvert {
+					// Find a directory storage to clone to first
+					// Prefer "local" if it exists and is directory storage, otherwise use template storage if it's directory
+					allStorages, err := pc.listStorages(ctx, nodeName)
+					if err == nil {
+						for _, s := range allStorages {
+							if s == "local" {
+								// Check if "local" is directory storage
+								localInfo, err := pc.getStorageInfo(ctx, nodeName, "local")
+								if err == nil && localInfo != nil {
+									if st, ok := localInfo["type"].(string); ok && (st == "dir" || st == "directory") {
+										intermediateStorage = "local"
+										break
+									}
+								}
+							}
+						}
+					}
+					// If no "local" directory storage found, use template storage if it's directory storage
+					if intermediateStorage == "" && (templateStorageType == "dir" || templateStorageType == "directory") {
+						intermediateStorage = templateStorage
+					}
+					// If still no directory storage, default to "local" (common default)
+					if intermediateStorage == "" {
+						intermediateStorage = "local"
+						logger.Warn("[ProxmoxClient] Could not find directory storage, defaulting to 'local' for intermediate clone")
+					}
+					useFullClone = true
+					logger.Info("[ProxmoxClient] Target storage '%s' is LVM thin, will clone to directory storage '%s' first, then convert to LVM thin", storage, intermediateStorage)
+				} else if templateStorage != "" && templateStorage != storage {
+					// Template storage doesn't match desired storage
+					// For non-LVM thin targets, use full clone directly
 					useFullClone = true
 					logger.Info("[ProxmoxClient] Template storage '%s' differs from desired storage '%s', using full clone", templateStorage, storage)
 				} else if templateStorageType == "lvmthin" || templateStorageType == "lvm" || templateStorageType == "zfs" {
@@ -367,9 +555,17 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 				cloneFormData.Set("name", config.VPSID) // Use VPS ID as VM name for uniqueness
 				cloneFormData.Set("target", nodeName)
 				if useFullClone {
-					cloneFormData.Set("full", "1") // Full clone (allows storage specification)
-					cloneFormData.Set("storage", storage) // Specify target storage for full clone
-					logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (full clone to storage %s)", imageTemplate, templateVMID, vmID, storage)
+					// For full clones to LVM thin, clone to directory storage first, then convert
+					// Otherwise clone directly to target storage
+					if needsQemuImgConvert && intermediateStorage != "" {
+						cloneFormData.Set("full", "1")                    // Full clone to directory storage first
+						cloneFormData.Set("storage", intermediateStorage) // Clone to directory storage
+						logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (full clone to directory storage %s, will convert to LVM thin %s)", imageTemplate, templateVMID, vmID, intermediateStorage, storage)
+					} else {
+						cloneFormData.Set("full", "1")        // Full clone (allows storage specification)
+						cloneFormData.Set("storage", storage) // Specify target storage for full clone
+						logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (full clone to storage %s)", imageTemplate, templateVMID, vmID, storage)
+					}
 				} else {
 					cloneFormData.Set("full", "0") // Linked clone (faster, inherits template storage)
 					logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (linked clone on storage %s)", imageTemplate, templateVMID, vmID, templateStorage)
@@ -384,10 +580,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 					if resp.StatusCode == http.StatusOK {
 						logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
 
-					// Wait a moment for the clone to complete and disk to be available
-					time.Sleep(2 * time.Second)
+						// Wait a moment for the clone to complete and disk to be available
+						time.Sleep(2 * time.Second)
 
-					// Template boot configuration uses device names (handled by setup script)
+						// Template boot configuration uses device names (handled by setup script)
 
 						// Reuse template config we already retrieved (no need to fetch again)
 						// templateDiskValue and templateStorage were already determined before cloning
@@ -458,283 +654,134 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						time.Sleep(3 * time.Second)
 
 						// Verify disk exists in cloned VM and determine which disk key to use
-						vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+						// Retry getting VM config as it may not be available immediately after cloning
+						var vmConfigCheck map[string]interface{}
 						var actualDiskKey string
-						if err != nil {
-							logger.Warn("[ProxmoxClient] Failed to get VM config after clone: %v", err)
-						} else {
-						// Check for disk - prefer the same type as template, but check all types
-						diskKeysToCheck := []string{}
-						if templateDiskKey != "" {
-							diskKeysToCheck = append(diskKeysToCheck, templateDiskKey)
+						maxRetries := 10
+						retryDelay := 500 * time.Millisecond
+						for attempt := 0; attempt < maxRetries; attempt++ {
+							config, err := pc.GetVMConfig(ctx, nodeName, vmID)
+							if err == nil {
+								vmConfigCheck = config
+								break
+							}
+							errorMsg := err.Error()
+							// If the error indicates the VM config doesn't exist, retry (Proxmox might still be creating it)
+							if strings.Contains(errorMsg, "does not exist") || strings.Contains(errorMsg, "Configuration file") {
+								if attempt < maxRetries-1 {
+									logger.Debug("[ProxmoxClient] VM %d config not yet available after clone (attempt %d/%d), retrying in %v...", vmID, attempt+1, maxRetries, retryDelay)
+									time.Sleep(retryDelay)
+									retryDelay = time.Duration(float64(retryDelay) * 1.5) // Exponential backoff
+									continue
+								}
+							}
+							// For other errors or last attempt, log warning and continue
+							logger.Warn("[ProxmoxClient] Failed to get VM config after clone (attempt %d/%d): %v", attempt+1, maxRetries, err)
+							if attempt == maxRetries-1 {
+								break // Exit retry loop on last attempt
+							}
 						}
-						// Add other disk types if template disk key wasn't found or is different
-						for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
-							found := false
-							for _, checkKey := range diskKeysToCheck {
-								if checkKey == diskKey {
-									found = true
+
+						if vmConfigCheck != nil {
+							// Check for disk - prefer the same type as template, but check all types
+							diskKeysToCheck := []string{}
+							if templateDiskKey != "" {
+								diskKeysToCheck = append(diskKeysToCheck, templateDiskKey)
+							}
+							// Add other disk types if template disk key wasn't found or is different
+							for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+								found := false
+								for _, checkKey := range diskKeysToCheck {
+									if checkKey == diskKey {
+										found = true
+										break
+									}
+								}
+								if !found {
+									diskKeysToCheck = append(diskKeysToCheck, diskKey)
+								}
+							}
+
+							for _, diskKey := range diskKeysToCheck {
+								if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
+									actualDiskKey = diskKey
+									logger.Info("[ProxmoxClient] VM %d has disk %s: %s", vmID, diskKey, disk)
 									break
 								}
 							}
-							if !found {
-								diskKeysToCheck = append(diskKeysToCheck, diskKey)
-							}
-						}
 
-						for _, diskKey := range diskKeysToCheck {
-							if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
-								actualDiskKey = diskKey
-								logger.Info("[ProxmoxClient] VM %d has disk %s: %s", vmID, diskKey, disk)
-								break
-							}
-						}
+							if actualDiskKey == "" {
+								logger.Warn("[ProxmoxClient] Cloned VM %d does not have a boot disk configured", vmID)
+								logger.Info("[ProxmoxClient] Template %s (VMID %d) disk config: %s=%s", imageTemplate, templateVMID, templateDiskKey, templateDiskValue)
 
-						if actualDiskKey == "" {
-							logger.Warn("[ProxmoxClient] Cloned VM %d does not have a boot disk configured", vmID)
-							logger.Info("[ProxmoxClient] Template %s (VMID %d) disk config: %s=%s", imageTemplate, templateVMID, templateDiskKey, templateDiskValue)
+								// Check if template disk is a cloud-init disk (not a boot disk)
+								isCloudInitDisk := false
+								if templateDiskValue != "" {
+									isCloudInitDisk = strings.Contains(templateDiskValue, "cloudinit")
+								}
 
-							// Check if template disk is a cloud-init disk (not a boot disk)
-							isCloudInitDisk := false
-							if templateDiskValue != "" {
-								isCloudInitDisk = strings.Contains(templateDiskValue, "cloudinit")
-							}
+								// If template only has cloud-init disk or no boot disk, create a new boot disk
+								// WARNING: Creating an empty disk - it will not be bootable without importing a cloud image
+								// The template should be recreated with a proper boot disk (see vps-provisioning.md)
+								if isCloudInitDisk || templateDiskKey == "" {
+									logger.Warn("[ProxmoxClient] Template has no boot disk (only cloud-init), creating new boot disk for VM %d. NOTE: This disk will be empty and may not boot. The template should be recreated with a proper boot disk.", vmID)
 
-							// If template only has cloud-init disk or no boot disk, create a new boot disk
-							// WARNING: Creating an empty disk - it will not be bootable without importing a cloud image
-							// The template should be recreated with a proper boot disk (see vps-provisioning.md)
-							if isCloudInitDisk || templateDiskKey == "" {
-								logger.Warn("[ProxmoxClient] Template has no boot disk (only cloud-init), creating new boot disk for VM %d. NOTE: This disk will be empty and may not boot. The template should be recreated with a proper boot disk.", vmID)
+									// Create a new boot disk using Proxmox API
+									// Format for directory storage: storage:size=XXG,format=qcow2 (Proxmox auto-generates filename)
+									// Format for LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+									diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+									diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
 
-								// Create a new boot disk using Proxmox API
-								// Format for directory storage: storage:size=XXG,format=qcow2 (Proxmox auto-generates filename)
-								// Format for LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
-								diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
-								diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
-
-								// Determine storage type and format
-								storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
-								var diskValue string
-								if err == nil && storageInfo != nil {
-									storageType, ok := storageInfo["type"].(string)
-									if ok {
-										if storageType == "dir" || storageType == "directory" {
-											// Directory storage: must include vmID subdirectory in path
-											// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
-											// Example: local:300/vm-300-disk-0.qcow2,size=10G,format=qcow2
-											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+									// Determine storage type and format
+									storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+									var diskValue string
+									if err == nil && storageInfo != nil {
+										storageType, ok := storageInfo["type"].(string)
+										if ok {
+											if storageType == "dir" || storageType == "directory" {
+												// Directory storage: must include vmID subdirectory in path
+												// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
+												// Example: local:300/vm-300-disk-0.qcow2,size=10G,format=qcow2
+												diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+											} else {
+												// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+												diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storage, vmID, diskSizeStr)
+											}
 										} else {
-											// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
-											diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storage, vmID, diskSizeStr)
+											// Default to directory format with vmID subdirectory
+											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
 										}
 									} else {
 										// Default to directory format with vmID subdirectory
 										diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
 									}
-								} else {
-									// Default to directory format with vmID subdirectory
-									diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
-								}
 
-								// For directory storage, we need to create the disk volume first, then attach it
-								// For other storage types, we can specify it directly in the config
-								actualDiskKey = "scsi0"
-								var diskResp *http.Response
-								var diskErr error
-
-								// If storage type detection failed, assume directory storage for "local" storage pool
-								// (common default for directory storage)
-								useDirectoryStorage := storageType == "dir" || storageType == "directory"
-								if !useDirectoryStorage && (storage == "local" || err != nil) {
-									// Default to directory storage if detection failed or storage is "local"
-									useDirectoryStorage = true
-									logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storage)
-								}
-
-								if useDirectoryStorage {
-									// Create disk volume first using storage content API
-									// Format: POST /nodes/{node}/storage/{storage}/content
-									// Parameters: vmid, filename, size, format
-									contentFormData := url.Values{}
-									contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
-									contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
-									contentFormData.Set("size", diskSizeStr)
-									contentFormData.Set("format", "qcow2")
-
-									contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
-									logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
-									contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
-									if contentErr == nil && contentResp != nil {
-										if contentResp.StatusCode == http.StatusOK {
-											contentResp.Body.Close()
-											logger.Info("[ProxmoxClient] Successfully created disk volume for VM %d", vmID)
-											// Now attach the disk to the VM config
-											diskFormData := url.Values{}
-											diskFormData.Set(actualDiskKey, diskValue)
-											diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
-										} else {
-											body, _ := io.ReadAll(contentResp.Body)
-											contentResp.Body.Close()
-											logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: status %d, response: %s", vmID, contentResp.StatusCode, string(body))
-											diskErr = fmt.Errorf("failed to create disk volume: status %d", contentResp.StatusCode)
-										}
-									} else {
-										logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: %v", vmID, contentErr)
-										diskErr = contentErr
-									}
-								} else {
-									// For LVM/ZFS, we can set it directly
-									diskFormData := url.Values{}
-									diskFormData.Set(actualDiskKey, diskValue)
-									logger.Info("[ProxmoxClient] Creating boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
-									diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
-								}
-								if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
-									diskResp.Body.Close()
-									logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
-									diskCreated = true
-									createdDiskValue = diskValue
-								} else {
-									var body []byte
-									if diskResp != nil {
-										body, _ = io.ReadAll(diskResp.Body)
-									}
-									logger.Error("[ProxmoxClient] Failed to create boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
-									// Continue anyway - we'll try to create it again later
-								}
-							} else {
-								// Template has a boot disk, but it wasn't cloned - try to find and attach it
-								logger.Info("[ProxmoxClient] Template has boot disk but it wasn't cloned, searching for disk volume...")
-
-								storageToSearch := storage
-								if templateDiskValue != "" {
-									parts := strings.Split(templateDiskValue, ":")
-									if len(parts) >= 1 {
-										storageToSearch = parts[0]
-									}
-								}
-
-								// List all volumes in storage to find the one for this VM
-								storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
-								contentResp, contentErr := pc.apiRequest(ctx, "GET", storageContentEndpoint, nil)
-								var foundVolume string
-								var foundDiskKey string
-								if contentErr == nil && contentResp != nil && contentResp.StatusCode == http.StatusOK {
-									defer contentResp.Body.Close()
-									var contentData struct {
-										Data []struct {
-											VolID   string `json:"volid"`
-											VMID    *int   `json:"vmid"`
-											Format  string `json:"format"`
-											Content string `json:"content"`
-										} `json:"data"`
-									}
-									if err := json.NewDecoder(contentResp.Body).Decode(&contentData); err == nil {
-										// Look for volumes that match this VM ID (cloned disk)
-										for _, vol := range contentData.Data {
-											if vol.Content == "images" && vol.VMID != nil && *vol.VMID == vmID {
-												// Skip cloud-init disks
-												if strings.Contains(vol.VolID, "cloudinit") {
-													continue
-												}
-												// Found a disk volume for the cloned VM
-												volParts := strings.Split(vol.VolID, ":")
-												if len(volParts) >= 2 {
-													volName := volParts[1]
-													foundVolume = volName
-													// Try to determine disk key from volume name
-													if strings.Contains(volName, "scsi") {
-														foundDiskKey = "scsi0"
-													} else if strings.Contains(volName, "virtio") {
-														foundDiskKey = "virtio0"
-													} else if strings.Contains(volName, "sata") {
-														foundDiskKey = "sata0"
-													} else if strings.Contains(volName, "ide") {
-														foundDiskKey = "ide0"
-													} else {
-														foundDiskKey = templateDiskKey
-														if foundDiskKey == "" {
-															foundDiskKey = "scsi0"
-														}
-													}
-													logger.Info("[ProxmoxClient] Found cloned disk volume %s for VM %d, using disk key %s", foundVolume, vmID, foundDiskKey)
-													break
-												}
-											}
-										}
-									}
-								}
-
-								// If we found a volume, add it to the VM config
-								if foundVolume != "" && foundDiskKey != "" {
-									newDiskValue := fmt.Sprintf("%s:%s", storageToSearch, foundVolume)
-									diskFormData := url.Values{}
-									diskFormData.Set(foundDiskKey, newDiskValue)
-									diskResp, diskErr := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
-									if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
-										diskResp.Body.Close()
-										actualDiskKey = foundDiskKey
-										logger.Info("[ProxmoxClient] Successfully attached disk %s to VM %d: %s", foundDiskKey, vmID, newDiskValue)
-									} else {
-										var body []byte
-										if diskResp != nil {
-											body, _ = io.ReadAll(diskResp.Body)
-										}
-										logger.Error("[ProxmoxClient] Failed to attach disk to VM %d: %v. Response: %s", vmID, diskErr, string(body))
-									}
-								} else {
-									// No disk found, create a new one
-									logger.Info("[ProxmoxClient] No cloned disk found, creating new boot disk for VM %d", vmID)
-									diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
-									diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
-
-									// Determine storage type and format
-									storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageToSearch)
-									var diskValue string
-									var storageTypeForDisk string
-									if err == nil && storageInfo != nil {
-										if st, ok := storageInfo["type"].(string); ok {
-											storageTypeForDisk = st
-											if st == "dir" || st == "directory" {
-												// Directory storage: must include vmID subdirectory in path
-												// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
-												diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
-											} else {
-												// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
-												diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
-											}
-										} else {
-											// Default to directory format with vmID subdirectory
-											storageTypeForDisk = "dir"
-											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
-										}
-									} else {
-										// Default to directory format with vmID subdirectory
-										storageTypeForDisk = "dir"
-										diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
-									}
-
+									// For directory storage, we need to create the disk volume first, then attach it
+									// For other storage types, we can specify it directly in the config
 									actualDiskKey = "scsi0"
 									var diskResp *http.Response
 									var diskErr error
 
 									// If storage type detection failed, assume directory storage for "local" storage pool
-									useDirectoryStorage := storageTypeForDisk == "dir" || storageTypeForDisk == "directory"
-									if !useDirectoryStorage && (storageToSearch == "local" || err != nil) {
+									// (common default for directory storage)
+									useDirectoryStorage := storageType == "dir" || storageType == "directory"
+									if !useDirectoryStorage && (storage == "local" || err != nil) {
 										// Default to directory storage if detection failed or storage is "local"
 										useDirectoryStorage = true
-										logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storageToSearch)
+										logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storage)
 									}
 
 									if useDirectoryStorage {
 										// Create disk volume first using storage content API
+										// Format: POST /nodes/{node}/storage/{storage}/content
+										// Parameters: vmid, filename, size, format
 										contentFormData := url.Values{}
 										contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
 										contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
 										contentFormData.Set("size", diskSizeStr)
 										contentFormData.Set("format", "qcow2")
 
-										contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
+										contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
 										logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
 										contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
 										if contentErr == nil && contentResp != nil {
@@ -773,85 +820,328 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 											body, _ = io.ReadAll(diskResp.Body)
 										}
 										logger.Error("[ProxmoxClient] Failed to create boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
-										// Try LVM/ZFS format as fallback (without format parameter)
-										if strings.Contains(string(body), "format") || strings.Contains(string(body), "qcow2") {
-											logger.Info("[ProxmoxClient] Retrying with LVM/ZFS format (no format parameter) for VM %d", vmID)
-											diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
+										// Continue anyway - we'll try to create it again later
+									}
+								} else {
+									// Template has a boot disk, but it wasn't cloned - try to find and attach it
+									logger.Info("[ProxmoxClient] Template has boot disk but it wasn't cloned, searching for disk volume...")
+
+									storageToSearch := storage
+									if templateDiskValue != "" {
+										parts := strings.Split(templateDiskValue, ":")
+										if len(parts) >= 1 {
+											storageToSearch = parts[0]
+										}
+									}
+
+									// List all volumes in storage to find the one for this VM
+									storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
+									contentResp, contentErr := pc.apiRequest(ctx, "GET", storageContentEndpoint, nil)
+									var foundVolume string
+									var foundDiskKey string
+									if contentErr == nil && contentResp != nil && contentResp.StatusCode == http.StatusOK {
+										defer contentResp.Body.Close()
+										var contentData struct {
+											Data []struct {
+												VolID   string `json:"volid"`
+												VMID    *int   `json:"vmid"`
+												Format  string `json:"format"`
+												Content string `json:"content"`
+											} `json:"data"`
+										}
+										if err := json.NewDecoder(contentResp.Body).Decode(&contentData); err == nil {
+											// Look for volumes that match this VM ID (cloned disk)
+											for _, vol := range contentData.Data {
+												if vol.Content == "images" && vol.VMID != nil && *vol.VMID == vmID {
+													// Skip cloud-init disks
+													if strings.Contains(vol.VolID, "cloudinit") {
+														continue
+													}
+													// Found a disk volume for the cloned VM
+													volParts := strings.Split(vol.VolID, ":")
+													if len(volParts) >= 2 {
+														volName := volParts[1]
+														foundVolume = volName
+														// Try to determine disk key from volume name
+														if strings.Contains(volName, "scsi") {
+															foundDiskKey = "scsi0"
+														} else if strings.Contains(volName, "virtio") {
+															foundDiskKey = "virtio0"
+														} else if strings.Contains(volName, "sata") {
+															foundDiskKey = "sata0"
+														} else if strings.Contains(volName, "ide") {
+															foundDiskKey = "ide0"
+														} else {
+															foundDiskKey = templateDiskKey
+															if foundDiskKey == "" {
+																foundDiskKey = "scsi0"
+															}
+														}
+														logger.Info("[ProxmoxClient] Found cloned disk volume %s for VM %d, using disk key %s", foundVolume, vmID, foundDiskKey)
+														break
+													}
+												}
+											}
+										}
+									}
+
+									// If we found a volume, add it to the VM config
+									if foundVolume != "" && foundDiskKey != "" {
+										newDiskValue := fmt.Sprintf("%s:%s", storageToSearch, foundVolume)
+										diskFormData := url.Values{}
+										diskFormData.Set(foundDiskKey, newDiskValue)
+										diskResp, diskErr := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+										if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+											diskResp.Body.Close()
+											actualDiskKey = foundDiskKey
+											logger.Info("[ProxmoxClient] Successfully attached disk %s to VM %d: %s", foundDiskKey, vmID, newDiskValue)
+										} else {
+											var body []byte
+											if diskResp != nil {
+												body, _ = io.ReadAll(diskResp.Body)
+											}
+											logger.Error("[ProxmoxClient] Failed to attach disk to VM %d: %v. Response: %s", vmID, diskErr, string(body))
+										}
+									} else {
+										// No disk found, create a new one
+										logger.Info("[ProxmoxClient] No cloned disk found, creating new boot disk for VM %d", vmID)
+										diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+										diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+
+										// Determine storage type and format
+										storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageToSearch)
+										var diskValue string
+										var storageTypeForDisk string
+										if err == nil && storageInfo != nil {
+											if st, ok := storageInfo["type"].(string); ok {
+												storageTypeForDisk = st
+												if st == "dir" || st == "directory" {
+													// Directory storage: must include vmID subdirectory in path
+													// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
+													diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+												} else {
+													// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+													diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
+												}
+											} else {
+												// Default to directory format with vmID subdirectory
+												storageTypeForDisk = "dir"
+												diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+											}
+										} else {
+											// Default to directory format with vmID subdirectory
+											storageTypeForDisk = "dir"
+											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+										}
+
+										actualDiskKey = "scsi0"
+										var diskResp *http.Response
+										var diskErr error
+
+										// If storage type detection failed, assume directory storage for "local" storage pool
+										useDirectoryStorage := storageTypeForDisk == "dir" || storageTypeForDisk == "directory"
+										if !useDirectoryStorage && (storageToSearch == "local" || err != nil) {
+											// Default to directory storage if detection failed or storage is "local"
+											useDirectoryStorage = true
+											logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storageToSearch)
+										}
+
+										if useDirectoryStorage {
+											// Create disk volume first using storage content API
+											contentFormData := url.Values{}
+											contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
+											contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
+											contentFormData.Set("size", diskSizeStr)
+											contentFormData.Set("format", "qcow2")
+
+											contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
+											logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
+											contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
+											if contentErr == nil && contentResp != nil {
+												if contentResp.StatusCode == http.StatusOK {
+													contentResp.Body.Close()
+													logger.Info("[ProxmoxClient] Successfully created disk volume for VM %d", vmID)
+													// Now attach the disk to the VM config
+													diskFormData := url.Values{}
+													diskFormData.Set(actualDiskKey, diskValue)
+													diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+												} else {
+													body, _ := io.ReadAll(contentResp.Body)
+													contentResp.Body.Close()
+													logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: status %d, response: %s", vmID, contentResp.StatusCode, string(body))
+													diskErr = fmt.Errorf("failed to create disk volume: status %d", contentResp.StatusCode)
+												}
+											} else {
+												logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: %v", vmID, contentErr)
+												diskErr = contentErr
+											}
+										} else {
+											// For LVM/ZFS, we can set it directly
 											diskFormData := url.Values{}
 											diskFormData.Set(actualDiskKey, diskValue)
-											diskResp2, diskErr2 := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
-											if diskErr2 == nil && diskResp2 != nil && diskResp2.StatusCode == http.StatusOK {
-												diskResp2.Body.Close()
-												logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d with LVM/ZFS format: %s", actualDiskKey, vmID, diskValue)
-												diskCreated = true
-												createdDiskValue = diskValue
-											} else {
-												var body2 []byte
-												if diskResp2 != nil {
-													body2, _ = io.ReadAll(diskResp2.Body)
+											logger.Info("[ProxmoxClient] Creating boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+											diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+										}
+										if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+											diskResp.Body.Close()
+											logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+											diskCreated = true
+											createdDiskValue = diskValue
+										} else {
+											var body []byte
+											if diskResp != nil {
+												body, _ = io.ReadAll(diskResp.Body)
+											}
+											logger.Error("[ProxmoxClient] Failed to create boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
+											// Try LVM/ZFS format as fallback (without format parameter)
+											if strings.Contains(string(body), "format") || strings.Contains(string(body), "qcow2") {
+												logger.Info("[ProxmoxClient] Retrying with LVM/ZFS format (no format parameter) for VM %d", vmID)
+												diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
+												diskFormData := url.Values{}
+												diskFormData.Set(actualDiskKey, diskValue)
+												diskResp2, diskErr2 := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+												if diskErr2 == nil && diskResp2 != nil && diskResp2.StatusCode == http.StatusOK {
+													diskResp2.Body.Close()
+													logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d with LVM/ZFS format: %s", actualDiskKey, vmID, diskValue)
+													diskCreated = true
+													createdDiskValue = diskValue
+												} else {
+													var body2 []byte
+													if diskResp2 != nil {
+														body2, _ = io.ReadAll(diskResp2.Body)
+													}
+													logger.Error("[ProxmoxClient] Failed to create boot disk with LVM/ZFS format for VM %d: %v. Response: %s", vmID, diskErr2, string(body2))
 												}
-												logger.Error("[ProxmoxClient] Failed to create boot disk with LVM/ZFS format for VM %d: %v. Response: %s", vmID, diskErr2, string(body2))
 											}
 										}
 									}
 								}
 							}
 						}
-					}
 
 						// Resize disk after cloning to match the plan's disk size
 						// For linked clones, the disk inherits the template size, so we need to resize it
 						// If we just created a new disk, it should already be the correct size, but verify anyway
 						if actualDiskKey != "" {
-						vmConfigAfter, err := pc.GetVMConfig(ctx, nodeName, vmID)
-						if err == nil {
-							if disk, ok := vmConfigAfter[actualDiskKey].(string); ok && disk != "" {
-								diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+							// Use the config we already retrieved, or get it again if we don't have it
+							var vmConfigAfter map[string]interface{}
+							if vmConfigCheck != nil {
+								vmConfigAfter = vmConfigCheck
+							} else {
+								var err error
+								vmConfigAfter, err = pc.GetVMConfig(ctx, nodeName, vmID)
+								if err != nil {
+									logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
+								}
+							}
+							if vmConfigAfter != nil {
+								if disk, ok := vmConfigAfter[actualDiskKey].(string); ok && disk != "" {
+									diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
 
-								// Check if we just created the disk (if so, it should already be the right size)
-								// But we still verify and resize if needed, as the size might not match exactly
-								justCreated := strings.Contains(disk, "size=")
+									// Check if we just created the disk (if so, it should already be the right size)
+									// But we still verify and resize if needed, as the size might not match exactly
+									justCreated := strings.Contains(disk, "size=")
 
-								if justCreated {
-									// Extract size from disk config to verify it matches
-									// Format: "storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2"
-									if strings.Contains(disk, "size=") {
-										sizePart := strings.Split(disk, "size=")
-										if len(sizePart) > 1 {
-											sizeStr := strings.Split(sizePart[1], ",")[0]
-											sizeStr = strings.TrimSuffix(sizeStr, "G")
-											if existingSize, parseErr := strconv.ParseInt(sizeStr, 10, 64); parseErr == nil {
-												if existingSize == diskSizeGB {
-													logger.Info("[ProxmoxClient] Disk %s was just created with correct size (%dGB), skipping resize", actualDiskKey, diskSizeGB)
-													// Skip to next iteration - disk is already correct size
-													goto skipResize
-												} else {
-													logger.Info("[ProxmoxClient] Disk %s was created with size %dGB but needs %dGB, resizing...", actualDiskKey, existingSize, diskSizeGB)
+									if justCreated {
+										// Extract size from disk config to verify it matches
+										// Format: "storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2"
+										if strings.Contains(disk, "size=") {
+											sizePart := strings.Split(disk, "size=")
+											if len(sizePart) > 1 {
+												sizeStr := strings.Split(sizePart[1], ",")[0]
+												sizeStr = strings.TrimSuffix(sizeStr, "G")
+												if existingSize, parseErr := strconv.ParseInt(sizeStr, 10, 64); parseErr == nil {
+													if existingSize == diskSizeGB {
+														logger.Info("[ProxmoxClient] Disk %s was just created with correct size (%dGB), skipping resize", actualDiskKey, diskSizeGB)
+														// Skip to next iteration - disk is already correct size
+														goto skipResize
+													} else {
+														logger.Info("[ProxmoxClient] Disk %s was created with size %dGB but needs %dGB, resizing...", actualDiskKey, existingSize, diskSizeGB)
+													}
 												}
+											}
+										}
+									}
+
+							skipResize:
+								// Check if we need to move disk to target storage
+								// This is needed for:
+								// 1. Linked clones where disk stays on template storage
+								// 2. Full clones to LVM thin (cloned to directory storage first, need to convert)
+								// 3. New boot disks created on intermediate storage when target is LVM thin
+								needsMove := false
+								var moveReason string
+
+								if !useFullClone && templateStorage != "" && templateStorage != storage {
+									needsMove = true
+									moveReason = fmt.Sprintf("Linked clone created disk on template storage '%s', but target storage is '%s'", templateStorage, storage)
+								} else if useFullClone && needsQemuImgConvert && intermediateStorage != "" && intermediateStorage != storage {
+									needsMove = true
+									moveReason = fmt.Sprintf("Full clone created disk on directory storage '%s', but target LVM thin storage '%s' requires qemu-img convert", intermediateStorage, storage)
+								} else if needsQemuImgConvert && storage != "" {
+									// Check if disk is on a different storage than target (e.g., newly created disk on intermediate storage)
+									if diskConfig, ok := vmConfigAfter[actualDiskKey].(string); ok {
+										// Extract storage from disk config (e.g., "local:303/vm-303-disk-0.qcow2" -> "local")
+										if parts := strings.Split(diskConfig, ":"); len(parts) > 0 {
+											currentStorage := parts[0]
+											if currentStorage != storage {
+												needsMove = true
+												moveReason = fmt.Sprintf("Disk was created on storage '%s', but target LVM thin storage '%s' requires qemu-img convert", currentStorage, storage)
 											}
 										}
 									}
 								}
 
-								// Resize disk to match plan size
-								// For linked clones, this will create a new disk with the correct size
-								logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
-								if err := pc.resizeDisk(ctx, nodeName, vmID, actualDiskKey, diskSizeGB); err != nil {
-									logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, err)
-									// This is a critical error - the VM will have the wrong disk size
-									// Continue anyway but log as error so it's visible
+								if needsMove {
+									// For LVM thin moves: DON'T resize before move!
+									// The disk needs to be moved at its current size, then resized after
+									// This is because Proxmox storage API doesn't respect size parameter for LVM thin
+									logger.Info("[ProxmoxClient] %s. Moving disk at current size, will resize after...", moveReason)
+									writeLog("Moving disk to target storage...", false)
+									// Use separate context to avoid parent context cancellation during long disk operations
+									moveCtx, moveCancel := context.WithTimeout(context.Background(), 120*time.Second)
+									moveErr := pc.MoveDisk(moveCtx, nodeName, vmID, actualDiskKey, storage, true)
+									moveCancel()
+									if moveErr != nil {
+										logger.Error("[ProxmoxClient] Failed to move disk %s for VM %d to target storage '%s': %v", actualDiskKey, vmID, storage, moveErr)
+										writeLog(fmt.Sprintf("Failed to move disk: %v", moveErr), true)
+										return nil, fmt.Errorf("failed to move disk from template storage to target storage: %w", moveErr)
+									}
+									logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to target storage '%s'", actualDiskKey, vmID, storage)
+									writeLog("Disk moved successfully", false)
+									
+									// NOW resize the disk on the target storage
+									// Use separate context to avoid parent context cancellation
+									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size) after move", actualDiskKey, vmID, diskSizeGB)
+									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
+									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
+									resizeCancel()
+									if resizeErr != nil {
+										logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB after move: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
+										writeLog(fmt.Sprintf("Failed to resize disk: %v", resizeErr), true)
+										// Continue anyway - disk is moved, just not resized
+									} else {
+										logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+										writeLog("Disk resized successfully", false)
+									}
 								} else {
-									logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+									// No move needed - resize in place
+									// Use separate context to avoid parent context cancellation
+									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
+									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
+									resizeCancel()
+									if resizeErr != nil {
+										logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
+									} else {
+										logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+									}
 								}
-							skipResize:
+								}
 							} else {
-								logger.Warn("[ProxmoxClient] Could not find disk %s in VM %d config after clone", actualDiskKey, vmID)
+								logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
 							}
-						} else {
-							logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
-						}
-						} else {
-							logger.Warn("[ProxmoxClient] No disk key found for VM %d after clone - cannot resize", vmID)
 						}
 					} else {
 						body, _ := io.ReadAll(resp.Body)
@@ -895,10 +1185,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
-		// CRITICAL: Set up cloud-init drive on directory storage (snippetStorage)
-		// When cloning templates to LVM/ZFS storage, the cloud-init drive must be on directory storage
-		// Without this, cloud-init won't have configuration and the VM will hang waiting for metadata
-		vmConfig["ide2"] = fmt.Sprintf("%s:cloudinit", snippetStorage)
+		// Note: ide2 (cloudinit disk) comes from template - no need to create it
 
 		// Root password: use custom if provided, otherwise auto-generate
 		if config.RootPassword != nil && *config.RootPassword != "" {
@@ -1032,9 +1319,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Form data does NOT include sshkeys parameter")
 		}
 
-
 		// Now update the config with all other parameters
-		resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+		// Use separate context to avoid parent context cancellation during long operations
+		configCtx, configCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer configCancel()
+		resp, err := pc.apiRequestForm(configCtx, "PUT", updateEndpoint, formData)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
@@ -1220,9 +1509,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Initial config update failed for VM %d: %v. Response: %s. Retrying with cloud-init config only...", vmID, err, bodyStr)
 
 			// Get the actual disk key from the cloned VM to use in boot order
-			vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+			// Use separate context to avoid parent context cancellation
+			checkCtx, checkCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			vmConfigCheck, checkErr := pc.GetVMConfig(checkCtx, nodeName, vmID)
+			checkCancel()
 			var actualDiskKey string
-			if err == nil {
+			if checkErr == nil {
 				// Find which disk key exists in the cloned VM
 				for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
 					if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
@@ -1234,8 +1526,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 			// If we couldn't find a disk, try to get it from template
 			if actualDiskKey == "" {
-				templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
-				if err == nil {
+				templateCtx, templateCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				templateConfig, templateErr := pc.GetVMConfig(templateCtx, nodeName, templateVMID)
+				templateCancel()
+				if templateErr == nil {
 					for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
 						if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
 							actualDiskKey = diskKey
@@ -1273,7 +1567,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Info("[ProxmoxClient] Retrying with boot order %s and bootdisk %s for VM %d", actualDiskKey, actualDiskKey, vmID)
 
 			// Now update the config with retry parameters
-			retryResp, retryErr := pc.apiRequestForm(ctx, "PUT", updateEndpoint, retryFormData)
+			// Use separate context to avoid parent context cancellation
+			retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer retryCancel()
+			retryResp, retryErr := pc.apiRequestForm(retryCtx, "PUT", updateEndpoint, retryFormData)
 			if retryErr == nil && retryResp != nil && retryResp.StatusCode == http.StatusOK {
 				retryResp.Body.Close()
 				logger.Info("[ProxmoxClient] Successfully applied cloud-init config to VM %d on retry", vmID)
@@ -1382,6 +1679,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		logger.Debug("[ProxmoxClient] No root password for VM %d (cloud-init not used)", vmID)
 	}
 
+	logger.Info("[ProxmoxClient] CreateVMResult: VMID=%s, Password length=%d, NodeName=%s", fmt.Sprintf("%d", vmID), len(rootPassword), nodeName)
 	return &CreateVMResult{
 		VMID:     fmt.Sprintf("%d", vmID),
 		Password: rootPassword,
@@ -1398,7 +1696,7 @@ func (pc *ProxmoxClient) isVMDeletedError(err error, statusCode int, bodyStr str
 	if err == nil && statusCode == 0 && bodyStr == "" {
 		return false
 	}
-	
+
 	// Check error message
 	if err != nil {
 		errStr := err.Error()
@@ -1408,7 +1706,7 @@ func (pc *ProxmoxClient) isVMDeletedError(err error, statusCode int, bodyStr str
 			return true
 		}
 	}
-	
+
 	// Check response body and status code
 	if statusCode == 500 || statusCode == 404 {
 		if strings.Contains(bodyStr, "unable to find configuration file") ||
@@ -1417,7 +1715,7 @@ func (pc *ProxmoxClient) isVMDeletedError(err error, statusCode int, bodyStr str
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -1437,12 +1735,12 @@ func (pc *ProxmoxClient) startVM(ctx context.Context, nodeName string, vmID int)
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		
+
 		// Check if VM was deleted (configuration file not found)
 		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
 			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
 		}
-		
+
 		return fmt.Errorf("failed to start VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
@@ -1466,12 +1764,12 @@ func (pc *ProxmoxClient) StopVM(ctx context.Context, nodeName string, vmID int) 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		
+
 		// Check if VM was deleted (configuration file not found)
 		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
 			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
 		}
-		
+
 		return fmt.Errorf("failed to stop VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
@@ -1505,7 +1803,7 @@ func (pc *ProxmoxClient) DeleteVM(ctx context.Context, nodeName string, vmID int
 			if resp.StatusCode >= 400 && resp.StatusCode < 600 {
 				// Check if VM exists by trying to find it on other nodes
 				logger.Warn("[ProxmoxClient] Got unusual status %d when getting VM config: %s. Will attempt to find VM on other nodes or proceed with deletion.", resp.StatusCode, errorMsg)
-				
+
 				// Try to find VM on other nodes
 				allNodes, listErr := pc.ListNodes(ctx)
 				if listErr == nil {
@@ -1519,14 +1817,14 @@ func (pc *ProxmoxClient) DeleteVM(ctx context.Context, nodeName string, vmID int
 							otherResp.Body.Close()
 							logger.Info("[ProxmoxClient] Found VM %d on node %s instead of %s", vmID, otherNode, nodeName)
 							nodeName = otherNode // Update node name for deletion
-							goto skipValidation // Skip validation since we found it on another node
+							goto skipValidation  // Skip validation since we found it on another node
 						}
 						if otherResp != nil {
 							otherResp.Body.Close()
 						}
 					}
 				}
-				
+
 				// If we can't validate, log warning but proceed with deletion attempt
 				// This handles cases where Proxmox API is having issues but VM still exists
 				logger.Warn("[ProxmoxClient] Cannot validate VM %d ownership due to API error (status %d), but will attempt deletion. This may be unsafe if VM name doesn't match VPS ID.", vmID, resp.StatusCode)
@@ -1759,6 +2057,86 @@ func (pc *ProxmoxClient) GetVMDiskSize(ctx context.Context, nodeName string, vmI
 	return 0, fmt.Errorf("disk size not found in VM config or storage")
 }
 
+// normalizeSizeForProxmox converts size formats from qemu-img (e.g., "10GiB" or "10 GiB") to Proxmox API format (e.g., "10G")
+// Proxmox API expects formats like "10G", "10M", "10K" (not "10GiB", "10MiB", etc.)
+func normalizeSizeForProxmox(size string) string {
+	size = strings.TrimSpace(size)
+
+	// Remove any spaces between number and unit (e.g., "10 GiB" -> "10GiB")
+	size = strings.ReplaceAll(size, " ", "")
+
+	// Convert binary units (GiB, MiB, KiB) to decimal units (G, M, K)
+	size = strings.ReplaceAll(size, "GiB", "G")
+	size = strings.ReplaceAll(size, "MiB", "M")
+	size = strings.ReplaceAll(size, "KiB", "K")
+	size = strings.ReplaceAll(size, "TiB", "T")
+	size = strings.ReplaceAll(size, "PiB", "P")
+
+	// Also handle decimal units (GB, MB, KB) - convert to G, M, K
+	size = strings.ReplaceAll(size, "GB", "G")
+	size = strings.ReplaceAll(size, "MB", "M")
+	size = strings.ReplaceAll(size, "KB", "K")
+	size = strings.ReplaceAll(size, "TB", "T")
+	size = strings.ReplaceAll(size, "PB", "P")
+
+	return size
+}
+
+// parseSizeString parses a normalized size string (e.g., "10G") into its numeric
+// value and unit.
+func parseSizeString(size string) (float64, string, error) {
+	var value float64
+	var unit string
+	if _, err := fmt.Sscanf(size, "%f%s", &value, &unit); err != nil {
+		return 0, "", err
+	}
+	if unit == "" {
+		unit = "B"
+	}
+	unit = strings.ToUpper(unit)
+	return value, unit, nil
+}
+
+// sizeValueToBytes converts a size value/unit pair (e.g., 10, "G") into bytes.
+func sizeValueToBytes(value float64, unit string) int64 {
+	switch unit {
+	case "G":
+		return int64(value * 1024 * 1024 * 1024)
+	case "M":
+		return int64(value * 1024 * 1024)
+	case "K":
+		return int64(value * 1024)
+	case "T":
+		return int64(value * 1024 * 1024 * 1024 * 1024)
+	case "P":
+		return int64(value * 1024 * 1024 * 1024 * 1024 * 1024)
+	case "B":
+		fallthrough
+	default:
+		return int64(value)
+	}
+}
+
+// runSSHCommand executes a single command on the remote host and returns its stdout.
+func runSSHCommand(conn *ssh.Client, cmd string) (string, error) {
+	session, err := conn.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	if err := session.Run(cmd); err != nil {
+		return "", fmt.Errorf("%w (stderr: %s)", err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
 func (pc *ProxmoxClient) ResizeDisk(ctx context.Context, nodeName string, vmID int, disk string, sizeGB int64) error {
 	return pc.resizeDisk(ctx, nodeName, vmID, disk, sizeGB)
 }
@@ -1816,7 +2194,7 @@ func (pc *ProxmoxClient) moveDisk(ctx context.Context, nodeName string, vmID int
 	}
 
 	logger.Info("[ProxmoxClient] Moving disk %s for VM %d from current storage to %s (delete source: %v)", disk, vmID, targetStorage, deleteSource)
-	
+
 	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
 	if err != nil {
 		return fmt.Errorf("failed to move disk: %w", err)
@@ -1895,11 +2273,71 @@ func (pc *ProxmoxClient) moveDiskWithQemuImg(ctx context.Context, nodeName strin
 
 	// Use SSH to perform the disk move with qemu-img convert
 	if err := pc.moveDiskWithQemuImgViaSSH(ctx, nodeName, vmID, disk, sourceDiskVolumeID, targetStorage, deleteSource); err != nil {
+		logger.Error("[ProxmoxClient] Failed to move disk with qemu-img convert for VM %d: %v", vmID, err)
 		return fmt.Errorf("failed to move disk with qemu-img convert: %w", err)
 	}
 
 	logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to LVM thin storage %s using qemu-img convert", disk, vmID, targetStorage)
 	return nil
+}
+
+// getDiskPathFromVolumeID constructs the disk path from a volume ID without using pvesm
+// This avoids cluster communication issues and works for common storage types
+func (pc *ProxmoxClient) getDiskPathFromVolumeID(ctx context.Context, nodeName string, volumeID string, storageType string) (string, error) {
+	// Parse volume ID: "storage:volume" or "storage:vmID/volume"
+	parts := strings.Split(volumeID, ":")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid volume ID format: %s", volumeID)
+	}
+
+	storageName := parts[0]
+	volumeName := parts[1]
+
+	// Construct path based on storage type
+	switch storageType {
+	case "lvmthin", "lvm-thin", "lvm":
+		// LVM thin: volume ID "local-lvm:vm-300-disk-0" -> "/dev/pve/vm-300-disk-0"
+		// Default VG is typically "pve", but we can try to detect it
+		// For now, use "pve" as default (most common)
+		// Extract just the volume name (e.g., "vm-300-disk-0" from "vm-300-disk-0")
+		diskPath := fmt.Sprintf("/dev/pve/%s", volumeName)
+		logger.Info("[ProxmoxClient] Constructed LVM path for volume %s: %s", volumeID, diskPath)
+		return diskPath, nil
+	case "dir", "directory":
+		// Directory storage: volume ID "local:300/vm-300-disk-0.qcow2" -> "/var/lib/vz/images/300/vm-300-disk-0.qcow2"
+		// Or we need to get the storage path from API
+		storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageName)
+		if err == nil && storageInfo != nil {
+			if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+				// Directory storage path is typically: <storage-path>/images/<vmid>/<filename>
+				diskPath := fmt.Sprintf("%s/images/%s", pathVal, volumeName)
+				logger.Info("[ProxmoxClient] Constructed directory path for volume %s: %s", volumeID, diskPath)
+				return diskPath, nil
+			}
+		}
+		// Fallback to default path
+		diskPath := fmt.Sprintf("/var/lib/vz/images/%s", volumeName)
+		logger.Info("[ProxmoxClient] Using default directory path for volume %s: %s", volumeID, diskPath)
+		return diskPath, nil
+	case "zfs":
+		// ZFS: volume ID "local-zfs:vm-300-disk-0" -> "/dev/zvol/rpool/data/vm-300-disk-0"
+		// ZFS paths are more complex, but we can try common patterns
+		storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageName)
+		if err == nil && storageInfo != nil {
+			if poolVal, ok := storageInfo["pool"].(string); ok && poolVal != "" {
+				diskPath := fmt.Sprintf("/dev/zvol/%s/%s", poolVal, volumeName)
+				logger.Info("[ProxmoxClient] Constructed ZFS path for volume %s: %s", volumeID, diskPath)
+				return diskPath, nil
+			}
+		}
+		// Fallback to common ZFS path
+		diskPath := fmt.Sprintf("/dev/zvol/rpool/data/%s", volumeName)
+		logger.Info("[ProxmoxClient] Using default ZFS path for volume %s: %s", volumeID, diskPath)
+		return diskPath, nil
+	default:
+		// For unknown types, cannot construct path
+		return "", fmt.Errorf("unknown storage type %s, cannot construct path for volume %s", storageType, volumeID)
+	}
 }
 
 // moveDiskWithQemuImgViaSSH uses SSH to execute qemu-img convert to move disk while preserving partition table
@@ -1955,24 +2393,37 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	}
 	defer conn.Close()
 
-	// Get source disk path using pvesm
-	session1, err := conn.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create SSH session: %w", err)
+	// Extract source storage name from volume ID (e.g., "local" from "local:300/vm-300-disk-0.qcow2")
+	sourceStorageParts := strings.Split(sourceDiskVolumeID, ":")
+	var sourceStorage string
+	if len(sourceStorageParts) >= 1 {
+		sourceStorage = sourceStorageParts[0]
 	}
-	defer session1.Close()
-
-	var stderr1 bytes.Buffer
-	session1.Stderr = &stderr1
-
-	cmd1 := fmt.Sprintf("pvesm path %s", sourceDiskVolumeID)
-	output1, err := session1.Output(cmd1)
-	if err != nil {
-		return fmt.Errorf("failed to get source disk path: %w (stderr: %s)", err, stderr1.String())
+	if sourceStorage == "" {
+		return fmt.Errorf("could not determine source storage from volume ID: %s", sourceDiskVolumeID)
 	}
-	sourceDiskPath := strings.TrimSpace(string(output1))
-	if sourceDiskPath == "" {
-		return fmt.Errorf("empty source disk path returned from pvesm")
+
+	// Get source storage type (needed for path construction)
+	sourceStorageInfo, err := pc.getStorageInfo(ctx, nodeName, sourceStorage)
+	var sourceStorageType string
+	if err == nil && sourceStorageInfo != nil {
+		if st, ok := sourceStorageInfo["type"].(string); ok {
+			sourceStorageType = st
+		}
+	}
+	if sourceStorageType == "" {
+		// Default assumption based on storage name
+		if strings.Contains(sourceStorage, "lvm") {
+			sourceStorageType = "lvmthin"
+		} else {
+			sourceStorageType = "dir"
+		}
+	}
+
+	// Get source disk path by constructing it from volume ID
+	sourceDiskPath, err := pc.getDiskPathFromVolumeID(ctx, nodeName, sourceDiskVolumeID, sourceStorageType)
+	if err != nil {
+		return fmt.Errorf("failed to construct source disk path from volume ID %s: %w", sourceDiskVolumeID, err)
 	}
 
 	logger.Info("[ProxmoxClient] Source disk path: %s", sourceDiskPath)
@@ -1987,8 +2438,8 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	var stderr2 bytes.Buffer
 	session2.Stderr = &stderr2
 
-	checkFormatCmd := fmt.Sprintf("qemu-img info %s 2>/dev/null | grep 'file format' | awk '{print $3}' || echo 'raw'", sourceDiskPath)
-	formatOutput, err := session2.Output(checkFormatCmd)
+	checkFormatCmd := fmt.Sprintf("/usr/bin/qemu-img info %s 2>/dev/null | grep 'file format' | awk '{print $3}' || /usr/bin/qemu-img info %s 2>/dev/null | grep 'file format' | awk '{print $3}' || echo 'raw'", sourceDiskPath, sourceDiskPath)
+	formatOutput, _ := session2.Output(checkFormatCmd)
 	sourceFormat := strings.TrimSpace(string(formatOutput))
 	if sourceFormat == "" {
 		sourceFormat = "raw"
@@ -1996,11 +2447,7 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 
 	logger.Info("[ProxmoxClient] Source disk format: %s", sourceFormat)
 
-	// Create target disk volume on target storage
-	// For LVM thin, we need to create the volume first
-	targetDiskVolumeID := fmt.Sprintf("%s:vm-%d-disk-0", targetStorage, vmID)
-	
-	// Get disk size from source
+	// Get final disk size from source (needed to create target volume at correct size)
 	session3, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session for size check: %w", err)
@@ -2010,10 +2457,11 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	var stderr3 bytes.Buffer
 	session3.Stderr = &stderr3
 
-	getSizeCmd := fmt.Sprintf("qemu-img info %s 2>/dev/null | grep 'virtual size' | awk '{print $3$4}' || qemu-img info %s 2>/dev/null | grep 'disk size' | awk '{print $3$4}'", sourceDiskPath, sourceDiskPath)
-	sizeOutput, err := session3.Output(getSizeCmd)
-	diskSize := strings.TrimSpace(string(sizeOutput))
-	if diskSize == "" {
+	// Get source disk size - use virtual size (actual disk capacity), not disk size (used space)
+	getSizeCmd := fmt.Sprintf("/usr/bin/qemu-img info %s 2>/dev/null | grep 'virtual size' | awk '{print $3$4}'", sourceDiskPath)
+	sizeOutput, _ := session3.Output(getSizeCmd)
+	finalDiskSize := strings.TrimSpace(string(sizeOutput))
+	if finalDiskSize == "" {
 		// Try to get size from VM config
 		vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
 		if err == nil {
@@ -2024,25 +2472,62 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 					if idx := strings.Index(sizeStr, ","); idx != -1 {
 						sizeStr = sizeStr[:idx]
 					}
-					diskSize = sizeStr
+					finalDiskSize = sizeStr
 				}
 			}
 		}
-		if diskSize == "" {
+		if finalDiskSize == "" {
 			return fmt.Errorf("could not determine disk size")
 		}
 	}
 
-	logger.Info("[ProxmoxClient] Disk size: %s, creating target volume: %s", diskSize, targetDiskVolumeID)
+	// Normalize size format for Proxmox API (converts "10GiB" to "10G", "10MiB" to "10M", etc.)
+	sourceDiskSizeHuman := normalizeSizeForProxmox(finalDiskSize)
+	sourceDiskSizeBytes, _ := strconv.ParseInt(strings.TrimSpace(string(sizeOutput)), 10, 64)
+	if sourceDiskSizeBytes == 0 {
+		// Parse from human-readable format
+		if sizeValue, unit, err := parseSizeString(sourceDiskSizeHuman); err == nil {
+			sourceDiskSizeBytes = sizeValueToBytes(sizeValue, unit)
+		}
+	}
 
-	// Create target volume via Proxmox storage content API
-	logger.Info("[ProxmoxClient] Creating target volume")
+	// Proxmox API requires whole numbers for size (e.g., "4G" not "3.5G")
+	// Round up to ensure the target volume is at least as large as the source
+	if sizeValue, unit, err := parseSizeString(sourceDiskSizeHuman); err == nil {
+		// Round up to nearest whole number
+		sizeValueInt := int64(sizeValue)
+		if float64(sizeValueInt) < sizeValue {
+			sizeValueInt++ // Round up
+		}
+		sourceDiskSizeHuman = fmt.Sprintf("%d%s", sizeValueInt, unit)
+		logger.Info("[ProxmoxClient] Rounded source disk size from %s to %s for Proxmox API", normalizeSizeForProxmox(finalDiskSize), sourceDiskSizeHuman)
+	}
+
+	logger.Info("[ProxmoxClient] Source disk size: %s (%d bytes)", sourceDiskSizeHuman, sourceDiskSizeBytes)
+
+	// Strategy: Create LVM at source size, convert, THEN resize to final size
+	// This is more reliable than trying to create LVM at final size which may not work
+	targetDiskVolumeID := fmt.Sprintf("%s:vm-%d-disk-0", targetStorage, vmID)
+
+	// Delete any existing volume first (from failed previous attempts)
+	deleteEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, targetStorage, fmt.Sprintf("vm-%d-disk-0", vmID))
+	deleteResp, deleteErr := pc.apiRequest(ctx, "DELETE", deleteEndpoint, nil)
+	if deleteErr == nil && deleteResp != nil {
+		deleteResp.Body.Close()
+		logger.Info("[ProxmoxClient] Deleted existing target volume (from previous attempt)")
+		// Wait a moment for the delete to complete
+		time.Sleep(1 * time.Second)
+	}
+
+	// Create target volume via Proxmox storage content API with SOURCE size (not final size)
+	// We'll resize AFTER conversion - this is more reliable
+	logger.Info("[ProxmoxClient] Creating target LVM thin volume with source size %s (%d bytes)", sourceDiskSizeHuman, sourceDiskSizeBytes)
 	contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, targetStorage)
 	contentFormData := url.Values{}
 	contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
 	contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0", vmID))
-	contentFormData.Set("size", diskSize)
-	contentFormData.Set("format", "raw") // LVM thin uses raw format
+	contentFormData.Set("size", sourceDiskSizeHuman) // Use source size - we'll resize after conversion
+	contentFormData.Set("format", "raw")             // LVM thin uses raw format
 
 	contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
 	if contentErr != nil {
@@ -2050,48 +2535,114 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	}
 	defer contentResp.Body.Close()
 
+	contentBody, _ := io.ReadAll(contentResp.Body)
+	logger.Info("[ProxmoxClient] Create volume API response: status=%d, body=%s", contentResp.StatusCode, string(contentBody))
+
 	if contentResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(contentResp.Body)
-		return fmt.Errorf("failed to create target volume: %s (status: %d)", string(body), contentResp.StatusCode)
+		return fmt.Errorf("failed to create target volume: %s (status: %d)", string(contentBody), contentResp.StatusCode)
 	}
 
-	// Get target path
-	session4, err := conn.NewSession()
-	if err != nil {
-		return fmt.Errorf("failed to create SSH session for target path: %w", err)
-	}
-	defer session4.Close()
+	// Get target storage type
+	targetStorageInfo, err := pc.getStorageInfo(ctx, nodeName, targetStorage)
 
-	targetPathCmd := fmt.Sprintf("pvesm path %s", targetDiskVolumeID)
-	targetPathOutput, err := session4.Output(targetPathCmd)
-	if err != nil {
-		return fmt.Errorf("failed to get target disk path: %w", err)
+	// Proxmox API returned success, trust that the volume was created
+	// Wait a moment for it to be fully available
+	logger.Info("[ProxmoxClient] Proxmox API created volume successfully, waiting for it to be available...")
+	time.Sleep(2 * time.Second)
+	var targetStorageType string
+	if err == nil && targetStorageInfo != nil {
+		if st, ok := targetStorageInfo["type"].(string); ok {
+			targetStorageType = st
+		}
 	}
-	targetDiskPath := strings.TrimSpace(string(targetPathOutput))
-	if targetDiskPath == "" {
-		return fmt.Errorf("empty target disk path returned from pvesm")
+	if targetStorageType == "" {
+		targetStorageType = "lvmthin" // Default for target (we know it's LVM thin from the caller)
+	}
+
+	// Get target disk path by constructing it from volume ID
+	targetDiskPath, err := pc.getDiskPathFromVolumeID(ctx, nodeName, targetDiskVolumeID, targetStorageType)
+	if err != nil {
+		return fmt.Errorf("failed to construct target disk path from volume ID %s: %w", targetDiskVolumeID, err)
+	}
+
+	// Wait for LVM volume to be created and available
+	logger.Info("[ProxmoxClient] Waiting for target LVM volume to be available...")
+	time.Sleep(2 * time.Second)
+
+	// Verify both source and target sizes before converting
+	logger.Info("[ProxmoxClient] Verifying source and target disk sizes before conversion")
+	
+	// Get source size
+	sourceSizeCmd := fmt.Sprintf("stat -c '%%s' %s", sourceDiskPath)
+	sourceSizeStr, sourceErr := runSSHCommand(conn, sourceSizeCmd)
+	logger.Info("[ProxmoxClient] Source size command: %s, result: %s, err: %v", sourceSizeCmd, strings.TrimSpace(sourceSizeStr), sourceErr)
+	
+	// Get target size using blockdev (more reliable than lvs which may not be in PATH)
+	targetSizeCmd := fmt.Sprintf("blockdev --getsize64 %s 2>/dev/null || /usr/sbin/blockdev --getsize64 %s 2>/dev/null", targetDiskPath, targetDiskPath)
+	targetSizeStr, targetErr := runSSHCommand(conn, targetSizeCmd)
+	logger.Info("[ProxmoxClient] Target size command: %s, result: %s, err: %v", targetSizeCmd, strings.TrimSpace(targetSizeStr), targetErr)
+
+	var sourceSizeBytes, targetSizeBytes int64
+	if sourceErr == nil && strings.TrimSpace(sourceSizeStr) != "" {
+		sourceSizeBytes, _ = strconv.ParseInt(strings.TrimSpace(sourceSizeStr), 10, 64)
+		logger.Info("[ProxmoxClient] Source disk size: %d bytes (%.2f GiB)", sourceSizeBytes, float64(sourceSizeBytes)/(1024*1024*1024))
+	}
+	if targetErr == nil && strings.TrimSpace(targetSizeStr) != "" {
+		targetSizeBytes, _ = strconv.ParseInt(strings.TrimSpace(targetSizeStr), 10, 64)
+		logger.Info("[ProxmoxClient] Target volume size: %d bytes (%.2f GiB), expected: %s", targetSizeBytes, float64(targetSizeBytes)/(1024*1024*1024), sourceDiskSizeHuman)
+	}
+
+	if sourceSizeBytes > 0 && targetSizeBytes > 0 {
+		if targetSizeBytes < sourceSizeBytes {
+			logger.Warn("[ProxmoxClient] Target LVM volume (%d bytes) is smaller than source disk (%d bytes). Conversion may fail.",
+				targetSizeBytes, sourceSizeBytes)
+		} else {
+			logger.Info("[ProxmoxClient] Size check passed: target (%d bytes) >= source (%d bytes)", targetSizeBytes, sourceSizeBytes)
+		}
+	} else {
+		logger.Warn("[ProxmoxClient] Could not verify disk sizes (source: %d, target: %d), proceeding anyway", sourceSizeBytes, targetSizeBytes)
 	}
 
 	logger.Info("[ProxmoxClient] Converting disk with qemu-img (preserves partition table)")
+	logger.Info("[ProxmoxClient] qemu-img convert command: qemu-img convert -f %s -O raw %s %s", sourceFormat, sourceDiskPath, targetDiskPath)
+
+	// Try qemu-img convert, with sudo fallback if permission denied
 	session5, err := conn.NewSession()
 	if err != nil {
+		logger.Error("[ProxmoxClient] Failed to create SSH session for qemu-img convert: %v", err)
 		return fmt.Errorf("failed to create SSH session for convert: %w", err)
 	}
-	defer session5.Close()
 
 	var stderr5 bytes.Buffer
+	var stdout5 bytes.Buffer
 	session5.Stderr = &stderr5
+	session5.Stdout = &stdout5
 
-	convertCmd := fmt.Sprintf("qemu-img convert -f %s -O raw %s %s", sourceFormat, sourceDiskPath, targetDiskPath)
+	convertCmd := fmt.Sprintf("/usr/bin/qemu-img convert -f %s -O raw %s %s", sourceFormat, sourceDiskPath, targetDiskPath)
 	if err := session5.Run(convertCmd); err != nil {
-		return fmt.Errorf("failed to convert disk: %w (stderr: %s)", err, stderr5.String())
-	}
+		stderrOutput := stderr5.String()
+		stdoutOutput := stdout5.String()
+		session5.Close() // Close the failed session
 
+		logger.Error("[ProxmoxClient] qemu-img convert failed: %v", err)
+		logger.Error("[ProxmoxClient] qemu-img convert stderr: %s", stderrOutput)
+		logger.Error("[ProxmoxClient] qemu-img convert stdout: %s", stdoutOutput)
+		logger.Error("[ProxmoxClient] Source disk path: %s", sourceDiskPath)
+		logger.Error("[ProxmoxClient] Target disk path: %s", targetDiskPath)
+		logger.Error("[ProxmoxClient] Source format: %s", sourceFormat)
+		return fmt.Errorf("failed to convert disk with qemu-img: %w (stderr: %s, stdout: %s). Ensure the SSH user has read access to the source disk and write access to the target LVM volume", err, stderrOutput, stdoutOutput)
+	}
+	session5.Close() // Close on success
+
+	logger.Info("[ProxmoxClient] qemu-img convert completed successfully")
+
+	// Note: No resize needed - LVM thin volume was created at final size
 	logger.Info("[ProxmoxClient] Successfully converted disk, updating VM config")
 
-	// Update VM config to point to new disk
+	// Update VM config to point to new disk with source size
+	// The disk will be resized by the caller after this function returns
 	vmConfigUpdate := map[string]interface{}{
-		disk: targetDiskVolumeID,
+		disk: fmt.Sprintf("%s,size=%s", targetDiskVolumeID, sourceDiskSizeHuman),
 	}
 	if err := pc.UpdateVMConfig(ctx, nodeName, vmID, vmConfigUpdate); err != nil {
 		// Clean up target disk on error
@@ -2102,17 +2653,99 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 		return fmt.Errorf("failed to update VM config: %w", err)
 	}
 
-	// Delete source disk if requested
+	// Delete source disk if requested - use Proxmox API DELETE endpoint
 	if deleteSource {
-		logger.Info("[ProxmoxClient] Deleting source disk: %s", sourceDiskVolumeID)
-		// Delete via Proxmox storage content API
-		deleteEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, strings.Split(sourceDiskVolumeID, ":")[0], strings.Split(sourceDiskVolumeID, ":")[1])
-		deleteResp, deleteErr := pc.apiRequest(ctx, "DELETE", deleteEndpoint, nil)
-		if deleteErr == nil && deleteResp != nil {
-			deleteResp.Body.Close()
-		}
+		logger.Info("[ProxmoxClient] Deleting source disk via API: %s", sourceDiskVolumeID)
+		
+		// Use Proxmox API: DELETE /api2/json/nodes/{node}/storage/{storage}/content/{volumeid}
+		sourceStorage := strings.Split(sourceDiskVolumeID, ":")[0]
+		encodedVolumeID := url.PathEscape(sourceDiskVolumeID)
+		deleteEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, sourceStorage, encodedVolumeID)
+		logger.Info("[ProxmoxClient] Delete endpoint: %s", deleteEndpoint)
+		
+		apiDeleteCtx, apiDeleteCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer apiDeleteCancel()
+		
+		deleteResp, deleteErr := pc.apiRequest(apiDeleteCtx, "DELETE", deleteEndpoint, nil)
+		deleteSuccess := false
 		if deleteErr != nil {
-			logger.Warn("[ProxmoxClient] Failed to delete source disk (non-fatal): %v", deleteErr)
+			logger.Warn("[ProxmoxClient] Failed to delete source disk via API: %v", deleteErr)
+		} else if deleteResp != nil {
+			defer deleteResp.Body.Close()
+			body, _ := io.ReadAll(deleteResp.Body)
+			if deleteResp.StatusCode == http.StatusOK {
+				logger.Info("[ProxmoxClient] Successfully deleted source disk via API: %s", sourceDiskVolumeID)
+				deleteSuccess = true
+			} else {
+				logger.Warn("[ProxmoxClient] API delete returned status %d: %s", deleteResp.StatusCode, string(body))
+			}
+		}
+		
+		// Remove unused disk from VM config after deletion
+		// The deleted disk may show up as "unused disk" (typically scsi1) in the VM config
+		// We need to remove it from the config to clean up the "unused disks" view
+		if deleteSuccess {
+			logger.Info("[ProxmoxClient] Removing unused disk from VM %d config", vmID)
+			
+			// Get current VM config to find unused disk entries
+			vmConfigCtx, vmConfigCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer vmConfigCancel()
+			
+			vmConfig, err := pc.GetVMConfig(vmConfigCtx, nodeName, vmID)
+			if err == nil {
+				// Check for unused disk entries (typically scsi1, but could be others)
+				// Look for disk entries that match the deleted source disk
+				// We need to match the exact source disk volume ID to avoid removing the active disk
+				// The active disk (the one we just updated) should NOT be removed
+				sourceStorage := strings.Split(sourceDiskVolumeID, ":")[0]
+				for diskKey := range vmConfig {
+					// Skip the active disk - it was just updated to point to the new storage
+					if diskKey == disk {
+						continue
+					}
+					
+					if strings.HasPrefix(diskKey, "scsi") || strings.HasPrefix(diskKey, "virtio") || 
+					   strings.HasPrefix(diskKey, "sata") || strings.HasPrefix(diskKey, "ide") {
+						if diskValue, ok := vmConfig[diskKey].(string); ok && diskValue != "" {
+							// Check if this disk entry matches the deleted source disk exactly
+							// Match the full source disk volume ID (e.g., "local:301/vm-301-disk-0.raw")
+							// This ensures we don't remove the active disk which points to the new storage
+							// The active disk will be on a different storage (e.g., local-lvmthin:vm-301-disk-0)
+							if strings.Contains(diskValue, sourceDiskVolumeID) {
+								// This is the unused disk - remove it from config using DELETE parameter
+								logger.Info("[ProxmoxClient] Removing unused disk %s from VM %d config (matches source: %s)", diskKey, vmID, sourceDiskVolumeID)
+								deleteConfig := map[string]interface{}{
+									"delete": diskKey,
+								}
+								if deleteErr := pc.UpdateVMConfig(vmConfigCtx, nodeName, vmID, deleteConfig); deleteErr != nil {
+									logger.Warn("[ProxmoxClient] Failed to remove unused disk %s from VM %d config (non-fatal): %v", diskKey, vmID, deleteErr)
+								} else {
+									logger.Info("[ProxmoxClient] Successfully removed unused disk %s from VM %d config", diskKey, vmID)
+								}
+								break // Only remove the first matching unused disk
+							} else if strings.HasPrefix(diskValue, sourceStorage+":") {
+								// Check if it's the source storage with the old path format (directory storage with subdirectory)
+								// Format: "local:301/vm-301-disk-0.raw" or "local:301/vm-301-disk-0"
+								if strings.Contains(diskValue, fmt.Sprintf("/vm-%d-disk-0", vmID)) {
+									// This is likely the unused disk on directory storage - remove it
+									logger.Info("[ProxmoxClient] Removing unused disk %s from VM %d config (matches source storage and path: %s)", diskKey, vmID, diskValue)
+									deleteConfig := map[string]interface{}{
+										"delete": diskKey,
+									}
+									if deleteErr := pc.UpdateVMConfig(vmConfigCtx, nodeName, vmID, deleteConfig); deleteErr != nil {
+										logger.Warn("[ProxmoxClient] Failed to remove unused disk %s from VM %d config (non-fatal): %v", diskKey, vmID, deleteErr)
+									} else {
+										logger.Info("[ProxmoxClient] Successfully removed unused disk %s from VM %d config", diskKey, vmID)
+									}
+									break // Only remove the first matching unused disk
+								}
+							}
+						}
+					}
+				}
+			} else {
+				logger.Warn("[ProxmoxClient] Failed to get VM config to remove unused disk (non-fatal): %v", err)
+			}
 		}
 	}
 
@@ -2178,12 +2811,12 @@ func (pc *ProxmoxClient) RebootVM(ctx context.Context, nodeName string, vmID int
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		bodyStr := string(body)
-		
+
 		// Check if VM was deleted (configuration file not found)
 		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
 			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
 		}
-		
+
 		return fmt.Errorf("failed to reboot VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 

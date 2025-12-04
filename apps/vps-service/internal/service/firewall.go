@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 

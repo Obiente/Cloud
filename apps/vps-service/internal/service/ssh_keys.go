@@ -9,7 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 

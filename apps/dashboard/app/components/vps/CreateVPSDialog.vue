@@ -1,8 +1,8 @@
 <template>
   <OuiDialog
     :open="modelValue"
-    title="Create VPS Instance"
-    description="Provision a new virtual private server with full root access."
+    :title="props.initialValues ? 'Retry VPS Creation' : 'Create VPS Instance'"
+    :description="props.initialValues ? 'Retry creating this VPS instance with the same settings.' : 'Provision a new virtual private server with full root access.'"
     @update:open="updateOpen"
   >
     <OuiStack gap="lg">
@@ -314,7 +314,7 @@
           @click="handleCreate"
           :disabled="!isValid || isCreating"
         >
-          {{ isCreating ? "Creating..." : "Create VPS" }}
+          {{ isCreating ? (props.initialValues ? "Retrying..." : "Creating...") : (props.initialValues ? "Retry VPS" : "Create VPS") }}
         </OuiButton>
       </OuiFlex>
     </template>
@@ -405,9 +405,18 @@
 
   interface Props {
     modelValue: boolean;
+    initialValues?: {
+      name?: string;
+      description?: string;
+      region?: string;
+      image?: number;
+      size?: string;
+    } | null;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    initialValues: null,
+  });
   const emit = defineEmits<{
     "update:modelValue": [value: boolean];
     created: [];
@@ -539,27 +548,29 @@
   const updateOpen = (value: boolean) => {
     emit("update:modelValue", value);
     if (!value) {
-      // Reset form when closing
-      form.value = {
-        name: "",
-        description: "",
-        region: "",
-        image: VPSImage.UBUNTU_24_04,
-        size: "",
-        rootPassword: "",
-        cloudInit: {
-          hostname: "",
-          timezone: "",
-          locale: "",
-          packages: "",
-          packageUpdate: true,
-          packageUpgrade: false,
-          runcmd: "",
-          sshInstallServer: true,
-          sshAllowPw: true,
-          users: [],
-        },
-      };
+      // Reset form when closing (unless we have initial values for retry)
+      if (!props.initialValues) {
+        form.value = {
+          name: "",
+          description: "",
+          region: "",
+          image: VPSImage.UBUNTU_24_04,
+          size: "",
+          rootPassword: "",
+          cloudInit: {
+            hostname: "",
+            timezone: "",
+            locale: "",
+            packages: "",
+            packageUpdate: true,
+            packageUpgrade: false,
+            runcmd: "",
+            sshInstallServer: true,
+            sshAllowPw: true,
+            users: [],
+          },
+        };
+      }
       errors.value = {};
       error.value = null;
       // Don't clear password if we're about to show the password dialog
@@ -615,6 +626,25 @@
     () => props.modelValue,
     async (isOpen) => {
       if (isOpen) {
+        // Pre-fill form with initial values if provided (for retry)
+        if (props.initialValues) {
+          if (props.initialValues.name) {
+            form.value.name = props.initialValues.name;
+          }
+          if (props.initialValues.description !== undefined) {
+            form.value.description = props.initialValues.description;
+          }
+          if (props.initialValues.region) {
+            form.value.region = props.initialValues.region;
+          }
+          if (props.initialValues.image !== undefined) {
+            form.value.image = props.initialValues.image as VPSImage;
+          }
+          if (props.initialValues.size) {
+            form.value.size = props.initialValues.size;
+          }
+        }
+
         await Promise.all([
           fetchSSHKeys(),
           loadRegions(),
@@ -791,7 +821,10 @@
         };
       }
 
-      const response = await client.createVPS({
+      // Start VPS creation (async - don't wait for completion)
+      // The backend creates the VPS record immediately with CREATING status,
+      // so we can close the dialog and refresh the list right away
+      const createPromise = client.createVPS({
         organizationId: organizationId.value || "",
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
@@ -804,115 +837,120 @@
         ...(cloudInitConfig && { cloudInit: cloudInitConfig }),
       });
 
-      // Capture password if provided (one-time only)
-      // Connect RPC returns the response message directly
-      const vps = response.vps;
+      // Capture VPS name before closing dialog (form gets reset on close)
+      const vpsName = form.value.name.trim();
       
-      // Use a replacer to handle BigInt values (convert to string) for JSON serialization
-      const bigIntReplacer = (key: string, value: any) => {
-        if (typeof value === 'bigint') {
-          return value.toString();
-        }
-        return value;
-      };
+      // Close dialog and refresh list immediately so user can see progress
+      emit("created");
+      updateOpen(false);
+      isCreating.value = false;
       
-      // Try multiple ways to access the password (defensive approach)
-      let password: string | undefined = undefined;
-      
-      // Method 1: Direct access (camelCase - TypeScript convention) - try first as it's most direct
-      if (vps?.rootPassword !== undefined && vps?.rootPassword !== null) {
-        const pwd = vps.rootPassword;
-        if (typeof pwd === "string" && pwd.trim() !== "") {
-          password = pwd.trim();
-        } else if (pwd) {
-          password = String(pwd).trim();
-        }
-      }
-      
-      // Method 2: Check snake_case (protobuf field name)
-      if (!password && vps && (vps as any).root_password !== undefined && (vps as any).root_password !== null) {
-        const pwd = (vps as any).root_password;
-        if (typeof pwd === "string" && pwd.trim() !== "") {
-          password = pwd.trim();
-        } else if (pwd) {
-          password = String(pwd).trim();
-        }
-      }
-      
-      // Method 3: Check if it's a getter method (protobuf optional fields)
-      if (!password && vps && typeof (vps as any).getRootPassword === "function") {
-        try {
-          const getterResult = (vps as any).getRootPassword();
-          if (getterResult && typeof getterResult === "string" && getterResult.trim() !== "") {
-            password = getterResult.trim();
+      // Show toast notification that VPS creation has started
+      toast.success("VPS creation started", `Your VPS instance "${vpsName}" is now provisioning. You can track the progress in the VPS list.`);
+
+      // Handle password display asynchronously (don't block UI)
+      createPromise
+        .then((response) => {
+          // Capture password if provided (one-time only)
+          const vps = response.vps;
+          
+          // Use a replacer to handle BigInt values (convert to string) for JSON serialization
+          const bigIntReplacer = (key: string, value: any) => {
+            if (typeof value === 'bigint') {
+              return value.toString();
+            }
+            return value;
+          };
+          
+          // Try multiple ways to access the password (defensive approach)
+          let password: string | undefined = undefined;
+          
+          // Method 1: Direct access (camelCase - TypeScript convention)
+          if (vps?.rootPassword !== undefined && vps?.rootPassword !== null) {
+            const pwd = vps.rootPassword;
+            if (typeof pwd === "string" && pwd.trim() !== "") {
+              password = pwd.trim();
+            } else if (pwd) {
+              password = String(pwd).trim();
+            }
           }
-        } catch (e) {
-          // Ignore getter errors
-        }
-      }
-      
-      // Method 4: Deep search in response (last resort - most reliable for Connect RPC)
-      // This catches the password regardless of how it's serialized
-      if (!password) {
-        const responseStr = JSON.stringify(response, bigIntReplacer);
-        // Try multiple regex patterns to catch different serialization formats
-        const patterns = [
-          /"rootPassword"\s*:\s*"([^"]+)"/,  // camelCase (most common)
-          /"root_password"\s*:\s*"([^"]+)"/,  // snake_case
-          /"root[_-]?password"\s*:\s*"([^"]+)"/i,  // Flexible format
-        ];
-        
-        for (const pattern of patterns) {
-          const match = responseStr.match(pattern);
-          if (match && match[1]) {
-            password = match[1].trim();
-            break;
+          
+          // Method 2: Check snake_case (protobuf field name)
+          if (!password && vps && (vps as any).root_password !== undefined && (vps as any).root_password !== null) {
+            const pwd = (vps as any).root_password;
+            if (typeof pwd === "string" && pwd.trim() !== "") {
+              password = pwd.trim();
+            } else if (pwd) {
+              password = String(pwd).trim();
+            }
           }
-        }
-      }
-      
-      // Log for debugging (always log to help diagnose)
-      console.log("[CreateVPSDialog] Password extraction:", {
-        hasVps: !!vps,
-        rootPassword: vps?.rootPassword,
-        rootPasswordType: typeof vps?.rootPassword,
-        rootPasswordValue: vps?.rootPassword,
-        passwordExtracted: password ? "***" : null,
-        passwordLength: password?.length,
-        responseKeys: Object.keys(response || {}),
-        vpsKeys: vps ? Object.keys(vps) : [],
-        rawResponse: JSON.stringify(response, bigIntReplacer, 2).substring(0, 500), // First 500 chars for debugging
-      });
-      
-      if (password && password.length > 0) {
-        // Set password first
-        createdPassword.value = password;
-        console.log("[CreateVPSDialog] Password set to createdPassword:", {
-          passwordLength: password.length,
-          createdPasswordValue: createdPassword.value ? "***" : null,
-          createdPasswordLength: createdPassword.value?.length,
+          
+          // Method 3: Check if it's a getter method (protobuf optional fields)
+          if (!password && vps && typeof (vps as any).getRootPassword === "function") {
+            try {
+              const getterResult = (vps as any).getRootPassword();
+              if (getterResult && typeof getterResult === "string" && getterResult.trim() !== "") {
+                password = getterResult.trim();
+              }
+            } catch (e) {
+              // Ignore getter errors
+            }
+          }
+          
+          // Method 4: Deep search in response (last resort)
+          if (!password) {
+            const responseStr = JSON.stringify(response, bigIntReplacer);
+            const patterns = [
+              /"rootPassword"\s*:\s*"([^"]+)"/,
+              /"root_password"\s*:\s*"([^"]+)"/,
+              /"root[_-]?password"\s*:\s*"([^"]+)"/i,
+            ];
+            
+            for (const pattern of patterns) {
+              const match = responseStr.match(pattern);
+              if (match && match[1]) {
+                password = match[1].trim();
+                break;
+              }
+            }
+          }
+          
+          // Show password dialog if password was returned
+          if (password && password.length > 0) {
+            createdPassword.value = password;
+            showPasswordDialog.value = true;
+          }
+        })
+        .catch((err) => {
+          // Handle errors that occur after dialog is closed
+          error.value =
+            err instanceof Error ? err : new Error("Failed to create VPS");
+          
+          // Check if this is a timeout/context cancellation error
+          // In this case, the VPS might still have been created successfully
+          const isTimeoutError = 
+            err instanceof Error && (
+              err.message.includes("context canceled") ||
+              err.message.includes("timeout") ||
+              err.message.includes("NetworkError") ||
+              err.message.includes("Failed to fetch")
+            );
+          
+          if (isTimeoutError) {
+            // VPS might have been created despite the error
+            // Show a warning but don't treat it as a complete failure
+            toast.warning(
+              "VPS creation may have completed",
+              "The request timed out, but your VPS may have been created. Please check the VPS list."
+            );
+          } else {
+            // Real error - show alert
+            showAlert({
+              title: "Failed to create VPS",
+              message: error.value.message,
+            });
+          }
         });
-        // Set showPasswordDialog BEFORE closing the create dialog
-        // This prevents the watch from clearing the password when the dialog closes
-        showPasswordDialog.value = true;
-        console.log("[CreateVPSDialog] Showing password dialog with password length:", createdPassword.value.length);
-        // Close the create dialog after setting showPasswordDialog
-        updateOpen(false);
-      } else {
-        // No password returned - log for debugging
-        console.warn("[CreateVPSDialog] No root password found in CreateVPS response", {
-          response,
-          vps,
-          hasVps: !!vps,
-          rootPassword: vps?.rootPassword,
-          rootPasswordType: typeof vps?.rootPassword,
-          rootPasswordValue: vps?.rootPassword,
-          responseKeys: Object.keys(response || {}),
-          vpsKeys: vps ? Object.keys(vps) : [],
-        });
-        emit("created");
-        updateOpen(false);
-      }
     } catch (err) {
       error.value =
         err instanceof Error ? err : new Error("Failed to create VPS");

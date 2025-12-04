@@ -676,3 +676,55 @@ func (s *Service) GetVPSUsage(ctx context.Context, req *connect.Request[vpsv1.Ge
 
 	return connect.NewResponse(response), nil
 }
+
+// ImportVPS imports missing VPS instances from Proxmox that belong to the organization
+func (s *Service) ImportVPS(ctx context.Context, req *connect.Request[vpsv1.ImportVPSRequest]) (*connect.Response[vpsv1.ImportVPSResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.checkOrganizationPermission(ctx, orgID); err != nil {
+		return nil, err
+	}
+
+	// Create VPS manager
+	vpsManager, err := vpsorch.NewVPSManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
+	}
+
+	// Import VPS from Proxmox
+	results, err := vpsManager.ImportVPS(ctx, orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to import VPS: %w", err))
+	}
+
+	// Process results
+	var importedVPS []*vpsv1.VPSInstance
+	var errors []string
+	importedCount := int32(0)
+	skippedCount := int32(0)
+
+	for _, result := range results {
+		if result.Error != nil {
+			errors = append(errors, result.Error.Error())
+			skippedCount++
+		} else if result.Skipped {
+			skippedCount++
+		} else if result.VPS != nil {
+			importedVPS = append(importedVPS, vpsToProto(result.VPS))
+			importedCount++
+		}
+	}
+
+	response := &vpsv1.ImportVPSResponse{
+		ImportedCount: importedCount,
+		ImportedVps:   importedVPS,
+		SkippedCount:  skippedCount,
+		Errors:        errors,
+	}
+
+	return connect.NewResponse(response), nil
+}

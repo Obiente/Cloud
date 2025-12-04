@@ -10,8 +10,8 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	orchestrator "vps-service/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"

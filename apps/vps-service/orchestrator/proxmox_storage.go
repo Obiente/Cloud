@@ -1,14 +1,15 @@
 package orchestrator
 
 import (
-"context"
-"encoding/json"
-"fmt"
-"io"
-"net/http"
-"os"
-"strings"
-"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
 
 // Storage and node management operations
@@ -112,6 +113,75 @@ func (pc *ProxmoxClient) getAllVMIDs(ctx context.Context) ([]int, error) {
 	}
 
 	return allVMIDs, nil
+}
+
+// ProxmoxVMInfo represents a VM from Proxmox with its description
+type ProxmoxVMInfo struct {
+	VMID        int
+	NodeName    string
+	Description string
+	Name        string
+	Status      string
+}
+
+// ListAllVMsWithDescriptions lists all VMs from all Proxmox nodes with their descriptions
+func (pc *ProxmoxClient) ListAllVMsWithDescriptions(ctx context.Context) ([]ProxmoxVMInfo, error) {
+	nodes, err := pc.ListNodes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	var allVMs []ProxmoxVMInfo
+	vmMap := make(map[int]bool) // Use map to avoid duplicates
+
+	for _, nodeName := range nodes {
+		resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		var vmsResp struct {
+			Data []struct {
+				Vmid       int    `json:"vmid"`
+				Name       string `json:"name"`
+				Status     string `json:"status"`
+				Description string `json:"description,omitempty"`
+			} `json:"data"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
+			logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			continue
+		}
+
+		for _, vm := range vmsResp.Data {
+			if !vmMap[vm.Vmid] {
+				// If description is not in the list response, fetch it from config
+				description := vm.Description
+				if description == "" {
+					vmConfig, err := pc.GetVMConfig(ctx, nodeName, vm.Vmid)
+					if err == nil {
+						if desc, ok := vmConfig["description"].(string); ok {
+							description = desc
+						}
+					}
+				}
+
+				allVMs = append(allVMs, ProxmoxVMInfo{
+					VMID:        vm.Vmid,
+					NodeName:    nodeName,
+					Description: description,
+					Name:        vm.Name,
+					Status:      vm.Status,
+				})
+				vmMap[vm.Vmid] = true
+			}
+		}
+	}
+
+	return allVMs, nil
 }
 
 func (pc *ProxmoxClient) FindVMNode(ctx context.Context, vmID int) (string, error) {

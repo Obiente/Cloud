@@ -103,6 +103,11 @@ const (
 	// VPSServiceReinitializeVPSProcedure is the fully-qualified name of the VPSService's
 	// ReinitializeVPS RPC.
 	VPSServiceReinitializeVPSProcedure = "/obiente.cloud.vps.v1.VPSService/ReinitializeVPS"
+	// VPSServiceStreamVPSLogsProcedure is the fully-qualified name of the VPSService's StreamVPSLogs
+	// RPC.
+	VPSServiceStreamVPSLogsProcedure = "/obiente.cloud.vps.v1.VPSService/StreamVPSLogs"
+	// VPSServiceImportVPSProcedure is the fully-qualified name of the VPSService's ImportVPS RPC.
+	VPSServiceImportVPSProcedure = "/obiente.cloud.vps.v1.VPSService/ImportVPS"
 )
 
 // VPSServiceClient is a client for the obiente.cloud.vps.v1.VPSService service.
@@ -157,6 +162,12 @@ type VPSServiceClient interface {
 	// This will delete all data on the VPS and reinstall the operating system
 	// The VPS will be reconfigured with the same cloud-init settings
 	ReinitializeVPS(context.Context, *connect.Request[v1.ReinitializeVPSRequest]) (*connect.Response[v1.ReinitializeVPSResponse], error)
+	// Stream VPS provisioning logs
+	StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest]) (*connect.ServerStreamForClient[v1.VPSLogLine], error)
+	// Import missing VPS instances from Proxmox that belong to the organization
+	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
+	// any that are missing from the database, ensuring they belong to the requesting organization
+	ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error)
 }
 
 // NewVPSServiceClient constructs a client for the obiente.cloud.vps.v1.VPSService service. By
@@ -338,6 +349,18 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("ReinitializeVPS")),
 			connect.WithClientOptions(opts...),
 		),
+		streamVPSLogs: connect.NewClient[v1.StreamVPSLogsRequest, v1.VPSLogLine](
+			httpClient,
+			baseURL+VPSServiceStreamVPSLogsProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("StreamVPSLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		importVPS: connect.NewClient[v1.ImportVPSRequest, v1.ImportVPSResponse](
+			httpClient,
+			baseURL+VPSServiceImportVPSProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("ImportVPS")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -371,6 +394,8 @@ type vPSServiceClient struct {
 	removeSSHKey          *connect.Client[v1.RemoveSSHKeyRequest, v1.RemoveSSHKeyResponse]
 	resetVPSPassword      *connect.Client[v1.ResetVPSPasswordRequest, v1.ResetVPSPasswordResponse]
 	reinitializeVPS       *connect.Client[v1.ReinitializeVPSRequest, v1.ReinitializeVPSResponse]
+	streamVPSLogs         *connect.Client[v1.StreamVPSLogsRequest, v1.VPSLogLine]
+	importVPS             *connect.Client[v1.ImportVPSRequest, v1.ImportVPSResponse]
 }
 
 // ListVPS calls obiente.cloud.vps.v1.VPSService.ListVPS.
@@ -513,6 +538,16 @@ func (c *vPSServiceClient) ReinitializeVPS(ctx context.Context, req *connect.Req
 	return c.reinitializeVPS.CallUnary(ctx, req)
 }
 
+// StreamVPSLogs calls obiente.cloud.vps.v1.VPSService.StreamVPSLogs.
+func (c *vPSServiceClient) StreamVPSLogs(ctx context.Context, req *connect.Request[v1.StreamVPSLogsRequest]) (*connect.ServerStreamForClient[v1.VPSLogLine], error) {
+	return c.streamVPSLogs.CallServerStream(ctx, req)
+}
+
+// ImportVPS calls obiente.cloud.vps.v1.VPSService.ImportVPS.
+func (c *vPSServiceClient) ImportVPS(ctx context.Context, req *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error) {
+	return c.importVPS.CallUnary(ctx, req)
+}
+
 // VPSServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSService service.
 type VPSServiceHandler interface {
 	// List organization VPS instances
@@ -565,6 +600,12 @@ type VPSServiceHandler interface {
 	// This will delete all data on the VPS and reinstall the operating system
 	// The VPS will be reconfigured with the same cloud-init settings
 	ReinitializeVPS(context.Context, *connect.Request[v1.ReinitializeVPSRequest]) (*connect.Response[v1.ReinitializeVPSResponse], error)
+	// Stream VPS provisioning logs
+	StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest], *connect.ServerStream[v1.VPSLogLine]) error
+	// Import missing VPS instances from Proxmox that belong to the organization
+	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
+	// any that are missing from the database, ensuring they belong to the requesting organization
+	ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error)
 }
 
 // NewVPSServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -742,6 +783,18 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("ReinitializeVPS")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceStreamVPSLogsHandler := connect.NewServerStreamHandler(
+		VPSServiceStreamVPSLogsProcedure,
+		svc.StreamVPSLogs,
+		connect.WithSchema(vPSServiceMethods.ByName("StreamVPSLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceImportVPSHandler := connect.NewUnaryHandler(
+		VPSServiceImportVPSProcedure,
+		svc.ImportVPS,
+		connect.WithSchema(vPSServiceMethods.ByName("ImportVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSServiceListVPSProcedure:
@@ -800,6 +853,10 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceResetVPSPasswordHandler.ServeHTTP(w, r)
 		case VPSServiceReinitializeVPSProcedure:
 			vPSServiceReinitializeVPSHandler.ServeHTTP(w, r)
+		case VPSServiceStreamVPSLogsProcedure:
+			vPSServiceStreamVPSLogsHandler.ServeHTTP(w, r)
+		case VPSServiceImportVPSProcedure:
+			vPSServiceImportVPSHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -919,4 +976,12 @@ func (UnimplementedVPSServiceHandler) ResetVPSPassword(context.Context, *connect
 
 func (UnimplementedVPSServiceHandler) ReinitializeVPS(context.Context, *connect.Request[v1.ReinitializeVPSRequest]) (*connect.Response[v1.ReinitializeVPSResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ReinitializeVPS is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest], *connect.ServerStream[v1.VPSLogLine]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.StreamVPSLogs is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ImportVPS is not implemented"))
 }

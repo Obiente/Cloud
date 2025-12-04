@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 

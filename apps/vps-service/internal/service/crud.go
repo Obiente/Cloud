@@ -11,7 +11,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -111,6 +111,9 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 
 	// Generate VPS ID
 	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
+	
+	// Get or create log streamer for this VPS
+	logStreamer := GetVPSLogStreamer(vpsID)
 
 	// Convert proto to VPSConfig
 	config := &orchestrator.VPSConfig{
@@ -278,7 +281,11 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	config.DiskBytes = sizeCatalog.DiskBytes
 
 	// Create VPS via manager
-	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(ctx, config)
+	// Use independent context to avoid HTTP request timeout/cancellation
+	// VPS creation can take 1-2 minutes, but HTTP requests typically timeout at 30-60 seconds
+	createCtx, createCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer createCancel()
+	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(createCtx, config, logStreamer)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS: %w", err))
 	}
@@ -292,12 +299,30 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		logger.Warn("[VPS Service] WARNING: rootPassword is empty for VPS %s - password will not be returned", vpsInstance.ID)
 	}
 
-	// Send notification for VPS creation
-	s.notifyVPSCreated(ctx, vpsInstance)
-
-	return connect.NewResponse(&vpsv1.CreateVPSResponse{
+	// Log response details before sending
+	responseVPS := &vpsv1.CreateVPSResponse{
 		Vps: protoVPS,
-	}), nil
+	}
+	if responseVPS.Vps.RootPassword != nil {
+		logger.Info("[VPS Service] Response contains root password (length: %d) for VPS %s", len(*responseVPS.Vps.RootPassword), vpsInstance.ID)
+	} else {
+		logger.Warn("[VPS Service] Response does NOT contain root password for VPS %s", vpsInstance.ID)
+	}
+
+	// Return response immediately to avoid context cancellation issues
+	// Send notification in background (non-blocking, uses independent context)
+	response := connect.NewResponse(responseVPS)
+	
+	// Send notification asynchronously with independent context to avoid blocking response
+	go func() {
+		// Use background context with timeout for notifications
+		notifyCtx, notifyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer notifyCancel()
+		s.notifyVPSCreated(notifyCtx, vpsInstance)
+	}()
+
+	logger.Info("[VPS Service] Returning CreateVPS response for VPS %s", vpsInstance.ID)
+	return response, nil
 }
 
 // GetVPS retrieves a VPS instance by ID
@@ -456,29 +481,51 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	// Always delete from Proxmox if InstanceID exists (VM was provisioned)
-	// This ensures the VM is removed from Proxmox when deleted from the dashboard
-	// For VPS in CREATING status, we still attempt deletion but don't fail if it errors
-	// (VM might not be fully created yet or might be in a transitional state)
-	if vps.InstanceID != nil {
-		if err := s.vpsManager.DeleteVPS(ctx, vpsID); err != nil {
-			// If VPS is in CREATING status, log warning but continue with database deletion
-			// The VM might not be fully created yet or might be in a bad state
-			// Also allow deletion to proceed if VM doesn't exist (already deleted or never created)
-			errStr := err.Error()
-			isVMNotFound := strings.Contains(errStr, "does not exist") ||
-				strings.Contains(errStr, "not found") ||
-				strings.Contains(errStr, "already deleted")
-			
-			if vps.Status == 1 || isVMNotFound { // CREATING or VM not found
-				if vps.Status == 1 {
-					logger.Warn("[VPS Service] Failed to delete VPS %s from Proxmox (status: CREATING): %v. Continuing with database deletion.", vpsID, err)
+	// Check if VPS is already marked as DELETED (status 9) or DELETING (status 8)
+	// If so, skip Proxmox operations entirely - the VM is already gone or being deleted
+	deletedStatus := int32(vpsv1.VPSStatus_DELETED)
+	deletingStatus := int32(vpsv1.VPSStatus_DELETING)
+	if vps.Status == deletedStatus {
+		logger.Info("[VPS Service] VPS %s is already marked as DELETED, skipping Proxmox operations and deleting database record only", vpsID)
+	} else if vps.Status == deletingStatus {
+		logger.Info("[VPS Service] VPS %s is already being deleted, skipping duplicate deletion", vpsID)
+		return connect.NewResponse(&vpsv1.DeleteVPSResponse{
+			Success: true,
+		}), nil
+	} else {
+		// Set status to DELETING immediately for frontend feedback
+		if err := database.DB.Model(&vps).Update("status", deletingStatus).Error; err != nil {
+			logger.Warn("[VPS Service] Failed to set VPS %s status to DELETING: %v", vpsID, err)
+			// Continue with deletion anyway
+		} else {
+			logger.Info("[VPS Service] Set VPS %s status to DELETING", vpsID)
+		}
+		// Always delete from Proxmox if InstanceID exists (VM was provisioned)
+		// This ensures the VM is removed from Proxmox when deleted from the dashboard
+		// For VPS in CREATING status, we still attempt deletion but don't fail if it errors
+		// (VM might not be fully created yet or might be in a transitional state)
+		if vps.InstanceID != nil {
+			if err := s.vpsManager.DeleteVPS(ctx, vpsID); err != nil {
+				// If VPS is in CREATING status, log warning but continue with database deletion
+				// The VM might not be fully created yet or might be in a bad state
+				// Also allow deletion to proceed if VM doesn't exist (already deleted or never created)
+				errStr := err.Error()
+				isVMNotFound := strings.Contains(errStr, "does not exist") ||
+					strings.Contains(errStr, "not found") ||
+					strings.Contains(errStr, "already deleted") ||
+					strings.Contains(errStr, "context canceled") // Context canceled often means VM doesn't exist
+				
+				creatingStatus := int32(vpsv1.VPSStatus_CREATING)
+				if vps.Status == creatingStatus || isVMNotFound {
+					if vps.Status == creatingStatus {
+						logger.Warn("[VPS Service] Failed to delete VPS %s from Proxmox (status: CREATING): %v. Continuing with database deletion.", vpsID, err)
+					} else {
+						logger.Info("[VPS Service] VM for VPS %s does not exist in Proxmox (may have been deleted already). Continuing with database deletion.", vpsID)
+					}
 				} else {
-					logger.Info("[VPS Service] VM for VPS %s does not exist in Proxmox (may have been deleted already). Continuing with database deletion.", vpsID)
+					// For other statuses and errors, return error to prevent orphaned VMs
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS from Proxmox: %w", err))
 				}
-			} else {
-				// For other statuses and errors, return error to prevent orphaned VMs
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS from Proxmox: %w", err))
 			}
 		}
 	}

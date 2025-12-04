@@ -107,6 +107,11 @@ service VPSService {
   
   // Stream VPS provisioning logs
   rpc StreamVPSLogs(StreamVPSLogsRequest) returns (stream VPSLogLine);
+  
+  // Import missing VPS instances from Proxmox that belong to the organization
+  // This will scan Proxmox for VMs with Obiente Cloud descriptions and import
+  // any that are missing from the database, ensuring they belong to the requesting organization
+  rpc ImportVPS(ImportVPSRequest) returns (ImportVPSResponse);
 }
 
 message ListVPSRequest {
@@ -631,5 +636,17 @@ message VPSLogLine {
   bool stderr = 2;                    // Whether this is stderr output
   int32 line_number = 3;               // Sequential line number
   google.protobuf.Timestamp timestamp = 4; // Timestamp when log was written
+}
+
+// Import VPS messages
+message ImportVPSRequest {
+  string organization_id = 1; // Organization to import VPS for (must match VPS ownership)
+}
+
+message ImportVPSResponse {
+  int32 imported_count = 1;           // Number of VPS instances imported
+  repeated VPSInstance imported_vps = 2; // List of imported VPS instances
+  int32 skipped_count = 3;           // Number of VPS instances skipped (already exist or don't belong to org)
+  repeated string errors = 4;         // Any errors encountered during import
 }
 

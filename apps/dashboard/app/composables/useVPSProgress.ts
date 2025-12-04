@@ -20,6 +20,11 @@ export function useVPSProgress(options: VPSProgressOptions) {
   let animationFrameId: number | null = null;
   let incrementalProgressIntervalId: ReturnType<typeof setInterval> | null = null;
   let lastLogUpdateTime = ref(Date.now());
+  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY = 2000;
+  let isReconnecting = false;
 
   // VPS provisioning phase patterns and their progress percentages
   // Order matters: more specific patterns should come first
@@ -193,17 +198,54 @@ export function useVPSProgress(options: VPSProgressOptions) {
     }
   };
 
-  const startStreaming = async () => {
-    if (isStreaming.value || streamController) {
+  const scheduleReconnect = () => {
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+    }
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.error("[useVPSProgress] Max reconnect attempts reached, stopping stream");
+      isStreaming.value = false;
+      isReconnecting = false;
+      return;
+    }
+    reconnectAttempts++;
+    const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
+    isReconnecting = true;
+    reconnectTimeout = setTimeout(async () => {
+      reconnectTimeout = null;
+      // Only reconnect if we're still supposed to be streaming
+      // (isStreaming might be false if explicitly stopped, but isReconnecting indicates we want to reconnect)
+      if (!isReconnecting) {
+        return;
+      }
+      console.log(`[useVPSProgress] Attempting to reconnect stream (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+      await startStreamingInternal(true); // Pass true to indicate this is a reconnect
+    }, delay);
+  };
+
+  const startStreamingInternal = async (isReconnect = false) => {
+    if (isStreaming.value || (streamController && !isReconnect)) {
       return;
     }
 
+    // Only reset progress if this is a fresh start, not a reconnect
+    if (!isReconnect) {
+      targetProgress.value = 0;
+      progress.value = 0;
+      isFailed.value = false;
+      currentPhase.value = "Starting server setup...";
+      reconnectAttempts = 0;
+    }
+
     isStreaming.value = true;
-    targetProgress.value = 0;
-    progress.value = 0;
-    isFailed.value = false;
+    isReconnecting = false;
     lastLogUpdateTime.value = Date.now();
-    currentPhase.value = "Starting server setup...";
+    
+    // Abort previous stream if reconnecting
+    if (streamController && isReconnect) {
+      streamController.abort();
+    }
+    
     streamController = new AbortController();
     
     // Start incremental progress tracking
@@ -218,6 +260,9 @@ export function useVPSProgress(options: VPSProgressOptions) {
         { signal: streamController.signal }
       );
 
+      // Reset reconnect attempts on successful connection
+      reconnectAttempts = 0;
+
       for await (const update of stream) {
         if (streamController?.signal.aborted) {
           break;
@@ -229,7 +274,7 @@ export function useVPSProgress(options: VPSProgressOptions) {
         }
       }
     } catch (err: any) {
-      if (err.name === "AbortError") {
+      if (err.name === "AbortError" || streamController?.signal.aborted) {
         return;
       }
       // Suppress benign stream errors
@@ -242,13 +287,35 @@ export function useVPSProgress(options: VPSProgressOptions) {
         console.error("Failed to stream VPS logs for progress:", err);
       }
     } finally {
-      isStreaming.value = false;
+      const wasAborted = streamController?.signal.aborted || false;
+      const shouldReconnect = isReconnecting || (!wasAborted && isStreaming.value);
       streamController = null;
       stopIncrementalProgress();
+      
+      // Only attempt to reconnect if the stream wasn't explicitly aborted
+      // and we're still supposed to be streaming (or were in the process of reconnecting)
+      if (shouldReconnect) {
+        // Stream ended unexpectedly, attempt to reconnect
+        // Don't set isStreaming to false yet - let reconnect handle it
+        scheduleReconnect();
+      } else {
+        isStreaming.value = false;
+        isReconnecting = false;
+      }
     }
   };
 
+  const startStreaming = async () => {
+    await startStreamingInternal(false);
+  };
+
   const stopStreaming = () => {
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    reconnectAttempts = 0;
+    isReconnecting = false;
     if (streamController) {
       streamController.abort();
       streamController = null;

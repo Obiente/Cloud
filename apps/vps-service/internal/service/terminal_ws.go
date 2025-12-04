@@ -18,7 +18,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -342,10 +342,13 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 
 	// Get web terminal SSH key for this VPS
 	terminalKey, err := database.GetVPSTerminalKey(initMsg.VPSID)
+	terminalKeyMissing := false
+	noIPFound := false
 	if err != nil {
 		log.Printf("[VPS Terminal WS] Failed to get terminal SSH key: %v, falling back to password", err)
 		// Fall back to password if key not found (for backwards compatibility)
 		terminalKey = nil
+		terminalKeyMissing = true
 	}
 
 	// Try SSH with web terminal key or password fallback
@@ -372,11 +375,36 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				}
 			}
 		} else {
-			// No public IP, try to get internal IP from Proxmox
-			log.Printf("[VPS Terminal WS] No public IP found, attempting to get internal IP from Proxmox")
-			ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-			if err == nil && len(ipv4) > 0 {
-				vpsIP := ipv4[0]
+			// No public IP from database, try multiple fallbacks
+			var vpsIP string
+			
+			// Fallback 1: Try gateway for allocated IP (most reliable if guest agent isn't working)
+			gatewayClient := vpsManager.GetGatewayClient()
+			if gatewayClient != nil {
+				log.Printf("[VPS Terminal WS] No public IP found, attempting to get IP from gateway")
+				allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, initMsg.VPSID)
+				if err == nil && len(allocations) > 0 {
+					vpsIP = allocations[0].IpAddress
+					log.Printf("[VPS Terminal WS] Found IP %s from gateway allocation", vpsIP)
+				} else if err != nil {
+					log.Printf("[VPS Terminal WS] Failed to get IP from gateway: %v", err)
+				}
+			}
+			
+			// Fallback 2: Try Proxmox guest agent (requires qemu-guest-agent to be installed)
+			if vpsIP == "" {
+				log.Printf("[VPS Terminal WS] Attempting to get IP from Proxmox guest agent")
+				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+				if err == nil && len(ipv4) > 0 {
+					vpsIP = ipv4[0]
+					log.Printf("[VPS Terminal WS] Found IP %s from Proxmox guest agent", vpsIP)
+				} else if err != nil {
+					log.Printf("[VPS Terminal WS] Failed to get IP from Proxmox guest agent: %v", err)
+				}
+			}
+			
+			// Connect if we have an IP
+			if vpsIP != "" {
 				if terminalKey != nil {
 					// Use web terminal SSH key
 					sshConn, err = s.connectSSHWithKey(ctx, initMsg.VPSID, vpsIP, terminalKey.PrivateKey, cols, rows)
@@ -395,6 +423,9 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 						}
 					}
 				}
+			} else {
+				log.Printf("[VPS Terminal WS] Could not find IP address from any source")
+				noIPFound = true
 			}
 		}
 	}
@@ -545,8 +576,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// All connection methods failed
-	sendError("Failed to establish terminal connection. Please ensure the VPS is running and SSH is accessible.")
+	// All connection methods failed - provide specific error message
+	if terminalKeyMissing {
+		sendError("Web terminal key not found. This VPS was created before web terminal support was added. Please recreate the VPS to enable web terminal access, or use SSH to connect directly.")
+	} else if noIPFound {
+		sendError("Could not determine VPS IP address. The VPS may still be booting. Please wait a moment and try again, or check if the VPS has network connectivity.")
+	} else {
+		sendError("Failed to establish terminal connection. Please ensure the VPS is running and SSH is accessible.")
+	}
 	conn.Close(websocket.StatusInternalError, "Terminal connection failed")
 }
 
