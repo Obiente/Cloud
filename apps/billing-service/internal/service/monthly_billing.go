@@ -18,6 +18,7 @@ type UsageBreakdown struct {
 	MemoryCostCents   int64 `json:"memory_cost_cents"`
 	BandwidthCostCents int64 `json:"bandwidth_cost_cents"`
 	StorageCostCents  int64 `json:"storage_cost_cents"`
+	PublicIPCostCents int64 `json:"public_ip_cost_cents"` // Flat rate cost for public IPs
 	TotalCostCents    int64 `json:"total_cost_cents"`
 }
 
@@ -223,7 +224,39 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		storageCost = storageCostFullMonth
 	}
 
-	totalCostCents := cpuCost + memoryCost + bandwidthCost + storageCost
+	// Calculate public IP costs (flat rate, prorated based on billing period)
+	var publicIPCost int64
+	var publicIPAssignments []struct {
+		MonthlyCostCents int64
+		AssignedAt       time.Time
+	}
+	database.DB.Table("vps_public_ips ip").
+		Select("ip.monthly_cost_cents, ip.assigned_at").
+		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
+		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
+		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
+		Scan(&publicIPAssignments)
+	
+	for _, assignment := range publicIPAssignments {
+		// Calculate prorated cost based on when IP was assigned
+		assignmentDate := assignment.AssignedAt
+		if assignmentDate.Before(billingPeriodStart) {
+			assignmentDate = billingPeriodStart
+		}
+		
+		periodDuration := billingPeriodEnd.Sub(assignmentDate)
+		daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
+		daysInPeriod := periodDuration.Hours() / 24.0
+		
+		if daysInPeriod > 0 && daysInMonth > 0 {
+			proratedCost := int64(float64(assignment.MonthlyCostCents) * (daysInPeriod / daysInMonth))
+			publicIPCost += proratedCost
+		} else {
+			publicIPCost += assignment.MonthlyCostCents
+		}
+	}
+
+	totalCostCents := cpuCost + memoryCost + bandwidthCost + storageCost + publicIPCost
 
 	// Create usage breakdown
 	breakdown := UsageBreakdown{
@@ -231,6 +264,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		MemoryCostCents:    memoryCost,
 		BandwidthCostCents: bandwidthCost,
 		StorageCostCents:   storageCost,
+		PublicIPCostCents:  publicIPCost,
 		TotalCostCents:     totalCostCents,
 	}
 
@@ -517,7 +551,39 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		storageCost = storageCostFullMonth
 	}
 
-	totalCostCents := cpuCost + memoryCost + bandwidthCost + storageCost
+	// Calculate public IP costs (flat rate, prorated based on billing period)
+	var publicIPCost int64
+	var publicIPAssignments []struct {
+		MonthlyCostCents int64
+		AssignedAt       time.Time
+	}
+	database.DB.Table("vps_public_ips ip").
+		Select("ip.monthly_cost_cents, ip.assigned_at").
+		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
+		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
+		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
+		Scan(&publicIPAssignments)
+	
+	for _, assignment := range publicIPAssignments {
+		// Calculate prorated cost based on when IP was assigned
+		assignmentDate := assignment.AssignedAt
+		if assignmentDate.Before(billingPeriodStart) {
+			assignmentDate = billingPeriodStart
+		}
+		
+		periodDuration := billingPeriodEnd.Sub(assignmentDate)
+		daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
+		daysInPeriod := periodDuration.Hours() / 24.0
+		
+		if daysInPeriod > 0 && daysInMonth > 0 {
+			proratedCost := int64(float64(assignment.MonthlyCostCents) * (daysInPeriod / daysInMonth))
+			publicIPCost += proratedCost
+		} else {
+			publicIPCost += assignment.MonthlyCostCents
+		}
+	}
+
+	totalCostCents := cpuCost + memoryCost + bandwidthCost + storageCost + publicIPCost
 
 	// Create usage breakdown
 	breakdown := UsageBreakdown{
@@ -525,6 +591,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		MemoryCostCents:    memoryCost,
 		BandwidthCostCents: bandwidthCost,
 		StorageCostCents:   storageCost,
+		PublicIPCostCents:  publicIPCost,
 		TotalCostCents:     totalCostCents,
 	}
 
@@ -533,9 +600,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		return nil, false, fmt.Errorf("marshal breakdown: %w", err)
 	}
 
-	// Create the bill
-	billID := fmt.Sprintf("bill-%d", time.Now().UnixNano())
-	dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
+		// Create the bill
+		billID := fmt.Sprintf("bill-%d", time.Now().UnixNano())
+		dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
 
 	bill := &database.MonthlyBill{
 		ID:                billID,

@@ -3,7 +3,7 @@
     <OuiStack gap="xs">
       <OuiText tag="h1" size="3xl" weight="extrabold">VPS Management</OuiText>
       <OuiText color="muted">
-        Manage VPS instances and size catalog across every organization.
+        Manage VPS instances, size catalog, and public IP addresses across every organization.
       </OuiText>
     </OuiStack>
 
@@ -12,11 +12,12 @@
 </template>
 
 <script setup lang="ts">
-import { ServerIcon, CubeIcon } from "@heroicons/vue/24/outline";
+import { ServerIcon, CubeIcon, GlobeAltIcon } from "@heroicons/vue/24/outline";
 import { ref } from "vue";
 import OuiTabs from "~/components/oui/Tabs.vue";
 import VPSInstancesTab from "~/components/superadmin/VPSInstancesTab.vue";
 import VPSSizesTab from "~/components/superadmin/VPSSizesTab.vue";
+import VPSPublicIPsTab from "~/components/superadmin/VPSPublicIPsTab.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -36,6 +37,12 @@ const tabs = [
     label: "Sizes",
     icon: CubeIcon,
     component: VPSSizesTab,
+  },
+  {
+    id: "public-ips",
+    label: "Public IPs",
+    icon: GlobeAltIcon,
+    component: VPSPublicIPsTab,
   },
 ];
 </script>

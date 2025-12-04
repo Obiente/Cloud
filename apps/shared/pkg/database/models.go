@@ -475,6 +475,42 @@ func (VPSInstance) TableName() string {
 	return "vps_instances"
 }
 
+// VPSPublicIP represents a public IP address that can be assigned to a VPS instance
+type VPSPublicIP struct {
+	ID              string     `gorm:"primaryKey;column:id" json:"id"`
+	IPAddress       string     `gorm:"column:ip_address;uniqueIndex;not null" json:"ip_address"` // IPv4 or IPv6 address
+	VPSID           *string    `gorm:"column:vps_id;index" json:"vps_id"`                         // Assigned VPS instance ID (nullable)
+	OrganizationID  *string    `gorm:"column:organization_id;index" json:"organization_id"`     // Organization that owns the VPS (nullable, set when assigned)
+	MonthlyCostCents int64     `gorm:"column:monthly_cost_cents;not null;default:0" json:"monthly_cost_cents"` // Monthly cost in cents (set by superadmin)
+	Gateway         *string    `gorm:"column:gateway" json:"gateway"`                             // Gateway IP for this public IP (nullable, set by superadmin)
+	Netmask         *string    `gorm:"column:netmask" json:"netmask"`                            // Netmask/CIDR for this public IP (nullable, set by superadmin, e.g., "24" or "255.255.255.0")
+	AssignedAt      *time.Time `gorm:"column:assigned_at" json:"assigned_at"`                    // When IP was assigned to VPS
+	CreatedAt       time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (VPSPublicIP) TableName() string {
+	return "vps_public_ips"
+}
+
+// BeforeCreate hook to set timestamps
+func (ip *VPSPublicIP) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if ip.CreatedAt.IsZero() {
+		ip.CreatedAt = now
+	}
+	if ip.UpdatedAt.IsZero() {
+		ip.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (ip *VPSPublicIP) BeforeUpdate(tx *gorm.DB) error {
+	ip.UpdatedAt = time.Now()
+	return nil
+}
+
 // BeforeCreate hook to set timestamps
 func (vps *VPSInstance) BeforeCreate(tx *gorm.DB) error {
 	now := time.Now()

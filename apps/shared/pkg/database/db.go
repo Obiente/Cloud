@@ -543,6 +543,7 @@ func InitDatabase() error {
 		&VPSInstance{},
 		&VPSSizeCatalog{},
 		&VPSRegionCatalog{},
+		&VPSPublicIP{},
 		&SSHKey{},
 		&VPSTerminalKey{},
 		&VPSBastionKey{},

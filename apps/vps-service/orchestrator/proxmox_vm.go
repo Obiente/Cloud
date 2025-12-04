@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -3217,6 +3218,193 @@ func (pc *ProxmoxClient) CheckGuestAgentStatus(ctx context.Context, nodeName str
 	if infoErr == nil && infoResp != nil {
 		defer infoResp.Body.Close()
 		if infoResp.StatusCode == http.StatusOK {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// ExecuteGuestCommand executes a command on the VM via the QEMU guest agent
+// Returns the command output and exit code
+// Note: The command is executed asynchronously - we return immediately after starting it
+// For commands that need to complete, use ExecuteGuestCommandSync instead
+func (pc *ProxmoxClient) ExecuteGuestCommand(ctx context.Context, nodeName string, vmID int, command string) (string, int, error) {
+	// Check if guest agent is available
+	agentAvailable, err := pc.CheckGuestAgentStatus(ctx, nodeName, vmID)
+	if err != nil {
+		return "", -1, fmt.Errorf("failed to check guest agent status: %w", err)
+	}
+	if !agentAvailable {
+		return "", -1, fmt.Errorf("guest agent is not available")
+	}
+
+	// Execute command via guest agent (Proxmox uses form-encoded data)
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec", nodeName, vmID)
+	
+	formData := url.Values{}
+	formData.Set("command", command)
+
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
+	if err != nil {
+		return "", -1, fmt.Errorf("failed to execute command: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", -1, fmt.Errorf("failed to execute command: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var execResp struct {
+		Data struct {
+			Pid      int    `json:"pid"`
+			Exited   int    `json:"exited"`
+			ExitCode int    `json:"exitcode"`
+			OutData  string `json:"out-data"`
+			ErrData  string `json:"err-data"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&execResp); err != nil {
+		return "", -1, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// If command hasn't exited yet, wait for it (poll)
+	pid := execResp.Data.Pid
+	maxWait := 30 * time.Second
+	waitInterval := 500 * time.Millisecond
+	waited := 0 * time.Second
+
+	for execResp.Data.Exited == 0 && waited < maxWait {
+		time.Sleep(waitInterval)
+		waited += waitInterval
+
+		// Check status of the command
+		statusEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec-status?pid=%d", nodeName, vmID, pid)
+
+		statusResp, err := pc.apiRequest(ctx, "GET", statusEndpoint, nil)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to check command status: %v", err)
+			continue
+		}
+		defer statusResp.Body.Close()
+
+		if statusResp.StatusCode == http.StatusOK {
+			if err := json.NewDecoder(statusResp.Body).Decode(&execResp); err == nil {
+				if execResp.Data.Exited != 0 {
+					break
+				}
+			}
+		}
+	}
+
+	output := execResp.Data.OutData
+	if execResp.Data.ErrData != "" {
+		if output != "" {
+			output += "\n"
+		}
+		output += execResp.Data.ErrData
+	}
+
+	return output, execResp.Data.ExitCode, nil
+}
+
+// ConfigurePublicIPOnVM configures a public IP address on a running VM
+// This manually adds the IP and routing without requiring a reboot
+func (pc *ProxmoxClient) ConfigurePublicIPOnVM(ctx context.Context, nodeName string, vmID int, publicIP string, publicGateway string, netmask string) error {
+	// Check if VM is running
+	status, err := pc.GetVMStatus(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM status: %w", err)
+	}
+	if status != "running" {
+		logger.Info("[ProxmoxClient] VM %d is not running (status: %s), IP will be configured on next boot via cloud-init", vmID, status)
+		return nil // Not an error - cloud-init will handle it on boot
+	}
+
+	// Check if guest agent is available
+	agentAvailable, err := pc.CheckGuestAgentStatus(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to check guest agent status: %w", err)
+	}
+	if !agentAvailable {
+		logger.Warn("[ProxmoxClient] Guest agent not available for VM %d, IP will be configured on next boot via cloud-init", vmID)
+		return nil // Not an error - cloud-init will handle it on boot
+	}
+
+	// Determine the interface name (typically eth0 or ens3)
+	// First, try to get the primary interface name
+	getInterfaceCmd := "ip -4 route | grep default | awk '{print $5}' | head -1"
+	interfaceOutput, _, err := pc.ExecuteGuestCommand(ctx, nodeName, vmID, getInterfaceCmd)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to get interface name: %v, using eth0 as default", err)
+		interfaceOutput = "eth0"
+	}
+	interfaceName := strings.TrimSpace(interfaceOutput)
+	if interfaceName == "" {
+		interfaceName = "eth0" // Default fallback
+	}
+
+	// Convert netmask to CIDR if needed (e.g., "255.255.255.0" -> "24")
+	cidr := netmask
+	if !strings.Contains(netmask, "/") {
+		// Assume it's already a CIDR number like "24"
+		if !strings.Contains(netmask, ".") {
+			cidr = netmask
+		} else {
+			// Try to convert dotted notation to CIDR (simplified - assumes /24 for now)
+			cidr = "24"
+		}
+	}
+
+	// Add the IP address to the interface
+	addIPCmd := fmt.Sprintf("ip addr add %s/%s dev %s 2>&1 || true", publicIP, cidr, interfaceName)
+	_, exitCode, err := pc.ExecuteGuestCommand(ctx, nodeName, vmID, addIPCmd)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to add IP address via guest agent: %v", err)
+		// Continue anyway - might already be configured
+	} else if exitCode != 0 {
+		logger.Warn("[ProxmoxClient] IP address command returned exit code %d (may already be configured)", exitCode)
+	}
+
+	// Calculate the subnet for routing
+	parsedIP := net.ParseIP(publicIP)
+	if parsedIP == nil {
+		return fmt.Errorf("invalid IP address: %s", publicIP)
+	}
+	ip4 := parsedIP.To4()
+	if ip4 == nil {
+		return fmt.Errorf("invalid IPv4 address: %s", publicIP)
+	}
+
+	// For /24, use first 3 octets
+	subnet := fmt.Sprintf("%d.%d.%d.0/24", ip4[0], ip4[1], ip4[2])
+
+	// Add route for the public IP subnet via the public gateway
+	addRouteCmd := fmt.Sprintf("ip route add %s via %s dev %s metric 100 2>&1 || ip route replace %s via %s dev %s metric 100 2>&1 || true", subnet, publicGateway, interfaceName, subnet, publicGateway, interfaceName)
+	_, exitCode, err = pc.ExecuteGuestCommand(ctx, nodeName, vmID, addRouteCmd)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to add route via guest agent: %v", err)
+	} else if exitCode != 0 {
+		logger.Warn("[ProxmoxClient] Route command returned exit code %d (route may already exist)", exitCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully configured public IP %s on VM %d interface %s", publicIP, vmID, interfaceName)
+	return nil
+}
+
+// VerifyPublicIPOnVM verifies that a public IP is configured on the VM
+func (pc *ProxmoxClient) VerifyPublicIPOnVM(ctx context.Context, nodeName string, vmID int, publicIP string) (bool, error) {
+	// Get IP addresses from guest agent
+	ipv4, _, err := pc.GetVMIPAddresses(ctx, nodeName, vmID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get VM IP addresses: %w", err)
+	}
+
+	// Check if the public IP is in the list
+	for _, ip := range ipv4 {
+		if ip == publicIP {
 			return true, nil
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -1261,3 +1262,184 @@ func generateGenericRuncmd(config *VPSConfig, needsSSHRestart bool) string {
 	return userData
 }
 
+
+// UpdateCloudInitUserDataWithStaticIP updates the cloud-init userData snippet to add a public IP address
+// alongside the existing internal DHCP IP. The public IP uses its own gateway for routing.
+// This function reads the existing userData and adds the public IP configuration without removing DHCP.
+func (pc *ProxmoxClient) UpdateCloudInitUserDataWithStaticIP(ctx context.Context, nodeName string, vmID int, publicIP string, publicGateway string, netmask string) error {
+	// Get VM config to find the cicustom path
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	// Check if VM uses cloud-init snippets
+	cicustom, ok := vmConfig["cicustom"].(string)
+	if !ok || cicustom == "" {
+		return fmt.Errorf("VM %d does not use cloud-init snippets (cicustom not set). Cannot update IP configuration", vmID)
+	}
+
+	// Parse cicustom to get storage and filename
+	// Format: "user=<storage>:snippets/<filename>"
+	var storage, filename string
+	if strings.HasPrefix(cicustom, "user=") {
+		parts := strings.TrimPrefix(cicustom, "user=")
+		storageAndFile := strings.SplitN(parts, ":", 2)
+		if len(storageAndFile) == 2 {
+			storage = storageAndFile[0]
+			filepath := storageAndFile[1]
+			// Extract filename from path (e.g., "snippets/vm-123-user-data" -> "vm-123-user-data")
+			if strings.HasPrefix(filepath, "snippets/") {
+				filename = strings.TrimPrefix(filepath, "snippets/")
+			} else {
+				filename = filepath
+			}
+		} else {
+			return fmt.Errorf("invalid cicustom format: %s", cicustom)
+		}
+	} else {
+		return fmt.Errorf("unsupported cicustom format: %s (expected 'user=<storage>:snippets/<filename>')", cicustom)
+	}
+
+	if storage == "" || filename == "" {
+		return fmt.Errorf("failed to parse storage and filename from cicustom: %s", cicustom)
+	}
+
+	// Read existing userData snippet
+	existingUserData, err := pc.ReadSnippetViaSSH(ctx, nodeName, storage, filename)
+	if err != nil {
+		return fmt.Errorf("failed to read existing cloud-init snippet: %w", err)
+	}
+
+	// Update userData to add public IP alongside existing DHCP configuration
+	updatedUserData := updateUserDataWithPublicIP(existingUserData, publicIP, publicGateway, netmask)
+
+	// Write updated snippet back
+	_, err = pc.writeSnippetViaSSH(ctx, nodeName, storage, filename, updatedUserData)
+	if err != nil {
+		return fmt.Errorf("failed to write updated cloud-init snippet: %w", err)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated cloud-init userData for VM %d with public IP %s", vmID, publicIP)
+	return nil
+}
+
+// updateUserDataWithPublicIP adds a public IP address to cloud-init userData alongside the existing DHCP configuration
+// The public IP uses its own gateway for routing, while the internal IP continues to use DHCP via Proxmox ipconfig0
+func updateUserDataWithPublicIP(userData string, publicIP string, publicGateway string, netmask string) string {
+	// Default values if not provided
+	if netmask == "" {
+		netmask = "24" // Default to /24
+	}
+	if publicGateway == "" {
+		// Calculate default gateway from IP (typically .1 in the subnet)
+		ip := net.ParseIP(publicIP)
+		if ip != nil {
+			// For /24, set last octet to 1
+			ip4 := ip.To4()
+			if ip4 != nil {
+				ip4[3] = 1
+				publicGateway = ip4.String()
+			}
+		}
+		// If we still don't have a gateway, this means the IP is invalid
+		// This should not happen as IPs should be validated before calling this function
+		if publicGateway == "" {
+			logger.Error("[ProxmoxClient] Failed to calculate gateway for public IP %s: invalid IP format", publicIP)
+			// Return userData unchanged - the network config will be invalid but we won't use a wrong gateway
+			return userData
+		}
+	}
+
+	// Parse the IP to validate it
+	ip := net.ParseIP(publicIP)
+	if ip == nil {
+		logger.Warn("[ProxmoxClient] Invalid IP address format: %s, using default netmask", publicIP)
+	}
+
+	// Check if the public IP is already configured
+	if strings.Contains(userData, publicIP) {
+		logger.Info("[ProxmoxClient] Public IP %s already configured in userData", publicIP)
+		return userData
+	}
+
+	// Check if network config is disabled (using Proxmox ipconfig0 for DHCP)
+	networkDisabled := strings.Contains(userData, "network:\n  config: disabled")
+	
+	// We need to enable network config to add the public IP, but keep DHCP working
+	// Proxmox ipconfig0 will still work for the primary interface, we're just adding an additional address
+	if networkDisabled {
+		// Remove the disabled network config line
+		userData = strings.Replace(userData, "network:\n  config: disabled\n", "", 1)
+	}
+
+	// Find where to insert network config (after SSH config, before hostname)
+	insertPoint := strings.Index(userData, "hostname:")
+	if insertPoint == -1 {
+		insertPoint = strings.Index(userData, "users:")
+	}
+	if insertPoint == -1 {
+		insertPoint = strings.Index(userData, "package_update:")
+	}
+	if insertPoint == -1 {
+		// Insert at the end of SSH config
+		sshIndex := strings.Index(userData, "ssh:\n")
+		if sshIndex != -1 {
+			nextDoubleNewline := strings.Index(userData[sshIndex:], "\n\n")
+			if nextDoubleNewline != -1 {
+				insertPoint = sshIndex + nextDoubleNewline + 2
+			}
+		}
+	}
+
+	// Calculate the public IP subnet for routing
+	publicIPSubnet := ""
+	if ip != nil {
+		ip4 := ip.To4()
+		if ip4 != nil {
+			// For /24, use the first 3 octets
+			publicIPSubnet = fmt.Sprintf("%d.%d.%d.0/24", ip4[0], ip4[1], ip4[2])
+		}
+	}
+	if publicIPSubnet == "" {
+		publicIPSubnet = "0.0.0.0/0" // Fallback to default route
+	}
+
+	// Network configuration that adds public IP alongside DHCP
+	// DHCP will continue to work via Proxmox ipconfig0, this adds the public IP as an additional address
+	networkConfig := fmt.Sprintf(`network:
+  version: 2
+  ethernets:
+    eth0:
+      # Keep DHCP for internal IP (configured via Proxmox ipconfig0)
+      dhcp4: true
+      # Add public IP as additional address
+      addresses:
+        - %s/%s
+      # Routing configuration for public IP
+      routes:
+        # Route for public IP subnet via public gateway
+        - to: %s
+          via: %s
+          metric: 100
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+
+`, publicIP, netmask, publicIPSubnet, publicGateway)
+
+	if insertPoint > 0 && insertPoint < len(userData) {
+		userData = userData[:insertPoint] + networkConfig + userData[insertPoint:]
+	} else {
+		// Append at the beginning (after #cloud-config)
+		cloudConfigIndex := strings.Index(userData, "#cloud-config\n")
+		if cloudConfigIndex != -1 {
+			insertPoint = cloudConfigIndex + len("#cloud-config\n") + 1
+			userData = userData[:insertPoint] + networkConfig + userData[insertPoint:]
+		} else {
+			// Prepend
+			userData = networkConfig + userData
+		}
+	}
+
+	return userData
+}

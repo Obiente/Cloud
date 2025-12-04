@@ -135,6 +135,24 @@ const (
 	// SuperadminServiceDeleteVPSSizeProcedure is the fully-qualified name of the SuperadminService's
 	// DeleteVPSSize RPC.
 	SuperadminServiceDeleteVPSSizeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSSize"
+	// SuperadminServiceListVPSPublicIPsProcedure is the fully-qualified name of the SuperadminService's
+	// ListVPSPublicIPs RPC.
+	SuperadminServiceListVPSPublicIPsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListVPSPublicIPs"
+	// SuperadminServiceCreateVPSPublicIPProcedure is the fully-qualified name of the
+	// SuperadminService's CreateVPSPublicIP RPC.
+	SuperadminServiceCreateVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateVPSPublicIP"
+	// SuperadminServiceUpdateVPSPublicIPProcedure is the fully-qualified name of the
+	// SuperadminService's UpdateVPSPublicIP RPC.
+	SuperadminServiceUpdateVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdateVPSPublicIP"
+	// SuperadminServiceDeleteVPSPublicIPProcedure is the fully-qualified name of the
+	// SuperadminService's DeleteVPSPublicIP RPC.
+	SuperadminServiceDeleteVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSPublicIP"
+	// SuperadminServiceAssignVPSPublicIPProcedure is the fully-qualified name of the
+	// SuperadminService's AssignVPSPublicIP RPC.
+	SuperadminServiceAssignVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/AssignVPSPublicIP"
+	// SuperadminServiceUnassignVPSPublicIPProcedure is the fully-qualified name of the
+	// SuperadminService's UnassignVPSPublicIP RPC.
+	SuperadminServiceUnassignVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnassignVPSPublicIP"
 	// SuperadminServiceListStripeWebhookEventsProcedure is the fully-qualified name of the
 	// SuperadminService's ListStripeWebhookEvents RPC.
 	SuperadminServiceListStripeWebhookEventsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListStripeWebhookEvents"
@@ -197,6 +215,13 @@ type SuperadminServiceClient interface {
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
+	// VPS public IP management endpoints
+	ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error)
+	CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error)
+	UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error)
+	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
+	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -421,6 +446,42 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
 			connect.WithClientOptions(opts...),
 		),
+		listVPSPublicIPs: connect.NewClient[v1.ListVPSPublicIPsRequest, v1.ListVPSPublicIPsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListVPSPublicIPsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListVPSPublicIPs")),
+			connect.WithClientOptions(opts...),
+		),
+		createVPSPublicIP: connect.NewClient[v1.CreateVPSPublicIPRequest, v1.CreateVPSPublicIPResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreateVPSPublicIPProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreateVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
+		updateVPSPublicIP: connect.NewClient[v1.UpdateVPSPublicIPRequest, v1.UpdateVPSPublicIPResponse](
+			httpClient,
+			baseURL+SuperadminServiceUpdateVPSPublicIPProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UpdateVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteVPSPublicIP: connect.NewClient[v1.DeleteVPSPublicIPRequest, v1.DeleteVPSPublicIPResponse](
+			httpClient,
+			baseURL+SuperadminServiceDeleteVPSPublicIPProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
+		assignVPSPublicIP: connect.NewClient[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse](
+			httpClient,
+			baseURL+SuperadminServiceAssignVPSPublicIPProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("AssignVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
+		unassignVPSPublicIP: connect.NewClient[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse](
+			httpClient,
+			baseURL+SuperadminServiceUnassignVPSPublicIPProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UnassignVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
 		listStripeWebhookEvents: connect.NewClient[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse](
 			httpClient,
 			baseURL+SuperadminServiceListStripeWebhookEventsProcedure,
@@ -484,6 +545,12 @@ type superadminServiceClient struct {
 	createVPSSize                            *connect.Client[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse]
 	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
 	deleteVPSSize                            *connect.Client[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse]
+	listVPSPublicIPs                         *connect.Client[v1.ListVPSPublicIPsRequest, v1.ListVPSPublicIPsResponse]
+	createVPSPublicIP                        *connect.Client[v1.CreateVPSPublicIPRequest, v1.CreateVPSPublicIPResponse]
+	updateVPSPublicIP                        *connect.Client[v1.UpdateVPSPublicIPRequest, v1.UpdateVPSPublicIPResponse]
+	deleteVPSPublicIP                        *connect.Client[v1.DeleteVPSPublicIPRequest, v1.DeleteVPSPublicIPResponse]
+	assignVPSPublicIP                        *connect.Client[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse]
+	unassignVPSPublicIP                      *connect.Client[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse]
 	listStripeWebhookEvents                  *connect.Client[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse]
 	listNodes                                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	getNode                                  *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
@@ -670,6 +737,36 @@ func (c *superadminServiceClient) DeleteVPSSize(ctx context.Context, req *connec
 	return c.deleteVPSSize.CallUnary(ctx, req)
 }
 
+// ListVPSPublicIPs calls obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs.
+func (c *superadminServiceClient) ListVPSPublicIPs(ctx context.Context, req *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error) {
+	return c.listVPSPublicIPs.CallUnary(ctx, req)
+}
+
+// CreateVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP.
+func (c *superadminServiceClient) CreateVPSPublicIP(ctx context.Context, req *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error) {
+	return c.createVPSPublicIP.CallUnary(ctx, req)
+}
+
+// UpdateVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP.
+func (c *superadminServiceClient) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error) {
+	return c.updateVPSPublicIP.CallUnary(ctx, req)
+}
+
+// DeleteVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP.
+func (c *superadminServiceClient) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error) {
+	return c.deleteVPSPublicIP.CallUnary(ctx, req)
+}
+
+// AssignVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP.
+func (c *superadminServiceClient) AssignVPSPublicIP(ctx context.Context, req *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+	return c.assignVPSPublicIP.CallUnary(ctx, req)
+}
+
+// UnassignVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP.
+func (c *superadminServiceClient) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+	return c.unassignVPSPublicIP.CallUnary(ctx, req)
+}
+
 // ListStripeWebhookEvents calls
 // obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents.
 func (c *superadminServiceClient) ListStripeWebhookEvents(ctx context.Context, req *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
@@ -739,6 +836,13 @@ type SuperadminServiceHandler interface {
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
+	// VPS public IP management endpoints
+	ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error)
+	CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error)
+	UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error)
+	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
+	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -958,6 +1062,42 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListVPSPublicIPsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListVPSPublicIPsProcedure,
+		svc.ListVPSPublicIPs,
+		connect.WithSchema(superadminServiceMethods.ByName("ListVPSPublicIPs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceCreateVPSPublicIPHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreateVPSPublicIPProcedure,
+		svc.CreateVPSPublicIP,
+		connect.WithSchema(superadminServiceMethods.ByName("CreateVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUpdateVPSPublicIPHandler := connect.NewUnaryHandler(
+		SuperadminServiceUpdateVPSPublicIPProcedure,
+		svc.UpdateVPSPublicIP,
+		connect.WithSchema(superadminServiceMethods.ByName("UpdateVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceDeleteVPSPublicIPHandler := connect.NewUnaryHandler(
+		SuperadminServiceDeleteVPSPublicIPProcedure,
+		svc.DeleteVPSPublicIP,
+		connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceAssignVPSPublicIPHandler := connect.NewUnaryHandler(
+		SuperadminServiceAssignVPSPublicIPProcedure,
+		svc.AssignVPSPublicIP,
+		connect.WithSchema(superadminServiceMethods.ByName("AssignVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUnassignVPSPublicIPHandler := connect.NewUnaryHandler(
+		SuperadminServiceUnassignVPSPublicIPProcedure,
+		svc.UnassignVPSPublicIP,
+		connect.WithSchema(superadminServiceMethods.ByName("UnassignVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceListStripeWebhookEventsHandler := connect.NewUnaryHandler(
 		SuperadminServiceListStripeWebhookEventsProcedure,
 		svc.ListStripeWebhookEvents,
@@ -1052,6 +1192,18 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceUpdateVPSSizeHandler.ServeHTTP(w, r)
 		case SuperadminServiceDeleteVPSSizeProcedure:
 			superadminServiceDeleteVPSSizeHandler.ServeHTTP(w, r)
+		case SuperadminServiceListVPSPublicIPsProcedure:
+			superadminServiceListVPSPublicIPsHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreateVPSPublicIPProcedure:
+			superadminServiceCreateVPSPublicIPHandler.ServeHTTP(w, r)
+		case SuperadminServiceUpdateVPSPublicIPProcedure:
+			superadminServiceUpdateVPSPublicIPHandler.ServeHTTP(w, r)
+		case SuperadminServiceDeleteVPSPublicIPProcedure:
+			superadminServiceDeleteVPSPublicIPHandler.ServeHTTP(w, r)
+		case SuperadminServiceAssignVPSPublicIPProcedure:
+			superadminServiceAssignVPSPublicIPHandler.ServeHTTP(w, r)
+		case SuperadminServiceUnassignVPSPublicIPProcedure:
+			superadminServiceUnassignVPSPublicIPHandler.ServeHTTP(w, r)
 		case SuperadminServiceListStripeWebhookEventsProcedure:
 			superadminServiceListStripeWebhookEventsHandler.ServeHTTP(w, r)
 		case SuperadminServiceListNodesProcedure:
@@ -1203,6 +1355,30 @@ func (UnimplementedSuperadminServiceHandler) UpdateVPSSize(context.Context, *con
 
 func (UnimplementedSuperadminServiceHandler) DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
