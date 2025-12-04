@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 )
@@ -99,7 +100,8 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 		var perms []string
 		_ = json.Unmarshal([]byte(r.Permissions), &perms)
 		for _, perm := range perms {
-			if perm == sp.Permission {
+			// Check exact match or wildcard match
+			if perm == sp.Permission || matchesPermission(perm, sp.Permission) {
 				// Resource scoping resolution
 				for _, b := range bindings {
 					if b.RoleID != r.ID {
@@ -132,6 +134,27 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 		}
 	}
 	return fmt.Errorf("permission denied: %s", sp.Permission)
+}
+
+// matchesPermission checks if a permission pattern (with wildcards) matches a specific permission
+// Examples:
+//   - "organization.members.*" matches "organization.members.invite"
+//   - "organization.admin.*" matches "organization.admin.add_credits"
+//   - "organization.*" matches "organization.update"
+//   - "deployment.*" matches "deployment.create"
+func matchesPermission(pattern, permission string) bool {
+	// Exact match
+	if pattern == permission {
+		return true
+	}
+	
+	// Wildcard match: pattern ends with ".*"
+	if strings.HasSuffix(pattern, ".*") {
+		prefix := strings.TrimSuffix(pattern, ".*")
+		return strings.HasPrefix(permission, prefix+".")
+	}
+	
+	return false
 }
 
 // matchesSelector determines if a selector JSON matches the target resource's attributes

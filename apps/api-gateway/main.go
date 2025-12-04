@@ -39,6 +39,7 @@ const (
 var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.auth.v1.AuthService/":                  "auth-service:3002",
 	"/obiente.cloud.organizations.v1.OrganizationService/": "organizations-service:3003",
+	"/obiente.cloud.admin.v1.AdminService/":                "auth-service:3002", // Admin endpoints (roles, permissions) are handled by auth service
 	"/obiente.cloud.billing.v1.BillingService/":            "billing-service:3004",
 	"/obiente.cloud.deployments.v1.DeploymentService/":     "deployments-service:3005",
 	"/obiente.cloud.gameservers.v1.GameServerService/":     "gameservers-service:3006",

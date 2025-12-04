@@ -146,6 +146,29 @@ type OrgRoleBinding struct {
 
 func (OrgRoleBinding) TableName() string { return "org_role_bindings" }
 
+// SuperadminRole represents a reusable role definition for superadmin users (global permissions)
+type SuperadminRole struct {
+	ID          string `gorm:"primaryKey" json:"id"`
+	Name        string `gorm:"uniqueIndex" json:"name"`
+	Description string `gorm:"type:text" json:"description"`
+	// JSON-encoded list of permission strings, e.g., ["admin.roles.read","admin.quotas.update"]
+	Permissions string `gorm:"type:jsonb" json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (SuperadminRole) TableName() string { return "superadmin_roles" }
+
+// SuperadminRoleBinding binds a user to superadmin roles
+type SuperadminRoleBinding struct {
+	ID     string `gorm:"primaryKey" json:"id"`
+	UserID string `gorm:"index" json:"user_id"`
+	RoleID string `gorm:"index" json:"role_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (SuperadminRoleBinding) TableName() string { return "superadmin_role_bindings" }
+
 // DeploymentUsageHourly stores hourly aggregated metrics to reduce raw data volume
 type DeploymentUsageHourly struct {
 	ID                  uint      `gorm:"primaryKey" json:"id"`

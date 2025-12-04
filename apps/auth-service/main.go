@@ -18,6 +18,7 @@ import (
 
 	authsvc "auth-service/internal/service"
 
+	adminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1/adminv1connect"
 	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
 
 	"connectrpc.com/connect"
@@ -48,7 +49,12 @@ func main() {
 	database.RegisterModels(
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.OrgRole{},
+		&database.OrgRoleBinding{},
+		&database.OrgQuota{},
 		&database.GitHubIntegration{},
+		&database.SuperadminRole{},
+		&database.SuperadminRoleBinding{},
 	)
 
 	// Initialize database
@@ -72,6 +78,9 @@ func main() {
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
 
+	// Register all service procedures for permission discovery
+	auth.RegisterAllServices()
+
 	// Register auth service
 	// Note: Login endpoint doesn't require auth, but other endpoints do
 	// We'll handle this in the service itself
@@ -81,6 +90,14 @@ func main() {
 		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(authPath, authHandler)
+
+	// Register admin service (roles, permissions, quotas)
+	adminService := authsvc.NewAdminService()
+	adminPath, adminHandler := adminv1connect.NewAdminServiceHandler(
+		adminService,
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
+	)
+	mux.Handle(adminPath, adminHandler)
 
 	// Health check endpoint with replica ID
 	mux.HandleFunc("/health", health.HandleHealth("auth-service", func() (bool, string, map[string]interface{}) {

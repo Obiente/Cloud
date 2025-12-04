@@ -42,7 +42,7 @@
               type="number"
             />
           </OuiGrid>
-          <OuiFlex class="mt-4" justify="start" gap="md">
+          <OuiFlex mt="md" justify="start" gap="md" align="center">
             <OuiButton type="submit">Save</OuiButton>
             <OuiText v-if="message" color="success">{{ message }}</OuiText>
             <OuiText v-if="error" color="danger">{{ error }}</OuiText>

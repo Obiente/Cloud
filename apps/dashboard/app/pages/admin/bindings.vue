@@ -5,25 +5,25 @@
       <OuiCardBody>
         <form @submit.prevent="create">
           <OuiGrid cols="1" colsMd="3" gap="md">
-            <div>
+            <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Organization</OuiText>
               <OuiSelect v-model="selectedOrg" :items="orgItems" />
-            </div>
-            <div>
+            </OuiStack>
+            <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Member</OuiText>
               <OuiSelect v-model="userId" :items="memberItems" />
-            </div>
-            <div>
+            </OuiStack>
+            <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Role</OuiText>
               <OuiSelect v-model="roleId" :items="roleItems" />
-            </div>
-            <div>
+            </OuiStack>
+            <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">
                 Resource Type (optional)
               </OuiText>
               <OuiSelect v-model="resourceType" :items="resourceTypeItems" />
-            </div>
-            <div>
+            </OuiStack>
+            <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Resource (optional)</OuiText>
               <OuiSelect
                 v-if="resourceType === 'deployment'"
@@ -42,9 +42,9 @@
                 v-model="resourceIdsString"
                 placeholder="* for all"
               />
-            </div>
+            </OuiStack>
           </OuiGrid>
-          <OuiFlex class="mt-4" gap="md">
+          <OuiFlex mt="md" gap="md">
             <OuiButton type="submit">Bind</OuiButton>
           </OuiFlex>
         </form>
@@ -54,14 +54,26 @@
     <OuiCard>
       <OuiCardHeader>Bindings</OuiCardHeader>
       <OuiCardBody>
-        <OuiFlex gap="sm">
-          <OuiButton variant="ghost" @click="refreshAll">Refresh</OuiButton>
-        </OuiFlex>
-        <ul class="list-disc pl-6 mt-2">
-          <li v-for="b in bindingItems" :key="b.id">
-            {{ b.user }} → {{ b.role }} ({{ b.resourceType }} {{ b.resource }})
-          </li>
-        </ul>
+        <OuiStack gap="sm">
+          <OuiFlex gap="xs">
+            <OuiButton variant="ghost" size="sm" @click="refreshAll">Refresh</OuiButton>
+          </OuiFlex>
+          <OuiStack gap="xs">
+            <OuiFlex
+              v-for="b in bindingItems"
+              :key="b.id"
+              align="center"
+              gap="xs"
+            >
+              <OuiText size="sm">
+                {{ b.user }} → {{ b.role }} ({{ b.resourceType }} {{ b.resource }})
+              </OuiText>
+            </OuiFlex>
+            <OuiFlex v-if="!bindingItems || bindingItems.length === 0" justify="center" py="lg">
+              <OuiText color="secondary" size="sm">No bindings found</OuiText>
+            </OuiFlex>
+          </OuiStack>
+        </OuiStack>
       </OuiCardBody>
     </OuiCard>
   </OuiStack>
