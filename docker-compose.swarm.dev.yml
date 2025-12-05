@@ -57,6 +57,7 @@ services:
       start_period: 30s
     deploy:
       replicas: 1
+      endpoint_mode: dnsrr  # Use DNS Round Robin - DNS returns actual task IPs, not VIP
       placement:
         constraints:
           - node.labels.postgres.enabled == true
@@ -121,6 +122,7 @@ services:
       start_period: 30s
     deploy:
       replicas: 1
+      endpoint_mode: dnsrr  # Use DNS Round Robin - DNS returns actual task IPs, not VIP
       placement:
         constraints:
           - node.labels.metrics.enabled == true
@@ -175,6 +177,7 @@ services:
       start_period: 10s
     deploy:
       replicas: 1
+      endpoint_mode: dnsrr  # Use DNS Round Robin - DNS returns actual task IPs, not VIP
       placement:
         constraints:
           - node.labels.redis.enabled == true
