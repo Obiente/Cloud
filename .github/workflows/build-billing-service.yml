@@ -23,8 +23,12 @@ permissions:
 
 jobs:
   build-and-push-billing-service:
-    name: Build and Push Billing Service
+    name: Build and Push Billing Service (${{ matrix.platform }})
     runs-on: self-hosted
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+      fail-fast: false
     env:
       REGISTRY: ghcr.io
       SERVICE_NAME: billing-service
@@ -80,7 +84,9 @@ jobs:
           echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build and push Billing Service Docker image (attempt 1)
+      # Build and push each platform independently for non-blocking pushes
+      # Each architecture runs in parallel and pushes as soon as it's ready
+      - name: Build and push Billing Service Docker image (${{ matrix.platform }}) - attempt 1
         id: build-attempt-1
         uses: docker/build-push-action@v5
         continue-on-error: true
@@ -95,10 +101,10 @@ jobs:
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Billing Service Docker image (attempt 2)
+      - name: Build and push Billing Service Docker image (${{ matrix.platform }}) - attempt 2
         if: steps.build-attempt-1.outcome == 'failure'
         id: build-attempt-2
         uses: docker/build-push-action@v5
@@ -114,10 +120,10 @@ jobs:
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Billing Service Docker image (attempt 3)
+      - name: Build and push Billing Service Docker image (${{ matrix.platform }}) - attempt 3
         if: steps.build-attempt-2.outcome == 'failure'
         uses: docker/build-push-action@v5
         with:
@@ -131,6 +137,6 @@ jobs:
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
