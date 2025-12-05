@@ -85,8 +85,103 @@ export function useVPSProgress(options: VPSProgressOptions) {
       phase: "Setting up operating system",
     },
     {
-      pattern: /Operating system installed/i,
+      pattern: /Starting template clone/i,
+      progress: 56,
+      phase: "Starting template clone",
+    },
+    {
+      pattern: /Template clone initiated/i,
+      progress: 57,
+      phase: "Cloning template",
+    },
+    {
+      pattern: /Verifying cloned disk/i,
+      progress: 58,
+      phase: "Verifying cloned disk",
+    },
+    {
+      pattern: /Waiting for clone to finalize/i,
+      progress: 59,
+      phase: "Finalizing clone",
+    },
+    {
+      pattern: /Verifying disk configuration/i,
+      progress: 60,
+      phase: "Verifying disk configuration",
+    },
+    {
+      pattern: /Disk verified:/i,
+      progress: 61,
+      phase: "Disk verified",
+    },
+    {
+      pattern: /Boot disk not found|Creating new disk|Creating boot disk/i,
+      progress: 62,
+      phase: "Creating boot disk",
+    },
+    {
+      pattern: /Boot disk created successfully/i,
+      progress: 63,
+      phase: "Boot disk created",
+    },
+    {
+      pattern: /Searching for cloned disk volume/i,
+      progress: 64,
+      phase: "Searching for disk volume",
+    },
+    {
+      pattern: /Attaching cloned disk to VM/i,
+      progress: 65,
+      phase: "Attaching disk",
+    },
+    {
+      pattern: /Disk attached successfully/i,
+      progress: 66,
+      phase: "Disk attached",
+    },
+    {
+      pattern: /Checking disk size/i,
+      progress: 67,
+      phase: "Checking disk size",
+    },
+    {
+      pattern: /Converting disk storage format|Moving disk to target storage/i,
+      progress: 68,
+      phase: "Converting storage format",
+    },
+    {
+      pattern: /Disk moved successfully/i,
+      progress: 69,
+      phase: "Storage conversion complete",
+    },
+    {
+      pattern: /Resizing disk to/i,
       progress: 70,
+      phase: "Resizing disk",
+    },
+    {
+      pattern: /Disk resized successfully/i,
+      progress: 71,
+      phase: "Disk resized",
+    },
+    {
+      pattern: /Configuring cloud-init/i,
+      progress: 72,
+      phase: "Configuring cloud-init",
+    },
+    {
+      pattern: /Cloud-init configuration complete/i,
+      progress: 73,
+      phase: "Cloud-init configured",
+    },
+    {
+      pattern: /Applying VM configuration/i,
+      progress: 74,
+      phase: "Applying VM configuration",
+    },
+    {
+      pattern: /Operating system installed/i,
+      progress: 75,
       phase: "Operating system installed",
     },
     {

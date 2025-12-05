@@ -632,6 +632,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 				// Clone from template
 				writeLog("Setting up operating system...", false)
+				writeLog("Starting template clone...", false)
 				// Proxmox API expects form-encoded data for clone operations
 				// Note: For linked clones (full=0), the storage parameter is not allowed
 				// The disk will be cloned to the same storage as the template
@@ -666,9 +667,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 					defer resp.Body.Close()
 					if resp.StatusCode == http.StatusOK {
 						logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
+						writeLog("Template clone initiated, waiting for completion...", false)
 
 						// Wait a moment for the clone to complete and disk to be available
 						time.Sleep(2 * time.Second)
+						writeLog("Verifying cloned disk...", false)
 
 						// Template boot configuration uses device names (handled by setup script)
 
@@ -738,9 +741,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						}
 
 						// Wait a bit longer for clone to fully complete
+						writeLog("Waiting for clone to finalize...", false)
 						time.Sleep(3 * time.Second)
 
 						// Verify disk exists in cloned VM and determine which disk key to use
+						writeLog("Verifying disk configuration...", false)
 						// Retry getting VM config as it may not be available immediately after cloning
 						var vmConfigCheck map[string]interface{}
 						var actualDiskKey string
@@ -793,6 +798,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 								if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
 									actualDiskKey = diskKey
 									logger.Info("[ProxmoxClient] VM %d has disk %s: %s", vmID, diskKey, disk)
+									writeLog(fmt.Sprintf("Disk verified: %s", diskKey), false)
 									break
 								}
 							}
@@ -800,6 +806,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 							if actualDiskKey == "" {
 								logger.Warn("[ProxmoxClient] Cloned VM %d does not have a boot disk configured", vmID)
 								logger.Info("[ProxmoxClient] Template %s (VMID %d) disk config: %s=%s", imageTemplate, templateVMID, templateDiskKey, templateDiskValue)
+								writeLog("Boot disk not found, creating new disk...", false)
 
 								// Check if template disk is a cloud-init disk (not a boot disk)
 								isCloudInitDisk := false
@@ -818,6 +825,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									// Format for LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
 									diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
 									diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+									writeLog(fmt.Sprintf("Creating boot disk (%dGB)...", diskSizeGB), false)
 
 									// Determine storage type and format
 									storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
@@ -899,6 +907,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
 										diskResp.Body.Close()
 										logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+										writeLog("Boot disk created successfully", false)
 										diskCreated = true
 										createdDiskValue = diskValue
 									} else {
@@ -912,6 +921,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 								} else {
 									// Template has a boot disk, but it wasn't cloned - try to find and attach it
 									logger.Info("[ProxmoxClient] Template has boot disk but it wasn't cloned, searching for disk volume...")
+									writeLog("Searching for cloned disk volume...", false)
 
 									storageToSearch := storage
 									if templateDiskValue != "" {
@@ -974,6 +984,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 									// If we found a volume, add it to the VM config
 									if foundVolume != "" && foundDiskKey != "" {
+										writeLog("Attaching cloned disk to VM...", false)
 										newDiskValue := fmt.Sprintf("%s:%s", storageToSearch, foundVolume)
 										diskFormData := url.Values{}
 										diskFormData.Set(foundDiskKey, newDiskValue)
@@ -982,6 +993,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 											diskResp.Body.Close()
 											actualDiskKey = foundDiskKey
 											logger.Info("[ProxmoxClient] Successfully attached disk %s to VM %d: %s", foundDiskKey, vmID, newDiskValue)
+											writeLog("Disk attached successfully", false)
 										} else {
 											var body []byte
 											if diskResp != nil {
@@ -992,8 +1004,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									} else {
 										// No disk found, create a new one
 										logger.Info("[ProxmoxClient] No cloned disk found, creating new boot disk for VM %d", vmID)
+										writeLog("No cloned disk found, creating new boot disk...", false)
 										diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
 										diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+										writeLog(fmt.Sprintf("Creating boot disk (%dGB)...", diskSizeGB), false)
 
 										// Determine storage type and format
 										storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageToSearch)
@@ -1090,6 +1104,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 												if diskErr2 == nil && diskResp2 != nil && diskResp2.StatusCode == http.StatusOK {
 													diskResp2.Body.Close()
 													logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d with LVM/ZFS format: %s", actualDiskKey, vmID, diskValue)
+													writeLog("Boot disk created successfully", false)
 													diskCreated = true
 													createdDiskValue = diskValue
 												} else {
@@ -1110,6 +1125,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						// For linked clones, the disk inherits the template size, so we need to resize it
 						// If we just created a new disk, it should already be the correct size, but verify anyway
 						if actualDiskKey != "" {
+							writeLog("Checking disk size...", false)
 							// Use the config we already retrieved, or get it again if we don't have it
 							var vmConfigAfter map[string]interface{}
 							if vmConfigCheck != nil {
@@ -1184,6 +1200,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									// The disk needs to be moved at its current size, then resized after
 									// This is because Proxmox storage API doesn't respect size parameter for LVM thin
 									logger.Info("[ProxmoxClient] %s. Moving disk at current size, will resize after...", moveReason)
+									writeLog("Converting disk storage format...", false)
 									writeLog("Moving disk to target storage...", false)
 									// Use separate context to avoid parent context cancellation during long disk operations
 									moveCtx, moveCancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -1216,13 +1233,16 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									// No move needed - resize in place
 									// Use separate context to avoid parent context cancellation
 									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
+									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
 									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
 									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
 									resizeCancel()
 									if resizeErr != nil {
 										logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
+										writeLog(fmt.Sprintf("Disk resize failed: %v", resizeErr), true)
 									} else {
 										logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+										writeLog("Disk resized successfully", false)
 									}
 								}
 								}
@@ -1267,6 +1287,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 	// Configure cloud-init if using template
 	if useCloudInit {
+		writeLog("Configuring cloud-init...", false)
 		// Cloud-init configuration
 		// Use ip=dhcp without specifying interface - cloud-init will auto-detect
 		// Specifying interface name can cause issues if the interface name doesn't match
@@ -1304,6 +1325,8 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			// Use cicustom to reference the snippet
 			vmConfig["cicustom"] = snippetPath
 			logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
+			writeLog("Cloud-init configuration complete", false)
+			writeLog("Operating system installed", false)
 			// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
 		} else {
 			return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
@@ -1312,11 +1335,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 	// Create or update VM
 	endpoint := fmt.Sprintf("/nodes/%s/qemu", nodeName)
-	if useCloudInit {
-		// Update cloned VM configuration
-		// Proxmox API expects form-encoded data for config updates
-		// Note: Don't include disk config in update when cloning - disk already exists and was resized separately
-		updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+		if useCloudInit {
+			writeLog("Applying VM configuration...", false)
+			// Update cloned VM configuration
+			// Proxmox API expects form-encoded data for config updates
+			// Note: Don't include disk config in update when cloning - disk already exists and was resized separately
+			updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 
 		// Get the actual disk key from the cloned VM to use in boot order
 		vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
