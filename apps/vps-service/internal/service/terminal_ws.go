@@ -285,21 +285,6 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		rows = 24
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		sendError("Failed to get Proxmox config")
-		conn.Close(websocket.StatusInternalError, "Proxmox config error")
-		return
-	}
-
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		sendError("Failed to create Proxmox client")
-		conn.Close(websocket.StatusInternalError, "Proxmox client error")
-		return
-	}
-
 	vmIDInt := 0
 	if vps.InstanceID != nil {
 		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
@@ -319,20 +304,48 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 	defer vpsManager.Close()
 
-	// Find which node the VM is running on
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
-	if err != nil {
-		// Check if VM was deleted from Proxmox directly
-		// If VM is not found, sync status to mark it as DELETED
-		if strings.Contains(err.Error(), "not found on any node") {
-			log.Printf("[VPS Terminal WS] VM %d not found in Proxmox - syncing status to DELETED", vmIDInt)
-			// Sync status will mark VPS as DELETED if VM doesn't exist
-			if syncErr := vpsManager.SyncVPSStatusFromProxmox(ctx, initMsg.VPSID); syncErr != nil {
-				log.Printf("[VPS Terminal WS] Failed to sync VPS status: %v", syncErr)
-			}
+	// Get node name from VPS or discover it
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		// NodeID is missing - need to discover it
+		// Get first node from mapping to use for discovery
+		discoveryNode, err := orchestrator.GetFirstProxmoxNodeName()
+		if err != nil {
+			sendError(fmt.Sprintf("VPS has no NodeID and cannot discover node: %v", err))
+			conn.Close(websocket.StatusInternalError, "Node discovery failed")
+			return
 		}
-		sendError(fmt.Sprintf("Failed to find Proxmox node for VM: %v", err))
-		conn.Close(websocket.StatusInternalError, "VM node not found")
+		// Get Proxmox client for discovery
+		discoveryClient, err := vpsManager.GetProxmoxClientForNode(discoveryNode)
+		if err != nil {
+			sendError(fmt.Sprintf("Failed to get Proxmox client for discovery: %v", err))
+			conn.Close(websocket.StatusInternalError, "Proxmox client error")
+			return
+		}
+		// Discover the node where the VM is running
+		nodeName, err = discoveryClient.FindVMNode(ctx, vmIDInt)
+		if err != nil {
+			// Check if VM was deleted from Proxmox directly
+			if strings.Contains(err.Error(), "not found on any node") {
+				log.Printf("[VPS Terminal WS] VM %d not found in Proxmox - syncing status to DELETED", vmIDInt)
+				// Sync status will mark VPS as DELETED if VM doesn't exist
+				if syncErr := vpsManager.SyncVPSStatusFromProxmox(ctx, initMsg.VPSID); syncErr != nil {
+					log.Printf("[VPS Terminal WS] Failed to sync VPS status: %v", syncErr)
+				}
+			}
+			sendError(fmt.Sprintf("Failed to find Proxmox node for VM: %v", err))
+			conn.Close(websocket.StatusInternalError, "VM node not found")
+			return
+		}
+	}
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
+	if err != nil {
+		sendError(fmt.Sprintf("Failed to get Proxmox client for node %s: %v", nodeName, err))
+		conn.Close(websocket.StatusInternalError, "Proxmox client error")
 		return
 	}
 
@@ -1036,29 +1049,47 @@ func (s *Service) getVPSRootPassword(ctx context.Context, vpsID string) (string,
 		return "", fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return "", fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return "", fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return "", fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return "", fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Create VPS manager to get Proxmox client
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err != nil {
+		return "", fmt.Errorf("failed to create VPS manager: %w", err)
+	}
+	defer vpsManager.Close()
+
+	// Get node name from VPS or discover it
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		// NodeID is missing - need to discover it
+		discoveryNode, err := orchestrator.GetFirstProxmoxNodeName()
+		if err != nil {
+			return "", fmt.Errorf("VPS has no NodeID and cannot discover node: %w", err)
+		}
+		discoveryClient, err := vpsManager.GetProxmoxClientForNode(discoveryNode)
+		if err != nil {
+			return "", fmt.Errorf("failed to get Proxmox client for discovery: %w", err)
+		}
+		nodeName, err = discoveryClient.FindVMNode(ctx, vmIDInt)
+		if err != nil {
+			return "", fmt.Errorf("failed to find VM node: %w", err)
+		}
+	}
+
+	// Get Proxmox client for the node
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Get VM config from Proxmox
-	vmConfig, err := proxmoxClient.GetVMConfig(ctx, nodes[0], vmIDInt)
+	vmConfig, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmIDInt)
 	if err != nil {
 		return "", fmt.Errorf("failed to get VM config: %w", err)
 	}

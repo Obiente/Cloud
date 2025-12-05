@@ -165,9 +165,9 @@ func getProxmoxNodeNames(mapping map[string]string) []string {
 	return nodes
 }
 
-// getFirstProxmoxNodeName returns the first node name from the mapping for discovery purposes
+// GetFirstProxmoxNodeName returns the first node name from the mapping for discovery purposes
 // Returns empty string if no nodes are configured
-func getFirstProxmoxNodeName() (string, error) {
+func GetFirstProxmoxNodeName() (string, error) {
 	mapping, err := parseNodeProxmoxMapping()
 	if err != nil {
 		return "", fmt.Errorf("failed to parse Proxmox API mapping: %w", err)
@@ -1502,7 +1502,7 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 	} else {
 		// NodeID is missing - need to discover it
 		// Get first node from mapping to use for discovery
-		discoveryNode, err := getFirstProxmoxNodeName()
+		discoveryNode, err := GetFirstProxmoxNodeName()
 		if err != nil {
 			return fmt.Errorf("VPS %s has no NodeID and cannot discover node: %w. Please set NodeID manually or re-import the VPS", vpsID, err)
 		}
