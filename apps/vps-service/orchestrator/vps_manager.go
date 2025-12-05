@@ -182,6 +182,23 @@ func GetFirstProxmoxNodeName() (string, error) {
 	return "", fmt.Errorf("no nodes found in PROXMOX_NODE_ENDPOINTS mapping")
 }
 
+// GetAllProxmoxNodeNames returns all node names from the mapping
+// Returns empty slice if no nodes are configured
+func GetAllProxmoxNodeNames() ([]string, error) {
+	mapping, err := parseNodeProxmoxMapping()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Proxmox API mapping: %w", err)
+	}
+	if len(mapping) == 0 {
+		return nil, fmt.Errorf("PROXMOX_NODE_ENDPOINTS environment variable is required (configure node endpoints mapping, e.g., 'node1:proxmox1.example.com')")
+	}
+	nodes := make([]string, 0, len(mapping))
+	for nodeName := range mapping {
+		nodes = append(nodes, nodeName)
+	}
+	return nodes, nil
+}
+
 // GetProxmoxConfig gets Proxmox configuration from environment variables
 // nodeName is required when using PROXMOX_NODE_ENDPOINTS
 func GetProxmoxConfig(nodeName ...string) (*ProxmoxConfig, error) {
@@ -456,34 +473,37 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		}
 	}
 
-	// Get Proxmox client for target node (if known) or default
-	// Use node-specific client if we know the target node from region mapping
+	// Get Proxmox client for target node (if known) or try all nodes from mapping
+	// If region is specified, MUST use that region's node (no fallback to other nodes)
+	// If no region is specified, try all nodes sequentially
 	var proxmoxClient *ProxmoxClient
 	if targetNodeName != "" {
+		// Region is specified - MUST use the region's node, fail if unavailable
 		client, err := vm.GetProxmoxClientForNode(targetNodeName)
 		if err != nil {
-			logger.Warn("[VPSManager] Failed to get Proxmox client for node %s: %v (will try default)", targetNodeName, err)
-			// Fallback to default
-			proxmoxConfig, err := GetProxmoxConfig()
-			if err != nil {
-				return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
-			}
-			proxmoxClient, err = NewProxmoxClient(proxmoxConfig)
-			if err != nil {
-				return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
-			}
-		} else {
-			proxmoxClient = client
+			return nil, "", fmt.Errorf("failed to get Proxmox client for region %s node %s: %w. The region's node must be available to create VPS in this region", config.Region, targetNodeName, err)
 		}
+		proxmoxClient = client
+		logger.Info("[VPSManager] Using region %s node %s for VPS creation", config.Region, targetNodeName)
 	} else {
-		// No target node known, use default
-		proxmoxConfig, err := GetProxmoxConfig()
+		// No region specified - try all nodes from mapping sequentially
+		allNodes, err := GetAllProxmoxNodeNames()
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
+			return nil, "", fmt.Errorf("failed to get Proxmox nodes: %w", err)
 		}
-		proxmoxClient, err = NewProxmoxClient(proxmoxConfig)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
+		var lastErr error
+		for _, node := range allNodes {
+			client, err := vm.GetProxmoxClientForNode(node)
+			if err == nil {
+				proxmoxClient = client
+				logger.Info("[VPSManager] Using node %s for VPS creation (no region specified)", node)
+				break
+			}
+			logger.Debug("[VPSManager] Failed to get Proxmox client for node %s: %v (trying next node)", node, err)
+			lastErr = err
+		}
+		if proxmoxClient == nil {
+			return nil, "", fmt.Errorf("failed to get Proxmox client after trying all %d nodes: %w", len(allNodes), lastErr)
 		}
 	}
 
@@ -1088,36 +1108,47 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 	}
 
 	// Try to get IPs from Proxmox guest agent first
-	ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-	if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
+	guestAgentErr := error(nil)
+	ipv4, ipv6, guestAgentErr := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+	if guestAgentErr == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
 		// Successfully got IPs from guest agent
+		logger.Info("[VPSManager] Got IPs from guest agent for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
 		return ipv4, ipv6, nil
 	}
 
 	// Guest agent not available or returned no IPs - fall back to gateway
 	// Get gateway client for the node where VPS is running
 	if vps.NodeID != nil && *vps.NodeID != "" {
-		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
-		if err == nil {
-			logger.Info("[VPSManager] Guest agent not available for VPS %s, falling back to gateway on node %s", vpsID, *vps.NodeID)
-			allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
-			if err == nil && len(allocations) > 0 {
+		gatewayClient, gatewayErr := vm.GetGatewayClientForNode(*vps.NodeID)
+		if gatewayErr == nil {
+			if guestAgentErr != nil {
+				logger.Info("[VPSManager] Guest agent unavailable for VPS %s (%v), falling back to gateway on node %s", vpsID, guestAgentErr, *vps.NodeID)
+			} else {
+				logger.Info("[VPSManager] Guest agent returned no IPs for VPS %s, falling back to gateway on node %s", vpsID, *vps.NodeID)
+			}
+			allocations, listErr := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
+			if listErr == nil && len(allocations) > 0 {
 				// Return gateway-allocated IP as IPv4
 				gatewayIP := allocations[0].IpAddress
 				logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
 				return []string{gatewayIP}, []string{}, nil
-			} else if err != nil {
-				logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
+			} else if listErr != nil {
+				logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, listErr)
+			} else {
+				logger.Debug("[VPSManager] Gateway returned no IP allocations for VPS %s", vpsID)
 			}
 		} else {
-			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, gatewayErr)
 		}
+	} else {
+		logger.Debug("[VPSManager] VPS %s has no NodeID, cannot fall back to gateway", vpsID)
 	}
 
 	// Both guest agent and gateway failed
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get VM IP addresses from guest agent: %w", err)
+	if guestAgentErr != nil {
+		return nil, nil, fmt.Errorf("failed to get VM IP addresses: guest agent error: %w", guestAgentErr)
 	}
+	// Guest agent succeeded but returned no IPs, and gateway also failed
 	return []string{}, []string{}, nil
 }
 
@@ -1501,25 +1532,38 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 		nodeName = *vps.NodeID
 	} else {
 		// NodeID is missing - need to discover it
-		// Get first node from mapping to use for discovery
-		discoveryNode, err := GetFirstProxmoxNodeName()
+		// Try all nodes sequentially until one succeeds
+		allNodes, err := GetAllProxmoxNodeNames()
 		if err != nil {
 			return fmt.Errorf("VPS %s has no NodeID and cannot discover node: %w. Please set NodeID manually or re-import the VPS", vpsID, err)
-		}
-		// Get Proxmox client for discovery
-		discoveryClient, err := vm.GetProxmoxClientForNode(discoveryNode)
-		if err != nil {
-			return fmt.Errorf("failed to get Proxmox client for discovery node %s: %w", discoveryNode, err)
 		}
 		vmIDInt := 0
 		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 		if vmIDInt == 0 {
 			return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 		}
-		// Discover the node where the VM is running
-		var findErr error
-		nodeName, findErr = discoveryClient.FindVMNode(ctx, vmIDInt)
-		if findErr != nil {
+		// Try each node until we find one that can discover the VM
+		var lastErr error
+		for _, discoveryNode := range allNodes {
+			// Get Proxmox client for this discovery node
+			discoveryClient, err := vm.GetProxmoxClientForNode(discoveryNode)
+			if err != nil {
+				logger.Debug("[VPSManager] Failed to get Proxmox client for discovery node %s: %v (trying next node)", discoveryNode, err)
+				lastErr = err
+				continue
+			}
+			// Try to discover the node where the VM is running
+			nodeName, findErr := discoveryClient.FindVMNode(ctx, vmIDInt)
+			if findErr == nil {
+				// Success! Update VPS record with discovered NodeID
+				vps.NodeID = &nodeName
+				if err := database.DB.Model(&vps).Update("node_id", nodeName).Error; err != nil {
+					logger.Warn("[VPSManager] Failed to update NodeID for VPS %s: %v (continuing with sync)", vpsID, err)
+				} else {
+					logger.Info("[VPSManager] Discovered and updated NodeID for VPS %s: %s (via discovery node %s)", vpsID, nodeName, discoveryNode)
+				}
+				break
+			}
 			// Check if VM was deleted from Proxmox directly
 			// FindVMNode returns "VM X not found on any node" when VM doesn't exist
 			if strings.Contains(findErr.Error(), "not found on any node") {
@@ -1531,14 +1575,13 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 				}
 				return nil
 			}
-			return fmt.Errorf("failed to find VM node: %w", findErr)
+			// Discovery failed on this node, try next one
+			logger.Debug("[VPSManager] Failed to discover VM %d via node %s: %v (trying next node)", vmIDInt, discoveryNode, findErr)
+			lastErr = findErr
 		}
-		// Update VPS record with discovered NodeID
-		vps.NodeID = &nodeName
-		if err := database.DB.Model(&vps).Update("node_id", nodeName).Error; err != nil {
-			logger.Warn("[VPSManager] Failed to update NodeID for VPS %s: %v (continuing with sync)", vpsID, err)
-		} else {
-			logger.Info("[VPSManager] Discovered and updated NodeID for VPS %s: %s", vpsID, nodeName)
+		// If we tried all nodes and none worked, return error
+		if nodeName == "" {
+			return fmt.Errorf("failed to discover VM node after trying all %d nodes: %w", len(allNodes), lastErr)
 		}
 	}
 
@@ -1836,14 +1879,27 @@ type ImportVPSResult struct {
 // 6. Gets VM config to extract resource specs
 // 7. Imports missing VPS with proper ownership
 func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]ImportVPSResult, error) {
-	proxmoxConfig, err := GetProxmoxConfig()
+	// Try all nodes sequentially until one succeeds for listing VMs (any node can list all VMs in cluster)
+	allNodes, err := GetAllProxmoxNodeNames()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Proxmox config: %w", err)
+		return nil, fmt.Errorf("failed to get Proxmox nodes for import: %w", err)
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
+	var proxmoxClient *ProxmoxClient
+	var lastErr error
+	for _, discoveryNode := range allNodes {
+		client, err := vm.GetProxmoxClientForNode(discoveryNode)
+		if err != nil {
+			logger.Debug("[VPSManager] Failed to get Proxmox client for discovery node %s: %v (trying next node)", discoveryNode, err)
+			lastErr = err
+			continue
+		}
+		proxmoxClient = client
+		logger.Info("[VPSManager] Using node %s for VM listing", discoveryNode)
+		break
+	}
+	if proxmoxClient == nil {
+		return nil, fmt.Errorf("failed to get Proxmox client after trying all %d nodes: %w", len(allNodes), lastErr)
 	}
 
 	// List all VMs from Proxmox
@@ -2224,14 +2280,27 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 // ImportMissingVPSForAllOrgs imports missing VPS instances for all organizations
 // This is used for periodic background sync to import VPSs that exist in Proxmox but not in the database
 func (vm *VPSManager) ImportMissingVPSForAllOrgs(ctx context.Context) error {
-	proxmoxConfig, err := GetProxmoxConfig()
+	// Try all nodes sequentially until one succeeds for listing VMs (any node can list all VMs in cluster)
+	allNodes, err := GetAllProxmoxNodeNames()
 	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+		return fmt.Errorf("failed to get Proxmox nodes for import: %w", err)
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	var proxmoxClient *ProxmoxClient
+	var lastErr error
+	for _, discoveryNode := range allNodes {
+		client, err := vm.GetProxmoxClientForNode(discoveryNode)
+		if err != nil {
+			logger.Debug("[VPSManager] Failed to get Proxmox client for discovery node %s: %v (trying next node)", discoveryNode, err)
+			lastErr = err
+			continue
+		}
+		proxmoxClient = client
+		logger.Info("[VPSManager] Using node %s for VM listing", discoveryNode)
+		break
+	}
+	if proxmoxClient == nil {
+		return fmt.Errorf("failed to get Proxmox client after trying all %d nodes: %w", len(allNodes), lastErr)
 	}
 
 	// List all VMs from Proxmox

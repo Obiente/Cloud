@@ -358,55 +358,61 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 
 	// If VPS has an instance ID, try to fetch latest disk size and IP addresses from Proxmox
 	if vps.InstanceID != nil {
-		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+		// Try to get IP addresses from VPS manager (tries guest agent first, falls back to gateway)
+		// This uses the VPS's NodeID to get the correct Proxmox client and gateway client
+		vpsManager, err := orchestrator.NewVPSManager()
 		if err == nil {
-			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-			if err == nil {
-				vmIDInt := 0
-				fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-				if vmIDInt > 0 {
-					nodes, err := proxmoxClient.ListNodes(ctx)
-					if err == nil && len(nodes) > 0 {
+			defer vpsManager.Close()
+			
+			// Get node name for Proxmox operations
+			nodeName := ""
+			if vps.NodeID != nil && *vps.NodeID != "" {
+				nodeName = *vps.NodeID
+			}
+			
+			// Try to get disk size from Proxmox if we have a node
+			if nodeName != "" {
+				proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
+				if err == nil {
+					vmIDInt := 0
+					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+					if vmIDInt > 0 {
 						// Try to get disk size from Proxmox
-						if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodes[0], vmIDInt); err == nil && diskSize > 0 {
+						if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodeName, vmIDInt); err == nil && diskSize > 0 {
 							// Update database if disk size is different
 							if vps.DiskBytes != diskSize {
 								vps.DiskBytes = diskSize
 								database.DB.Model(&vps).Update("disk_bytes", diskSize)
 							}
 						}
-
-						// Try to get IP addresses from VPS manager (tries guest agent first, falls back to gateway)
-						vpsManager, err := orchestrator.NewVPSManager()
-						if err == nil {
-							defer vpsManager.Close()
-							ipv4, ipv6, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
-							if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
-								// Update database with IP addresses (from guest agent or gateway)
-								if len(ipv4) > 0 {
-									ipv4JSON, _ := json.Marshal(ipv4)
-									vps.IPv4Addresses = string(ipv4JSON)
-								}
-								if len(ipv6) > 0 {
-									ipv6JSON, _ := json.Marshal(ipv6)
-									vps.IPv6Addresses = string(ipv6JSON)
-								}
-								if len(ipv4) > 0 || len(ipv6) > 0 {
-									database.DB.Model(&vps).Updates(map[string]interface{}{
-										"ipv4_addresses": vps.IPv4Addresses,
-										"ipv6_addresses": vps.IPv6Addresses,
-									})
-									logger.Info("[VPS Service] Updated IP addresses for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
-								}
-							} else if err != nil {
-								logger.Debug("[VPS Service] Failed to get IP addresses for VPS %s (guest agent and gateway both unavailable): %v", vpsID, err)
-							}
-						} else {
-							logger.Warn("[VPS Service] Failed to create VPS manager for IP sync: %v", err)
-						}
 					}
 				}
 			}
+			
+			// Try to get IP addresses (uses VPS's NodeID for gateway client)
+			ipv4, ipv6, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
+			if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
+				// Update database with IP addresses (from guest agent or gateway)
+				if len(ipv4) > 0 {
+					ipv4JSON, _ := json.Marshal(ipv4)
+					vps.IPv4Addresses = string(ipv4JSON)
+				}
+				if len(ipv6) > 0 {
+					ipv6JSON, _ := json.Marshal(ipv6)
+					vps.IPv6Addresses = string(ipv6JSON)
+				}
+				if len(ipv4) > 0 || len(ipv6) > 0 {
+					database.DB.Model(&vps).Updates(map[string]interface{}{
+						"ipv4_addresses": vps.IPv4Addresses,
+						"ipv6_addresses": vps.IPv6Addresses,
+					})
+					logger.Info("[VPS Service] Updated IP addresses for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
+				}
+			} else if err != nil {
+				logger.Debug("[VPS Service] Failed to get IP addresses for VPS %s (guest agent and gateway both unavailable): %v", vpsID, err)
+			}
+		} else {
+			logger.Warn("[VPS Service] Failed to create VPS manager for IP sync: %v", err)
 		}
 	}
 
