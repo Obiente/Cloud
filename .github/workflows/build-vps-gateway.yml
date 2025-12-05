@@ -86,6 +86,7 @@ jobs:
 
       # Build and push each platform independently for non-blocking pushes
       # Each architecture runs in parallel and pushes as soon as it's ready
+      # Push with platform-specific tag for manifest merging
       - name: Build and push VPS Gateway Docker image (${{ matrix.platform }}) - attempt 1
         id: build-attempt-1
         uses: docker/build-push-action@v5
@@ -94,7 +95,9 @@ jobs:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VPS_GATEWAY_COMMIT=${{ github.sha }}
@@ -113,7 +116,9 @@ jobs:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VPS_GATEWAY_COMMIT=${{ github.sha }}
@@ -130,7 +135,9 @@ jobs:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VPS_GATEWAY_COMMIT=${{ github.sha }}
@@ -140,3 +147,50 @@ jobs:
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
+  merge-manifest:
+    name: Merge Multi-Platform Manifest
+    runs-on: self-hosted
+    needs: build-and-push-vps-gateway
+    if: github.event_name != 'pull_request'
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ghcr.io/obiente/cloud-vps-gateway
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Create and push multi-platform manifest
+        run: |
+          # Wait a moment for all images to be fully pushed
+          sleep 5
+          # Get the tags (they come as newline-separated)
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Creating manifest for tag: $tag"
+              # Use imagetools to create manifest from platform-specific tags
+              # The platform-specific images should have been pushed with the same tag
+              docker buildx imagetools create --tag "$tag" \
+                "${{ env.IMAGE_NAME }}:linux/amd64" \
+                "${{ env.IMAGE_NAME }}:linux/arm64" || echo "Note: Manifest may already exist or images not ready yet"
+            fi
+          done
