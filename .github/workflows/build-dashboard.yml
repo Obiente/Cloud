@@ -185,7 +185,7 @@ jobs:
 
 
   merge-manifest:
-    name: Merge Multi-Platform Manifest
+    name: Merge Multi-Platform Manifest - Dashboard
     runs-on: self-hosted
     needs: build-and-push-dashboard
     if: github.event_name != 'pull_request'

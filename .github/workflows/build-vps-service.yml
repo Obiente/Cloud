@@ -148,7 +148,7 @@ jobs:
 
 
   merge-manifest:
-    name: Merge Multi-Platform Manifest
+    name: Merge Multi-Platform Manifest - VPS Service
     runs-on: self-hosted
     needs: build-and-push-vps-service
     if: github.event_name != 'pull_request'

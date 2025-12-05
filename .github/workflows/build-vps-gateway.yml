@@ -148,7 +148,7 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
 
   merge-manifest:
-    name: Merge Multi-Platform Manifest
+    name: Merge Multi-Platform Manifest - VPS Gateway
     runs-on: self-hosted
     needs: build-and-push-vps-gateway
     if: github.event_name != 'pull_request'

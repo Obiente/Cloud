@@ -148,7 +148,7 @@ jobs:
 
 
   merge-manifest:
-    name: Merge Multi-Platform Manifest
+    name: Merge Multi-Platform Manifest - Audit Service
     runs-on: self-hosted
     needs: build-and-push-audit-service
     if: github.event_name != 'pull_request'
