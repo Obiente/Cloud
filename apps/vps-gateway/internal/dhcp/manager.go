@@ -574,6 +574,11 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString("# dnsmasq configuration - managed by vps-gateway\n")
 	writer.WriteString("# Do not edit manually - this file is auto-generated\n\n")
 	
+	// Run as root (container is already privileged, no need to drop privileges)
+	// This prevents "unknown user or group: dnsmasq" errors in containers
+	writer.WriteString("user=root\n")
+	writer.WriteString("\n")
+	
 	// Network interface and listen addresses
 	// Use listen-address instead of bind-interfaces to have more control
 	// Listen on the listen IP (for DHCP) and 127.0.0.1 (for local DNS queries)
