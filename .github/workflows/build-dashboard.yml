@@ -94,7 +94,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             DASHBOARD_COMMIT=${{ github.sha }}
@@ -128,7 +128,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             DASHBOARD_COMMIT=${{ github.sha }}
@@ -160,7 +160,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.meta.outputs.tags }}
-            ${{ env.IMAGE_NAME }}:${{ matrix.platform }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             DASHBOARD_COMMIT=${{ github.sha }}
@@ -223,7 +223,7 @@ jobs:
             if [ -n "$tag" ]; then
               echo "Creating manifest for tag: $tag"
               docker buildx imagetools create --tag "$tag" \
-                "${{ env.IMAGE_NAME }}:linux/amd64" \
-                "${{ env.IMAGE_NAME }}:linux/arm64" || echo "Note: Manifest may already exist or images not ready yet"
+                "${{ env.IMAGE_NAME }}:linux-amd64" \
+                "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Note: Manifest may already exist or images not ready yet"
             fi
           done
