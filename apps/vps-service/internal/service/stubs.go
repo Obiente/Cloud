@@ -449,21 +449,29 @@ func (s *Service) GetVPSMetrics(ctx context.Context, req *connect.Request[vpsv1.
 	// If no time range specified or end time is recent, also get current metric from Proxmox
 	if req.Msg.GetStartTime() == nil || req.Msg.GetEndTime() == nil || endTime.After(time.Now().Add(-5*time.Minute)) {
 		if vps.InstanceID != nil {
-			proxmoxConfig, err := vpsorch.GetProxmoxConfig()
-			if err == nil {
-				proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
-				if err == nil {
-					vmIDInt := 0
-					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-					if vmIDInt > 0 {
-						nodes, err := proxmoxClient.ListNodes(ctx)
-						if err == nil && len(nodes) > 0 {
+			vmIDInt := 0
+			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+			if vmIDInt > 0 {
+				// Get node name from VPS (required)
+				nodeName := ""
+				if vps.NodeID != nil && *vps.NodeID != "" {
+					nodeName = *vps.NodeID
+				} else {
+					logger.Warn("[GetVPSMetrics] VPS %s has no node ID - skipping current metrics from Proxmox", vpsID)
+				}
+				if nodeName != "" {
+					// Get VPS manager to get Proxmox client for the node
+					vpsManager, err := vpsorch.NewVPSManager()
+					if err == nil {
+						defer vpsManager.Close()
+						proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
+						if err == nil {
 							// Get current metrics from Proxmox
-							proxmoxMetrics, err := proxmoxClient.GetVMMetrics(ctx, nodes[0], vmIDInt)
+							proxmoxMetrics, err := proxmoxClient.GetVMMetrics(ctx, nodeName, vmIDInt)
 							if err == nil {
 								// Get disk size from VM config (fallback to database value)
 								diskTotalBytes := vps.DiskBytes
-								if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodes[0], vmIDInt); err == nil {
+								if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodeName, vmIDInt); err == nil {
 									diskTotalBytes = diskSize
 								}
 

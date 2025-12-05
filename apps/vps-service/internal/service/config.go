@@ -670,22 +670,25 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 		return nil, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
 	}
 
-	// Create Proxmox client
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get VPS manager to get Proxmox client for the node
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
+		return nil, fmt.Errorf("failed to create VPS manager: %w", err)
 	}
+	defer vpsManager.Close()
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find VM node: %w", err)
+		return nil, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Try to get cloud-init config from Proxmox
@@ -791,22 +794,25 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
 	}
 
-	// Create Proxmox client
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get VPS manager to get Proxmox client for the node
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to create VPS manager: %w", err)
 	}
+	defer vpsManager.Close()
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to find VM node: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Load existing config and merge with new config

@@ -52,26 +52,25 @@ func (s *Service) ListFirewallRules(ctx context.Context, req *connect.Request[vp
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name (use first available for now)
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// List firewall rules
 	rules, err := proxmoxClient.ListFirewallRules(ctx, nodeName, vmID)
@@ -125,26 +124,25 @@ func (s *Service) GetFirewallRule(ctx context.Context, req *connect.Request[vpsv
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Get firewall rule
 	rule, err := proxmoxClient.GetFirewallRule(ctx, nodeName, vmID, int(req.Msg.GetRulePos()))
@@ -192,26 +190,25 @@ func (s *Service) CreateFirewallRule(ctx context.Context, req *connect.Request[v
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Convert proto rule to form data
 	ruleData := firewallRuleToFormData(req.Msg.GetRule())
@@ -288,26 +285,25 @@ func (s *Service) UpdateFirewallRule(ctx context.Context, req *connect.Request[v
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Convert proto rule to form data
 	ruleData := firewallRuleToFormData(req.Msg.GetRule())
@@ -363,26 +359,25 @@ func (s *Service) DeleteFirewallRule(ctx context.Context, req *connect.Request[v
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Delete firewall rule
 	if err := proxmoxClient.DeleteFirewallRule(ctx, nodeName, vmID, int(req.Msg.GetRulePos())); err != nil {
@@ -429,26 +424,25 @@ func (s *Service) GetFirewallOptions(ctx context.Context, req *connect.Request[v
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Get firewall options
 	options, err := proxmoxClient.GetFirewallOptions(ctx, nodeName, vmID)
@@ -496,26 +490,25 @@ func (s *Service) UpdateFirewallOptions(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %w", err))
 	}
 
-	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
+	defer vpsManager.Close()
 
-	// Get node name
-	nodes, err := proxmoxClient.ListNodes(ctx)
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
-	if len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("no Proxmox nodes available"))
-	}
-	nodeName := nodes[0]
 
 	// Convert proto options to form data
 	optionsData := firewallOptionsToFormData(req.Msg.GetOptions())

@@ -709,14 +709,19 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 			vmIDInt := 0
 			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 			if vmIDInt > 0 {
-				// Get Proxmox configuration
-				proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-				if err == nil {
-					// Create Proxmox client
-					proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+				// Get node name from VPS (required)
+				nodeName := ""
+				if vps.NodeID != nil && *vps.NodeID != "" {
+					nodeName = *vps.NodeID
+				} else {
+					logger.Warn("[SSHProxy] VPS %s has no node ID - skipping cloud-init update after auto-creating bastion key", vpsID)
+				}
+				if nodeName != "" {
+					// Get VPS manager to get Proxmox client for the node
+					vpsManager, err := orchestrator.NewVPSManager()
 					if err == nil {
-						// Find the node where the VM is running
-						nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+						defer vpsManager.Close()
+						proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 						if err == nil {
 							// Update cloud-init config to include the new bastion key
 							// We need to load current config, which will automatically include the new key
@@ -1653,16 +1658,24 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 
 	if actualVPSIP == "" {
 		logger.Info("[SSHProxy] No IP from VPS manager, trying to get internal IP from Proxmox for VPS %s", vpsID)
-		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-		if err == nil {
-			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-			if err == nil {
-				vmIDInt := 0
-				if vps.InstanceID != nil {
-					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-				}
-				if vmIDInt > 0 {
-					nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+		vmIDInt := 0
+		if vps.InstanceID != nil {
+			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+		}
+		if vmIDInt > 0 {
+			// Get node name from VPS (required)
+			nodeName := ""
+			if vps.NodeID != nil && *vps.NodeID != "" {
+				nodeName = *vps.NodeID
+			} else {
+				logger.Warn("[SSHProxy] VPS %s has no node ID - cannot get IP from Proxmox", vpsID)
+			}
+			if nodeName != "" {
+				// Get VPS manager to get Proxmox client for the node
+				vpsManager, err := orchestrator.NewVPSManager()
+				if err == nil {
+					defer vpsManager.Close()
+					proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 					if err == nil {
 						ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
 						if err == nil && len(ipv4) > 0 {

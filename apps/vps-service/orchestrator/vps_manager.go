@@ -1291,29 +1291,25 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 		return nil, "", fmt.Errorf("VPS has no instance ID (not provisioned yet)")
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return nil, "", fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return nil, "", fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, "", fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
 	}
-	nodeName := nodes[0]
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
+	}
 
 	// Get current cloud-init configuration before deleting the VM
 	// We'll use a default config - the actual cloud-init will be reapplied after VM creation
@@ -1646,18 +1642,6 @@ func (vm *VPSManager) UpdateOrganizationVPSSSHKeysExcluding(ctx context.Context,
 		return nil
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	// Update SSH keys for each VPS instance
 	successCount := 0
 	for _, vps := range vpsInstances {
@@ -1672,10 +1656,19 @@ func (vm *VPSManager) UpdateOrganizationVPSSSHKeysExcluding(ctx context.Context,
 			continue
 		}
 
-		// Find the node where the VM is running
-		nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+		// Get node name from VPS (required)
+		nodeName := ""
+		if vps.NodeID != nil && *vps.NodeID != "" {
+			nodeName = *vps.NodeID
+		} else {
+			logger.Warn("[VPSManager] VPS %s has no node ID - skipping SSH key update", vps.ID)
+			continue
+		}
+
+		// Get Proxmox client for the node where VPS is running
+		proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 		if err != nil {
-			logger.Warn("[VPSManager] Failed to find node for VM %d (VPS %s): %v", vmIDInt, vps.ID, err)
+			logger.Warn("[VPSManager] Failed to get Proxmox client for node %s (VPS %s): %v", nodeName, vps.ID, err)
 			continue
 		}
 
@@ -1711,28 +1704,24 @@ func (vm *VPSManager) UpdateVPSSSHKeysExcluding(ctx context.Context, vpsID strin
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
+	}
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to find VM node: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Update SSH keys (includes VPS-specific and org-wide), excluding the specified key if provided
@@ -1756,28 +1745,24 @@ func (vm *VPSManager) EnableVPSGuestAgent(ctx context.Context, vpsID string) err
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
+	}
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to find VM node: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Enable guest agent in VM config
@@ -1802,28 +1787,24 @@ func (vm *VPSManager) RecoverVPSGuestAgent(ctx context.Context, vpsID string) er
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
-	}
-
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use")
+	}
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to find VM node: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	// Recover guest agent (updates both VM config and cloud-init)

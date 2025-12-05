@@ -46,15 +46,22 @@ func (s *Service) ListSSHKeys(ctx context.Context, req *connect.Request[vpsv1.Li
 
 		// Seed SSH keys from Proxmox if VPS has an instance ID
 		if vps.InstanceID != nil {
-			proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-			if err == nil {
-				proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-				if err == nil {
-					vmIDInt := 0
-					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-					if vmIDInt > 0 {
-						// Find the node where the VM is running
-						nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+			vmIDInt := 0
+			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+			if vmIDInt > 0 {
+				// Get node name from VPS (required)
+				nodeName := ""
+				if vps.NodeID != nil && *vps.NodeID != "" {
+					nodeName = *vps.NodeID
+				} else {
+					logger.Warn("[VPS] VPS %s has no node ID - skipping SSH key seeding from Proxmox", vpsID)
+				}
+				if nodeName != "" {
+					// Get VPS manager to get Proxmox client for the node
+					vpsManager, err := orchestrator.NewVPSManager()
+					if err == nil {
+						defer vpsManager.Close()
+						proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 						if err == nil {
 							// Get existing SSH keys from Proxmox and seed them
 							// After deleting a key, we update Proxmox first, so Proxmox is the source of truth

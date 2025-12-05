@@ -42,18 +42,6 @@ func (s *Service) ResetVPSPassword(ctx context.Context, req *connect.Request[vps
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
 	}
 
-	// Get Proxmox configuration
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
-	}
-
 	// Parse VM ID
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
@@ -61,10 +49,25 @@ func (s *Service) ResetVPSPassword(ctx context.Context, req *connect.Request[vps
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID))
 	}
 
-	// Find the node where the VM is running
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	// Get node name from VPS (required)
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no node ID - cannot determine which Proxmox node to use"))
+	}
+
+	// Get VPS manager to get Proxmox client for the node
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to find VM node: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
+	}
+	defer vpsManager.Close()
+
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err))
 	}
 
 	// Generate new random password
