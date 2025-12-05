@@ -29,17 +29,181 @@ type VPSManager struct {
 	dockerClient   client.APIClient
 	gatewayClient  *VPSGatewayClient // Deprecated - use GetGatewayClientForNode instead
 	gatewayClients sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
+	proxmoxClients sync.Map          // Cache of Proxmox clients per node (key: nodeName string, value: *ProxmoxClient)
+}
+
+// parseNodeEndpointsMapping parses the PROXMOX_NODE_ENDPOINTS environment variable (default mapping)
+// Format: "node1:host1,node2:host2" or "node1:host1:8006,node2:host2:8006"
+// Returns a map of node name -> endpoint (hostname/IP, optionally with port)
+func parseNodeEndpointsMapping() map[string]string {
+	mapping := make(map[string]string)
+	envValue := os.Getenv("PROXMOX_NODE_ENDPOINTS")
+	if envValue == "" {
+		return mapping
+	}
+
+	// Parse comma-separated node mappings
+	nodeStrings := strings.Split(envValue, ",")
+	for _, nodeStr := range nodeStrings {
+		nodeStr = strings.TrimSpace(nodeStr)
+		if nodeStr == "" {
+			continue
+		}
+
+		// Parse "nodeName:endpoint" format (endpoint can be hostname/IP, optionally with port)
+		if strings.Contains(nodeStr, ":") {
+			// Split on first colon only (endpoint might contain port with colon)
+			parts := strings.SplitN(nodeStr, ":", 2)
+			if len(parts) == 2 {
+				nodeName := strings.TrimSpace(parts[0])
+				endpoint := strings.TrimSpace(parts[1])
+				if nodeName != "" && endpoint != "" {
+					mapping[nodeName] = endpoint
+				}
+			}
+		}
+	}
+
+	return mapping
+}
+
+// parseNodeProxmoxMapping parses the PROXMOX_NODE_API_ENDPOINTS environment variable (API override)
+// Format: "node1:https://proxmox1:8006,node2:https://proxmox2:8006"
+// Returns a map of node name -> API URL
+// Falls back to PROXMOX_NODE_ENDPOINTS if API override not configured
+func parseNodeProxmoxMapping() (map[string]string, error) {
+	mapping := make(map[string]string)
+
+	// First, check for API-specific override
+	envValue := os.Getenv("PROXMOX_NODE_API_ENDPOINTS")
+	if envValue != "" {
+		// Parse comma-separated node mappings
+		nodeStrings := strings.Split(envValue, ",")
+		for _, nodeStr := range nodeStrings {
+			nodeStr = strings.TrimSpace(nodeStr)
+			if nodeStr == "" {
+				continue
+			}
+
+			// Parse "nodeName:apiURL" format
+			// API URL may contain colons (https://), so we need to split on first colon only
+			parts := strings.SplitN(nodeStr, ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid Proxmox API mapping format: %s (expected 'nodeName:apiURL')", nodeStr)
+			}
+
+			nodeName := strings.TrimSpace(parts[0])
+			apiURL := strings.TrimSpace(parts[1])
+			if nodeName == "" || apiURL == "" {
+				return nil, fmt.Errorf("invalid Proxmox API mapping: node name and URL cannot be empty in '%s'", nodeStr)
+			}
+
+			// Validate URL format (should start with http:// or https://)
+			if !strings.HasPrefix(apiURL, "http://") && !strings.HasPrefix(apiURL, "https://") {
+				return nil, fmt.Errorf("invalid Proxmox API URL format in '%s': must start with http:// or https://", nodeStr)
+			}
+
+			mapping[nodeName] = apiURL
+		}
+		return mapping, nil
+	}
+
+	// Fall back to default PROXMOX_NODE_ENDPOINTS and construct API URLs
+	defaultMapping := parseNodeEndpointsMapping()
+	if len(defaultMapping) > 0 {
+		// Construct API URLs from default endpoints (assume https:// and port 8006)
+		for nodeName, endpoint := range defaultMapping {
+			// Extract hostname/IP (remove port if present)
+			host := endpoint
+			if strings.Contains(endpoint, ":") {
+				// Endpoint has port, extract just the hostname/IP
+				host = strings.Split(endpoint, ":")[0]
+			}
+			// Construct API URL with https:// and port 8006
+			apiURL := fmt.Sprintf("https://%s:8006", host)
+			mapping[nodeName] = apiURL
+		}
+	}
+
+	return mapping, nil
+}
+
+// resolveProxmoxURLForNode resolves the Proxmox API URL for a given node name
+// Uses PROXMOX_NODE_API_ENDPOINTS or PROXMOX_NODE_ENDPOINTS mapping (required)
+func resolveProxmoxURLForNode(nodeName string) (string, error) {
+	// Try per-node mapping
+	mapping, err := parseNodeProxmoxMapping()
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Proxmox API mapping: %w", err)
+	}
+
+	// Mapping is required - no fallback
+	if len(mapping) == 0 {
+		return "", fmt.Errorf("PROXMOX_NODE_ENDPOINTS environment variable is required (configure node endpoints mapping, e.g., 'node1:proxmox1.example.com')")
+	}
+
+	// If node is specified, use it
+	if nodeName != "" {
+		apiURL, ok := mapping[nodeName]
+		if ok {
+			return apiURL, nil
+		}
+		// Node not found in mapping - return error
+		return "", fmt.Errorf("no Proxmox API endpoint configured for node '%s'. Available nodes: %v", nodeName, getProxmoxNodeNames(mapping))
+	}
+
+	// If no node specified but mapping exists, return error (node name is required)
+	return "", fmt.Errorf("node name is required when using PROXMOX_NODE_ENDPOINTS. Configure PROXMOX_NODE_ENDPOINTS with node mappings (e.g., 'node1:proxmox1.example.com')")
+}
+
+// getProxmoxNodeNames extracts node names from mapping for error messages
+func getProxmoxNodeNames(mapping map[string]string) []string {
+	nodes := make([]string, 0, len(mapping))
+	for node := range mapping {
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+// getFirstProxmoxNodeName returns the first node name from the mapping for discovery purposes
+// Returns empty string if no nodes are configured
+func getFirstProxmoxNodeName() (string, error) {
+	mapping, err := parseNodeProxmoxMapping()
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Proxmox API mapping: %w", err)
+	}
+	if len(mapping) == 0 {
+		return "", fmt.Errorf("PROXMOX_NODE_ENDPOINTS environment variable is required (configure node endpoints mapping, e.g., 'node1:proxmox1.example.com')")
+	}
+	// Return first node (order is not guaranteed, but any node works for discovery)
+	for nodeName := range mapping {
+		return nodeName, nil
+	}
+	return "", fmt.Errorf("no nodes found in PROXMOX_NODE_ENDPOINTS mapping")
 }
 
 // GetProxmoxConfig gets Proxmox configuration from environment variables
-func GetProxmoxConfig() (*ProxmoxConfig, error) {
+// nodeName is required when using PROXMOX_NODE_ENDPOINTS
+func GetProxmoxConfig(nodeName ...string) (*ProxmoxConfig, error) {
 	config := &ProxmoxConfig{}
 
-	// Get Proxmox API URL from environment
-	config.APIURL = os.Getenv("PROXMOX_API_URL")
-	if config.APIURL == "" {
-		return nil, fmt.Errorf("PROXMOX_API_URL environment variable is required")
+	// Resolve API URL (node-specific, nodeName is required)
+	var apiURL string
+	var err error
+	if len(nodeName) > 0 && nodeName[0] != "" {
+		apiURL, err = resolveProxmoxURLForNode(nodeName[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve Proxmox API URL for node %s: %w", nodeName[0], err)
+		}
+		logger.Debug("[GetProxmoxConfig] Using node-specific API URL for node %s: %s", nodeName[0], apiURL)
+	} else {
+		// Try to resolve without node name (will fail if PROXMOX_NODE_ENDPOINTS is configured)
+		apiURL, err = resolveProxmoxURLForNode("")
+		if err != nil {
+			return nil, err
+		}
 	}
+	config.APIURL = apiURL
 
 	// Get username (default: root@pam)
 	config.Username = os.Getenv("PROXMOX_USERNAME")
@@ -65,30 +229,14 @@ func GetProxmoxConfig() (*ProxmoxConfig, error) {
 	}
 
 	// SSH configuration for snippet writing (optional - only needed if using SSH method)
-	config.SSHHost = os.Getenv("PROXMOX_SSH_HOST")
+	// SSH host is resolved via resolveSSHEndpoint using node mapping, not from environment
+	config.SSHHost = "" // No longer used - resolved via node mapping
 	config.SSHUser = os.Getenv("PROXMOX_SSH_USER")
 	if config.SSHUser == "" {
 		config.SSHUser = "obiente-cloud" // Default SSH user
 	}
 	config.SSHKeyPath = os.Getenv("PROXMOX_SSH_KEY_PATH")
 	config.SSHKeyData = os.Getenv("PROXMOX_SSH_KEY_DATA")
-
-	// If SSH host is not set, try to extract from APIURL
-	if config.SSHHost == "" && config.APIURL != "" {
-		// Extract hostname from APIURL (e.g., "https://proxmox.example.com:8006" -> "proxmox.example.com")
-		if strings.HasPrefix(config.APIURL, "http://") || strings.HasPrefix(config.APIURL, "https://") {
-			// Remove protocol
-			hostPart := strings.TrimPrefix(strings.TrimPrefix(config.APIURL, "https://"), "http://")
-			// Remove port and path
-			if colonIdx := strings.Index(hostPart, ":"); colonIdx > 0 {
-				config.SSHHost = hostPart[:colonIdx]
-			} else if slashIdx := strings.Index(hostPart, "/"); slashIdx > 0 {
-				config.SSHHost = hostPart[:slashIdx]
-			} else {
-				config.SSHHost = hostPart
-			}
-		}
-	}
 
 	return config, nil
 }
@@ -103,7 +251,8 @@ type ProxmoxConfig struct {
 	Secret   string // Token secret
 
 	// SSH configuration for writing snippet files directly to Proxmox storage
-	SSHHost    string // Proxmox node hostname/IP (defaults to APIURL host if not set)
+	// SSHHost is no longer used - SSH endpoints are resolved via PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS
+	SSHHost    string // Deprecated - not used (SSH endpoints resolved via node mapping)
 	SSHUser    string // SSH user for snippet writing (e.g., "obiente-cloud")
 	SSHKeyPath string // Path to SSH private key file (e.g., "/path/to/id_rsa")
 	SSHKeyData string // SSH private key content (alternative to SSHKeyPath)
@@ -122,6 +271,7 @@ func NewVPSManager() (*VPSManager, error) {
 		dockerClient:   cli,
 		gatewayClient:  nil,        // Deprecated - use GetGatewayClientForNode instead
 		gatewayClients: sync.Map{}, // Cache of gateway clients per node
+		proxmoxClients: sync.Map{}, // Cache of Proxmox clients per node
 	}, nil
 }
 
@@ -150,6 +300,41 @@ func (vm *VPSManager) GetGatewayClientForNode(nodeName string) (*VPSGatewayClien
 
 	// Cache the client
 	vm.gatewayClients.Store(nodeName, client)
+	return client, nil
+}
+
+// GetProxmoxClientForNode gets or creates a Proxmox client for a specific node
+// Clients are cached to avoid recreating for each request
+// If nodeName is empty, uses default/fallback configuration
+func (vm *VPSManager) GetProxmoxClientForNode(nodeName string) (*ProxmoxClient, error) {
+	// Use empty string as cache key for default/fallback
+	cacheKey := nodeName
+	if nodeName == "" {
+		cacheKey = "__default__"
+	}
+
+	// Check cache first
+	if cached, ok := vm.proxmoxClients.Load(cacheKey); ok {
+		if client, ok := cached.(*ProxmoxClient); ok {
+			logger.Debug("[VPSManager] Using cached Proxmox client for node %s", nodeName)
+			return client, nil
+		}
+	}
+
+	// Create new client for this node
+	logger.Info("[VPSManager] Creating Proxmox client for node %s", nodeName)
+	proxmoxConfig, err := GetProxmoxConfig(nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Proxmox config for node %s: %w", nodeName, err)
+	}
+
+	client, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Proxmox client for node %s: %w", nodeName, err)
+	}
+
+	// Cache the client
+	vm.proxmoxClients.Store(cacheKey, client)
 	return client, nil
 }
 
@@ -187,18 +372,6 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 			config.OwnerID = &ownerMember.UserID
 			// Owner name will be resolved later if needed via user profile resolver
 		}
-	}
-
-	// Get Proxmox configuration from environment variables
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
-	}
-
-	// Create Proxmox client
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
 	writeLog("Setting up secure access...", false)
@@ -280,6 +453,37 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		if mappedNode, ok := regionNodeMap[config.Region]; ok {
 			targetNodeName = mappedNode
 			logger.Info("[VPSManager] Using mapped node %s for region %s (for gateway selection)", targetNodeName, config.Region)
+		}
+	}
+
+	// Get Proxmox client for target node (if known) or default
+	// Use node-specific client if we know the target node from region mapping
+	var proxmoxClient *ProxmoxClient
+	if targetNodeName != "" {
+		client, err := vm.GetProxmoxClientForNode(targetNodeName)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to get Proxmox client for node %s: %v (will try default)", targetNodeName, err)
+			// Fallback to default
+			proxmoxConfig, err := GetProxmoxConfig()
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
+			}
+			proxmoxClient, err = NewProxmoxClient(proxmoxConfig)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
+			}
+		} else {
+			proxmoxClient = client
+		}
+	} else {
+		// No target node known, use default
+		proxmoxConfig, err := GetProxmoxConfig()
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
+		}
+		proxmoxClient, err = NewProxmoxClient(proxmoxConfig)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 		}
 	}
 
@@ -573,30 +777,34 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
-	// Parse VM ID and find node
+	// Parse VM ID
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	// Find node (for now, use first available)
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
-	if err := proxmoxClient.startVM(ctx, nodes[0], vmIDInt); err != nil {
+	if err := proxmoxClient.startVM(ctx, nodeName, vmIDInt); err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
@@ -611,7 +819,7 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 	}
 
 	// Get actual status from Proxmox and update
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "does not exist") {
@@ -647,14 +855,15 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
@@ -663,12 +872,16 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
-	if err := proxmoxClient.StopVM(ctx, nodes[0], vmIDInt); err != nil {
+	if err := proxmoxClient.StopVM(ctx, nodeName, vmIDInt); err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
@@ -683,7 +896,7 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 	}
 
 	// Get actual status from Proxmox and update
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "does not exist") {
@@ -719,14 +932,15 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
@@ -735,12 +949,16 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
-	if err := proxmoxClient.RebootVM(ctx, nodes[0], vmIDInt); err != nil {
+	if err := proxmoxClient.RebootVM(ctx, nodeName, vmIDInt); err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
@@ -756,7 +974,7 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 
 	// Get actual status from Proxmox and update
 	// Note: Reboot is async, so status might be "running" or transitioning
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		// Check if VM was deleted from Proxmox
 		if strings.Contains(err.Error(), "does not exist") {
@@ -797,14 +1015,15 @@ func (vm *VPSManager) GetVPSStatus(ctx context.Context, vpsID string) (string, e
 		return "", fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return "", fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return "", fmt.Errorf("failed to create Proxmox client: %w", err)
+		return "", fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
@@ -813,12 +1032,16 @@ func (vm *VPSManager) GetVPSStatus(ctx context.Context, vpsID string) (string, e
 		return "", fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return "", fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return "", fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
-	status, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	status, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		return "", fmt.Errorf("failed to get VM status: %w", err)
 	}
@@ -838,14 +1061,15 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 		return nil, nil, fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Proxmox client: %w", err)
+		return nil, nil, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
@@ -854,13 +1078,17 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 		return nil, nil, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return nil, nil, fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return nil, nil, fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
 	// Try to get IPs from Proxmox guest agent first
-	ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodes[0], vmIDInt)
+	ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
 	if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
 		// Successfully got IPs from guest agent
 		return ipv4, ipv6, nil
@@ -905,14 +1133,15 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// Get Proxmox client for the node where VPS is running
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
@@ -921,9 +1150,13 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find node if not stored in VPS
+	if nodeName == "" {
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
+		nodeName = nodes[0]
 	}
 
 	// Release IP address from gateway if available
@@ -952,7 +1185,7 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		}
 	}
 	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmIDInt)
-	if err := proxmoxClient.deleteSnippetViaSSH(ctx, nodes[0], snippetStorage, snippetFilename); err != nil {
+	if err := proxmoxClient.deleteSnippetViaSSH(ctx, nodeName, snippetStorage, snippetFilename); err != nil {
 		logger.Warn("[VPSManager] Failed to delete snippet file for VPS %s: %v (continuing with VM deletion)", vpsID, err)
 		// Continue with VM deletion even if snippet deletion fails
 	} else {
@@ -968,32 +1201,36 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 	}
 
 	// DeleteVM will validate that the VM was created by our API by checking VM name matches VPS ID
-	// Try to find the VM on the correct node first
-	nodeName := nodes[0]
-	allNodes, err := proxmoxClient.ListNodes(ctx)
-	if err == nil {
-		// Try to find which node the VM is actually on
-		for _, node := range allNodes {
-			status, statusErr := proxmoxClient.GetVMStatus(ctx, node, vmIDInt)
-			if statusErr == nil && status != "" {
-				nodeName = node
-				logger.Info("[VPSManager] Found VM %d on node %s", vmIDInt, nodeName)
-				break
+	// If nodeName is not set, try to find the VM on any node
+	if nodeName == "" {
+		allNodes, err := proxmoxClient.ListNodes(ctx)
+		if err == nil {
+			// Try to find which node the VM is actually on
+			for _, node := range allNodes {
+				status, statusErr := proxmoxClient.GetVMStatus(ctx, node, vmIDInt)
+				if statusErr == nil && status != "" {
+					nodeName = node
+					logger.Info("[VPSManager] Found VM %d on node %s", vmIDInt, nodeName)
+					break
+				}
 			}
 		}
 	}
 
 	if err := proxmoxClient.DeleteVM(ctx, nodeName, vmIDInt, vpsID); err != nil {
-		// If deletion fails, try other nodes as fallback
-		if len(allNodes) > 1 {
-			logger.Warn("[VPSManager] Failed to delete VM %d from node %s: %v. Trying other nodes...", vmIDInt, nodeName, err)
-			for _, otherNode := range allNodes {
-				if otherNode == nodeName {
-					continue
-				}
-				if delErr := proxmoxClient.DeleteVM(ctx, otherNode, vmIDInt, vpsID); delErr == nil {
-					logger.Info("[VPSManager] Successfully deleted VM %d from node %s", vmIDInt, otherNode)
-					goto deletionSuccess
+		// If deletion fails and we have a specific node, try other nodes as fallback
+		if nodeName != "" {
+			allNodes, err := proxmoxClient.ListNodes(ctx)
+			if err == nil && len(allNodes) > 1 {
+				logger.Warn("[VPSManager] Failed to delete VM %d from node %s: %v. Trying other nodes...", vmIDInt, nodeName, err)
+				for _, otherNode := range allNodes {
+					if otherNode == nodeName {
+						continue
+					}
+					if delErr := proxmoxClient.DeleteVM(ctx, otherNode, vmIDInt, vpsID); delErr == nil {
+						logger.Info("[VPSManager] Successfully deleted VM %d from node %s", vmIDInt, otherNode)
+						goto deletionSuccess
+					}
 				}
 			}
 		}
@@ -1258,37 +1495,63 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 		return fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := GetProxmoxConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	// NodeID is required - if missing, discover it and update the VPS record
+	nodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		nodeName = *vps.NodeID
+	} else {
+		// NodeID is missing - need to discover it
+		// Get first node from mapping to use for discovery
+		discoveryNode, err := getFirstProxmoxNodeName()
+		if err != nil {
+			return fmt.Errorf("VPS %s has no NodeID and cannot discover node: %w. Please set NodeID manually or re-import the VPS", vpsID, err)
+		}
+		// Get Proxmox client for discovery
+		discoveryClient, err := vm.GetProxmoxClientForNode(discoveryNode)
+		if err != nil {
+			return fmt.Errorf("failed to get Proxmox client for discovery node %s: %w", discoveryNode, err)
+		}
+		vmIDInt := 0
+		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+		if vmIDInt == 0 {
+			return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
+		}
+		// Discover the node where the VM is running
+		var findErr error
+		nodeName, findErr = discoveryClient.FindVMNode(ctx, vmIDInt)
+		if findErr != nil {
+			// Check if VM was deleted from Proxmox directly
+			// FindVMNode returns "VM X not found on any node" when VM doesn't exist
+			if strings.Contains(findErr.Error(), "not found on any node") {
+				logger.Info("[VPSManager] VM %d not found in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+				vps.Status = 9 // DELETED
+				vps.UpdatedAt = time.Now()
+				if err := database.DB.Save(&vps).Error; err != nil {
+					return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("failed to find VM node: %w", findErr)
+		}
+		// Update VPS record with discovered NodeID
+		vps.NodeID = &nodeName
+		if err := database.DB.Model(&vps).Update("node_id", nodeName).Error; err != nil {
+			logger.Warn("[VPSManager] Failed to update NodeID for VPS %s: %v (continuing with sync)", vpsID, err)
+		} else {
+			logger.Info("[VPSManager] Discovered and updated NodeID for VPS %s: %s", vpsID, nodeName)
+		}
 	}
 
-	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	// Get Proxmox client for the node where VPS is running
+	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
 	if err != nil {
-		return fmt.Errorf("failed to create Proxmox client: %w", err)
+		return fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
 	}
 
 	vmIDInt := 0
 	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 	if vmIDInt == 0 {
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
-	}
-
-	// Find the node where the VM is running (for multi-node clusters)
-	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
-	if err != nil {
-		// Check if VM was deleted from Proxmox directly
-		// FindVMNode returns "VM X not found on any node" when VM doesn't exist
-		if strings.Contains(err.Error(), "not found on any node") {
-			logger.Info("[VPSManager] VM %d not found in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
-			vps.Status = 9 // DELETED
-			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
-				return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
-			}
-			return nil
-		}
-		return fmt.Errorf("failed to find VM node: %w", err)
 	}
 
 	// Get actual status from Proxmox
@@ -1851,8 +2114,20 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 		// Map Proxmox status to VPS status
 		vpsStatus := mapProxmoxStatusToVPSStatus(proxmoxVM.Status)
 
+		// NodeID is required - skip VMs without node name
+		if proxmoxVM.NodeName == "" {
+			logger.Warn("[VPSManager] VM %d has no node name - skipping import for VPS %s", proxmoxVM.VMID, vpsID)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("VM %d has no node name - cannot import VPS without node information", proxmoxVM.VMID),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
 		// Create VPS instance record
 		vmIDStr := fmt.Sprintf("%d", proxmoxVM.VMID)
+		nodeID := &proxmoxVM.NodeName
 		vpsInstance := &database.VPSInstance{
 			ID:             vpsID,
 			Name:           displayName,
@@ -1866,7 +2141,7 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 			MemoryBytes:    memoryBytes,
 			DiskBytes:      diskBytes,
 			InstanceID:     &vmIDStr,
-			NodeID:         nil,
+			NodeID:         nodeID, // Store Proxmox node name (required)
 			SSHKeyID:       nil,
 			OrganizationID: organizationID,
 			CreatedBy:      creatorID,

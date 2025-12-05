@@ -830,7 +830,8 @@ TRAEFIK_DASHBOARD_PORT=9090
 | Variable                 | Type   | Default     | Required | Description                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------ | ------ | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `VPS_REGIONS`            | string | -           | ✅       | VPS regions configuration (format: `"region1:Name 1;region2:Name 2"` or simple `"region1"`)                                                                                                                                                                                                                                                             |
-| `PROXMOX_API_URL`        | string | -           | ✅       | Proxmox API URL (e.g., `https://proxmox.example.com:8006`)                                                                                                                                                                                                                                                                                              |
+| `PROXMOX_NODE_ENDPOINTS` | string | -           | ✅       | **Node endpoints mapping** (used for both API and SSH if not overridden). Maps Proxmox node names to hostnames/IPs (optionally with port). Format: `"node1:host1,node2:host2"` or `"node1:host1:8006,node2:host2:8006"`. For API: Constructs `https://host:8006` URLs. For SSH: Uses endpoints directly (assumes port 22 if not specified). Required for all Proxmox deployments (single-node or multi-node). |
+| `PROXMOX_NODE_API_ENDPOINTS` | string | -           | ❌       | **Optional API-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for API only). Maps Proxmox node names to full API URLs. Format: `"node1:https://proxmox1:8006,node2:https://proxmox2:8006"` (full URLs required). If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default). Enables high availability: if one node goes down, others continue working as long as there's quorum. |
 | `PROXMOX_USERNAME`       | string | `root@pam`  | ❌       | Proxmox username (default: `root@pam`)                                                                                                                                                                                                                                                                                                                  |
 | `PROXMOX_PASSWORD`       | string | -           | ✅\*     | Proxmox password (required if not using token)                                                                                                                                                                                                                                                                                                          |
 | `PROXMOX_TOKEN_ID`       | string | -           | ✅\*     | Proxmox API token ID (required if not using password)                                                                                                                                                                                                                                                                                                   |
@@ -838,15 +839,14 @@ TRAEFIK_DASHBOARD_PORT=9090
 | `PROXMOX_STORAGE_POOL`   | string | `local-lvm` | ❌       | Proxmox storage pool for VM disks. **Note:** For template-based VMs (linked clones), the storage pool is inherited from the template and this setting is ignored. This setting only applies to: (1) VMs created without templates (ISO installation), (2) new disks created when templates have no disk, or (3) additional disks beyond what's cloned. To use a different storage pool for cloned VMs, create the template on the desired storage pool. |
 | `PROXMOX_VM_ID_START`    | number | -           | ❌       | Starting VM ID range (e.g., `300`). If set, VMs will be created starting from this ID. If not set, Proxmox auto-generates the next available ID.                                                                                                                                                                                                        |
 | `PROXMOX_VLAN_ID`        | number | -           | ❌       | Optional VLAN tag for VM network isolation (e.g., `100`). If set, all VMs will be placed on this VLAN. This provides Layer 2 isolation and helps prevent IP spoofing and network attacks.                                                                                                                                                               |
-| `PROXMOX_SSH_HOST`       | string | -           | ❌       | Proxmox node hostname/IP for SSH snippet writing (defaults to `PROXMOX_API_URL` host if not set). Used as fallback for single-node setups or when `PROXMOX_NODE_SSH_ENDPOINTS` is not configured. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for details.                                                              |
-| `PROXMOX_NODE_SSH_ENDPOINTS` | string | -           | ❌       | **Multi-node setups**: Comma-separated mapping of Proxmox node names to SSH endpoints. Format: `"node1:192.168.1.10,node2:192.168.1.11"` or `"node1:hostname1.example.com:22,node2:hostname2.example.com:2222"`. Endpoints can be IP addresses or hostnames, optionally with ports. Required for multi-node clusters where node names are not resolvable hostnames. Takes precedence over `PROXMOX_SSH_HOST`. |
+| `PROXMOX_NODE_SSH_ENDPOINTS` | string | -           | ❌       | **Optional SSH-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for SSH only). Comma-separated mapping of Proxmox node names to SSH endpoints. Format: `"node1:192.168.1.10,node2:192.168.1.11"` or `"node1:hostname1.example.com:22,node2:hostname2.example.com:2222"`. Endpoints can be IP addresses or hostnames, optionally with ports. If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default). |
 | `PROXMOX_SSH_USER`       | string | `obiente-cloud` | ❌       | SSH user for snippet writing. Defaults to `obiente-cloud` if not set. Same user must exist on all Proxmox nodes. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for setup instructions.                                                                                                                                                                                  |
 | `PROXMOX_SSH_KEY_PATH`   | string | -           | ❌       | Path to SSH private key file for snippet writing. Either this or `PROXMOX_SSH_KEY_DATA` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                                                                                  |
 | `PROXMOX_SSH_KEY_DATA`   | string | -           | ❌       | SSH private key content (alternative to `PROXMOX_SSH_KEY_PATH`). Supports both raw key data and base64-encoded keys. Useful when using secrets managers. Either this or `PROXMOX_SSH_KEY_PATH` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                              |
 | `PROXMOX_REGION_NODES`   | string | -           | ❌       | Maps VPS regions to specific Proxmox cluster nodes. Format: `"region1:node1;region2:node2"`. When creating a VPS in a region, the system will use the mapped node if available. If not configured or the mapped node doesn't exist, it falls back to the first available node. Useful for multi-node Proxmox clusters where you want to control which node hosts VMs for each region. |
 | `SSH_PROXY_PORT`         | number | `2222`      | ❌       | SSH proxy port for VPS access                                                                                                                                                                                                                                                                                                                           |
 | `VPS_GATEWAY_API_SECRET` | string | -           | ❌       | Shared secret for authenticating with vps-gateway service. Must match `GATEWAY_API_SECRET` configured in vps-gateway. Required when using gateway service.                                                                                                                                                                                              |
-| `VPS_NODE_GATEWAY_ENDPOINTS` | string | -           | ✅       | Maps Proxmox node names to gateway URLs (required for multi-node deployments). Format: `"node1:http://gateway1:1537,node2:http://gateway2:1537"`. Each gateway URL points to the vps-gateway service on that node. Must be configured for all nodes where VPSs will be created.                                                                         |
+| `VPS_NODE_GATEWAY_ENDPOINTS` | string | -           | ✅\*     | Maps Proxmox node names to gateway URLs (required for multi-node deployments). Format: `"node1:http://gateway1:1537,node2:http://gateway2:1537"`. Each gateway URL points to the vps-gateway service on that node. Must be configured for all nodes where VPSs will be created.                                                                         |
 | `VPS_GATEWAY_BRIDGE`     | string | `OCvpsnet`  | ❌       | Bridge name for gateway network in Proxmox. When using SDN, this should be the SDN VNet bridge name (auto-created by Proxmox, e.g., `OCvpsnet` for the OCvps-vnet VNet). VPS instances will be connected to this bridge when gateway is enabled. See [VPS Gateway Setup Guide](../guides/vps-gateway-setup.md) for details on finding SDN bridge names. |
 
 ### VPS Gateway Service Configuration
@@ -856,19 +856,19 @@ These environment variables are used by the `vps-gateway` service itself (not th
 | Variable                   | Type   | Default | Required | Description                                                                                                                                                                                                            |
 | -------------------------- | ------ | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GATEWAY_GRPC_PORT`        | int    | `1537`  | ⚪       | gRPC server port for the gateway. Default is **1537** which maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3". Gateway exposes this port for API instances to connect. |
-| `GATEWAY_API_SECRET`       | string | -       | ✅       | Shared secret for authenticating API connections. Must match `VPS_GATEWAY_API_SECRET` in API service. Both must be identical.                                                                                          |
+| `GATEWAY_API_SECRET`       | string | -       | ✅\*     | Shared secret for authenticating API connections (required when using gateway service). Must match `VPS_GATEWAY_API_SECRET` in API service. Both must be identical.                                                                                          |
 | `GATEWAY_OUTBOUND_IP`     | string | -       | ❌       | Optional IP address to use for outbound SNAT. If set, gateway will automatically configure iptables SNAT rules to use this IP for all outbound traffic from VPSs on this node. Allows isolation of VPS traffic from other infrastructure. Prevents abuse/blocking on VPS traffic from affecting other services. Each node's gateway can have a different outbound IP. The gateway automatically configures and cleans up iptables rules on startup/shutdown. |
 | `GATEWAY_OUTBOUND_INTERFACE` | string | - | ❌ | Optional network interface name for outbound traffic. If not set, the gateway will auto-detect the primary outbound interface from the default route. Only needed if auto-detection fails or you want to use a specific interface. |
 | `GATEWAY_PUBLIC_IP`        | string | -       | ⚪       | Public IP address for DNAT configuration. Used for documentation purposes - actual DNAT is configured on router/firewall. Example: `203.0.113.1`.                                                                      |
-| `GATEWAY_DHCP_POOL_START`  | string | -       | ✅       | Starting IP address for DHCP pool (e.g., `10.15.3.20`)                                                                                                                                                                 |
-| `GATEWAY_DHCP_POOL_END`    | string | -       | ✅       | Ending IP address for DHCP pool (e.g., `10.15.3.254`)                                                                                                                                                                  |
-| `GATEWAY_DHCP_SUBNET`      | string | -       | ✅       | Subnet address (e.g., `10.15.3.0`)                                                                                                                                                                                     |
-| `GATEWAY_DHCP_SUBNET_MASK` | string | -       | ✅       | Subnet mask (e.g., `255.255.255.0`)                                                                                                                                                                                    |
-| `GATEWAY_DHCP_GATEWAY`     | string | -       | ✅       | Gateway IP address that VPSs should use (e.g., `10.15.3.1`). This is the VXLAN gateway/router, same for all nodes.                                                                                                     |
+| `GATEWAY_DHCP_POOL_START`  | string | `10.15.3.20` | ❌       | Starting IP address for DHCP pool (e.g., `10.15.3.20`). Defaults provided in docker-compose.                                                                                                                                                                 |
+| `GATEWAY_DHCP_POOL_END`    | string | `10.15.3.254` | ❌       | Ending IP address for DHCP pool (e.g., `10.15.3.254`). Defaults provided in docker-compose.                                                                                                                                                                  |
+| `GATEWAY_DHCP_SUBNET`      | string | `10.15.3.0` | ❌       | Subnet address (e.g., `10.15.3.0`). Defaults provided in docker-compose.                                                                                                                                                                                     |
+| `GATEWAY_DHCP_SUBNET_MASK` | string | `255.255.255.0` | ❌       | Subnet mask (e.g., `255.255.255.0`). Defaults provided in docker-compose.                                                                                                                                                                                    |
+| `GATEWAY_DHCP_GATEWAY`     | string | `10.15.3.1` | ❌       | Gateway IP address that VPSs should use (e.g., `10.15.3.1`). This is the VXLAN gateway/router, same for all nodes. Defaults provided in docker-compose.                                                                                                     |
 | `GATEWAY_DHCP_LISTEN_IP`   | string | -       | ❌       | IP address for the gateway service to listen on (e.g., `10.15.3.10`). **Required for multi-node deployments** - each node's gateway must have a unique IP on the VXLAN. If not set, defaults to `GATEWAY_DHCP_GATEWAY` (single-node mode). |
-| `GATEWAY_DHCP_DNS`         | string | -       | ✅       | Comma-separated DNS servers for upstream DNS resolution (e.g., `1.1.1.1,1.0.0.1`)                                                                                                                                      |
+| `GATEWAY_DHCP_DNS`         | string | `1.1.1.1,1.0.0.1` | ❌       | Comma-separated DNS servers for upstream DNS resolution (e.g., `1.1.1.1,1.0.0.1`). Defaults provided in docker-compose.                                                                                                                                      |
 | `GATEWAY_DHCP_DOMAIN`      | string | `vps.local` | ❌       | DNS domain for VPS hostname resolution (e.g., `vps.local`). The gateway's dnsmasq will resolve VPS hostnames within this domain.                          |
-| `GATEWAY_DHCP_INTERFACE`   | string | -       | ✅       | Network interface name for DHCP **inside the container/VM** (e.g., `eth0`, `eth1`). This is the interface connected to the SDN bridge (`OCvpsnet` on the Proxmox host). The interface name inside the container is typically `eth0` (first interface), not the bridge name. Check with `ip addr show` inside the container to find the correct interface name. |
+| `GATEWAY_DHCP_INTERFACE`   | string | `eth0` | ❌       | Network interface name for DHCP **inside the container/VM** (e.g., `eth0`, `eth1`). This is the interface connected to the SDN bridge (`OCvpsnet` on the Proxmox host). The interface name inside the container is typically `eth0` (first interface), not the bridge name. Check with `ip addr show` inside the container to find the correct interface name. Defaults to `eth0` in docker-compose. |
 | `LOG_LEVEL`                | string | `info`  | ❌       | Logging level (`debug`, `info`, `warn`, `error`)                                                                                                                                                                       |
 
 **NODE_IPS Format:**
@@ -969,12 +969,10 @@ VPS provisioning requires Proxmox VE to be configured. You can use either passwo
 
 ```bash
 # Password authentication
-PROXMOX_API_URL=https://proxmox.example.com:8006
 PROXMOX_USERNAME=root@pam
 PROXMOX_PASSWORD=your-secure-password
 
 # Or API token authentication (recommended)
-PROXMOX_API_URL=https://proxmox.example.com:8006
 PROXMOX_USERNAME=root@pam
 PROXMOX_TOKEN_ID=obiente-cloud
 PROXMOX_TOKEN_SECRET=your-token-secret
@@ -985,28 +983,82 @@ PROXMOX_STORAGE_POOL=local-zfs
 # Optional: VLAN tag for network isolation (recommended for security)
 PROXMOX_VLAN_ID=100
 
-# Optional: SSH configuration for cloud-init snippet writing
-# See docs/guides/proxmox-ssh-user-setup.md for detailed setup instructions
-
-# Single-node setup
-PROXMOX_SSH_HOST=proxmox.example.com
-PROXMOX_SSH_USER=obiente-cloud
-PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
-
-# Multi-node setup (recommended for clusters)
-# Maps Proxmox node names to SSH endpoints (IP addresses or hostnames)
-# PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
-# PROXMOX_SSH_USER=obiente-cloud
-# PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
-
-# Or use key data from secrets manager:
-# PROXMOX_SSH_KEY_DATA="-----BEGIN OPENSSH PRIVATE KEY-----\n..."
-
 # Optional: Map VPS regions to specific Proxmox nodes (for multi-node clusters)
 # Format: "region1:node1;region2:node2"
 # Example: Map us-east-1 region to "customer" node, us-west-1 to "west" node
 PROXMOX_REGION_NODES="us-east-1:customer;us-west-1:west"
 ```
+
+**Proxmox Node Endpoints Configuration:**
+
+All Proxmox deployments (single-node or multi-node) require node endpoint mapping. The system supports a default mapping with optional overrides:
+
+**Configuration Hierarchy:**
+
+1. **Default Mapping** (required for all setups):
+   ```bash
+   # Default endpoints used for both API and SSH
+   # For API: Constructs https://host:8006 URLs
+   # For SSH: Uses endpoints directly (assumes port 22 if not specified)
+   # Single-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com"
+   # Multi-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com"
+   ```
+
+2. **Optional API Override** (if API endpoints differ from default):
+   ```bash
+   # Override API endpoints only (full URLs required)
+   PROXMOX_NODE_API_ENDPOINTS="node1:https://proxmox1.example.com:8006,node2:https://proxmox2.example.com:8006"
+   ```
+
+3. **Optional SSH Override** (if SSH endpoints differ from default):
+   ```bash
+   # Override SSH endpoints only
+   PROXMOX_NODE_SSH_ENDPOINTS="node1:192.168.1.10,node2:192.168.1.11"
+   ```
+
+**Single-Node Setup Example:**
+
+```bash
+# Single-node setup (one node in the mapping)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+
+# SSH configuration
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+```
+
+**Multi-Node Setup Example:**
+
+```bash
+# Default mapping (used for both API and SSH)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+
+# Optional: Override API endpoints if they differ (e.g., different ports or protocols)
+# PROXMOX_NODE_API_ENDPOINTS="node1:https://proxmox1.example.com:8006,node2:https://proxmox2.example.com:8006"
+
+# Optional: Override SSH endpoints if they differ (e.g., different IPs or ports)
+# PROXMOX_NODE_SSH_ENDPOINTS="node1:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+
+# SSH configuration (same for all nodes)
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+
+# Or use key data from secrets manager:
+# PROXMOX_SSH_KEY_DATA="-----BEGIN OPENSSH PRIVATE KEY-----\n..."
+```
+
+**Benefits of Per-Node Endpoints:**
+
+- **High Availability**: If one Proxmox node goes down, others continue working (as long as there's quorum)
+- **Better Performance**: Direct API calls to the correct node without unnecessary routing
+- **Scalability**: Easy to add more nodes by updating the environment variable
+- **Flexibility**: Override API or SSH endpoints independently when needed
+
+**SSH Configuration:**
+
+See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for detailed setup instructions.
 
 **Note:** The storage pool specified in `PROXMOX_STORAGE_POOL` must exist in your Proxmox installation and support VM disk images. Common values are `local-lvm` (default), `local`, `local-zfs`, or custom storage pools. If the storage pool doesn't exist, VPS creation will fail with a clear error message listing available storage pools.
 
@@ -1047,7 +1099,7 @@ See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-t
 
 | Variable                        | Type     | Default                              | Required | Description                                                                                                                                    |
 | ------------------------------- | -------- | ------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERNAL_SERVICE_SECRET`       | string   | -                                    | ✅       | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications.   |
+| `INTERNAL_SERVICE_SECRET`       | string   | -                                    | ✅\*     | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications.   |
 | `NOTIFICATIONS_SERVICE_URL`     | string   | `http://notifications-service:3012`  | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                              |
 | `NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | number | `3`                                | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                   |
 | `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                            | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                    |
@@ -1126,9 +1178,9 @@ SECRET=<generated_value>
 
 | Variable                             | Type   | Default | Required      |
 | ------------------------------------ | ------ | ------- | ------------- |
-| `STRIPE_SECRET_KEY`                  | string | -       | ✅ (billing)  |
-| `STRIPE_WEBHOOK_SECRET`              | string | -       | ✅ (webhooks) |
-| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | string | -       | ✅ (frontend) |
+| `STRIPE_SECRET_KEY`                  | string | -       | ✅\* (billing)  |
+| `STRIPE_WEBHOOK_SECRET`              | string | -       | ✅\* (webhooks) |
+| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | string | -       | ✅\* (frontend) |
 
 **Setup:**
 

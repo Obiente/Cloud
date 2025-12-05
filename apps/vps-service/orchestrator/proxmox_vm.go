@@ -217,57 +217,90 @@ func getMapKeys(m map[string]interface{}) []string {
 	return keys
 }
 
-// parseNodeSSHMapping parses the PROXMOX_NODE_SSH_ENDPOINTS environment variable
+// parseNodeSSHMapping parses the PROXMOX_NODE_SSH_ENDPOINTS environment variable (SSH override)
 // Format: "node1:192.168.1.10,node2:192.168.1.11" or "node1:hostname1.example.com:22,node2:hostname2.example.com:2222"
 // Returns a map of node name -> SSH endpoint (hostname/IP, optionally with port)
+// Falls back to PROXMOX_NODE_ENDPOINTS if SSH override not configured
 func parseNodeSSHMapping() map[string]string {
 	mapping := make(map[string]string)
+	
+	// First, check for SSH-specific override
 	envValue := os.Getenv("PROXMOX_NODE_SSH_ENDPOINTS")
-	if envValue == "" {
+	if envValue != "" {
+		// Parse comma-separated node mappings
+		nodeStrings := strings.Split(envValue, ",")
+		for _, nodeStr := range nodeStrings {
+			nodeStr = strings.TrimSpace(nodeStr)
+			if nodeStr == "" {
+				continue
+			}
+
+			// Parse "nodeName:endpoint" format (endpoint can be IP or hostname, optionally with port)
+			if strings.Contains(nodeStr, ":") {
+				// Split on first colon only (endpoint might contain port with colon)
+				parts := strings.SplitN(nodeStr, ":", 2)
+				if len(parts) == 2 {
+					nodeName := strings.TrimSpace(parts[0])
+					endpoint := strings.TrimSpace(parts[1])
+					if nodeName != "" && endpoint != "" {
+						mapping[nodeName] = endpoint
+					}
+				}
+			}
+		}
 		return mapping
 	}
 
-	// Parse comma-separated node mappings
-	nodeStrings := strings.Split(envValue, ",")
-	for _, nodeStr := range nodeStrings {
-		nodeStr = strings.TrimSpace(nodeStr)
-		if nodeStr == "" {
-			continue
-		}
-
-		// Parse "nodeName:endpoint" format (endpoint can be IP or hostname, optionally with port)
-		if strings.Contains(nodeStr, ":") {
-			// Split on first colon only (endpoint might contain port with colon)
-			parts := strings.SplitN(nodeStr, ":", 2)
-			if len(parts) == 2 {
-				nodeName := strings.TrimSpace(parts[0])
-				endpoint := strings.TrimSpace(parts[1])
-				if nodeName != "" && endpoint != "" {
-					mapping[nodeName] = endpoint
+	// Fall back to default PROXMOX_NODE_ENDPOINTS
+	// Import the function from vps_manager.go (we'll need to make it accessible)
+	// For now, parse it directly here to avoid circular dependencies
+	defaultMapping := make(map[string]string)
+	defaultEnvValue := os.Getenv("PROXMOX_NODE_ENDPOINTS")
+	if defaultEnvValue != "" {
+		nodeStrings := strings.Split(defaultEnvValue, ",")
+		for _, nodeStr := range nodeStrings {
+			nodeStr = strings.TrimSpace(nodeStr)
+			if nodeStr == "" {
+				continue
+			}
+			if strings.Contains(nodeStr, ":") {
+				parts := strings.SplitN(nodeStr, ":", 2)
+				if len(parts) == 2 {
+					nodeName := strings.TrimSpace(parts[0])
+					endpoint := strings.TrimSpace(parts[1])
+					if nodeName != "" && endpoint != "" {
+						defaultMapping[nodeName] = endpoint
+					}
 				}
 			}
 		}
 	}
 
-	return mapping
+	return defaultMapping
 }
 
 // resolveSSHEndpoint resolves the SSH endpoint for a given node name
-// Uses PROXMOX_NODE_SSH_ENDPOINTS mapping if available, otherwise falls back to nodeName or config.SSHHost
+// Uses PROXMOX_NODE_SSH_ENDPOINTS mapping if available, otherwise falls back to PROXMOX_NODE_ENDPOINTS, then nodeName
 func resolveSSHEndpoint(nodeName string, config *ProxmoxConfig) string {
-	// First, check node-to-SSH-endpoint mapping
+	// First, check node-to-SSH-endpoint mapping (SSH override)
 	nodeSSHMap := parseNodeSSHMapping()
 	if endpoint, ok := nodeSSHMap[nodeName]; ok {
 		return endpoint
 	}
 
-	// Fall back to nodeName (if it's a resolvable hostname/IP)
+	// Fall back to default PROXMOX_NODE_ENDPOINTS mapping
+	defaultMapping := parseNodeEndpointsMapping()
+	if endpoint, ok := defaultMapping[nodeName]; ok {
+		return endpoint
+	}
+
+	// Last resort: use nodeName directly (if it's a resolvable hostname/IP)
 	if nodeName != "" {
 		return nodeName
 	}
 
-	// Last resort: use configured SSH host
-	return config.SSHHost
+	// No endpoint found
+	return ""
 }
 
 // parseRegionNodeMapping parses the PROXMOX_REGION_NODES environment variable
@@ -2271,8 +2304,8 @@ func (pc *ProxmoxClient) moveDisk(ctx context.Context, nodeName string, vmID int
 // moveDiskWithQemuImg moves a disk using qemu-img convert to preserve partition table integrity on LVM thin storage
 func (pc *ProxmoxClient) moveDiskWithQemuImg(ctx context.Context, nodeName string, vmID int, disk string, targetStorage string, deleteSource bool) error {
 	// Check if SSH is configured (required for this operation)
-	if pc.config.SSHHost == "" || pc.config.SSHUser == "" {
-		return fmt.Errorf("SSH not configured, cannot move disk with qemu-img convert. Please configure PROXMOX_SSH_HOST and PROXMOX_SSH_USER")
+	if pc.config.SSHUser == "" {
+		return fmt.Errorf("SSH not configured, cannot move disk with qemu-img convert. Please configure PROXMOX_SSH_USER and PROXMOX_NODE_ENDPOINTS")
 	}
 
 	logger.Info("[ProxmoxClient] Moving disk %s for VM %d to LVM thin storage %s using qemu-img convert", disk, vmID, targetStorage)
@@ -2437,10 +2470,10 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	}
 
 	// Connect to Proxmox node via SSH
-	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS mapping
+	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_NODE_ENDPOINTS mapping
 	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
 	if sshEndpoint == "" {
-		return fmt.Errorf("SSH endpoint not configured for node %s (PROXMOX_NODE_SSH_ENDPOINTS, PROXMOX_SSH_HOST, or resolvable nodeName required)", nodeName)
+		return fmt.Errorf("SSH endpoint not configured for node %s (configure PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS)", nodeName)
 	}
 	
 	sshHost := sshEndpoint

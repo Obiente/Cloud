@@ -8,16 +8,33 @@ Advanced configuration options for VPS instances on Obiente Cloud.
 
 #### Password Authentication
 
+**Single-node setup:**
 ```bash
-PROXMOX_API_URL=https://proxmox.example.com:8006
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+PROXMOX_USERNAME=root@pam
+PROXMOX_PASSWORD=your-secure-password
+```
+
+**Multi-node setup:**
+```bash
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com"
 PROXMOX_USERNAME=root@pam
 PROXMOX_PASSWORD=your-secure-password
 ```
 
 #### Token Authentication (Recommended)
 
+**Single-node setup:**
 ```bash
-PROXMOX_API_URL=https://proxmox.example.com:8006
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+PROXMOX_USERNAME=root@pam
+PROXMOX_TOKEN_ID=obiente-cloud
+PROXMOX_TOKEN_SECRET=your-token-secret
+```
+
+**Multi-node setup:**
+```bash
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com"
 PROXMOX_USERNAME=root@pam
 PROXMOX_TOKEN_ID=obiente-cloud
 PROXMOX_TOKEN_SECRET=your-token-secret
@@ -291,18 +308,24 @@ If you want VMs to be isolated, configure firewall rules as described above.
 For single-node Proxmox deployments:
 
 ```bash
-PROXMOX_SSH_HOST=proxmox.example.com
+# Single-node setup (one node in the mapping)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+
 PROXMOX_SSH_USER=obiente-cloud
 PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 ```
 
 ### Multi-Node Setup
 
-For multi-node Proxmox clusters, use node-to-endpoint mapping:
+For multi-node Proxmox clusters, configure default node endpoints with optional SSH override:
 
 ```bash
-# Map Proxmox node names to SSH endpoints
-PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+# Default node endpoints (used for both API and SSH)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+
+# Optional: Override SSH endpoints if they differ from default
+# PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+
 PROXMOX_SSH_USER=obiente-cloud
 PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 ```
@@ -310,14 +333,26 @@ PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 Endpoints can be IP addresses or hostnames, optionally with ports:
 
 ```bash
-PROXMOX_NODE_SSH_ENDPOINTS="main:proxmox-main.example.com,node2:192.168.1.11:2222"
+# Default mapping (for API, constructs https://host:8006; for SSH, uses directly)
+PROXMOX_NODE_ENDPOINTS="main:proxmox-main.example.com,node2:proxmox2.example.com"
+
+# Or with explicit ports (for SSH, port 22 is assumed if not specified)
+PROXMOX_NODE_ENDPOINTS="main:proxmox-main.example.com,node2:192.168.1.11:2222"
 ```
+
+**Configuration Hierarchy:**
+
+The system resolves SSH endpoints in this order:
+1. `PROXMOX_NODE_SSH_ENDPOINTS` (SSH override)
+2. `PROXMOX_NODE_ENDPOINTS` (default mapping)
+3. Node name directly (if resolvable)
 
 **Why This Is Needed:**
 
 - Cloud-init snippets must be written to directory-type storage
 - Multi-node clusters require node-to-endpoint mapping when node names aren't resolvable hostnames
 - SSH access allows the API to write snippet files directly to Proxmox storage
+- Per-node endpoints enable high availability: if one node goes down, others continue working
 
 See the [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) for complete setup instructions.
 
@@ -527,6 +562,24 @@ For HA VPS provisioning:
 2. Configure shared storage
 3. Enable VM migration
 4. Configure quorum
+5. **Configure per-node endpoints** for high availability (see [Proxmox SSH Configuration](#proxmox-ssh-configuration))
+
+**Per-Node Endpoints for High Availability:**
+
+Configure `PROXMOX_NODE_ENDPOINTS` (or `PROXMOX_NODE_API_ENDPOINTS` and `PROXMOX_NODE_SSH_ENDPOINTS`) to enable high availability:
+
+```bash
+# Default mapping (recommended)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+
+# Optional: Override API endpoints for different URLs
+# PROXMOX_NODE_API_ENDPOINTS="node1:https://proxmox1.example.com:8006,node2:https://proxmox2.example.com:8006"
+```
+
+**Benefits:**
+- If one Proxmox node goes down, others continue working (as long as there's quorum)
+- Direct API calls to the correct node without unnecessary routing
+- Better performance and reliability
 
 ### Load Balancing
 
@@ -535,6 +588,7 @@ Distribute VPS instances across nodes:
 1. Configure node selection logic
 2. Monitor node resources
 3. Implement load balancing
+4. Use `PROXMOX_REGION_NODES` to map regions to specific nodes
 
 ## Troubleshooting Configuration
 

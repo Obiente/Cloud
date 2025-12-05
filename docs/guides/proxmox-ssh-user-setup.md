@@ -2,7 +2,7 @@
 
 This guide explains how to set up a dedicated SSH user (`obiente-cloud`) on your Proxmox node(s) for writing cloud-init snippet files and performing disk operations (e.g., `qemu-img convert` for LVM thin storage).
 
-**For multi-node clusters**: Follow this guide for each Proxmox node, then configure `PROXMOX_NODE_SSH_ENDPOINTS` to map node names to their SSH endpoints (see Step 7).
+**For all setups**: Follow this guide for each Proxmox node, then configure `PROXMOX_NODE_ENDPOINTS` (required) or `PROXMOX_NODE_SSH_ENDPOINTS` (optional SSH override) to map node names to their endpoints (see Step 7).
 
 ## Why a Dedicated User?
 
@@ -232,7 +232,7 @@ ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "/usr/bin/qemu-img info
 # Should output a path like: /dev/pve/vm-100-disk-0 (or show permission error if not configured)
 ```
 
-**For multi-node clusters**: Test SSH connection to each node using its endpoint from `PROXMOX_NODE_SSH_ENDPOINTS`:
+**For all setups**: Test SSH connection to each node using its endpoint from `PROXMOX_NODE_ENDPOINTS` or `PROXMOX_NODE_SSH_ENDPOINTS`:
 ```bash
 # Test each node (replace with actual endpoints from your configuration)
 ssh -i obiente-cloud-key obiente-cloud@192.168.1.10 "whoami"  # main node
@@ -250,17 +250,14 @@ Configure the following environment variables in your API service:
 # Optional: SSH user (defaults to "obiente-cloud" if not set)
 PROXMOX_SSH_USER=obiente-cloud
 
-# For single-node setups: SSH host (defaults to PROXMOX_API_URL host if not set)
-# Automatically extracts hostname and removes http:///https:// prefixes and ports
-PROXMOX_SSH_HOST=your-proxmox-node.example.com
-# Or with custom port:
-# PROXMOX_SSH_HOST=your-proxmox-node.example.com:2222
+# Node endpoints mapping (required for all setups)
+# Single-node example:
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+# Multi-node example:
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
 
-# For multi-node setups: Node-to-SSH-endpoint mapping (recommended)
-# Maps Proxmox node names to their SSH endpoints (IP addresses or hostnames)
-# Format: "node1:endpoint1,node2:endpoint2" (comma-separated)
-# Endpoints can be IP addresses or hostnames, optionally with ports
-PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:proxmox-node3.example.com:2222"
+# Optional: Override SSH endpoints if they differ from default
+# PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:proxmox-node3.example.com:2222"
 # Or with hostnames:
 # PROXMOX_NODE_SSH_ENDPOINTS="main:proxmox-main.example.com,node2:proxmox-node2.example.com"
 
@@ -275,23 +272,48 @@ PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 # PROXMOX_SSH_KEY_DATA="LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K..."
 ```
 
-**Multi-Node Setup**:
+**Node Endpoints Configuration**:
 
-If you have multiple Proxmox nodes in a cluster, use `PROXMOX_NODE_SSH_ENDPOINTS` to map each node name to its SSH endpoint. This is especially important when:
-- Node names are not resolvable hostnames (e.g., `main`, `node2`)
-- Nodes have different IP addresses or hostnames
-- Nodes use different SSH ports
+All Proxmox deployments (single-node or multi-node) require node endpoint mapping. The system supports a default mapping with optional SSH override:
 
-The system will:
-1. First check `PROXMOX_NODE_SSH_ENDPOINTS` for a mapping
-2. Fall back to using the node name directly (if it's resolvable)
-3. Fall back to `PROXMOX_SSH_HOST` as a last resort
+**Configuration Hierarchy:**
 
-**Example for 3-node cluster**:
+1. **Default Mapping** (required for all setups):
+   ```bash
+   # Single-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+   
+   # Multi-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+   ```
+
+2. **Optional SSH Override** (if SSH endpoints differ from default):
+   ```bash
+   # Override SSH endpoints only
+   PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+   ```
+
+**The system will resolve SSH endpoints in this order:**
+1. Check `PROXMOX_NODE_SSH_ENDPOINTS` (SSH override)
+2. Check `PROXMOX_NODE_ENDPOINTS` (default mapping)
+3. Fall back to using the node name directly (if it's resolvable)
+
+**Single-Node Example**:
 ```bash
-# Node names in Proxmox: main, node2, node3
-# SSH endpoints: 192.168.1.10, 192.168.1.11, 192.168.1.12
-PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+# Single-node setup (one node in the mapping)
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+```
+
+**Multi-Node Example**:
+```bash
+# Default mapping (used for both API and SSH)
+PROXMOX_NODE_ENDPOINTS="main:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+
+# Optional: Override SSH if endpoints differ (e.g., internal IPs)
+# PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
 
 # Same SSH key works for all nodes (configured once)
 PROXMOX_SSH_USER=obiente-cloud

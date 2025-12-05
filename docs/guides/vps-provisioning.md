@@ -22,14 +22,22 @@ To enable VPS provisioning, you need:
 ### Required Environment Variables
 
 ```bash
-# Proxmox API Configuration
-PROXMOX_API_URL=https://your-proxmox-server:8006
+# Proxmox Authentication
 PROXMOX_USERNAME=root@pam
 PROXMOX_PASSWORD=your-password
 
 # Or use API token (recommended for production)
 PROXMOX_TOKEN_ID=your-token-id
 PROXMOX_TOKEN_SECRET=your-token-secret
+
+# Proxmox Node Endpoints (required for all setups)
+# Single-node example:
+PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
+# Multi-node example:
+PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com"
+
+# Optional: Override API endpoints if they differ from default
+# PROXMOX_NODE_API_ENDPOINTS="node1:https://proxmox1.example.com:8006,node2:https://proxmox2.example.com:8006"
 
 # Optional: Storage pool (defaults to local-lvm)
 PROXMOX_STORAGE_POOL=local-lvm
@@ -50,15 +58,12 @@ PROXMOX_REGION_NODES="us-east-1:main;us-west-1:node2"
 
 # Proxmox SSH Configuration (required for cloud-init snippet writing)
 # See Proxmox SSH User Setup Guide for detailed instructions
-# Single-node setup:
-PROXMOX_SSH_HOST=proxmox.example.com
+# SSH user and key (same for all nodes)
 PROXMOX_SSH_USER=obiente-cloud
 PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 
-# Multi-node setup (recommended for clusters):
+# Optional: Override SSH endpoints if they differ from PROXMOX_NODE_ENDPOINTS
 # PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
-# PROXMOX_SSH_USER=obiente-cloud
-# PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 
 # SSH Proxy Configuration (optional)
 SSH_PROXY_PORT=2222
@@ -152,17 +157,17 @@ Cloud-init snippets are required for proper VPS configuration. The system needs 
 
 2. **Configure Environment Variables**:
    
-   **For single-node setups:**
+   **For all setups (single-node or multi-node):**
    ```bash
-   PROXMOX_SSH_HOST=proxmox.example.com
-   PROXMOX_SSH_USER=obiente-cloud
-   PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
-   ```
+   # Single-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox.example.com"
    
-   **For multi-node clusters (recommended):**
-   ```bash
-   # Map Proxmox node names to SSH endpoints
-   PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+   # Multi-node example:
+   PROXMOX_NODE_ENDPOINTS="node1:proxmox1.example.com,node2:proxmox2.example.com,node3:proxmox3.example.com"
+   
+   # Optional: Override SSH endpoints if they differ
+   # PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+   
    PROXMOX_SSH_USER=obiente-cloud
    PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
    ```
@@ -1099,7 +1104,7 @@ Proxmox's `move_disk` operation can corrupt partition tables when moving disks t
 **Requirements:**
 
 - SSH access to the Proxmox node must be configured (see [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md))
-- For multi-node clusters, configure `PROXMOX_NODE_SSH_ENDPOINTS` to map node names to SSH endpoints
+- Configure `PROXMOX_NODE_ENDPOINTS` (required for all setups) or `PROXMOX_NODE_SSH_ENDPOINTS` (optional SSH override) to map node names to SSH endpoints
 - The VM will be temporarily stopped during the disk move operation
 
 ## Related Documentation
