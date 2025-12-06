@@ -6,11 +6,15 @@ package orchestrator
 import (
 	"context"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	shared "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 // Core orchestrator service types and initialization
@@ -135,6 +139,10 @@ func (os *OrchestratorService) Start() {
 	go os.syncNodeMetadataPeriodically()
 	logger.Debug("[Orchestrator] Started periodic node metadata sync")
 
+	// Restore running deployments from database on startup
+	go os.restoreRunningDeployments()
+	logger.Debug("[Orchestrator] Started restoration of running deployments")
+
 	logger.Info("[Orchestrator] Orchestration service started successfully")
 }
 
@@ -224,4 +232,78 @@ func (orch *OrchestratorService) getEnv(key string) string {
 
 func (orch *OrchestratorService) getEnvFromOS(key string) string {
 	return os.Getenv(key)
+}
+
+// restoreRunningDeployments queries the database for all deployments marked as RUNNING
+// and attempts to start them. This ensures deployments are restored after orchestrator restarts.
+// This function runs in a goroutine and processes deployments concurrently to avoid blocking.
+func (os *OrchestratorService) restoreRunningDeployments() {
+	// Give the system a moment to fully initialize before restoring deployments
+	time.Sleep(5 * time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	logger.Info("[Orchestrator] Restoring running deployments from database...")
+
+	// Query database for all deployments with status = RUNNING
+	var deployments []database.Deployment
+	runningStatus := int32(deploymentsv1.DeploymentStatus_RUNNING)
+	if err := database.DB.WithContext(ctx).
+		Where("status = ? AND deleted_at IS NULL", runningStatus).
+		Find(&deployments).Error; err != nil {
+		logger.Error("[Orchestrator] Failed to query running deployments from database: %v", err)
+		return
+	}
+
+	if len(deployments) == 0 {
+		logger.Info("[Orchestrator] No running deployments found in database to restore")
+		return
+	}
+
+	logger.Info("[Orchestrator] Found %d running deployment(s) to restore", len(deployments))
+
+	// Process deployments concurrently with a limit to avoid overwhelming the system
+	const maxConcurrency = 5
+	semaphore := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	successCount := 0
+	failureCount := 0
+
+	for _, deployment := range deployments {
+		wg.Add(1)
+		go func(dep database.Deployment) {
+			defer wg.Done()
+
+			// Acquire semaphore to limit concurrency
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			logger.Info("[Orchestrator] Restoring deployment %s (name: %s, domain: %s)",
+				dep.ID, dep.Name, dep.Domain)
+
+			// Use a shorter timeout per deployment to avoid blocking too long
+			deployCtx, deployCancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer deployCancel()
+
+			if err := os.deploymentManager.StartDeployment(deployCtx, dep.ID); err != nil {
+				logger.Warn("[Orchestrator] Failed to restore deployment %s: %v", dep.ID, err)
+				mu.Lock()
+				failureCount++
+				mu.Unlock()
+			} else {
+				logger.Info("[Orchestrator] Successfully restored deployment %s", dep.ID)
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}(deployment)
+	}
+
+	// Wait for all deployments to be processed
+	wg.Wait()
+
+	logger.Info("[Orchestrator] Deployment restoration completed: %d succeeded, %d failed out of %d total",
+		successCount, failureCount, len(deployments))
 }
