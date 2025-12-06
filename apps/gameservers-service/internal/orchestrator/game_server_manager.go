@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
-	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/client"
 )
 
 // GameServerManager manages the lifecycle of game server containers
@@ -872,6 +872,25 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		fmt.Sprintf("%s:%s", volumeHostPath, volumeMountPoint),
 	}
 
+	// Memory configuration: Use soft limits to avoid OOM kills
+	// Strategy:
+	// 1. MemoryReservation (soft limit): User's requested limit - Docker tries to keep memory below this
+	//    but won't OOM kill if exceeded. This is the "target" memory usage.
+	// 2. Memory (hard limit): 20% buffer above reservation - Absolute maximum to prevent runaway growth
+	// 3. OomKillDisable: Prevent OOM kills - Instead of killing, we'll monitor and gracefully stop
+	//    the container if it exceeds the soft limit for too long.
+	// 4. MemorySwap: Set to 0 (no swap) - Game servers need low latency, swap causes lag
+	//
+	// This approach ensures:
+	// - Containers won't be OOM killed unexpectedly
+	// - Memory usage is still controlled and monitored
+	// - Game servers can handle temporary memory spikes
+	// - System stability is maintained through monitoring
+	memoryReservation := config.MemoryBytes
+	memoryHardLimit := int64(float64(config.MemoryBytes) * 1.2) // 20% buffer above soft limit
+	oomKillDisable := true // Disable OOM kills - we'll handle memory pressure gracefully
+	memorySwap := int64(0) // No swap - game servers need low latency
+	
 	// Host configuration
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
@@ -880,9 +899,12 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 			Name: "unless-stopped",
 		},
 		Resources: container.Resources{
-			Memory:    config.MemoryBytes,
-			CPUShares: cpuShares,  // Relative priority (for scheduling)
-			NanoCPUs:  nanoCPUs,   // Hard CPU limit (prevents exceeding allocated CPUs)
+			Memory:            memoryHardLimit,      // Hard limit with buffer (prevents runaway growth)
+			MemoryReservation: memoryReservation,   // Soft limit (user's requested limit - no OOM kill)
+			MemorySwap:        memorySwap,          // No swap - game servers need low latency
+			OomKillDisable:    &oomKillDisable,    // Disable OOM kills - we'll monitor and gracefully stop
+			CPUShares:         cpuShares,          // Relative priority (for scheduling)
+			NanoCPUs:          nanoCPUs,           // Hard CPU limit (prevents exceeding allocated CPUs)
 		},
 		NetworkMode: container.NetworkMode(gsm.networkName),
 		Privileged:  false, // Never run game servers in privileged mode

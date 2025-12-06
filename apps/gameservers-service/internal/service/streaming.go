@@ -121,11 +121,16 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 			dockerTailLimit = maxDockerTailLimit
 		}
 	} else if untilTime != nil {
-		// For historical loading without search, use the requested limit
-		// This ensures proper pagination - we get exactly what was requested
-		dockerTailLimit = *limit
+		// For historical loading without search, use a reasonable limit
+		// We need to read more than requested to get the most recent N lines before the timestamp
+		// But cap it to prevent slow responses - use 3x the limit or max, whichever is smaller
+		dockerTailLimit = *limit * 3
 		if dockerTailLimit > maxDockerTailLimit {
 			dockerTailLimit = maxDockerTailLimit
+		}
+		// Also cap the absolute maximum we'll process for historical logs
+		if dockerTailLimit > 2000 {
+			dockerTailLimit = 2000 // Cap historical logs at 2000 lines for faster response
 		}
 	}
 	
@@ -164,12 +169,11 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 	
 	// Memory safety: Track total lines processed to prevent OOM
 	// With 2G memory limit, we can handle more but still need a hard limit to catch leaks
-	const maxLogLinesInMemory = 10000 // Hard limit to catch memory leaks
+	// maxLogLinesInMemory is already declared above (line 113)
 	linesProcessed := 0
 	
 	// Optimization: For "until" queries, we only need to keep the last N lines
 	// Use a sliding window instead of accumulating all lines
-	needsAllLines := searchQuery != "" || untilTime != nil
 	var slidingWindow []*gameserversv1.GameServerLogLine // Only used when untilTime != nil
 	if untilTime != nil {
 		// Pre-allocate sliding window to hold only the last N lines
@@ -349,9 +353,9 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 		// Count all processed lines, not just matching ones
 		// Also check memory safety limit
 		if untilTime != nil {
-			// For until queries, we need to read all available logs to get the most recent ones
-			// Only stop if we hit the memory safety limit
-			if linesProcessed >= maxLogLinesInMemory {
+			// For until queries, limit how much we read to prevent slow responses
+			// We've already capped dockerTailLimit above, so use that as our limit
+			if linesProcessed >= int(dockerTailLimit) || linesProcessed >= maxLogLinesInMemory {
 				break
 			}
 		} else if len(logLines) >= int(dockerTailLimit) || linesProcessed >= maxLogLinesInMemory {
@@ -414,11 +418,20 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		tail = &tailVal
 	}
 
+	// Cap the initial tail to prevent slow startup when requesting many lines
+	// Lines are sent immediately as they're read, but Docker still needs to return the initial tail first
+	const maxInitialTail = 1000 // Cap initial tail at 1000 lines for faster streaming startup
+	actualTail := *tail
+	if actualTail > maxInitialTail {
+		logger.Info("[StreamGameServerLogs] Capping initial tail from %d to %d for faster streaming startup", actualTail, maxInitialTail)
+		actualTail = maxInitialTail
+	}
+
 	// Always follow logs when streaming - client context will handle disconnection
 	// This ensures logs are always streamed while the tab is open
 	follow := true
 
-	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *tail), follow, nil, nil)
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", actualTail), follow, nil, nil)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
 	}

@@ -2,13 +2,16 @@ package gameservers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 
 	"github.com/moby/moby/client"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 )
 
 // checkAndSyncGameServerStatus checks all game servers that should be running
@@ -126,7 +129,9 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 					skippedCount++
 				}
 			} else {
-				// Container crashed or failed - update to FAILED
+				// Container crashed or failed - check if it's an OOM kill
+				isOOMKill := exitCode == 137 // Exit code 137 = OOM kill (128 + 9, where 9 is SIGKILL)
+				
 				if currentStatus != int32(gameserversv1.GameServerStatus_FAILED) {
 					logger.Info("[HealthMonitor] Game server %s container exited with code %d but DB status is %d, updating to FAILED", gameServer.ID, exitCode, currentStatus)
 					if err := s.repo.UpdateStatus(ctx, gameServer.ID, int32(gameserversv1.GameServerStatus_FAILED)); err != nil {
@@ -139,9 +144,17 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 							Update("status", "stopped").Error; err != nil {
 							logger.Warn("[HealthMonitor] Failed to update location status for game server %s: %v", gameServer.ID, err)
 						}
+						
+						// Send notification if it's an OOM kill
+						if isOOMKill {
+							s.sendOOMKillNotification(ctx, &gameServer)
+						}
+						
 						syncedCount++
 					}
 				} else {
+					// Status already FAILED - don't send duplicate notifications
+					// (notification was already sent when status changed to FAILED)
 					skippedCount++
 				}
 			}
@@ -149,6 +162,66 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 	}
 
 	logger.Debug("[HealthMonitor] Check complete: %d synced, %d skipped (already correct), %d errors", syncedCount, skippedCount, errorCount)
+}
+
+// sendOOMKillNotification sends a notification to the game server owner about an OOM kill
+func (s *Service) sendOOMKillNotification(ctx context.Context, gameServer *database.GameServer) {
+	if gameServer.CreatedBy == "" {
+		logger.Warn("[HealthMonitor] Cannot send OOM kill notification for game server %s: no CreatedBy user ID", gameServer.ID)
+		return
+	}
+
+	// Format memory limit for display
+	memoryGB := float64(gameServer.MemoryBytes) / (1024 * 1024 * 1024)
+	memoryLimitStr := fmt.Sprintf("%.2f GB", memoryGB)
+	if memoryGB < 1 {
+		memoryMB := float64(gameServer.MemoryBytes) / (1024 * 1024)
+		memoryLimitStr = fmt.Sprintf("%.0f MB", memoryMB)
+	}
+
+	title := fmt.Sprintf("Game Server \"%s\" Stopped Due to Memory Limit", gameServer.Name)
+	message := fmt.Sprintf(
+		"Your game server \"%s\" was stopped because it exceeded its memory limit of %s. "+
+			"Consider increasing the memory limit or optimizing your server configuration.",
+		gameServer.Name,
+		memoryLimitStr,
+	)
+
+	// Create action URL to view/edit the game server
+	actionURL := fmt.Sprintf("/gameservers/%s", gameServer.ID)
+	actionLabel := "View Game Server"
+
+	// Get organization ID if available
+	var orgID *string
+	if gameServer.OrganizationID != "" {
+		orgID = &gameServer.OrganizationID
+	}
+
+	// Send notification
+	err := notifications.CreateNotificationForUser(
+		ctx,
+		gameServer.CreatedBy,
+		orgID,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR,
+		notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+		title,
+		message,
+		&actionURL,
+		&actionLabel,
+		map[string]string{
+			"game_server_id":   gameServer.ID,
+			"game_server_name": gameServer.Name,
+			"exit_code":        "137",
+			"reason":           "oom_kill",
+			"memory_limit":     fmt.Sprintf("%d", gameServer.MemoryBytes),
+		},
+	)
+
+	if err != nil {
+		logger.Warn("[HealthMonitor] Failed to send OOM kill notification for game server %s to user %s: %v", gameServer.ID, gameServer.CreatedBy, err)
+	} else {
+		logger.Info("[HealthMonitor] Sent OOM kill notification for game server %s to user %s", gameServer.ID, gameServer.CreatedBy)
+	}
 }
 
 // StartHealthMonitor starts a background service that periodically checks
