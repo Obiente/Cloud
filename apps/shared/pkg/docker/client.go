@@ -473,7 +473,18 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 	}
 
 	log.Printf("[ContainerListFiles] Command succeeded, output length: %d chars", len(output))
-	return parseLsOutput(output, path), nil
+	files := parseLsOutput(output, path)
+	
+	// Memory safety: Very high limit to allow normal operations while catching memory leaks
+	// With 2G memory limit, we can handle large directories, but still need a hard cap
+	// This limit is high enough that normal operations won't hit it, but a memory leak will
+	const maxFilesLimit = 100000 // Very high limit - only catches genuine memory leaks
+	if len(files) > maxFilesLimit {
+		log.Printf("[ContainerListFiles] WARNING: Directory contains %d files (exceeds safety limit of %d). This may indicate a memory leak or misconfiguration. Limiting to %d files.", len(files), maxFilesLimit, maxFilesLimit)
+		files = files[:maxFilesLimit]
+	}
+	
+	return files, nil
 }
 
 // ContainerReadFile reads a file using cat command

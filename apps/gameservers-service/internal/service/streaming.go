@@ -107,18 +107,26 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 	// For proper pagination, always use a reasonable limit
 	// When using until for historical loading, we want to fetch in chunks
 	// If search is active, we may need to fetch more to account for filtering
+	// With 2G memory limit, we can be more generous but still have safety limits
+	// These limits prevent OOM kills while allowing normal operations
+	const maxDockerTailLimit = 5000 // Generous limit for large log files
+	const maxLogLinesInMemory = 10000 // Hard limit on total lines in memory (catches leaks)
+	
 	dockerTailLimit := *limit
 	if searchQuery != "" {
 		// When searching, fetch more logs to account for filtering
-		// But cap it at a reasonable maximum to prevent timeouts
+		// Be generous but still bounded
 		dockerTailLimit = *limit * 5
-		if dockerTailLimit > 1000 {
-			dockerTailLimit = 1000 // Cap at 1000 to prevent timeouts
+		if dockerTailLimit > maxDockerTailLimit {
+			dockerTailLimit = maxDockerTailLimit
 		}
 	} else if untilTime != nil {
 		// For historical loading without search, use the requested limit
 		// This ensures proper pagination - we get exactly what was requested
 		dockerTailLimit = *limit
+		if dockerTailLimit > maxDockerTailLimit {
+			dockerTailLimit = maxDockerTailLimit
+		}
 	}
 	
 	// Add a timeout to the Docker API call itself to prevent hanging
@@ -154,6 +162,20 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 	var logLines []*gameserversv1.GameServerLogLine
 	header := make([]byte, 8)
 	
+	// Memory safety: Track total lines processed to prevent OOM
+	// With 2G memory limit, we can handle more but still need a hard limit to catch leaks
+	const maxLogLinesInMemory = 10000 // Hard limit to catch memory leaks
+	linesProcessed := 0
+	
+	// Optimization: For "until" queries, we only need to keep the last N lines
+	// Use a sliding window instead of accumulating all lines
+	needsAllLines := searchQuery != "" || untilTime != nil
+	var slidingWindow []*gameserversv1.GameServerLogLine // Only used when untilTime != nil
+	if untilTime != nil {
+		// Pre-allocate sliding window to hold only the last N lines
+		slidingWindow = make([]*gameserversv1.GameServerLogLine, 0, int(*limit)+100) // +100 buffer
+	}
+	
 	// Create a channel to signal when read completes
 	type readResult struct {
 		n   int
@@ -161,6 +183,11 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 	}
 	
 	for {
+		// Memory safety check: stop if we've processed too many lines
+		if linesProcessed >= maxLogLinesInMemory {
+			logger.Warn("[GetGameServerLogs] Reached memory safety limit (%d lines) for game server %s, stopping early", maxLogLinesInMemory, gameServerID)
+			break
+		}
 		// Check if context is cancelled
 		select {
 		case <-readCtx.Done():
@@ -283,20 +310,51 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 				Level:     &logLevel,
 			}
 			
+			// Increment processed line counter
+			linesProcessed++
+			
 			// Apply search filter if provided
-			if searchQuery == "" || strings.Contains(strings.ToLower(lineText), searchQuery) {
+			matchesSearch := searchQuery == "" || strings.Contains(strings.ToLower(lineText), searchQuery)
+			
+			if untilTime != nil {
+				// For "until" queries: use sliding window - only keep last N lines
+				// This avoids accumulating all lines in memory
+				if matchesSearch {
+					slidingWindow = append(slidingWindow, line)
+					// Keep only the last N lines in the sliding window
+					if len(slidingWindow) > int(*limit)+100 { // +100 buffer for safety
+						// Remove oldest lines, keep only the most recent
+						keepFrom := len(slidingWindow) - int(*limit) - 100
+						slidingWindow = slidingWindow[keepFrom:]
+					}
+				}
+			} else if matchesSearch {
+				// Normal case: accumulate matching lines
 				logLines = append(logLines, line)
 				
-				// If we have enough matching lines, we can stop early
-				if len(logLines) >= int(*limit) {
+				// If we have enough matching lines and no search, we can stop early
+				// (With search, we might need more to find enough matches)
+				if searchQuery == "" && len(logLines) >= int(*limit) {
 					goto done
 				}
+			}
+			
+			// Early exit optimization: if no search and no until, stop once we have enough
+			if searchQuery == "" && untilTime == nil && len(logLines) >= int(*limit) {
+				goto done
 			}
 		}
 		
 		// Stop if we've processed enough raw lines (accounting for filtering)
 		// Count all processed lines, not just matching ones
-		if len(logLines) >= int(dockerTailLimit) {
+		// Also check memory safety limit
+		if untilTime != nil {
+			// For until queries, we need to read all available logs to get the most recent ones
+			// Only stop if we hit the memory safety limit
+			if linesProcessed >= maxLogLinesInMemory {
+				break
+			}
+		} else if len(logLines) >= int(dockerTailLimit) || linesProcessed >= maxLogLinesInMemory {
 			break
 		}
 	}
@@ -305,9 +363,14 @@ done:
 	// When using until parameter, Docker returns logs in chronological order (oldest to newest)
 	// up to the until timestamp. For historical loading, we want the MOST RECENT logs before
 	// that timestamp, so we need to take the last N lines, not the first N.
-	if untilTime != nil && len(logLines) > int(*limit) {
-		// Take the last N lines (most recent before until timestamp)
-		logLines = logLines[len(logLines)-int(*limit):]
+	if untilTime != nil {
+		// Use the sliding window which already contains only the last N lines
+		if len(slidingWindow) > int(*limit) {
+			// Take the last N lines from sliding window
+			logLines = slidingWindow[len(slidingWindow)-int(*limit):]
+		} else {
+			logLines = slidingWindow
+		}
 	} else if len(logLines) > int(*limit) {
 		// For normal queries (no until), take the first N lines
 		logLines = logLines[:int(*limit)]
