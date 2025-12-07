@@ -78,11 +78,11 @@ func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID st
 	// This properly evaluates organization-level roles with gameservers.* permissions
 	err = s.permissionChecker.CheckScopedPermission(ctx, gameServer.OrganizationID, auth.ScopedPermission{
 		Permission:   scopedPermission,
-		ResourceType: "gameserver",
+		ResourceType: string(auth.ResourceTypeGameServer),
 		ResourceID:   gameServerID,
 	})
 	if err != nil {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: insufficient permissions"))
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 	}
 
 	return nil
