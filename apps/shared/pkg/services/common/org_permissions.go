@@ -42,9 +42,23 @@ func AuthorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, all
 		return nil
 	}
 
-	role := strings.ToLower(member.Role)
+	// member.Role should always contain a role ID (e.g., "system:owner" for system roles, or custom role ID)
+	roleID := member.Role
+	
+	// Check if member's role ID matches any of the allowed roles
+	// allowedRoles can be either system role names (e.g., "owner", "admin") or role IDs
 	for _, allowed := range allowedRoles {
-		if role == strings.ToLower(allowed) {
+		allowedLower := strings.ToLower(allowed)
+		
+		// Check if allowed is a system role name - convert to ID
+		if systemRoleID := auth.GetSystemRoleID(allowedLower); systemRoleID != "" {
+			if roleID == systemRoleID {
+				return nil
+			}
+		}
+		
+		// Check if allowed is already a role ID (matches exactly)
+		if roleID == allowed {
 			return nil
 		}
 	}

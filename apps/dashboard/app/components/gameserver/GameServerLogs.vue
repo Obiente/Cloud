@@ -875,21 +875,19 @@ const handleTerminalOutput = (text: string) => {
 };
 
 // Function to attach scroll listener
-const attachScrollListener = () => {
-  nextTick(() => {
-    const scrollContainer = logsContainer.value?.querySelector('.oui-logs-viewer') as HTMLElement;
-    if (scrollContainer) {
-      // Remove existing listener if any (to avoid duplicates)
-      scrollContainer.removeEventListener('scroll', handleScroll);
-      // Add the listener
-      scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-      console.log('[GameServerLogs] ✓ Scroll listener attached to OuiLogs container');
-      return true;
-    } else {
-      console.warn('[GameServerLogs] Could not find scroll container (.oui-logs-viewer), will retry...');
-      return false;
-    }
-  });
+const attachScrollListener = (): boolean => {
+  const scrollContainer = logsContainer.value?.querySelector('.oui-logs-viewer') as HTMLElement;
+  if (scrollContainer) {
+    // Remove existing listener if any (to avoid duplicates)
+    scrollContainer.removeEventListener('scroll', handleScroll);
+    // Add the listener
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    console.log('[GameServerLogs] ✓ Scroll listener attached to OuiLogs container');
+    return true;
+  } else {
+    console.warn('[GameServerLogs] Could not find scroll container (.oui-logs-viewer), will retry...');
+    return false;
+  }
 };
 
 onMounted(() => {
@@ -901,17 +899,20 @@ onMounted(() => {
   const maxRetries = 10;
   
   const tryAttach = () => {
-    if (attachScrollListener()) {
-      return; // Success
-    }
-    
-    retries++;
-    if (retries < maxRetries) {
-      // Retry after a short delay
-      setTimeout(tryAttach, 100);
-    } else {
-      console.error('[GameServerLogs] Failed to attach scroll listener after', maxRetries, 'retries');
-    }
+    // Use nextTick to ensure DOM is ready
+    nextTick(() => {
+      if (attachScrollListener()) {
+        return; // Success
+      }
+      
+      retries++;
+      if (retries < maxRetries) {
+        // Retry after a short delay
+        setTimeout(tryAttach, 100);
+      } else {
+        console.error('[GameServerLogs] Failed to attach scroll listener after', maxRetries, 'retries');
+      }
+    });
   };
   
   tryAttach();

@@ -139,7 +139,7 @@
             v-if="createError"
             :error="createError"
             title="Unable to create game server"
-            hint="Make sure you're logged in and have permission to create game servers."
+            :hint="createErrorHint"
           />
 
           <OuiInput
@@ -238,6 +238,7 @@ import OuiByte from "~/components/oui/Byte.vue";
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
 import { GameServerService, GameType } from "@obiente/proto";
+import { ConnectError, Code } from "@connectrpc/connect";
 
 definePageMeta({
   layout: "default",
@@ -247,11 +248,30 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
+const auth = useAuth();
 const orgsStore = useOrganizationsStore();
 const client = useConnectClient(GameServerService);
 
 // Error handling
 const listError = ref<Error | null>(null);
+
+// Compute hint for create error - only show "logged in" hint if user is not authenticated
+const createErrorHint = computed(() => {
+  if (!createError.value) return undefined;
+  
+  // If error is PermissionDenied and user is authenticated, don't mention logging in
+  if (createError.value instanceof ConnectError) {
+    if (createError.value.code === Code.PermissionDenied && auth.isAuthenticated) {
+      return "You don't have permission to create game servers. Contact your organization administrator to grant you the necessary permissions.";
+    }
+    if (createError.value.code === Code.Unauthenticated) {
+      return "Please log in and try again.";
+    }
+  }
+  
+  // Default hint for other errors
+  return "Please try again. If the problem persists, contact support.";
+});
 
 // Check for organizationId in query params (from superadmin navigation)
 if (route.query.organizationId && typeof route.query.organizationId === "string") {

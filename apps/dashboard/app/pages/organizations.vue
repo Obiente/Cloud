@@ -106,6 +106,7 @@
     { value: "admin", label: "Admin", disabled: false },
     { value: "member", label: "Member", disabled: false },
     { value: "viewer", label: "Viewer", disabled: false },
+    { value: "none", label: "None", disabled: false },
   ];
 
   const defaultRoleItems = computed(() =>
@@ -124,11 +125,11 @@
           : "org-role-catalog-none",
       async () => {
         const orgId = organizationId.value;
-        if (!orgId) return [] as { id: string; name: string }[];
+        if (!orgId) return [] as { id: string; name: string; permissionsJson: string }[];
         const res = await adminClient.listRoles({
           organizationId: orgId,
         });
-        return (res.roles || []).map((r) => ({ id: r.id, name: r.name }));
+        return (res.roles || []).map((r) => ({ id: r.id, name: r.name, permissionsJson: r.permissionsJson || "[]" }));
       },
       { watch: [selectedOrg] }
     );
@@ -191,6 +192,57 @@
   const currentUserIsOwner = computed(
     () => currentMemberRecord.value?.role === "owner"
   );
+
+  // Fetch user's permissions for the current organization
+  const { data: userPermissionsData } = await useClientFetch(
+    () =>
+      organizationId.value
+        ? `org-permissions-${organizationId.value}`
+        : "org-permissions-none",
+    async () => {
+      const orgId = organizationId.value;
+      if (!orgId) return [] as string[];
+      try {
+        const res = await orgClient.getMyPermissions({
+          organizationId: orgId,
+        });
+        return res.permissions || [];
+      } catch {
+        return [] as string[];
+      }
+    },
+    { watch: [selectedOrg] }
+  );
+  const userPermissions = computed(() => userPermissionsData.value || []);
+
+  // Helper function to check if a permission matches (supports wildcards)
+  function matchesPermission(perm: string, required: string): boolean {
+    // Special case: "*" matches everything
+    if (perm === "*") return true;
+    if (required === "*") return true;
+    
+    if (perm === required) return true;
+    if (perm.endsWith(".*")) {
+      const prefix = perm.slice(0, -2);
+      return required.startsWith(prefix + ".");
+    }
+    if (required.endsWith(".*")) {
+      const prefix = required.slice(0, -2);
+      return perm.startsWith(prefix + ".");
+    }
+    return false;
+  }
+
+  // Check if user has a specific permission
+  function hasPermission(permission: string): boolean {
+    const perms = userPermissions.value;
+    return perms.some((perm) => matchesPermission(perm, permission));
+  }
+
+  // Check if current user can update member roles
+  const canUpdateMembers = computed(() => {
+    return hasPermission("organization.members.update") || hasPermission("organization.members.*");
+  });
 
   watch(
     [selectedOrg, roleItems],
@@ -1323,7 +1375,8 @@
                         :model-value="member.role"
                         :items="roleItems"
                         :disabled="
-                          member.role === 'owner' && currentUserIsOwner
+                          !canUpdateMembers ||
+                          (member.role === 'owner' && currentUserIsOwner)
                         "
                         @update:model-value="(r) => setRole(member.id, r as string)"
                       />
@@ -1397,6 +1450,7 @@
                   label="Role"
                   v-model="inviteRole"
                   :items="roleItems"
+                  :disabled="!canUpdateMembers"
                 />
                 <OuiFlex align="end">
                   <OuiButton @click="invite" :disabled="inviteDisabled || inviting">

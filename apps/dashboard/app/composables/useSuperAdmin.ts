@@ -67,8 +67,8 @@ export const useSuperAdmin = () => {
         
         // Fetch overview if user has permission
         if (state.value.isFullSuperadmin || checkPerm("superadmin.overview.read")) {
-          const response = await client.getOverview({});
-          state.value.overview = response;
+      const response = await client.getOverview({});
+      state.value.overview = response;
         } else {
           state.value.overview = null;
         }

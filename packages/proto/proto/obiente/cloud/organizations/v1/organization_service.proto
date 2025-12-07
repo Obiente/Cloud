@@ -62,6 +62,9 @@ service OrganizationService {
 
   // Get credit transaction history for an organization
   rpc GetCreditLog(GetCreditLogRequest) returns (GetCreditLogResponse);
+
+  // Get current user's permissions for an organization
+  rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse);
 }
 
 message GetUsageRequest {
@@ -369,4 +372,12 @@ message CreditTransaction {
   // User ID who initiated (null for system/automatic)
   optional string created_by = 8;
   google.protobuf.Timestamp created_at = 9;
+}
+
+message GetMyPermissionsRequest {
+  string organization_id = 1;
+}
+
+message GetMyPermissionsResponse {
+  repeated string permissions = 1;
 }

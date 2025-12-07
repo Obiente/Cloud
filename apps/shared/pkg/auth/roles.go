@@ -57,14 +57,16 @@ func HasOrgRole(ctx context.Context, orgID, role string) bool {
 }
 
 // isOrgOwner checks organization_members table for an 'owner' member
+// The role field should contain a role ID (e.g., "system:owner" for system roles)
 func isOrgOwner(ctx context.Context, orgID string) bool {
     user, err := GetUserFromContext(ctx)
     if err != nil || user == nil {
         return false
     }
     var cnt int64
+    // Check for system role ID
     _ = database.DB.Model(&database.OrganizationMember{}).
-        Where("organization_id = ? AND user_id = ? AND role = ?", orgID, user.Id, "owner").
+        Where("organization_id = ? AND user_id = ? AND role = ?", orgID, user.Id, SystemRoleIDOwner).
         Count(&cnt).Error
     return cnt > 0
 }
@@ -79,12 +81,46 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
     if HasRole(user, RoleAdmin) || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
 		return nil
 	}
-	// Load bindings and roles
+
+	// First check role from organization_members table (can be system role or custom role)
+	// The role field should always contain a role ID
+	var member database.OrganizationMember
+	if err := database.DB.Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member).Error; err == nil {
+		roleID := member.Role
+		
+		// Check if it's a system role ID
+		if IsSystemRoleID(roleID) {
+			if CheckSystemRolePermissionByID(roleID, sp.Permission) {
+				// System role has permission, org-wide access is granted (no resource scoping)
+				return nil
+			}
+		} else {
+			// It's a custom role assigned directly - look it up in the database by ID
+			var customRole database.OrgRole
+			lookupErr := database.DB.Where("id = ? AND organization_id = ?", roleID, orgID).First(&customRole).Error
+			if lookupErr == nil {
+				// Found the custom role, check its permissions
+				var perms []string
+				if err := json.Unmarshal([]byte(customRole.Permissions), &perms); err == nil {
+					for _, perm := range perms {
+						// Check exact match or wildcard match
+						if perm == sp.Permission || matchesPermission(perm, sp.Permission) {
+							// Custom role assigned directly grants org-wide access (no resource scoping)
+							return nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check custom roles via role bindings (even if user has a direct role assignment without permission)
 	var bindings []database.OrgRoleBinding
 	if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).Find(&bindings).Error; err != nil {
 		return fmt.Errorf("permission lookup failed")
 	}
 	if len(bindings) == 0 {
+		// No custom role bindings, and direct role assignment doesn't have permission
 		return fmt.Errorf("permission denied: %s", sp.Permission)
 	}
 	var roles []database.OrgRole
@@ -97,6 +133,10 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 	}
 	// Evaluate permissions JSON
 	for _, r := range roles {
+		// Skip system roles in database (they shouldn't be there, but just in case)
+		if IsSystemRole(r.Name) {
+			continue
+		}
 		var perms []string
 		_ = json.Unmarshal([]byte(r.Permissions), &perms)
 		for _, perm := range perms {
@@ -107,13 +147,22 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 					if b.RoleID != r.ID {
 						continue
 					}
-					// Org-wide
-					if b.ResourceType == "" && b.ResourceID == "" && b.ResourceSelector == "" {
+					// Org-wide binding (all scoping fields empty)
+					// ResourceSelector can be empty string or "{}" (empty JSON object)
+					isSelectorEmpty := b.ResourceSelector == "" || b.ResourceSelector == "{}"
+					if b.ResourceType == "" && b.ResourceID == "" && isSelectorEmpty {
 						return nil
 					}
-					// Exact or wildcard id match
-					if b.ResourceType == sp.ResourceType {
-						if b.ResourceID == "*" || b.ResourceID == sp.ResourceID || b.ResourceID == "" {
+					// If checking org-wide permission (sp.ResourceID is empty), allow if binding is org-wide or matches resource type with empty/wildcard ID
+					if sp.ResourceID == "" {
+						// Org-wide check: allow if binding is org-wide OR if binding matches resource type with empty/wildcard ID
+						if b.ResourceType == "" || (b.ResourceType == sp.ResourceType && (b.ResourceID == "" || b.ResourceID == "*")) {
+							return nil
+						}
+					} else {
+						// Specific resource check: must match resource type and ID
+						if b.ResourceType == sp.ResourceType {
+							if b.ResourceID == "*" || b.ResourceID == sp.ResourceID {
 							return nil
 						}
 						// Selector-based match (e.g., environment)
@@ -127,6 +176,7 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 					if b.ResourceType == "environment" && sp.ResourceType == "deployment" {
 						if matchesEnvironmentForDeployment(sp.ResourceID, b) {
 							return nil
+							}
 						}
 					}
 				}

@@ -112,8 +112,14 @@ func (s *AdminService) ListRoles(ctx context.Context, req *connect.Request[admin
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list roles: %w", err))
 	}
 
+	// Filter out system roles - they should not be in the database
+	// System roles are defined in code and checked from organization_members.role
 	protoRoles := make([]*adminv1.Role, 0, len(roles))
 	for _, r := range roles {
+		// Skip system roles - they shouldn't be in the database
+		if auth.IsSystemRole(r.Name) {
+			continue
+		}
 		protoRoles = append(protoRoles, &adminv1.Role{
 			Id:              r.ID,
 			Name:            r.Name,
@@ -141,6 +147,11 @@ func (s *AdminService) CreateRole(ctx context.Context, req *connect.Request[admi
 	name := strings.TrimSpace(req.Msg.GetName())
 	if name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role name is required"))
+	}
+
+	// Prevent creating system roles as custom roles
+	if auth.IsSystemRole(name) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cannot create system role '%s' as custom role. System roles are defined in code and cannot be created or modified", name))
 	}
 
 	permissionsJSON := strings.TrimSpace(req.Msg.GetPermissionsJson())
@@ -223,8 +234,17 @@ func (s *AdminService) UpdateRole(ctx context.Context, req *connect.Request[admi
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get role: %w", err))
 	}
 
+	// Prevent updating system roles
+	if auth.IsSystemRole(role.Name) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cannot update system role '%s'. System roles are defined in code and cannot be modified", role.Name))
+	}
+
 	// Update name if provided
 	if name := strings.TrimSpace(req.Msg.GetName()); name != "" {
+		// Prevent renaming to a system role name
+		if auth.IsSystemRole(name) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cannot rename role to system role name '%s'. System roles are defined in code", name))
+		}
 		// Check if new name conflicts with existing role
 		var existing database.OrgRole
 		if err := database.DB.Where("organization_id = ? AND name = ? AND id != ?", orgID, name, roleID).First(&existing).Error; err == nil {
@@ -276,6 +296,11 @@ func (s *AdminService) DeleteRole(ctx context.Context, req *connect.Request[admi
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("role not found"))
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get role: %w", err))
+	}
+
+	// Prevent deleting system roles
+	if auth.IsSystemRole(role.Name) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cannot delete system role '%s'. System roles are defined in code and cannot be deleted", role.Name))
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin

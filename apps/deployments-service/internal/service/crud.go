@@ -36,12 +36,30 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
 
+	// Check if user has organization-wide read permission for deployments
+	// This allows users with custom roles (like "system admin") to see all deployments
+	hasOrgWideRead := false
+	permErr := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
+		Permission:   "deployment.read",
+		ResourceType: "deployment",
+		ResourceID:   "", // Empty resource ID means org-wide permission
+	})
+	if permErr == nil {
+		hasOrgWideRead = true
+	} else {
+		// Log permission check failure for debugging (but don't fail the request yet)
+		// User might still have permission to see their own deployments
+		log.Printf("[ListDeployments] User %s does not have org-wide deployment.read permission in org %s: %v", userInfo.Id, orgID, permErr)
+	}
+
 	// Create filters with user ID
 	filters := &database.DeploymentFilters{
 		UserID: userInfo.Id,
-		// Admin users can see all deployments
-		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin),
+		// Admin users or users with org-wide read permission can see all deployments
+		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin) || hasOrgWideRead,
 	}
+	
+	log.Printf("[ListDeployments] User %s, Org %s, IncludeAll: %v, hasOrgWideRead: %v", userInfo.Id, orgID, filters.IncludeAll, hasOrgWideRead)
 
 	// Add status filter if provided
 	if status := req.Msg.Status; status != nil {
@@ -54,6 +72,8 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
 	}
+	
+	log.Printf("[ListDeployments] Found %d deployments for user %s in org %s (IncludeAll: %v)", len(dbDeployments), userInfo.Id, orgID, filters.IncludeAll)
 
 	// Convert DB models to proto models and enrich with actual container status
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))

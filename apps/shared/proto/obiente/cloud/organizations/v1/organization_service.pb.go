@@ -2750,6 +2750,94 @@ func (x *CreditTransaction) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type GetMyPermissionsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetMyPermissionsRequest) Reset() {
+	*x = GetMyPermissionsRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMyPermissionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMyPermissionsRequest) ProtoMessage() {}
+
+func (x *GetMyPermissionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMyPermissionsRequest.ProtoReflect.Descriptor instead.
+func (*GetMyPermissionsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *GetMyPermissionsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type GetMyPermissionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Permissions   []string               `protobuf:"bytes,1,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMyPermissionsResponse) Reset() {
+	*x = GetMyPermissionsResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMyPermissionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMyPermissionsResponse) ProtoMessage() {}
+
+func (x *GetMyPermissionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMyPermissionsResponse.ProtoReflect.Descriptor instead.
+func (*GetMyPermissionsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *GetMyPermissionsResponse) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
 var File_obiente_cloud_organizations_v1_organization_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "" +
@@ -2975,7 +3063,11 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\n" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\a\n" +
 	"\x05_noteB\r\n" +
-	"\v_created_by2\x99\x12\n" +
+	"\v_created_by\"B\n" +
+	"\x17GetMyPermissionsRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"<\n" +
+	"\x18GetMyPermissionsResponse\x12 \n" +
+	"\vpermissions\x18\x01 \x03(\tR\vpermissions2\xa1\x13\n" +
 	"\x13OrganizationService\x12\x88\x01\n" +
 	"\x11ListOrganizations\x128.obiente.cloud.organizations.v1.ListOrganizationsRequest\x1a9.obiente.cloud.organizations.v1.ListOrganizationsResponse\x12\x8b\x01\n" +
 	"\x12CreateOrganization\x129.obiente.cloud.organizations.v1.CreateOrganizationRequest\x1a:.obiente.cloud.organizations.v1.CreateOrganizationResponse\x12\x82\x01\n" +
@@ -2995,7 +3087,8 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"AddCredits\x121.obiente.cloud.organizations.v1.AddCreditsRequest\x1a2.obiente.cloud.organizations.v1.AddCreditsResponse\x12\x82\x01\n" +
 	"\x0fAdminAddCredits\x126.obiente.cloud.organizations.v1.AdminAddCreditsRequest\x1a7.obiente.cloud.organizations.v1.AdminAddCreditsResponse\x12\x8b\x01\n" +
 	"\x12AdminRemoveCredits\x129.obiente.cloud.organizations.v1.AdminRemoveCreditsRequest\x1a:.obiente.cloud.organizations.v1.AdminRemoveCreditsResponse\x12y\n" +
-	"\fGetCreditLog\x123.obiente.cloud.organizations.v1.GetCreditLogRequest\x1a4.obiente.cloud.organizations.v1.GetCreditLogResponseB[ZYgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1;organizationsv1b\x06proto3"
+	"\fGetCreditLog\x123.obiente.cloud.organizations.v1.GetCreditLogRequest\x1a4.obiente.cloud.organizations.v1.GetCreditLogResponse\x12\x85\x01\n" +
+	"\x10GetMyPermissions\x127.obiente.cloud.organizations.v1.GetMyPermissionsRequest\x1a8.obiente.cloud.organizations.v1.GetMyPermissionsResponseB[ZYgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1;organizationsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_organizations_v1_organization_service_proto_rawDescOnce sync.Once
@@ -3009,7 +3102,7 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(
 	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescData
 }
 
-var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 43)
+var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []any{
 	(*GetUsageRequest)(nil),            // 0: obiente.cloud.organizations.v1.GetUsageRequest
 	(*GetUsageResponse)(nil),           // 1: obiente.cloud.organizations.v1.GetUsageResponse
@@ -3054,38 +3147,40 @@ var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []a
 	(*GetCreditLogRequest)(nil),        // 40: obiente.cloud.organizations.v1.GetCreditLogRequest
 	(*GetCreditLogResponse)(nil),       // 41: obiente.cloud.organizations.v1.GetCreditLogResponse
 	(*CreditTransaction)(nil),          // 42: obiente.cloud.organizations.v1.CreditTransaction
-	(*v1.Pagination)(nil),              // 43: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),      // 44: google.protobuf.Timestamp
-	(*v11.User)(nil),                   // 45: obiente.cloud.auth.v1.User
+	(*GetMyPermissionsRequest)(nil),    // 43: obiente.cloud.organizations.v1.GetMyPermissionsRequest
+	(*GetMyPermissionsResponse)(nil),   // 44: obiente.cloud.organizations.v1.GetMyPermissionsResponse
+	(*v1.Pagination)(nil),              // 45: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),      // 46: google.protobuf.Timestamp
+	(*v11.User)(nil),                   // 47: obiente.cloud.auth.v1.User
 }
 var file_obiente_cloud_organizations_v1_organization_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.organizations.v1.GetUsageResponse.current:type_name -> obiente.cloud.organizations.v1.UsageMetrics
 	2,  // 1: obiente.cloud.organizations.v1.GetUsageResponse.estimated_monthly:type_name -> obiente.cloud.organizations.v1.UsageMetrics
 	3,  // 2: obiente.cloud.organizations.v1.GetUsageResponse.quota:type_name -> obiente.cloud.organizations.v1.UsageQuota
 	31, // 3: obiente.cloud.organizations.v1.ListOrganizationsResponse.organizations:type_name -> obiente.cloud.organizations.v1.Organization
-	43, // 4: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	45, // 4: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	31, // 5: obiente.cloud.organizations.v1.CreateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	31, // 6: obiente.cloud.organizations.v1.GetOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	31, // 7: obiente.cloud.organizations.v1.UpdateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	33, // 8: obiente.cloud.organizations.v1.ListMembersResponse.members:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	43, // 9: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	45, // 9: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	33, // 10: obiente.cloud.organizations.v1.InviteMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
 	20, // 11: obiente.cloud.organizations.v1.ListMyInvitesResponse.invites:type_name -> obiente.cloud.organizations.v1.PendingInvite
-	43, // 12: obiente.cloud.organizations.v1.ListMyInvitesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	44, // 13: obiente.cloud.organizations.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	45, // 12: obiente.cloud.organizations.v1.ListMyInvitesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	46, // 13: obiente.cloud.organizations.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
 	33, // 14: obiente.cloud.organizations.v1.AcceptInviteResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
 	31, // 15: obiente.cloud.organizations.v1.AcceptInviteResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	33, // 16: obiente.cloud.organizations.v1.UpdateMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	44, // 17: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
+	46, // 17: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
 	32, // 18: obiente.cloud.organizations.v1.Organization.plan_info:type_name -> obiente.cloud.organizations.v1.PlanInfo
-	45, // 19: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
-	44, // 20: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
+	47, // 19: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
+	46, // 20: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
 	31, // 21: obiente.cloud.organizations.v1.AddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	31, // 22: obiente.cloud.organizations.v1.AdminAddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	31, // 23: obiente.cloud.organizations.v1.AdminRemoveCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
 	42, // 24: obiente.cloud.organizations.v1.GetCreditLogResponse.transactions:type_name -> obiente.cloud.organizations.v1.CreditTransaction
-	43, // 25: obiente.cloud.organizations.v1.GetCreditLogResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	44, // 26: obiente.cloud.organizations.v1.CreditTransaction.created_at:type_name -> google.protobuf.Timestamp
+	45, // 25: obiente.cloud.organizations.v1.GetCreditLogResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	46, // 26: obiente.cloud.organizations.v1.CreditTransaction.created_at:type_name -> google.protobuf.Timestamp
 	4,  // 27: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:input_type -> obiente.cloud.organizations.v1.ListOrganizationsRequest
 	6,  // 28: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:input_type -> obiente.cloud.organizations.v1.CreateOrganizationRequest
 	8,  // 29: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:input_type -> obiente.cloud.organizations.v1.GetOrganizationRequest
@@ -3104,26 +3199,28 @@ var file_obiente_cloud_organizations_v1_organization_service_proto_depIdxs = []i
 	36, // 42: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:input_type -> obiente.cloud.organizations.v1.AdminAddCreditsRequest
 	38, // 43: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:input_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
 	40, // 44: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:input_type -> obiente.cloud.organizations.v1.GetCreditLogRequest
-	5,  // 45: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
-	7,  // 46: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
-	9,  // 47: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
-	11, // 48: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
-	13, // 49: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
-	15, // 50: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
-	17, // 51: obiente.cloud.organizations.v1.OrganizationService.ResendInvite:output_type -> obiente.cloud.organizations.v1.ResendInviteResponse
-	19, // 52: obiente.cloud.organizations.v1.OrganizationService.ListMyInvites:output_type -> obiente.cloud.organizations.v1.ListMyInvitesResponse
-	22, // 53: obiente.cloud.organizations.v1.OrganizationService.AcceptInvite:output_type -> obiente.cloud.organizations.v1.AcceptInviteResponse
-	24, // 54: obiente.cloud.organizations.v1.OrganizationService.DeclineInvite:output_type -> obiente.cloud.organizations.v1.DeclineInviteResponse
-	26, // 55: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
-	28, // 56: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
-	30, // 57: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:output_type -> obiente.cloud.organizations.v1.TransferOwnershipResponse
-	1,  // 58: obiente.cloud.organizations.v1.OrganizationService.GetUsage:output_type -> obiente.cloud.organizations.v1.GetUsageResponse
-	35, // 59: obiente.cloud.organizations.v1.OrganizationService.AddCredits:output_type -> obiente.cloud.organizations.v1.AddCreditsResponse
-	37, // 60: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:output_type -> obiente.cloud.organizations.v1.AdminAddCreditsResponse
-	39, // 61: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:output_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
-	41, // 62: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:output_type -> obiente.cloud.organizations.v1.GetCreditLogResponse
-	45, // [45:63] is the sub-list for method output_type
-	27, // [27:45] is the sub-list for method input_type
+	43, // 45: obiente.cloud.organizations.v1.OrganizationService.GetMyPermissions:input_type -> obiente.cloud.organizations.v1.GetMyPermissionsRequest
+	5,  // 46: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
+	7,  // 47: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
+	9,  // 48: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
+	11, // 49: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
+	13, // 50: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
+	15, // 51: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
+	17, // 52: obiente.cloud.organizations.v1.OrganizationService.ResendInvite:output_type -> obiente.cloud.organizations.v1.ResendInviteResponse
+	19, // 53: obiente.cloud.organizations.v1.OrganizationService.ListMyInvites:output_type -> obiente.cloud.organizations.v1.ListMyInvitesResponse
+	22, // 54: obiente.cloud.organizations.v1.OrganizationService.AcceptInvite:output_type -> obiente.cloud.organizations.v1.AcceptInviteResponse
+	24, // 55: obiente.cloud.organizations.v1.OrganizationService.DeclineInvite:output_type -> obiente.cloud.organizations.v1.DeclineInviteResponse
+	26, // 56: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
+	28, // 57: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
+	30, // 58: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:output_type -> obiente.cloud.organizations.v1.TransferOwnershipResponse
+	1,  // 59: obiente.cloud.organizations.v1.OrganizationService.GetUsage:output_type -> obiente.cloud.organizations.v1.GetUsageResponse
+	35, // 60: obiente.cloud.organizations.v1.OrganizationService.AddCredits:output_type -> obiente.cloud.organizations.v1.AddCreditsResponse
+	37, // 61: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:output_type -> obiente.cloud.organizations.v1.AdminAddCreditsResponse
+	39, // 62: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:output_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
+	41, // 63: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:output_type -> obiente.cloud.organizations.v1.GetCreditLogResponse
+	44, // 64: obiente.cloud.organizations.v1.OrganizationService.GetMyPermissions:output_type -> obiente.cloud.organizations.v1.GetMyPermissionsResponse
+	46, // [46:65] is the sub-list for method output_type
+	27, // [27:46] is the sub-list for method input_type
 	27, // [27:27] is the sub-list for extension type_name
 	27, // [27:27] is the sub-list for extension extendee
 	0,  // [0:27] is the sub-list for field type_name
@@ -3150,7 +3247,7 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc), len(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   43,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

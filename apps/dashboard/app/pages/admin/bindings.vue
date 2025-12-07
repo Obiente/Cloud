@@ -21,6 +21,7 @@
                     v-model="userId"
                     :options="memberItems"
                     placeholder="Search for a member..."
+                    :disabled="!canCreateBindings"
                   />
                 </OuiStack>
                 <OuiStack gap="xs">
@@ -29,6 +30,7 @@
                     v-model="roleId"
                     :options="roleItemsForCombobox"
                     placeholder="Search for a role..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiText v-if="selectedRolePermissions.length > 0" size="xs" color="secondary" class="mt-1">
                     {{ selectedRolePermissions.length }} permission{{ selectedRolePermissions.length !== 1 ? 's' : '' }}
@@ -65,6 +67,7 @@
                     v-model="resourceType" 
                     :items="resourceTypeItems"
                     placeholder="Select resource type..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiText v-if="resourceType === 'deployment'" size="xs" color="secondary" class="mt-1">
                     Grant access to a specific deployment
@@ -88,18 +91,21 @@
                     v-model="deploymentId"
                     :options="deploymentItems"
                     placeholder="Search for a deployment..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiCombobox
                     v-else-if="resourceType === 'vps'"
                     v-model="vpsId"
                     :options="vpsItems"
                     placeholder="Search for a VPS instance..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiCombobox
                     v-else-if="resourceType === 'gameserver'"
                     v-model="gameserverId"
                     :options="gameserverItems"
                     placeholder="Search for a game server..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiSelect
                     v-else-if="resourceType === 'environment'"
@@ -107,11 +113,13 @@
                     v-model="resourceIds"
                     :items="environmentItems"
                     placeholder="Select environments..."
+                    :disabled="!canCreateBindings"
                   />
                   <OuiInput
                     v-else
                     v-model="resourceIdsString"
                     placeholder="Enter resource ID or * for all"
+                    :disabled="!canCreateBindings"
                   />
                   <OuiText v-if="resourceType === 'deployment' && deploymentId" size="xs" color="secondary" class="mt-1">
                     Selected: {{ getDeploymentName(deploymentId) }}
@@ -142,7 +150,7 @@
             </OuiCard>
 
             <OuiFlex class="mt-6" gap="md" justify="start">
-              <OuiButton type="submit">Bind</OuiButton>
+              <OuiButton type="submit" :disabled="!canCreateBindings">Bind</OuiButton>
             </OuiFlex>
           </OuiStack>
         </form>
@@ -161,11 +169,21 @@
               v-for="b in bindingItems"
               :key="b.id"
               align="center"
+              justify="between"
               gap="xs"
+              class="p-2 border border-border-muted rounded hover:bg-background-muted transition-colors"
             >
               <OuiText size="sm">
                 {{ b.user }} → {{ b.role }} ({{ b.resourceType }} {{ b.resource }})
               </OuiText>
+              <OuiButton
+                variant="ghost"
+                color="danger"
+                size="xs"
+                @click="removeBinding(b.id)"
+              >
+                Delete
+              </OuiButton>
             </OuiFlex>
             <OuiFlex v-if="!bindingItems || bindingItems.length === 0" justify="center" py="lg">
               <OuiText color="secondary" size="sm">No bindings found</OuiText>
@@ -182,12 +200,14 @@ import { computed, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useOrganizationId } from "~/composables/useOrganizationId";
-import { OrganizationService, DeploymentService, AdminService, VPSService, GameServerService } from "@obiente/proto";
+import { OrganizationService, DeploymentService, AdminService, VPSService, GameServerService, type OrganizationMember } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
+import { useAuth } from "~/composables/useAuth";
 import OuiCombobox from "~/components/oui/Combobox.vue";
 
 definePageMeta({ layout: "admin", middleware: "auth" });
 
+const auth = useAuth();
 const orgStore = useOrganizationsStore();
 orgStore.hydrate();
 const { orgs, currentOrgId } = storeToRefs(orgStore);
@@ -271,6 +291,98 @@ const { data: bindingsData, refresh: refreshBindings } = await useClientFetch(
   { watch: [selectedOrg] }
 );
 const bindings = computed(() => bindingsData.value || []);
+
+// Get current user's member record for permission checks
+const { data: membersData } = await useClientFetch(
+  () =>
+    organizationId.value
+      ? `admin-bindings-members-${organizationId.value}`
+      : "admin-bindings-members-none",
+  async () => {
+    const orgId = organizationId.value;
+    if (!orgId) return [] as OrganizationMember[];
+    const res = await orgClient.listMembers({
+      organizationId: orgId,
+    });
+    return res.members || [];
+  },
+  { watch: [selectedOrg] }
+);
+const members = computed(() => membersData.value || []);
+
+const currentUserIdentifiers = computed(() => {
+  const identifiers = new Set<string>();
+  const sessionUser: any = auth.user || null;
+  if (!sessionUser) {
+    return identifiers;
+  }
+  [sessionUser.id, sessionUser.sub, sessionUser.userId].forEach((id) => {
+    if (id) {
+      identifiers.add(String(id));
+    }
+  });
+  return identifiers;
+});
+
+const currentMemberRecord = computed(
+  () =>
+    members.value.find((member) => {
+      const memberUserId = member.user?.id;
+      if (!memberUserId) return false;
+      return currentUserIdentifiers.value.has(memberUserId);
+    }) || null
+);
+
+// Fetch user's permissions for the current organization
+const { data: userPermissionsData } = await useClientFetch(
+  () =>
+    organizationId.value
+      ? `admin-bindings-permissions-${organizationId.value}`
+      : "admin-bindings-permissions-none",
+  async () => {
+    const orgId = organizationId.value;
+    if (!orgId) return [] as string[];
+    try {
+      const res = await orgClient.getMyPermissions({
+        organizationId: orgId,
+      });
+      return res.permissions || [];
+    } catch {
+      return [] as string[];
+    }
+  },
+  { watch: [selectedOrg] }
+);
+const userPermissions = computed(() => userPermissionsData.value || []);
+
+// Helper function to check if a permission matches (supports wildcards)
+function matchesPermission(perm: string, required: string): boolean {
+  // Special case: "*" matches everything
+  if (perm === "*") return true;
+  if (required === "*") return true;
+  
+  if (perm === required) return true;
+  if (perm.endsWith(".*")) {
+    const prefix = perm.slice(0, -2);
+    return required.startsWith(prefix + ".");
+  }
+  if (required.endsWith(".*")) {
+    const prefix = required.slice(0, -2);
+    return perm.startsWith(prefix + ".");
+  }
+  return false;
+}
+
+// Check if user has a specific permission
+function hasPermission(permission: string): boolean {
+  const perms = userPermissions.value;
+  return perms.some((perm) => matchesPermission(perm, permission));
+}
+
+// Check if current user can create role bindings
+const canCreateBindings = computed(() => {
+  return hasPermission("admin.bindings.create") || hasPermission("admin.bindings.*") || hasPermission("admin.*");
+});
 
 const { data: roleOptionsData, refresh: refreshRoleOptions } = await useClientFetch(
   () =>
@@ -654,5 +766,18 @@ async function refreshAll() {
     refreshVPSOptions(),
     refreshGameserverOptions(),
   ]);
+}
+
+async function removeBinding(id: string) {
+  if (!confirm("Are you sure you want to delete this role binding?")) {
+    return;
+  }
+  try {
+    await adminClient.deleteRoleBinding({ id });
+    await refreshBindings();
+  } catch (e: any) {
+    console.error("Failed to delete role binding:", e);
+    alert(e?.message || "Failed to delete role binding");
+  }
 }
 </script>

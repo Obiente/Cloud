@@ -49,12 +49,12 @@ const { data: permissionsCatalog, error: permissionsError } = await useClientFet
   "admin-permissions",
   async () => {
     try {
-      const res = await adminClient.listPermissions({});
+    const res = await adminClient.listPermissions({});
       const perms = (res.permissions || []).map((p) => ({
-        id: p.id,
-        description: p.description ?? "",
-        resourceType: p.resourceType ?? "admin",
-      }));
+      id: p.id,
+      description: p.description ?? "",
+      resourceType: p.resourceType ?? "admin",
+    }));
       return perms;
     } catch (e: any) {
       console.error("[Roles] Failed to load permissions:", e);
@@ -84,11 +84,11 @@ const { data: roles, refresh: refreshRoles } = await useClientFetch(
 
 async function createRole(data: { name: string; permissionsJson: string; organizationId?: string }) {
   if (!data.organizationId) throw new Error("Organization ID is required");
-  await adminClient.createRole({
+    await adminClient.createRole({
     organizationId: data.organizationId,
     name: data.name,
     permissionsJson: data.permissionsJson,
-  });
+    });
 }
 
 async function updateRole(data: { id: string; name: string; permissionsJson: string; organizationId?: string }) {
@@ -102,6 +102,6 @@ async function updateRole(data: { id: string; name: string; permissionsJson: str
 }
 
 async function deleteRole(id: string) {
-  await adminClient.deleteRole({ id });
+    await adminClient.deleteRole({ id });
 }
 </script>

@@ -12,6 +12,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/database/migrations"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -58,6 +59,19 @@ func main() {
 		logger.Fatalf("failed to initialize database: %v", err)
 	}
 	logger.Info("✓ Database initialized")
+
+	// Run service-specific migrations
+	// Each service should only run migrations relevant to its own tables/data.
+	// This pattern avoids redundant migration execution and improves startup time.
+	registry := migrations.NewMigrationRegistry(database.DB)
+	// Register shared migrations (affects multiple services or shared infrastructure)
+	migrations.RegisterMigrations(registry)
+	// Register organizations-service specific migrations (only affects organization tables)
+	migrations.RegisterOrganizationsMigrations(registry)
+	if err := registry.Apply(); err != nil {
+		logger.Fatalf("failed to apply migrations: %v", err)
+	}
+	logger.Info("✓ Migrations applied")
 
 	// Initialize metrics database (TimescaleDB for usage stats)
 	if err := database.InitMetricsDatabase(); err != nil {

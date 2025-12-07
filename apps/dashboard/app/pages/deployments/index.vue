@@ -148,7 +148,7 @@
               v-if="createError"
               :error="createError"
               title="Unable to create deployment"
-              hint="Make sure you're logged in and have permission to create deployments."
+              :hint="createErrorHint"
             />
 
             <OuiInput
@@ -240,6 +240,7 @@
   import OuiByte from "~/components/oui/Byte.vue";
   import { useDialog } from "~/composables/useDialog";
   import { useBuildProgress } from "~/composables/useBuildProgress";
+  import { ConnectError, Code } from "@connectrpc/connect";
   definePageMeta({
     layout: "default",
     middleware: "auth",
@@ -251,8 +252,29 @@
   const createError = ref<Error | null>(null);
   const listError = ref<Error | null>(null);
   
+  // Auth for checking authentication status
+  const auth = useAuth();
+  
   // Organizations
   const orgsStore = useOrganizationsStore();
+  
+  // Compute hint for create error - only show "logged in" hint if user is not authenticated
+  const createErrorHint = computed(() => {
+    if (!createError.value) return undefined;
+    
+    // If error is PermissionDenied and user is authenticated, don't mention logging in
+    if (createError.value instanceof ConnectError) {
+      if (createError.value.code === Code.PermissionDenied && auth.isAuthenticated) {
+        return "You don't have permission to create deployments. Contact your organization administrator to grant you the necessary permissions.";
+      }
+      if (createError.value.code === Code.Unauthenticated) {
+        return "Please log in and try again.";
+      }
+    }
+    
+    // Default hint for other errors
+    return "Please try again. If the problem persists, contact support.";
+  });
   
   // Check for organizationId in query params (from superadmin navigation)
   if (route.query.organizationId && typeof route.query.organizationId === "string") {

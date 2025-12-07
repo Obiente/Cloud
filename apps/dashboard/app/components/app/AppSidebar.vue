@@ -98,33 +98,39 @@
         />
 
         <!-- Admin -->
-        <div class="mt-4">
-          <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">Admin</OuiText>
-        </div>
-        <AppNavigationLink
-          to="/audit-logs"
-          label="Audit Logs"
-          :icon="ClipboardDocumentListIcon"
-          @navigate="handleNavigate"
-        />
-        <AppNavigationLink
-          to="/admin/quotas"
-          label="Quotas"
-          :icon="Cog6ToothIcon"
-          @navigate="handleNavigate"
-        />
-        <AppNavigationLink
-          to="/admin/roles"
-          label="Roles"
-          :icon="Cog6ToothIcon"
-          @navigate="handleNavigate"
-        />
-        <AppNavigationLink
-          to="/admin/bindings"
-          label="Bindings"
-          :icon="Cog6ToothIcon"
-          @navigate="handleNavigate"
-        />
+        <template v-if="hasAnyAdminPermission">
+          <div class="mt-4">
+            <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">Admin</OuiText>
+          </div>
+          <AppNavigationLink
+            v-if="hasAdminPagePermission('/audit-logs')"
+            to="/audit-logs"
+            label="Audit Logs"
+            :icon="ClipboardDocumentListIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            v-if="hasAdminPagePermission('/admin/quotas')"
+            to="/admin/quotas"
+            label="Quotas"
+            :icon="Cog6ToothIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            v-if="hasAdminPagePermission('/admin/roles')"
+            to="/admin/roles"
+            label="Roles"
+            :icon="Cog6ToothIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            v-if="hasAdminPagePermission('/admin/bindings')"
+            to="/admin/bindings"
+            label="Bindings"
+            :icon="Cog6ToothIcon"
+            @navigate="handleNavigate"
+          />
+        </template>
         <template v-if="props.showSuperAdmin">
           <div class="mt-4">
             <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">
@@ -284,6 +290,9 @@ import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";
 import { computed } from 'vue';
 import ObienteLogo from "./ObienteLogo.vue";
+import { useOrganizationId } from "~/composables/useOrganizationId";
+import { OrganizationService } from "@obiente/proto";
+import { useConnectClient } from "~/lib/connect-client";
 
 interface Organization {
   id: string;
@@ -315,6 +324,81 @@ const config = useConfig();
 const billingEnabled = computed(() => config.billingEnabled.value === true);
 
 const superAdmin = useSuperAdmin();
+const organizationId = useOrganizationId();
+const orgClient = useConnectClient(OrganizationService);
+
+// Fetch user's permissions for the current organization
+const { data: userPermissionsData } = await useClientFetch(
+  () =>
+    organizationId.value
+      ? `admin-sidebar-permissions-${organizationId.value}`
+      : "admin-sidebar-permissions-none",
+  async () => {
+    const orgId = organizationId.value;
+    if (!orgId) return [] as string[];
+    try {
+      const res = await orgClient.getMyPermissions({
+        organizationId: orgId,
+      });
+      return res.permissions || [];
+    } catch {
+      return [] as string[];
+    }
+  },
+  { watch: [organizationId] }
+);
+const userPermissions = computed(() => userPermissionsData.value || []);
+
+// Helper function to check if a permission matches (supports wildcards)
+function matchesPermission(perm: string, required: string): boolean {
+  // Special case: "*" matches everything
+  if (perm === "*") return true;
+  if (required === "*") return true;
+  
+  if (perm === required) return true;
+  if (perm.endsWith(".*")) {
+    const prefix = perm.slice(0, -2);
+    return required.startsWith(prefix + ".");
+  }
+  if (required.endsWith(".*")) {
+    const prefix = required.slice(0, -2);
+    return perm.startsWith(prefix + ".");
+  }
+  return false;
+}
+
+// Check if user has a specific permission
+function hasPermission(permission: string): boolean {
+  const perms = userPermissions.value;
+  return perms.some((perm) => matchesPermission(perm, permission));
+}
+
+// Map admin pages to required permissions
+const adminPagePermissions: Record<string, string[]> = {
+  "/audit-logs": ["organization.*", "admin.*"], // Audit logs require org admin/owner
+  "/admin/quotas": ["admin.quotas.update", "admin.quotas.*", "admin.*"],
+  "/admin/roles": ["admin.roles.read", "admin.roles.*", "admin.*"],
+  "/admin/bindings": ["admin.bindings.read", "admin.bindings.*", "admin.*"],
+};
+
+// Check if user has permission for an admin page
+const hasAdminPagePermission = (path: string): boolean => {
+  const requiredPerms = adminPagePermissions[path];
+  if (!requiredPerms) return false;
+  return requiredPerms.some((perm) => hasPermission(perm));
+};
+
+// Check if user has any admin permission (to show the admin section)
+const hasAnyAdminPermission = computed(() => {
+  return hasPermission("admin.*") ||
+    hasPermission("admin.roles.read") ||
+    hasPermission("admin.roles.*") ||
+    hasPermission("admin.bindings.read") ||
+    hasPermission("admin.bindings.*") ||
+    hasPermission("admin.quotas.update") ||
+    hasPermission("admin.quotas.*") ||
+    hasPermission("organization.*");
+});
 
 // Map pages to required permissions
 const pagePermissions: Record<string, string> = {

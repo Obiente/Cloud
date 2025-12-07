@@ -568,28 +568,44 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 
 	requestedRole := strings.TrimSpace(req.Msg.GetRole())
 	if requestedRole != "" {
-		if strings.EqualFold(requestedRole, "owner") {
-			if !isSuper {
-				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("use transfer ownership flow to assign owner"))
-			}
-			m.Role = "owner"
-		} else {
-			if strings.EqualFold(m.Role, "owner") {
+		// Convert role name to role ID if it's a system role
+		// If it's already a role ID (custom role), use it as-is
+		var roleID string
+		if systemRoleID := auth.GetSystemRoleID(strings.ToLower(requestedRole)); systemRoleID != "" {
+			roleID = systemRoleID
+			if roleID == auth.SystemRoleIDOwner {
 				if !isSuper {
-					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the last owner cannot be demoted"))
-				}
-				var ownerCount int64
-				if err := database.DB.Model(&database.OrganizationMember{}).
-					Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), "owner").
-					Count(&ownerCount).Error; err != nil {
-					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
-				}
-				if ownerCount <= 1 {
-					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
+					return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("use transfer ownership flow to assign owner"))
 				}
 			}
-			m.Role = strings.ToLower(requestedRole)
+		} else {
+			// It's either a custom role ID or a role name that doesn't exist
+			// Check if it's a valid custom role ID
+			var customRole database.OrgRole
+			if err := database.DB.Where("id = ? AND organization_id = ?", requestedRole, req.Msg.GetOrganizationId()).First(&customRole).Error; err != nil {
+				// Not a valid role ID, treat as invalid
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid role: %s", requestedRole))
+			}
+			roleID = requestedRole
 		}
+		
+		// Check if we're demoting an owner
+		if m.Role == auth.SystemRoleIDOwner && roleID != auth.SystemRoleIDOwner {
+			if !isSuper {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the last owner cannot be demoted"))
+			}
+			var ownerCount int64
+			if err := database.DB.Model(&database.OrganizationMember{}).
+				Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), auth.SystemRoleIDOwner).
+				Count(&ownerCount).Error; err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
+			}
+			if ownerCount <= 1 {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
+			}
+		}
+		
+		m.Role = roleID
 	}
 
 	m.Status = "active"
@@ -623,10 +639,10 @@ func (s *Service) RemoveMember(ctx context.Context, req *connect.Request[organiz
 	}
 
 	// Prevent removing the last owner
-	if strings.EqualFold(member.Role, "owner") {
+	if member.Role == auth.SystemRoleIDOwner {
 		var ownerCount int64
 		if err := database.DB.Model(&database.OrganizationMember{}).
-			Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), "owner").
+			Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), auth.SystemRoleIDOwner).
 			Count(&ownerCount).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
 		}

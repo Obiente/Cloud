@@ -1142,7 +1142,7 @@ func (s *Service) RevokeDNSDelegationAPIKeyForOrganization(ctx context.Context, 
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can revoke API keys
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}

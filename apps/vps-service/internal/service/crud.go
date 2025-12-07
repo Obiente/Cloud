@@ -33,6 +33,23 @@ func (s *Service) ListVPS(ctx context.Context, req *connect.Request[vpsv1.ListVP
 		return nil, err
 	}
 
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
+	}
+
+	// Check if user has organization-wide read permission for VPS
+	// This allows users with custom roles (like "system admin") to see all VPS instances
+	hasOrgWideRead := false
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
+		Permission:   "vps.read",
+		ResourceType: "vps",
+		ResourceID:   "", // Empty resource ID means org-wide permission
+	}); err == nil {
+		hasOrgWideRead = true
+	}
+
 	page := int(req.Msg.GetPage())
 	if page < 1 {
 		page = 1
@@ -47,6 +64,7 @@ func (s *Service) ListVPS(ctx context.Context, req *connect.Request[vpsv1.ListVP
 
 	offset := (page - 1) * perPage
 
+	// Build query with permission-based filtering
 	query := database.DB.Model(&database.VPSInstance{}).
 		Where("organization_id = ? AND deleted_at IS NULL", orgID)
 
@@ -54,6 +72,11 @@ func (s *Service) ListVPS(ctx context.Context, req *connect.Request[vpsv1.ListVP
 	if req.Msg.Status != nil {
 		status := req.Msg.GetStatus()
 		query = query.Where("status = ?", int32(status))
+	}
+
+	// Filter by user if they don't have org-wide read permission
+	if !auth.HasRole(userInfo, auth.RoleAdmin) && !hasOrgWideRead {
+		query = query.Where("created_by = ?", userInfo.Id)
 	}
 
 	// Get total count

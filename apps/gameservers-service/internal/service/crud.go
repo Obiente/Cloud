@@ -61,10 +61,21 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
 
+	// Check if user has organization-wide read permission for game servers
+	// This allows users with custom roles (like "system admin") to see all game servers
+	hasOrgWideRead := false
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
+		Permission:   "gameservers.read",
+		ResourceType: "gameserver",
+		ResourceID:   "", // Empty resource ID means org-wide permission
+	}); err == nil {
+		hasOrgWideRead = true
+	}
+
 	// Create filters with user ID
 	filters := &database.GameServerFilters{
 		UserID:     userInfo.Id,
-		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin),
+		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin) || hasOrgWideRead,
 	}
 
 	// Add status filter if provided
@@ -299,7 +310,7 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	if req.Msg.Description != nil {
 		dbGameServer.Description = req.Msg.Description
 	}
-	if req.Msg.EnvVars != nil && len(req.Msg.EnvVars) > 0 {
+	if len(req.Msg.EnvVars) > 0 {
 		envVarsBytes, err := json.Marshal(req.Msg.EnvVars)
 		if err == nil {
 			dbGameServer.EnvVars = string(envVarsBytes)

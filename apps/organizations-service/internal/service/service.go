@@ -2,9 +2,11 @@ package organizations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,7 +31,7 @@ import (
 
 const (
 	defaultConsoleURL        = "https://obiente.cloud"
-	defaultOwnerFallbackRole = "admin"
+	defaultOwnerFallbackRole = auth.SystemRoleIDAdmin
 )
 
 type Config struct {
@@ -155,7 +157,7 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create org: %w", err))
 	}
 	// add creator as owner
-	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: "owner", Status: "active", JoinedAt: now}
+	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
 	// Ensure organization has a plan assigned (defaults to Starter plan)
 	_ = EnsurePlanAssigned(org.ID)
@@ -225,9 +227,11 @@ func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organiza
 	list := make([]*organizationsv1.OrganizationMember, 0, len(members))
 	for _, member := range members {
 		userProto := buildUserProfile(ctx, resolver, member)
+		// Convert role ID to role name for frontend compatibility
+		roleName := getRoleNameForAPI(member.Role)
 		om := &organizationsv1.OrganizationMember{
 			Id:       member.ID,
-			Role:     member.Role,
+			Role:     roleName,
 			Status:   member.Status,
 			JoinedAt: timestamppb.New(member.JoinedAt),
 			User:     userProto,
@@ -269,12 +273,28 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		return nil, err
 	}
 
-	role := req.Msg.GetRole()
-	if role == "" {
-		role = "member"
+	roleInput := req.Msg.GetRole()
+	if roleInput == "" {
+		roleInput = "member"
 	}
-	if strings.EqualFold(role, "owner") {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("owner role cannot be invited; transfer flow pending"))
+	
+	// Convert role name to role ID if it's a system role
+	// If it's already a role ID (custom role), use it as-is
+	var roleID string
+	if systemRoleID := auth.GetSystemRoleID(strings.ToLower(roleInput)); systemRoleID != "" {
+		roleID = systemRoleID
+		if roleID == auth.SystemRoleIDOwner {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("owner role cannot be invited; transfer flow pending"))
+		}
+	} else {
+		// It's either a custom role ID or a role name that doesn't exist
+		// Check if it's a valid custom role ID
+		var customRole database.OrgRole
+		if err := database.DB.Where("id = ? AND organization_id = ?", roleInput, org.ID).First(&customRole).Error; err != nil {
+			// Not a valid role ID, treat as invalid
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid role: %s", roleInput))
+		}
+		roleID = roleInput
 	}
 
 	// Prevent self-invitation: check if inviter is trying to invite themselves
@@ -297,7 +317,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 	var m *database.OrganizationMember
 	if err == nil {
 		// User is already invited - update role and resend invite
-		existingMember.Role = strings.ToLower(role)
+		existingMember.Role = roleID
 		existingMember.JoinedAt = time.Now() // Update invite timestamp
 		if err := database.DB.Save(&existingMember).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update existing invite: %w", err))
@@ -325,7 +345,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
 		// New invite - create member
-		m = &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: pendingUserID, Role: strings.ToLower(role), Status: "invited", JoinedAt: time.Now()}
+		m = &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: pendingUserID, Role: roleID, Status: "invited", JoinedAt: time.Now()}
 		if err := database.DB.Create(m).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invite member: %w", err))
 		}
@@ -339,7 +359,9 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check existing invite: %w", err))
 	}
 
-	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID, Email: emailAddr, Name: deriveNameFromEmail(emailAddr)}}
+	// Convert role ID to role name for frontend compatibility
+	roleName := getRoleNameForAPI(m.Role)
+	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: roleName, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID, Email: emailAddr, Name: deriveNameFromEmail(emailAddr)}}
 	return connect.NewResponse(&organizationsv1.InviteMemberResponse{Member: om}), nil
 }
 
@@ -442,7 +464,7 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 			user.Id, org.ID, "INVITE", member.ID).First(&existingNotification).Error == nil
 
 		if !notificationExists {
-			actionURL := fmt.Sprintf("/organizations/%s/invites", org.ID)
+			actionURL := fmt.Sprintf("/organizations?tab=invitations&organizationId=%s", org.ID)
 			actionLabel := "View Invite"
 			metadata := map[string]string{
 				"invite_id":        member.ID,
@@ -461,11 +483,13 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 			}
 		}
 
+		// Convert role ID to role name for frontend compatibility
+		roleName := getRoleNameForAPI(member.Role)
 		invites = append(invites, &organizationsv1.PendingInvite{
 			Id:             member.ID,
 			OrganizationId: org.ID,
 			OrganizationName: org.Name,
-			Role:           member.Role,
+			Role:           roleName,
 			InvitedAt:      timestamppb.New(member.JoinedAt),
 			InviterEmail:   "", // TODO: Track inviter in future enhancement
 		})
@@ -527,10 +551,12 @@ func (s *Service) AcceptInvite(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("accept invite: %w", err))
 	}
 
-	// Build response
+		// Build response
+	// Convert role ID to role name for frontend compatibility
+	roleName := getRoleNameForAPI(member.Role)
 	om := &organizationsv1.OrganizationMember{
 		Id:       member.ID,
-		Role:     member.Role,
+		Role:     roleName,
 		Status:   member.Status,
 		JoinedAt: timestamppb.New(member.JoinedAt),
 		User:     user,
@@ -596,28 +622,44 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 
 	requestedRole := strings.TrimSpace(req.Msg.GetRole())
 	if requestedRole != "" {
-		if strings.EqualFold(requestedRole, "owner") {
-			if !isSuper {
-				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("use transfer ownership flow to assign owner"))
-			}
-			m.Role = "owner"
-		} else {
-			if strings.EqualFold(m.Role, "owner") {
+		// Convert role name to role ID if it's a system role
+		// If it's already a role ID (custom role), use it as-is
+		var roleID string
+		if systemRoleID := auth.GetSystemRoleID(strings.ToLower(requestedRole)); systemRoleID != "" {
+			roleID = systemRoleID
+			if roleID == auth.SystemRoleIDOwner {
 				if !isSuper {
-					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the last owner cannot be demoted"))
-				}
-				var ownerCount int64
-				if err := database.DB.Model(&database.OrganizationMember{}).
-					Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), "owner").
-					Count(&ownerCount).Error; err != nil {
-					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
-				}
-				if ownerCount <= 1 {
-					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
+					return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("use transfer ownership flow to assign owner"))
 				}
 			}
-			m.Role = strings.ToLower(requestedRole)
+		} else {
+			// It's either a custom role ID or a role name that doesn't exist
+			// Check if it's a valid custom role ID
+			var customRole database.OrgRole
+			if err := database.DB.Where("id = ? AND organization_id = ?", requestedRole, req.Msg.GetOrganizationId()).First(&customRole).Error; err != nil {
+				// Not a valid role ID, treat as invalid
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid role: %s", requestedRole))
+			}
+			roleID = requestedRole
 		}
+		
+		// Check if we're demoting an owner
+		if m.Role == auth.SystemRoleIDOwner && roleID != auth.SystemRoleIDOwner {
+			if !isSuper {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the last owner cannot be demoted"))
+			}
+			var ownerCount int64
+			if err := database.DB.Model(&database.OrganizationMember{}).
+				Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), auth.SystemRoleIDOwner).
+				Count(&ownerCount).Error; err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
+			}
+			if ownerCount <= 1 {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
+			}
+		}
+		
+		m.Role = roleID
 	}
 
 	m.Status = "active"
@@ -625,7 +667,9 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update member: %w", err))
 	}
 
-	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID}}
+	// Convert role ID to role name for frontend compatibility
+	roleName := getRoleNameForAPI(m.Role)
+	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: roleName, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID}}
 	return connect.NewResponse(&organizationsv1.UpdateMemberResponse{Member: om}), nil
 }
 
@@ -651,10 +695,10 @@ func (s *Service) RemoveMember(ctx context.Context, req *connect.Request[organiz
 	}
 
 	// Prevent removing the last owner
-	if strings.EqualFold(member.Role, "owner") {
+	if member.Role == auth.SystemRoleIDOwner {
 		var ownerCount int64
 		if err := database.DB.Model(&database.OrganizationMember{}).
-			Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), "owner").
+			Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), auth.SystemRoleIDOwner).
 			Count(&ownerCount).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
 		}
@@ -682,12 +726,26 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id and new_owner_member_id are required"))
 	}
 
-	fallbackRole := strings.ToLower(strings.TrimSpace(req.Msg.GetFallbackRole()))
-	if fallbackRole == "" {
-		fallbackRole = defaultOwnerFallbackRole
-	}
-	if fallbackRole == "owner" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("fallback role cannot be owner"))
+	fallbackRoleInput := strings.TrimSpace(req.Msg.GetFallbackRole())
+	var fallbackRoleID string
+	if fallbackRoleInput == "" {
+		fallbackRoleID = defaultOwnerFallbackRole
+	} else {
+		// Convert role name to role ID if it's a system role
+		if systemRoleID := auth.GetSystemRoleID(strings.ToLower(fallbackRoleInput)); systemRoleID != "" {
+			fallbackRoleID = systemRoleID
+			if fallbackRoleID == auth.SystemRoleIDOwner {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("fallback role cannot be owner"))
+			}
+		} else {
+			// It's either a custom role ID or invalid
+			// Check if it's a valid custom role ID
+			var customRole database.OrgRole
+			if err := database.DB.Where("id = ? AND organization_id = ?", fallbackRoleInput, orgID).First(&customRole).Error; err != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid fallback role: %s", fallbackRoleInput))
+			}
+			fallbackRoleID = fallbackRoleInput
+		}
 	}
 
 	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
@@ -700,7 +758,7 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 	var response *organizationsv1.TransferOwnershipResponse
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		var currentOwner database.OrganizationMember
-		ownerQuery := tx.Where("organization_id = ? AND role = ?", orgID, "owner")
+		ownerQuery := tx.Where("organization_id = ? AND role = ?", orgID, auth.SystemRoleIDOwner)
 		if isSuperAdmin {
 			ownerQuery = ownerQuery.Where("id <> ?", newOwnerMemberID)
 		} else {
@@ -730,17 +788,17 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 		if !strings.EqualFold(targetMember.Status, "active") {
 			return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("member must be active before receiving ownership"))
 		}
-		if strings.EqualFold(targetMember.Role, "owner") {
+		if targetMember.Role == auth.SystemRoleIDOwner {
 			return connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("member is already an owner"))
 		}
 
-		targetMember.Role = "owner"
+		targetMember.Role = auth.SystemRoleIDOwner
 		targetMember.Status = "active"
 		if err := tx.Save(&targetMember).Error; err != nil {
 			return fmt.Errorf("promote new owner: %w", err)
 		}
 
-		currentOwner.Role = fallbackRole
+		currentOwner.Role = fallbackRoleID
 		if err := tx.Save(&currentOwner).Error; err != nil {
 			return fmt.Errorf("update previous owner role: %w", err)
 		}
@@ -749,7 +807,7 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 			Success:               true,
 			PreviousOwnerMemberId: currentOwner.ID,
 			NewOwnerMemberId:      targetMember.ID,
-			FallbackRole:          fallbackRole,
+			FallbackRole:          auth.GetSystemRoleNameFromID(fallbackRoleID), // Return role name for API compatibility
 		}
 		return nil
 	}); err != nil {
@@ -1418,7 +1476,7 @@ func ensurePersonalOrg(userID string) {
 	if err := database.DB.Create(org).Error; err != nil {
 		return
 	}
-	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
+	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
 	// Ensure organization has a plan assigned (defaults to Starter plan)
 	_ = EnsurePlanAssigned(org.ID)
@@ -1562,7 +1620,8 @@ func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organiz
 		inviterName = strings.TrimSpace(inviter.GetEmail())
 	}
 
-	roleLabel := capitalize(member.Role)
+	// Convert role ID to display name for email
+	roleLabel := getRoleDisplayName(member.Role)
 	greetingName := deriveNameFromEmail(inviteeEmail)
 
 	subject := fmt.Sprintf("%s invited you to %s on Obiente Cloud", inviterName, org.Name)
@@ -1590,7 +1649,7 @@ func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organiz
 		},
 		CTA: &email.CTA{
 			Label:       "Accept invitation",
-			URL:         consoleURL,
+			URL:         fmt.Sprintf("%s/organizations?tab=invitations&organizationId=%s", consoleURL, org.ID),
 			Description: "Sign in with your invitation email to finish onboarding.",
 		},
 		SignatureLines: []string{
@@ -1629,6 +1688,32 @@ func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organiz
 	}
 
 	return nil
+}
+
+// getRoleNameForAPI converts a role ID to a role name for API responses
+// System role IDs (e.g., "system:owner") are converted to role names (e.g., "owner")
+// Custom role IDs are returned as-is (they are already the role ID)
+func getRoleNameForAPI(roleID string) string {
+	// Check if it's a system role ID - convert to role name
+	if roleName := auth.GetSystemRoleNameFromID(roleID); roleName != "" {
+		return roleName
+	}
+	
+	// It's a custom role ID - return as-is (frontend will handle it via role catalog)
+	return roleID
+}
+
+// getRoleDisplayName converts a role ID to a human-readable display name
+func getRoleDisplayName(roleID string) string {
+	// Check if it's a system role ID
+	if roleName := auth.GetSystemRoleNameFromID(roleID); roleName != "" {
+		return capitalize(roleName)
+	}
+	
+	// It's a custom role ID - try to look up the role name
+	// For now, we'll just capitalize the ID as a fallback
+	// In a real scenario, you might want to look up the role name from the database
+	return capitalize(roleID)
 }
 
 func capitalize(input string) string {
@@ -1902,5 +1987,127 @@ func (s *Service) GetCreditLog(ctx context.Context, req *connect.Request[organiz
 			Total:      int32(total),
 			TotalPages: int32(totalPages),
 		},
+	}), nil
+}
+
+func (s *Service) GetMyPermissions(ctx context.Context, req *connect.Request[organizationsv1.GetMyPermissionsRequest]) (*connect.Response[organizationsv1.GetMyPermissionsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	permissionSet := make(map[string]bool)
+
+	// Superadmins have all permissions - return wildcard to indicate all permissions
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	if isSuperAdmin {
+		return connect.NewResponse(&organizationsv1.GetMyPermissionsResponse{
+			Permissions: []string{"*"},
+		}), nil
+	}
+
+	// Get member record to check direct role assignment
+	// Note: We check without status filter first, then filter by status if needed
+	var member database.OrganizationMember
+	memberQuery := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id)
+	if err := memberQuery.First(&member).Error; err != nil {
+		// User is not a member - return empty permissions
+		logger.Debug("[GetMyPermissions] User %s is not a member of org %s", user.Id, orgID)
+		return connect.NewResponse(&organizationsv1.GetMyPermissionsResponse{
+			Permissions: []string{},
+		}), nil
+	}
+
+	// Only process if member is active
+	if member.Status != "active" {
+		logger.Debug("[GetMyPermissions] User %s is not an active member of org %s (status: %s)", user.Id, orgID, member.Status)
+		return connect.NewResponse(&organizationsv1.GetMyPermissionsResponse{
+			Permissions: []string{},
+		}), nil
+	}
+
+	roleID := member.Role
+	logger.Debug("[GetMyPermissions] User %s has role ID %s in org %s", user.Id, roleID, orgID)
+
+	// Check if it's a system role ID
+	if auth.IsSystemRoleID(roleID) {
+		roleName := auth.GetSystemRoleNameFromID(roleID)
+		logger.Debug("[GetMyPermissions] Role ID %s maps to role name %s", roleID, roleName)
+		if roleName != "" {
+			perms := auth.GetSystemRolePermissions(roleName)
+			logger.Debug("[GetMyPermissions] System role %s has %d permissions: %v", roleName, len(perms), perms)
+			if len(perms) == 0 {
+				logger.Debug("[GetMyPermissions] WARNING: System role %s returned empty permissions!", roleName)
+			}
+			for _, perm := range perms {
+				permissionSet[perm] = true
+			}
+		} else {
+			logger.Debug("[GetMyPermissions] WARNING: Role ID %s is a system role ID but GetSystemRoleNameFromID returned empty!", roleID)
+		}
+	} else {
+		// It's a custom role assigned directly - look it up in the database by ID
+		var customRole database.OrgRole
+		if err := database.DB.Where("id = ? AND organization_id = ?", roleID, orgID).First(&customRole).Error; err == nil {
+			var perms []string
+			if err := json.Unmarshal([]byte(customRole.Permissions), &perms); err == nil {
+				logger.Debug("[GetMyPermissions] Custom role %s has %d permissions", customRole.Name, len(perms))
+				for _, perm := range perms {
+					permissionSet[perm] = true
+				}
+			}
+		} else {
+			logger.Debug("[GetMyPermissions] Custom role ID %s not found in org %s: %v", roleID, orgID, err)
+		}
+	}
+
+	// Check custom roles via role bindings
+	var bindings []database.OrgRoleBinding
+	if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).Find(&bindings).Error; err == nil {
+		if len(bindings) > 0 {
+			logger.Debug("[GetMyPermissions] User %s has %d role bindings in org %s", user.Id, len(bindings), orgID)
+			var roles []database.OrgRole
+			roleIDs := make([]string, 0, len(bindings))
+			for _, b := range bindings {
+				roleIDs = append(roleIDs, b.RoleID)
+			}
+			if err := database.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err == nil {
+				for _, r := range roles {
+					// Skip system roles in database (they shouldn't be there, but just in case)
+					if auth.IsSystemRole(r.Name) {
+						continue
+					}
+					var perms []string
+					if err := json.Unmarshal([]byte(r.Permissions), &perms); err == nil {
+						for _, perm := range perms {
+							permissionSet[perm] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Convert set to slice and sort
+	permissions := make([]string, 0, len(permissionSet))
+	for perm := range permissionSet {
+		permissions = append(permissions, perm)
+	}
+	sort.Strings(permissions)
+
+	logger.Debug("[GetMyPermissions] User %s has %d total permissions in org %s: %v", user.Id, len(permissions), orgID, permissions)
+
+	// Ensure we always return a non-nil slice (even if empty)
+	if permissions == nil {
+		permissions = []string{}
+	}
+
+	return connect.NewResponse(&organizationsv1.GetMyPermissionsResponse{
+		Permissions: permissions,
 	}), nil
 }

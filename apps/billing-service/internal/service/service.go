@@ -252,7 +252,7 @@ func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can access portal
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -357,7 +357,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can update billing account
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -503,7 +503,7 @@ func (s *Service) CreateSetupIntent(ctx context.Context, req *connect.Request[bi
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can create setup intents
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -678,7 +678,7 @@ func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can attach payment methods
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -759,7 +759,7 @@ func (s *Service) DetachPaymentMethod(ctx context.Context, req *connect.Request[
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can detach payment methods
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -839,7 +839,7 @@ func (s *Service) SetDefaultPaymentMethod(ctx context.Context, req *connect.Requ
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can set default payment method
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -946,7 +946,7 @@ func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billing
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can view invoices
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -1100,7 +1100,7 @@ func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, r
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can create subscription checkout
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -1333,7 +1333,7 @@ func (s *Service) ListSubscriptions(ctx context.Context, req *connect.Request[bi
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can view subscriptions
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -1456,7 +1456,7 @@ func (s *Service) UpdateSubscriptionPaymentMethod(ctx context.Context, req *conn
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can update subscriptions
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}
@@ -1599,7 +1599,7 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 		}
 		// Only owners and admins can cancel subscriptions
-		if member.Role != "owner" && member.Role != "admin" {
+		if member.Role != auth.SystemRoleIDOwner && member.Role != auth.SystemRoleIDAdmin {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
 		}
 	}

@@ -87,6 +87,9 @@ const (
 	// OrganizationServiceGetCreditLogProcedure is the fully-qualified name of the OrganizationService's
 	// GetCreditLog RPC.
 	OrganizationServiceGetCreditLogProcedure = "/obiente.cloud.organizations.v1.OrganizationService/GetCreditLog"
+	// OrganizationServiceGetMyPermissionsProcedure is the fully-qualified name of the
+	// OrganizationService's GetMyPermissions RPC.
+	OrganizationServiceGetMyPermissionsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/GetMyPermissions"
 )
 
 // OrganizationServiceClient is a client for the obiente.cloud.organizations.v1.OrganizationService
@@ -128,6 +131,8 @@ type OrganizationServiceClient interface {
 	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
 	// Get credit transaction history for an organization
 	GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error)
+	// Get current user's permissions for an organization
+	GetMyPermissions(context.Context, *connect.Request[v1.GetMyPermissionsRequest]) (*connect.Response[v1.GetMyPermissionsResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the
@@ -250,6 +255,12 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("GetCreditLog")),
 			connect.WithClientOptions(opts...),
 		),
+		getMyPermissions: connect.NewClient[v1.GetMyPermissionsRequest, v1.GetMyPermissionsResponse](
+			httpClient,
+			baseURL+OrganizationServiceGetMyPermissionsProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("GetMyPermissions")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -273,6 +284,7 @@ type organizationServiceClient struct {
 	adminAddCredits    *connect.Client[v1.AdminAddCreditsRequest, v1.AdminAddCreditsResponse]
 	adminRemoveCredits *connect.Client[v1.AdminRemoveCreditsRequest, v1.AdminRemoveCreditsResponse]
 	getCreditLog       *connect.Client[v1.GetCreditLogRequest, v1.GetCreditLogResponse]
+	getMyPermissions   *connect.Client[v1.GetMyPermissionsRequest, v1.GetMyPermissionsResponse]
 }
 
 // ListOrganizations calls obiente.cloud.organizations.v1.OrganizationService.ListOrganizations.
@@ -365,6 +377,11 @@ func (c *organizationServiceClient) GetCreditLog(ctx context.Context, req *conne
 	return c.getCreditLog.CallUnary(ctx, req)
 }
 
+// GetMyPermissions calls obiente.cloud.organizations.v1.OrganizationService.GetMyPermissions.
+func (c *organizationServiceClient) GetMyPermissions(ctx context.Context, req *connect.Request[v1.GetMyPermissionsRequest]) (*connect.Response[v1.GetMyPermissionsResponse], error) {
+	return c.getMyPermissions.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the
 // obiente.cloud.organizations.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
@@ -404,6 +421,8 @@ type OrganizationServiceHandler interface {
 	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
 	// Get credit transaction history for an organization
 	GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error)
+	// Get current user's permissions for an organization
+	GetMyPermissions(context.Context, *connect.Request[v1.GetMyPermissionsRequest]) (*connect.Response[v1.GetMyPermissionsResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -521,6 +540,12 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("GetCreditLog")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceGetMyPermissionsHandler := connect.NewUnaryHandler(
+		OrganizationServiceGetMyPermissionsProcedure,
+		svc.GetMyPermissions,
+		connect.WithSchema(organizationServiceMethods.ByName("GetMyPermissions")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.organizations.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -559,6 +584,8 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceAdminRemoveCreditsHandler.ServeHTTP(w, r)
 		case OrganizationServiceGetCreditLogProcedure:
 			organizationServiceGetCreditLogHandler.ServeHTTP(w, r)
+		case OrganizationServiceGetMyPermissionsProcedure:
+			organizationServiceGetMyPermissionsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -638,4 +665,8 @@ func (UnimplementedOrganizationServiceHandler) AdminRemoveCredits(context.Contex
 
 func (UnimplementedOrganizationServiceHandler) GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.GetCreditLog is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) GetMyPermissions(context.Context, *connect.Request[v1.GetMyPermissionsRequest]) (*connect.Response[v1.GetMyPermissionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.GetMyPermissions is not implemented"))
 }

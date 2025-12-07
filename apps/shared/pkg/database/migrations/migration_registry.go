@@ -9,14 +9,54 @@ import (
 	"gorm.io/gorm"
 )
 
-// RegisterMigrations adds all migrations to the registry
+// Migration Registration Pattern:
+//
+// Each service should have its own migration registration function to avoid
+// redundant migration execution across services. This improves startup time
+// and ensures each service only runs migrations relevant to its own tables/data.
+//
+// Pattern:
+//   1. Create a service-specific registration function (e.g., RegisterOrganizationsMigrations)
+//   2. In your service's main.go, create a MigrationRegistry and call:
+//      - RegisterMigrations(registry) for shared migrations
+//      - RegisterYourServiceMigrations(registry) for service-specific migrations
+//   3. Call registry.Apply() to run all registered migrations
+//
+// Example (organizations-service/main.go):
+//   registry := migrations.NewMigrationRegistry(database.DB)
+//   migrations.RegisterMigrations(registry)              // Shared migrations
+//   migrations.RegisterOrganizationsMigrations(registry) // Service-specific
+//   if err := registry.Apply(); err != nil {
+//       logger.Fatalf("failed to apply migrations: %v", err)
+//   }
+//
+// Shared migrations are those that affect multiple services or shared infrastructure.
+// Service-specific migrations should only affect tables/data managed by that service.
+
+// RegisterMigrations adds all shared migrations to the registry.
+// These are migrations that affect multiple services or shared infrastructure.
+// Each service should call this in addition to their service-specific migrations.
 func RegisterMigrations(registry *MigrationRegistry) {
-	// Register migrations in order
+	// Register shared migrations in order
 	// Format: YYYY_MM_DD_###_description
 	registry.Register("2025_10_28_001", "Initial schema setup", initialSchema)
+	registry.Register("2025_11_02_001", "Create credit_transactions table", createCreditTransactions)
+	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
+	registry.Register("2025_11_07_004", "Create audit_logs table", createAuditLogsTable)
+	registry.Register("2025_11_13_001", "Create vps_bastion_keys table", createVPSBastionKeysTable)
+	registry.Register("2025_11_14_001", "Add ssh_alias column to vps_instances", addSSHAliasToVPSInstances)
+	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
+	registry.Register("2025_01_03_003", "Create support_tickets and ticket_comments tables", createSupportTicketsTables)
+
+	// Add new shared migrations here
+}
+
+// RegisterDeploymentsMigrations registers migrations specific to deployments-service.
+// These migrations only affect deployment-related tables and should only be run
+// by the deployments-service to avoid redundant execution.
+func RegisterDeploymentsMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_10_28_002", "Add health status to deployments", addHealthStatus)
 	registry.Register("2025_10_28_003", "Add custom domains column", addCustomDomains)
-	registry.Register("2025_11_02_001", "Create credit_transactions table", createCreditTransactions)
 	registry.Register("2025_12_20_001", "Drop redundant usage tables", dropRedundantUsageTables)
 	registry.Register("2025_12_20_002", "Rename storage_usage to storage_bytes", renameStorageUsageToStorageBytes)
 	registry.Register("2025_12_20_003", "Add group column to deployments", addGroupColumnToDeployments)
@@ -24,16 +64,15 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_005", "Add start_command column to deployments", addStartCommandColumn)
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
-	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
-	registry.Register("2025_01_03_003", "Create support_tickets and ticket_comments tables", createSupportTicketsTables)
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
-	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
-	registry.Register("2025_11_07_004", "Create audit_logs table", createAuditLogsTable)
-	registry.Register("2025_11_13_001", "Create vps_bastion_keys table", createVPSBastionKeysTable)
-	registry.Register("2025_11_14_001", "Add ssh_alias column to vps_instances", addSSHAliasToVPSInstances)
+}
 
-	// Add new migrations here
+// RegisterOrganizationsMigrations registers migrations specific to organizations-service.
+// These migrations only affect organization-related tables (e.g., organization_members)
+// and should only be run by the organizations-service to avoid redundant execution.
+func RegisterOrganizationsMigrations(registry *MigrationRegistry) {
+	registry.Register("2025_01_07_001", "Migrate organization member roles from names to IDs", migrateOrganizationMemberRoles)
 }
 
 // initialSchema creates the initial database schema
@@ -656,6 +695,45 @@ func addSSHAliasToVPSInstances(db *gorm.DB) error {
 
 	// Add unique index (allowing NULL values - multiple NULLs are allowed in unique indexes)
 	return db.Exec("CREATE UNIQUE INDEX idx_vps_instances_ssh_alias ON vps_instances(ssh_alias) WHERE ssh_alias IS NOT NULL").Error
+}
+
+// migrateOrganizationMemberRoles migrates role assignments from old format (role names) to new format (role IDs)
+// Old format: "owner", "admin", "member", "viewer", "none"
+// New format: "system:owner", "system:admin", "system:member", "system:viewer", "system:none"
+func migrateOrganizationMemberRoles(db *gorm.DB) error {
+	// Check if table exists
+	if !db.Migrator().HasTable("organization_members") {
+		return nil
+	}
+
+	// Update each system role name to its corresponding role ID
+	roleMappings := map[string]string{
+		"owner":  "system:owner",
+		"admin":  "system:admin",
+		"member": "system:member",
+		"viewer": "system:viewer",
+		"none":   "system:none",
+	}
+
+	for oldRole, newRoleID := range roleMappings {
+		// Use CASE to handle case-insensitive matching and update only if not already updated
+		result := db.Exec(`
+			UPDATE organization_members 
+			SET role = ? 
+			WHERE LOWER(role) = LOWER(?) 
+			AND role != ?
+		`, newRoleID, oldRole, newRoleID)
+		
+		if result.Error != nil {
+			return fmt.Errorf("failed to migrate role %s to %s: %w", oldRole, newRoleID, result.Error)
+		}
+		
+		if result.RowsAffected > 0 {
+			logger.Info("Migrated %d organization members from role '%s' to '%s'", result.RowsAffected, oldRole, newRoleID)
+		}
+	}
+
+	return nil
 }
 
 // Template for creating a new migration:
