@@ -123,6 +123,19 @@
             </OuiStack>
           </OuiBox>
 
+          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer" @click="navigateTo('/docs/permissions')">
+            <OuiStack gap="sm">
+              <OuiFlex align="center" gap="sm">
+                <ShieldCheckIcon class="h-5 w-5 text-primary" />
+                <OuiText size="sm" weight="semibold" color="primary">Permissions & Access</OuiText>
+              </OuiFlex>
+              <OuiText size="sm" color="secondary">
+                Understand how permissions work, manage roles and access control. 
+                Learn about system roles, custom roles, and role bindings.
+              </OuiText>
+            </OuiStack>
+          </OuiBox>
+
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer" @click="navigateTo('/docs/self-hosting')">
             <OuiStack gap="sm">
               <OuiFlex align="center" gap="sm">
@@ -191,6 +204,7 @@ import {
   CreditCardIcon,
   BuildingOfficeIcon,
   CubeIcon,
+  ShieldCheckIcon,
   QuestionMarkCircleIcon,
   ArrowRightIcon,
 } from "@heroicons/vue/24/outline";

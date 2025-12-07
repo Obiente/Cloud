@@ -83,6 +83,13 @@
         />
 
         <AppNavigationLink
+          to="/docs/permissions"
+          label="Permissions"
+          :icon="ShieldCheckIcon"
+          @navigate="handleNavigate"
+        />
+
+        <AppNavigationLink
           to="/docs/self-hosting"
           label="Self-Hosting"
           :icon="ServerIcon"
@@ -117,6 +124,7 @@ import {
   CircleStackIcon,
   CreditCardIcon,
   BuildingOfficeIcon,
+  ShieldCheckIcon,
   QuestionMarkCircleIcon,
 } from "@heroicons/vue/24/outline";
 
