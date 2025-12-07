@@ -100,7 +100,7 @@ func (s *AdminService) ListRoles(ctx context.Context, req *connect.Request[admin
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -166,7 +166,7 @@ func (s *AdminService) CreateRole(ctx context.Context, req *connect.Request[admi
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -219,7 +219,7 @@ func (s *AdminService) UpdateRole(ctx context.Context, req *connect.Request[admi
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -304,7 +304,7 @@ func (s *AdminService) DeleteRole(ctx context.Context, req *connect.Request[admi
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, role.OrganizationID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -340,7 +340,7 @@ func (s *AdminService) ListRoleBindings(ctx context.Context, req *connect.Reques
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -393,7 +393,7 @@ func (s *AdminService) CreateRoleBinding(ctx context.Context, req *connect.Reque
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -492,7 +492,7 @@ func (s *AdminService) DeleteRoleBinding(ctx context.Context, req *connect.Reque
 	}
 
 	// Check authorization - user must be owner/admin of the organization or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, binding.OrganizationID, user, "owner", "admin"); err != nil {
 			return nil, err
@@ -519,7 +519,7 @@ func (s *AdminService) UpsertOrgQuota(ctx context.Context, req *connect.Request[
 	}
 
 	// Only superadmins can update quotas
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "admin.quotas.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 

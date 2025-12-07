@@ -243,7 +243,7 @@ func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -348,7 +348,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -494,7 +494,7 @@ func (s *Service) CreateSetupIntent(ctx context.Context, req *connect.Request[bi
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -669,7 +669,7 @@ func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -750,7 +750,7 @@ func (s *Service) DetachPaymentMethod(ctx context.Context, req *connect.Request[
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -830,7 +830,7 @@ func (s *Service) SetDefaultPaymentMethod(ctx context.Context, req *connect.Requ
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -937,7 +937,7 @@ func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billing
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1091,7 +1091,7 @@ func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, r
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1324,7 +1324,7 @@ func (s *Service) ListSubscriptions(ctx context.Context, req *connect.Request[bi
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1447,7 +1447,7 @@ func (s *Service) UpdateSubscriptionPaymentMethod(ctx context.Context, req *conn
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -1590,7 +1590,7 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.IsSuperadmin(ctx, user) {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {

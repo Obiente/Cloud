@@ -27,7 +27,7 @@ func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[sup
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -130,7 +130,7 @@ func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[su
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.create") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -211,7 +211,7 @@ func (s *Service) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[su
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -319,7 +319,7 @@ func (s *Service) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[su
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.delete") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -358,7 +358,7 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[su
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -541,7 +541,7 @@ func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps_public_ips.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 

@@ -296,7 +296,7 @@ func (s *Service) CreateNotification(ctx context.Context, req *connect.Request[n
 	
 	if userAuthenticated && !internalAuth {
 		// User is present but not internal service call - require superadmin
-		if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		if !auth.IsSuperadmin(ctx, user) {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 		}
 	}
@@ -376,7 +376,7 @@ func (s *Service) CreateOrganizationNotification(ctx context.Context, req *conne
 	
 	if userAuthenticated && !internalAuth {
 		// User is present but not internal service call - require superadmin
-		if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		if !auth.IsSuperadmin(ctx, user) {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 		}
 	}

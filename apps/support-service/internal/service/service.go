@@ -71,7 +71,8 @@ func (s *Service) ListTickets(ctx context.Context, req *connect.Request[supportv
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	isSuperAdmin := auth.HasRole(userInfo, auth.RoleSuperAdmin) || auth.HasRole(userInfo, auth.RoleAdmin)
+	// Check if user has superadmin support permissions (either hardcoded role or via role bindings)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, userInfo, "superadmin.support.read")
 
 	// Build query
 	query := s.db.Model(&database.SupportTicket{})
@@ -163,7 +164,8 @@ func (s *Service) GetTicket(ctx context.Context, req *connect.Request[supportv1.
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	isSuperAdmin := auth.HasRole(userInfo, auth.RoleSuperAdmin) || auth.HasRole(userInfo, auth.RoleAdmin)
+	// Check if user has superadmin support permissions (either hardcoded role or via role bindings)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, userInfo, "superadmin.support.read")
 
 	// Get ticket
 	var ticket database.SupportTicket
@@ -201,7 +203,8 @@ func (s *Service) UpdateTicket(ctx context.Context, req *connect.Request[support
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	isSuperAdmin := auth.HasRole(userInfo, auth.RoleSuperAdmin) || auth.HasRole(userInfo, auth.RoleAdmin)
+	// Check if user has superadmin support permissions (either hardcoded role or via role bindings)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, userInfo, "superadmin.support.update")
 
 	if !isSuperAdmin {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only superadmins can update tickets"))
@@ -270,7 +273,8 @@ func (s *Service) AddComment(ctx context.Context, req *connect.Request[supportv1
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	isSuperAdmin := auth.HasRole(userInfo, auth.RoleSuperAdmin) || auth.HasRole(userInfo, auth.RoleAdmin)
+	// Check if user has superadmin support permissions (either hardcoded role or via role bindings)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, userInfo, "superadmin.support.update")
 
 	// Get ticket to verify it exists and check permissions
 	var ticket database.SupportTicket
@@ -345,7 +349,8 @@ func (s *Service) ListComments(ctx context.Context, req *connect.Request[support
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	isSuperAdmin := auth.HasRole(userInfo, auth.RoleSuperAdmin) || auth.HasRole(userInfo, auth.RoleAdmin)
+	// Check if user has superadmin support permissions (either hardcoded role or via role bindings)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, userInfo, "superadmin.support.read")
 
 	// Get ticket to verify it exists and check permissions
 	var ticket database.SupportTicket

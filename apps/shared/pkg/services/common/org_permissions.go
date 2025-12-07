@@ -22,7 +22,7 @@ func AuthorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, all
 		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
+	if auth.IsSuperadmin(ctx, user) {
 		return nil
 	}
 
@@ -74,12 +74,12 @@ func AuthorizeOrgAdmin(ctx context.Context, orgID string, user *authv1.User) err
 
 // GetOrganizationMember retrieves an organization member record for a user.
 // Returns nil, nil if the user is a superadmin (they don't need a member record).
-func GetOrganizationMember(orgID string, user *authv1.User) (*database.OrganizationMember, error) {
+func GetOrganizationMember(ctx context.Context, orgID string, user *authv1.User) (*database.OrganizationMember, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user is nil")
 	}
 
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
+	if auth.IsSuperadmin(ctx, user) {
 		return nil, nil // Superadmins don't need member records
 	}
 
@@ -101,11 +101,11 @@ func VerifyOrgAccess(ctx context.Context, orgID string, user *authv1.User) error
 		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
+	if auth.IsSuperadmin(ctx, user) {
 		return nil
 	}
 
-	member, err := GetOrganizationMember(orgID, user)
+	member, err := GetOrganizationMember(ctx, orgID, user)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 	}

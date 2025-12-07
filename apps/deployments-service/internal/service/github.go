@@ -31,7 +31,7 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		return "", fmt.Errorf("authentication required")
 	}
 
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 
 	// First try specific integration ID if provided
 	if integrationID != "" {

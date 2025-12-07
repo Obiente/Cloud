@@ -53,7 +53,7 @@ func (s *Service) GetOverview(ctx context.Context, _ *connect.Request[superadmin
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.overview.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -129,7 +129,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -295,7 +295,7 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -733,7 +733,7 @@ func (s *Service) GetDNSConfig(ctx context.Context, _ *connect.Request[superadmi
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -818,7 +818,7 @@ func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Requ
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read")
 	
 	// Non-superadmins can only see their own organization's records
 	var organizationID string
@@ -969,7 +969,7 @@ func (s *Service) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, user, "superadmin.dns.create")
 
 	description := strings.TrimSpace(req.Msg.GetDescription())
 	if description == "" {
@@ -1096,7 +1096,7 @@ func (s *Service) RevokeDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.dns.delete") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -1132,7 +1132,7 @@ func (s *Service) RevokeDNSDelegationAPIKeyForOrganization(ctx context.Context, 
 	}
 
 	// Check if user is superadmin or member of the organization
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.HasSuperadminPermission(ctx, user, "superadmin.dns.delete")
 	if !isSuperAdmin {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member).Error; err != nil {
@@ -1176,7 +1176,7 @@ func (s *Service) ListDNSDelegationAPIKeys(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -1589,7 +1589,7 @@ func (s *Service) GetAbuseDetection(ctx context.Context, _ *connect.Request[supe
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.abuse.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -1608,7 +1608,7 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.income.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2030,7 +2030,7 @@ func (s *Service) ListAllInvoices(ctx context.Context, req *connect.Request[supe
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.invoices.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2173,7 +2173,7 @@ func (s *Service) SendInvoiceReminder(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.invoices.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2214,7 +2214,7 @@ func (s *Service) ListPlans(ctx context.Context, _ *connect.Request[superadminv1
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.plans.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2251,7 +2251,7 @@ func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadmi
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.plans.create") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2298,7 +2298,7 @@ func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadmi
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.plans.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2370,7 +2370,7 @@ func (s *Service) DeletePlan(ctx context.Context, req *connect.Request[superadmi
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.plans.delete") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2397,7 +2397,7 @@ func (s *Service) AssignPlanToOrganization(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.plans.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2446,7 +2446,7 @@ func (s *Service) ListStripeWebhookEvents(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.webhooks.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2569,7 +2569,7 @@ func (s *Service) ListUsers(ctx context.Context, req *connect.Request[superadmin
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.users.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2679,7 +2679,7 @@ func (s *Service) GetUser(ctx context.Context, req *connect.Request[superadminv1
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.users.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2762,7 +2762,7 @@ func (s *Service) ListNodes(ctx context.Context, req *connect.Request[superadmin
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.nodes.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2805,7 +2805,7 @@ func (s *Service) GetNode(ctx context.Context, req *connect.Request[superadminv1
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.nodes.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2830,7 +2830,7 @@ func (s *Service) UpdateNodeConfig(ctx context.Context, req *connect.Request[sup
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.nodes.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -2993,7 +2993,7 @@ func (s *Service) ListSuperadminPermissions(ctx context.Context, req *connect.Re
 	}
 
 	// Only superadmins can view superadmin permissions
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "admin.permissions.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3150,8 +3150,8 @@ func (s *Service) ListSuperadminRoles(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin roles
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin roles (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3182,8 +3182,8 @@ func (s *Service) CreateSuperadminRole(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin roles
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin roles (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3249,8 +3249,8 @@ func (s *Service) UpdateSuperadminRole(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin roles
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin roles (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3326,8 +3326,8 @@ func (s *Service) DeleteSuperadminRole(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin roles
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin roles (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3364,8 +3364,8 @@ func (s *Service) ListSuperadminRoleBindings(ctx context.Context, req *connect.R
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin role bindings
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin role bindings (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3395,8 +3395,8 @@ func (s *Service) CreateSuperadminRoleBinding(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin role bindings
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin role bindings (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -3454,8 +3454,8 @@ func (s *Service) DeleteSuperadminRoleBinding(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	// Only superadmins can manage superadmin role bindings
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	// Only superadmins can manage superadmin role bindings (requires full superadmin access)
+	if !auth.IsSuperadmin(ctx, user) {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 

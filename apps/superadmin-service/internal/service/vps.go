@@ -162,7 +162,7 @@ func (s *Service) ListAllVPS(ctx context.Context, req *connect.Request[superadmi
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -312,7 +312,7 @@ func (s *Service) SuperadminGetVPS(ctx context.Context, req *connect.Request[sup
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.read") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -384,7 +384,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -643,7 +643,7 @@ func (s *Service) SuperadminSuspendVPS(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -705,7 +705,7 @@ func (s *Service) SuperadminUnsuspendVPS(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -754,7 +754,7 @@ func (s *Service) SuperadminUpdateVPSCloudInit(ctx context.Context, req *connect
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -810,7 +810,7 @@ func (s *Service) SuperadminForceStopVPS(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.update") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -862,7 +862,7 @@ func (s *Service) SuperadminForceDeleteVPS(ctx context.Context, req *connect.Req
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "superadmin.vps.delete") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 

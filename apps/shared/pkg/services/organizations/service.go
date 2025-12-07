@@ -68,7 +68,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 
 	var rows []row
 	onlyMine := req.Msg.GetOnlyMine()
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 
 	// If onlyMine is true, or user is not a superadmin, filter to user's memberships
 	if onlyMine || !isSuperAdmin {
@@ -376,7 +376,7 @@ func (s *Service) ResendInvite(ctx context.Context, req *connect.Request[organiz
 	// Authorize: user must be owner or admin of the organization, or superadmin
 	if err := common.AuthorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
 		// Allow superadmins to resend invites for any organization
-		if !auth.HasRole(inviter, auth.RoleSuperAdmin) {
+		if !auth.IsSuperadmin(ctx, inviter) {
 			return nil, err
 		}
 	}
@@ -559,7 +559,7 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 		return nil, err
 	}
 
-	isSuper := auth.HasRole(actor, auth.RoleSuperAdmin)
+	isSuper := auth.IsSuperadmin(ctx, actor)
 
 	var m database.OrganizationMember
 	if err := database.DB.First(&m, "id = ? AND organization_id = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId()).Error; err != nil {
@@ -678,7 +678,7 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("fallback role cannot be owner"))
 	}
 
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner"); err != nil {
 			return nil, err
@@ -762,7 +762,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
 	}
 
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 	if err := common.AuthorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
 		return nil, err
@@ -1671,7 +1671,7 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 	}
 
 	// Only superadmins can use this
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "organization.admin.add_credits") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -1742,7 +1742,7 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 	}
 
 	// Only superadmins can use this
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+	if !auth.HasSuperadminPermission(ctx, user, "organization.admin.remove_credits") {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
@@ -1819,7 +1819,7 @@ func (s *Service) GetCreditLog(ctx context.Context, req *connect.Request[organiz
 	}
 
 	// Check authorization - user must be a member or superadmin
-	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {

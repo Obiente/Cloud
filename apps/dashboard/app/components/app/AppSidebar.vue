@@ -390,6 +390,16 @@ const hasAdminPagePermission = (path: string): boolean => {
 
 // Check if user has any admin permission (to show the admin section)
 const hasAnyAdminPermission = computed(() => {
+  // Superadmins always have all permissions, including admin permissions
+  if (superAdmin.isFullSuperadmin.value) {
+    return true;
+  }
+  
+  // Check if user has wildcard permission (from GetMyPermissions for superadmins)
+  if (hasPermission("*")) {
+    return true;
+  }
+  
   return hasPermission("admin.*") ||
     hasPermission("admin.roles.read") ||
     hasPermission("admin.roles.*") ||
