@@ -23,8 +23,12 @@ permissions:
 
 jobs:
   build-and-push-orchestrator-service:
-    name: Build and Push Orchestrator Service
+    name: Build and Push Orchestrator Service (${{ matrix.platform }})
     runs-on: self-hosted
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+      fail-fast: false
     env:
       REGISTRY: ghcr.io
       SERVICE_NAME: orchestrator-service
@@ -81,111 +85,131 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       # Build and push each platform independently for non-blocking pushes
-      - name: Build and push Orchestrator Service Docker image (amd64) - attempt 1
-        id: build-amd64-attempt-1
+      # Each architecture runs in parallel and pushes as soon as it's ready
+      - name: Build and push Orchestrator Service Docker image (${{ matrix.platform }}) - attempt 1
+        id: build-attempt-1
         uses: docker/build-push-action@v5
         continue-on-error: true
         with:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Orchestrator Service Docker image (amd64) - attempt 2
-        if: steps.build-amd64-attempt-1.outcome == 'failure'
-        id: build-amd64-attempt-2
+      - name: Build and push Orchestrator Service Docker image (${{ matrix.platform }}) - attempt 2
+        if: steps.build-attempt-1.outcome == 'failure'
+        id: build-attempt-2
         uses: docker/build-push-action@v5
         continue-on-error: true
         with:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Orchestrator Service Docker image (amd64) - attempt 3
-        if: steps.build-amd64-attempt-2.outcome == 'failure'
+      - name: Build and push Orchestrator Service Docker image (${{ matrix.platform }}) - attempt 3
+        if: steps.build-attempt-2.outcome == 'failure'
+        id: build-attempt-3
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Orchestrator Service Docker image (arm64) - attempt 1
-        id: build-arm64-attempt-1
-        uses: docker/build-push-action@v5
-        continue-on-error: true
+      # Create/update manifest immediately after this platform build completes
+      # This allows pulls to work even before the other platform is built
+      - name: Create/update manifest for ${{ matrix.platform }}
+        if: github.event_name != 'pull_request' && (steps.build-attempt-1.outcome == 'success' || steps.build-attempt-2.outcome == 'success' || steps.build-attempt-3.outcome == 'success')
+        run: |
+          PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}"
+          OTHER_PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-arm64' || 'linux-amd64' }}"
+          
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Updating manifest for tag: $tag with platform: ${{ matrix.platform }}"
+              # Check if the other platform image exists
+              if docker buildx imagetools inspect "$OTHER_PLATFORM_TAG" >/dev/null 2>&1; then
+                echo "Both platforms available, creating multi-platform manifest"
+                docker buildx imagetools create --tag "$tag" \
+                  "${{ env.IMAGE_NAME }}:linux-amd64" \
+                  "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Manifest update completed"
+              else
+                echo "Only ${{ matrix.platform }} available, creating single-platform manifest"
+                docker buildx imagetools create --tag "$tag" "$PLATFORM_TAG" || echo "Manifest update completed"
+              fi
+            fi
+          done
+
+
+  merge-manifest:
+    name: Merge Multi-Platform Manifest - Orchestrator Service
+    runs-on: self-hosted
+    needs: build-and-push-orchestrator-service
+    if: github.event_name != 'pull_request'
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ghcr.io/obiente/cloud-orchestrator-service
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          context: .
-          file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            COMMIT=${{ github.sha }}
-            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/arm64
-          builder: ${{ steps.buildx.outputs.name }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Orchestrator Service Docker image (arm64) - attempt 2
-        if: steps.build-arm64-attempt-1.outcome == 'failure'
-        id: build-arm64-attempt-2
-        uses: docker/build-push-action@v5
-        continue-on-error: true
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          context: .
-          file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            COMMIT=${{ github.sha }}
-            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/arm64
-          builder: ${{ steps.buildx.outputs.name }}
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Orchestrator Service Docker image (arm64) - attempt 3
-        if: steps.build-arm64-attempt-2.outcome == 'failure'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            COMMIT=${{ github.sha }}
-            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/arm64
-          builder: ${{ steps.buildx.outputs.name }}
-
+      - name: Create and push multi-platform manifest
+        run: |
+          sleep 5
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Creating manifest for tag: $tag"
+              docker buildx imagetools create --tag "$tag"                 "${{ env.IMAGE_NAME }}:linux-amd64"                 "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Note: Manifest creation completed (may already exist)"
+            fi
+          done

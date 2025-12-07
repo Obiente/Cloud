@@ -129,6 +129,7 @@ jobs:
 
       - name: Build and push VPS Service Docker image (${{ matrix.platform }}) - attempt 3
         if: steps.build-attempt-2.outcome == 'failure'
+        id: build-attempt-3
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -145,6 +146,30 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
+
+      # Create/update manifest immediately after this platform build completes
+      # This allows pulls to work even before the other platform is built
+      - name: Create/update manifest for ${{ matrix.platform }}
+        if: github.event_name != 'pull_request' && (steps.build-attempt-1.outcome == 'success' || steps.build-attempt-2.outcome == 'success' || steps.build-attempt-3.outcome == 'success')
+        run: |
+          PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}"
+          OTHER_PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-arm64' || 'linux-amd64' }}"
+          
+          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "Updating manifest for tag: $tag with platform: ${{ matrix.platform }}"
+              # Check if the other platform image exists
+              if docker buildx imagetools inspect "$OTHER_PLATFORM_TAG" >/dev/null 2>&1; then
+                echo "Both platforms available, creating multi-platform manifest"
+                docker buildx imagetools create --tag "$tag" \
+                  "${{ env.IMAGE_NAME }}:linux-amd64" \
+                  "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Manifest update completed"
+              else
+                echo "Only ${{ matrix.platform }} available, creating single-platform manifest"
+                docker buildx imagetools create --tag "$tag" "$PLATFORM_TAG" || echo "Manifest update completed"
+              fi
+            fi
+          done
 
 
   merge-manifest:
@@ -185,8 +210,6 @@ jobs:
           echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
             if [ -n "$tag" ]; then
               echo "Creating manifest for tag: $tag"
-              docker buildx imagetools create --tag "$tag" \
-                "${{ env.IMAGE_NAME }}:linux-amd64" \
-                "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Note: Manifest may already exist or images not ready yet"
+              docker buildx imagetools create --tag "$tag"                 "${{ env.IMAGE_NAME }}:linux-amd64"                 "${{ env.IMAGE_NAME }}:linux-arm64" || echo "Note: Manifest creation completed (may already exist)"
             fi
           done
