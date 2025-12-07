@@ -51,10 +51,10 @@
                   tab.triggerClass,
                 ]"
                 @mouseenter="handleTabHover(tab.id)"
-                @dragstart="(e) => handleDragStart(e, tab.id)"
+                @dragstart="(e: DragEvent) => handleDragStart(e, tab.id)"
                 @dragend="handleDragEnd"
-                @dragover="(e) => handleDragOver(e, tab.id)"
-                @drop="(e) => handleDrop(e, tab.id)"
+                @dragover="(e: DragEvent) => handleDragOver(e, tab.id)"
+                @drop="(e: DragEvent) => handleDrop(e, tab.id)"
                 @dragleave="handleDragLeave"
               >
                 <component

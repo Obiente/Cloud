@@ -249,8 +249,11 @@ message GetGameServerLogsResponse {
 
 message StreamGameServerLogsRequest {
   string game_server_id = 1;
-  optional bool follow = 2;         // Follow logs (like tail -f)
+  optional bool follow = 2;         // Follow logs (like tail -f, default: true)
   optional int32 tail = 3;          // Number of lines to tail (default: 100)
+  optional google.protobuf.Timestamp since = 4; // Get historical logs since this timestamp
+  optional google.protobuf.Timestamp until = 5; // Get historical logs until this timestamp (for pagination)
+  optional string search_query = 6;   // Search query to filter logs (case-insensitive substring match)
 }
 
 message GameServerLogLine {

@@ -147,10 +147,21 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail str
 			opts.Tail = "500"
 		}
 	}
+	
+	// Log the exact parameters being sent to Docker API for debugging
+	containerIDShort := containerID
+	if len(containerID) > 12 {
+		containerIDShort = containerID[:12]
+	}
+	log.Printf("[ContainerLogs] Calling Docker API: containerID=%s, tail=%q, follow=%v, since=%v, until=%v", 
+		containerIDShort, tail, follow, opts.Since, opts.Until)
+	
 	logs, err := c.api.ContainerLogs(ctx, containerID, opts)
 	if err != nil {
+		log.Printf("[ContainerLogs] Docker API error: %v", err)
 		return nil, fmt.Errorf("docker: logs for %s: %w", containerID, err)
 	}
+	log.Printf("[ContainerLogs] Successfully obtained logs reader from Docker API")
 	return logs, nil
 }
 

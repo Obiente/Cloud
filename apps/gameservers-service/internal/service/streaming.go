@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"gameservers-service/internal/orchestrator"
+
 	"github.com/acarl005/stripansi"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
@@ -48,346 +50,14 @@ func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Reque
 	return stream.Send(update)
 }
 
-// GetGameServerLogs retrieves logs for a game server
+// GetGameServerLogs is deprecated - use StreamGameServerLogs instead
+// This endpoint blocks until all logs are fetched, which can cause timeouts
 func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerLogsRequest]) (*connect.Response[gameserversv1.GetGameServerLogsResponse], error) {
-	gameServerID := req.Msg.GetGameServerId()
-	if gameServerID == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game server ID is required"))
-	}
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
-		return nil, err
-	}
-
-	// Get logs from Docker container
-	manager, err := s.getGameServerManager()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
-	}
-
-	limit := req.Msg.Limit
-	if limit == nil || *limit == 0 {
-		limitVal := int32(100) // Default to last 100 lines
-		limit = &limitVal
-	}
-
-	// Parse since timestamp if provided
-	var sinceTime *time.Time
-	if req.Msg.Since != nil {
-		since := req.Msg.Since.AsTime()
-		sinceTime = &since
-	}
-
-	// Parse until timestamp if provided (for historical loading)
-	var untilTime *time.Time
-	if req.Msg.Until != nil {
-		until := req.Msg.Until.AsTime()
-		untilTime = &until
-	} else if sinceTime != nil {
-		// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
-		// Docker's "until" parameter gets logs before a timestamp
-		// Use until to get logs before the since timestamp
-		untilTime = sinceTime
-		sinceTime = nil // Clear since when using until
-	}
-
-	// Get search query if provided
-	searchQuery := ""
-	if req.Msg.SearchQuery != nil && *req.Msg.SearchQuery != "" {
-		searchQuery = strings.ToLower(strings.TrimSpace(*req.Msg.SearchQuery))
-	}
-	
-	// Log the request for debugging
-	logger.Info("[GetGameServerLogs] Request received for game server %s (limit=%d, since=%v, until=%v, search=%s)", 
-		gameServerID, 
-		func() int32 { if limit != nil { return *limit } else { return 0 } }(),
-		sinceTime,
-		untilTime,
-		func() string { if searchQuery != "" { return searchQuery } else { return "none" } }())
-
-	// For proper pagination, always use a reasonable limit
-	// When using until for historical loading, we want to fetch in chunks
-	// If search is active, we may need to fetch more to account for filtering
-	// With 2G memory limit, we can be more generous but still have safety limits
-	// These limits prevent OOM kills while allowing normal operations
-	const maxDockerTailLimit = 5000 // Generous limit for large log files
-	const maxLogLinesInMemory = 10000 // Hard limit on total lines in memory (catches leaks)
-	
-	dockerTailLimit := *limit
-	if searchQuery != "" {
-		// When searching, fetch more logs to account for filtering
-		// Be generous but still bounded
-		dockerTailLimit = *limit * 5
-		if dockerTailLimit > maxDockerTailLimit {
-			dockerTailLimit = maxDockerTailLimit
-		}
-	} else if untilTime != nil {
-		// For historical loading without search, use a reasonable limit
-		// We need to read more than requested to get the most recent N lines before the timestamp
-		// But cap it to prevent slow responses - use 3x the limit or max, whichever is smaller
-		dockerTailLimit = *limit * 3
-		if dockerTailLimit > maxDockerTailLimit {
-			dockerTailLimit = maxDockerTailLimit
-		}
-		// Also cap the absolute maximum we'll process for historical logs
-		if dockerTailLimit > 2000 {
-			dockerTailLimit = 2000 // Cap historical logs at 2000 lines for faster response
-		}
-	}
-	
-	// Add a timeout to the Docker API call itself to prevent hanging
-	// Docker API calls can hang if the daemon is slow or the container is in a bad state
-	dockerCtx, dockerCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dockerCancel()
-	
-	// Use dockerTailLimit for Docker query
-	logger.Debug("[GetGameServerLogs] Calling Docker API for game server %s (tail=%d, since=%v, until=%v)", 
-		gameServerID, dockerTailLimit, sinceTime, untilTime)
-	logsReader, err := manager.GetGameServerLogs(dockerCtx, gameServerID, fmt.Sprintf("%d", dockerTailLimit), false, sinceTime, untilTime)
-	if err != nil {
-		// Check if it's a timeout
-		if dockerCtx.Err() == context.DeadlineExceeded {
-			logger.Error("[GetGameServerLogs] Docker API call timed out after 10 seconds for game server %s: %v", gameServerID, err)
-			return nil, connect.NewError(connect.CodeDeadlineExceeded, fmt.Errorf("docker API call timed out after 10 seconds: %w", err))
-		}
-		logger.Error("[GetGameServerLogs] Failed to get game server logs for %s: %v", gameServerID, err)
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
-	}
-	defer logsReader.Close()
-	logger.Debug("[GetGameServerLogs] Successfully obtained logs reader for game server %s", gameServerID)
-
-	// Add a timeout to prevent indefinite blocking on reads
-	// For non-following logs, Docker should return quickly, but we add a safety timeout
-	readCtx, readCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer readCancel()
-
-	// Parse Docker multiplexed log format
-	// Docker logs format: [8-byte header][payload]
-	// Header: [stream_type(1)][reserved(3)][size(4 bytes, big-endian)]
-	// stream_type: 1=stdout, 2=stderr
-	var logLines []*gameserversv1.GameServerLogLine
-	header := make([]byte, 8)
-	
-	// Memory safety: Track total lines processed to prevent OOM
-	// With 2G memory limit, we can handle more but still need a hard limit to catch leaks
-	// maxLogLinesInMemory is already declared above (line 113)
-	linesProcessed := 0
-	
-	// Optimization: For "until" queries, we only need to keep the last N lines
-	// Use a sliding window instead of accumulating all lines
-	var slidingWindow []*gameserversv1.GameServerLogLine // Only used when untilTime != nil
-	if untilTime != nil {
-		// Pre-allocate sliding window to hold only the last N lines
-		slidingWindow = make([]*gameserversv1.GameServerLogLine, 0, int(*limit)+100) // +100 buffer
-	}
-	
-	// Create a channel to signal when read completes
-	type readResult struct {
-		n   int
-		err error
-	}
-	
-	for {
-		// Memory safety check: stop if we've processed too many lines
-		if linesProcessed >= maxLogLinesInMemory {
-			logger.Warn("[GetGameServerLogs] Reached memory safety limit (%d lines) for game server %s, stopping early", maxLogLinesInMemory, gameServerID)
-			break
-		}
-		// Check if context is cancelled
-		select {
-		case <-readCtx.Done():
-			// Timeout or cancellation - return what we have
-			goto done
-		case <-ctx.Done():
-			goto done
-		default:
-		}
-
-		// Read 8-byte header with timeout
-		headerChan := make(chan readResult, 1)
-		go func() {
-			n, err := io.ReadFull(logsReader, header)
-			headerChan <- readResult{n: n, err: err}
-		}()
-		
-		var err error
-		select {
-		case <-readCtx.Done():
-			// Timeout - return what we have
-			goto done
-		case result := <-headerChan:
-			err = result.err
-		}
-		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				// EOF means we've read all available logs
-				break
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log header: %w", err))
-		}
-
-		streamType := header[0]
-		// Read payload length (bytes 4-7, big-endian)
-		payloadLength := int(binary.BigEndian.Uint32(header[4:8]))
-
-		if payloadLength == 0 {
-			continue
-		}
-
-		// Read payload with timeout
-		payload := make([]byte, payloadLength)
-		payloadChan := make(chan readResult, 1)
-		go func() {
-			n, err := io.ReadFull(logsReader, payload)
-			payloadChan <- readResult{n: n, err: err}
-		}()
-		
-		select {
-		case <-readCtx.Done():
-			// Timeout - return what we have
-			goto done
-		case result := <-payloadChan:
-			err = result.err
-		}
-		
-		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				// Partial payload, process what we have
-				if len(payload) > 0 {
-					// Strip ANSI sequences from raw payload first
-					rawText := strings.ToValidUTF8(string(payload), "")
-					rawText = stripansi.Strip(rawText)
-					rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
-					sanitizedLine := stripTimestampFromLine(rawText)
-					if sanitizedLine != "" {
-						logLevel := detectLogLevelFromContent(sanitizedLine, streamType == 2)
-						line := &gameserversv1.GameServerLogLine{
-							Line:      sanitizedLine,
-							Timestamp: timestamppb.Now(),
-							Level:     &logLevel,
-						}
-						logLines = append(logLines, line)
-					}
-				}
-				break
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log payload: %w", err))
-		}
-
-		// Extract timestamp from original payload before processing
-		// Docker logs with timestamps have format: 2025-01-01T12:00:00.123456789Z <log content>
-		var logTimestamp *timestamppb.Timestamp
-		timestampRegex := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)\s+`)
-		originalPayloadText := strings.ToValidUTF8(string(payload), "")
-		if matches := timestampRegex.FindStringSubmatch(originalPayloadText); len(matches) > 1 {
-			if parsedTime, err := time.Parse(time.RFC3339Nano, matches[1]); err == nil {
-				logTimestamp = timestamppb.New(parsedTime)
-			}
-		}
-
-		// Sanitize to valid UTF-8 and strip ANSI sequences from raw payload
-		rawText := originalPayloadText
-		rawText = stripansi.Strip(rawText) // Use library to strip ANSI
-		rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
-		
-		// Split by newlines to handle multiple lines in one payload
-		lines := strings.Split(rawText, "\n")
-		for _, lineText := range lines {
-			lineText = strings.TrimRight(lineText, "\r")
-			if lineText == "" {
-				continue
-			}
-
-			// Strip timestamps from log lines (e.g., [01:57:06] or 2025-11-05T01:57:06.052Z)
-			lineText = stripTimestampFromLine(lineText)
-			
-			// Detect log level from content
-			logLevel := detectLogLevelFromContent(lineText, streamType == 2)
-			
-			// If no timestamp extracted, use current time
-			if logTimestamp == nil {
-				logTimestamp = timestamppb.Now()
-			}
-			
-			line := &gameserversv1.GameServerLogLine{
-				Line:      lineText,
-				Timestamp: logTimestamp,
-				Level:     &logLevel,
-			}
-			
-			// Increment processed line counter
-			linesProcessed++
-			
-			// Apply search filter if provided
-			matchesSearch := searchQuery == "" || strings.Contains(strings.ToLower(lineText), searchQuery)
-			
-			if untilTime != nil {
-				// For "until" queries: use sliding window - only keep last N lines
-				// This avoids accumulating all lines in memory
-				if matchesSearch {
-					slidingWindow = append(slidingWindow, line)
-					// Keep only the last N lines in the sliding window
-					if len(slidingWindow) > int(*limit)+100 { // +100 buffer for safety
-						// Remove oldest lines, keep only the most recent
-						keepFrom := len(slidingWindow) - int(*limit) - 100
-						slidingWindow = slidingWindow[keepFrom:]
-					}
-				}
-			} else if matchesSearch {
-				// Normal case: accumulate matching lines
-				logLines = append(logLines, line)
-				
-				// If we have enough matching lines and no search, we can stop early
-				// (With search, we might need more to find enough matches)
-				if searchQuery == "" && len(logLines) >= int(*limit) {
-					goto done
-				}
-			}
-			
-			// Early exit optimization: if no search and no until, stop once we have enough
-			if searchQuery == "" && untilTime == nil && len(logLines) >= int(*limit) {
-				goto done
-			}
-		}
-		
-		// Stop if we've processed enough raw lines (accounting for filtering)
-		// Count all processed lines, not just matching ones
-		// Also check memory safety limit
-		if untilTime != nil {
-			// For until queries, limit how much we read to prevent slow responses
-			// We've already capped dockerTailLimit above, so use that as our limit
-			if linesProcessed >= int(dockerTailLimit) || linesProcessed >= maxLogLinesInMemory {
-				break
-			}
-		} else if len(logLines) >= int(dockerTailLimit) || linesProcessed >= maxLogLinesInMemory {
-			break
-		}
-	}
-	
-done:
-	// When using until parameter, Docker returns logs in chronological order (oldest to newest)
-	// up to the until timestamp. For historical loading, we want the MOST RECENT logs before
-	// that timestamp, so we need to take the last N lines, not the first N.
-	if untilTime != nil {
-		// Use the sliding window which already contains only the last N lines
-		if len(slidingWindow) > int(*limit) {
-			// Take the last N lines from sliding window
-			logLines = slidingWindow[len(slidingWindow)-int(*limit):]
-		} else {
-			logLines = slidingWindow
-		}
-	} else if len(logLines) > int(*limit) {
-		// For normal queries (no until), take the first N lines
-		logLines = logLines[:int(*limit)]
-	}
-
-	logger.Info("[GetGameServerLogs] Returning %d log lines for game server %s", len(logLines), gameServerID)
-	res := connect.NewResponse(&gameserversv1.GetGameServerLogsResponse{
-		Lines: logLines,
-	})
-	return res, nil
+	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("GetGameServerLogs is deprecated. Please use StreamGameServerLogs instead, which connects immediately and streams logs without blocking"))
 }
 
 // StreamGameServerLogs streams logs for a game server
+// This connects immediately and streams historical logs first (if requested), then continues with live logs
 func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.StreamGameServerLogsRequest], stream *connect.ServerStream[gameserversv1.GameServerLogLine]) error {
 	logger.Info("[StreamGameServerLogs] Request received")
 	// Ensure authenticated - use the returned context
@@ -412,35 +82,335 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
 	}
 
+	// Parse request parameters
 	tail := req.Msg.Tail
 	if tail == nil || *tail == 0 {
 		tailVal := int32(100) // Default to last 100 lines
 		tail = &tailVal
 	}
 
-	// Cap the initial tail to prevent slow startup when requesting many lines
-	// Lines are sent immediately as they're read, but Docker still needs to return the initial tail first
-	const maxInitialTail = 1000 // Cap initial tail at 1000 lines for faster streaming startup
-	actualTail := *tail
-	if actualTail > maxInitialTail {
-		logger.Info("[StreamGameServerLogs] Capping initial tail from %d to %d for faster streaming startup", actualTail, maxInitialTail)
-		actualTail = maxInitialTail
+	follow := req.Msg.Follow
+	if follow == nil {
+		followVal := true // Default to following logs
+		follow = &followVal
 	}
 
-	// Always follow logs when streaming - client context will handle disconnection
-	// This ensures logs are always streamed while the tab is open
-	follow := true
+	// Parse since/until timestamps for historical logs
+	var sinceTime *time.Time
+	if req.Msg.Since != nil {
+		since := req.Msg.Since.AsTime()
+		sinceTime = &since
+	}
 
-	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", actualTail), follow, nil, nil)
+	var untilTime *time.Time
+	if req.Msg.Until != nil {
+		until := req.Msg.Until.AsTime()
+		untilTime = &until
+	} else if sinceTime != nil {
+		// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
+		untilTime = sinceTime
+		sinceTime = nil
+	}
+
+	// Get search query if provided
+	searchQuery := ""
+	if req.Msg.SearchQuery != nil && *req.Msg.SearchQuery != "" {
+		searchQuery = strings.ToLower(strings.TrimSpace(*req.Msg.SearchQuery))
+	}
+
+	logger.Info("[StreamGameServerLogs] Streaming logs for %s (tail=%d, follow=%v, since=%v, until=%v, search=%s)",
+		gameServerID, *tail, *follow, sinceTime, untilTime, func() string {
+			if searchQuery != "" {
+				return searchQuery
+			}
+			return "none"
+		}())
+
+	// Step 1: Stream historical logs first
+	// Always fetch initial tail as historical logs to ensure connection is established immediately
+	// If since/until is provided, use those; otherwise just get the tail
+	logger.Info("[StreamGameServerLogs] Fetching historical logs for %s", gameServerID)
+	if err := s.streamHistoricalLogs(ctx, manager, gameServerID, stream, *tail, sinceTime, untilTime, searchQuery); err != nil {
+		logger.Warn("[StreamGameServerLogs] Error streaming historical logs: %v", err)
+		// Continue to live streaming even if historical fails
+	}
+
+	// Step 2: Continue with live streaming if follow is true
+	if !*follow {
+		logger.Info("[StreamGameServerLogs] Follow disabled, ending stream after historical logs")
+		return nil
+	}
+
+	// For live streaming, we only want NEW logs (follow mode)
+	// If we already sent historical logs, we don't want to duplicate them
+	// So we use tail=0 to skip the initial tail and only get new logs
+	logger.Info("[StreamGameServerLogs] Starting live log streaming for %s (following new logs only)", gameServerID)
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, "0", true, nil, nil)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
 	}
 	defer logsReader.Close()
 
-	// Parse Docker multiplexed log format
-	// Docker logs format: [8-byte header][payload]
-	// Header: [stream_type(1)][reserved(3)][size(4 bytes, big-endian)]
-	// stream_type: 1=stdout, 2=stderr
+	// Stream live logs
+	return s.streamLiveLogs(ctx, logsReader, stream, searchQuery)
+}
+
+// streamHistoricalLogs fetches and streams historical logs (non-following)
+func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrator.GameServerManager, gameServerID string, stream *connect.ServerStream[gameserversv1.GameServerLogLine], limit int32, sinceTime *time.Time, untilTime *time.Time, searchQuery string) error {
+	// Calculate how many lines to fetch
+	// For historical logs, we fetch more than requested to account for filtering
+	dockerTailLimit := int(limit)
+	if searchQuery != "" {
+		dockerTailLimit = int(limit) * 3 // Fetch more when searching
+	} else if untilTime != nil {
+		dockerTailLimit = int(limit) * 2 // Fetch more for historical pagination
+	}
+
+	// Cap to prevent memory issues
+	const maxHistoricalLines = 5000
+	if dockerTailLimit > maxHistoricalLines {
+		dockerTailLimit = maxHistoricalLines
+	}
+
+	logger.Info("[streamHistoricalLogs] Fetching %d lines for %s (since=%v, until=%v, search=%s)", dockerTailLimit, gameServerID, sinceTime, untilTime, searchQuery)
+
+	// Hybrid approach: Try follow=false first (fast, returns immediately), then fallback to follow=true
+	tailParam := fmt.Sprintf("%d", dockerTailLimit)
+	
+	// Parse and stream historical logs
+	// For until queries, Docker returns logs in chronological order (oldest to newest)
+	// We need to keep only the last N lines, so we use a sliding window
+	header := make([]byte, 8)
+	var allLines []*gameserversv1.GameServerLogLine
+	useSlidingWindow := untilTime != nil
+	linesRead := 0
+	linesSent := 0
+
+	logger.Info("[streamHistoricalLogs] Attempting to read historical logs (useSlidingWindow=%v)", useSlidingWindow)
+
+	// CRITICAL FIX: User confirmed Docker CLI works (docker logs shows logs), but our API returns EOF
+	// Docker's tail parameter can be unreliable with follow=false. Use "all" to get all logs, then limit client-side
+	// This ensures we actually get logs even if Docker's tail calculation fails
+	effectiveTail := "all"
+	limitClientSide := true // When using "all", we need to limit on our side
+	logger.Info("[streamHistoricalLogs] Using tail='all' to ensure we get logs (Docker tail can be unreliable with follow=false), will limit to %d lines client-side", dockerTailLimit)
+
+	// Try follow=false first - it's faster and more reliable for historical logs
+	// According to Docker docs, follow=false with tail returns the last N lines and closes immediately
+	logger.Info("[streamHistoricalLogs] Trying follow=false with tail=%s - Docker should return logs immediately or EOF", effectiveTail)
+	
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, effectiveTail, false, sinceTime, untilTime)
+	if err != nil {
+		logger.Error("[streamHistoricalLogs] Failed to get logs reader with follow=false: %v", err)
+		return fmt.Errorf("failed to get historical logs: %w", err)
+	}
+	defer logsReader.Close()
+	
+	logger.Info("[streamHistoricalLogs] Successfully obtained logs reader (follow=false), reading until EOF...")
+
+	// Read all logs until EOF with follow=false
+	// Docker returns logs and closes the stream
+	readAnyLogs := false
+	useFollow := false
+	for {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			logger.Info("[streamHistoricalLogs] Context cancelled, read %d lines, sent %d lines", linesRead, linesSent)
+			return nil
+		default:
+		}
+
+		// Read header - with follow=false, Docker returns logs immediately or EOF
+		// With follow=true, we use timeout to detect when Docker has finished sending tail
+		var err error
+		if useFollow {
+			// With follow=true, use timeout to detect when Docker has finished sending tail
+			// Docker sends tail immediately, then waits for new logs
+			headerChan := make(chan error, 1)
+			go func() {
+				_, readErr := io.ReadFull(logsReader, header)
+				headerChan <- readErr
+			}()
+			
+			select {
+			case err = <-headerChan:
+				// Got result, continue reading
+				logger.Debug("[streamHistoricalLogs] Read header with follow=true, continuing...")
+			case <-time.After(5 * time.Second):
+				// Timeout - Docker has finished sending historical logs
+				logger.Info("[streamHistoricalLogs] Timeout (5s) after reading %d lines with follow=true (Docker finished sending tail), stopping", linesSent)
+				if linesSent == 0 {
+					logger.Warn("[streamHistoricalLogs] No historical logs were read with follow=true - container may have no logs")
+				}
+				return nil
+			}
+		} else {
+			// With follow=false, read directly (Docker returns logs immediately or EOF)
+			// No timeout needed - Docker either sends logs immediately or returns EOF
+			logger.Debug("[streamHistoricalLogs] Reading header with follow=false (no timeout)...")
+			_, err = io.ReadFull(logsReader, header)
+			logger.Debug("[streamHistoricalLogs] Read header result: err=%v", err)
+		}
+		
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				logger.Info("[streamHistoricalLogs] EOF reached (follow=%v), read %d lines total, sent %d lines", useFollow, linesRead, linesSent)
+				if !readAnyLogs && !useFollow {
+					// Got EOF immediately with follow=false and no logs - try follow=true as fallback
+					logger.Warn("[streamHistoricalLogs] Got EOF immediately with follow=false and no logs, trying follow=true as fallback")
+					logsReader.Close()
+					
+					// Retry with follow=true and longer timeout
+					logsReader, err = manager.GetGameServerLogs(ctx, gameServerID, tailParam, true, sinceTime, untilTime)
+					if err != nil {
+						logger.Error("[streamHistoricalLogs] Failed to get logs reader with follow=true: %v", err)
+						return fmt.Errorf("failed to get historical logs with follow=true: %w", err)
+					}
+					useFollow = true
+					logger.Info("[streamHistoricalLogs] Retrying with follow=true, will use timeout to detect when Docker finishes sending tail")
+					
+					// Continue to next iteration to read with follow=true
+					continue
+				} else if !readAnyLogs {
+					logger.Warn("[streamHistoricalLogs] WARNING: Got EOF immediately - no historical logs available. Container may have no logs yet.")
+				}
+				break // Done reading historical logs
+			}
+			logger.Error("[streamHistoricalLogs] Error reading header: %v (linesSent=%d, follow=%v)", err, linesSent, useFollow)
+			// If we've read some logs but hit an error, that's okay - we got what we could
+			if linesSent > 0 {
+				logger.Info("[streamHistoricalLogs] Error after reading %d lines, stopping", linesSent)
+				return nil
+			}
+			return fmt.Errorf("failed to read log header: %w", err)
+		}
+		
+		readAnyLogs = true
+
+		streamType := header[0]
+		payloadLength := int(binary.BigEndian.Uint32(header[4:8]))
+		if payloadLength == 0 {
+			logger.Debug("[streamHistoricalLogs] Header with zero payload length, skipping")
+			continue
+		}
+		logger.Info("[streamHistoricalLogs] Header: streamType=%d, payloadLength=%d bytes", streamType, payloadLength)
+
+		// Read payload
+		payload := make([]byte, payloadLength)
+		bytesRead, err := io.ReadFull(logsReader, payload)
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				logger.Warn("[streamHistoricalLogs] EOF while reading payload (expected %d bytes, read %d bytes). This might indicate Docker closed the stream early.", payloadLength, bytesRead)
+				// If we read some data, try to parse what we have
+				if bytesRead > 0 {
+					logger.Info("[streamHistoricalLogs] Attempting to parse partial payload (%d bytes)", bytesRead)
+					payload = payload[:bytesRead]
+					// Continue to parsing below
+				} else {
+					logger.Info("[streamHistoricalLogs] No payload data read, read %d lines total, sent %d lines", linesRead, linesSent)
+					break
+				}
+			} else {
+				return fmt.Errorf("failed to read log payload: %w", err)
+			}
+		}
+
+		// Parse log lines
+		lines := s.parseLogPayload(payload, streamType == 2)
+		logger.Info("[streamHistoricalLogs] Parsed %d lines from payload (size=%d bytes, linesSent=%d)", len(lines), payloadLength, linesSent)
+		if len(lines) > 0 && len(lines[0].Line) > 0 {
+			previewLen := 50
+			if len(lines[0].Line) < previewLen {
+				previewLen = len(lines[0].Line)
+			}
+			logger.Info("[streamHistoricalLogs] First line preview: %q", lines[0].Line[:previewLen])
+		}
+		
+		for _, line := range lines {
+			linesRead++
+			
+			// Apply search filter if provided
+			if searchQuery != "" && !strings.Contains(strings.ToLower(line.Line), searchQuery) {
+				continue
+			}
+
+			if useSlidingWindow {
+				// For until queries, use sliding window to keep only last N lines
+				allLines = append(allLines, line)
+				if len(allLines) > int(limit)+100 { // Keep a bit more for filtering
+					allLines = allLines[1:] // Remove oldest
+				}
+			} else {
+				// When using "all", we need to buffer and only send the last N lines
+				if limitClientSide {
+					allLines = append(allLines, line)
+					// Keep only the last N lines in memory
+					if len(allLines) > int(dockerTailLimit)+100 { // Keep a bit extra for filtering
+						allLines = allLines[1:] // Remove oldest
+					}
+				} else {
+					// Stream immediately to client
+					previewLen := 50
+					if len(line.Line) < previewLen {
+						previewLen = len(line.Line)
+					}
+					logger.Debug("[streamHistoricalLogs] Sending log line to client: %q", line.Line[:previewLen])
+					if err := stream.Send(line); err != nil {
+						logger.Error("[streamHistoricalLogs] Failed to send log line to client: %v", err)
+						return err
+					}
+					linesSent++
+					if linesSent == 1 {
+						firstLinePreview := 100
+						if len(line.Line) < firstLinePreview {
+							firstLinePreview = len(line.Line)
+						}
+						logger.Info("[streamHistoricalLogs] ✓ Successfully sent first log line to client! Line: %q", line.Line[:firstLinePreview])
+					}
+					if linesSent%100 == 0 {
+						logger.Info("[streamHistoricalLogs] Sent %d lines so far", linesSent)
+					}
+				}
+			}
+		}
+	}
+
+	// For until queries or client-side limiting, send the last N lines
+	if useSlidingWindow || limitClientSide {
+		startIdx := 0
+		limitToUse := int(limit)
+		if limitClientSide {
+			limitToUse = dockerTailLimit
+		}
+		if len(allLines) > limitToUse {
+			startIdx = len(allLines) - limitToUse
+		}
+		sentCount := 0
+		for i := startIdx; i < len(allLines); i++ {
+			if err := stream.Send(allLines[i]); err != nil {
+				logger.Warn("[streamHistoricalLogs] Failed to send log line from buffer: %v", err)
+				return err
+			}
+			sentCount++
+			linesSent++
+		}
+		logger.Info("[streamHistoricalLogs] Streamed %d historical log lines (from %d total read) for %s", sentCount, len(allLines), gameServerID)
+		if sentCount == 0 && linesRead == 0 {
+			logger.Warn("[streamHistoricalLogs] WARNING: No historical logs were read or sent! This might indicate an issue with Docker log retrieval.")
+		}
+	} else {
+		logger.Info("[streamHistoricalLogs] Completed streaming historical logs for %s: read %d lines, sent %d lines (no sliding window used)", gameServerID, linesRead, linesSent)
+		if linesSent == 0 && linesRead == 0 {
+			logger.Warn("[streamHistoricalLogs] WARNING: No historical logs were read or sent! This might indicate an issue with Docker log retrieval.")
+		}
+	}
+
+	return nil
+}
+
+// streamLiveLogs streams live logs (following)
+func (s *Service) streamLiveLogs(ctx context.Context, logsReader io.ReadCloser, stream *connect.ServerStream[gameserversv1.GameServerLogLine], searchQuery string) error {
 	header := make([]byte, 8)
 	for {
 		// Check if context is cancelled
@@ -455,17 +425,14 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				// EOF is normal when following logs - container might have paused or no new logs
-				// Check if context is cancelled before waiting
 				if ctx.Err() != nil {
 					return nil
 				}
-				// Brief pause before retrying to avoid tight loop
-				// This allows the stream to continue when new logs arrive
+				// Brief pause before retrying
 				select {
 				case <-ctx.Done():
 					return nil
 				case <-time.After(100 * time.Millisecond):
-					// Reset header and retry
 					header = make([]byte, 8)
 					continue
 				}
@@ -477,9 +444,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		}
 
 		streamType := header[0]
-		// Read payload length (bytes 4-7, big-endian)
 		payloadLength := int(binary.BigEndian.Uint32(header[4:8]))
-
 		if payloadLength == 0 {
 			continue
 		}
@@ -489,34 +454,23 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		_, err = io.ReadFull(logsReader, payload)
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				// Partial payload, send what we have
+				// Partial payload, try to send what we have
 				if len(payload) > 0 {
-					// Strip ANSI sequences from raw payload first
-					rawText := strings.ToValidUTF8(string(payload), "")
-					rawText = stripansi.Strip(rawText)
-					rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
-					sanitizedLine := stripTimestampFromLine(rawText)
-					if sanitizedLine != "" {
-						logLevel := detectLogLevelFromContent(sanitizedLine, streamType == 2)
-						line := &gameserversv1.GameServerLogLine{
-							Line:      sanitizedLine,
-							Timestamp: timestamppb.Now(),
-							Level:     &logLevel,
-						}
-
-						if sendErr := stream.Send(line); sendErr != nil {
-							if ctx.Err() != nil {
-								return nil
+					lines := s.parseLogPayload(payload, streamType == 2)
+					for _, line := range lines {
+						if searchQuery == "" || strings.Contains(strings.ToLower(line.Line), searchQuery) {
+							if sendErr := stream.Send(line); sendErr != nil {
+								if ctx.Err() != nil {
+									return nil
+								}
+								return sendErr
 							}
-							return sendErr
 						}
 					}
 				}
-				// EOF is normal when following - check context and retry
 				if ctx.Err() != nil {
 					return nil
 				}
-				// Brief pause before retrying
 				select {
 				case <-ctx.Done():
 					return nil
@@ -530,34 +484,15 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log payload: %w", err))
 		}
 
-		// Sanitize to valid UTF-8 and strip ANSI sequences from raw payload
-		rawText := strings.ToValidUTF8(string(payload), "")
-		rawText = stripansi.Strip(rawText) // Use library to strip ANSI
-		rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
-		
-		// Split by newlines to handle multiple lines in one payload
-		lines := strings.Split(rawText, "\n")
-		for _, lineText := range lines {
-			lineText = strings.TrimRight(lineText, "\r")
-			if lineText == "" {
+		// Parse and send log lines
+		lines := s.parseLogPayload(payload, streamType == 2)
+		for _, line := range lines {
+			// Apply search filter if provided
+			if searchQuery != "" && !strings.Contains(strings.ToLower(line.Line), searchQuery) {
 				continue
 			}
 
-			// Strip timestamps from log lines (e.g., [01:57:06] or 2025-11-05T01:57:06.052Z)
-			// Minecraft logs often have timestamps embedded in them
-			lineText = stripTimestampFromLine(lineText)
-			
-			// Detect log level from content
-			logLevel := detectLogLevelFromContent(lineText, streamType == 2)
-			
-			line := &gameserversv1.GameServerLogLine{
-				Line:      lineText,
-				Timestamp: timestamppb.Now(),
-				Level:     &logLevel,
-			}
-
 			if sendErr := stream.Send(line); sendErr != nil {
-				// Check if context was cancelled (client disconnected)
 				if ctx.Err() != nil {
 					return nil
 				}
@@ -565,6 +500,39 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 			}
 		}
 	}
+}
+
+// parseLogPayload parses a Docker log payload and returns log lines
+func (s *Service) parseLogPayload(payload []byte, isStderr bool) []*gameserversv1.GameServerLogLine {
+	// Sanitize to valid UTF-8 and strip ANSI sequences
+	rawText := strings.ToValidUTF8(string(payload), "")
+	rawText = stripansi.Strip(rawText)
+	rawText = stripAnsiEscapeSequences(rawText)
+
+	// Split by newlines to handle multiple lines in one payload
+	lines := strings.Split(rawText, "\n")
+	var logLines []*gameserversv1.GameServerLogLine
+
+	for _, lineText := range lines {
+		lineText = strings.TrimRight(lineText, "\r")
+		if lineText == "" {
+			continue
+		}
+
+		// Strip timestamps from log lines
+		lineText = stripTimestampFromLine(lineText)
+
+		// Detect log level from content
+		logLevel := detectLogLevelFromContent(lineText, isStderr)
+
+		logLines = append(logLines, &gameserversv1.GameServerLogLine{
+			Line:      lineText,
+			Timestamp: timestamppb.Now(),
+			Level:     &logLevel,
+		})
+	}
+
+	return logLines
 }
 
 // stripAnsiEscapeSequences removes ANSI escape sequences from log lines
@@ -597,6 +565,14 @@ func stripAnsiEscapeSequences(line string) string {
 		line = regexp.MustCompile(`\[K`).ReplaceAllString(line, "")
 		line = regexp.MustCompile(`\[[A-HJmsu]`).ReplaceAllString(line, "")
 		
+		// Remove escape sequences that might appear as text: <--ERE], <--ERE, <--, etc.
+		// These are often malformed escape sequences that got converted to text
+		// Do this FIRST before other patterns to catch it early
+		// Match <-- followed by any characters (including letters, numbers, etc.) up to and including ]
+		line = regexp.MustCompile(`<--[A-Z0-9]*\]`).ReplaceAllString(line, "") // Match <--ERE] specifically
+		line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")     // Match <--ERE (without bracket)
+		line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")           // Match <-- alone
+		
 		// Remove formatting codes: [0m, [1m, [4m, [3m, [30m, etc.
 		// Match [ followed by digits and 'm' (SGR - Select Graphic Rendition)
 		// But exclude timestamps like [21:45:50] by requiring the 'm' suffix
@@ -623,6 +599,17 @@ func stripAnsiEscapeSequences(line string) string {
 	line = regexp.MustCompile(`^\[\?[0-9]*[hHlLmM]?`).ReplaceAllString(line, "") // At start of line
 	line = regexp.MustCompile(`\[K$`).ReplaceAllString(line, "")                // At end of line
 	line = regexp.MustCompile(`\[K\s`).ReplaceAllString(line, " ")              // Before whitespace
+	
+	// Final cleanup: remove any remaining <-- patterns (should have been caught earlier, but be safe)
+	// Be very aggressive here - match <-- followed by anything up to ]
+	line = regexp.MustCompile(`<--[A-Z0-9]*\]`).ReplaceAllString(line, "") // Match <--ERE] specifically
+	line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")     // Match <--ERE (without bracket)
+	line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")           // Match <-- alone
+	
+	// Also remove standalone ERE] patterns that might remain (leftover from incomplete stripping)
+	line = regexp.MustCompile(`^ERE\]`).ReplaceAllString(line, "")
+	line = regexp.MustCompile(`\s+ERE\]`).ReplaceAllString(line, "")
+	line = regexp.MustCompile(`ERE\]`).ReplaceAllString(line, "") // Remove anywhere
 	
 	return strings.TrimSpace(line)
 }

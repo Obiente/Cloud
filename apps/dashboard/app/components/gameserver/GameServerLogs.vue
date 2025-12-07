@@ -116,7 +116,6 @@
     <div
       ref="logsContainer"
       class="logs-container-wrapper"
-      @scroll="handleScroll"
     >
       <OuiLogs
         ref="logsComponent"
@@ -205,6 +204,19 @@ let terminalOutputBuffer = "";
 let scrollPositionBeforeLoad = 0;
 let isLoadingOlderLogsDebounce: ReturnType<typeof setTimeout> | null = null;
 
+// Helper function to ensure logs are always sorted chronologically by timestamp
+const sortLogsByTimestamp = () => {
+  logs.value.sort((a, b) => {
+    const timeA = new Date(a.timestamp).getTime();
+    const timeB = new Date(b.timestamp).getTime();
+    // If timestamps are equal, maintain insertion order (stable sort)
+    if (timeA === timeB) {
+      return 0;
+    }
+    return timeA - timeB; // Ascending order (oldest first)
+  });
+};
+
 // Helper function to check if a line is empty or only whitespace
 function isEmptyOrWhitespace(line: string): boolean {
   return !line || line.trim().length === 0;
@@ -243,40 +255,64 @@ const formattedLogs = computed<LogEntry[]>(() => {
 });
 
 // Handle scroll to detect when user scrolls to top for lazy loading
-const handleScroll = () => {
+const handleScroll = (event?: Event) => {
+  // Find the scroll container from the event target
+  const scrollContainer = event?.target as HTMLElement | null;
+  
+  if (!scrollContainer) {
+    return;
+  }
+
   if (
-    !logsContainer.value ||
     isLoadingOlderLogs.value ||
     hasLoadedAllLogs.value ||
     searchQuery.value // Don't load older logs when searching
-  )
+  ) {
     return;
+  }
 
-  const container = logsContainer.value;
-  const scrollTop = container.scrollTop;
+  const scrollTop = scrollContainer.scrollTop;
 
-  // If user scrolls within 200px of the top, load older logs
-  if (scrollTop < 200 && logs.value.length > 0) {
+  // Debug logging (remove in production if needed)
+  if (scrollTop < 500) {
+    console.log('[GameServerLogs] Scroll detected:', { scrollTop, logsLength: logs.value.length });
+  }
+
+  // If user scrolls within 300px of the top, load older logs
+  // Increased threshold for better UX - starts loading before reaching the very top
+  if (scrollTop < 300 && logs.value.length > 0) {
+    console.log('[GameServerLogs] Triggering loadOlderLogs - scrollTop:', scrollTop);
+    
     // Debounce to avoid multiple rapid requests
     if (isLoadingOlderLogsDebounce) {
       clearTimeout(isLoadingOlderLogsDebounce);
     }
 
+    // Reduced debounce time for more responsive loading
     isLoadingOlderLogsDebounce = setTimeout(() => {
       loadOlderLogs();
-    }, 300);
+    }, 200);
   }
 };
 
 // Load older logs using the since parameter
 const loadOlderLogs = async () => {
+  console.log('[GameServerLogs] loadOlderLogs called', {
+    isLoadingOlderLogs: isLoadingOlderLogs.value,
+    hasLoadedAllLogs: hasLoadedAllLogs.value,
+    logsLength: logs.value.length
+  });
+  
   if (
     isLoadingOlderLogs.value ||
     hasLoadedAllLogs.value ||
     logs.value.length === 0
-  )
+  ) {
+    console.log('[GameServerLogs] loadOlderLogs aborted - conditions not met');
     return;
+  }
 
+  console.log('[GameServerLogs] Starting to load older logs...');
   isLoadingOlderLogs.value = true;
 
   try {
@@ -299,33 +335,43 @@ const loadOlderLogs = async () => {
     oldestDate.setMilliseconds(oldestDate.getMilliseconds() - 1);
     const untilTimestamp = timestamp(oldestDate);
 
-    // Fetch logs before this timestamp (using until parameter for historical loading)
-    const response = await client.getGameServerLogs({
-      gameServerId: props.gameServerId,
-      limit: 100, // Load 100 older lines at a time for proper pagination
-      until: untilTimestamp,
-      searchQuery: searchQuery.value || undefined,
-    });
+    console.log('[GameServerLogs] Fetching older logs before timestamp:', oldestDate.toISOString());
 
-    if (response.lines && response.lines.length > 0) {
-      // Parse and add older logs to the beginning
-      const olderLogs = response.lines
-        .filter((line) => {
-          const lineText = line.line || "";
-          return !isEmptyOrWhitespace(lineText);
-        })
-        .map((line) => {
+    // Fetch logs before this timestamp using the streaming endpoint with until parameter
+    // Use follow=false to get historical logs only (no live streaming)
+    const olderLogs: Array<{ line: string; timestamp: string; level?: number }> = [];
+    const abortController = new AbortController();
+    
+    try {
+      console.log('[GameServerLogs] Calling streamGameServerLogs with until parameter');
+      const logStream = client.streamGameServerLogs(
+        {
+          gameServerId: props.gameServerId,
+          follow: false, // Don't follow, just get historical logs
+          tail: 100, // Load 100 older lines at a time for proper pagination
+          until: untilTimestamp,
+          searchQuery: searchQuery.value || undefined,
+        },
+        { signal: abortController.signal }
+      );
+      
+      console.log('[GameServerLogs] Stream obtained, reading logs...');
+
+      // Collect all logs from the stream
+      for await (const logLine of logStream) {
+        const lineText = logLine.line || "";
+        if (!isEmptyOrWhitespace(lineText)) {
           let timestamp: string;
           try {
-            if (line.timestamp) {
+            if (logLine.timestamp) {
               const ts =
-                typeof line.timestamp === "string"
-                  ? line.timestamp
-                  : (line.timestamp as any)?.seconds
+                typeof logLine.timestamp === "string"
+                  ? logLine.timestamp
+                  : (logLine.timestamp as any)?.seconds
                   ? new Date(
-                      Number((line.timestamp as any).seconds) * 1000
+                      Number((logLine.timestamp as any).seconds) * 1000
                     ).toISOString()
-                  : new Date(line.timestamp as any).toISOString();
+                  : new Date(logLine.timestamp as any).toISOString();
               timestamp = ts;
             } else {
               timestamp = new Date().toISOString();
@@ -333,13 +379,22 @@ const loadOlderLogs = async () => {
           } catch (err) {
             timestamp = new Date().toISOString();
           }
-          return {
-            line: line.line || "",
+          olderLogs.push({
+            line: lineText,
             timestamp,
-            level: line.level,
-          };
-        });
+            level: logLine.level,
+          });
+        }
+      }
+    } catch (err: any) {
+      // Handle abort errors silently (user might have scrolled away)
+      if (err?.name === "AbortError" || err?.code === "aborted") {
+        return;
+      }
+      throw err;
+    }
 
+    if (olderLogs.length > 0) {
       // Filter out any duplicate logs based on line content and timestamp
       // Docker's until parameter is inclusive, so we might get the same log
       const existingLogKeys = new Set(
@@ -361,7 +416,7 @@ const loadOlderLogs = async () => {
       }
 
       // If we got fewer logs than requested, we've reached the beginning
-      if (response.lines.length < 100) {
+      if (olderLogs.length < 100) {
         hasLoadedAllLogs.value = true;
       }
     } else {
@@ -450,49 +505,62 @@ const startFollowing = async () => {
 
     // Get recent logs first (only on initial connection, not on reconnection)
     // On reconnection, preserve existing logs and let the stream fill in gaps
+    // Note: The streaming endpoint already sends historical logs first, so this is optional
+    // but we do it here to get logs immediately before the stream starts
     if (logs.value.length === 0) {
       try {
-        const response = await client.getGameServerLogs({
-          gameServerId: props.gameServerId,
-          limit: Math.max(tailLines.value, 100), // Load at least 100 lines initially
-          searchQuery: searchQuery.value || undefined,
-        });
+        const initialLogs: Array<{ line: string; timestamp: string; level?: number }> = [];
+        const initialAbortController = new AbortController();
+        
+        const initialStream = client.streamGameServerLogs(
+          {
+            gameServerId: props.gameServerId,
+            follow: false, // Just get historical logs, no streaming
+            tail: Math.max(tailLines.value, 100), // Load at least 100 lines initially
+            searchQuery: searchQuery.value || undefined,
+          },
+          { signal: initialAbortController.signal }
+        );
 
-        if (response.lines && response.lines.length > 0) {
-          const newLogs = response.lines
-            .filter((line) => {
-              const lineText = line.line || "";
-              return !isEmptyOrWhitespace(lineText);
-            })
-            .map((line) => {
-              let timestamp: string;
-              try {
-                if (line.timestamp) {
-                  const ts =
-                    typeof line.timestamp === "string"
-                      ? line.timestamp
-                      : (line.timestamp as any)?.seconds
-                      ? new Date(
-                          Number((line.timestamp as any).seconds) * 1000
-                        ).toISOString()
-                      : new Date(line.timestamp as any).toISOString();
-                  timestamp = ts;
-                } else {
-                  timestamp = new Date().toISOString();
-                }
-              } catch (err) {
+        for await (const logLine of initialStream) {
+          const lineText = logLine.line || "";
+          if (!isEmptyOrWhitespace(lineText)) {
+            let timestamp: string;
+            try {
+              if (logLine.timestamp) {
+                const ts =
+                  typeof logLine.timestamp === "string"
+                    ? logLine.timestamp
+                    : (logLine.timestamp as any)?.seconds
+                    ? new Date(
+                        Number((logLine.timestamp as any).seconds) * 1000
+                      ).toISOString()
+                    : new Date(logLine.timestamp as any).toISOString();
+                timestamp = ts;
+              } else {
                 timestamp = new Date().toISOString();
               }
-              return {
-                line: line.line || "",
-                timestamp,
-                level: line.level,
-              };
+            } catch (err) {
+              timestamp = new Date().toISOString();
+            }
+            initialLogs.push({
+              line: lineText,
+              timestamp,
+              level: logLine.level,
             });
-          logs.value.push(...newLogs);
+          }
         }
-      } catch (err) {
-        console.warn("Failed to fetch initial logs:", err);
+        
+        if (initialLogs.length > 0) {
+          logs.value.push(...initialLogs);
+          // Ensure logs are sorted chronologically after adding initial logs
+          sortLogsByTimestamp();
+        }
+      } catch (err: any) {
+        // Handle abort errors silently
+        if (err?.name !== "AbortError" && err?.code !== "aborted") {
+          console.warn("Failed to fetch initial logs:", err);
+        }
       }
     }
     // On reconnection, don't fetch initial logs - preserve existing logs
@@ -544,16 +612,30 @@ const startFollowing = async () => {
         );
         
         if (!existingKeys.has(logKey)) {
-          logs.value.push({
+          const newLog = {
             line: line,
             timestamp,
             level: logLine.level,
-          });
+          };
+          
+          // For streaming logs, they should come in chronological order
+          // But we check if the new log is out of order before adding
+          const lastLog = logs.value[logs.value.length - 1];
+          const isOutOfOrder = lastLog && new Date(timestamp).getTime() < new Date(lastLog.timestamp).getTime();
+          
+          logs.value.push(newLog);
+          
+          // Only sort if we detect out-of-order logs (performance optimization)
+          // Sort periodically (every 50 logs) as a safety net for edge cases
+          if (isOutOfOrder || logs.value.length % 50 === 0) {
+            sortLogsByTimestamp();
+          }
         }
       }
 
-      // Keep only last 10000 lines
+      // Keep only last 10000 lines (after sorting to ensure we keep the newest)
       if (logs.value.length > 10000) {
+        sortLogsByTimestamp(); // Sort before slicing to ensure we keep the newest logs
         logs.value = logs.value.slice(-10000);
       }
     }
@@ -639,48 +721,59 @@ const handleSearch = async () => {
   logs.value = [];
 
   try {
-    const response = await client.getGameServerLogs({
-      gameServerId: props.gameServerId,
-      limit: searchQuery.value ? 1000 : tailLines.value, // Fetch more when searching
-      searchQuery: searchQuery.value || undefined,
-    });
+    const searchLogs: Array<{ line: string; timestamp: string; level?: number }> = [];
+    const searchAbortController = new AbortController();
+    
+    const searchStream = client.streamGameServerLogs(
+      {
+        gameServerId: props.gameServerId,
+        follow: false, // Just get historical logs, no streaming
+        tail: searchQuery.value ? 1000 : tailLines.value, // Fetch more when searching
+        searchQuery: searchQuery.value || undefined,
+      },
+      { signal: searchAbortController.signal }
+    );
 
-    if (response.lines && response.lines.length > 0) {
-      const newLogs = response.lines
-        .filter((line) => {
-          const lineText = line.line || "";
-          return !isEmptyOrWhitespace(lineText);
-        })
-        .map((line) => {
-          let timestamp: string;
-          try {
-            if (line.timestamp) {
-              const ts =
-                typeof line.timestamp === "string"
-                  ? line.timestamp
-                  : (line.timestamp as any)?.seconds
-                  ? new Date(
-                      Number((line.timestamp as any).seconds) * 1000
-                    ).toISOString()
-                  : new Date(line.timestamp as any).toISOString();
-              timestamp = ts;
-            } else {
-              timestamp = new Date().toISOString();
-            }
-          } catch (err) {
+    for await (const logLine of searchStream) {
+      const lineText = logLine.line || "";
+      if (!isEmptyOrWhitespace(lineText)) {
+        let timestamp: string;
+        try {
+          if (logLine.timestamp) {
+            const ts =
+              typeof logLine.timestamp === "string"
+                ? logLine.timestamp
+                : (logLine.timestamp as any)?.seconds
+                ? new Date(
+                    Number((logLine.timestamp as any).seconds) * 1000
+                  ).toISOString()
+                : new Date(logLine.timestamp as any).toISOString();
+            timestamp = ts;
+          } else {
             timestamp = new Date().toISOString();
           }
-          return {
-            line: line.line || "",
-            timestamp,
-            level: line.level,
-          };
+        } catch (err) {
+          timestamp = new Date().toISOString();
+        }
+        searchLogs.push({
+          line: lineText,
+          timestamp,
+          level: logLine.level,
         });
-      logs.value = newLogs;
+      }
+    }
+    
+    if (searchLogs.length > 0) {
+      logs.value = searchLogs;
+      // Ensure search results are sorted chronologically
+      sortLogsByTimestamp();
     }
   } catch (err: any) {
-    console.error("Failed to search logs:", err);
-    error.value = err.message || "Failed to search logs";
+    // Handle abort errors silently
+    if (err?.name !== "AbortError" && err?.code !== "aborted") {
+      console.error("Failed to search logs:", err);
+      error.value = err.message || "Failed to search logs";
+    }
   } finally {
     isSearching.value = false;
   }
@@ -745,8 +838,12 @@ const handleTerminalOutput = (text: string) => {
   // Direct push for immediate display (Vue 3 reactivity handles batching efficiently)
   if (newLogs.length > 0) {
     logs.value.push(...newLogs);
+    
+    // Ensure logs are sorted chronologically after adding terminal output
+    // Terminal logs use current timestamp, so they should be at the end, but sort to be safe
+    sortLogsByTimestamp();
 
-    // Keep only last 10000 lines
+    // Keep only last 10000 lines (after sorting to ensure we keep the newest)
     if (logs.value.length > 10000) {
       logs.value = logs.value.slice(-10000);
     }
@@ -764,23 +861,80 @@ const handleTerminalOutput = (text: string) => {
         timestamp: now,
         level: undefined,
       });
+      // Sort after adding terminal buffer log
+      sortLogsByTimestamp();
     }
     terminalOutputBuffer = "";
 
+    // Keep only last 10000 lines (after sorting to ensure we keep the newest)
     if (logs.value.length > 10000) {
+      sortLogsByTimestamp();
       logs.value = logs.value.slice(-10000);
     }
   }
 };
 
+// Function to attach scroll listener
+const attachScrollListener = () => {
+  nextTick(() => {
+    const scrollContainer = logsContainer.value?.querySelector('.oui-logs-viewer') as HTMLElement;
+    if (scrollContainer) {
+      // Remove existing listener if any (to avoid duplicates)
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      // Add the listener
+      scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+      console.log('[GameServerLogs] ✓ Scroll listener attached to OuiLogs container');
+      return true;
+    } else {
+      console.warn('[GameServerLogs] Could not find scroll container (.oui-logs-viewer), will retry...');
+      return false;
+    }
+  });
+};
+
 onMounted(() => {
   startFollowing();
+  
+  // Attach scroll listener to the OuiLogs component's scroll container
+  // We need to wait for the component to render - retry a few times if needed
+  let retries = 0;
+  const maxRetries = 10;
+  
+  const tryAttach = () => {
+    if (attachScrollListener()) {
+      return; // Success
+    }
+    
+    retries++;
+    if (retries < maxRetries) {
+      // Retry after a short delay
+      setTimeout(tryAttach, 100);
+    } else {
+      console.error('[GameServerLogs] Failed to attach scroll listener after', maxRetries, 'retries');
+    }
+  };
+  
+  tryAttach();
+  
+  // Also watch for when logsComponent becomes available and logs are loaded
+  watch([() => logsComponent.value, () => logs.value.length], () => {
+    if (logsComponent.value && logs.value.length > 0) {
+      // Component is ready and has logs, ensure listener is attached
+      attachScrollListener();
+    }
+  });
 });
 
 onUnmounted(() => {
   stopFollowing();
   if (isLoadingOlderLogsDebounce) {
     clearTimeout(isLoadingOlderLogsDebounce);
+  }
+  
+  // Remove scroll listener
+  const scrollContainer = logsContainer.value?.querySelector('.oui-logs-viewer') as HTMLElement;
+  if (scrollContainer) {
+    scrollContainer.removeEventListener('scroll', handleScroll);
   }
 });
 

@@ -31,7 +31,7 @@ import (
 
 const (
 	readHeaderTimeout       = 10 * time.Second
-	writeTimeout            = 30 * time.Second
+	writeTimeout            = 60 * time.Second // Increased to allow log processing to complete
 	idleTimeout             = 2 * time.Minute
 	gracefulShutdownMessage = "shutting down server"
 )

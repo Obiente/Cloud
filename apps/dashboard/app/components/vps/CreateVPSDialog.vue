@@ -179,7 +179,7 @@
                           v-for="key in availableSSHKeys"
                           :key="key.id"
                           :model-value="user.selectedSSHKeyIds?.includes(key.id) || false"
-                          @update:model-value="(checked) => toggleSSHKey(user, key.id, checked)"
+                          @update:model-value="(checked: boolean) => toggleSSHKey(user, key.id, checked)"
                         >
                           <OuiFlex align="center" gap="xs">
                             <KeyIcon class="h-4 w-4 text-secondary" />
@@ -326,7 +326,7 @@
     title="VPS Created Successfully"
     description="Your VPS instance has been created. Please note down the root password below - it will not be shown again."
     @update:open="
-      (val) => {
+      (val: boolean) => {
         if (!val) {
           showPasswordDialog = false;
           createdPassword = null;

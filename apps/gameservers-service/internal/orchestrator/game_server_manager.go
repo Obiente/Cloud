@@ -661,10 +661,25 @@ func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerI
 	}
 
 	// Check if container exists before trying to get logs
-	_, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
+	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("container %s not found (may have been deleted): %w", (*gameServer.ContainerID)[:12], err)
 	}
+
+	// Log container details for debugging
+	containerState := "unknown"
+	if containerInfo.Container.State != nil {
+		if containerInfo.Container.State.Running {
+			containerState = "running"
+		} else {
+			containerState = "stopped"
+		}
+	}
+	logger.Info("[GetGameServerLogs] Container ID: %s, State: %s, Tail: %q, Follow: %v", 
+		(*gameServer.ContainerID)[:12], 
+		containerState,
+		tail,
+		follow)
 
 	return gsm.dockerHelper.ContainerLogs(ctx, *gameServer.ContainerID, tail, follow, since, until)
 }
