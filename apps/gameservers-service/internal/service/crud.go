@@ -310,6 +310,40 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	if req.Msg.Description != nil {
 		dbGameServer.Description = req.Msg.Description
 	}
+	if req.Msg.ServerVersion != nil {
+		dbGameServer.ServerVersion = req.Msg.ServerVersion
+		
+		// Update VERSION environment variable for Minecraft servers
+		gameType := gameserversv1.GameType(dbGameServer.GameType)
+		if gameType == gameserversv1.GameType_MINECRAFT || 
+		   gameType == gameserversv1.GameType_MINECRAFT_JAVA || 
+		   gameType == gameserversv1.GameType_MINECRAFT_BEDROCK {
+			// Parse existing environment variables
+			envVars := make(map[string]string)
+			if dbGameServer.EnvVars != "" {
+				if err := json.Unmarshal([]byte(dbGameServer.EnvVars), &envVars); err != nil {
+					logger.Warn("[UpdateGameServer] Failed to parse existing env_vars for game server %s: %v", gameServerID, err)
+					envVars = make(map[string]string)
+				}
+			}
+			
+			// Update VERSION environment variable
+			if *req.Msg.ServerVersion != "" {
+				envVars["VERSION"] = *req.Msg.ServerVersion
+			} else {
+				// If server_version is set to empty, remove VERSION from env vars
+				delete(envVars, "VERSION")
+			}
+			
+			// Save updated environment variables
+			envVarsBytes, err := json.Marshal(envVars)
+			if err == nil {
+				dbGameServer.EnvVars = string(envVarsBytes)
+			} else {
+				logger.Warn("[UpdateGameServer] Failed to marshal updated env_vars for game server %s: %v", gameServerID, err)
+			}
+		}
+	}
 	if len(req.Msg.EnvVars) > 0 {
 		envVarsBytes, err := json.Marshal(req.Msg.EnvVars)
 		if err == nil {

@@ -310,6 +310,14 @@ const initializeGameSpecificSettings = () => {
     case GameType.MINECRAFT_JAVA:
       settings.push(
         {
+          key: "server_version",
+          label: "Minecraft Version",
+          placeholder: "1.20.1",
+          hint: "Minecraft server version (e.g., 1.20.1). Leave empty to use latest.",
+          type: "input",
+          value: props.gameServer.serverVersion || "",
+        },
+        {
           key: "MAX_PLAYERS",
           label: "Max Players",
           placeholder: "20",
@@ -383,6 +391,14 @@ const initializeGameSpecificSettings = () => {
 
     case GameType.MINECRAFT_BEDROCK:
       settings.push(
+        {
+          key: "server_version",
+          label: "Minecraft Version",
+          placeholder: "1.20.1",
+          hint: "Minecraft Bedrock server version (e.g., 1.20.1). Leave empty to use latest.",
+          type: "input",
+          value: props.gameServer.serverVersion || "",
+        },
         {
           key: "MAX_PLAYERS",
           label: "Max Players",
@@ -752,8 +768,14 @@ const hasChanges = computed(() => {
   // Check game-specific settings
   const currentEnvVars = props.gameServer.envVars || {};
   for (const setting of gameSpecificSettings.value) {
-    const currentValue = currentEnvVars[setting.key] || "";
-    if (setting.value !== currentValue) return true;
+    if (setting.key === "server_version") {
+      // Check server_version separately (it's not an env var)
+      const currentServerVersion = props.gameServer.serverVersion || "";
+      if (setting.value.trim() !== currentServerVersion) return true;
+    } else {
+      const currentValue = currentEnvVars[setting.key] || "";
+      if (setting.value !== currentValue) return true;
+    }
   }
 
   // Check env vars
@@ -764,9 +786,9 @@ const hasChanges = computed(() => {
     }
   });
 
-  // Merge game-specific settings into form env vars for comparison
+  // Merge game-specific settings into form env vars for comparison (excluding server_version)
   gameSpecificSettings.value.forEach((setting) => {
-    if (setting.value.trim()) {
+    if (setting.key !== "server_version" && setting.value.trim()) {
       formEnvVars[setting.key] = setting.value.trim();
     }
   });
@@ -807,9 +829,16 @@ const handleSave = async () => {
     // Convert env vars array to map
     const envVarsMap: Record<string, string> = {};
     
+    // Extract server_version separately (it's not an env var)
+    let serverVersion: string | undefined = undefined;
+    
     // Add game-specific settings
     gameSpecificSettings.value.forEach((setting) => {
-      if (setting.value.trim()) {
+      if (setting.key === "server_version") {
+        // Handle server_version separately
+        const versionValue = setting.value.trim();
+        serverVersion = versionValue || undefined;
+      } else if (setting.value.trim()) {
         envVarsMap[setting.key] = setting.value.trim();
       }
     });
@@ -829,6 +858,7 @@ const handleSave = async () => {
       cpuCores,
       startCommand: formData.value.startCommand || undefined,
       envVars: envVarsMap,
+      serverVersion,
     });
 
     toast.success("Game server settings updated successfully");

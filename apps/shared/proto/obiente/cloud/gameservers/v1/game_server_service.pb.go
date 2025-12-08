@@ -651,6 +651,7 @@ type UpdateGameServerRequest struct {
 	EnvVars       map[string]string      `protobuf:"bytes,5,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Maps are optional by default in proto3
 	StartCommand  *string                `protobuf:"bytes,6,opt,name=start_command,json=startCommand,proto3,oneof" json:"start_command,omitempty"`
 	Description   *string                `protobuf:"bytes,7,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	ServerVersion *string                `protobuf:"bytes,8,opt,name=server_version,json=serverVersion,proto3,oneof" json:"server_version,omitempty"` // Game server version (e.g., "1.20.1" for Minecraft)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -730,6 +731,13 @@ func (x *UpdateGameServerRequest) GetStartCommand() string {
 func (x *UpdateGameServerRequest) GetDescription() string {
 	if x != nil && x.Description != nil {
 		return *x.Description
+	}
+	return ""
+}
+
+func (x *UpdateGameServerRequest) GetServerVersion() string {
+	if x != nil && x.ServerVersion != nil {
+		return *x.ServerVersion
 	}
 	return ""
 }
@@ -5190,7 +5198,7 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\"b\n" +
 	"\x15GetGameServerResponse\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
-	"gameServer\"\xd8\x03\n" +
+	"gameServer\"\x97\x04\n" +
 	"\x17UpdateGameServerRequest\x12$\n" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x17\n" +
 	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12&\n" +
@@ -5198,7 +5206,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\tcpu_cores\x18\x04 \x01(\x05H\x02R\bcpuCores\x88\x01\x01\x12]\n" +
 	"\benv_vars\x18\x05 \x03(\v2B.obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntryR\aenvVars\x12(\n" +
 	"\rstart_command\x18\x06 \x01(\tH\x03R\fstartCommand\x88\x01\x01\x12%\n" +
-	"\vdescription\x18\a \x01(\tH\x04R\vdescription\x88\x01\x01\x1a:\n" +
+	"\vdescription\x18\a \x01(\tH\x04R\vdescription\x88\x01\x01\x12*\n" +
+	"\x0eserver_version\x18\b \x01(\tH\x05R\rserverVersion\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
@@ -5207,7 +5216,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\n" +
 	"_cpu_coresB\x10\n" +
 	"\x0e_start_commandB\x0e\n" +
-	"\f_description\"e\n" +
+	"\f_descriptionB\x11\n" +
+	"\x0f_server_version\"e\n" +
 	"\x18UpdateGameServerResponse\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
 	"gameServer\"?\n" +

@@ -186,6 +186,7 @@ message UpdateGameServerRequest {
   map<string, string> env_vars = 5;  // Maps are optional by default in proto3
   optional string start_command = 6;
   optional string description = 7;
+  optional string server_version = 8; // Game server version (e.g., "1.20.1" for Minecraft)
 }
 
 message UpdateGameServerResponse {
