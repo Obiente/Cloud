@@ -51,6 +51,7 @@ var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.support.v1.SupportService/":            "support-service:3009",
 	"/obiente.cloud.audit.v1.AuditService/":                "audit-service:3010",
 	"/obiente.cloud.notifications.v1.NotificationService/": "notifications-service:3012",
+	"/obiente.cloud.databases.v1.DatabaseService/": "databases-service:3014",
 	"/webhooks/stripe":                                     "billing-service:3004",
 	"/dns/push":                                            "dns-service:8053",         // DNS delegation push endpoint
 	"/dns/push/batch":                                      "dns-service:8053",         // DNS delegation batch push endpoint
@@ -72,6 +73,7 @@ var serviceDomains = map[string]string{
 	"support-service:3009":       "support-service",
 	"audit-service:3010":         "audit-service",
 	"notifications-service:3012": "notifications-service",
+	"databases-service:3014": "databases-service",
 	"dns-service:8053":           "dns-service",
 }
 
