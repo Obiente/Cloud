@@ -65,7 +65,7 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 	// This allows users with custom roles (like "system admin") to see all game servers
 	hasOrgWideRead := false
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
-		Permission:   "gameservers.read",
+		Permission:   auth.PermissionGameServersRead,
 		ResourceType: "gameserver",
 		ResourceID:   "", // Empty resource ID means org-wide permission
 	}); err == nil {
@@ -124,7 +124,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 
 	// Permission: org-level
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "gameservers.create"}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionGameServersCreate}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

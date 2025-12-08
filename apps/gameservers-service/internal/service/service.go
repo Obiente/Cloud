@@ -3,7 +3,6 @@ package gameservers
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"gameservers-service/internal/catalog/modrinth"
 	"gameservers-service/internal/orchestrator"
@@ -49,17 +48,7 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 }
 
 // checkGameServerPermission verifies user permissions for a game server
-// Uses the unified CheckResourcePermission which handles all permission logic
+// Uses the reusable CheckResourcePermissionWithError helper
 func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID string, permission string) error {
-	if err := s.permissionChecker.CheckResourcePermission(ctx, "gameserver", gameServerID, permission); err != nil {
-		// Convert to Connect error with appropriate code
-		if strings.Contains(err.Error(), "not found") {
-			return connect.NewError(connect.CodeNotFound, err)
-		}
-		if strings.Contains(err.Error(), "unauthenticated") {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	return nil
+	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "gameserver", gameServerID, permission)
 }

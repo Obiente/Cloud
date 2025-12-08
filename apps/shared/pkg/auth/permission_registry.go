@@ -82,17 +82,17 @@ func (r *PermissionRegistry) IsSuperadminOnly(permission string) bool {
 		}
 	}
 
-	// Also check by permission prefix patterns
+	// Also check by permission prefix patterns using constants
 	// All admin.* permissions are superadmin-only
-	if strings.HasPrefix(permission, "admin.") {
+	if strings.HasPrefix(permission, ResourcePrefixAdmin+".") {
 		return true
 	}
 	// organization.admin.* permissions are superadmin-only
-	if strings.HasPrefix(permission, "organization.admin.") {
+	if strings.HasPrefix(permission, ResourcePrefixOrganization+".admin.") {
 		return true
 	}
 	// All superadmin.* permissions are superadmin-only
-	if strings.HasPrefix(permission, "superadmin.") {
+	if strings.HasPrefix(permission, ResourcePrefixSuperadmin+".") {
 		return true
 	}
 
@@ -168,30 +168,7 @@ func (r *PermissionRegistry) GetAllPermissions(excludeSuperadmin ...bool) []*Per
 		}
 	}
 
-	// Add manual permissions (for backward compatibility)
-	for perm, desc := range ScopeDescriptions {
-		// Skip user-based permissions
-		parts := strings.Split(perm, ".")
-		resourceType := "other"
-		if len(parts) > 0 {
-			resourceType = parts[0]
-		}
-		if resourceType == "support" || resourceType == "notification" {
-			continue
-		}
-		// Skip superadmin-only permissions if requested
-		if shouldExcludeSuperadmin && r.IsSuperadminOnly(perm) {
-			continue
-		}
-
-		if _, exists := permMap[perm]; !exists {
-			permMap[perm] = &PermissionDefinition{
-				Permission:   perm,
-				ResourceType: resourceType,
-				Description:  desc,
-			}
-		}
-	}
+	// All permissions come from the registry - no need for manual fallbacks
 
 	// Convert to slice
 	result := make([]*PermissionDefinition, 0, len(permMap))

@@ -178,7 +178,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "gameservers.read", ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionGameServersRead, ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return
@@ -536,7 +536,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 					// Check if user typed "start" command
 					if trimmed == "start" {
 						// Check permissions for starting game server
-						if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "gameservers.manage", ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
+						if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionGameServersManage, ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
 							errMsg := "Permission denied: you need 'gameservers.manage' permission to start game servers.\r\n"
 							errData := make([]int, len(errMsg))
 							for i, b := range []byte(errMsg) {

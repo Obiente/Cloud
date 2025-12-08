@@ -158,7 +158,7 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 				serviceName := input.GetServiceName()
 
 				// Check permissions
-				if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+				if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 					errorChan <- connect.NewError(connect.CodePermissionDenied, err)
 					return
 				}
@@ -290,7 +290,7 @@ func (s *Service) StreamTerminalOutput(ctx context.Context, req *connect.Request
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -399,7 +399,7 @@ func (s *Service) SendTerminalInput(ctx context.Context, req *connect.Request[de
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

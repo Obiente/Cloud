@@ -49,21 +49,21 @@ func (s *AdminService) ListPermissions(ctx context.Context, req *connect.Request
 	// Convert to proto format
 	permissions := make([]*adminv1.PermissionDefinition, 0, len(permDefs))
 	for _, perm := range permDefs {
-		// Get description with fallback
+		// Get description from registry, or generate default if missing
 		description := perm.Description
 		if description == "" {
-			// Check manual descriptions
-			if desc, ok := auth.ScopeDescriptions[perm.Permission]; ok && desc != "" {
-				description = desc
-			} else {
-				// Generate default description
-				parts := strings.Split(perm.Permission, ".")
-				if len(parts) == 2 {
-					action := parts[1]
-					description = fmt.Sprintf("%s %s", strings.Title(action), perm.ResourceType)
-				} else {
-					description = fmt.Sprintf("Permission: %s", perm.Permission)
+			// Generate default description from permission string
+			parts := strings.Split(perm.Permission, ".")
+			if len(parts) >= 2 {
+				action := parts[len(parts)-1]
+				resourceType := parts[0]
+				// Capitalize action
+				if len(action) > 0 {
+					action = strings.ToUpper(action[:1]) + action[1:]
 				}
+				description = fmt.Sprintf("%s %s", action, resourceType)
+			} else {
+				description = fmt.Sprintf("Permission: %s", perm.Permission)
 			}
 		}
 

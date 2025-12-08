@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -25,7 +26,7 @@ func (s *Service) ResetVPSPassword(ctx context.Context, req *connect.Request[vps
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 

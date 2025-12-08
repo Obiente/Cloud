@@ -193,7 +193,7 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 // Examples:
 //   - "organization.members.*" matches "organization.members.invite"
 //   - "organization.admin.*" matches "organization.admin.add_credits"
-//   - "organization.*" matches "organization.update"
+//   - "organization.*" matches auth.PermissionOrganizationUpdate
 //   - "deployment.*" matches "deployment.create"
 func matchesPermission(pattern, permission string) bool {
 	// Exact match
@@ -256,12 +256,12 @@ func matchesEnvironmentForDeployment(deploymentID string, b database.OrgRoleBind
 // resourceTypeToPermissionPrefix maps resource types to their canonical permission prefixes
 // This ensures consistency: deployment -> "deployment", gameserver -> "gameservers", etc.
 var resourceTypeToPermissionPrefix = map[string]string{
-	"deployment":  "deployment",  // singular, matches system roles
-	"gameserver": "gameservers", // plural, matches system roles
-	"vps":        "vps",         // singular, matches system roles
+	"deployment":  ResourcePrefixDeployment,  // singular, matches system roles
+	"gameserver": ResourcePrefixGameServers, // plural, matches system roles
+	"vps":        ResourcePrefixVPS,         // singular, matches system roles
 	// Also handle plural forms that might be passed in
-	"deployments": "deployment",
-	"gameservers": "gameservers",
+	"deployments": ResourcePrefixDeployment,
+	"gameservers": ResourcePrefixGameServers,
 }
 
 // normalizePermission converts any permission string to canonical format

@@ -44,19 +44,9 @@ func (s *ConfigService) ensureAuthenticated(ctx context.Context, req connect.Any
 
 // checkVPSPermission verifies user permissions for a VPS instance
 // checkVPSPermission verifies user permissions for a VPS
-// Uses the unified CheckResourcePermission which handles all permission logic
+// Uses the reusable CheckResourcePermissionWithError helper
 func (s *ConfigService) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
-	if err := s.permissionChecker.CheckResourcePermission(ctx, "vps", vpsID, permission); err != nil {
-		// Convert to Connect error with appropriate code
-		if strings.Contains(err.Error(), "not found") {
-			return connect.NewError(connect.CodeNotFound, err)
-		}
-		if strings.Contains(err.Error(), "unauthenticated") {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	return nil
+	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "vps", vpsID, permission)
 }
 
 // GetCloudInitConfig retrieves the cloud-init configuration for a VPS
@@ -67,7 +57,7 @@ func (s *ConfigService) GetCloudInitConfig(ctx context.Context, req *connect.Req
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -103,7 +93,7 @@ func (s *ConfigService) GetCloudInitUserData(ctx context.Context, req *connect.R
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -143,7 +133,7 @@ func (s *ConfigService) UpdateCloudInitConfig(ctx context.Context, req *connect.
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -186,7 +176,7 @@ func (s *ConfigService) ListVPSUsers(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -226,7 +216,7 @@ func (s *ConfigService) CreateVPSUser(ctx context.Context, req *connect.Request[
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -326,7 +316,7 @@ func (s *ConfigService) UpdateVPSUser(ctx context.Context, req *connect.Request[
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -434,7 +424,7 @@ func (s *ConfigService) DeleteVPSUser(ctx context.Context, req *connect.Request[
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -486,7 +476,7 @@ func (s *ConfigService) SetUserPassword(ctx context.Context, req *connect.Reques
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -545,7 +535,7 @@ func (s *ConfigService) UpdateUserSSHKeys(ctx context.Context, req *connect.Requ
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1418,7 +1408,7 @@ func (s *ConfigService) RotateTerminalKey(ctx context.Context, req *connect.Requ
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1469,7 +1459,7 @@ func (s *ConfigService) RemoveTerminalKey(ctx context.Context, req *connect.Requ
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1526,7 +1516,7 @@ func (s *ConfigService) GetTerminalKey(ctx context.Context, req *connect.Request
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -1554,7 +1544,7 @@ func (s *ConfigService) RotateBastionKey(ctx context.Context, req *connect.Reque
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1605,7 +1595,7 @@ func (s *ConfigService) GetBastionKey(ctx context.Context, req *connect.Request[
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -1633,7 +1623,7 @@ func (s *ConfigService) GetSSHAlias(ctx context.Context, req *connect.Request[vp
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -1666,7 +1656,7 @@ func (s *ConfigService) SetSSHAlias(ctx context.Context, req *connect.Request[vp
 	vpsID := req.Msg.GetVpsId()
 	alias := req.Msg.GetAlias()
 
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.write"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSWrite); err != nil {
 		return nil, err
 	}
 
@@ -1737,7 +1727,7 @@ func (s *ConfigService) RemoveSSHAlias(ctx context.Context, req *connect.Request
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.write"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSWrite); err != nil {
 		return nil, err
 	}
 

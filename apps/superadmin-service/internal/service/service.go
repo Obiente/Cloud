@@ -3016,22 +3016,21 @@ func (s *Service) ListSuperadminPermissions(ctx context.Context, req *connect.Re
 	// Convert to proto format
 	permissions := make([]*superadminv1.SuperadminPermissionDefinition, 0, len(superadminPerms))
 	for _, perm := range superadminPerms {
-		// Get description with fallback
+		// Get description from registry, or generate default if missing
 		description := perm.Description
 		if description == "" {
-			// Check manual descriptions
-			if desc, ok := auth.ScopeDescriptions[perm.Permission]; ok && desc != "" {
-				description = desc
-			} else {
-				// Generate default description
-				parts := strings.Split(perm.Permission, ".")
-				if len(parts) >= 2 {
-					action := parts[len(parts)-1]
-					resourceType := strings.Join(parts[:len(parts)-1], ".")
-					description = fmt.Sprintf("%s %s", strings.Title(action), resourceType)
-				} else {
-					description = fmt.Sprintf("Permission: %s", perm.Permission)
+			// Generate default description from permission string
+			parts := strings.Split(perm.Permission, ".")
+			if len(parts) >= 2 {
+				action := parts[len(parts)-1]
+				resourceType := strings.Join(parts[:len(parts)-1], ".")
+				// Capitalize action
+				if len(action) > 0 {
+					action = strings.ToUpper(action[:1]) + action[1:]
 				}
+				description = fmt.Sprintf("%s %s", action, resourceType)
+			} else {
+				description = fmt.Sprintf("Permission: %s", perm.Permission)
 			}
 		}
 

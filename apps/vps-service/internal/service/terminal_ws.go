@@ -223,7 +223,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Verify permissions
-	if err := s.checkVPSPermission(ctx, initMsg.VPSID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, initMsg.VPSID, auth.PermissionVPSRead); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return

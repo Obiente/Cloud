@@ -27,7 +27,7 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -304,7 +304,7 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 	}
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -582,7 +582,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions (allow viewing usage for deleted deployments)
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

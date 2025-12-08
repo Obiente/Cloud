@@ -2,7 +2,6 @@ package deployments
 
 import (
 	"context"
-	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -48,19 +47,9 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 
 // checkDeploymentPermission is a helper to verify user permissions
 // checkDeploymentPermission verifies user permissions for a deployment
-// Uses the unified CheckResourcePermission which handles all permission logic
+// Uses the reusable CheckResourcePermissionWithError helper
 func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID string, permission string) error {
-	if err := s.permissionChecker.CheckResourcePermission(ctx, "deployment", deploymentID, permission); err != nil {
-		// Convert to Connect error with appropriate code
-		if strings.Contains(err.Error(), "not found") {
-			return connect.NewError(connect.CodeNotFound, err)
-		}
-		if strings.Contains(err.Error(), "unauthenticated") {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	return nil
+	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "deployment", deploymentID, permission)
 }
 
 // shouldForwardToNode checks if a container location is on a different node and forwarding is possible

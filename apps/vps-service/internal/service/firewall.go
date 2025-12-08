@@ -9,6 +9,7 @@ import (
 
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -30,7 +31,7 @@ func (s *Service) ListFirewallRules(ctx context.Context, req *connect.Request[vp
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +103,7 @@ func (s *Service) GetFirewallRule(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -168,7 +169,7 @@ func (s *Service) CreateFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -263,7 +264,7 @@ func (s *Service) UpdateFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -337,7 +338,7 @@ func (s *Service) DeleteFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 
@@ -402,7 +403,7 @@ func (s *Service) GetFirewallOptions(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -468,7 +469,7 @@ func (s *Service) UpdateFirewallOptions(ctx context.Context, req *connect.Reques
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSUpdate); err != nil {
 		return nil, err
 	}
 

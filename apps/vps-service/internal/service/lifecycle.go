@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
@@ -54,7 +55,7 @@ func (s *Service) StartVPS(ctx context.Context, req *connect.Request[vpsv1.Start
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 
@@ -109,7 +110,7 @@ func (s *Service) StopVPS(ctx context.Context, req *connect.Request[vpsv1.StopVP
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 
@@ -164,7 +165,7 @@ func (s *Service) RebootVPS(ctx context.Context, req *connect.Request[vpsv1.Rebo
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 
@@ -219,7 +220,7 @@ func (s *Service) ReinitializeVPS(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 
@@ -257,7 +258,7 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 

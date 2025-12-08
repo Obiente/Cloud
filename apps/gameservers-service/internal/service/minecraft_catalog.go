@@ -17,6 +17,7 @@ import (
 
 	"gameservers-service/internal/catalog/modrinth"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
@@ -46,7 +47,7 @@ func (s *Service) ListMinecraftProjects(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
 	}
 
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +133,7 @@ func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.
 	if gameServerID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
 	}
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -232,7 +233,7 @@ func (s *Service) GetMinecraftProject(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("project_id is required"))
 	}
 
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -255,7 +256,7 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 	if req.Msg.GetProjectId() == "" || req.Msg.GetVersionId() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("project_id and version_id are required"))
 	}
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 

@@ -2,7 +2,6 @@ package vps
 
 import (
 	"context"
-	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
@@ -35,31 +34,15 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 }
 
 // checkVPSPermission verifies user permissions for a VPS
-// Uses the unified CheckResourcePermission which handles all permission logic
+// Uses the reusable CheckResourcePermissionWithError helper
 func (s *Service) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
-	if err := s.permissionChecker.CheckResourcePermission(ctx, "vps", vpsID, permission); err != nil {
-		// Convert to Connect error with appropriate code
-		if strings.Contains(err.Error(), "not found") {
-			return connect.NewError(connect.CodeNotFound, err)
-		}
-		if strings.Contains(err.Error(), "unauthenticated") {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	return nil
+	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "vps", vpsID, permission)
 }
 
 // checkOrganizationPermission verifies user has access to an organization
-// Uses CheckScopedPermission with organization.read permission
+// Uses the reusable CheckScopedPermissionWithError helper
 func (s *Service) checkOrganizationPermission(ctx context.Context, organizationID string) error {
-	if err := s.permissionChecker.CheckScopedPermission(ctx, organizationID, auth.ScopedPermission{
-		Permission: "organization.read",
-	}); err != nil {
-		if strings.Contains(err.Error(), "unauthenticated") {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	return nil
+	return auth.CheckScopedPermissionWithError(ctx, s.permissionChecker, organizationID, auth.ScopedPermission{
+		Permission: auth.PermissionOrganizationRead,
+	})
 }

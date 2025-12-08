@@ -40,7 +40,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	// This allows users with custom roles (like "system admin") to see all deployments
 	hasOrgWideRead := false
 	permErr := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
-		Permission:   "deployment.read",
+		Permission:   auth.PermissionDeploymentRead,
 		ResourceType: "deployment",
 		ResourceID:   "", // Empty resource ID means org-wide permission
 	})
@@ -135,7 +135,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	}
 
 	// Permission: org-level
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.create"}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentCreate}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

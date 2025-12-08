@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -298,17 +297,19 @@ func extractResourceID(req connect.AnyRequest, procedure, resourceType string) s
 }
 
 // checkOrgPermission checks if user has permission in an organization
+// Uses the unified CheckScopedPermission for consistency
 func checkOrgPermission(ctx context.Context, user *authv1.User, orgID, permission, resourceID string) error {
-	// Check if user is org owner/admin (they have all permissions)
-	if isOrgOwner(ctx, orgID) {
-		return nil
-	}
+	// Normalize permission and extract resource type
+	normalizedPerm := normalizePermission("", permission)
+	
+	// Extract resource type from normalized permission using helper
+	resourceType := resourceToResourceType(normalizedPerm)
 
-	// Use existing permission checking logic
+	// Use unified permission checking
 	pc := NewPermissionChecker()
 	sp := ScopedPermission{
-		Permission:   permission,
-		ResourceType: resourceToResourceType(permission),
+		Permission:   normalizedPerm,
+		ResourceType: resourceType,
 		ResourceID:   resourceID,
 	}
 
@@ -316,56 +317,43 @@ func checkOrgPermission(ctx context.Context, user *authv1.User, orgID, permissio
 }
 
 // checkGlobalPermission checks global permissions (for services without org context)
+// Uses the shared HasSuperadminPermission helper for consistency
 func checkGlobalPermission(ctx context.Context, user *authv1.User, permission string) error {
-	// Superadmin email users bypass all checks
-	if HasRole(user, RoleSuperAdmin) {
+	// Normalize permission first
+	normalizedPerm := normalizePermission("", permission)
+	
+	if HasSuperadminPermission(ctx, user, normalizedPerm) {
 		return nil
 	}
-
-	// Check superadmin role bindings
-	var bindings []database.SuperadminRoleBinding
-	if err := database.DB.Where("user_id = ?", user.Id).Find(&bindings).Error; err != nil {
-		logger.Debug("[Permission] Failed to load superadmin role bindings for user %s: %v", user.Id, err)
-		return fmt.Errorf("permission denied: %s", permission)
-	}
-
-	if len(bindings) == 0 {
-		return fmt.Errorf("permission denied: %s", permission)
-	}
-
-	// Load roles
-	var roles []database.SuperadminRole
-	roleIDs := make([]string, 0, len(bindings))
-	for _, b := range bindings {
-		roleIDs = append(roleIDs, b.RoleID)
-	}
-	if err := database.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
-		logger.Debug("[Permission] Failed to load superadmin roles: %v", err)
-		return fmt.Errorf("permission denied: %s", permission)
-	}
-
-	// Check if any role has the required permission
-	for _, r := range roles {
-		var perms []string
-		if err := json.Unmarshal([]byte(r.Permissions), &perms); err != nil {
-			continue
-		}
-		for _, perm := range perms {
-			// Check exact match or wildcard match
-			if perm == permission || matchesPermission(perm, permission) {
-				return nil
-			}
-		}
-	}
-
-	return fmt.Errorf("permission denied: %s", permission)
+	
+	return fmt.Errorf("permission denied: %s", normalizedPerm)
 }
 
 // resourceToResourceType extracts resource type from permission string
+// Maps permission prefixes back to resource types for scoping
 func resourceToResourceType(permission string) string {
 	parts := strings.Split(permission, ".")
-	if len(parts) > 0 {
-		return parts[0]
+	if len(parts) == 0 {
+		return ""
 	}
-	return ""
+	
+	prefix := parts[0]
+	
+	// Map permission prefix to resource type
+	switch prefix {
+	case ResourcePrefixDeployment:
+		return "deployment"
+	case ResourcePrefixGameServers:
+		return "gameserver" // Use singular for resource type
+	case ResourcePrefixVPS:
+		return "vps"
+	case ResourcePrefixOrganization:
+		return "organization"
+	case ResourcePrefixAdmin:
+		return "admin"
+	case ResourcePrefixSuperadmin:
+		return "superadmin"
+	default:
+		return prefix // Use as-is if unknown
+	}
 }

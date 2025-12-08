@@ -16,6 +16,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -71,7 +72,7 @@ func (s *Service) ListGameServerFiles(ctx context.Context, req *connect.Request[
 	gameServerID := req.Msg.GetGameServerId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -256,7 +257,7 @@ func (s *Service) SearchGameServerFiles(ctx context.Context, req *connect.Reques
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -361,7 +362,7 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 	gameServerID := req.Msg.GetGameServerId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
 		return nil, err
 	}
 
@@ -517,7 +518,7 @@ func (s *Service) UploadGameServerFiles(ctx context.Context, req *connect.Reques
 	gameServerID := metadata.GetGameServerId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -700,7 +701,7 @@ func (s *Service) ExtractGameServerFile(ctx context.Context, req *connect.Reques
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -882,7 +883,7 @@ func (s *Service) CreateGameServerFileArchive(ctx context.Context, req *connect.
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1337,7 +1338,7 @@ func (s *Service) DeleteGameServerEntries(ctx context.Context, req *connect.Requ
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1443,7 +1444,7 @@ func (s *Service) CreateGameServerEntry(ctx context.Context, req *connect.Reques
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1572,7 +1573,7 @@ func (s *Service) WriteGameServerFile(ctx context.Context, req *connect.Request[
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 
@@ -1702,7 +1703,7 @@ func (s *Service) RenameGameServerEntry(ctx context.Context, req *connect.Reques
 	targetPath := req.Msg.GetTargetPath()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
 		return nil, err
 	}
 

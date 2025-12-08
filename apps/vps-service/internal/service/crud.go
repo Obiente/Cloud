@@ -43,7 +43,7 @@ func (s *Service) ListVPS(ctx context.Context, req *connect.Request[vpsv1.ListVP
 	// This allows users with custom roles (like "system admin") to see all VPS instances
 	hasOrgWideRead := false
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
-		Permission:   "vps.read",
+		Permission:   auth.PermissionVPSRead,
 		ResourceType: "vps",
 		ResourceID:   "", // Empty resource ID means org-wide permission
 	}); err == nil {
@@ -356,7 +356,7 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -452,7 +452,7 @@ func (s *Service) UpdateVPS(ctx context.Context, req *connect.Request[vpsv1.Upda
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 
@@ -497,7 +497,7 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 

@@ -981,7 +981,7 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 			// Check if user has access to this VPS
 			// Check permissions using unified permission checker
 			pc := auth.NewPermissionChecker()
-			if err := pc.CheckResourcePermission(ctx, "vps", vpsID, "vps.read"); err == nil {
+			if err := pc.CheckResourcePermission(ctx, "vps", vpsID, auth.PermissionVPSRead); err == nil {
 				logger.Info("[SSHProxy] User authenticated via API token for VPS %s", vpsID)
 			} else if vps.CreatedBy == userInfo.Id {
 				logger.Info("[SSHProxy] VPS owner authenticated via API token for VPS %s", vpsID)

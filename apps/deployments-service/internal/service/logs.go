@@ -54,7 +54,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	containerID := req.Msg.GetContainerId()
 	serviceName := req.Msg.GetServiceName()
 	
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 	
@@ -517,7 +517,7 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 

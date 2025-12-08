@@ -158,7 +158,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return
@@ -374,7 +374,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 					// Check if user typed "start" command (case-insensitive, allow with newline)
 					if trimmed == "start" {
 						// Check permissions for starting container
-						if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "deployments.manage", ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
+						if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionDeploymentManage, ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
 							errMsg := "Permission denied: you need 'deployments.manage' permission to start containers.\r\n"
 							errData := make([]int, len(errMsg))
 							for i, b := range []byte(errMsg) {

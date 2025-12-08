@@ -8,6 +8,7 @@ import (
 
 	vpsorch "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
@@ -90,7 +91,7 @@ func (s *Service) StreamVPSLogs(ctx context.Context, req *connect.Request[vpsv1.
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return err
 	}
 
@@ -171,7 +172,7 @@ func (s *Service) StreamVPSMetrics(ctx context.Context, req *connect.Request[vps
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return err
 	}
 
@@ -351,7 +352,7 @@ func (s *Service) GetVPSMetrics(ctx context.Context, req *connect.Request[vpsv1.
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 
@@ -542,7 +543,7 @@ func (s *Service) GetVPSUsage(ctx context.Context, req *connect.Request[vpsv1.Ge
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
 	}
 

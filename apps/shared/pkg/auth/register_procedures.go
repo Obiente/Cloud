@@ -246,23 +246,23 @@ func RegisterOrganizationServiceProcedures() {
 		description  string
 	}{
 		// Basic org operations (user-based, marked as public)
-		{"/obiente.cloud.organizations.v1.OrganizationService/ListOrganizations", "organization.read", "organization", "read", "View organizations"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/CreateOrganization", "organization.create", "organization", "create", "Create organization"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/GetOrganization", "organization.read", "organization", "read", "View organization details"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/ListOrganizations", PermissionOrganizationRead, "organization", "read", "View organizations"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/CreateOrganization", PermissionOrganizationRead, "organization", "create", "Create organization"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/GetOrganization", PermissionOrganizationRead, "organization", "read", "View organization details"},
 
 		// Org management (requires org admin/owner)
-		{"/obiente.cloud.organizations.v1.OrganizationService/UpdateOrganization", "organization.update", "organization", "update", "Update organization"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/DeleteOrganization", "organization.delete", "organization", "delete", "Delete organization"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/UpdateOrganization", PermissionOrganizationUpdate, "organization", "update", "Update organization"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/DeleteOrganization", PermissionOrganizationDelete, "organization", "delete", "Delete organization"},
 
 		// Member management (requires org admin/owner)
-		{"/obiente.cloud.organizations.v1.OrganizationService/ListMembers", "organization.members.read", "organization", "members.read", "View organization members"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/InviteMember", "organization.members.invite", "organization", "members.invite", "Invite member to organization"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/UpdateMember", "organization.members.update", "organization", "members.update", "Update member role"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/RemoveMember", "organization.members.delete", "organization", "members.delete", "Remove member from organization"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/ListMembers", PermissionOrganizationMembersRead, "organization", "members.read", "View organization members"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/InviteMember", PermissionOrganizationMembersUpdate, "organization", "members.invite", "Invite member to organization"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/UpdateMember", PermissionOrganizationMembersUpdate, "organization", "members.update", "Update member role"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/RemoveMember", PermissionOrganizationMembersUpdate, "organization", "members.delete", "Remove member from organization"},
 
 		// Usage and billing
-		{"/obiente.cloud.organizations.v1.OrganizationService/GetUsage", "organization.read", "organization", "read", "View organization usage"},
-		{"/obiente.cloud.organizations.v1.OrganizationService/GetCreditLog", "organization.read", "organization", "read", "View credit log"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/GetUsage", PermissionOrganizationRead, "organization", "read", "View organization usage"},
+		{"/obiente.cloud.organizations.v1.OrganizationService/GetCreditLog", PermissionOrganizationRead, "organization", "read", "View credit log"},
 
 		// Admin operations (superadmin only) - hierarchical permissions
 		// These are marked as superadmin-only and won't appear in organization permission trees
