@@ -1,0 +1,568 @@
+syntax = "proto3";
+
+package obiente.cloud.databases.v1;
+
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1;databasesv1";
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/common/v1/common.proto";
+
+// DatabaseType represents the type of database engine
+enum DatabaseType {
+  DATABASE_TYPE_UNSPECIFIED = 0;
+  POSTGRESQL = 1;
+  MYSQL = 2;
+  MONGODB = 3;
+  REDIS = 4;
+  MARIADB = 5;
+}
+
+// DatabaseStatus represents the current status of a database instance
+enum DatabaseStatus {
+  DATABASE_STATUS_UNSPECIFIED = 0;
+  CREATING = 1;       // Database is being provisioned
+  STARTING = 2;       // Database is starting up
+  RUNNING = 3;        // Database is running
+  STOPPING = 4;       // Database is stopping
+  STOPPED = 5;        // Database is stopped
+  BACKING_UP = 6;     // Database is being backed up
+  RESTORING = 7;      // Database is being restored
+  FAILED = 8;         // Database provisioning or operation failed
+  DELETING = 9;       // Database is being deleted
+  DELETED = 10;       // Database has been deleted (soft delete)
+  SUSPENDED = 11;     // Database is suspended
+}
+
+service DatabaseService {
+  // List organization databases
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse);
+  
+  // Create new database instance
+  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse);
+  
+  // Get database instance details
+  rpc GetDatabase(GetDatabaseRequest) returns (GetDatabaseResponse);
+  
+  // Update database instance configuration
+  rpc UpdateDatabase(UpdateDatabaseRequest) returns (UpdateDatabaseResponse);
+  
+  // Delete database instance
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse);
+  
+  // Start a stopped database instance
+  rpc StartDatabase(StartDatabaseRequest) returns (StartDatabaseResponse);
+  
+  // Stop a running database instance
+  rpc StopDatabase(StopDatabaseRequest) returns (StopDatabaseResponse);
+  
+  // Restart a database instance
+  rpc RestartDatabase(RestartDatabaseRequest) returns (RestartDatabaseResponse);
+  
+  // Stream database status updates
+  rpc StreamDatabaseStatus(StreamDatabaseStatusRequest) returns (stream DatabaseStatusUpdate);
+  
+  // Get database connection info (credentials, connection strings)
+  rpc GetDatabaseConnectionInfo(GetDatabaseConnectionInfoRequest) returns (GetDatabaseConnectionInfoResponse);
+  
+  // Reset database password
+  rpc ResetDatabasePassword(ResetDatabasePasswordRequest) returns (ResetDatabasePasswordResponse);
+  
+  // Database introspection - get schema information
+  rpc GetDatabaseSchema(GetDatabaseSchemaRequest) returns (GetDatabaseSchemaResponse);
+  
+  // List tables in a database
+  rpc ListTables(ListTablesRequest) returns (ListTablesResponse);
+  
+  // Get table structure/details
+  rpc GetTableStructure(GetTableStructureRequest) returns (GetTableStructureResponse);
+  
+  // Execute query on database
+  rpc ExecuteQuery(ExecuteQueryRequest) returns (ExecuteQueryResponse);
+  
+  // Stream query results (for large result sets)
+  rpc StreamQuery(StreamQueryRequest) returns (stream QueryResultRow);
+  
+  // Backup management
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse);
+  rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse);
+  rpc GetBackup(GetBackupRequest) returns (GetBackupResponse);
+  rpc DeleteBackup(DeleteBackupRequest) returns (DeleteBackupResponse);
+  rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
+  
+  // Get database metrics
+  rpc GetDatabaseMetrics(GetDatabaseMetricsRequest) returns (GetDatabaseMetricsResponse);
+  
+  // Stream real-time database metrics
+  rpc StreamDatabaseMetrics(StreamDatabaseMetricsRequest) returns (stream DatabaseMetric);
+  
+  // Get available database sizes/pricing
+  rpc ListDatabaseSizes(ListDatabaseSizesRequest) returns (ListDatabaseSizesResponse);
+}
+
+message ListDatabasesRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+  // Optional: filter by status
+  optional DatabaseStatus status = 4;
+  // Optional: filter by type
+  optional DatabaseType type = 5;
+}
+
+message ListDatabasesResponse {
+  repeated DatabaseInstance databases = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message CreateDatabaseRequest {
+  string organization_id = 1;
+  string name = 2;
+  optional string description = 3;
+  DatabaseType type = 4;
+  string size = 5; // Database size/spec (e.g., "small", "medium", "large")
+  optional string version = 6; // Database version (e.g., "15", "8.0", "7.0")
+  map<string, string> metadata = 7; // Additional metadata/tags
+  optional string initial_database_name = 8; // Initial database name to create
+  optional string initial_username = 9; // Initial username (if not provided, auto-generated)
+  optional string initial_password = 10; // Initial password (if not provided, auto-generated)
+}
+
+message CreateDatabaseResponse {
+  DatabaseInstance database = 1;
+  // Connection info returned only on creation
+  DatabaseConnectionInfo connection_info = 2;
+}
+
+message GetDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message GetDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message UpdateDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string name = 3;
+  optional string description = 4;
+  map<string, string> metadata = 5; // Update metadata/tags
+}
+
+message UpdateDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message DeleteDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  bool force = 3; // If true, force delete even if database is running
+}
+
+message DeleteDatabaseResponse {
+  bool success = 1;
+}
+
+message StartDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message StartDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message StopDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message StopDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message RestartDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message RestartDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message StreamDatabaseStatusRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message DatabaseStatusUpdate {
+  string database_id = 1;
+  DatabaseStatus status = 2;
+  optional string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message GetDatabaseConnectionInfoRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message GetDatabaseConnectionInfoResponse {
+  DatabaseConnectionInfo connection_info = 1;
+}
+
+message DatabaseConnectionInfo {
+  string database_id = 1;
+  string host = 2;
+  int32 port = 3;
+  string database_name = 4;
+  string username = 5;
+  string password = 6; // Only returned on creation or password reset
+  // Connection strings for different languages/frameworks
+  string postgresql_url = 7; // postgresql://user:pass@host:port/dbname
+  string mysql_url = 8; // mysql://user:pass@host:port/dbname
+  string mongodb_url = 9; // mongodb://user:pass@host:port/dbname
+  string redis_url = 10; // redis://:pass@host:port
+  // Additional connection info
+  bool ssl_required = 11;
+  optional string ssl_certificate = 12; // CA certificate if needed
+  string connection_instructions = 13; // Human-readable instructions
+}
+
+message ResetDatabasePasswordRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string username = 3; // If not provided, resets root/admin password
+}
+
+message ResetDatabasePasswordResponse {
+  string database_id = 1;
+  string username = 2;
+  string new_password = 3; // New password (shown once, never stored)
+  string message = 4; // Instructions for applying the password change
+}
+
+// Schema introspection messages
+message GetDatabaseSchemaRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3; // Specific database name (for multi-database engines)
+}
+
+message GetDatabaseSchemaResponse {
+  string database_id = 1;
+  optional string database_name = 2;
+  repeated TableInfo tables = 3;
+  repeated ViewInfo views = 4;
+  repeated FunctionInfo functions = 5;
+  repeated ProcedureInfo procedures = 6;
+}
+
+message ListTablesRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3; // Specific database name
+  int32 page = 4;
+  int32 per_page = 5;
+}
+
+message ListTablesResponse {
+  repeated TableInfo tables = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message GetTableStructureRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string table_name = 3;
+  optional string database_name = 4; // Specific database name
+}
+
+message GetTableStructureResponse {
+  TableInfo table = 1;
+}
+
+message TableInfo {
+  string name = 1;
+  string schema = 2; // Schema/database name
+  string type = 3; // "table", "view", etc.
+  int64 row_count = 4; // Approximate row count
+  int64 size_bytes = 5; // Table size in bytes
+  repeated ColumnInfo columns = 6;
+  repeated IndexInfo indexes = 7;
+  repeated ForeignKeyInfo foreign_keys = 8;
+}
+
+message ColumnInfo {
+  string name = 1;
+  string data_type = 2; // e.g., "varchar(255)", "int", "timestamp"
+  bool is_nullable = 3;
+  optional string default_value = 4;
+  bool is_primary_key = 5;
+  bool is_unique = 6;
+  optional string comment = 7;
+  int32 ordinal_position = 8;
+}
+
+message IndexInfo {
+  string name = 1;
+  bool is_unique = 2;
+  bool is_primary = 3;
+  repeated string column_names = 4;
+  optional string type = 5; // "btree", "hash", etc.
+}
+
+message ForeignKeyInfo {
+  string name = 1;
+  string from_table = 2;
+  repeated string from_columns = 3;
+  string to_table = 4;
+  repeated string to_columns = 5;
+  optional string on_delete = 6; // "CASCADE", "RESTRICT", etc.
+  optional string on_update = 7;
+}
+
+message ViewInfo {
+  string name = 1;
+  string schema = 2;
+  string definition = 3; // SQL definition
+}
+
+message FunctionInfo {
+  string name = 1;
+  string schema = 2;
+  string return_type = 3;
+  repeated ParameterInfo parameters = 4;
+  string definition = 5; // Function body/definition
+}
+
+message ProcedureInfo {
+  string name = 1;
+  string schema = 2;
+  repeated ParameterInfo parameters = 3;
+  string definition = 5; // Procedure body/definition
+}
+
+message ParameterInfo {
+  string name = 1;
+  string data_type = 2;
+  string mode = 3; // "IN", "OUT", "INOUT"
+  int32 ordinal_position = 4;
+}
+
+// Query execution messages
+message ExecuteQueryRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string query = 3;
+  optional string database_name = 4; // Specific database name
+  optional int32 max_rows = 5; // Maximum rows to return (default: 1000)
+  optional int32 timeout_seconds = 6; // Query timeout in seconds (default: 30)
+}
+
+message ExecuteQueryResponse {
+  repeated QueryResultColumn columns = 1;
+  repeated QueryResultRow rows = 2;
+  int32 row_count = 3;
+  optional int32 affected_rows = 4; // For INSERT/UPDATE/DELETE
+  optional string query_type = 5; // "SELECT", "INSERT", "UPDATE", "DELETE", etc.
+  bool truncated = 6; // Whether results were truncated due to max_rows
+  google.protobuf.Timestamp executed_at = 7;
+  int32 execution_time_ms = 8; // Query execution time in milliseconds
+}
+
+message QueryResultColumn {
+  string name = 1;
+  string data_type = 2;
+}
+
+message QueryResultRow {
+  repeated QueryResultCell cells = 1;
+}
+
+message QueryResultCell {
+  string column_name = 1;
+  optional string value = 2; // JSON-encoded value (null for NULL values)
+  bool is_null = 3;
+}
+
+message StreamQueryRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string query = 3;
+  optional string database_name = 4;
+  optional int32 timeout_seconds = 5;
+}
+
+// Backup management messages
+message ListBackupsRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  int32 page = 3;
+  int32 per_page = 4;
+}
+
+message ListBackupsResponse {
+  repeated DatabaseBackup backups = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message CreateBackupRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string name = 3; // Optional backup name (auto-generated if not provided)
+  optional string description = 4;
+}
+
+message CreateBackupResponse {
+  DatabaseBackup backup = 1;
+}
+
+message GetBackupRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string backup_id = 3;
+}
+
+message GetBackupResponse {
+  DatabaseBackup backup = 1;
+}
+
+message DeleteBackupRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string backup_id = 3;
+}
+
+message DeleteBackupResponse {
+  bool success = 1;
+}
+
+message RestoreBackupRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string backup_id = 3;
+  optional string target_database_name = 4; // Optional: restore to different database name
+}
+
+message RestoreBackupResponse {
+  DatabaseInstance database = 1; // Restored database instance
+  string message = 2;
+}
+
+message DatabaseBackup {
+  string id = 1;
+  string database_id = 2;
+  string name = 3;
+  optional string description = 4;
+  int64 size_bytes = 5;
+  DatabaseBackupStatus status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  optional google.protobuf.Timestamp completed_at = 8;
+  optional string error_message = 9;
+}
+
+enum DatabaseBackupStatus {
+  DATABASE_BACKUP_STATUS_UNSPECIFIED = 0;
+  BACKUP_CREATING = 1;
+  BACKUP_COMPLETED = 2;
+  BACKUP_FAILED = 3;
+  BACKUP_DELETING = 4;
+  BACKUP_DELETED = 5;
+}
+
+// Metrics messages
+message GetDatabaseMetricsRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  optional string interval = 5; // Aggregation interval (e.g., "1m", "5m", "1h")
+}
+
+message GetDatabaseMetricsResponse {
+  repeated DatabaseMetric metrics = 1;
+}
+
+message StreamDatabaseMetricsRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message DatabaseMetric {
+  string database_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double cpu_usage_percent = 3;
+  int64 memory_used_bytes = 4;
+  int64 memory_total_bytes = 5;
+  int64 disk_used_bytes = 6;
+  int64 disk_total_bytes = 7;
+  int64 connections_active = 8;
+  int64 connections_max = 9;
+  int64 queries_per_second = 10;
+  int64 slow_queries = 11;
+  int64 cache_hit_rate = 12; // Percentage (0-100)
+}
+
+message ListDatabaseSizesRequest {
+  optional DatabaseType type = 1; // Optional: filter by database type
+}
+
+message ListDatabaseSizesResponse {
+  repeated DatabaseSize sizes = 1;
+}
+
+message DatabaseSize {
+  string id = 1;
+  string name = 2;
+  DatabaseType type = 3;
+  int32 cpu_cores = 4;
+  int64 memory_bytes = 5;
+  int64 disk_bytes = 6;
+  int64 max_connections = 7;
+  // Pricing (in cents per month)
+  int64 price_cents_per_month = 8;
+}
+
+message DatabaseInstance {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  DatabaseStatus status = 4;
+  DatabaseType type = 5;
+  optional string version = 6;
+  string size = 7;
+  
+  // Resource specifications
+  int32 cpu_cores = 8;
+  int64 memory_bytes = 9;
+  int64 disk_bytes = 10;
+  int64 disk_used_bytes = 11;
+  int64 max_connections = 12;
+  
+  // Network information
+  optional string host = 13;
+  optional int32 port = 14;
+  
+  // Infrastructure information
+  optional string instance_id = 15; // Internal instance ID
+  optional string node_id = 16;     // Docker Swarm node ID where database is running
+  
+  // Metadata and tags
+  map<string, string> metadata = 17;
+  
+  // Timestamps
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+  optional google.protobuf.Timestamp last_started_at = 20;
+  optional google.protobuf.Timestamp deleted_at = 21; // Soft delete
+  
+  // Organization and ownership
+  string organization_id = 22;
+  string created_by = 23;
+  
+  // Current metrics (if available)
+  optional DatabaseMetric current_metrics = 24;
+}
+

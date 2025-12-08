@@ -259,9 +259,11 @@ var resourceTypeToPermissionPrefix = map[string]string{
 	"deployment":  ResourcePrefixDeployment,  // singular, matches system roles
 	"gameserver": ResourcePrefixGameServers, // plural, matches system roles
 	"vps":        ResourcePrefixVPS,         // singular, matches system roles
+	"database":   ResourcePrefixDatabase,    // singular
 	// Also handle plural forms that might be passed in
 	"deployments": ResourcePrefixDeployment,
 	"gameservers": ResourcePrefixGameServers,
+	"databases":   ResourcePrefixDatabase,
 }
 
 // normalizePermission converts any permission string to canonical format
@@ -368,6 +370,12 @@ func (p *PermissionChecker) CheckResourcePermission(ctx context.Context, resourc
 			return fmt.Errorf("resource not found: %s", resourceID)
 		}
 		orgID = vps.OrganizationID
+	case "database":
+		var db database.DatabaseInstance
+		if err := database.DB.Select("organization_id").Where("id = ? AND deleted_at IS NULL", resourceID).First(&db).Error; err != nil {
+			return fmt.Errorf("resource not found: %s", resourceID)
+		}
+		orgID = db.OrganizationID
 	default:
 		return fmt.Errorf("unsupported resource type: %s", resourceType)
 	}

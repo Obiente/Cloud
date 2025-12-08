@@ -260,6 +260,44 @@ services:
       retries: 3
       start_period: 40s
 
+  # Databases Service - Microservice for managed database management
+  databases-service:
+    image: ghcr.io/obiente/cloud-databases-service:latest
+    build:
+      context: .
+      dockerfile: apps/databases-service/Dockerfile
+    container_name: obiente-databases-service
+    environment:
+      PORT: 3014
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.service=databases-service"
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`) || Host(`databases-service.localhost`)"
+      - "traefik.http.routers.databases-service.entrypoints=web"
+      - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
+      - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`) || Host(`databases-service.localhost`)"
+      - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.databases-service-secure.service=databases-service"
+      - "traefik.http.routers.databases-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3014/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Game Servers Service - Microservice for game server management
   gameservers-service:
     image: ghcr.io/obiente/cloud-gameservers-service:latest

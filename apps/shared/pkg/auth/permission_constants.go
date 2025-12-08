@@ -8,6 +8,7 @@ const (
 	ResourcePrefixDeployment  = "deployment"  // singular
 	ResourcePrefixGameServers = "gameservers" // plural
 	ResourcePrefixVPS         = "vps"         // singular
+	ResourcePrefixDatabase    = "database"     // singular
 	ResourcePrefixOrganization = "organization"
 	ResourcePrefixAdmin        = "admin"
 	ResourcePrefixSuperadmin   = "superadmin"
@@ -69,6 +70,19 @@ const (
 	PermissionVPSWrite  = ResourcePrefixVPS + ".write" // Legacy alias for update
 	PermissionVPSManage = ResourcePrefixVPS + "." + ActionManage
 	PermissionVPSAll    = ResourcePrefixVPS + ".*"
+)
+
+// Database permissions
+const (
+	PermissionDatabaseRead   = ResourcePrefixDatabase + "." + ActionRead
+	PermissionDatabaseCreate = ResourcePrefixDatabase + "." + ActionCreate
+	PermissionDatabaseUpdate = ResourcePrefixDatabase + "." + ActionUpdate
+	PermissionDatabaseDelete = ResourcePrefixDatabase + "." + ActionDelete
+	PermissionDatabaseStart  = ResourcePrefixDatabase + "." + ActionStart
+	PermissionDatabaseStop   = ResourcePrefixDatabase + "." + ActionStop
+	PermissionDatabaseRestart = ResourcePrefixDatabase + "." + ActionRestart
+	PermissionDatabaseManage = ResourcePrefixDatabase + "." + ActionManage
+	PermissionDatabaseAll    = ResourcePrefixDatabase + ".*"
 )
 
 // Organization permissions

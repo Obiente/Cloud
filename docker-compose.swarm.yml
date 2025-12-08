@@ -465,6 +465,52 @@ services:
     networks:
       - obiente-network
 
+  # Databases Service - Microservice for managed database management
+  databases-service:
+    image: ghcr.io/obiente/cloud-databases-service:latest
+    environment:
+      PORT: 3014
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
+    deploy:
+      mode: replicated
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+      labels:
+        - "cloud.obiente.service=databases-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.databases-service.entrypoints=web"
+        - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
+        - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.databases-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.databases-service-secure.service=databases-service"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3014/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    dns_search: []
+    networks:
+      - obiente-network
+
   # Game Servers Service - Microservice for game server management
   gameservers-service:
     image: ghcr.io/obiente/cloud-gameservers-service:latest
