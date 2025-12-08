@@ -204,6 +204,19 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 	addGameSpecificEnvVars(envVars, req.Msg.GetGameType(), serverVersion)
 
+	// Persist the final envVars (including any defaults like VERSION) into the DB
+	if envVarsBytes, err := json.Marshal(envVars); err == nil {
+		// Update the DB record so future restarts use the same envs
+		dbGameServer.EnvVars = string(envVarsBytes)
+		if err := s.repo.Update(ctx, dbGameServer); err != nil {
+			logger.Warn("[CreateGameServer] Failed to persist env_vars after adding defaults for game server %s: %v", id, err)
+		} else {
+			logger.Debug("[CreateGameServer] Persisted env_vars for game server %s", id)
+		}
+	} else {
+		logger.Warn("[CreateGameServer] Failed to marshal env_vars for persistence for game server %s: %v", id, err)
+	}
+
 	// Create Docker container using orchestrator
 	manager, err := s.getGameServerManager()
 	if err != nil {
@@ -286,9 +299,20 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 
 	// Track if CPU or memory changed (for updating running container)
-	var cpuChanged, memoryChanged bool
+	var cpuChanged, memoryChanged, envVarsChanged bool
 	var oldMemoryBytes int64
 	var oldCPUCores int32
+	var oldEnvVars map[string]string
+
+	// Parse old environment variables for comparison
+	if dbGameServer.EnvVars != "" {
+		if err := json.Unmarshal([]byte(dbGameServer.EnvVars), &oldEnvVars); err != nil {
+			logger.Warn("[UpdateGameServer] Failed to parse existing env_vars for comparison: %v", err)
+			oldEnvVars = make(map[string]string)
+		}
+	} else {
+		oldEnvVars = make(map[string]string)
+	}
 
 	// Update fields if provided
 	if req.Msg.Name != nil {
@@ -312,13 +336,10 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 	if req.Msg.ServerVersion != nil {
 		dbGameServer.ServerVersion = req.Msg.ServerVersion
-		
-		// Update VERSION environment variable for Minecraft servers
 		gameType := gameserversv1.GameType(dbGameServer.GameType)
-		if gameType == gameserversv1.GameType_MINECRAFT || 
-		   gameType == gameserversv1.GameType_MINECRAFT_JAVA || 
-		   gameType == gameserversv1.GameType_MINECRAFT_BEDROCK {
-			// Parse existing environment variables
+		if gameType == gameserversv1.GameType_MINECRAFT ||
+			gameType == gameserversv1.GameType_MINECRAFT_JAVA ||
+			gameType == gameserversv1.GameType_MINECRAFT_BEDROCK {
 			envVars := make(map[string]string)
 			if dbGameServer.EnvVars != "" {
 				if err := json.Unmarshal([]byte(dbGameServer.EnvVars), &envVars); err != nil {
@@ -326,16 +347,13 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 					envVars = make(map[string]string)
 				}
 			}
-			
-			// Update VERSION environment variable
+
 			if *req.Msg.ServerVersion != "" {
 				envVars["VERSION"] = *req.Msg.ServerVersion
 			} else {
-				// If server_version is set to empty, remove VERSION from env vars
 				delete(envVars, "VERSION")
 			}
-			
-			// Save updated environment variables
+
 			envVarsBytes, err := json.Marshal(envVars)
 			if err == nil {
 				dbGameServer.EnvVars = string(envVarsBytes)
@@ -344,10 +362,63 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 			}
 		}
 	}
+
 	if len(req.Msg.EnvVars) > 0 {
-		envVarsBytes, err := json.Marshal(req.Msg.EnvVars)
+		// Start from the provided env vars
+		merged := make(map[string]string)
+		for k, v := range req.Msg.EnvVars {
+			merged[k] = v
+		}
+
+		// If ServerVersion was provided in the request, ensure it is reflected
+		// in the env map for Minecraft servers as `VERSION` (or removed if empty).
+		if req.Msg.ServerVersion != nil {
+			// Determine game type
+			gameType := gameserversv1.GameType(dbGameServer.GameType)
+			if gameType == gameserversv1.GameType_MINECRAFT ||
+				gameType == gameserversv1.GameType_MINECRAFT_JAVA ||
+				gameType == gameserversv1.GameType_MINECRAFT_BEDROCK {
+				if *req.Msg.ServerVersion != "" {
+					merged["VERSION"] = *req.Msg.ServerVersion
+				} else {
+					delete(merged, "VERSION")
+				}
+			}
+		}
+
+		envVarsBytes, err := json.Marshal(merged)
 		if err == nil {
 			dbGameServer.EnvVars = string(envVarsBytes)
+		}
+	}
+
+	// Check if environment variables changed by comparing old and new
+	newEnvVars := make(map[string]string)
+	if dbGameServer.EnvVars != "" {
+		if err := json.Unmarshal([]byte(dbGameServer.EnvVars), &newEnvVars); err != nil {
+			logger.Warn("[UpdateGameServer] Failed to parse new env_vars for comparison: %v", err)
+			newEnvVars = make(map[string]string)
+		}
+	}
+
+	// Compare old and new env vars
+	if len(oldEnvVars) != len(newEnvVars) {
+		envVarsChanged = true
+	} else {
+		for key, value := range newEnvVars {
+			if oldValue, exists := oldEnvVars[key]; !exists || oldValue != value {
+				envVarsChanged = true
+				break
+			}
+		}
+		// Also check for removed keys
+		if !envVarsChanged {
+			for key := range oldEnvVars {
+				if _, exists := newEnvVars[key]; !exists {
+					envVarsChanged = true
+					break
+				}
+			}
 		}
 	}
 
@@ -364,11 +435,11 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 			go func() {
 				updateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
-				
+
 				if err := s.updateContainerResourceLimits(updateCtx, *dbGameServer.ContainerID, dbGameServer.MemoryBytes, dbGameServer.CPUCores); err != nil {
 					logger.Warn("[UpdateGameServer] Failed to update container resource limits for game server %s: %v", gameServerID, err)
 				} else {
-					logger.Info("[UpdateGameServer] Successfully updated container resource limits for game server %s (Memory: %d bytes, CPU: %d cores)", 
+					logger.Info("[UpdateGameServer] Successfully updated container resource limits for game server %s (Memory: %d bytes, CPU: %d cores)",
 						gameServerID, dbGameServer.MemoryBytes, dbGameServer.CPUCores)
 				}
 			}()
@@ -684,7 +755,7 @@ func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID
 
 	// Convert CPU cores to NanoCPUs (1 CPU = 1e9 nanoseconds)
 	nanoCPUs := int64(float64(cpuCores) * 1e9)
-	
+
 	// Convert CPU cores to CPU shares (1024 shares = 1 core)
 	cpuShares := int64(cpuCores) * 1024
 
@@ -693,8 +764,8 @@ func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID
 	_, err = dockerClient.ContainerUpdate(ctx, containerID, client.ContainerUpdateOptions{
 		Resources: &container.Resources{
 			Memory:    memoryBytes,
-			CPUShares: cpuShares,  // Relative priority
-			NanoCPUs:  nanoCPUs,   // Hard CPU limit
+			CPUShares: cpuShares, // Relative priority
+			NanoCPUs:  nanoCPUs,  // Hard CPU limit
 		},
 	})
 	if err != nil {

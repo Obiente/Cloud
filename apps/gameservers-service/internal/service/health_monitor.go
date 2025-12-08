@@ -19,14 +19,15 @@ import (
 func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 	logger.Debug("[HealthMonitor] Checking game servers that should be running...")
 
-	// Query all game servers with status RUNNING, STARTING, or RESTARTING that are not deleted
+	// Query all game servers with status RUNNING, STARTING, RESTARTING, or STOPPING that are not deleted
 	var gameServers []database.GameServer
 	statusRunning := int32(gameserversv1.GameServerStatus_RUNNING)
 	statusStarting := int32(gameserversv1.GameServerStatus_STARTING)
 	statusRestarting := int32(gameserversv1.GameServerStatus_RESTARTING)
+	statusStopping := int32(gameserversv1.GameServerStatus_STOPPING)
 
 	err := database.DB.WithContext(ctx).
-		Where("(status = ? OR status = ? OR status = ?) AND deleted_at IS NULL", statusRunning, statusStarting, statusRestarting).
+		Where("(status = ? OR status = ? OR status = ? OR status = ?) AND deleted_at IS NULL", statusRunning, statusStarting, statusRestarting, statusStopping).
 		Find(&gameServers).Error
 
 	if err != nil {

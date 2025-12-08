@@ -239,6 +239,13 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			StartCommand: gameServer.StartCommand,
 		}
 
+		// Log env vars we are about to use when creating container
+		if len(envVars) > 0 {
+			logger.Info("[GameServerManager] Starting game server %s: will create container with env: %v", gameServerID, envVars)
+		} else {
+			logger.Info("[GameServerManager] Starting game server %s: will create container with no custom env vars", gameServerID)
+		}
+
 		// Create the container
 		if err := gsm.CreateGameServer(ctx, config); err != nil {
 			return fmt.Errorf("failed to create game server container: %w", err)
@@ -321,6 +328,73 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		containerInfo = containerInfoResult.Container
 	} else {
 		containerInfo = containerInfoResult.Container
+	}
+
+	// If container config exists, ask helper if we should recreate it because
+	// desired DB config changed (image or envs). This centralizes the comparison
+	// logic so Start/Restart behaviors remain consistent.
+	if containerInfo.Config != nil {
+		recreate, diffs := gsm.shouldRecreateContainer(gameServer, containerInfo.Config.Image, containerInfo.Config.Env)
+		if recreate {
+			logger.Info("[GameServerManager] Desired config changed for %s (%s), recreating container %s before start", gameServerID, strings.Join(diffs, ", "), (*gameServer.ContainerID)[:12])
+
+			// Try to stop and remove existing container (best-effort)
+			timeout := 30 * time.Second
+			_ = gsm.dockerHelper.StopContainer(ctx, *gameServer.ContainerID, timeout)
+			_ = gsm.dockerHelper.RemoveContainer(ctx, *gameServer.ContainerID, true)
+
+			// Clear container info in DB so CreateGameServer will write new container
+			repo := database.NewGameServerRepository(database.DB, database.RedisClient)
+			if err := repo.UpdateContainerInfo(ctx, gameServerID, nil, nil); err != nil {
+				logger.Warn("[GameServerManager] Failed to clear container ID before recreation: %v", err)
+			}
+
+			// Parse environment variables from JSON
+			envVars := make(map[string]string)
+			if gameServer.EnvVars != "" {
+				if err := json.Unmarshal([]byte(gameServer.EnvVars), &envVars); err != nil {
+					logger.Warn("[GameServerManager] Failed to parse env vars for game server %s: %v", gameServerID, err)
+				}
+			}
+
+			// Build config from database game server
+			config := &GameServerConfig{
+				GameServerID: gameServerID,
+				Image:        gameServer.DockerImage,
+				Port:         gameServer.Port,
+				EnvVars:      envVars,
+				MemoryBytes:  gameServer.MemoryBytes,
+				CPUCores:     gameServer.CPUCores,
+				StartCommand: gameServer.StartCommand,
+			}
+
+			// Create the new container (will register container info in DB)
+			if err := gsm.CreateGameServer(ctx, config); err != nil {
+				return fmt.Errorf("failed to recreate game server container before start: %w", err)
+			}
+
+			// Refresh game server to get the new container ID
+			gameServer, err = database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
+			if err != nil {
+				return fmt.Errorf("failed to refresh game server after recreation: %w", err)
+			}
+
+			if gameServer.ContainerID == nil {
+				return fmt.Errorf("container was recreated but container ID was not set in database")
+			}
+
+			// Restore STARTING status since we're in the middle of starting the server
+			if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 2); err != nil { // STARTING = 2
+				logger.Warn("[GameServerManager] Failed to restore STARTING status after container recreation: %v", err)
+			}
+
+			// Re-inspect recreated container for start logic
+			containerInfoResult, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to inspect recreated container %s: %w", (*gameServer.ContainerID)[:12], err)
+			}
+			containerInfo = containerInfoResult.Container
+		}
 	}
 
 	// Only start if not already running
@@ -556,6 +630,30 @@ func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerI
 	}
 	containerInfo := containerInfoResult.Container
 
+	// If container config exists, ask helper if we should recreate it because
+	// desired DB config changed (image or envs). This centralizes the comparison
+	// logic so Start/Restart behaviors remain consistent.
+	if containerInfo.Config != nil {
+		recreate, diffs := gsm.shouldRecreateContainer(gameServer, containerInfo.Config.Image, containerInfo.Config.Env)
+		if recreate {
+			logger.Info("[GameServerManager] Config changed for game server %s (%s) — recreating container %s", gameServerID, strings.Join(diffs, ", "), (*gameServer.ContainerID)[:12])
+
+			// Try to stop and remove existing container (best-effort)
+			timeout := 30 * time.Second
+			_ = gsm.dockerHelper.StopContainer(ctx, *gameServer.ContainerID, timeout)
+			_ = gsm.dockerHelper.RemoveContainer(ctx, *gameServer.ContainerID, true)
+
+			// Clear container info in DB so StartGameServer will create a new container
+			repo := database.NewGameServerRepository(database.DB, database.RedisClient)
+			if err := repo.UpdateContainerInfo(ctx, gameServerID, nil, nil); err != nil {
+				logger.Warn("[GameServerManager] Failed to clear container ID before recreation: %v", err)
+			}
+
+			// StartGameServer will create + start the container with current DB config
+			return gsm.StartGameServer(ctx, gameServerID)
+		}
+	}
+
 	// If container is not running, just start it instead of restarting
 	if !containerInfo.State.Running {
 		logger.Info("[GameServerManager] Container %s is not running, starting instead of restarting", (*gameServer.ContainerID)[:12])
@@ -675,8 +773,8 @@ func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerI
 			containerState = "stopped"
 		}
 	}
-	logger.Info("[GetGameServerLogs] Container ID: %s, State: %s, Tail: %q, Follow: %v", 
-		(*gameServer.ContainerID)[:12], 
+	logger.Info("[GetGameServerLogs] Container ID: %s, State: %s, Tail: %q, Follow: %v",
+		(*gameServer.ContainerID)[:12],
 		containerState,
 		tail,
 		follow)
@@ -794,6 +892,13 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		return "", fmt.Errorf("failed to pull image %s: %w", config.Image, err)
 	}
 
+	// Log the env vars that will be used to create the container
+	if len(config.EnvVars) > 0 {
+		logger.Info("[GameServerManager] Creating container %s with env: %v", name, config.EnvVars)
+	} else {
+		logger.Info("[GameServerManager] Creating container %s with no custom env vars", name)
+	}
+
 	// Prepare environment variables
 	env := []string{}
 	for key, value := range config.EnvVars {
@@ -864,7 +969,7 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	// Convert CPU cores to CPU shares (Docker uses shares for relative priority)
 	// 1024 shares = 1 CPU core, so multiply by 1024
 	cpuShares := int64(config.CPUCores) * 1024
-	
+
 	// Convert CPU cores to NanoCPUs for hard CPU limit
 	// 1 CPU = 1,000,000,000 nanoseconds (1e9)
 	// This sets an absolute CPU limit, not just relative priority
@@ -903,9 +1008,9 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	// - System stability is maintained through monitoring
 	memoryReservation := config.MemoryBytes
 	memoryHardLimit := int64(float64(config.MemoryBytes) * 1.2) // 20% buffer above soft limit
-	oomKillDisable := true // Disable OOM kills - we'll handle memory pressure gracefully
-	memorySwap := int64(0) // No swap - game servers need low latency
-	
+	oomKillDisable := true                                      // Disable OOM kills - we'll handle memory pressure gracefully
+	memorySwap := int64(0)                                      // No swap - game servers need low latency
+
 	// Host configuration
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
@@ -914,12 +1019,12 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 			Name: "unless-stopped",
 		},
 		Resources: container.Resources{
-			Memory:            memoryHardLimit,      // Hard limit with buffer (prevents runaway growth)
-			MemoryReservation: memoryReservation,   // Soft limit (user's requested limit - no OOM kill)
-			MemorySwap:        memorySwap,          // No swap - game servers need low latency
-			OomKillDisable:    &oomKillDisable,    // Disable OOM kills - we'll monitor and gracefully stop
-			CPUShares:         cpuShares,          // Relative priority (for scheduling)
-			NanoCPUs:          nanoCPUs,           // Hard CPU limit (prevents exceeding allocated CPUs)
+			Memory:            memoryHardLimit,   // Hard limit with buffer (prevents runaway growth)
+			MemoryReservation: memoryReservation, // Soft limit (user's requested limit - no OOM kill)
+			MemorySwap:        memorySwap,        // No swap - game servers need low latency
+			OomKillDisable:    &oomKillDisable,   // Disable OOM kills - we'll monitor and gracefully stop
+			CPUShares:         cpuShares,         // Relative priority (for scheduling)
+			NanoCPUs:          nanoCPUs,          // Hard CPU limit (prevents exceeding allocated CPUs)
 		},
 		NetworkMode: container.NetworkMode(gsm.networkName),
 		Privileged:  false, // Never run game servers in privileged mode
@@ -1046,4 +1151,104 @@ func (gsm *GameServerManager) updateGameServerContainerInfo(ctx context.Context,
 	return database.DB.Model(&database.GameServer{}).
 		Where("id = ?", gameServerID).
 		Updates(updates).Error
+}
+
+// envsDiffer compares the desired env vars (stored as JSON in DB) with the
+// container's current env slice ("KEY=VALUE"). Returns true if there is any
+// difference that would require recreating the container to take effect.
+func (gsm *GameServerManager) envsDiffer(envJSON string, containerEnv []string) bool {
+	if envJSON == "" {
+		// No desired envs persisted -> nothing we can compare against
+		logger.Debug("[GameServerManager] No desired env JSON to compare against")
+		return false
+	}
+
+	var desired map[string]string
+	if err := json.Unmarshal([]byte(envJSON), &desired); err != nil {
+		// If we can't parse desired envs, assume difference so we recreate container
+		logger.Warn("[GameServerManager] Failed to parse desired env JSON for comparison, will recreate container: %v", err)
+		return true
+	}
+
+	if len(desired) == 0 {
+		logger.Debug("[GameServerManager] Desired env JSON parsed but empty")
+		return false
+	}
+
+	// Convert container env slice to map
+	containerMap := make(map[string]string, len(containerEnv))
+	for _, e := range containerEnv {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			containerMap[parts[0]] = parts[1]
+		}
+	}
+
+	// Track differences for logging
+	diffs := []string{}
+	for k, v := range desired {
+		if cval, ok := containerMap[k]; !ok {
+			diffs = append(diffs, fmt.Sprintf("missing key %s", k))
+		} else if cval != v {
+			diffs = append(diffs, fmt.Sprintf("%s: desired=%q container=%q", k, v, cval))
+		}
+	}
+
+	if len(diffs) > 0 {
+		logger.Info("[GameServerManager] Env differences detected for game server: %s", strings.Join(diffs, ", "))
+		return true
+	}
+
+	return false
+}
+
+// shouldRecreateContainer checks whether the container needs to be recreated
+// because the desired DB configuration (image + env vars) differs from the
+// container's current configuration. Returns (true, diffs) when recreation
+// is needed, where diffs is a human-readable list of differences.
+func (gsm *GameServerManager) shouldRecreateContainer(gameServer *database.GameServer, containerImage string, containerEnv []string) (bool, []string) {
+	diffs := []string{}
+
+	// Compare image
+	if containerImage != gameServer.DockerImage {
+		diffs = append(diffs, fmt.Sprintf("image: desired=%q container=%q", gameServer.DockerImage, containerImage))
+	}
+
+	// Parse desired envs from DB
+	desired := make(map[string]string)
+	if gameServer.EnvVars != "" {
+		if err := json.Unmarshal([]byte(gameServer.EnvVars), &desired); err != nil {
+			// If we can't parse desired envs, assume difference so we recreate container
+			diffs = append(diffs, fmt.Sprintf("failed to parse desired envs: %v", err))
+			return true, diffs
+		}
+	}
+
+	// Convert container env slice to map
+	containerMap := make(map[string]string, len(containerEnv))
+	for _, e := range containerEnv {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			containerMap[parts[0]] = parts[1]
+		}
+	}
+
+	// Quick length check — if different, we have a mismatch
+	if len(desired) != len(containerMap) {
+		diffs = append(diffs, fmt.Sprintf("env count mismatch: desired=%d container=%d", len(desired), len(containerMap)))
+	}
+
+	// Compare each desired key/value
+	for k, v := range desired {
+		if cval, ok := containerMap[k]; !ok {
+			diffs = append(diffs, fmt.Sprintf("missing key %s", k))
+		} else if cval != v {
+			diffs = append(diffs, fmt.Sprintf("%s: desired=%q container=%q", k, v, cval))
+		}
+	}
+
+	if len(diffs) > 0 {
+		return true, diffs
+	}
+	return false, nil
 }
