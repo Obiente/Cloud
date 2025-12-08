@@ -2,11 +2,9 @@ package vps
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
-	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -14,7 +12,6 @@ import (
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
 	"connectrpc.com/connect"
-	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -37,65 +34,32 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 	return common.EnsureAuthenticated(ctx, req)
 }
 
-// checkVPSPermission verifies user permissions for a VPS instance
+// checkVPSPermission verifies user permissions for a VPS
+// Uses the unified CheckResourcePermission which handles all permission logic
 func (s *Service) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
-	// Get VPS by ID to check ownership
-	var vps database.VPSInstance
-	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+	if err := s.permissionChecker.CheckResourcePermission(ctx, "vps", vpsID, permission); err != nil {
+		// Convert to Connect error with appropriate code
+		if strings.Contains(err.Error(), "not found") {
+			return connect.NewError(connect.CodeNotFound, err)
 		}
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+		if strings.Contains(err.Error(), "unauthenticated") {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	// Get user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
-	}
-
-	// First check if user is admin (always has access)
-	if auth.HasRole(userInfo, auth.RoleAdmin) {
-		return nil
-	}
-
-	// Check if user is the resource owner
-	if vps.CreatedBy == userInfo.Id {
-		return nil // Resource owners have full access to their resources
-	}
-
-	// For more complex permissions (organization-based, team-based, etc.)
-	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeVPS, vpsID, permission)
-	if err != nil {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
-	}
-
 	return nil
 }
 
 // checkOrganizationPermission verifies user has access to an organization
+// Uses CheckScopedPermission with organization.read permission
 func (s *Service) checkOrganizationPermission(ctx context.Context, organizationID string) error {
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
+	if err := s.permissionChecker.CheckScopedPermission(ctx, organizationID, auth.ScopedPermission{
+		Permission: "organization.read",
+	}); err != nil {
+		if strings.Contains(err.Error(), "unauthenticated") {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	// Admins have access to all organizations
-	if auth.HasRole(userInfo, auth.RoleAdmin) {
-		return nil
-	}
-
-	// Check if user is a member of the organization
-	var count int64
-	if err := database.DB.Model(&database.OrganizationMember{}).
-		Where("organization_id = ? AND user_id = ? AND status = ?", organizationID, userInfo.Id, "active").
-		Count(&count).Error; err != nil {
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check organization membership: %w", err))
-	}
-
-	if count == 0 {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("user is not a member of organization %s", organizationID))
-	}
-
 	return nil
 }

@@ -46,7 +46,7 @@ func (s *Service) ListMinecraftProjects(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
 	}
 
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +132,7 @@ func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.
 	if gameServerID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
 	}
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
 		return nil, err
 	}
 

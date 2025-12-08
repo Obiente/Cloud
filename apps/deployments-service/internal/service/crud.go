@@ -56,7 +56,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	filters := &database.DeploymentFilters{
 		UserID: userInfo.Id,
 		// Admin users or users with org-wide read permission can see all deployments
-		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin) || hasOrgWideRead,
+		IncludeAll: auth.IsSuperadmin(ctx, userInfo) || hasOrgWideRead,
 	}
 	
 	log.Printf("[ListDeployments] User %s, Org %s, IncludeAll: %v, hasOrgWideRead: %v", userInfo.Id, orgID, filters.IncludeAll, hasOrgWideRead)
@@ -205,7 +205,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRequest]) (*connect.Response[deploymentsv1.GetDeploymentResponse], error) {
 	// Check if user has view permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if err := s.checkDeploymentPermission(ctx, deploymentID, "view"); err != nil {
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "read"); err != nil {
 		return nil, err
 	}
 

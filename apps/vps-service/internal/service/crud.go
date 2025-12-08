@@ -75,7 +75,7 @@ func (s *Service) ListVPS(ctx context.Context, req *connect.Request[vpsv1.ListVP
 	}
 
 	// Filter by user if they don't have org-wide read permission
-	if !auth.HasRole(userInfo, auth.RoleAdmin) && !hasOrgWideRead {
+	if !auth.IsSuperadmin(ctx, userInfo) && !hasOrgWideRead {
 		query = query.Where("created_by = ?", userInfo.Id)
 	}
 
@@ -356,7 +356,7 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
 		return nil, err
 	}
 

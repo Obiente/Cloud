@@ -17,7 +17,7 @@ import (
 func (s *Service) GetDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.GetDeploymentEnvVarsResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)

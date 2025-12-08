@@ -3,9 +3,11 @@ package gameservers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"gameservers-service/internal/catalog/modrinth"
 	"gameservers-service/internal/orchestrator"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
@@ -47,34 +49,17 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 }
 
 // checkGameServerPermission verifies user permissions for a game server
+// Uses the unified CheckResourcePermission which handles all permission logic
 func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID string, permission string) error {
-	// Get game server by ID to check ownership
-	gameServer, err := s.repo.GetByID(ctx, gameServerID)
-	if err != nil {
-		return connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
+	if err := s.permissionChecker.CheckResourcePermission(ctx, "gameserver", gameServerID, permission); err != nil {
+		// Convert to Connect error with appropriate code
+		if strings.Contains(err.Error(), "not found") {
+			return connect.NewError(connect.CodeNotFound, err)
+		}
+		if strings.Contains(err.Error(), "unauthenticated") {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	// Get user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
-	}
-
-	// First check if user is admin (always has access)
-	if auth.HasRole(userInfo, auth.RoleAdmin) {
-		return nil
-	}
-
-	// Check if user is the resource owner
-	if gameServer.CreatedBy == userInfo.Id {
-		return nil // Resource owners have full access to their resources
-	}
-
-	// For more complex permissions (organization-based, team-based, etc.)
-	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeGameServer, gameServerID, permission)
-	if err != nil {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
-	}
-
 	return nil
 }

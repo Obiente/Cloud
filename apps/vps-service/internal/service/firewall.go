@@ -30,7 +30,7 @@ func (s *Service) ListFirewallRules(ctx context.Context, req *connect.Request[vp
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +102,7 @@ func (s *Service) GetFirewallRule(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
 		return nil, err
 	}
 
@@ -402,7 +402,7 @@ func (s *Service) GetFirewallOptions(ctx context.Context, req *connect.Request[v
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
 		return nil, err
 	}
 

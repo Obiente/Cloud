@@ -19,7 +19,7 @@ import (
 // GetGameServerMetrics retrieves metrics for a game server
 func (s *Service) GetGameServerMetrics(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerMetricsRequest]) (*connect.Response[gameserversv1.GetGameServerMetricsResponse], error) {
 	gameServerID := req.Msg.GetGameServerId()
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		return nil, err
 	}
 
@@ -249,7 +249,7 @@ func (s *Service) StreamGameServerMetrics(ctx context.Context, req *connect.Requ
 	}
 
 	gameServerID := req.Msg.GetGameServerId()
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		return err
 	}
 
@@ -312,7 +312,7 @@ func (s *Service) GetGameServerUsage(ctx context.Context, req *connect.Request[g
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		return nil, err
 	}
 

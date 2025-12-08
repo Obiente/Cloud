@@ -158,7 +158,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return

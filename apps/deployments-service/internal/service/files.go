@@ -32,7 +32,7 @@ import (
 func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ListContainerFilesRequest]) (*connect.Response[deploymentsv1.ListContainerFilesResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -263,7 +263,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[deploymentsv1.GetContainerFileRequest]) (*connect.Response[deploymentsv1.GetContainerFileResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

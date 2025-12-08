@@ -22,7 +22,7 @@ func (s *Service) ListBuilds(ctx context.Context, req *connect.Request[deploymen
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -55,7 +55,7 @@ func (s *Service) GetBuild(ctx context.Context, req *connect.Request[deployments
 	buildID := req.Msg.GetBuildId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -81,7 +81,7 @@ func (s *Service) GetBuildLogs(ctx context.Context, req *connect.Request[deploym
 	buildID := req.Msg.GetBuildId()
 
 	// Check permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.read", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 

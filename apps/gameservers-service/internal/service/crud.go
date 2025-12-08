@@ -75,7 +75,7 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 	// Create filters with user ID
 	filters := &database.GameServerFilters{
 		UserID:     userInfo.Id,
-		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin) || hasOrgWideRead,
+		IncludeAll: auth.IsSuperadmin(ctx, userInfo) || hasOrgWideRead,
 	}
 
 	// Add status filter if provided
@@ -256,7 +256,7 @@ func (s *Service) GetGameServer(ctx context.Context, req *connect.Request[gamese
 	if gameServerID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game server ID is required"))
 	}
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		return nil, err
 	}
 

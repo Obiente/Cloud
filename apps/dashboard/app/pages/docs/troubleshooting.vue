@@ -171,7 +171,7 @@ const faqItems = [
         <li><strong>Role-based access:</strong> Your role (Owner, Admin, Member, Viewer) determines what you can do</li>
         <li><strong>Custom roles:</strong> Custom roles may have specific permission sets</li>
       </ul>
-      <p class="text-sm text-secondary mt-3"><strong>Solution:</strong> Contact your organization admin to assign the appropriate permissions or role. Common permissions include: deployments.view, deployments.create, deployments.manage, gameservers.view, gameservers.create, gameservers.manage.</p>
+      <p class="text-sm text-secondary mt-3"><strong>Solution:</strong> Contact your organization admin to assign the appropriate permissions or role. Common permissions include: deployments.read, deployments.create, deployments.manage, gameservers.read, gameservers.create, gameservers.manage.</p>
     `,
   },
   {

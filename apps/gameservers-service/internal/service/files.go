@@ -71,7 +71,7 @@ func (s *Service) ListGameServerFiles(ctx context.Context, req *connect.Request[
 	gameServerID := req.Msg.GetGameServerId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
 		return nil, err
 	}
 
@@ -256,7 +256,7 @@ func (s *Service) SearchGameServerFiles(ctx context.Context, req *connect.Reques
 	}
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
 		return nil, err
 	}
 
@@ -361,7 +361,7 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 	gameServerID := req.Msg.GetGameServerId()
 
 	// Check permissions
-	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.read"); err != nil {
 		return nil, err
 	}
 

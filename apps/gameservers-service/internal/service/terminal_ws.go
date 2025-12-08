@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	"connectrpc.com/connect"
@@ -178,7 +178,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "gameservers.view", ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "gameservers.read", ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return

@@ -30,7 +30,7 @@ func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Reque
 	}
 
 	gameServerID := req.Msg.GetGameServerId()
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		return err
 	}
 
@@ -70,7 +70,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 
 	gameServerID := req.Msg.GetGameServerId()
 	logger.Info("[StreamGameServerLogs] Request for game server %s", gameServerID)
-	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
 		logger.Error("[StreamGameServerLogs] Permission check failed for game server %s: %v", gameServerID, err)
 		return err
 	}

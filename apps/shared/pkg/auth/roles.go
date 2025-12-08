@@ -73,6 +73,9 @@ func isOrgOwner(ctx context.Context, orgID string) bool {
 
 // CheckScopedPermission verifies user has permission in org, optionally scoped to resource
 func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID string, sp ScopedPermission) error {
+	// Normalize permission to canonical format automatically
+	sp.Permission = normalizePermission(sp.ResourceType, sp.Permission)
+
 	user, err := GetUserFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unauthenticated")
@@ -248,4 +251,135 @@ func matchesEnvironmentForDeployment(deploymentID string, b database.OrgRoleBind
 	default:
 		return false
 	}
+}
+
+// resourceTypeToPermissionPrefix maps resource types to their canonical permission prefixes
+// This ensures consistency: deployment -> "deployment", gameserver -> "gameservers", etc.
+var resourceTypeToPermissionPrefix = map[string]string{
+	"deployment":  "deployment",  // singular, matches system roles
+	"gameserver": "gameservers", // plural, matches system roles
+	"vps":        "vps",         // singular, matches system roles
+	// Also handle plural forms that might be passed in
+	"deployments": "deployment",
+	"gameservers": "gameservers",
+}
+
+// normalizePermission converts any permission string to canonical format
+// It handles:
+//   - Legacy actions: "view" -> "read", "edit" -> "update", etc.
+//   - Resource type normalization: "gameserver" -> "gameservers", "deployments" -> "deployment"
+//   - Already normalized permissions: passes through unchanged
+// Examples:
+//   - normalizePermission("gameserver", "read") -> "gameservers.read"
+//   - normalizePermission("gameserver", "view") -> "gameservers.read"
+//   - normalizePermission("deployment", "read") -> "deployment.read"
+//   - normalizePermission("deployments", "read") -> "deployment.read"
+//   - normalizePermission("", "deployments.read") -> "deployment.read"
+//   - normalizePermission("", "gameservers.read") -> "gameservers.read"
+func normalizePermission(resourceType, permission string) string {
+	// Action normalization map
+	actionMap := map[string]string{
+		"view":    "read",
+		"edit":    "update",
+		"manage":  "update",
+		"write":   "update",
+		"start":   "start",
+		"stop":    "stop",
+		"restart": "restart",
+		"delete":  "delete",
+		"create":  "create",
+		"deploy":  "deploy",
+	}
+
+	// If permission already contains a dot, it's in format "resource.action"
+	if strings.Contains(permission, ".") {
+		parts := strings.SplitN(permission, ".", 2)
+		if len(parts) == 2 {
+			resourcePrefix := parts[0]
+			action := parts[1]
+
+			// Normalize resource prefix to canonical form
+			if canonicalPrefix, ok := resourceTypeToPermissionPrefix[resourcePrefix]; ok {
+				resourcePrefix = canonicalPrefix
+			}
+
+			// Normalize action
+			if normalizedAction, ok := actionMap[action]; ok {
+				action = normalizedAction
+			}
+
+			return fmt.Sprintf("%s.%s", resourcePrefix, action)
+		}
+		// Malformed, return as-is
+		return permission
+	}
+
+	// Permission is just an action (legacy format), need resource type
+	if resourceType == "" {
+		// Can't normalize without resource type
+		return permission
+	}
+
+	// Get canonical permission prefix for resource type
+	permissionPrefix := resourceTypeToPermissionPrefix[resourceType]
+	if permissionPrefix == "" {
+		// Unknown resource type, use as-is
+		permissionPrefix = resourceType
+	}
+
+	// Normalize action
+	normalizedAction := actionMap[permission]
+	if normalizedAction == "" {
+		normalizedAction = permission // Use as-is if not in map
+	}
+
+	// Build canonical permission string
+	return fmt.Sprintf("%s.%s", permissionPrefix, normalizedAction)
+}
+
+// CheckResourcePermission is a unified permission check for all resources
+// It looks up the organization ID from the resource and uses CheckScopedPermission
+// resourceType should be one of: "deployment", "gameserver", "vps"
+// permission can be legacy format (e.g., "view", "edit") or proper format (e.g., "deployments.read", "gameservers.read")
+// All permissions are automatically normalized to canonical format
+func (p *PermissionChecker) CheckResourcePermission(ctx context.Context, resourceType, resourceID, permission string) error {
+	// Normalize permission to canonical format automatically
+	// normalizePermission will handle resource type mapping (e.g., "gameserver" -> "gameservers")
+	normalizedPerm := normalizePermission(resourceType, permission)
+
+	// Look up organization ID from resource
+	var orgID string
+	switch resourceType {
+	case "deployment":
+		var dep database.Deployment
+		if err := database.DB.Select("organization_id").Where("id = ?", resourceID).First(&dep).Error; err != nil {
+			return fmt.Errorf("resource not found: %s", resourceID)
+		}
+		orgID = dep.OrganizationID
+	case "gameserver":
+		var gs database.GameServer
+		if err := database.DB.Select("organization_id").Where("id = ? AND deleted_at IS NULL", resourceID).First(&gs).Error; err != nil {
+			return fmt.Errorf("resource not found: %s", resourceID)
+		}
+		orgID = gs.OrganizationID
+	case "vps":
+		var vps database.VPSInstance
+		if err := database.DB.Select("organization_id").Where("id = ? AND deleted_at IS NULL", resourceID).First(&vps).Error; err != nil {
+			return fmt.Errorf("resource not found: %s", resourceID)
+		}
+		orgID = vps.OrganizationID
+	default:
+		return fmt.Errorf("unsupported resource type: %s", resourceType)
+	}
+
+	if orgID == "" {
+		return fmt.Errorf("resource has no organization ID")
+	}
+
+	// Use CheckScopedPermission with resource scoping
+	return p.CheckScopedPermission(ctx, orgID, ScopedPermission{
+		Permission:   normalizedPerm,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+	})
 }

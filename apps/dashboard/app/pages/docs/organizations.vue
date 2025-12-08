@@ -155,7 +155,7 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Deployments</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• deployments.view</OuiText>
+                  <OuiText size="xs" color="secondary">• deployments.read</OuiText>
                   <OuiText size="xs" color="secondary">• deployments.create</OuiText>
                   <OuiText size="xs" color="secondary">• deployments.manage</OuiText>
                 </OuiStack>
@@ -166,7 +166,7 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Game Servers</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• gameservers.view</OuiText>
+                  <OuiText size="xs" color="secondary">• gameservers.read</OuiText>
                   <OuiText size="xs" color="secondary">• gameservers.create</OuiText>
                   <OuiText size="xs" color="secondary">• gameservers.manage</OuiText>
                 </OuiStack>
@@ -177,7 +177,7 @@
           <OuiBox p="md" rounded="lg" class="bg-info/10 border border-info/20">
             <OuiText size="sm" color="secondary">
               Permissions can be assigned organization-wide or scoped to specific resources. 
-              For example, a user might have "deployments.view" for all deployments but 
+              For example, a user might have "deployments.read" for all deployments but 
               "deployments.manage" only for specific deployments in a project.
             </OuiText>
           </OuiBox>
@@ -328,7 +328,7 @@ const organizationAccordionItems = [
     content: `
       <p class="text-sm text-secondary mb-3">Create custom roles and assign them via bindings:</p>
       <ul class="list-disc list-inside space-y-1 text-sm text-secondary">
-        <li><strong>Custom Roles:</strong> Create roles with specific permissions (e.g., "deployments.view", "gameservers.manage")</li>
+        <li><strong>Custom Roles:</strong> Create roles with specific permissions (e.g., "deployments.read", "gameservers.manage")</li>
         <li><strong>Role Bindings:</strong> Bind users to roles, optionally scoped to specific resources</li>
         <li><strong>Resource Selectors:</strong> Use selectors to scope roles to resources matching criteria (e.g., environment="production")</li>
         <li><strong>Scoped Permissions:</strong> Permissions can be organization-wide or limited to specific resources</li>

@@ -979,9 +979,10 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 			}
 
 			// Check if user has access to this VPS
-			// Check if user is admin
-			if auth.HasRole(userInfo, auth.RoleAdmin) {
-				logger.Info("[SSHProxy] Admin user authenticated via API token for VPS %s", vpsID)
+			// Check permissions using unified permission checker
+			pc := auth.NewPermissionChecker()
+			if err := pc.CheckResourcePermission(ctx, "vps", vpsID, "vps.read"); err == nil {
+				logger.Info("[SSHProxy] User authenticated via API token for VPS %s", vpsID)
 			} else if vps.CreatedBy == userInfo.Id {
 				logger.Info("[SSHProxy] VPS owner authenticated via API token for VPS %s", vpsID)
 			} else {

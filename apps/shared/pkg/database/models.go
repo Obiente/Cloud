@@ -125,7 +125,7 @@ type OrgRole struct {
 	ID             string `gorm:"primaryKey" json:"id"`
 	OrganizationID string `gorm:"index" json:"organization_id"`
 	Name           string `gorm:"index" json:"name"`
-	// JSON-encoded list of permission strings, e.g., ["deployments.view","deployments.create","deployments.scale"]
+	// JSON-encoded list of permission strings, e.g., ["deployments.read","deployments.create","deployments.scale"]
 	Permissions    string `gorm:"type:jsonb" json:"permissions"`
 }
 

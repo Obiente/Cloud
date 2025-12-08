@@ -257,7 +257,7 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
 		return nil, err
 	}
 

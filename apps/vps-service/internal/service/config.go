@@ -43,33 +43,19 @@ func (s *ConfigService) ensureAuthenticated(ctx context.Context, req connect.Any
 }
 
 // checkVPSPermission verifies user permissions for a VPS instance
+// checkVPSPermission verifies user permissions for a VPS
+// Uses the unified CheckResourcePermission which handles all permission logic
 func (s *ConfigService) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
-	var vps database.VPSInstance
-	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+	if err := s.permissionChecker.CheckResourcePermission(ctx, "vps", vpsID, permission); err != nil {
+		// Convert to Connect error with appropriate code
+		if strings.Contains(err.Error(), "not found") {
+			return connect.NewError(connect.CodeNotFound, err)
 		}
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+		if strings.Contains(err.Error(), "unauthenticated") {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
-	}
-
-	if auth.HasRole(userInfo, auth.RoleAdmin) {
-		return nil
-	}
-
-	if vps.CreatedBy == userInfo.Id {
-		return nil
-	}
-
-	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeVPS, vpsID, permission)
-	if err != nil {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
-	}
-
 	return nil
 }
 

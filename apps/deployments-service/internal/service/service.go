@@ -2,7 +2,7 @@ package deployments
 
 import (
 	"context"
-	"fmt"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -47,35 +47,19 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 }
 
 // checkDeploymentPermission is a helper to verify user permissions
+// checkDeploymentPermission verifies user permissions for a deployment
+// Uses the unified CheckResourcePermission which handles all permission logic
 func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID string, permission string) error {
-	// Get deployment by ID to check ownership
-	deployment, err := s.repo.GetByID(ctx, deploymentID)
-	if err != nil {
-		return connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	if err := s.permissionChecker.CheckResourcePermission(ctx, "deployment", deploymentID, permission); err != nil {
+		// Convert to Connect error with appropriate code
+		if strings.Contains(err.Error(), "not found") {
+			return connect.NewError(connect.CodeNotFound, err)
+		}
+		if strings.Contains(err.Error(), "unauthenticated") {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-	
-	// Get user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
-	}
-	
-	// First check if user is admin (always has access)
-	if auth.HasRole(userInfo, auth.RoleAdmin) {
-		return nil
-	}
-	
-	// Check if user is the resource owner
-    if deployment.CreatedBy == userInfo.Id {
-		return nil // Resource owners have full access to their resources
-	}
-	
-	// For more complex permissions (organization-based, team-based, etc.)
-	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeDeployment, deploymentID, permission)
-	if err != nil {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
-	}
-	
 	return nil
 }
 
