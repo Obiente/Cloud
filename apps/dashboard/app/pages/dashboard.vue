@@ -60,10 +60,7 @@
 
       <!-- Enhanced KPI Overview -->
       <OuiGrid
-        cols="2"
-        cols-sm="2"
-        cols-md="3"
-        cols-lg="5"
+        :cols="{ sm: 2, md: 3, lg: 5 }"
         gap="xs"
         class="sm:gap-2 md:gap-4"
       >
@@ -167,7 +164,7 @@
         </OuiCardHeader>
         <OuiCardBody>
           <template v-if="isLoadingUsage">
-            <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+            <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
               <OuiStack v-for="i in 4" :key="i" gap="sm">
                 <OuiSkeleton width="6rem" height="1rem" variant="text" />
                 <OuiSkeleton
@@ -183,7 +180,7 @@
           <template
             v-else-if="usageData && usageData.current && usageData.quota"
           >
-            <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+            <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
               <!-- CPU Usage -->
               <OuiStack gap="sm">
                 <OuiFlex align="center" justify="between">
@@ -320,7 +317,7 @@
       </OuiCard>
 
       <!-- Cost Breakdown & Health Row -->
-      <OuiGrid cols="1" cols-lg="2" gap="lg" class="md:gap-8">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg" class="md:gap-8">
         <!-- Cost Breakdown -->
         <OuiCard>
           <OuiCardHeader>

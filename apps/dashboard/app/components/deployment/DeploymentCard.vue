@@ -123,7 +123,7 @@
           <OuiSkeleton :width="randomTextWidthByType('short')" height="1.5rem" variant="rectangle" :rounded="true" class="opacity-30" />
         </OuiFlex>
 
-        <OuiGrid cols="2" gap="sm">
+        <OuiGrid :cols="{ sm: 2 }" gap="sm">
           <OuiBox
             p="sm"
             rounded="lg"
@@ -222,7 +222,7 @@
           </span>
         </OuiFlex>
 
-        <OuiGrid cols="2" gap="sm">
+        <OuiGrid :cols="{ sm: 2 }" gap="sm">
           <OuiBox
             p="sm"
             rounded="lg"

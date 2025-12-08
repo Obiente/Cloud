@@ -5,314 +5,251 @@
 </template>
 
 <script setup lang="ts">
-import type {
-  AxisAlign,
-  AxisAlignContent,
-  AxisAlignWithBaseline,
-  AxisJustify,
-  DimensionVariant,
-  GridColumns,
-  GridRows,
-  MarginVariant,
-  OUIColor,
-  OUIBorderRadius,
-  OUISpacing,
-} from "./types";
-import {
-  alignClass,
-  alignContentClass,
-  alignWithBaselineClass,
-  justifyClass,
-  backgroundClass,
-  borderRadiusClass,
-  marginClass,
-  spacingClass,
-  widthClass,
-  heightClass,
-} from "./classMaps";
+  import type {
+    AxisAlign,
+    AxisAlignContent,
+    AxisAlignWithBaseline,
+    AxisJustify,
+    DimensionVariant,
+    GridColumns,
+    GridRows,
+    MarginVariant,
+    OUIColor,
+    OUIBorderRadius,
+    OUISpacing,
+    Responsive,
+  } from "./types";
+  import {
+    alignMap,
+    backgroundClass,
+    borderRadiusClass,
+    marginMap,
+    spacingMap,
+    autoFitMap,
+    autoFillMap,
+    widthClass,
+    heightClass,
+    responsiveClass,
+  } from "./classMaps";
 
-interface GridProps {
-  /**
-   * The HTML element or component to render as
-   * @default 'div'
-   */
-  as?: string;
+  interface GridProps {
+    /**
+     * The HTML element or component to render as
+     * @default 'div'
+     */
+    as?: string;
 
-  /**
-   * Number of columns in the grid
-   */
-  cols?: GridColumns;
+    /**
+     * Number of columns in the grid.
+     * Supports responsive values, e.g. `{ sm: "2", lg: "4" }`
+     */
+    cols?: Responsive<GridColumns>;
 
-  /**
-   * Number of rows in the grid
-   */
-  rows?: GridRows;
+    /**
+     * Number of rows in the grid.
+     * Supports responsive values.
+     */
+    rows?: Responsive<GridRows>;
 
-  /**
-   * Responsive columns - small screens
-   */
-  colsSm?: GridColumns;
+    /**
+     * Gap between grid items using OUI spacing scale.
+     * Supports responsive values.
+     */
+    gap?: Responsive<OUISpacing>;
 
-  /**
-   * Responsive columns - medium screens
-   */
-  colsMd?: GridColumns;
+    /**
+     * Gap in X direction (column gap)
+     * Supports responsive values.
+     */
+    gapX?: Responsive<OUISpacing>;
 
-  /**
-   * Responsive columns - large screens
-   */
-  colsLg?: GridColumns;
+    /**
+     * Gap in Y direction (row gap)
+     * Supports responsive values.
+     */
+    gapY?: Responsive<OUISpacing>;
 
-  /**
-   * Responsive columns - extra large screens
-   */
-  colsXl?: GridColumns;
+    /**
+     * Justify items (horizontal alignment within grid cells)
+     * Supports responsive values.
+     */
+    justifyItems?: Responsive<AxisAlign>;
 
-  /**
-   * Responsive columns - 2xl screens
-   */
-  cols2xl?: GridColumns;
+    /**
+     * Align items (vertical alignment within grid cells)
+     * Supports responsive values.
+     */
+    alignItems?: Responsive<AxisAlignWithBaseline>;
 
-  /**
-   * Gap between grid items using OUI spacing scale
-   */
-  gap?: OUISpacing;
+    /**
+     * Justify content (horizontal alignment of the grid within container)
+     * Supports responsive values.
+     */
+    justifyContent?: Responsive<AxisJustify>;
 
-  /**
-   * Gap in X direction (column gap)
-   */
-  gapX?: OUISpacing;
+    /**
+     * Align content (vertical alignment of the grid within container)
+     * Supports responsive values.
+     */
+    alignContent?: Responsive<AxisAlignContent>;
 
-  /**
-   * Gap in Y direction (row gap)
-   */
-  gapY?: OUISpacing;
+    /**
+     * Auto-fit columns with a minimum width.
+     * Supports responsive values.
+     */
+    autoFit?: Responsive<"xs" | "sm" | "md" | "lg" | "xl">;
 
-  /**
-   * Justify items (horizontal alignment within grid cells)
-   */
-  justifyItems?: AxisAlign;
+    /**
+     * Auto-fill columns with a minimum width.
+     * Supports responsive values.
+     */
+    autoFill?: Responsive<"xs" | "sm" | "md" | "lg" | "xl">;
 
-  /**
-   * Align items (vertical alignment within grid cells)
-   */
-  alignItems?: AxisAlignWithBaseline;
+    /**
+     * Padding variant using OUI spacing scale
+     * Supports responsive values.
+     */
+    p?: Responsive<OUISpacing>;
 
-  /**
-   * Justify content (horizontal alignment of the grid within container)
-   */
-  justifyContent?: AxisJustify;
+    /**
+     * Padding X (horizontal) variant
+     * Supports responsive values.
+     */
+    px?: Responsive<OUISpacing>;
 
-  /**
-   * Align content (vertical alignment of the grid within container)
-   */
-  alignContent?: AxisAlignContent;
+    /**
+     * Padding Y (vertical) variant
+     * Supports responsive values.
+     */
+    py?: Responsive<OUISpacing>;
 
-  /**
-   * Auto-fit columns with minimum width
-   */
-  autoFit?: "xs" | "sm" | "md" | "lg" | "xl";
+    /**
+     * Margin variant using OUI spacing scale
+     * Supports responsive values.
+     */
+    m?: Responsive<MarginVariant>;
 
-  /**
-   * Auto-fill columns with minimum width
-   */
-  autoFill?: "xs" | "sm" | "md" | "lg" | "xl";
+    /**
+     * Margin X (horizontal) variant
+     * Supports responsive values.
+     */
+    mx?: Responsive<MarginVariant>;
 
-  /**
-   * Padding variant using OUI spacing scale
-   */
-  p?: OUISpacing;
+    /**
+     * Margin Y (vertical) variant
+     * Supports responsive values.
+     */
+    my?: Responsive<MarginVariant>;
 
-  /**
-   * Padding X (horizontal) variant
-   */
-  px?: OUISpacing;
+    /**
+     * Background color using OUI color system
+     */
+    bg?: OUIColor;
 
-  /**
-   * Padding Y (vertical) variant
-   */
-  py?: OUISpacing;
+    /**
+     * Border radius variant
+     */
+    rounded?: OUIBorderRadius;
 
-  /**
-   * Margin variant using OUI spacing scale
-   */
-  m?: MarginVariant;
+    /**
+     * Width variant
+     */
+    w?: DimensionVariant;
 
-  /**
-   * Margin X (horizontal) variant
-   */
-  mx?: MarginVariant;
-
-  /**
-   * Margin Y (vertical) variant
-   */
-  my?: MarginVariant;
-
-  /**
-   * Background color using OUI color system
-   */
-  bg?: OUIColor;
-
-  /**
-   * Border radius variant
-   */
-  rounded?: OUIBorderRadius;
-
-  /**
-   * Width variant
-   */
-  w?: DimensionVariant;
-
-  /**
-   * Height variant
-   */
-  h?: DimensionVariant;
-}
-
-const props = withDefaults(defineProps<GridProps>(), {
-  as: "div",
-});
-
-const gridClasses = computed(() => {
-  const classes = ["oui-grid", "grid", "min-w-0", "w-full"];
-
-  // Column classes
-  if (props.cols) {
-    if (props.cols === "none") {
-      classes.push("grid-cols-none");
-    } else if (props.cols === "subgrid") {
-      classes.push("grid-cols-subgrid");
-    } else {
-      classes.push(`grid-cols-${props.cols}`);
-    }
+    /**
+     * Height variant
+     */
+    h?: DimensionVariant;
   }
 
-  // Row classes
-  if (props.rows) {
-    if (props.rows === "none") {
-      classes.push("grid-rows-none");
-    } else if (props.rows === "subgrid") {
-      classes.push("grid-rows-subgrid");
-    } else {
-      classes.push(`grid-rows-${props.rows}`);
-    }
-  }
-
-  // Responsive columns
-  const responsiveCols: Record<string, GridColumns | undefined> = {
-    sm: props.colsSm,
-    md: props.colsMd,
-    lg: props.colsLg,
-    xl: props.colsXl,
-    "2xl": props.cols2xl,
-  };
-
-  Object.entries(responsiveCols).forEach(([breakpoint, value]) => {
-    if (!value) return;
-    const prefix = breakpoint === "2xl" ? "2xl" : breakpoint;
-    if (value === "none") {
-      classes.push(`${prefix}:grid-cols-none`);
-    } else if (value === "subgrid") {
-      classes.push(`${prefix}:grid-cols-subgrid`);
-    } else {
-      classes.push(`${prefix}:grid-cols-${value}`);
-    }
+  const props = withDefaults(defineProps<GridProps>(), {
+    as: "div",
   });
 
-  // Auto-fit and auto-fill
-  if (props.autoFit) {
-    const autoFitMap = {
-      xs: "grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
-      sm: "grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]",
-      md: "grid-cols-[repeat(auto-fit,minmax(24rem,1fr))]",
-      lg: "grid-cols-[repeat(auto-fit,minmax(28rem,1fr))]",
-      xl: "grid-cols-[repeat(auto-fit,minmax(32rem,1fr))]",
-    };
-    classes.push(autoFitMap[props.autoFit]);
-  }
+  const gridClasses = computed(() => {
+    const classes = ["oui-grid", "grid", "min-w-0", "w-full"];
 
-  if (props.autoFill) {
-    const autoFillMap = {
-      xs: "grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]",
-      sm: "grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]",
-      md: "grid-cols-[repeat(auto-fill,minmax(24rem,1fr))]",
-      lg: "grid-cols-[repeat(auto-fill,minmax(28rem,1fr))]",
-      xl: "grid-cols-[repeat(auto-fill,minmax(32rem,1fr))]",
-    };
-    classes.push(autoFillMap[props.autoFill]);
-  }
+    // Columns
+    classes.push(
+      ...responsiveClass(props.cols, {
+        none: "grid-cols-none",
+        subgrid: "grid-cols-subgrid",
+        "1": "grid-cols-1",
+        "2": "grid-cols-2",
+        "3": "grid-cols-3",
+        "4": "grid-cols-4",
+        "5": "grid-cols-5",
+        "6": "grid-cols-6",
+        "7": "grid-cols-7",
+        "8": "grid-cols-8",
+        "9": "grid-cols-9",
+        "10": "grid-cols-10",
+        "11": "grid-cols-11",
+        "12": "grid-cols-12",
+      })
+    );
 
-  // Gap classes
-  const gap = spacingClass(props.gap, "gap");
-  if (gap) classes.push(gap);
+    // Rows
+    classes.push(
+      ...responsiveClass(props.rows, {
+        none: "grid-rows-none",
+        subgrid: "grid-rows-subgrid",
+        "1": "grid-rows-1",
+        "2": "grid-rows-2",
+        "3": "grid-rows-3",
+        "4": "grid-rows-4",
+        "5": "grid-rows-5",
+        "6": "grid-rows-6",
+      })
+    );
 
-  const gapX = spacingClass(props.gapX, "gap-x");
-  if (gapX) classes.push(gapX);
+    // Gaps
+    classes.push(...responsiveClass(props.gap, spacingMap("gap")));
+    classes.push(...responsiveClass(props.gapX, spacingMap("gap-x")));
+    classes.push(...responsiveClass(props.gapY, spacingMap("gap-y")));
 
-  const gapY = spacingClass(props.gapY, "gap-y");
-  if (gapY) classes.push(gapY);
+    // Alignment
+    if (props.justifyItems)
+      classes.push(
+        ...responsiveClass(props.justifyItems, alignMap("justify-items"))
+      );
+    if (props.alignItems)
+      classes.push(...responsiveClass(props.alignItems, alignMap("items")));
+    if (props.justifyContent)
+      classes.push(
+        ...responsiveClass(props.justifyContent, alignMap("justify"))
+      );
+    if (props.alignContent)
+      classes.push(...responsiveClass(props.alignContent, alignMap("content")));
 
-  // Justify and align
-  if (props.justifyItems) {
-    const justifyItems = alignClass(props.justifyItems, "justify-items");
-    if (justifyItems) classes.push(justifyItems);
-  }
+    // Auto-fit / auto-fill
+    if (props.autoFit)
+      classes.push(...responsiveClass(props.autoFit, autoFitMap));
+    if (props.autoFill)
+      classes.push(...responsiveClass(props.autoFill, autoFillMap));
 
-  if (props.alignItems) {
-    const alignItems = alignWithBaselineClass(props.alignItems, "items");
-    if (alignItems) classes.push(alignItems);
-  }
+    // Padding / margin
+    classes.push(...responsiveClass(props.p, spacingMap("p")));
+    classes.push(...responsiveClass(props.px, spacingMap("px")));
+    classes.push(...responsiveClass(props.py, spacingMap("py")));
+    classes.push(...responsiveClass(props.m, marginMap("m")));
+    classes.push(...responsiveClass(props.mx, marginMap("mx")));
+    classes.push(...responsiveClass(props.my, marginMap("my")));
 
-  if (props.justifyContent) {
-    const justifyContent = justifyClass(props.justifyContent, "justify");
-    if (justifyContent) classes.push(justifyContent);
-  }
+    // Background / radius / width / height
+    const bg = backgroundClass(props.bg);
+    if (bg) classes.push(bg);
+    const rounded = borderRadiusClass(props.rounded);
+    if (rounded) classes.push(rounded);
+    const width = widthClass(props.w);
+    if (width) classes.push(width);
+    const height = heightClass(props.h);
+    if (height) classes.push(height);
 
-  if (props.alignContent) {
-    const alignContent = alignContentClass(props.alignContent, "content");
-    if (alignContent) classes.push(alignContent);
-  }
+    return classes.join(" ");
+  });
 
-  // Padding classes
-  const padding = spacingClass(props.p, "p");
-  if (padding) classes.push(padding);
-
-  const paddingX = spacingClass(props.px, "px");
-  if (paddingX) classes.push(paddingX);
-
-  const paddingY = spacingClass(props.py, "py");
-  if (paddingY) classes.push(paddingY);
-
-  // Margin classes
-  const margin = marginClass(props.m, "m");
-  if (margin) classes.push(margin);
-
-  const marginX = marginClass(props.mx, "mx");
-  if (marginX) classes.push(marginX);
-
-  const marginY = marginClass(props.my, "my");
-  if (marginY) classes.push(marginY);
-
-  // Background classes
-  const bg = backgroundClass(props.bg);
-  if (bg) classes.push(bg);
-
-  // Border radius classes
-  const rounded = borderRadiusClass(props.rounded);
-  if (rounded) classes.push(rounded);
-
-  // Width classes
-  const width = widthClass(props.w);
-  if (width) classes.push(width);
-
-  // Height classes
-  const height = heightClass(props.h);
-  if (height) classes.push(height);
-
-  return classes.join(" ");
-});
-
-defineOptions({
-  inheritAttrs: false,
-});
+  defineOptions({
+    inheritAttrs: false,
+  });
 </script>

@@ -1,7 +1,7 @@
 <template>
     <OuiStack gap="xl">
       <!-- Key Metrics Grid -->
-      <OuiGrid cols="1" cols-md="2" cols-lg="3" cols-xl="4" gap="md">
+      <OuiGrid :cols="{ sm: 1, md: 2, lg: 3, xl: 4 }" gap="md">
         <!-- Status Card -->
         <OuiCard>
           <OuiCardBody>
@@ -263,7 +263,7 @@
       />
 
       <!-- Main Information Grid -->
-      <OuiGrid cols="1" cols-lg="2" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
         <!-- Deployment Details Card -->
         <OuiCard>
           <OuiCardHeader>
@@ -539,7 +539,7 @@
           <OuiText size="lg" weight="bold">Quick Links</OuiText>
         </OuiCardHeader>
         <OuiCardBody>
-          <OuiGrid cols="2" cols-md="4" gap="md">
+          <OuiGrid :cols="{ sm: 2, md: 4 }" gap="md">
             <OuiButton
               variant="ghost"
               size="sm"

@@ -43,7 +43,7 @@
         class="backdrop-blur-sm border border-border-muted/60"
       >
         <OuiCardBody>
-          <OuiGrid cols="1" cols-md="3" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
             <OuiInput
               v-model="searchQuery"
               placeholder="Search by name or game type..."
@@ -70,7 +70,7 @@
       </OuiCard>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="pending && !gameServersData" cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-if="pending && !gameServersData" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <GameServerCard
           v-for="i in 6"
           :key="i"
@@ -116,7 +116,7 @@
         </OuiButton>
       </OuiStack>
 
-      <OuiGrid v-else cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <GameServerCard
           v-for="gameServer in filteredGameServers"
           :key="gameServer.id"

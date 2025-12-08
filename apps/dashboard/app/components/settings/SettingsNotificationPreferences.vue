@@ -39,7 +39,7 @@
                 </OuiText>
               </OuiStack>
 
-              <OuiGrid cols="1" cols-md="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
                 <!-- Email Enabled -->
                 <OuiFlex justify="between" align="center">
                   <OuiStack gap="xs">

@@ -16,7 +16,9 @@
         </OuiText>
         <OuiFlex v-if="!loading && gameServer?.port" align="center" gap="xs">
           <ServerIcon class="h-3 w-3 text-secondary" />
-          <OuiText size="xs" color="secondary">Port: {{ gameServer?.port }}</OuiText>
+          <OuiText size="xs" color="secondary"
+            >Port: {{ gameServer?.port }}</OuiText
+          >
         </OuiFlex>
       </OuiStack>
     </template>
@@ -56,7 +58,7 @@
 
     <template #resources>
       <!-- Skeleton for resources -->
-      <OuiGrid v-if="loading" :cols="String(resources.length) as any" gap="sm">
+      <OuiGrid :cols="{ sm: resources.length }" v-if="loading" gap="sm">
         <OuiBox
           v-for="(resource, idx) in resources"
           :key="idx"
@@ -69,15 +71,22 @@
               v-if="resource.icon"
               :is="resource.icon"
               class="h-4 w-4 text-secondary"
-              :style="{ opacity: iconVar.opacity, transform: `scale(${iconVar.scale})` }"
+              :style="{
+                opacity: iconVar.opacity,
+                transform: `scale(${iconVar.scale})`,
+              }"
             />
-            <OuiSkeleton :width="randomTextWidthByType('label')" height="0.875rem" variant="text" />
+            <OuiSkeleton
+              :width="randomTextWidthByType('label')"
+              height="0.875rem"
+              variant="text"
+            />
           </OuiStack>
         </OuiBox>
       </OuiGrid>
-      
+
       <!-- Actual resources content -->
-      <OuiGrid v-else :cols="String(resources.length) as any" gap="sm">
+      <OuiGrid :cols="{ sm: resources.length }" v-else gap="sm">
         <OuiBox
           v-for="(resource, idx) in resources"
           :key="idx"
@@ -128,7 +137,10 @@
   import OuiStack from "~/components/oui/Stack.vue";
   import OuiText from "~/components/oui/Text.vue";
   import OuiSkeleton from "~/components/oui/Skeleton.vue";
-  import { randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
+  import {
+    randomTextWidthByType,
+    randomIconVariation,
+  } from "~/composables/useSkeletonVariations";
 
   interface GameServer {
     id: string;
@@ -205,7 +217,7 @@
     if (!props.gameServer || props.loading) return "Unknown";
     const gameType = props.gameServer.gameType;
     if (!gameType) return "Unknown";
-    
+
     const typeMap: Record<string, string> = {
       [GameType.MINECRAFT]: "Minecraft",
       [GameType.MINECRAFT_JAVA]: "Minecraft Java",
@@ -233,9 +245,11 @@
   });
 
   // Helper function to convert BigInt to number for memoryBytes
-  const getMemoryBytesValue = (value: bigint | number | undefined | null): number => {
+  const getMemoryBytesValue = (
+    value: bigint | number | undefined | null
+  ): number => {
     if (!value) return 0;
-    if (typeof value === 'bigint') return Number(value);
+    if (typeof value === "bigint") return Number(value);
     return value;
   };
 
@@ -270,21 +284,29 @@
       emit("refresh");
     } catch (error: any) {
       const errorMessage = error?.message || "Unknown error";
-      
+
       // Check for common configuration errors
       let hint = "";
-      if (errorMessage.includes("exited immediately") || errorMessage.includes("container exit")) {
-        hint = "The container may be missing required environment variables. Check the game server settings.";
-        
+      if (
+        errorMessage.includes("exited immediately") ||
+        errorMessage.includes("container exit")
+      ) {
+        hint =
+          "The container may be missing required environment variables. Check the game server settings.";
+
         // Add specific hint for CS2 servers
-        const gameTypeNum = typeof props.gameServer.gameType === 'number' 
-          ? props.gameServer.gameType 
-          : (props.gameServer.gameType ? Number(props.gameServer.gameType) : undefined);
+        const gameTypeNum =
+          typeof props.gameServer.gameType === "number"
+            ? props.gameServer.gameType
+            : props.gameServer.gameType
+            ? Number(props.gameServer.gameType)
+            : undefined;
         if (gameTypeNum === GameType.CS2 && errorMessage.includes("exit")) {
-          hint = "CS2 servers require a Steam Game Server Login Token (SRCDS_TOKEN). Configure it in the game server settings.";
+          hint =
+            "CS2 servers require a Steam Game Server Login Token (SRCDS_TOKEN). Configure it in the game server settings.";
         }
       }
-      
+
       const message = hint ? `${hint}\n\nError: ${errorMessage}` : errorMessage;
       await showAlert({
         title: "Failed to start game server",
@@ -317,4 +339,3 @@
     emit("refresh");
   };
 </script>
-

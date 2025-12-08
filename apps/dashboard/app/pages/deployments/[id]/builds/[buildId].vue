@@ -45,7 +45,7 @@
             </OuiFlex>
 
             <!-- Build Info -->
-            <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="sm" v-if="build">
+            <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="sm" v-if="build">
               <div v-if="build.branch">
                 <OuiText size="xs" color="muted" class="mb-1">Branch</OuiText>
                 <OuiText size="sm" weight="medium" class="font-mono">{{ build.branch }}</OuiText>

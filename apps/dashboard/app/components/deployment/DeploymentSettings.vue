@@ -23,7 +23,7 @@
             >Settings saved successfully!</OuiText
           >
 
-          <OuiGrid cols="1" :cols-md="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect
               v-model="localEnvironment"
               :items="environmentOptions"
@@ -209,7 +209,7 @@
           </OuiStack>
 
           <!-- Build Strategy -->
-          <OuiGrid cols="1" :cols-md="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect
               v-model="buildStrategy"
               :items="buildStrategyOptions"
@@ -220,9 +220,9 @@
           </OuiGrid>
 
           <!-- Install, Build, and Start Commands -->
-          <OuiGrid
+          <OuiGrid :cols="{ sm: 1, md: 3 }"
             v-if="showInstallBuildCommands"
-            cols="1"
+           
             :cols-md="3"
             gap="md"
           >
@@ -250,7 +250,7 @@
           </OuiGrid>
 
           <!-- Dockerfile path input -->
-          <OuiGrid cols="1" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
+          <OuiGrid :cols="{ sm: 1 }" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
             <OuiInput
               v-model="config.dockerfilePath"
               label="Dockerfile Path"
@@ -261,8 +261,8 @@
           </OuiGrid>
 
           <!-- Compose file path input -->
-          <OuiGrid
-            cols="1"
+          <OuiGrid :cols="{ sm: 1 }"
+           
             v-if="
               buildStrategy === BuildStrategy.PLAIN_COMPOSE ||
               buildStrategy === BuildStrategy.COMPOSE_REPO
@@ -278,8 +278,8 @@
           </OuiGrid>
 
           <!-- Build Path Configuration -->
-          <OuiGrid
-            cols="1"
+          <OuiGrid :cols="{ sm: 1, md: 2 }"
+           
             :cols-md="2"
             gap="md"
             v-if="showBuildPathConfig"

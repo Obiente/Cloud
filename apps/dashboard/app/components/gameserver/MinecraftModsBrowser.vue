@@ -166,10 +166,10 @@
     </OuiAlert>
 
     <OuiStack gap="lg">
-      <OuiGrid
-        cols="1"
-        cols-md="2"
-        cols-xl="3"
+      <OuiGrid :cols="{ sm: 1, md: 2, xl: 3 }"
+       
+       
+       
         gap="lg"
         :class="[
           'transition-opacity duration-150',

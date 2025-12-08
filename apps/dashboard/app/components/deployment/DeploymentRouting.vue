@@ -63,7 +63,7 @@
               </OuiButton>
             </OuiFlex>
 
-            <OuiGrid cols="1" :cols-md="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiSelect
                 v-model="rule.domain"
                 :items="domainOptions"
@@ -79,7 +79,7 @@
               />
             </OuiGrid>
 
-            <OuiGrid cols="1" :cols-md="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiInput
                 v-model="rule.targetPortStr"
                 type="number"
@@ -101,7 +101,7 @@
               />
             </OuiGrid>
 
-            <OuiGrid cols="1" :cols-md="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiSelect
                 v-model="rule.protocol"
                 :items="protocolOptions"

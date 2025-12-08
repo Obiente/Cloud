@@ -20,7 +20,7 @@
       </OuiFlex>
     </OuiCardHeader>
     <OuiCardBody>
-      <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+      <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="md">
         <!-- CPU Usage -->
         <OuiBox
           p="md"

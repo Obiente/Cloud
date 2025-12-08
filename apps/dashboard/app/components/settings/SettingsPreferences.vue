@@ -41,7 +41,7 @@
               Customize the file editor appearance and behavior
             </OuiText>
 
-            <OuiGrid cols="1" cols-md="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <!-- Word Wrap -->
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Word Wrap</OuiText>

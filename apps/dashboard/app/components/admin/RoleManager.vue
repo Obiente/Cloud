@@ -11,7 +11,7 @@
       </OuiCardHeader>
       <OuiCardBody>
         <form @submit.prevent="saveRole">
-          <OuiGrid cols="1" colsMd="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect
               v-if="showOrganizationSelector"
               label="Organization"

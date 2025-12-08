@@ -1,23 +1,22 @@
 <template>
-  <OuiGrid :cols="cols" :cols-md="colsMd" :cols-lg="colsLg" gap="lg">
+  <OuiGrid :cols="finalCols" gap="lg">
     <slot />
   </OuiGrid>
 </template>
 
 <script setup lang="ts">
-import type { GridColumns } from "~/components/oui/types";
+  import { computed } from "vue";
+  import type {
+    GridColumns,
+    Responsive,
+    Breakpoint,
+  } from "~/components/oui/types";
 
-withDefaults(
-  defineProps<{
-    cols?: GridColumns;
-    colsMd?: GridColumns;
-    colsLg?: GridColumns;
-  }>(),
-  {
-    cols: 1 as GridColumns,
-    colsMd: 2 as GridColumns,
-    colsLg: 4 as GridColumns,
-  }
-);
+  const props = defineProps<{
+    cols?: Responsive<GridColumns>;
+  }>();
+
+  const finalCols = computed<Responsive<GridColumns>>(() => {
+    return props.cols ?? { sm: 1, md: 2, lg: 4 };
+  });
 </script>
-

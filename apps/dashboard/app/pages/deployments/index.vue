@@ -43,7 +43,7 @@
         class="backdrop-blur-sm border border-border-muted/60"
       >
         <OuiCardBody>
-          <OuiGrid cols="1" cols-md="4" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 4 }" gap="md">
             <OuiInput
               v-model="searchQuery"
               placeholder="Search by name, domain, or framework..."
@@ -78,7 +78,7 @@
       </OuiCard>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="pending && !deployments" cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-if="pending && !deployments" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <DeploymentCard
           v-for="i in 6"
           :key="i"
@@ -124,7 +124,7 @@
         </OuiButton>
       </OuiStack>
 
-      <OuiGrid v-else cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <DeploymentCard
           v-for="deployment in filteredDeployments"
           :key="deployment.id"

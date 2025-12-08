@@ -71,20 +71,10 @@ export type OUIColor =
   | "info";
 
 export type OUIBorderRadius = "none" | "sm" | "md" | "lg" | "xl" | "full";
+export type OUIOverflow = "visible" | "hidden" | "auto" | "scroll";
+export type OUISize = SizeRange<"xs", "7xl">;
 
-export type OUISize =
-  | "xs"
-  | "sm"
-  | "md"
-  | "lg"
-  | "xl"
-  | "2xl"
-  | "3xl"
-  | "4xl"
-  | "5xl"
-  | "6xl"
-  | "7xl";
-
+    
 /** ------------------------------------------------------------------
  *  Size scale enum + derived ranges
  *  ------------------------------------------------------------------ */
@@ -159,3 +149,13 @@ export type DimensionVariant =
   | "screen"
   | SizeRange<"xs", "full">;
 export type MarginVariant = OUISpacing | "auto";
+
+export type Breakpoint = "sm" | "md" | "lg" | "xl" | "2xl";
+
+/**
+ * Responsive<T> - either a single value T or an object keyed by breakpoints.
+ * Example:
+ *   T
+ *   | { sm?: T; md?: T; lg?: T; ... }
+ */
+export type Responsive<T extends string | number> = T | Partial<Record<Breakpoint, T>>;

@@ -24,7 +24,15 @@
       <div
         v-if="isActioning"
         class="absolute inset-0 h-full shimmer-animation"
-        style="background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%); background-size: 200% 100%;"
+        style="
+          background: linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.4) 50%,
+            transparent 100%
+          );
+          background-size: 200% 100%;
+        "
       />
     </div>
 
@@ -41,21 +49,41 @@
                   v-if="statusMeta?.icon"
                   :is="statusMeta.icon"
                   :class="['h-5 w-5 shrink-0', statusMeta.iconClass]"
-                  :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
+                  :style="{
+                    opacity: skeletonVars.iconOpacity,
+                    transform: `scale(${skeletonVars.iconScale})`,
+                  }"
                 />
                 <slot name="icon">
                   <component
                     v-if="icon"
                     :is="icon"
                     :class="['h-5 w-5 shrink-0', iconClass]"
-                    :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
+                    :style="{
+                      opacity: skeletonVars.iconOpacity,
+                      transform: `scale(${skeletonVars.iconScale})`,
+                    }"
                   />
                 </slot>
-                <OuiSkeleton v-if="!statusMeta?.icon && !icon" width="1.25rem" height="1.25rem" variant="rectangle" :rounded="true" />
-                <OuiSkeleton :width="skeletonVars.titleWidth" height="1.5rem" variant="text" />
+                <OuiSkeleton
+                  v-if="!statusMeta?.icon && !icon"
+                  width="1.25rem"
+                  height="1.25rem"
+                  variant="rectangle"
+                  :rounded="true"
+                />
+                <OuiSkeleton
+                  :width="skeletonVars.titleWidth"
+                  height="1.5rem"
+                  variant="text"
+                />
               </OuiFlex>
               <slot name="subtitle">
-                <OuiSkeleton :width="skeletonVars.subtitleWidth" height="1rem" variant="text" />
+                <OuiSkeleton
+                  :width="skeletonVars.subtitleWidth"
+                  height="1rem"
+                  variant="text"
+                />
               </slot>
             </OuiStack>
             <OuiFlex gap="xs">
@@ -65,12 +93,21 @@
 
           <!-- Status Badge Skeleton - Use actual badge structure -->
           <OuiBadge variant="secondary" size="sm" class="opacity-30">
-            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+            <OuiSkeleton
+              :width="randomTextWidthByType('short')"
+              height="0.875rem"
+              variant="text"
+              class="bg-transparent"
+            />
           </OuiBadge>
 
           <!-- Resources Skeleton - Use actual resource structure -->
           <slot name="resources">
-            <OuiGrid v-if="resources && resources.length > 0" :cols="String(resources.length) as any" gap="sm">
+            <OuiGrid
+              :cols="{ sm: resources.length }"
+              v-if="resources && resources.length > 0"
+              gap="sm"
+            >
               <OuiBox
                 v-for="(resource, idx) in resources"
                 :key="idx"
@@ -83,9 +120,16 @@
                     v-if="resource.icon"
                     :is="resource.icon"
                     class="h-4 w-4 text-secondary"
-                    :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
+                    :style="{
+                      opacity: skeletonVars.iconOpacity,
+                      transform: `scale(${skeletonVars.iconScale})`,
+                    }"
                   />
-                  <OuiSkeleton :width="randomTextWidthByType('label')" height="0.875rem" variant="text" />
+                  <OuiSkeleton
+                    :width="randomTextWidthByType('label')"
+                    height="0.875rem"
+                    variant="text"
+                  />
                 </OuiStack>
               </OuiBox>
             </OuiGrid>
@@ -97,10 +141,19 @@
           <!-- Footer Skeleton - Match actual structure -->
           <OuiFlex justify="between" align="center">
             <slot name="footer-left">
-              <OuiSkeleton :width="skeletonVars.subtitleWidth" height="0.875rem" variant="text" />
+              <OuiSkeleton
+                :width="skeletonVars.subtitleWidth"
+                height="0.875rem"
+                variant="text"
+              />
             </slot>
             <slot name="footer-right">
-              <OuiSkeleton width="6rem" height="2rem" variant="rectangle" :rounded="true" />
+              <OuiSkeleton
+                width="6rem"
+                height="2rem"
+                variant="rectangle"
+                :rounded="true"
+              />
             </slot>
           </OuiFlex>
         </template>
@@ -114,7 +167,10 @@
                 <component
                   v-if="statusMeta?.icon"
                   :is="statusMeta.icon"
-                  :class="['h-5 w-5 shrink-0 transition-colors duration-500', statusMeta.iconClass]"
+                  :class="[
+                    'h-5 w-5 shrink-0 transition-colors duration-500',
+                    statusMeta.iconClass,
+                  ]"
                 />
                 <slot name="icon">
                   <component
@@ -134,7 +190,12 @@
                 </OuiText>
               </OuiFlex>
               <slot name="subtitle">
-                <OuiText v-if="subtitle" size="sm" color="secondary" class="truncate">
+                <OuiText
+                  v-if="subtitle"
+                  size="sm"
+                  color="secondary"
+                  class="truncate"
+                >
                   {{ subtitle }}
                 </OuiText>
               </slot>
@@ -146,13 +207,22 @@
           </OuiFlex>
 
           <!-- Status Badge -->
-          <OuiBadge v-if="statusMeta" :variant="statusMeta.badge" size="sm" class="transition-all duration-300">
+          <OuiBadge
+            v-if="statusMeta"
+            :variant="statusMeta.badge"
+            size="sm"
+            class="transition-all duration-300"
+          >
             {{ statusMeta.label }}
           </OuiBadge>
 
           <!-- Resources / Custom Content -->
           <slot name="resources">
-            <OuiGrid v-if="resources && resources.length > 0" :cols="String(resources.length) as any" gap="sm">
+            <OuiGrid
+              :cols="{ sm: resources.length }"
+              v-if="resources && resources.length > 0"
+              gap="sm"
+            >
               <OuiBox
                 v-for="(resource, idx) in resources"
                 :key="idx"
@@ -166,7 +236,9 @@
                     :is="resource.icon"
                     class="h-4 w-4 text-secondary"
                   />
-                  <OuiText size="xs" weight="medium">{{ resource.label }}</OuiText>
+                  <OuiText size="xs" weight="medium">{{
+                    resource.label
+                  }}</OuiText>
                 </OuiStack>
               </OuiBox>
             </OuiGrid>
@@ -209,7 +281,11 @@
   import OuiBadge from "~/components/oui/Badge.vue";
   import OuiGrid from "~/components/oui/Grid.vue";
   import OuiBox from "~/components/oui/Box.vue";
-  import { useSkeletonVariations, randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
+  import {
+    useSkeletonVariations,
+    randomTextWidthByType,
+    randomIconVariation,
+  } from "~/composables/useSkeletonVariations";
 
   interface Resource {
     icon?: any;
@@ -283,17 +359,16 @@
 </script>
 
 <style scoped>
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
   }
-  100% {
-    background-position: 200% 0;
-  }
-}
 
-.shimmer-animation {
-  animation: shimmer 2s ease-in-out infinite;
-}
+  .shimmer-animation {
+    animation: shimmer 2s ease-in-out infinite;
+  }
 </style>
-

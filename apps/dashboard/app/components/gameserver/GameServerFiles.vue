@@ -80,7 +80,12 @@
         :isLoadingTree="isLoadingTree"
         :containerRunning="containerRunning"
         :getVolumeLabel="(volume) => volume.mountPoint || volume.name || ''"
-        :getVolumeSecondaryLabel="(volume) => volume.mountPoint && volume.name !== volume.mountPoint ? getVolumeDisplayName(volume.name) : null"
+        :getVolumeSecondaryLabel="
+          (volume) =>
+            volume.mountPoint && volume.name !== volume.mountPoint
+              ? getVolumeDisplayName(volume.name)
+              : null
+        "
         :parseError="parseTreeError"
         @switch-source="handleSwitchSource"
         @toggle="handleToggle"
@@ -209,7 +214,12 @@
               </Transition>
             </OuiFlex>
           </div>
-          <OuiFlex gap="md" align="center" wrap="wrap" class="w-full sm:w-auto shrink-0">
+          <OuiFlex
+            gap="md"
+            align="center"
+            wrap="wrap"
+            class="w-full sm:w-auto shrink-0"
+          >
             <OuiCombobox
               v-if="currentNode?.type === 'file'"
               v-model="fileLanguage"
@@ -236,7 +246,9 @@
               class="flex-1 sm:flex-initial shrink-0 min-w-fit"
             >
               <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
-              <span class="hidden sm:inline">{{ isSaving ? "Saving..." : "Save" }}</span>
+              <span class="hidden sm:inline">{{
+                isSaving ? "Saving..." : "Save"
+              }}</span>
               <span class="sm:hidden">{{ isSaving ? "..." : "Save" }}</span>
             </OuiButton>
             <OuiButton
@@ -271,7 +283,9 @@
             >
               <template #items="{ currentNode: node }">
                 <OuiMenuItem
-                  v-if="node && (node.type === 'directory' || node.type === 'file')"
+                  v-if="
+                    node && (node.type === 'directory' || node.type === 'file')
+                  "
                   value="create-archive"
                   @select="() => handleCreateArchive(node)"
                 >
@@ -285,21 +299,24 @@
 
         <div class="flex-1 relative min-h-0 overflow-hidden" role="tabpanel">
           <!-- File Uploader (replaces editor when showUpload is true) -->
-          <div
+          <OuiFlex
             v-if="showUpload"
-            class="h-full flex items-center justify-center p-8"
+            justify="center"
+            align="center"
+            gap="md"
+            p="md"
+            h="full"
+            overflow="scroll"
           >
-            <div class="w-full max-w-2xl">
-              <FileUploader
-                :game-server-id="gameServerId"
-                :destination-path="currentDirectory"
-                :volume-name="
-                  source.type === 'volume' ? source.volumeName : undefined
-                "
-                @uploaded="handleFilesUploaded"
-              />
-            </div>
-          </div>
+            <FileUploader
+              :game-server-id="gameServerId"
+              :destination-path="currentDirectory"
+              :volume-name="
+                source.type === 'volume' ? source.volumeName : undefined
+              "
+              @uploaded="handleFilesUploaded"
+            />
+          </OuiFlex>
           <!-- File Preview/Editor (shown when not uploading) -->
           <template v-else>
             <div
@@ -482,7 +499,6 @@
         </div>
       </section>
     </div>
-
   </OuiStack>
 </template>
 
@@ -511,11 +527,11 @@
   import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
   import FileBrowserSearch from "../shared/FileBrowserSearch.vue";
   import FileUploader from "./GameServerFileUploader.vue";
-import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
-import MinecraftEULAEditor from "./MinecraftEULAEditor.vue";
-import MinecraftServerPropertiesEditor from "./MinecraftServerPropertiesEditor.vue";
-import MinecraftWhitelistEditor from "./MinecraftWhitelistEditor.vue";
-import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
+  import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
+  import MinecraftEULAEditor from "./MinecraftEULAEditor.vue";
+  import MinecraftServerPropertiesEditor from "./MinecraftServerPropertiesEditor.vue";
+  import MinecraftWhitelistEditor from "./MinecraftWhitelistEditor.vue";
+  import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useConnectClient } from "~/lib/connect-client";
   import { GameServerService } from "@obiente/proto";
@@ -727,28 +743,30 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   // Helper function to get a user-friendly volume display name
   function getVolumeDisplayName(volumeName: string | undefined): string {
     if (!volumeName) return "";
-    
+
     // For game server volumes, extract meaningful name from the volume name
     // e.g., "gameserver-gs-1763160031-data" -> "Data Volume"
     if (volumeName.startsWith("gameserver-") && volumeName.endsWith("-data")) {
       return "Data Volume";
     }
-    
+
     // For anonymous volumes with mount point names, extract the mount point
     // e.g., "anonymous-config" -> "Config Volume"
     if (volumeName.startsWith("anonymous-")) {
       const mountPoint = volumeName.replace("anonymous-", "");
       if (mountPoint && mountPoint !== "volume") {
-        return mountPoint.charAt(0).toUpperCase() + mountPoint.slice(1) + " Volume";
+        return (
+          mountPoint.charAt(0).toUpperCase() + mountPoint.slice(1) + " Volume"
+        );
       }
       return "Anonymous Volume";
     }
-    
+
     // For other volumes, show a shortened version if it's a hash
     if (volumeName.length > 20 && /^[a-f0-9]+$/.test(volumeName)) {
       return volumeName.substring(0, 8) + "...";
     }
-    
+
     return volumeName;
   }
 
@@ -887,15 +905,20 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     loadChildren(node, node.nextCursor ?? undefined);
   }
 
-  function handleContextAction(action: string, node: ExplorerNode, selectedPaths?: string[]) {
+  function handleContextAction(
+    action: string,
+    node: ExplorerNode,
+    selectedPaths?: string[]
+  ) {
     // If multiple nodes are selected, use them; otherwise use the clicked node
-    const pathsToUse = selectedPaths && selectedPaths.length > 1 
-      ? selectedPaths.filter(p => p !== "/")
-      : [node.path];
-    
+    const pathsToUse =
+      selectedPaths && selectedPaths.length > 1
+        ? selectedPaths.filter((p) => p !== "/")
+        : [node.path];
+
     // Resolve paths to nodes
     const nodesToUse = pathsToUse
-      .map(path => findNode(path))
+      .map((path) => findNode(path))
       .filter((n): n is ExplorerNode => n !== null);
 
     if (nodesToUse.length === 0) {
@@ -906,7 +929,9 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     switch (action) {
       case "open":
         if (nodesToUse.length === 1 && nodesToUse[0]) {
-          handleOpen(nodesToUse[0], { ensureExpanded: nodesToUse[0].type === "directory" });
+          handleOpen(nodesToUse[0], {
+            ensureExpanded: nodesToUse[0].type === "directory",
+          });
         }
         break;
       case "open-editor":
@@ -949,7 +974,9 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
         handleCreate("symlink");
         break;
       case "create-archive":
-        handleCreateArchive(nodesToUse.length === 1 && nodesToUse[0] ? nodesToUse[0] : undefined);
+        handleCreateArchive(
+          nodesToUse.length === 1 && nodesToUse[0] ? nodesToUse[0] : undefined
+        );
         break;
     }
   }
@@ -1448,7 +1475,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     }
   }
 
-
   function handlePreviewError() {
     // If preview fails, show error and allow download
     fileError.value =
@@ -1922,15 +1948,20 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       metaKey: event.metaKey,
       shiftKey: event.shiftKey,
     });
-    
+
     multiSelect.handleNodeClick(node, event, (selectedPaths) => {
       console.log("[GameServerFiles] Selection changed callback", {
         selectedPaths,
         selectedCount: selectedPaths.length,
       });
-      
+
       // Update selectedPath to the last selected if single selection
-      if (selectedPaths.length === 1 && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      if (
+        selectedPaths.length === 1 &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
         selectedPath.value = selectedPaths[0] || null;
       } else if (selectedPaths.length === 0) {
         selectedPath.value = null;
@@ -1942,7 +1973,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     // Determine which nodes to archive
     const nodesToArchive: ExplorerNode[] = [];
     const isMultiSelect = selectedNodes.value.size > 1;
-    
+
     if (isMultiSelect) {
       // Multi-select mode: archive all selected nodes (ignore the clicked node)
       for (const path of selectedNodes.value) {
@@ -1952,7 +1983,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
         }
       }
       if (nodesToArchive.length === 0) {
-        toast.error("No Selection", "Please select files or folders to archive");
+        toast.error(
+          "No Selection",
+          "Please select files or folders to archive"
+        );
         return;
       }
     } else if (node) {
@@ -1974,15 +2008,17 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       defaultZipName = (firstNode.name || "archive") + ".zip";
     } else if (nodesToArchive.length > 1) {
       // Multiple files - use common parent directory name or "archive"
-      const paths = nodesToArchive.map(n => n?.path).filter((p): p is string => !!p);
+      const paths = nodesToArchive
+        .map((n) => n?.path)
+        .filter((p): p is string => !!p);
       if (paths.length > 0) {
-        const pathParts = paths.map(p => p.split("/").filter(Boolean));
+        const pathParts = paths.map((p) => p.split("/").filter(Boolean));
         if (pathParts.length > 0 && pathParts[0]) {
-          const minLength = Math.min(...pathParts.map(p => p.length));
+          const minLength = Math.min(...pathParts.map((p) => p.length));
           let commonParts: string[] = [];
           for (let i = 0; i < minLength - 1; i++) {
             const part: string | undefined = pathParts[0][i];
-            if (part && pathParts.every(p => p[i] === part)) {
+            if (part && pathParts.every((p) => p[i] === part)) {
               commonParts.push(part);
             } else {
               break;
@@ -1995,22 +2031,24 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
         }
       }
     }
-    
+
     // Get parent directory for destination (use common parent if multiple)
     let parentPath = "/";
     if (nodesToArchive.length === 1 && firstNode) {
       parentPath = firstNode.path.split("/").slice(0, -1).join("/") || "/";
     } else if (nodesToArchive.length > 0) {
       // Find common parent path
-      const paths = nodesToArchive.map(n => n?.path).filter((p): p is string => !!p);
+      const paths = nodesToArchive
+        .map((n) => n?.path)
+        .filter((p): p is string => !!p);
       if (paths.length > 0) {
-        const pathParts = paths.map(p => p.split("/").filter(Boolean));
+        const pathParts = paths.map((p) => p.split("/").filter(Boolean));
         if (pathParts.length > 0 && pathParts[0]) {
-          const minLength = Math.min(...pathParts.map(p => p.length));
+          const minLength = Math.min(...pathParts.map((p) => p.length));
           let commonParts: string[] = [];
           for (let i = 0; i < minLength - 1; i++) {
             const part: string | undefined = pathParts[0][i];
-            if (part && pathParts.every(p => p[i] === part)) {
+            if (part && pathParts.every((p) => p[i] === part)) {
               commonParts.push(part);
             } else {
               break;
@@ -2024,9 +2062,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     // Show dialog to get zip file name
     const zipName = await dialog.showPrompt({
       title: "Create Archive",
-      message: nodesToArchive.length > 1 
-        ? `Enter name for the zip file (archiving ${nodesToArchive.length} items):`
-        : "Enter name for the zip file:",
+      message:
+        nodesToArchive.length > 1
+          ? `Enter name for the zip file (archiving ${nodesToArchive.length} items):`
+          : "Enter name for the zip file:",
       defaultValue: defaultZipName,
       placeholder: "archive.zip",
       confirmLabel: "Next",
@@ -2047,24 +2086,33 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     // Show dialog for archive options
     let archiveMessage = "";
     if (nodesToArchive.length > 1) {
-      archiveMessage = "How should the archive be structured?\n\n• Include Folders: Each selected item will be wrapped in a folder with its name (e.g., 'folder1/file.txt', 'folder2/file.txt')\n• Contents Only: All files from all selected items will be placed directly in the zip root (no parent folders)";
+      archiveMessage =
+        "How should the archive be structured?\n\n• Include Folders: Each selected item will be wrapped in a folder with its name (e.g., 'folder1/file.txt', 'folder2/file.txt')\n• Contents Only: All files from all selected items will be placed directly in the zip root (no parent folders)";
     } else if (firstNode?.type === "directory") {
-      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${firstNode.name || "folder"}' with all its contents inside\n• Contents Only: Files will be extracted directly to the zip root (no parent folder)`;
+      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${
+        firstNode.name || "folder"
+      }' with all its contents inside\n• Contents Only: Files will be extracted directly to the zip root (no parent folder)`;
     } else {
-      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${firstNode?.name || "file"}' with the file inside\n• Contents Only: The file will be placed directly in the zip root`;
+      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${
+        firstNode?.name || "file"
+      }' with the file inside\n• Contents Only: The file will be placed directly in the zip root`;
     }
-    
+
     const includeParent = await dialog.showConfirm({
       title: "Archive Structure",
       message: archiveMessage,
-      confirmLabel: nodesToArchive.length > 1 ? "Include Folders" : "Include Folder",
+      confirmLabel:
+        nodesToArchive.length > 1 ? "Include Folders" : "Include Folder",
       cancelLabel: "Contents Only",
       variant: "default",
     });
 
     try {
-      const destinationPath = parentPath === "/" ? `/${trimmedZipName}` : `${parentPath}/${trimmedZipName}`;
-      const sourcePaths = nodesToArchive.map(n => n.path);
+      const destinationPath =
+        parentPath === "/"
+          ? `/${trimmedZipName}`
+          : `${parentPath}/${trimmedZipName}`;
+      const sourcePaths = nodesToArchive.map((n) => n.path);
 
       const response = await fileBrowserClient.createArchive({
         sourcePaths: sourcePaths,
@@ -2074,7 +2122,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       });
 
       if (response.success) {
-        toast.success("Archive Created", `Archive created at ${response.archivePath} with ${response.filesArchived} file(s)`);
+        toast.success(
+          "Archive Created",
+          `Archive created at ${response.archivePath} with ${response.filesArchived} file(s)`
+        );
         // Clear multi-select after successful archive
         multiSelect.clearSelection();
         // Refresh the parent directory to show the new zip file
@@ -2085,7 +2136,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
           await refreshRoot();
         }
       } else {
-        toast.error("Archive Creation Failed", response.error || "Failed to create archive");
+        toast.error(
+          "Archive Creation Failed",
+          response.error || "Failed to create archive"
+        );
       }
     } catch (err: any) {
       console.error("Failed to create archive:", err);
@@ -2097,7 +2151,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     if (!currentNode.value || currentNode.value.type !== "file") return;
 
     // Get default folder name from zip file name (without extension)
-    const zipFileName = currentNode.value.name || currentNode.value.path.split("/").pop() || "extracted";
+    const zipFileName =
+      currentNode.value.name ||
+      currentNode.value.path.split("/").pop() ||
+      "extracted";
     const defaultFolderName = zipFileName.replace(/\.(zip|jar|war|ear)$/i, "");
 
     // Show dialog to get folder name
@@ -2127,7 +2184,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       // Get the parent directory of the zip file
       const zipPath = currentNode.value.path;
       const parentPath = zipPath.split("/").slice(0, -1).join("/") || "/";
-      const destinationPath = parentPath === "/" ? `/${trimmedFolderName}` : `${parentPath}/${trimmedFolderName}`;
+      const destinationPath =
+        parentPath === "/"
+          ? `/${trimmedFolderName}`
+          : `${parentPath}/${trimmedFolderName}`;
 
       // Call extract endpoint
       const response = await fileBrowserClient.extractArchive({
@@ -2137,7 +2197,10 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       });
 
       if (response.success) {
-        toast.success("Archive Extracted", `Files extracted to ${destinationPath}`);
+        toast.success(
+          "Archive Extracted",
+          `Files extracted to ${destinationPath}`
+        );
         // Refresh the parent directory to show the new folder
         const parentNode = findNode(parentPath);
         if (parentNode && parentNode.type === "directory") {
@@ -2146,11 +2209,17 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
           await refreshRoot();
         }
       } else {
-        toast.error("Extraction Failed", response.error || "Failed to extract archive");
+        toast.error(
+          "Extraction Failed",
+          response.error || "Failed to extract archive"
+        );
       }
     } catch (err: any) {
       console.error("Failed to extract zip:", err);
-      toast.error("Extraction Error", err?.message || "Failed to extract archive");
+      toast.error(
+        "Extraction Error",
+        err?.message || "Failed to extract archive"
+      );
     }
   }
 
@@ -2161,7 +2230,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       timeStyle: "short",
     }).format(new Date(value));
   }
-
 
   async function handleFilesUploaded() {
     showUpload.value = false;
@@ -2180,45 +2248,48 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   // Helper to create a simple tar archive from files
   async function createTarArchive(files: File[]): Promise<Uint8Array> {
     const tarData: Uint8Array[] = [];
-    
+
     for (const file of files) {
       const name = file.name;
       const content = await file.arrayBuffer();
       const fileBytes = new Uint8Array(content);
-      
+
       // Tar header: 512 bytes
       const header = new Uint8Array(512);
-      
+
       // Write file name (100 bytes)
       const nameBytes = new TextEncoder().encode(name);
       header.set(nameBytes.slice(0, 100), 0);
-      
+
       // Write file mode (8 bytes) - 0644
       header.set(new TextEncoder().encode("0000644"), 100);
-      
+
       // Write UID (8 bytes) - 0
       header.set(new TextEncoder().encode("0000000"), 108);
-      
+
       // Write GID (8 bytes) - 0
       header.set(new TextEncoder().encode("0000000"), 116);
-      
+
       // Write size (12 bytes) - octal
       const sizeStr = fileBytes.length.toString(8).padStart(11, "0") + " ";
       header.set(new TextEncoder().encode(sizeStr), 124);
-      
+
       // Write mtime (12 bytes) - current time in octal
-      const mtime = Math.floor(Date.now() / 1000).toString(8).padStart(11, "0") + " ";
+      const mtime =
+        Math.floor(Date.now() / 1000)
+          .toString(8)
+          .padStart(11, "0") + " ";
       header.set(new TextEncoder().encode(mtime), 136);
-      
+
       // Write typeflag (1 byte) - regular file (0)
       header[156] = 48; // '0'
-      
+
       // Write magic (6 bytes)
       header.set(new TextEncoder().encode("ustar "), 257);
-      
+
       // Write version (2 bytes)
       header.set(new TextEncoder().encode(" "), 263);
-      
+
       // Calculate checksum
       let checksum = 256; // Sum of all header bytes with checksum field as spaces
       for (let i = 0; i < 512; i++) {
@@ -2227,21 +2298,21 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       }
       const checksumStr = checksum.toString(8).padStart(6, "0") + "\0 ";
       header.set(new TextEncoder().encode(checksumStr), 148);
-      
+
       tarData.push(header);
       tarData.push(fileBytes);
-      
+
       // Pad to 512-byte boundary
       const padding = 512 - (fileBytes.length % 512);
       if (padding < 512) {
         tarData.push(new Uint8Array(padding));
       }
     }
-    
+
     // Two empty blocks to mark end of archive
     tarData.push(new Uint8Array(512));
     tarData.push(new Uint8Array(512));
-    
+
     // Concatenate all parts
     const totalLength = tarData.reduce((sum, arr) => sum + arr.length, 0);
     const result = new Uint8Array(totalLength);
@@ -2250,7 +2321,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       result.set(arr, offset);
       offset += arr.length;
     }
-    
+
     return result;
   }
 
@@ -2258,37 +2329,48 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     // Create a root node object for handleDropFiles
     const rootNode: ExplorerNode = {
       ...root,
-      parentPath: root.parentPath || '/',
+      parentPath: root.parentPath || "/",
       nextCursor: root.nextCursor || null,
     };
     // Upload to root directory
     await handleDropFiles(rootNode, files, event);
   }
 
-  async function handleSourceDropFiles(sourceName: string, files: File[], event?: DragEvent) {
+  async function handleSourceDropFiles(
+    sourceName: string,
+    files: File[],
+    event?: DragEvent
+  ) {
     // Switch to the source first if not already on it
-    if (sourceName === 'container' && source.type !== 'container') {
-      handleSwitchSource('container');
+    if (sourceName === "container" && source.type !== "container") {
+      handleSwitchSource("container");
       // Wait a bit for the source to switch
-      await new Promise(resolve => setTimeout(resolve, 100));
-    } else if (sourceName !== 'container' && (source.type !== 'volume' || source.volumeName !== sourceName)) {
-      handleSwitchSource('volume', sourceName);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } else if (
+      sourceName !== "container" &&
+      (source.type !== "volume" || source.volumeName !== sourceName)
+    ) {
+      handleSwitchSource("volume", sourceName);
       // Wait a bit for the source to switch
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    
+
     // Upload to root directory of the selected source
     const rootNode: ExplorerNode = {
       ...root,
-      parentPath: root.parentPath || '/',
+      parentPath: root.parentPath || "/",
       nextCursor: root.nextCursor || null,
     };
     await handleDropFiles(rootNode, files, event);
   }
 
-  async function handleDropFiles(node: ExplorerNode, files: File[], event?: DragEvent) {
+  async function handleDropFiles(
+    node: ExplorerNode,
+    files: File[],
+    event?: DragEvent
+  ) {
     if (node.type !== "directory") return;
-    
+
     // Check if any files are from zip archive
     let filesToUpload = files;
     if (event) {
@@ -2297,15 +2379,15 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
         filesToUpload = zipFiles;
       }
     }
-    
+
     if (filesToUpload.length === 0) return;
 
     const destinationPath = node.path || "/";
-    
+
     try {
       // Create tar archive
       const tarData = await createTarArchive(filesToUpload);
-      
+
       // Call the upload using the client adapter
       const response = await fileBrowserClient.uploadFiles({
         destinationPath: destinationPath,
@@ -2316,7 +2398,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
           isDirectory: false,
           path: f.name,
         })),
-        volumeName: source.type === 'volume' ? source.volumeName : undefined,
+        volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
 
       if (response.success) {
@@ -2328,9 +2410,15 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
           // Fallback to root if directory not found
           await refreshRoot();
         }
-        toast.success("Files uploaded successfully", `${filesToUpload.length} file(s) uploaded to ${destinationPath}`);
+        toast.success(
+          "Files uploaded successfully",
+          `${filesToUpload.length} file(s) uploaded to ${destinationPath}`
+        );
       } else {
-        toast.error("Upload Failed", response.error || "Failed to upload files");
+        toast.error(
+          "Upload Failed",
+          response.error || "Failed to upload files"
+        );
       }
     } catch (error: any) {
       console.error("Upload error:", error);
@@ -2488,7 +2576,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       handleOpen(result, { ensureExpanded: true });
     }
   }
-
 
   // Expose refresh method for parent component
   defineExpose({

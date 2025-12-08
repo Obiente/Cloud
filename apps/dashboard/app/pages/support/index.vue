@@ -18,7 +18,7 @@
       </OuiFlex>
 
       <!-- Stats Overview -->
-      <OuiGrid cols="1" cols-sm="2" cols-md="4" gap="md" v-if="!pending && tickets">
+      <OuiGrid :cols="{ sm: 1, md: 4 }" gap="md" v-if="!pending && tickets">
         <OuiCard hoverable class="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
           <OuiCardBody>
             <OuiFlex align="center" justify="between">

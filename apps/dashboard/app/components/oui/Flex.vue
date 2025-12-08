@@ -16,6 +16,9 @@
     OUIColor,
     OUIBorderRadius,
     OUISpacing,
+    OUIOverflow,
+    OUISize,
+    Responsive,
   } from "./types";
   import {
     alignContentWithStretchClass,
@@ -27,6 +30,9 @@
     marginClass,
     spacingClass,
     widthClass,
+    overflowClass,
+    overflowXClass,
+    overflowYClass,
   } from "./classMaps";
 
   interface FlexProps {
@@ -141,6 +147,21 @@
      * Height variant
      */
     h?: DimensionVariant;
+
+    /**
+     * Overflow behavior; supports responsive object e.g. { sm: 'hidden', lg: 'auto' }
+     */
+    overflow?: Responsive<OUIOverflow>;
+
+    /**
+     * Overflow X behavior
+     */
+    overflowX?: Responsive<OUIOverflow>;
+
+    /**
+     * Overflow Y behavior
+     */
+    overflowY?: Responsive<OUIOverflow>;
   }
 
   const props = withDefaults(defineProps<FlexProps>(), {
@@ -250,6 +271,10 @@
     // Height classes
     const height = heightClass(props.h);
     if (height) classes.push(height);
+
+    classes.push(...overflowClass(props.overflow));
+    classes.push(...overflowXClass(props.overflowX));
+    classes.push(...overflowYClass(props.overflowY));
 
     return classes.join(" ");
   });

@@ -23,7 +23,7 @@
             Current: {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
           </OuiText>
         </OuiFlex>
-        <OuiGrid cols="1" cols-md="2" gap="sm">
+        <OuiGrid :cols="{ sm: 1, md: 2 }" gap="sm">
           <OuiBox
             v-for="cost in costBreakdown"
             :key="cost.label"

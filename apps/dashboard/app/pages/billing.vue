@@ -1245,7 +1245,7 @@
                   <OuiText size="sm" color="muted">
                     Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
                   </OuiText>
-                  <OuiGrid cols="1" cols-md="2" cols-lg="5" gap="md">
+                  <OuiGrid :cols="{ sm: 1, md: 2, lg: 5 }" gap="md">
                     <OuiStack gap="xs">
                       <OuiText size="xs" color="muted">CPU Cores</OuiText>
                       <OuiText size="sm" weight="medium">
@@ -1299,7 +1299,7 @@
             <OuiStack gap="lg">
               <OuiText size="2xl" weight="bold">Current Usage</OuiText>
               <template v-if="isLoadingUsage">
-                <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+                <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
                   <!-- vCPU Usage Skeleton -->
                   <OuiCard>
                     <OuiCardBody>
@@ -1403,7 +1403,7 @@
                 </OuiCard>
               </template>
               <template v-else-if="safeUsage && safeUsageCurrent">
-                <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+                <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
                   <!-- vCPU Usage -->
                   <OuiCard>
                     <OuiCardBody>

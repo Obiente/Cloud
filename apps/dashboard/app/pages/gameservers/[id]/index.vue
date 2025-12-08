@@ -144,7 +144,7 @@
         </OuiCard>
 
         <!-- Overview Cards -->
-        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+        <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
           <OuiCard variant="default">
             <OuiCardBody>
               <OuiStack gap="sm">
@@ -323,7 +323,7 @@
         </OuiCard>
 
         <!-- Overview Cards Skeleton -->
-        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+        <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
           <OuiCard variant="default">
             <OuiCardBody>
               <OuiStack gap="sm">
@@ -385,7 +385,7 @@
             <OuiCardBody>
               <OuiStack gap="xl">
                 <!-- Key Metrics Grid Skeleton -->
-                <OuiGrid cols="1" cols-md="2" cols-lg="3" cols-xl="4" gap="md">
+                <OuiGrid :cols="{ sm: 1, md: 2, lg: 3, xl: 4 }" gap="md">
                   <OuiCard>
                     <OuiCardBody>
                       <OuiStack gap="sm">
@@ -443,7 +443,7 @@
                   </OuiCardHeader>
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+                      <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="md">
                         <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
                         <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
                         <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
@@ -462,7 +462,7 @@
                   <OuiCardBody>
                     <OuiStack gap="md">
                       <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
-                      <OuiGrid cols="1" cols-md="2" gap="md">
+                      <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
                         <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
                         <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
                       </OuiGrid>
@@ -476,7 +476,7 @@
                     <OuiSkeleton width="8rem" height="1.5rem" variant="text" />
                   </OuiCardHeader>
                   <OuiCardBody>
-                    <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+                    <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="md">
                       <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
                       <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
                       <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
@@ -486,7 +486,7 @@
                 </OuiCard>
 
                 <!-- Main Information Grid Skeleton -->
-                <OuiGrid cols="1" cols-lg="2" gap="lg">
+                <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
                   <!-- Game Server Details Skeleton -->
                   <OuiCard>
                     <OuiCardHeader>

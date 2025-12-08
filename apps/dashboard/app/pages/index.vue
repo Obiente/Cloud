@@ -190,7 +190,7 @@
           </OuiText>
         </OuiStack>
 
-        <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
+        <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="xl" class="w-full">
           <!-- GitHub Integration -->
           <OuiCard
             variant="default"
@@ -459,7 +459,7 @@
           </OuiText>
         </OuiStack>
 
-        <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
+        <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="xl" class="w-full">
           <!-- Premium Hardware -->
           <OuiCard variant="default" class="h-full border-accent-primary/10 hover:border-accent-primary/20 transition-colors">
             <OuiCardBody>

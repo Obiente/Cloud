@@ -21,7 +21,7 @@
     <!-- Filters -->
     <OuiCard v-if="hasMultipleFilterOptions" variant="outline">
       <OuiCardBody>
-        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+        <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="md">
           <OuiStack v-if="!props.organizationId && organizationOptions.length > 1" gap="xs">
             <OuiText size="sm" weight="medium">Organization</OuiText>
             <OuiSelect
@@ -213,7 +213,7 @@
     <!-- Details Dialog -->
     <OuiDialog v-model:open="detailsDialogOpen" title="Audit Log Details">
       <OuiStack gap="md" v-if="selectedLog">
-        <OuiGrid cols="1" cols-md="2" gap="md">
+        <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
           <OuiStack gap="xs">
             <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">ID</OuiText>
             <OuiText size="sm" class="font-mono">{{ selectedLog.id }}</OuiText>

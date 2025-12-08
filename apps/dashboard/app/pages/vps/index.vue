@@ -40,7 +40,7 @@
       <!-- Filters -->
       <OuiCard variant="default" class="backdrop-blur-sm border border-border-muted/60">
         <OuiCardBody>
-          <OuiGrid cols="1" cols-md="3" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
             <OuiInput
               v-model="searchQuery"
               placeholder="Search by name..."
@@ -104,7 +104,7 @@
       </OuiStack>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="isLoading && !vpsInstances" cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-if="isLoading && !vpsInstances" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <VPSCard
           v-for="i in 6"
           :key="i"
@@ -113,7 +113,7 @@
       </OuiGrid>
 
       <!-- VPS Grid -->
-      <OuiGrid v-if="filteredVPS.length > 0" cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-if="filteredVPS.length > 0" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <VPSCard
           v-for="vps in filteredVPS"
           :key="vps.id"

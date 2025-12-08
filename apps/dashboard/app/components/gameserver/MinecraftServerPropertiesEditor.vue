@@ -34,7 +34,7 @@
               <OuiText size="sm" weight="semibold" class="mb-4 block">
                 {{ category.label }}
               </OuiText>
-              <OuiGrid cols="1" colsMd="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
                 <template
                   v-for="prop in category.properties"
                   :key="prop.key"

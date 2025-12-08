@@ -26,7 +26,7 @@
     <!-- Screenshots/Gallery -->
     <div v-if="displayProject.gallery && displayProject.gallery.length > 0">
       <OuiText size="sm" weight="semibold" class="mb-2">Screenshots</OuiText>
-      <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="md">
+      <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <div
           v-for="(imageUrl, index) in displayProject.gallery"
           :key="index"
@@ -44,7 +44,7 @@
     </div>
 
     <!-- Stats Grid -->
-    <OuiGrid cols="2" cols-md="4" gap="md">
+    <OuiGrid :cols="{sm: 2, md: 4 }"  gap="md">
       <OuiCard variant="default">
         <OuiCardBody>
           <OuiStack gap="xs">

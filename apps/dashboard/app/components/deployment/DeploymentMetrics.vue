@@ -1,7 +1,7 @@
 <template>
   <OuiStack gap="xl">
     <!-- Usage Summary Cards -->
-    <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+    <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
       <OuiCard>
         <OuiCardBody>
           <OuiStack gap="md">
@@ -257,7 +257,7 @@
         @update:model-value="onTabChange"
       />
 
-      <OuiGrid cols="1" cols-lg="2" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
         <!-- CPU Usage Chart -->
         <OuiCard>
           <OuiCardBody>

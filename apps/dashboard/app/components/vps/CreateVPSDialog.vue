@@ -289,7 +289,7 @@
               These limits define the maximum resources your VPS can use. You'll
               be charged based on actual usage (pay-as-you-go).
             </OuiText>
-            <OuiGrid cols="2" gap="sm">
+            <OuiGrid :cols="{ sm: 2 }" gap="sm">
               <OuiText size="xs" color="secondary">CPU Cores</OuiText>
               <OuiText size="xs">{{ selectedSize.cpuCores }}</OuiText>
               <OuiText size="xs" color="secondary">Memory</OuiText>

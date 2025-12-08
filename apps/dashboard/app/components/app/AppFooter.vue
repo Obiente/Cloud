@@ -1,7 +1,7 @@
 <template>
   <footer class="border-t border-surface-muted/20 mt-24">
     <OuiContainer py="6xl" size="7xl">
-      <OuiGrid cols="1" cols-md="4" gap="xl">
+      <OuiGrid :cols="{ sm: 1, md: 4 }" gap="xl">
         <!-- Brand -->
         <OuiStack gap="lg">
           <OuiFlex align="center" gap="md">

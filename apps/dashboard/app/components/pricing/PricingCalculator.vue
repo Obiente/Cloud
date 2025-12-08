@@ -178,7 +178,7 @@
                   >
                     {{ formatCurrency(totalMonthlyCost) }}
                   </OuiText>
-                  <OuiGrid cols="2" cols-md="4" gap="md" class="mt-4">
+                  <OuiGrid :cols="{ sm: 2, md: 4 }" gap="md" class="mt-4">
                     <OuiStack gap="xs" align="center">
                       <OuiText size="sm" color="secondary">Memory</OuiText>
                       <OuiText size="md" weight="semibold">{{

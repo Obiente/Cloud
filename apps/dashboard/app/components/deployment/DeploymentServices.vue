@@ -328,7 +328,7 @@
                               </OuiButton>
                             </OuiFlex>
 
-                            <OuiGrid cols="1" :cols-md="2" gap="sm">
+                            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="sm">
                               <OuiInput
                                 v-model="rule.domain"
                                 label="Domain"
@@ -346,7 +346,7 @@
                               />
                             </OuiGrid>
 
-                            <OuiGrid cols="1" :cols-md="2" gap="sm">
+                            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="sm">
                               <OuiInput
                                 v-model="rule.pathPrefix"
                                 label="Path Prefix (optional)"
