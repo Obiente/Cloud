@@ -94,7 +94,10 @@
   const isSelected = computed(() => isExplicitSelected.value || hasSelectedAncestor.value);
   const isInheritedSelected = computed(() => hasSelectedAncestor.value && !isExplicitSelected.value);
   const depth = computed(() => Math.max(props.indexPath.length, 1));
-  const iconPadding = computed(() => `${(depth.value - 1) * 14 + 4}px`);
+  const iconPadding = computed(() => {
+    const levels = depth.value - 1;
+    return `calc(${levels} * var(--tree-indent-step) + var(--tree-indent-base))`;
+  });
 
   // Detect if this is the first or last selected node in a continuous sequence
   // This works by checking if there are selected siblings before/after this node
@@ -357,8 +360,8 @@
       menuTriggerRef.value.style.position = 'fixed';
       menuTriggerRef.value.style.left = `${event.clientX}px`;
       menuTriggerRef.value.style.top = `${event.clientY}px`;
-      menuTriggerRef.value.style.width = '1px';
-      menuTriggerRef.value.style.height = '1px';
+      menuTriggerRef.value.style.width = 'var(--tree-border-width)';
+      menuTriggerRef.value.style.height = 'var(--tree-border-width)';
       menuTriggerRef.value.style.opacity = '0';
       menuTriggerRef.value.style.pointerEvents = 'none';
       menuTriggerRef.value.style.zIndex = '-1';
@@ -530,6 +533,7 @@
           'is-dragging-over': isDraggingOver,
         }"
         :open="isExpanded"
+        unstyled
         @dragenter="handleDragEnter"
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
@@ -538,25 +542,25 @@
         <TreeView.BranchTrigger
           :style="{ 
             paddingLeft: iconPadding,
-            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? 'var(--radius-md)' : isSelected ? '0' : undefined,
+            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? 'var(--radius-md)' : isSelected ? '0' : undefined,
             borderBottomLeftRadius: isInheritedSelected
-              ? (isLastInheritedSelected ? '6px' : '0px')
+              ? (isLastInheritedSelected ? 'var(--radius-md)' : '0')
               : isSelected && hasInheritedDescendantSelected
-              ? '0px'
+              ? '0'
               : isLastSelected
-              ? '6px'
+              ? 'var(--radius-md)'
               : isSelected
-              ? '0px'
+              ? '0'
               : undefined,
             borderBottomRightRadius: isInheritedSelected
-              ? (isLastInheritedSelected ? '6px' : '0px')
+              ? (isLastInheritedSelected ? 'var(--radius-md)' : '0')
               : isSelected && hasInheritedDescendantSelected
-              ? '0px'
+              ? '0'
               : isLastSelected
-              ? '6px'
+              ? 'var(--radius-md)'
               : isSelected
-              ? '0px'
+              ? '0'
               : undefined,
           }"
           class="tree-trigger"
@@ -569,6 +573,7 @@
             'is-first-selected': isFirstSelected,
             'is-last-selected': isLastSelected,
           }"
+          unstyled
           @click.stop.prevent="handleBranchClick"
           @mousedown.stop.prevent
           @selectstart.prevent
@@ -630,7 +635,7 @@
                   ref="menuTriggerRef"
                   type="button"
                   class="action-button"
-                  style="position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px;"
+                  style="position: fixed; opacity: 0; pointer-events: none; width: var(--tree-border-width); height: var(--tree-border-width);"
                   @click.stop
                 />
               </template>
@@ -674,7 +679,7 @@
             v-for="file in node.uploadProgress.files"
             :key="file.fileName"
             class="uploading-file-item"
-            :style="{ paddingLeft: `calc(${iconPadding} + 28px)` }"
+            :style="{ paddingLeft: `calc(${iconPadding} + var(--tree-upload-offset))` }"
           >
             <DocumentIcon class="file-icon" />
             <span class="file-name">{{ file.fileName }}</span>
@@ -685,8 +690,8 @@
           </div>
         </div>
 
-        <TreeView.BranchContent v-if="isExpanded">
-          <TreeView.BranchIndentGuide />
+        <TreeView.BranchContent v-if="isExpanded" unstyled>
+          <TreeView.BranchIndentGuide unstyled />
           <div
             class="tree-children-wrapper"
             :class="{ 'is-dragging-over-parent': isDraggingOver }"
@@ -731,29 +736,30 @@
           'is-last-selected': isLastSelected,
           'is-loading': node.isLoading,
         }"
+        unstyled
       >
         <div
           :style="{ 
             paddingLeft: iconPadding,
-            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? 'var(--radius-md)' : isSelected ? '0' : undefined,
+            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? 'var(--radius-md)' : isSelected ? '0' : undefined,
             borderBottomLeftRadius: isInheritedSelected
-              ? (isLastInheritedSelected ? '6px' : '0px')
+              ? (isLastInheritedSelected ? 'var(--radius-md)' : '0')
               : isSelected && hasInheritedDescendantSelected
-              ? '0px'
+              ? '0'
               : isLastSelected
-              ? '6px'
+              ? 'var(--radius-md)'
               : isSelected
-              ? '0px'
+              ? '0'
               : undefined,
             borderBottomRightRadius: isInheritedSelected
-              ? (isLastInheritedSelected ? '6px' : '0px')
+              ? (isLastInheritedSelected ? 'var(--radius-md)' : '0')
               : isSelected && hasInheritedDescendantSelected
-              ? '0px'
+              ? '0'
               : isLastSelected
-              ? '6px'
+              ? 'var(--radius-md)'
               : isSelected
-              ? '0px'
+              ? '0'
               : undefined,
           }"
           class="tree-trigger"
@@ -794,7 +800,7 @@
                   ref="menuTriggerRef"
                   type="button"
                   class="action-button"
-                  style="position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px;"
+                  style="position: fixed; opacity: 0; pointer-events: none; width: var(--tree-border-width); height: var(--tree-border-width);"
                   @click.stop
                 />
               </template>
@@ -838,10 +844,27 @@
 
 <style scoped>
   .tree-node {
+    --tree-radius: var(--radius-md);
+    --tree-radius-sm: var(--radius-sm);
+    --tree-spacing: var(--spacing);
+    --tree-row-height: calc(var(--tree-spacing) * 7.5);
+    --tree-gap: calc(var(--tree-spacing) * 1.5);
+    --tree-padding-right: calc(var(--tree-spacing) * 2);
+    --tree-indent-step: calc(var(--tree-spacing) * 3.5);
+    --tree-indent-base: var(--tree-spacing);
+    --tree-upload-offset: calc(var(--tree-spacing) * 7);
+    --tree-border-width: var(--oui-border-width, calc(var(--spacing) * 0.25));
+    --tree-border-strong: calc(var(--tree-border-width) * 2);
+    --tree-motion-offset-sm: calc(var(--tree-spacing) * 0.5);
+    --tree-motion-offset-xs: calc(var(--tree-spacing) * 0.25);
+    --tree-icon-size: calc(var(--tree-spacing) * 4);
+    --tree-icon-size-sm: calc(var(--tree-spacing) * 3.5);
+    --tree-icon-size-xs: calc(var(--tree-spacing) * 3);
+    --tree-action-size: calc(var(--tree-spacing) * 6);
     display: flex;
     flex-direction: column;
     color: var(--oui-text-secondary);
-    font-size: 13px;
+    font-size: var(--text-sm);
     position: relative;
     user-select: none;
     -webkit-user-select: none;
@@ -856,7 +879,7 @@
     background: var(--oui-surface-selected) !important;
     border: none !important;
     color: var(--oui-text-primary);
-    margin-bottom: -1px;
+    margin-bottom: calc(-1 * var(--tree-border-width));
     border-radius: 0; /* Reset border radius to 0 */
   }
 
@@ -878,7 +901,7 @@
     background: var(--oui-surface-selected) !important;
     border: none !important;
     border-radius: 0;
-    margin-bottom: -1px;
+    margin-bottom: calc(-1 * var(--tree-border-width));
   }
 
   .tree-trigger.is-selected:not(.is-inherited-selected)::before {
@@ -894,7 +917,7 @@
 
   /* Single selection: round all corners */
   .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected.is-last-selected {
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
   }
 
   .tree-trigger.is-selected.has-inherited-selected-children.is-first-selected.is-last-selected {
@@ -903,7 +926,7 @@
   }
 
   .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected.is-last-selected::before {
-    border-radius: 4px;
+    border-radius: var(--tree-radius-sm);
   }
 
   .tree-trigger.is-selected.has-inherited-selected-children.is-first-selected.is-last-selected::before {
@@ -913,15 +936,15 @@
 
   /* Multi-selection grouping (items) */
   .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected:not(.is-last-selected) {
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    border-top-left-radius: var(--tree-radius);
+    border-top-right-radius: var(--tree-radius);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
 
   .tree-trigger.is-selected:not(.is-inherited-selected).is-last-selected:not(.is-first-selected) {
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: var(--tree-radius);
+    border-bottom-right-radius: var(--tree-radius);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
@@ -932,15 +955,15 @@
 
   /* Match overlay rounding to item rounding */
   .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected:not(.is-last-selected)::before {
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
+    border-top-left-radius: var(--tree-radius-sm);
+    border-top-right-radius: var(--tree-radius-sm);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
 
   .tree-trigger.is-selected:not(.is-inherited-selected).is-last-selected:not(.is-first-selected)::before {
-    border-bottom-left-radius: 4px;
-    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: var(--tree-radius-sm);
+    border-bottom-right-radius: var(--tree-radius-sm);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
@@ -962,23 +985,23 @@
   }
 
   .tree-trigger.is-inherited-selected.is-last-inherited {
-    border-bottom-left-radius: 6px !important;
-    border-bottom-right-radius: 6px !important;
+    border-bottom-left-radius: var(--tree-radius) !important;
+    border-bottom-right-radius: var(--tree-radius) !important;
   }
 
   .tree-trigger.is-inherited-selected.is-last-inherited::before {
-    border-bottom-left-radius: 4px !important;
-    border-bottom-right-radius: 4px !important;
+    border-bottom-left-radius: var(--tree-radius-sm) !important;
+    border-bottom-right-radius: var(--tree-radius-sm) !important;
   }
 
   .tree-trigger.is-inherited-selected.is-last-inherited.has-inherited-selected-children {
-    border-bottom-left-radius: 6px !important;
-    border-bottom-right-radius: 6px !important;
+    border-bottom-left-radius: var(--tree-radius) !important;
+    border-bottom-right-radius: var(--tree-radius) !important;
   }
 
   .tree-trigger.is-inherited-selected.is-last-inherited.has-inherited-selected-children::before {
-    border-bottom-left-radius: 4px !important;
-    border-bottom-right-radius: 4px !important;
+    border-bottom-left-radius: var(--tree-radius-sm) !important;
+    border-bottom-right-radius: var(--tree-radius-sm) !important;
   }
 
   .tree-node.is-inherited-selected > .tree-trigger:hover,
@@ -1032,7 +1055,7 @@
     background: var(--oui-accent-primary);
     opacity: 0.12;
     pointer-events: none;
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
     z-index: 0;
   }
 
@@ -1044,8 +1067,8 @@
   /* Shared subtle overlay wrapper for all children */
   .tree-children-wrapper.is-dragging-over-parent {
     position: relative;
-    margin: 2px 0;
-    padding: 2px 0;
+    margin: var(--tree-motion-offset-sm) 0;
+    padding: var(--tree-motion-offset-sm) 0;
   }
 
   .tree-children-wrapper.is-dragging-over-parent::before {
@@ -1055,7 +1078,7 @@
     background: var(--oui-accent-primary);
     opacity: 0.06;
     pointer-events: none;
-    border-radius: 4px;
+    border-radius: var(--tree-radius-sm);
     z-index: 0;
   }
 
@@ -1072,13 +1095,13 @@
   .tree-trigger__drop-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-left: 8px;
-    padding: 2px 6px;
+    gap: var(--tree-spacing);
+    margin-left: var(--tree-padding-right);
+    padding: calc(var(--tree-spacing) * 0.5) var(--tree-gap);
     background: var(--oui-surface-muted);
-    border: 1px solid var(--oui-border-default);
-    border-radius: 4px;
-    font-size: 11px;
+    border: var(--tree-border-width) solid var(--oui-border-default);
+    border-radius: var(--tree-radius-sm);
+    font-size: var(--text-xs);
     font-weight: 500;
     color: var(--oui-text-secondary);
     animation: fadeIn 0.2s ease-in;
@@ -1087,7 +1110,7 @@
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(-2px);
+      transform: translateY(calc(-1 * var(--tree-motion-offset-sm)));
     }
     to {
       opacity: 1;
@@ -1104,18 +1127,18 @@
       transform: translateY(0);
     }
     50% {
-      transform: translateY(-2px);
+      transform: translateY(calc(-1 * var(--tree-motion-offset-sm)));
     }
   }
 
   .tree-trigger {
     display: flex;
     align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding-right: 8px;
+    gap: var(--tree-gap);
+    height: var(--tree-row-height);
+    padding-right: var(--tree-padding-right);
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
     transition: background-color 0.12s ease;
     position: relative;
     user-select: none;
@@ -1145,7 +1168,7 @@
     background: var(--oui-accent-primary);
     opacity: 0.04;
     pointer-events: none;
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
     z-index: 0;
   }
 
@@ -1170,7 +1193,7 @@
   }
 
   .tree-trigger__chevron {
-    width: 16px;
+    width: var(--tree-icon-size);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1181,8 +1204,8 @@
   }
 
   .chevron {
-    height: 14px;
-    width: 14px;
+    height: var(--tree-icon-size-sm);
+    width: var(--tree-icon-size-sm);
     color: var(--oui-text-tertiary);
     transition: color 0.12s ease;
   }
@@ -1194,8 +1217,8 @@
   }
 
   .icon {
-    height: 16px;
-    width: 16px;
+    height: var(--tree-icon-size);
+    width: var(--tree-icon-size);
     color: var(--oui-text-tertiary);
   }
 
@@ -1206,7 +1229,7 @@
   .tree-trigger__label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--tree-gap);
     flex: 1;
     min-width: 0;
   }
@@ -1222,46 +1245,46 @@
   .tree-trigger__symlink {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--tree-spacing);
     color: var(--oui-text-tertiary);
-    margin-left: 6px;
+    margin-left: var(--tree-gap);
   }
 
   .symlink-arrow {
-    height: 12px;
-    width: 12px;
+    height: var(--tree-icon-size-xs);
+    width: var(--tree-icon-size-xs);
   }
 
   .symlink-target {
     font-family: var(--oui-font-mono);
-    font-size: 11px;
+    font-size: calc(var(--text-xs));
   }
 
   .tree-trigger__meta {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--oui-text-tertiary);
   }
 
   .tree-trigger__actions {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--tree-spacing);
     color: var(--oui-text-tertiary);
   }
 
   .action-icon {
-    height: 14px;
-    width: 14px;
+    height: var(--tree-icon-size-sm);
+    width: var(--tree-icon-size-sm);
   }
 
   .action-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: var(--tree-action-size);
+    height: var(--tree-action-size);
     border: none;
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
     background: transparent;
     color: inherit;
     cursor: pointer;
@@ -1275,14 +1298,14 @@
   .tree-load-more {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin: 4px 0 4px 28px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 12px;
+    gap: var(--tree-gap);
+    margin: var(--tree-spacing) 0 var(--tree-spacing) var(--tree-upload-offset);
+    padding: var(--tree-spacing) var(--tree-padding-right);
+    border-radius: var(--tree-radius);
+    font-size: var(--text-sm);
     color: var(--oui-text-secondary);
     background: transparent;
-    border: 1px dashed var(--oui-border-muted);
+    border: var(--tree-border-width) dashed var(--oui-border-muted);
     transition: background-color 0.12s ease, color 0.12s ease;
   }
 
@@ -1292,12 +1315,12 @@
   }
 
   .selection-header {
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: calc(var(--tree-spacing) * 2) calc(var(--tree-spacing) * 3);
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--oui-text-secondary);
     background: var(--oui-surface-raised);
-    border-bottom: 1px solid var(--oui-border-default);
+    border-bottom: var(--tree-border-width) solid var(--oui-border-default);
     margin: 0;
     user-select: none;
   }
@@ -1320,9 +1343,9 @@
   .tree-trigger__upload-progress {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-left: 6px;
-    font-size: 11px;
+    gap: var(--tree-spacing);
+    margin-left: var(--tree-gap);
+    font-size: var(--text-xs);
     color: var(--oui-primary-500);
     font-weight: 500;
   }
@@ -1335,8 +1358,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
-    border-radius: 4px;
+    padding: calc(var(--tree-spacing) * 0.5);
+    border-radius: var(--tree-radius-sm);
     border: none;
     background: transparent;
     color: var(--oui-text-secondary);
@@ -1354,7 +1377,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: var(--tree-motion-offset-sm);
     background: var(--oui-surface-hover);
     overflow: hidden;
   }
@@ -1366,41 +1389,41 @@
   }
 
   .uploading-files-list {
-    margin-top: 2px;
-    margin-bottom: 2px;
+    margin-top: calc(var(--tree-spacing) * 0.5);
+    margin-bottom: calc(var(--tree-spacing) * 0.5);
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: var(--tree-radius);
   }
 
   .uploading-file-item {
     position: relative;
     display: grid;
-    grid-template-columns: 16px 1fr auto;
+    grid-template-columns: var(--tree-icon-size) 1fr auto;
     align-items: center;
-    gap: 6px;
-    padding: 4px 8px 4px 0;
-    min-height: 28px;
-    font-size: 12px;
+    gap: var(--tree-gap);
+    padding: var(--tree-spacing) var(--tree-padding-right) var(--tree-spacing) 0;
+    min-height: var(--tree-upload-offset);
+    font-size: var(--text-sm);
     color: var(--oui-text-secondary);
     background: var(--oui-surface-raised);
-    border-left: 2px solid var(--oui-primary-500);
-    margin-bottom: 1px;
+    border-left: var(--tree-border-strong) solid var(--oui-primary-500);
+    margin-bottom: calc(var(--tree-spacing) * 0.25);
   }
   
   .uploading-file-item:first-child {
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
+    border-top-left-radius: var(--tree-radius);
+    border-top-right-radius: var(--tree-radius);
   }
   
   .uploading-file-item:last-child {
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: var(--tree-radius);
+    border-bottom-right-radius: var(--tree-radius);
     margin-bottom: 0;
   }
 
   .uploading-file-item .file-icon {
-    width: 14px;
-    height: 14px;
+    width: var(--tree-icon-size-sm);
+    height: var(--tree-icon-size-sm);
     color: var(--oui-text-tertiary);
   }
 
@@ -1408,14 +1431,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 
   .uploading-file-item .file-progress {
-    font-size: 10px;
+    font-size: calc(var(--text-xs) * 0.9);
     font-weight: 600;
     color: var(--oui-primary-500);
-    margin-right: 4px;
+    margin-right: var(--tree-spacing);
   }
 
   .file-progress-bar {
@@ -1423,7 +1446,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 1px;
+    height: var(--tree-motion-offset-xs);
     background: var(--oui-border-muted);
     overflow: hidden;
   }
