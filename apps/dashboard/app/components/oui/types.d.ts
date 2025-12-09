@@ -72,7 +72,7 @@ export type OUIColor =
 
 export type OUIBorderRadius = "none" | "sm" | "md" | "lg" | "xl" | "full";
 export type OUIOverflow = "visible" | "hidden" | "auto" | "scroll";
-export type OUISize = SizeRange<"xs", "7xl">;
+export type OUISize = SizeRange<"3xs", "7xl">;
 
     
 /** ------------------------------------------------------------------
@@ -81,18 +81,20 @@ export type OUISize = SizeRange<"xs", "7xl">;
 
 export enum SizeScale {
   "none" = 0,
-  "xs" = 1,
-  "sm" = 2,
-  "md" = 3,
-  "lg" = 4,
-  "xl" = 5,
-  "2xl" = 6,
-  "3xl" = 7,
-  "4xl" = 8,
-  "5xl" = 9,
-  "6xl" = 10,
-  "7xl" = 11,
-  "full" = 12,
+  "3xs" = 1,
+  "2xs" = 2,
+  "xs" = 3,
+  "sm" = 4,
+  "md" = 5,
+  "lg" = 6,
+  "xl" = 7,
+  "2xl" = 8,
+  "3xl" = 9,
+  "4xl" = 10,
+  "5xl" = 11,
+  "6xl" = 12,
+  "7xl" = 13,
+  "full" = 14,
 }
 
 type EnumValue<T, K extends keyof T> = T[K];
@@ -144,10 +146,12 @@ export type ContainerSize = SizeRange<"xs", "7xl"> | "full";
 export type ContainerBreakpoint = "always" | SizeRange<"sm", "2xl">;
 
 export type DimensionVariant =
+  | "0"
   | "auto"
   | "fit"
   | "screen"
-  | SizeRange<"xs", "full">;
+  | SizeRange<"3xs", "full">
+  | NumericWithString<Range<1, 256>>;
 export type MarginVariant = OUISpacing | "auto";
 
 export type Breakpoint = "sm" | "md" | "lg" | "xl" | "2xl";

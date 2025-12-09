@@ -30,6 +30,14 @@ import type { ExplorerNode } from "../components/shared/fileExplorerTypes";
 interface SourceState {
   type: "container" | "volume";
   volumeName?: string;
+  uploadProgress?: {
+    isUploading: boolean;
+    bytesUploaded: number;
+    totalBytes: number;
+    fileCount: number;
+    files: Array<{ fileName: string; bytesUploaded: number; totalBytes: number; percentComplete: number }>;
+    onCancel?: () => void;
+  };
 }
 
 type ResourceType = "deployment" | "gameserver";
@@ -82,6 +90,7 @@ export function useFileExplorer(options: ExplorerOptions) {
     hasMore: false,
     nextCursor: null,
     isExpanded: true,
+    uploadProgress: undefined,
   });
 
   const source = reactive<SourceState>({ type: "container" });
@@ -208,6 +217,7 @@ export function useFileExplorer(options: ExplorerOptions) {
       hasMore: false,
       nextCursor: null,
       isExpanded: false,
+      uploadProgress: undefined,
     };
   }
 

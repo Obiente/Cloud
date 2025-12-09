@@ -104,6 +104,12 @@
     skeleton?: boolean;
 
     /**
+     * Clamp text to a fixed number of lines (adds ellipsis)
+     * @default undefined
+     */
+    lineClamp?: number | string;
+
+    /**
      * Skeleton width (when skeleton prop is true)
      */
     skeletonWidth?: string;
@@ -126,9 +132,13 @@
 
   const textClasses = computed(() => {
     const classes = ["oui-text", "break-words"];
+    const clampValue =
+      props.lineClamp !== undefined ? Number(props.lineClamp) : undefined;
 
     // Size classes
     const sizeClasses: Record<OUISize, string> = {
+      "3xs": "text-[10px]",
+      "2xs": "text-[11px]",
       xs: "text-xs",
       sm: "text-sm",
       md: "text-base",
@@ -213,6 +223,11 @@
       classes.push("truncate");
     }
 
+    // Line clamp
+    if (clampValue && clampValue > 0) {
+      classes.push("overflow-hidden");
+    }
+
     // Leading (line height) classes
     if (props.leading) {
       if (typeof props.leading === "number") {
@@ -249,9 +264,17 @@
   // Handle custom numeric line height values via inline styles
   const textStyles = computed(() => {
     const styles: Record<string, string> = {};
+    const clampValue =
+      props.lineClamp !== undefined ? Number(props.lineClamp) : undefined;
 
     if (props.leading && typeof props.leading === "number") {
       styles.lineHeight = String(props.leading);
+    }
+
+    if (clampValue && clampValue > 0) {
+      styles.display = "-webkit-box";
+      styles.WebkitLineClamp = String(clampValue);
+      styles.WebkitBoxOrient = "vertical";
     }
 
     return Object.keys(styles).length > 0 ? styles : undefined;

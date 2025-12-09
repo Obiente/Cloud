@@ -23,11 +23,18 @@
     borderRadiusClass,
     borderWidthClass,
     heightClass,
-    marginClass,
+    marginMap,
     overflowClass,
+    overflowXClass,
+    overflowYClass,
     shadowClass,
-    spacingClass,
+    spacingMap,
     widthClass,
+    responsiveClass,
+    minHeightClass,
+    maxHeightClass,
+    minWidthClass,
+    maxWidthClass,
   } from "./classMaps";
 
   interface BoxProps {
@@ -40,32 +47,32 @@
     /**
      * Padding variant using OUI spacing scale
      */
-    p?: OUISpacing;
+    p?: Responsive<OUISpacing>;
 
     /**
      * Padding X (horizontal) variant
      */
-    px?: OUISpacing;
+    px?: Responsive<OUISpacing>;
 
     /**
      * Padding Y (vertical) variant
      */
-    py?: OUISpacing;
+    py?: Responsive<OUISpacing>;
 
     /**
      * Margin variant using OUI spacing scale
      */
-    m?: MarginVariant;
+    m?: Responsive<MarginVariant>;
 
     /**
      * Margin X (horizontal) variant
      */
-    mx?: MarginVariant;
+    mx?: Responsive<MarginVariant>;
 
     /**
      * Margin Y (vertical) variant
      */
-    my?: MarginVariant;
+    my?: Responsive<MarginVariant>;
 
     /**
      * Background color using OUI color system
@@ -113,45 +120,88 @@
     overflow?: Responsive<OUIOverflow>;
 
     /**
-     * Display type
+     * Overflow X behavior
+     */
+    overflowX?: Responsive<OUIOverflow>;
+
+    /**
+     * Overflow Y behavior
+     */
+    overflowY?: Responsive<OUIOverflow>;
+
+    /** Minimum width */
+    minW?: DimensionVariant;
+
+    /** Maximum width */
+    maxW?: DimensionVariant;
+
+    /** Minimum height */
+    minH?: DimensionVariant;
+
+    /** Maximum height */
+    maxH?: DimensionVariant;
+
+    /**
+     * Display type (supports responsive values)
      */
     display?:
-      | "block"
-      | "inline"
-      | "inline-block"
-      | "flex"
-      | "inline-flex"
-      | "grid"
-      | "inline-grid"
-      | "hidden";
+      | Responsive<
+          | "block"
+          | "inline"
+          | "inline-block"
+          | "flex"
+          | "inline-flex"
+          | "grid"
+          | "inline-grid"
+          | "hidden"
+        >;
+
+    /**
+     * Add flex: 1 to allow the box to grow
+     */
+    grow?: boolean;
+
+    /**
+     * Prevent shrinking in flex layouts
+     */
+    shrink?: boolean;
+
+    /**
+     * Add min-h-0 utility for nested flex layouts
+     */
+    minH0?: boolean;
+
+    /**
+     * Add min-w-0 utility (defaults to true)
+     */
+    minW0?: boolean;
   }
 
   const props = withDefaults(defineProps<BoxProps>(), {
     as: "div",
+    grow: false,
+    shrink: true,
+    minW0: true,
   });
 
   const boxClasses = computed(() => {
-    const classes = ["oui-box", "min-w-0"];
+    const classes = ["oui-box"];
+
+    if (props.minW0) classes.push("min-w-0");
+    if (props.minH0) classes.push("min-h-0");
+
+    if (props.grow) classes.push("flex-1");
+    if (!props.shrink) classes.push("flex-shrink-0");
 
     // Padding classes
-    const padding = spacingClass(props.p, "p");
-    if (padding) classes.push(padding);
-
-    const paddingX = spacingClass(props.px, "px");
-    if (paddingX) classes.push(paddingX);
-
-    const paddingY = spacingClass(props.py, "py");
-    if (paddingY) classes.push(paddingY);
+    classes.push(...responsiveClass(props.p, spacingMap("p")));
+    classes.push(...responsiveClass(props.px, spacingMap("px")));
+    classes.push(...responsiveClass(props.py, spacingMap("py")));
 
     // Margin classes
-    const margin = marginClass(props.m, "m");
-    if (margin) classes.push(margin);
-
-    const marginX = marginClass(props.mx, "mx");
-    if (marginX) classes.push(marginX);
-
-    const marginY = marginClass(props.my, "my");
-    if (marginY) classes.push(marginY);
+    classes.push(...responsiveClass(props.m, marginMap("m")));
+    classes.push(...responsiveClass(props.mx, marginMap("mx")));
+    classes.push(...responsiveClass(props.my, marginMap("my")));
 
     // Background classes
     const bg = backgroundClass(props.bg);
@@ -175,22 +225,49 @@
     // Width classes
     const width = widthClass(props.w);
     if (width) classes.push(width);
+    const minWidth = minWidthClass(props.minW);
+    if (minWidth) classes.push(minWidth);
+    const maxWidth = maxWidthClass(props.maxW);
+    if (maxWidth) classes.push(maxWidth);
 
     // Height classes
     const height = heightClass(props.h);
     if (height) classes.push(height);
-
-    // Position classes
-    if (props.position) {
-      classes.push(props.position);
-    }
+    const minHeight = minHeightClass(props.minH);
+    if (minHeight) classes.push(minHeight);
+    const maxHeight = maxHeightClass(props.maxH);
+    if (maxHeight) classes.push(maxHeight);
 
     // Overflow classes
     classes.push(...overflowClass(props.overflow));
+    classes.push(...overflowXClass(props.overflowX));
+    classes.push(...overflowYClass(props.overflowY));
+
+    // Position classes
+    if (props.position) {
+      const positionMap = {
+        static: "static",
+        relative: "relative",
+        absolute: "absolute",
+        fixed: "fixed",
+        sticky: "sticky",
+      } as const;
+      classes.push(...responsiveClass(props.position, positionMap));
+    }
 
     // Display classes
     if (props.display) {
-      classes.push(props.display);
+      const displayMap = {
+        block: "block",
+        inline: "inline",
+        "inline-block": "inline-block",
+        flex: "flex",
+        "inline-flex": "inline-flex",
+        grid: "grid",
+        "inline-grid": "inline-grid",
+        hidden: "hidden",
+      } as const;
+      classes.push(...responsiveClass(props.display, displayMap));
     }
 
     return classes.join(" ");

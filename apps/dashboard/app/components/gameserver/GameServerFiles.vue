@@ -306,30 +306,24 @@
             gap="md"
             p="md"
             h="full"
-            overflow="scroll"
+            w="full"
           >
-            <FileUploader
-              :game-server-id="gameServerId"
-              :destination-path="currentDirectory"
-              :destination-node="currentDirectoryNode"
-              :volume-name="
+            <GameServerFileUploader
+              :gameServerId="gameServerId"
+              :destinationPath="currentDirectory"
+              :volumeName="
                 source.type === 'volume' ? source.volumeName : undefined
               "
+              :targetNode="uploadTargetNode"
+              :sourceObject="currentDirectory === '/' ? source : undefined"
               @uploaded="handleFilesUploaded"
+              @uploadProgress="handleUploadProgress"
             />
           </OuiFlex>
           <!-- File Preview/Editor (shown when not uploading) -->
           <template v-else>
             <div
-              v-if="!selectedPath"
-              class="h-full flex items-center justify-center text-text-tertiary"
-            >
-              <OuiText size="sm" color="secondary"
-                >Select a file to view its contents</OuiText
-              >
-            </div>
-            <div
-              v-else-if="fileError"
+              v-if="fileError"
               class="h-full flex items-center justify-center p-8"
             >
               <div
@@ -482,14 +476,15 @@
             />
             <!-- Folder Overview -->
             <FolderOverview
-              v-else-if="currentNode && currentNode.type === 'directory'"
-              :node="currentNode"
-              :loading="currentNode.isLoading"
+              v-if="(currentNode && currentNode.type === 'directory') || !selectedPath"
+              :node="(currentNode && currentNode.type === 'directory') ? currentNode : explorer.root"
+              :loading="(currentNode && currentNode.type === 'directory') ? currentNode.isLoading : explorer.root.isLoading"
               @select-item="handleLoadFile"
               @load-more="handleLoadMore"
+              @drop-files="handleDropFiles"
             />
             <div
-              v-else-if="!selectedPath || !currentNode"
+              v-else-if="!currentNode"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
               <OuiText size="sm" color="secondary"
@@ -527,7 +522,7 @@
   } from "@ark-ui/vue/collection";
   import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
   import FileBrowserSearch from "../shared/FileBrowserSearch.vue";
-  import FileUploader from "./GameServerFileUploader.vue";
+  import GameServerFileUploader from "~/components/gameserver/GameServerFileUploader.vue";
   import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import MinecraftEULAEditor from "./MinecraftEULAEditor.vue";
   import MinecraftServerPropertiesEditor from "./MinecraftServerPropertiesEditor.vue";
@@ -553,6 +548,7 @@
   import FolderOverview from "~/components/shared/FolderOverview.vue";
   import { useMultiSelect } from "~/composables/useMultiSelect";
   import { useStreamingUpload } from "~/composables/useStreamingUpload";
+  import { useUploadManager } from "~/composables/useUploadManager";
 
   const props = defineProps<{
     gameServerId: string;
@@ -561,12 +557,10 @@
   const route = useRoute();
   const router = useRouter();
   const { uploadFile, isUploading: isStreamUploading, error: uploadError } = useStreamingUpload();
+  const uploadManager = useUploadManager();
 
   const showUpload = ref(false);
   const isDragDropUploading = ref(false);
-  const dragDropProgressMap = ref<Record<string, { bytesUploaded: number; totalBytes: number; percentComplete: number; speedBytesPerSec?: number }>>({});
-  const dragDropCompletedBytes = ref(0);
-  const dragDropTotalBytes = ref(0);
   const hasMounted = ref(false);
   const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
   const isLoadingFile = ref(false); // Track if a file load is in progress
@@ -854,14 +848,22 @@
     return explorer.root.path || "/";
   });
 
-  const currentDirectoryNode = computed((): ExplorerNode | undefined => {
+  const currentDirectoryNode = computed(() => {
     if (currentNode.value?.type === "directory") {
       return currentNode.value;
     }
     if (currentNode.value?.type === "file") {
-      return findNode(currentNode.value.parentPath || "/") ?? undefined;
+      return findNode(currentNode.value.parentPath || "/");
     }
     return explorer.root;
+  });
+
+  const uploadTargetNode = computed(() => {
+    // Always return the directory node (root for "/" paths)
+    if (currentDirectory.value === "/") {
+      return explorer.root;
+    }
+    return currentDirectoryNode.value;
   });
 
   function handleSwitchSource(type: "container" | "volume", name?: string) {
@@ -2251,14 +2253,49 @@
   async function handleFilesUploaded() {
     showUpload.value = false;
 
-    // Refresh the directory where files were uploaded (destination path)
+    // Clear upload progress
     const uploadDir = currentDirectory.value || "/";
-    const dirNode = findNode(uploadDir);
+    let dirNode = uploadDir === "/" ? explorer.root : findNode(uploadDir);
+    
+    if (dirNode) {
+      dirNode.uploadProgress = undefined;
+    }
+    
+    // Also clear source progress if it was a root upload
+    if (uploadDir === "/") {
+      source.uploadProgress = undefined;
+    }
+
+    // Refresh the directory where files were uploaded
     if (dirNode && dirNode.type === "directory") {
       await loadChildren(dirNode);
     } else {
       // Fallback to root if directory not found
       await refreshRoot();
+    }
+  }
+
+  function handleUploadProgress(progress: { 
+    bytesUploaded: number; 
+    totalBytes: number; 
+    percentComplete: number;
+    files: Array<{ fileName: string; bytesUploaded: number; totalBytes: number; percentComplete: number }>;
+  }) {
+    // Update the tree node for the upload directory
+    const uploadDir = currentDirectory.value || "/";
+    
+    // For root directory, always use explorer.root
+    let dirNode = uploadDir === "/" ? explorer.root : findNode(uploadDir);
+    
+    if (dirNode) {
+      dirNode.uploadProgress = {
+        isUploading: true,
+        bytesUploaded: progress.bytesUploaded,
+        totalBytes: progress.totalBytes,
+        fileCount: progress.files.length,
+        files: progress.files,
+        onCancel: undefined,
+      };
     }
   }
 
@@ -2343,13 +2380,10 @@
   }
 
   async function handleRootDropFiles(files: File[], event?: DragEvent) {
-    // Create a root node object for handleDropFiles
-    const rootNode: ExplorerNode = {
-      ...root,
-      parentPath: root.parentPath || "/",
-      nextCursor: root.nextCursor || null,
-    };
-    // Upload to root directory
+    // Use the actual reactive root node so sidebar tree reflects upload state
+    const rootNode = root;
+    rootNode.parentPath = rootNode.parentPath || "/";
+    rootNode.nextCursor = rootNode.nextCursor ?? null;
     await handleDropFiles(rootNode, files, event);
   }
 
@@ -2373,11 +2407,9 @@
     }
 
     // Upload to root directory of the selected source
-    const rootNode: ExplorerNode = {
-      ...root,
-      parentPath: root.parentPath || "/",
-      nextCursor: root.nextCursor || null,
-    };
+    const rootNode = root;
+    rootNode.parentPath = rootNode.parentPath || "/";
+    rootNode.nextCursor = rootNode.nextCursor ?? null;
     await handleDropFiles(rootNode, files, event);
   }
 
@@ -2401,9 +2433,11 @@
 
     const destinationPath = node.path || "/";
     isDragDropUploading.value = true;
-    dragDropProgressMap.value = {};
-    dragDropCompletedBytes.value = 0;
-    dragDropTotalBytes.value = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+    
+    // Set up upload manager for drag-drop uploads
+    const totalBytes = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+    uploadManager.setTotalBytesToUpload(totalBytes);
+    uploadManager.resetForNewBatch();
 
     // Create abort controller for cancellation
     const abortController = new AbortController();
@@ -2412,7 +2446,7 @@
     node.uploadProgress = {
       isUploading: true,
       bytesUploaded: 0,
-      totalBytes: dragDropTotalBytes.value,
+      totalBytes: totalBytes,
       fileCount: filesToUpload.length,
       files: filesToUpload.map(f => ({
         fileName: f.name,
@@ -2439,24 +2473,26 @@
           throw new Error("Upload cancelled");
         }
 
-        dragDropProgressMap.value[file.name] = {
+        uploadManager.updateProgress(file.name, {
           bytesUploaded: 0,
           totalBytes: file.size,
           percentComplete: 0,
-        };
+        });
 
         const success = await uploadFile(file, {
           gameServerId: props.gameServerId,
           destinationPath,
           volumeName: source.type === "volume" ? source.volumeName : undefined,
+          chunkSize: uploadManager.recommendedChunkSize.value,
+          maxConcurrency: uploadManager.recommendedConcurrency.value,
           abortSignal: abortController.signal,
           onProgress: (progress) => {
-            dragDropProgressMap.value[file.name] = {
+            uploadManager.updateProgress(file.name, {
               bytesUploaded: progress.bytesUploaded,
               totalBytes: progress.totalBytes,
               percentComplete: progress.percentComplete,
               speedBytesPerSec: progress.speedBytesPerSec,
-            };
+            });
             
             // Update individual file progress in node
             const fileProgress = node.uploadProgress?.files.find(f => f.fileName === file.name);
@@ -2465,16 +2501,15 @@
               fileProgress.percentComplete = progress.percentComplete;
             }
             
-            // Update overall node progress
-            const totalUploaded = dragDropCompletedBytes.value + 
-              Object.values(dragDropProgressMap.value).reduce((acc, p) => acc + p.bytesUploaded, 0);
+            // Update overall node progress via manager
+            const totalUploaded = Object.values(uploadManager.progressMap.value).reduce((acc, p) => acc + (p.bytesUploaded || 0), 0);
             
             if (node.uploadProgress) {
               node.uploadProgress.bytesUploaded = totalUploaded;
             }
             
-            // Update toast progress
-            const percent = Math.round((totalUploaded / dragDropTotalBytes.value) * 100);
+            // Update toast progress using manager's computed value
+            const percent = uploadManager.overallProgressClamped.value;
             toast.update(
               progressToastId,
               `Uploading ${filesToUpload.length} file(s)...`,
@@ -2483,7 +2518,6 @@
           },
           onFileComplete: () => {
             uploadedCount++;
-            dragDropCompletedBytes.value += file.size;
             
             // Mark file as complete in node progress
             const fileProgress = node.uploadProgress?.files.find(f => f.fileName === file.name);
@@ -2492,8 +2526,15 @@
               fileProgress.bytesUploaded = fileProgress.totalBytes;
             }
             
+            // Update manager progress
+            uploadManager.updateProgress(file.name, {
+              bytesUploaded: file.size,
+              totalBytes: file.size,
+              percentComplete: 100,
+            });
+            
             setTimeout(() => {
-              delete dragDropProgressMap.value[file.name];
+              uploadManager.removeProgress(file.name);
               // Remove file from node progress list
               if (node.uploadProgress) {
                 node.uploadProgress.files = node.uploadProgress.files.filter(f => f.fileName !== file.name);
@@ -2540,9 +2581,7 @@
       }
     } finally {
       isDragDropUploading.value = false;
-      dragDropProgressMap.value = {};
-      dragDropCompletedBytes.value = 0;
-      dragDropTotalBytes.value = 0;
+      uploadManager.clearProgress();
     }
   }
 

@@ -23,6 +23,10 @@ import {
   marginClass,
   spacingClass,
   widthClass,
+    minHeightClass,
+    maxHeightClass,
+    minWidthClass,
+    maxWidthClass,
 } from "./classMaps";
 
 interface StackProps {
@@ -111,6 +115,18 @@ interface StackProps {
    * Height variant
    */
   h?: DimensionVariant;
+
+  /** Minimum width */
+  minW?: DimensionVariant;
+
+  /** Maximum width */
+  maxW?: DimensionVariant;
+
+  /** Minimum height */
+  minH?: DimensionVariant;
+
+  /** Maximum height */
+  maxH?: DimensionVariant;
 
   /**
    * Divider between stack items
@@ -216,6 +232,18 @@ const stackClasses = computed(() => {
   // Height classes
   const height = heightClass(props.h);
   if (height) classes.push(height);
+
+  const minWidth = minWidthClass(props.minW);
+  if (minWidth) classes.push(minWidth);
+
+  const maxWidth = maxWidthClass(props.maxW);
+  if (maxWidth) classes.push(maxWidth);
+
+  const minHeight = minHeightClass(props.minH);
+  if (minHeight) classes.push(minHeight);
+
+  const maxHeight = maxHeightClass(props.maxH);
+  if (maxHeight) classes.push(maxHeight);
 
   return classes.join(" ");
 });

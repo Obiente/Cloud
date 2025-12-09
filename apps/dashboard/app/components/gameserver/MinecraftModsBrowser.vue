@@ -205,7 +205,7 @@
                       {{ typeLabel }}
                     </OuiBadge>
                   </OuiFlex>
-                  <OuiText size="sm" color="secondary" line-clamp="2">
+                  <OuiText size="sm" color="secondary" :lineClamp="2">
                     {{ project.description || "No description provided." }}
                   </OuiText>
                 </OuiStack>

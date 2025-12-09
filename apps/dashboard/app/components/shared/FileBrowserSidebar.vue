@@ -42,7 +42,7 @@
     <div class="p-3 border-b border-border-default">
       <nav class="flex flex-col gap-1.5">
         <button
-          class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-all duration-150 text-text-secondary border bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-all duration-150 text-text-secondary border bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed relative overflow-hidden"
           :class="{
             'bg-surface-selected text-text-primary is-selected-source':
               source.type === 'container',
@@ -65,13 +65,28 @@
           @dragleave="handleSourceDragLeave($event)"
           @drop="handleSourceDrop('container', $event)"
         >
-          <ServerIcon class="h-4 w-4" />
-          <span>Container filesystem</span>
+          <!-- Upload Progress Bar -->
+          <div
+            v-if="source.uploadProgress?.isUploading"
+            class="absolute inset-0 bg-accent-primary/10"
+            :style="{ width: `${(source.uploadProgress.bytesUploaded / source.uploadProgress.totalBytes) * 100}%`, transition: 'width 0.2s ease' }"
+          ></div>
+          
+          <div class="relative flex items-center gap-2 w-full">
+            <ServerIcon class="h-4 w-4" />
+            <div class="flex-1">
+              <span v-if="!source.uploadProgress?.isUploading">Container filesystem</span>
+              <span v-else class="text-[12px]">
+                {{ Math.round((source.uploadProgress.bytesUploaded / source.uploadProgress.totalBytes) * 100) }}% 
+                ({{ source.uploadProgress.fileCount }} file{{ source.uploadProgress.fileCount > 1 ? 's' : '' }})
+              </span>
+            </div>
+          </div>
         </button>
         <button
           v-for="volume in volumes"
           :key="volume.name"
-          class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-all duration-150 text-text-secondary border bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary"
+          class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-all duration-150 text-text-secondary border bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary relative overflow-hidden"
           :class="{
             'bg-surface-selected text-text-primary is-selected-source':
               source.type === 'volume' && source.volumeName === volume.name,
@@ -93,11 +108,28 @@
           @dragleave="handleSourceDragLeave($event)"
           @drop="handleSourceDrop(volume.name || '', $event)"
         >
-          <CubeIcon class="h-4 w-4" />
-          <span>{{ getVolumeLabel(volume) }}</span>
-          <span v-if="getVolumeSecondaryLabel(volume)" class="ml-auto text-[11px] text-text-tertiary">
-            {{ getVolumeSecondaryLabel(volume) }}
-          </span>
+          <!-- Upload Progress Bar -->
+          <div
+            v-if="source.uploadProgress?.isUploading && source.type === 'volume' && source.volumeName === volume.name"
+            class="absolute inset-0 bg-accent-primary/10"
+            :style="{ width: `${(source.uploadProgress.bytesUploaded / source.uploadProgress.totalBytes) * 100}%`, transition: 'width 0.2s ease' }"
+          ></div>
+          
+          <div class="relative flex items-center gap-2 w-full">
+            <CubeIcon class="h-4 w-4" />
+            <div class="flex-1">
+              <span v-if="!source.uploadProgress?.isUploading || source.type !== 'volume' || source.volumeName !== volume.name">
+                {{ getVolumeLabel(volume) }}
+              </span>
+              <span v-else class="text-[12px]">
+                {{ Math.round((source.uploadProgress.bytesUploaded / source.uploadProgress.totalBytes) * 100) }}% 
+                ({{ source.uploadProgress.fileCount }} file{{ source.uploadProgress.fileCount > 1 ? 's' : '' }})
+              </span>
+            </div>
+            <span v-if="getVolumeSecondaryLabel(volume) && (!source.uploadProgress?.isUploading || source.type !== 'volume' || source.volumeName !== volume.name)" class="text-[11px] text-text-tertiary">
+              {{ getVolumeSecondaryLabel(volume) }}
+            </span>
+          </div>
         </button>
       </nav>
     </div>
@@ -105,6 +137,7 @@
     <!-- File Tree Section -->
       <div 
         class="flex-1 overflow-y-auto font-mono" 
+        :class="{ 'bg-accent-primary/5 border-2 border-accent-primary': isDraggingOverRoot }"
         role="tree"
         style="user-select: none;"
       >
@@ -209,6 +242,14 @@
   interface SourceState {
     type: "container" | "volume";
     volumeName?: string;
+    uploadProgress?: {
+      isUploading: boolean;
+      bytesUploaded: number;
+      totalBytes: number;
+      fileCount: number;
+      files: Array<{ fileName: string; bytesUploaded: number; totalBytes: number; percentComplete: number }>;
+      onCancel?: () => void;
+    };
   }
 
   interface Volume {

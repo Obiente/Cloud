@@ -1,12 +1,10 @@
 <template>
   <BaseFileUploader
-    :uploaderId="gameServerId"
+    :uploaderId="deploymentId"
     :destinationPath="destinationPath"
     :volumeName="volumeName"
-    :targetNode="targetNode"
-    :sourceObject="sourceObject"
+    :additionalParams="{ containerId, serviceName }"
     @uploaded="emit('uploaded', $event)"
-    @uploadProgress="emit('uploadProgress', $event)"
   />
 </template>
 
@@ -14,16 +12,15 @@
   import BaseFileUploader from "~/components/shared/BaseFileUploader.vue";
 
   interface Props {
-    gameServerId: string;
+    deploymentId: string;
     destinationPath?: string;
     volumeName?: string;
-    targetNode?: any;
-    sourceObject?: any;
+    containerId?: string;
+    serviceName?: string;
   }
 
   interface Emits {
     (e: "uploaded", files: File[]): void;
-    (e: "uploadProgress", progress: any): void;
   }
 
   const props = defineProps<Props>();

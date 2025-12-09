@@ -30,6 +30,10 @@
     widthClass,
     heightClass,
     responsiveClass,
+    minHeightClass,
+    maxHeightClass,
+    minWidthClass,
+    maxWidthClass,
   } from "./classMaps";
 
   interface GridProps {
@@ -97,13 +101,13 @@
      * Auto-fit columns with a minimum width.
      * Supports responsive values.
      */
-    autoFit?: Responsive<"xs" | "sm" | "md" | "lg" | "xl">;
+    autoFit?: Responsive<"xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl">;
 
     /**
      * Auto-fill columns with a minimum width.
      * Supports responsive values.
      */
-    autoFill?: Responsive<"xs" | "sm" | "md" | "lg" | "xl">;
+    autoFill?: Responsive<"xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl">;
 
     /**
      * Padding variant using OUI spacing scale
@@ -160,6 +164,18 @@
      * Height variant
      */
     h?: DimensionVariant;
+
+    /** Minimum width */
+    minW?: DimensionVariant;
+
+    /** Maximum width */
+    maxW?: DimensionVariant;
+
+    /** Minimum height */
+    minH?: DimensionVariant;
+
+    /** Maximum height */
+    maxH?: DimensionVariant;
   }
 
   const props = withDefaults(defineProps<GridProps>(), {
@@ -245,6 +261,15 @@
     if (width) classes.push(width);
     const height = heightClass(props.h);
     if (height) classes.push(height);
+
+    const minWidth = minWidthClass(props.minW);
+    if (minWidth) classes.push(minWidth);
+    const maxWidth = maxWidthClass(props.maxW);
+    if (maxWidth) classes.push(maxWidth);
+    const minHeight = minHeightClass(props.minH);
+    if (minHeight) classes.push(minHeight);
+    const maxHeight = maxHeightClass(props.maxH);
+    if (maxHeight) classes.push(maxHeight);
 
     return classes.join(" ");
   });

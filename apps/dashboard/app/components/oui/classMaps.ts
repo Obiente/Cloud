@@ -14,11 +14,14 @@ import type {
   OUIOverflow,
   OUIShadow,
   OUISpacing,
+  OUISize,
   Responsive,
 } from "./types";
 
 const spacingScaleMap: Record<Exclude<OUISpacing, "none">, string> = {
-  xs: "1",
+  "3xs": "0.5",
+  "2xs": "1",
+  xs: "1.5",
   sm: "2",
   md: "4",
   lg: "6",
@@ -31,8 +34,41 @@ const spacingScaleMap: Record<Exclude<OUISpacing, "none">, string> = {
   "7xl": "40",
 };
 
+export const sizeScaleMap: Record<OUISize, string> = {
+  "3xs": "10px",
+  "2xs": "11px",
+  xs: "12px",
+  sm: "14px",
+  md: "16px",
+  lg: "18px",
+  xl: "20px",
+  "2xl": "24px",
+  "3xl": "30px",
+  "4xl": "36px",
+  "5xl": "48px",
+  "6xl": "60px",
+  "7xl": "72px",
+};
+
 const mapSpacingToken = (value: OUISpacing) =>
   value === "none" ? "0" : spacingScaleMap[value] ?? value;
+
+const baseDimensionUtility = (
+  value: DimensionVariant | undefined,
+  prefix: string
+) => {
+    if (!value) return undefined;
+
+    if (value === "screen") {
+      return `${prefix}-screen`;
+    }
+
+    if (value === "auto" || value === "fit" || value === "full" || value === "0") {
+      return `${prefix}-${value}`;
+    }
+
+    return `${prefix}-${value}`;
+  };
 
 const dimensionUtility = (
   value: DimensionVariant | undefined,
@@ -52,7 +88,7 @@ const dimensionUtility = (
     return `max-w-${value}`;
   }
 
-  return undefined;
+  return `${prefix}-${value}`;
 };
 
 const prefixedAxisClass = (value: string | undefined, prefix: string) =>
@@ -93,7 +129,19 @@ export const widthClass = (value: DimensionVariant | undefined) =>
   dimensionUtility(value, "w");
 
 export const heightClass = (value: DimensionVariant | undefined) =>
-  dimensionUtility(value, "h");
+  baseDimensionUtility(value, "h");
+
+export const minWidthClass = (value: DimensionVariant | undefined) =>
+  baseDimensionUtility(value, "min-w");
+
+export const maxWidthClass = (value: DimensionVariant | undefined) =>
+  baseDimensionUtility(value, "max-w");
+
+export const minHeightClass = (value: DimensionVariant | undefined) =>
+  baseDimensionUtility(value, "min-h");
+
+export const maxHeightClass = (value: DimensionVariant | undefined) =>
+  baseDimensionUtility(value, "max-h");
 
 export const borderWidthClass = (value: OUIBorderWidth | undefined) => {
   if (!value) return undefined;
@@ -213,7 +261,9 @@ export const alignMap = (prefix: string) => ({
 export const spacingMap = (prefix: string) => {
   const map: Record<OUISpacing, string> = {
     none: `${prefix}-0`,
-    xs: `${prefix}-1`,
+    "3xs": `${prefix}-0.5`,
+    "2xs": `${prefix}-1`,
+    xs: `${prefix}-1.5`,
     sm: `${prefix}-2`,
     md: `${prefix}-4`,
     lg: `${prefix}-6`,
@@ -229,20 +279,24 @@ export const spacingMap = (prefix: string) => {
 };
 
 // Auto-fit / auto-fill maps
-export const autoFitMap: Record<"xs" | "sm" | "md" | "lg" | "xl", string> = {
-  xs: "grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
-  sm: "grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]",
-  md: "grid-cols-[repeat(auto-fit,minmax(24rem,1fr))]",
-  lg: "grid-cols-[repeat(auto-fit,minmax(28rem,1fr))]",
-  xl: "grid-cols-[repeat(auto-fit,minmax(32rem,1fr))]",
+export const autoFitMap: Record<"xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl", string> = {
+  xs: "grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]",
+  sm: "grid-cols-[repeat(auto-fit,minmax(12rem,1fr))]",
+  md: "grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
+  lg: "grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]",
+  xl: "grid-cols-[repeat(auto-fit,minmax(24rem,1fr))]",
+  "2xl": "grid-cols-[repeat(auto-fit,minmax(28rem,1fr))]",
+  "3xl": "grid-cols-[repeat(auto-fit,minmax(32rem,1fr))]",
 };
 
-export const autoFillMap: Record<"xs" | "sm" | "md" | "lg" | "xl", string> = {
-  xs: "grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]",
-  sm: "grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]",
-  md: "grid-cols-[repeat(auto-fill,minmax(24rem,1fr))]",
-  lg: "grid-cols-[repeat(auto-fill,minmax(28rem,1fr))]",
-  xl: "grid-cols-[repeat(auto-fill,minmax(32rem,1fr))]",
+export const autoFillMap: Record<"xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl", string> = {
+  xs: "grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]",
+  sm: "grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]",
+  md: "grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]",
+  lg: "grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]",
+  xl: "grid-cols-[repeat(auto-fill,minmax(24rem,1fr))]",
+  "2xl": "grid-cols-[repeat(auto-fill,minmax(28rem,1fr))]",
+  "3xl": "grid-cols-[repeat(auto-fill,minmax(32rem,1fr))]",
 };
 
 export const marginMap = (prefix: string) => {

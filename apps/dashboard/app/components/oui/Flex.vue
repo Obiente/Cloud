@@ -33,6 +33,10 @@
     overflowClass,
     overflowXClass,
     overflowYClass,
+    minHeightClass,
+    maxHeightClass,
+    minWidthClass,
+    maxWidthClass,
   } from "./classMaps";
 
   interface FlexProps {
@@ -147,6 +151,26 @@
      * Height variant
      */
     h?: DimensionVariant;
+
+    /**
+     * Minimum width
+     */
+    minW?: DimensionVariant;
+
+    /**
+     * Maximum width
+     */
+    maxW?: DimensionVariant;
+
+    /**
+     * Minimum height
+     */
+    minH?: DimensionVariant;
+
+    /**
+     * Maximum height
+     */
+    maxH?: DimensionVariant;
 
     /**
      * Overflow behavior; supports responsive object e.g. { sm: 'hidden', lg: 'auto' }
@@ -271,6 +295,18 @@
     // Height classes
     const height = heightClass(props.h);
     if (height) classes.push(height);
+
+    const minWidth = minWidthClass(props.minW);
+    if (minWidth) classes.push(minWidth);
+
+    const maxWidth = maxWidthClass(props.maxW);
+    if (maxWidth) classes.push(maxWidth);
+
+    const minHeight = minHeightClass(props.minH);
+    if (minHeight) classes.push(minHeight);
+
+    const maxHeight = maxHeightClass(props.maxH);
+    if (maxHeight) classes.push(maxHeight);
 
     classes.push(...overflowClass(props.overflow));
     classes.push(...overflowXClass(props.overflowX));
