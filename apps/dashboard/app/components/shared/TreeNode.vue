@@ -12,6 +12,7 @@
     LinkIcon,
     ArrowPathIcon,
     ArrowUpTrayIcon,
+    XMarkIcon,
   } from "@heroicons/vue/24/outline";
   import type { ExplorerNode } from "./fileExplorerTypes";
 
@@ -47,6 +48,47 @@
   });
   const depth = computed(() => Math.max(props.indexPath.length, 1));
   const iconPadding = computed(() => `${(depth.value - 1) * 14 + 4}px`);
+
+  // Detect if this is the first or last selected node in a continuous sequence
+  // This works by checking if there are selected siblings before/after this node
+  const selectedSiblingsInfo = computed(() => {
+    // Not selected: no position in a group
+    if (!isSelected.value) {
+      return { isFirst: false, isLast: false };
+    }
+
+    // No multi-select set provided, or only one selected: treat as both first and last
+    if (!props.selectedNodes || props.selectedNodes.size <= 1) {
+      return { isFirst: true, isLast: true };
+    }
+    
+    // Get parent path
+    const nodePathSegments = props.node.path.split('/').filter(s => s);
+    const parentPath = '/' + (nodePathSegments.slice(0, -1).join('/'));
+    
+    // Get all selected paths as array
+    const allSelectedPaths = Array.from(props.selectedNodes);
+    
+    // Find selected siblings (same parent) and sort by path
+    const selectedSiblings = allSelectedPaths
+      .filter(path => {
+        const segments = path.split('/').filter(s => s);
+        const sParent = '/' + (segments.slice(0, -1).join('/'));
+        return sParent === parentPath;
+      })
+      .sort();
+    
+    const isFirst = selectedSiblings.length > 1 && selectedSiblings[0] === props.node.path;
+    const isLast = selectedSiblings.length > 1 && selectedSiblings[selectedSiblings.length - 1] === props.node.path;
+    
+    return {
+      isFirst,
+      isLast
+    };
+  });
+
+  const isFirstSelected = computed(() => selectedSiblingsInfo.value.isFirst);
+  const isLastSelected = computed(() => selectedSiblingsInfo.value.isLast);
 
   const menuSections = computed(() => {
     const sections: Array<{
@@ -118,14 +160,6 @@
   });
 
   function handleBranchClick(event: MouseEvent) {
-    console.log("[TreeNode] handleBranchClick", {
-      path: props.node.path,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
-      isSelected: isSelected.value,
-    });
-    
     // Prevent default to avoid text selection
     event.preventDefault();
     // Stop propagation to prevent parent nodes from toggling
@@ -145,14 +179,6 @@
   }
 
   function handleItemClick(event: MouseEvent) {
-    console.log("[TreeNode] handleItemClick", {
-      path: props.node.path,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
-      isSelected: isSelected.value,
-    });
-    
     // Prevent default to avoid text selection
     event.preventDefault();
     event.stopPropagation();
@@ -174,18 +200,15 @@
   }
 
   function handleMenuSelect(action: string) {
-    console.log("[TreeNode] handleMenuSelect", {
-      action,
-      nodePath: props.node.path,
-      selectedNodesCount: props.selectedNodes?.size || 0,
-    });
+    // Use the paths that were selected when the context menu opened
+    // This ensures the dialog shows the correct count
+    const pathsForAction = contextMenuSelectedPaths.value.length > 0 
+      ? contextMenuSelectedPaths.value 
+      : undefined;
     
-    // If multiple nodes are selected, pass all selected paths
-    if (props.selectedNodes && props.selectedNodes.size > 1) {
-      console.log("[TreeNode] Multiple nodes selected, passing all paths:", Array.from(props.selectedNodes));
-      emit("action", action, props.node, Array.from(props.selectedNodes));
+    if (pathsForAction && pathsForAction.length > 0) {
+      emit("action", action, props.node, pathsForAction);
     } else {
-      console.log("[TreeNode] Single node selected, passing only clicked node");
       emit("action", action, props.node);
     }
     menuOpen.value = false;
@@ -194,6 +217,23 @@
   function handleContextMenu(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
+    
+    // Capture the current selection state before potentially modifying it
+    // Include the right-clicked node if it's not already in the selection
+    let selectedToUse: Set<string> = new Set();
+    if (props.selectedNodes) {
+      selectedToUse = new Set(props.selectedNodes);
+    }
+    // Always include the right-clicked node
+    selectedToUse.add(props.node.path);
+    contextMenuSelectedPaths.value = Array.from(selectedToUse);
+    
+    // If right-clicked node is not in the selection, add it to the actual selection
+    // This ensures multi-select delete works correctly
+    if (props.selectedNodes && !props.selectedNodes.has(props.node.path)) {
+      // Emit select event with the context menu event to add this node to selection
+      emit("select", props.node, event);
+    }
     
     // Set menu position by updating the trigger element's position
     if (menuTriggerRef.value) {
@@ -248,11 +288,11 @@
   const isDraggingOver = ref(false);
   let expandTimer: ReturnType<typeof setTimeout> | null = null;
   const EXPAND_DELAY = 800; // 800ms hover delay before auto-expanding
-  
+
   const menuOpen = ref(false);
   const menuTriggerRef = ref<HTMLElement | null>(null);
-
-  function startExpandTimer() {
+  // Track selected paths at the time context menu is opened
+  const contextMenuSelectedPaths = ref<string[]>([]);  function startExpandTimer() {
     // Only start timer if folder is not expanded and is a directory
     if (!isDirectory.value || isExpanded.value) {
       return;
@@ -366,6 +406,8 @@
         class="tree-node"
         :class="{
           'is-selected': isSelected,
+          'is-first-selected': isFirstSelected,
+          'is-last-selected': isLastSelected,
           'is-directory': true,
           'is-loading': node.isLoading,
           'is-dragging-over': isDraggingOver,
@@ -377,11 +419,19 @@
         @drop="handleDrop"
       >
         <TreeView.BranchTrigger
-          :style="{ paddingLeft: iconPadding }"
+          :style="{ 
+            paddingLeft: iconPadding,
+            borderTopLeftRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopRightRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomLeftRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomRightRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+          }"
           class="tree-trigger"
           :class="{ 
             'is-dragging-over': isDraggingOver,
             'is-selected': isSelected,
+            'is-first-selected': isFirstSelected,
+            'is-last-selected': isLastSelected,
           }"
           @click.stop.prevent="handleBranchClick"
           @mousedown.stop.prevent
@@ -405,6 +455,21 @@
               <span v-if="isDraggingOver" class="tree-trigger__drop-indicator">
                 Drop files here
               </span>
+              <span v-else-if="node.uploadProgress?.isUploading" class="tree-trigger__upload-progress">
+                <span class="upload-progress-text">
+                  {{ Math.round((node.uploadProgress.bytesUploaded / node.uploadProgress.totalBytes) * 100) }}% 
+                  ({{ node.uploadProgress.fileCount }} file{{ node.uploadProgress.fileCount > 1 ? 's' : '' }})
+                </span>
+                <button
+                  v-if="node.uploadProgress.onCancel"
+                  type="button"
+                  class="upload-cancel-button"
+                  @click.stop="node.uploadProgress.onCancel()"
+                  title="Cancel upload"
+                >
+                  <XMarkIcon class="h-3 w-3" />
+                </button>
+              </span>
               <span v-if="isSymlink" class="tree-trigger__symlink">
                 <MinusSmallIcon class="symlink-arrow" />
                 <span class="symlink-target">{{ node.symlinkTarget }}</span>
@@ -413,6 +478,13 @@
             <span v-if="displaySize" class="tree-trigger__meta">
               {{ displaySize }}
             </span>
+            <!-- Upload progress bar -->
+            <div v-if="node.uploadProgress?.isUploading" class="tree-trigger__progress-bar">
+              <div 
+                class="tree-trigger__progress-fill" 
+                :style="{ width: `${(node.uploadProgress.bytesUploaded / node.uploadProgress.totalBytes) * 100}%` }"
+              />
+            </div>
           </span>
           <span class="tree-trigger__actions">
             <ArrowPathIcon v-if="node.isLoading" class="action-icon animate-spin" />
@@ -460,6 +532,23 @@
           </span>
         </TreeView.BranchTrigger>
 
+        <!-- Uploading Files List -->
+        <div v-if="node.uploadProgress?.isUploading && node.uploadProgress.files.length > 0" class="uploading-files-list">
+          <div
+            v-for="file in node.uploadProgress.files"
+            :key="file.fileName"
+            class="uploading-file-item"
+            :style="{ paddingLeft: `calc(${iconPadding} + 28px)` }"
+          >
+            <DocumentIcon class="file-icon" />
+            <span class="file-name">{{ file.fileName }}</span>
+            <span class="file-progress">{{ file.percentComplete }}%</span>
+            <div class="file-progress-bar">
+              <div class="file-progress-fill" :style="{ width: `${file.percentComplete}%` }" />
+            </div>
+          </div>
+        </div>
+
         <TreeView.BranchContent v-if="isExpanded">
           <TreeView.BranchIndentGuide />
           <div
@@ -477,7 +566,7 @@
               @toggle="(n, open) => emit('toggle', n, open)"
               @open="(n, options) => emit('open', n, options)"
               @select="(n, event) => emit('select', n, event)"
-              @action="(action, n) => emit('action', action, n)"
+              @action="(action, n, selectedPaths) => emit('action', action, n, selectedPaths)"
               @load-more="(n) => emit('load-more', n)"
               @drop-files="(n, files) => emit('drop-files', n, files)"
             />
@@ -499,13 +588,25 @@
         class="tree-node"
         :class="{
           'is-selected': isSelected,
+          'is-first-selected': isFirstSelected,
+          'is-last-selected': isLastSelected,
           'is-loading': node.isLoading,
         }"
       >
         <div
-          :style="{ paddingLeft: iconPadding }"
+          :style="{ 
+            paddingLeft: iconPadding,
+            borderTopLeftRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopRightRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomLeftRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomRightRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+          }"
           class="tree-trigger"
-          :class="{ 'is-selected': isSelected }"
+          :class="{ 
+            'is-selected': isSelected,
+            'is-first-selected': isFirstSelected,
+            'is-last-selected': isLastSelected,
+          }"
           @click.stop.prevent="handleItemClick"
           @mousedown.stop.prevent
           @selectstart.prevent
@@ -596,8 +697,9 @@
     position: relative;
     background: var(--oui-surface-selected) !important;
     border: none !important;
-    border-radius: 6px;
     color: var(--oui-text-primary);
+    margin-bottom: -1px;
+    border-radius: 0;
   }
 
   .tree-node.is-selected > .tree-trigger::before,
@@ -608,8 +710,75 @@
     background: var(--oui-accent-primary);
     opacity: 0.12;
     pointer-events: none;
-    border-radius: 4px;
+    border-radius: 0;
     z-index: 0;
+  }
+
+  /* Base selection (both file + branch) */
+  .tree-trigger.is-selected {
+    position: relative;
+    background: var(--oui-surface-selected) !important;
+    border: none !important;
+    border-radius: 0;
+    margin-bottom: -1px;
+  }
+
+  .tree-trigger.is-selected::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--oui-accent-primary);
+    opacity: 0.12;
+    pointer-events: none;
+    border-radius: 0;
+    z-index: 0;
+  }
+
+  /* Single selection: round all corners */
+  .tree-trigger.is-selected.is-first-selected.is-last-selected {
+    border-radius: 6px;
+  }
+
+  .tree-trigger.is-selected.is-first-selected.is-last-selected::before {
+    border-radius: 4px;
+  }
+
+  /* Multi-selection grouping (items) */
+  .tree-trigger.is-selected.is-first-selected:not(.is-last-selected) {
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .tree-trigger.is-selected.is-last-selected:not(.is-first-selected) {
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .tree-trigger.is-selected:not(.is-first-selected):not(.is-last-selected) {
+    border-radius: 0;
+  }
+
+  /* Match overlay rounding to item rounding */
+  .tree-trigger.is-selected.is-first-selected:not(.is-last-selected)::before {
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .tree-trigger.is-selected.is-last-selected:not(.is-first-selected)::before {
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .tree-trigger.is-selected:not(.is-first-selected):not(.is-last-selected)::before {
+    border-radius: 0;
   }
 
   /* Ensure children don't inherit selection styling - be very specific */
@@ -627,24 +796,7 @@
     display: none !important;
   }
 
-  /* .tree-trigger.is-selected is used for file items (TreeView.Item) */
-  .tree-trigger.is-selected {
-    position: relative;
-    background: var(--oui-surface-selected) !important;
-    border: none !important;
-    border-radius: 6px;
-  }
-
-  .tree-trigger.is-selected::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--oui-accent-primary);
-    opacity: 0.12;
-    pointer-events: none;
-    border-radius: 4px;
-    z-index: 0;
-  }
+  /* Ensure selection styling takes priority over directory/expanded states */
 
   /* Ensure selection styling takes priority over directory/expanded states */
   .tree-node.is-selected.is-directory > .tree-trigger,
@@ -958,6 +1110,123 @@
   .tree-load-more:disabled {
     opacity: 0.6;
     cursor: wait;
+  }
+
+  .tree-trigger__upload-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--oui-primary-500);
+    font-weight: 500;
+  }
+
+  .upload-progress-text {
+    white-space: nowrap;
+  }
+
+  .upload-cancel-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--oui-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .upload-cancel-button:hover {
+    background: var(--oui-surface-hover);
+    color: var(--oui-error-500);
+  }
+
+  .tree-trigger__progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--oui-surface-hover);
+    overflow: hidden;
+  }
+
+  .tree-trigger__progress-fill {
+    height: 100%;
+    background: var(--oui-primary-500);
+    transition: width 0.2s ease;
+  }
+
+  .uploading-files-list {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
+  .uploading-file-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 0;
+    min-height: 28px;
+    font-size: 12px;
+    color: var(--oui-text-secondary);
+    background: var(--oui-surface-raised);
+    border-left: 2px solid var(--oui-primary-500);
+    margin-bottom: 1px;
+  }
+  
+  .uploading-file-item:first-child {
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+  }
+  
+  .uploading-file-item:last-child {
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    margin-bottom: 0;
+  }
+
+  .uploading-file-item .file-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--oui-text-tertiary);
+  }
+
+  .uploading-file-item .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+
+  .uploading-file-item .file-progress {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--oui-primary-500);
+    margin-right: 4px;
+  }
+
+  .file-progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--oui-border-muted);
+    overflow: hidden;
+  }
+
+  .file-progress-fill {
+    height: 100%;
+    background: var(--oui-primary-500);
+    transition: width 0.2s ease;
   }
 </style>
 

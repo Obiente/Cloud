@@ -239,47 +239,67 @@ const uploadFiles = async (api: any) => {
   uploadSuccess.value = "";
 
   try {
-    // Create tar archive
-    const tarData = await createTarArchive(api.acceptedFiles);
-    
-    // Create metadata using protobuf schema
-    const metadata = create(UploadContainerFilesMetadataSchema, {
-      organizationId: organizationId.value,
-      deploymentId: props.deploymentId,
-      destinationPath: props.destinationPath || "/",
-      volumeName: props.volumeName,
-      containerId: !props.volumeName && props.containerId ? props.containerId : undefined,
-      serviceName: !props.volumeName && props.serviceName ? props.serviceName : undefined,
-      files: api.acceptedFiles.map((f: File) => ({
-        name: f.name,
-        size: BigInt(f.size),
-        isDirectory: false,
-        path: f.name,
-      })),
-    });
-    
-    // Create single non-streaming request with all data
-    const request = create(UploadContainerFilesRequestSchema, {
-      metadata: metadata,
-      tarData: new Uint8Array(tarData),
-    });
-    
-    // Call the upload RPC with a single request (non-streaming)
-    const response = await client.uploadContainerFiles(request);
+    // Upload in batches to avoid creating a single huge tar in memory
+    const MAX_BATCH_BYTES = 25 * 1024 * 1024; // 25 MB per batch
+    const MAX_BATCH_FILES = 5;
 
-    if (response.success) {
-      uploadSuccess.value = `Successfully uploaded ${response.filesUploaded} file(s)`;
-      emit("uploaded", api.acceptedFiles);
-      api.clearFiles();
-      rejectedFiles.value = [];
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => {
-        uploadSuccess.value = "";
-      }, 3000);
-    } else {
-      uploadError.value = response.error || "Upload failed";
+    const files = api.acceptedFiles.slice();
+    let uploadedFilesCount = 0;
+
+    while (files.length > 0) {
+      const batch: File[] = [];
+      let batchBytes = 0;
+
+      while (files.length > 0 && batch.length < MAX_BATCH_FILES) {
+        const next = files[0];
+        if (batch.length === 0 && next.size > MAX_BATCH_BYTES) {
+          batch.push(files.shift() as File);
+          break;
+        }
+        if (batchBytes + next.size > MAX_BATCH_BYTES) break;
+        batch.push(files.shift() as File);
+        batchBytes += next.size;
+      }
+
+      const tarData = await createTarArchive(batch);
+
+      const metadata = create(UploadContainerFilesMetadataSchema, {
+        organizationId: organizationId.value,
+        deploymentId: props.deploymentId,
+        destinationPath: props.destinationPath || "/",
+        volumeName: props.volumeName,
+        containerId: !props.volumeName && props.containerId ? props.containerId : undefined,
+        serviceName: !props.volumeName && props.serviceName ? props.serviceName : undefined,
+        files: batch.map((f: File) => ({
+          name: f.name,
+          size: BigInt(f.size),
+          isDirectory: false,
+          path: f.name,
+        })),
+      });
+
+      const request = create(UploadContainerFilesRequestSchema, {
+        metadata: metadata,
+        tarData: new Uint8Array(tarData),
+      });
+
+      const response = await client.uploadContainerFiles(request);
+      if (!response.success) {
+        throw new Error(response.error || "Upload failed");
+      }
+
+      uploadedFilesCount += response.filesUploaded || 0;
     }
+
+    uploadSuccess.value = `Successfully uploaded ${uploadedFilesCount} file(s)`;
+    emit("uploaded", api.acceptedFiles);
+    api.clearFiles();
+    rejectedFiles.value = [];
+
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      uploadSuccess.value = "";
+    }, 3000);
   } catch (error: any) {
     console.error("Upload error:", error);
     uploadError.value = error.message || "Failed to upload files";

@@ -25,7 +25,23 @@ export function useToast() {
     info: InformationCircleIcon,
   };
 
-  const toast = {
+  type ToastMethods = {
+    create: (options: {
+      title: string;
+      description?: string;
+      type?: "success" | "error" | "warning" | "info";
+      duration?: number;
+    }) => string;
+    success: (title: string, description?: string) => string;
+    error: (title: string, description?: string) => string;
+    warning: (title: string, description?: string) => string;
+    info: (title: string, description?: string) => string;
+    loading: (title: string, description?: string) => string;
+    update: (id: string, title: string, description?: string) => void;
+    dismiss: (id: string) => void;
+  };
+
+  const toast: ToastMethods = {
     create: (options: {
       title: string;
       description?: string;
@@ -71,11 +87,28 @@ export function useToast() {
         duration: 5000,
       });
     },
+    loading: (title: string, description?: string) => {
+      return globalToaster!.create({
+        title,
+        description,
+        type: "info",
+        duration: Infinity, // Loading toasts don't auto-dismiss
+      });
+    },
+    update: (id: string, title: string, description?: string) => {
+      globalToaster!.update(id, {
+        title,
+        description,
+      });
+    },
+    dismiss: (id: string) => {
+      globalToaster!.dismiss(id);
+    },
   };
 
   return {
     toaster: globalToaster,
-    toast,
+    toast: toast as ToastMethods,
     iconMap,
   };
 }

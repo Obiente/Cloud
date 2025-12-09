@@ -108,6 +108,9 @@ func main() {
 	)
 	mux.Handle(gameServersPath, gameServersHandler)
 
+	// HTTP endpoint for chunked file uploads (multipart streaming)
+	mux.HandleFunc("/internal/gameservers/upload-file", gameServerService.HandleUploadFile)
+
 	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
 	mux.HandleFunc("/terminal/ws", gameServerService.HandleTerminalWebSocket)
 

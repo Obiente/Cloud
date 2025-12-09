@@ -95,6 +95,10 @@ service GameServerService {
   // Upload files to a game server container or volume
   rpc UploadGameServerFiles(UploadGameServerFilesRequest) returns (UploadGameServerFilesResponse);
   
+  // Chunk-based file upload that streams without buffering large payloads in memory.
+  // Clients send a single unary request with file data split into chunks.
+  rpc ChunkUploadGameServerFiles(ChunkUploadGameServerFilesRequest) returns (ChunkUploadGameServerFilesResponse);
+  
   // Delete files or directories from a game server
   rpc DeleteGameServerEntries(DeleteGameServerEntriesRequest) returns (DeleteGameServerEntriesResponse);
   
@@ -466,6 +470,29 @@ message UploadGameServerFilesResponse {
   optional string error = 2;
   int32 files_uploaded = 3; // Number of files successfully uploaded
 }
+
+// ChunkUploadGameServerFilesRequest contains a single file chunk with metadata.
+// Clients should split each file into chunks (e.g., 64KB each) and send multiple unary requests.
+// The server assembles chunks into a complete file stream and uploads to the target destination without buffering.
+message ChunkUploadGameServerFilesRequest {
+  string game_server_id = 1;
+  string destination_path = 2; // Directory path where files should be extracted (default: "/")
+  optional string volume_name = 3; // If specified, upload to this volume
+  string file_name = 4; // Name of the file being uploaded
+  int64 file_size = 5; // Total size of the complete file (for validation)
+  int32 chunk_index = 6; // 0-based index of this chunk
+  int32 total_chunks = 7; // Total number of chunks for this file
+  bytes chunk_data = 8; // Raw file data for this chunk
+  optional string file_mode = 9; // File permissions (e.g., "0644"), optional
+}
+
+message ChunkUploadGameServerFilesResponse {
+  bool success = 1;
+  optional string error = 2;
+  string file_name = 3; // Name of the uploaded file
+  int64 bytes_received = 4; // Total bytes received for this file so far
+}
+
 
 enum GameServerEntryType {
   GAME_SERVER_ENTRY_TYPE_UNSPECIFIED = 0;

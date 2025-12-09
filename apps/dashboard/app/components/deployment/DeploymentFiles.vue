@@ -604,6 +604,8 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   const showUpload = ref(false);
   const showSidebarOnMobile = ref(false);
   const hasMounted = ref(false);
+  const isDragDropUploading = ref(false);
+  const dragDropUploadingFileCount = ref(0);
   const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
   const isLoadingFile = ref(false); // Track if a file load is in progress
   let currentFileLoadController: AbortController | null = null; // AbortController for cancelling pending requests
@@ -942,8 +944,8 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   }
 
   function handleContextAction(action: string, node: ExplorerNode, selectedPaths?: string[]) {
-    // If multiple nodes are selected, use them; otherwise use the clicked node
-    const pathsToUse = selectedPaths && selectedPaths.length > 1 
+    // If selected paths provided, use them; otherwise use the clicked node
+    const pathsToUse = selectedPaths && selectedPaths.length > 0
       ? selectedPaths.filter(p => p !== "/")
       : [node.path];
     
@@ -1344,9 +1346,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
     // Prevent concurrent loads of the same file
     if (isLoadingFile.value && currentFilePath.value === node.path) {
-      console.log(
-        "[handleLoadFile] Already loading this file, skipping duplicate request"
-      );
       return;
     }
 
@@ -1418,9 +1417,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
       // Verify this request is still valid (file hasn't changed during load)
       if (currentFilePath.value !== requestPath) {
-        console.log(
-          "[handleLoadFile] File changed during load, discarding stale response"
-        );
         return;
       }
 
@@ -1503,7 +1499,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     } catch (err: any) {
       // Don't show error if request was aborted (cancelled)
       if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
-        console.log("[handleLoadFile] Request was aborted");
         return;
       }
 
@@ -1536,24 +1531,18 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
   async function handleSaveFile() {
     if (!currentFilePath.value) {
-      console.warn("Cannot save: no file path");
       return;
     }
     if (isSaving.value) {
-      console.log("Save already in progress, skipping");
       return; // Prevent double-saving
     }
 
-    console.log("Starting save for:", currentFilePath.value);
-    console.log("Current saveStatus before save:", saveStatus.value);
     isSaving.value = true;
     saveStatus.value = "saving";
-    console.log("Save status set to 'saving':", saveStatus.value);
     saveErrorMessage.value = null;
 
     // Force Vue to update by using nextTick
     await nextTick();
-    console.log("After nextTick, saveStatus:", saveStatus.value);
 
     try {
       await writeFile({
@@ -1562,7 +1551,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
 
-      console.log("File saved successfully");
       saveStatus.value = "success";
       // Update original content to match saved content
       originalFileContent.value = fileContent.value;
@@ -1593,7 +1581,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
         // Reset status after showing dialog (5 seconds total)
         setTimeout(() => {
           if (saveStatus.value === "error") {
-            console.log("Resetting save status from error to idle");
             saveStatus.value = "idle";
             saveErrorMessage.value = null;
           }
@@ -2002,18 +1989,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
   // Handle node selection
   function handleNodeSelect(node: ExplorerNode, event: MouseEvent) {
-    console.log("[DeploymentFiles] handleNodeSelect called", {
-      path: node.path,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
-    });
-    
     multiSelect.handleNodeClick(node, event, (selectedPaths) => {
-      console.log("[DeploymentFiles] Selection changed callback", {
-        selectedPaths,
-        selectedCount: selectedPaths.length,
-      });
       
       // Update selectedPath to the last selected if single selection
       if (selectedPaths.length === 1 && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
@@ -2402,9 +2378,39 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
     const destinationPath = node.path || "/";
     
+    isDragDropUploading.value = true;
+    dragDropUploadingFileCount.value = filesToUpload.length;
+    
+    // Initialize node upload progress (tar-based, so no per-file tracking)
+    node.uploadProgress = {
+      isUploading: true,
+      bytesUploaded: 0,
+      totalBytes: filesToUpload.reduce((acc, f) => acc + f.size, 0),
+      fileCount: filesToUpload.length,
+      files: filesToUpload.map(f => ({
+        fileName: f.name,
+        bytesUploaded: 0,
+        totalBytes: f.size,
+        percentComplete: 0,
+      })),
+    };
+    
+    // Show toast with progress
+    const progressToastId = toast.loading(
+      `Uploading ${filesToUpload.length} file(s)...`,
+      "Creating archive..."
+    );
+    
     try {
       // Create tar archive
       const tarData = await createTarArchive(filesToUpload);
+      
+      // Update toast to show uploading state
+      toast.update(
+        progressToastId,
+        `Uploading ${filesToUpload.length} file(s)...`,
+        "Uploading to server..."
+      );
       
       // Call the upload using the client adapter
       const response = await fileBrowserClient.uploadFiles({
@@ -2422,6 +2428,16 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
       });
 
       if (response.success) {
+        // Clear node progress
+        node.uploadProgress = undefined;
+        
+        // Dismiss loading toast and show success
+        toast.dismiss(progressToastId);
+        toast.success(
+          "Files uploaded successfully",
+          `${filesToUpload.length} file(s) uploaded to ${destinationPath}`
+        );
+        
         // Refresh the directory where files were uploaded
         const dirNode = findNode(destinationPath);
         if (dirNode && dirNode.type === "directory") {
@@ -2430,13 +2446,26 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
           // Fallback to root if directory not found
           await refreshRoot();
         }
-        toast.success("Files uploaded successfully", `${filesToUpload.length} file(s) uploaded to ${destinationPath}`);
       } else {
+        // Clear node progress
+        node.uploadProgress = undefined;
+        
+        // Dismiss loading toast and show error
+        toast.dismiss(progressToastId);
         toast.error("Upload Failed", response.error || "Failed to upload files");
       }
     } catch (error: any) {
       console.error("Upload error:", error);
+      
+      // Clear node progress
+      node.uploadProgress = undefined;
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(progressToastId);
       toast.error("Upload Error", error.message || "Failed to upload files");
+    } finally {
+      isDragDropUploading.value = false;
+      dragDropUploadingFileCount.value = 0;
     }
   }
 

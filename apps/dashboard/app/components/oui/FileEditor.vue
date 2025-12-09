@@ -282,18 +282,35 @@ const initEditor = async () => {
     // Lazy load Monaco Editor
     if (!monaco) {
       // Set up MonacoEnvironment.getWorker before importing Monaco
-      // This only runs when Monaco is actually needed (lazy loading)
-      // Monaco can use a single default worker for all languages
+      // Use language-specific workers to avoid missing handlers (folding, symbols, etc.)
       if (typeof window !== "undefined" && !window.MonacoEnvironment) {
-        // Load the default editor worker - this handles all languages
-        const EditorWorker = await import("monaco-editor/esm/vs/editor/editor.worker?worker");
-        const WorkerClass = (EditorWorker as { default: new () => Worker }).default;
+        const [EditorWorker, JsonWorker, CssWorker, HtmlWorker, TsWorker] = await Promise.all([
+          import("monaco-editor/esm/vs/editor/editor.worker?worker"),
+          import("monaco-editor/esm/vs/language/json/json.worker?worker"),
+          import("monaco-editor/esm/vs/language/css/css.worker?worker"),
+          import("monaco-editor/esm/vs/language/html/html.worker?worker"),
+          import("monaco-editor/esm/vs/language/typescript/ts.worker?worker"),
+        ]);
 
-        // Set up MonacoEnvironment with a simple default worker
-        // Monaco will use this for all languages - it handles language-specific features internally
         window.MonacoEnvironment = {
-          getWorker() {
-            return new WorkerClass();
+          getWorker(_workerId: string, label: string) {
+            switch (label) {
+              case "json":
+                return new (JsonWorker as { default: new () => Worker }).default();
+              case "css":
+              case "scss":
+              case "less":
+                return new (CssWorker as { default: new () => Worker }).default();
+              case "html":
+              case "handlebars":
+              case "razor":
+                return new (HtmlWorker as { default: new () => Worker }).default();
+              case "typescript":
+              case "javascript":
+                return new (TsWorker as { default: new () => Worker }).default();
+              default:
+                return new (EditorWorker as { default: new () => Worker }).default();
+            }
           },
         };
       }

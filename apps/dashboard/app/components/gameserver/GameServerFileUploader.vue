@@ -1,7 +1,7 @@
 <template>
   <FileUpload.Root
-    :maxFiles="20"
-    :maxFileSize="100 * 1024 * 1024"
+    :maxFiles="500"
+    :maxFileSize="1024 * 1024 * 1024"
     @filesAccepted="handleFilesAccepted"
     @fileRejected="handleFileRejected"
   >
@@ -39,7 +39,7 @@
             </FileUpload.Trigger>
           </OuiFlex>
           <OuiText size="xs" color="secondary" class="mt-1">
-            Maximum size: 100MB per file
+            Maximum size: 1GB per file (up to 500 files)
           </OuiText>
         </OuiStack>
       </FileUpload.Dropzone>
@@ -52,12 +52,16 @@
           <OuiText size="xs" weight="semibold">
             Selected Files ({{ api.acceptedFiles.length }})
           </OuiText>
-          <OuiGrid :cols="{ sm: 2, md: 3, lg: 4 }" gap="sm">
+          <div class="selected-files-list">
             <OuiCard
-              v-for="file in api.acceptedFiles"
+              v-for="(file, idx) in api.acceptedFiles"
               :key="file.name"
               variant="outline"
-              class="p-3"
+              class="selected-file-item p-3"
+              :class="{
+                'selected-file-item-first': idx === 0,
+                'selected-file-item-last': idx === api.acceptedFiles.length - 1,
+              }"
             >
               <OuiFlex align="center" gap="md">
                 <FileUpload.Item :file="file">
@@ -85,11 +89,51 @@
                 </FileUpload.Item>
               </OuiFlex>
             </OuiCard>
-          </OuiGrid>
+          </div>
+
+          <!-- Upload Progress Section -->
+          <OuiStack v-if="isUploading" gap="sm" class="mt-4 p-4 bg-secondary/5 rounded-lg">
+            <OuiStack gap="xs">
+              <OuiFlex justify="between" align="center">
+                <OuiText size="sm" weight="semibold">Overall Progress</OuiText>
+                  <OuiStack align="end" gap="xs">
+                    <OuiText size="sm" weight="semibold" color="primary">{{ overallProgress }}%</OuiText>
+                    <OuiText size="xs" color="secondary">{{ formatSpeed(overallSpeed) }} • {{ overallEtaSeconds !== undefined && overallEtaSeconds !== null ? `${overallEtaSeconds}s left` : "—" }}</OuiText>
+                  </OuiStack>
+              </OuiFlex>
+              <div class="w-full bg-border-default rounded-full h-2 overflow-hidden">
+                <div
+                  class="bg-primary h-full transition-all duration-300"
+                  :style="{ width: `${overallProgress}%` }"
+                />
+              </div>
+            </OuiStack>
+
+            <!-- Per-file progress -->
+            <OuiStack gap="sm" v-if="Object.keys(progressMap).length > 0" class="mt-3">
+              <OuiText size="xs" weight="medium">Files:</OuiText>
+              <OuiStack gap="xs" class="max-h-40 overflow-y-auto">
+                <div v-for="(progress, fileName) in progressMap" :key="fileName" class="p-2 bg-white rounded border border-border-default">
+                  <OuiFlex justify="between" align="center" gap="sm">
+                    <OuiText size="xs" class="truncate flex-1">{{ fileName }}</OuiText>
+                    <OuiText size="xs" color="secondary" class="whitespace-nowrap">
+                      {{ formatBytes(progress.bytesUploaded) }} / {{ formatBytes(progress.totalBytes) }} • {{ formatSpeed(progress.speedBytesPerSec) }}
+                    </OuiText>
+                  </OuiFlex>
+                  <div class="w-full bg-border-default rounded-full h-1 overflow-hidden mt-1">
+                    <div
+                      class="bg-primary h-full transition-all duration-300"
+                      :style="{ width: `${progress.percentComplete}%` }"
+                    />
+                  </div>
+                </div>
+              </OuiStack>
+            </OuiStack>
+          </OuiStack>
 
           <OuiFlex justify="end" gap="sm" class="mt-2">
             <FileUpload.ClearTrigger asChild>
-              <OuiButton variant="ghost" size="sm"> Clear All </OuiButton>
+              <OuiButton variant="ghost" size="sm" :disabled="isUploading"> Clear All </OuiButton>
             </FileUpload.ClearTrigger>
             <OuiButton
               @click="uploadFiles(api)"
@@ -151,17 +195,14 @@
   import { ref, computed } from "vue";
   import { FileUpload } from "@ark-ui/vue/file-upload";
   import { ArrowUpTrayIcon, DocumentIcon } from "@heroicons/vue/24/outline";
-  import { useConnectClient } from "~/lib/connect-client";
-  import {
-    GameServerService,
-    UploadGameServerFilesRequestSchema,
-    UploadGameServerFilesMetadataSchema,
-  } from "@obiente/proto";
-  import { create } from "@bufbuild/protobuf";
+  import { useStreamingUpload } from "~/composables/useStreamingUpload";
+  import { useToast } from "~/composables/useToast";
+  import type { ExplorerNode } from "~/components/shared/fileExplorerTypes";
 
   interface Props {
     gameServerId: string;
     destinationPath?: string;
+    destinationNode?: ExplorerNode;
     volumeName?: string;
   }
 
@@ -171,9 +212,76 @@
 
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
-  const client = useConnectClient(GameServerService);
+  const { uploadFile, isUploading, error } = useStreamingUpload();
+  const { toast } = useToast();
 
-  const isUploading = ref(false);
+  const progressMap = ref<Record<string, { bytesUploaded: number; totalBytes: number; percentComplete: number; speedBytesPerSec?: number; etaSeconds?: number }>>(
+    {}
+  );
+
+  // Total bytes from files that have finished uploading (used to compute overall progress)
+  const completedBytes = ref(0);
+  // Grand total bytes for all selected files (including not-yet-started)
+  const totalBytesToUpload = ref(0);
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const formatSpeed = (bytesPerSec?: number) => {
+    if (!bytesPerSec || bytesPerSec <= 0) return "—";
+    // Use same units as formatBytes but per second
+    const k = 1024;
+    const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
+    const i = Math.floor(Math.log(bytesPerSec) / Math.log(k));
+    return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const overallProgress = computed(() => {
+    const items = Object.values(progressMap.value);
+    // Sum loaded for in-progress files
+    let loaded = 0;
+    for (const it of items) {
+      loaded += it.bytesUploaded;
+    }
+    // Add completed bytes to loaded
+    const completed = completedBytes.value;
+    // Use the grand total of all selected files (including not-yet-started)
+    const grandTotal = totalBytesToUpload.value;
+    const grandLoaded = loaded + completed;
+    if (!grandTotal || grandTotal === 0) return 0;
+    return Math.round((grandLoaded / grandTotal) * 100);
+  });
+
+  const overallSpeed = computed(() => {
+    // Sum speeds of all current progress entries (best-effort)
+    const items = Object.values(progressMap.value);
+    let speed = 0;
+    for (const it of items) {
+      speed += it.speedBytesPerSec || 0;
+    }
+    return speed;
+  });
+
+  const overallEtaSeconds = computed(() => {
+    const items = Object.values(progressMap.value);
+    let loaded = 0;
+    for (const it of items) {
+      loaded += it.bytesUploaded;
+    }
+    const completed = completedBytes.value;
+    const grandTotal = totalBytesToUpload.value;
+    const remaining = grandTotal ? Math.max(0, grandTotal - (loaded + completed)) : 0;
+    const speed = overallSpeed.value;
+    if (remaining === 0) return 0;
+    if (speed === 0) return undefined;
+    return Math.round(remaining / speed);
+  });
+
   const uploadError = ref("");
   const uploadSuccess = ref("");
   const rejectedFiles = ref<
@@ -183,6 +291,8 @@
   const handleFilesAccepted = (details: { acceptedFiles: File[] }) => {
     uploadError.value = "";
     uploadSuccess.value = "";
+    // Calculate total bytes for overall progress (includes files not yet started)
+    totalBytesToUpload.value = details.acceptedFiles.reduce((acc, f) => acc + f.size, 0);
   };
 
   const handleFileRejected = (details: {
@@ -195,136 +305,210 @@
     uploadError.value = `Some files were rejected. Please check the requirements.`;
   };
 
-  // Helper to create a simple tar archive from files
-  const createTarArchive = async (files: File[]): Promise<Uint8Array> => {
-    const tarData: Uint8Array[] = [];
-
-    for (const file of files) {
-      const name = file.name;
-      const content = await file.arrayBuffer();
-      const fileBytes = new Uint8Array(content);
-
-      // Tar header: 512 bytes
-      const header = new Uint8Array(512);
-
-      // Write file name (100 bytes)
-      const nameBytes = new TextEncoder().encode(name);
-      header.set(nameBytes.slice(0, 100), 0);
-
-      // Write file mode (8 bytes) - 0644
-      header.set(new TextEncoder().encode("0000644"), 100);
-
-      // Write UID (8 bytes) - 0
-      header.set(new TextEncoder().encode("0000000"), 108);
-
-      // Write GID (8 bytes) - 0
-      header.set(new TextEncoder().encode("0000000"), 116);
-
-      // Write size (12 bytes) - octal
-      const sizeStr = fileBytes.length.toString(8).padStart(11, "0") + " ";
-      header.set(new TextEncoder().encode(sizeStr), 124);
-
-      // Write mtime (12 bytes) - current time in octal
-      const mtime =
-        Math.floor(Date.now() / 1000)
-          .toString(8)
-          .padStart(11, "0") + " ";
-      header.set(new TextEncoder().encode(mtime), 136);
-
-      // Write typeflag (1 byte) - regular file (0)
-      header[156] = 48; // '0'
-
-      // Write magic (6 bytes)
-      header.set(new TextEncoder().encode("ustar "), 257);
-
-      // Write version (2 bytes)
-      header.set(new TextEncoder().encode(" "), 263);
-
-      // Calculate checksum
-      let checksum = 256; // Sum of all header bytes with checksum field as spaces
-      for (let i = 0; i < 512; i++) {
-        if (i >= 148 && i < 156) continue; // Skip checksum field
-        checksum += header[i] ?? 0;
-      }
-      const checksumStr = checksum.toString(8).padStart(6, "0") + "\0 ";
-      header.set(new TextEncoder().encode(checksumStr), 148);
-
-      tarData.push(header);
-      tarData.push(fileBytes);
-
-      // Pad to 512-byte boundary
-      const padding = 512 - (fileBytes.length % 512);
-      if (padding < 512) {
-        tarData.push(new Uint8Array(padding));
-      }
-    }
-
-    // Two empty blocks to mark end of archive
-    tarData.push(new Uint8Array(512));
-    tarData.push(new Uint8Array(512));
-
-    // Concatenate all parts
-    const totalLength = tarData.reduce((sum, arr) => sum + arr.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const arr of tarData) {
-      result.set(arr, offset);
-      offset += arr.length;
-    }
-
-    return result;
-  };
-
   const uploadFiles = async (api: any) => {
     if (!api || api.acceptedFiles.length === 0) return;
 
-    isUploading.value = true;
     uploadError.value = "";
     uploadSuccess.value = "";
 
-    try {
-      // Create tar archive
-      const tarData = await createTarArchive(api.acceptedFiles);
-
-      const metadata = create(UploadGameServerFilesMetadataSchema, {
-        gameServerId: props.gameServerId,
-        destinationPath: props.destinationPath || "/",
-        files: api.acceptedFiles.map((f: File) => ({
-          name: f.name,
-          size: BigInt(f.size),
-          isDirectory: false,
-          path: f.name,
+    const files = api.acceptedFiles.slice();
+    // Ensure grand total is up-to-date in case upload was triggered without a recent filesAccepted event
+    totalBytesToUpload.value = files.reduce((acc: number, f: File) => acc + f.size, 0);
+    
+    // Create abort controller for cancellation
+    const abortController = new AbortController();
+    
+    // Initialize node upload progress if node is provided
+    if (props.destinationNode) {
+      props.destinationNode.uploadProgress = {
+        isUploading: true,
+        bytesUploaded: 0,
+        totalBytes: totalBytesToUpload.value,
+        fileCount: files.length,
+        files: files.map((f: File) => ({
+          fileName: f.name,
+          bytesUploaded: 0,
+          totalBytes: f.size,
+          percentComplete: 0,
         })),
-        volumeName: props.volumeName,
-      });
+        onCancel: () => {
+          abortController.abort();
+          toast.info("Upload cancelled", "Stopping upload...");
+        },
+      };
+    }
 
-      // Create single non-streaming request with all data
-      const request = create(UploadGameServerFilesRequestSchema, {
-        metadata: metadata,
-        tarData: new Uint8Array(tarData),
-      });
+    // Show toast with initial progress
+    const progressToastId = toast.loading(
+      `Uploading ${files.length} file(s)...`,
+      "0% complete"
+    );
 
-      // Call the upload RPC with a single request (non-streaming)
-      const response = await client.uploadGameServerFiles(request);
+    try {
+      let uploadedFilesCount = 0;
 
-      if (response.success) {
-        uploadSuccess.value = `Successfully uploaded ${response.filesUploaded} file(s)`;
-        emit("uploaded", api.acceptedFiles);
-        api.clearFiles();
-        rejectedFiles.value = [];
+      // Upload files sequentially with progress tracking
+      for (const file of files) {
+        if (abortController.signal.aborted) {
+          throw new Error("Upload cancelled");
+        }
 
-        // Clear success message after 3 seconds
-        setTimeout(() => {
-          uploadSuccess.value = "";
-        }, 3000);
-      } else {
-        uploadError.value = response.error || "Upload failed";
+        progressMap.value[file.name] = { bytesUploaded: 0, totalBytes: file.size, percentComplete: 0 };
+
+        const success = await uploadFile(file, {
+          gameServerId: props.gameServerId,
+          destinationPath: props.destinationPath || "/",
+          volumeName: props.volumeName,
+          abortSignal: abortController.signal,
+          onProgress: (progress) => {
+            progressMap.value[file.name] = {
+              bytesUploaded: progress.bytesUploaded,
+              totalBytes: progress.totalBytes,
+              percentComplete: progress.percentComplete,
+            };
+            
+            // Update individual file progress in node
+            if (props.destinationNode?.uploadProgress) {
+              const fileProgress = props.destinationNode.uploadProgress.files.find(f => f.fileName === file.name);
+              if (fileProgress) {
+                fileProgress.bytesUploaded = progress.bytesUploaded;
+                fileProgress.percentComplete = progress.percentComplete;
+              }
+            }
+            
+            // Calculate total uploaded across all files
+            const totalUploaded = completedBytes.value + 
+              Object.values(progressMap.value).reduce((acc, p) => acc + p.bytesUploaded, 0);
+            
+            // Update node progress
+            if (props.destinationNode?.uploadProgress) {
+              props.destinationNode.uploadProgress.bytesUploaded = totalUploaded;
+            }
+            
+            // Update toast progress
+            const percent = Math.round((totalUploaded / totalBytesToUpload.value) * 100);
+            toast.update(
+              progressToastId,
+              `Uploading ${files.length} file(s)...`,
+              `${percent}% complete`
+            );
+          },
+          onFileComplete: () => {
+            uploadedFilesCount += 1;
+            // Mark file as completed: add its bytes to completedBytes
+            completedBytes.value += file.size;
+            
+            // Mark file as complete in node progress
+            if (props.destinationNode?.uploadProgress) {
+              const fileProgress = props.destinationNode.uploadProgress.files.find(f => f.fileName === file.name);
+              if (fileProgress) {
+                fileProgress.percentComplete = 100;
+                fileProgress.bytesUploaded = fileProgress.totalBytes;
+              }
+            }
+            
+            // Ensure UI shows 100% for a short time, then remove entry
+            progressMap.value[file.name] = {
+              bytesUploaded: file.size,
+              totalBytes: file.size,
+              percentComplete: 100,
+            };
+            setTimeout(() => {
+              delete progressMap.value[file.name];
+              // Remove file from node progress list
+              if (props.destinationNode?.uploadProgress) {
+                props.destinationNode.uploadProgress.files = props.destinationNode.uploadProgress.files.filter(f => f.fileName !== file.name);
+              }
+            }, 1500);
+          },
+        });
+
+        if (!success) {
+          throw new Error(error.value || "Upload failed");
+        }
       }
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      uploadError.value = error.message || "Failed to upload files";
-    } finally {
-      isUploading.value = false;
+
+      // Clear node progress
+      if (props.destinationNode) {
+        props.destinationNode.uploadProgress = undefined;
+      }
+      
+      // Dismiss loading toast and show success
+      toast.dismiss(progressToastId);
+      toast.success(
+        "Files uploaded successfully",
+        `${uploadedFilesCount} file(s) uploaded to ${props.destinationPath || '/'}`
+      );
+      
+      emit("uploaded", api.acceptedFiles);
+      api.clearFiles();
+      rejectedFiles.value = [];
+
+      // reset overall tracking
+      totalBytesToUpload.value = 0;
+      completedBytes.value = 0;
+      progressMap.value = {} as typeof progressMap.value;
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      uploadError.value = err.message || "Failed to upload files";
+      
+      // Clear node progress
+      if (props.destinationNode) {
+        props.destinationNode.uploadProgress = undefined;
+      }
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(progressToastId);
+      
+      if (abortController.signal.aborted || err.message === "Upload cancelled") {
+        toast.info("Upload cancelled", "Upload was stopped");
+      } else {
+        toast.error("Upload Error", err.message || "Failed to upload files");
+      }
     }
   };
 </script>
+
+<style scoped>
+  .selected-files-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--oui-border-default);
+  }
+
+  .selected-file-item {
+    border: none !important;
+    background: var(--oui-surface-base);
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .selected-file-item-first {
+    border-top-left-radius: 6px !important;
+    border-top-right-radius: 6px !important;
+  }
+
+  .selected-file-item-last {
+    border-bottom-left-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+  }
+
+  /* Handle multi-row grids - add rounded corners to edges */
+  .selected-file-item:nth-last-child(-n + 4) {
+    border-bottom-left-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+  }
+
+  .selected-file-item:nth-child(4n + 1) {
+    border-top-left-radius: 6px !important;
+    border-bottom-left-radius: 6px !important;
+  }
+
+  .selected-file-item:nth-child(4n) {
+    border-top-right-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+  }
+</style>

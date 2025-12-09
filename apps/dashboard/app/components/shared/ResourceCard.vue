@@ -103,11 +103,7 @@
 
           <!-- Resources Skeleton - Use actual resource structure -->
           <slot name="resources">
-            <OuiGrid
-              :cols="{ sm: resources.length }"
-              v-if="resources && resources.length > 0"
-              gap="sm"
-            >
+            <OuiGrid :cols="gridCols" v-if="resources && resources.length > 0" gap="sm">
               <OuiBox
                 v-for="(resource, idx) in resources"
                 :key="idx"
@@ -218,11 +214,7 @@
 
           <!-- Resources / Custom Content -->
           <slot name="resources">
-            <OuiGrid
-              :cols="{ sm: resources.length }"
-              v-if="resources && resources.length > 0"
-              gap="sm"
-            >
+              <OuiGrid :cols="gridCols" v-if="resources && resources.length > 0" gap="sm">
               <OuiBox
                 v-for="(resource, idx) in resources"
                 :key="idx"
@@ -356,6 +348,13 @@
       router.push(props.detailUrl);
     }
   };
+
+  // Compute Grid columns in a type-safe way for OuiGrid
+  const gridCols = computed(() => {
+    const count = props.resources ? props.resources.length : 0;
+    const sm = (count > 0 ? Math.min(4, count) : 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+    return { base: 1 as const, sm };
+  });
 </script>
 
 <style scoped>

@@ -87,6 +87,9 @@ const (
 	// GameServerServiceUploadGameServerFilesProcedure is the fully-qualified name of the
 	// GameServerService's UploadGameServerFiles RPC.
 	GameServerServiceUploadGameServerFilesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/UploadGameServerFiles"
+	// GameServerServiceChunkUploadGameServerFilesProcedure is the fully-qualified name of the
+	// GameServerService's ChunkUploadGameServerFiles RPC.
+	GameServerServiceChunkUploadGameServerFilesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/ChunkUploadGameServerFiles"
 	// GameServerServiceDeleteGameServerEntriesProcedure is the fully-qualified name of the
 	// GameServerService's DeleteGameServerEntries RPC.
 	GameServerServiceDeleteGameServerEntriesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/DeleteGameServerEntries"
@@ -165,6 +168,9 @@ type GameServerServiceClient interface {
 	GetGameServerFile(context.Context, *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error)
 	// Upload files to a game server container or volume
 	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
+	// Chunk-based file upload that streams without buffering large payloads in memory.
+	// Clients send a single unary request with file data split into chunks.
+	ChunkUploadGameServerFiles(context.Context, *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error)
 	// Delete files or directories from a game server
 	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)
 	// Create a file, directory, or symlink in a game server
@@ -311,6 +317,12 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("UploadGameServerFiles")),
 			connect.WithClientOptions(opts...),
 		),
+		chunkUploadGameServerFiles: connect.NewClient[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse](
+			httpClient,
+			baseURL+GameServerServiceChunkUploadGameServerFilesProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("ChunkUploadGameServerFiles")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteGameServerEntries: connect.NewClient[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse](
 			httpClient,
 			baseURL+GameServerServiceDeleteGameServerEntriesProcedure,
@@ -406,6 +418,7 @@ type gameServerServiceClient struct {
 	searchGameServerFiles       *connect.Client[v1.SearchGameServerFilesRequest, v1.SearchGameServerFilesResponse]
 	getGameServerFile           *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
 	uploadGameServerFiles       *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
+	chunkUploadGameServerFiles  *connect.Client[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse]
 	deleteGameServerEntries     *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
 	createGameServerEntry       *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
 	writeGameServerFile         *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
@@ -510,6 +523,12 @@ func (c *gameServerServiceClient) GetGameServerFile(ctx context.Context, req *co
 // UploadGameServerFiles calls obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles.
 func (c *gameServerServiceClient) UploadGameServerFiles(ctx context.Context, req *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error) {
 	return c.uploadGameServerFiles.CallUnary(ctx, req)
+}
+
+// ChunkUploadGameServerFiles calls
+// obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles.
+func (c *gameServerServiceClient) ChunkUploadGameServerFiles(ctx context.Context, req *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error) {
+	return c.chunkUploadGameServerFiles.CallUnary(ctx, req)
 }
 
 // DeleteGameServerEntries calls
@@ -618,6 +637,9 @@ type GameServerServiceHandler interface {
 	GetGameServerFile(context.Context, *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error)
 	// Upload files to a game server container or volume
 	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
+	// Chunk-based file upload that streams without buffering large payloads in memory.
+	// Clients send a single unary request with file data split into chunks.
+	ChunkUploadGameServerFiles(context.Context, *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error)
 	// Delete files or directories from a game server
 	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)
 	// Create a file, directory, or symlink in a game server
@@ -759,6 +781,12 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("UploadGameServerFiles")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gameServerServiceChunkUploadGameServerFilesHandler := connect.NewUnaryHandler(
+		GameServerServiceChunkUploadGameServerFilesProcedure,
+		svc.ChunkUploadGameServerFiles,
+		connect.WithSchema(gameServerServiceMethods.ByName("ChunkUploadGameServerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
 	gameServerServiceDeleteGameServerEntriesHandler := connect.NewUnaryHandler(
 		GameServerServiceDeleteGameServerEntriesProcedure,
 		svc.DeleteGameServerEntries,
@@ -869,6 +897,8 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceGetGameServerFileHandler.ServeHTTP(w, r)
 		case GameServerServiceUploadGameServerFilesProcedure:
 			gameServerServiceUploadGameServerFilesHandler.ServeHTTP(w, r)
+		case GameServerServiceChunkUploadGameServerFilesProcedure:
+			gameServerServiceChunkUploadGameServerFilesHandler.ServeHTTP(w, r)
 		case GameServerServiceDeleteGameServerEntriesProcedure:
 			gameServerServiceDeleteGameServerEntriesHandler.ServeHTTP(w, r)
 		case GameServerServiceCreateGameServerEntryProcedure:
@@ -972,6 +1002,10 @@ func (UnimplementedGameServerServiceHandler) GetGameServerFile(context.Context, 
 
 func (UnimplementedGameServerServiceHandler) UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) ChunkUploadGameServerFiles(context.Context, *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles is not implemented"))
 }
 
 func (UnimplementedGameServerServiceHandler) DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error) {

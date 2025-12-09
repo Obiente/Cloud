@@ -311,6 +311,7 @@
             <FileUploader
               :game-server-id="gameServerId"
               :destination-path="currentDirectory"
+              :destination-node="currentDirectoryNode"
               :volume-name="
                 source.type === 'volume' ? source.volumeName : undefined
               "
@@ -551,6 +552,7 @@
   import ZipPreview from "~/components/shared/ZipPreview.vue";
   import FolderOverview from "~/components/shared/FolderOverview.vue";
   import { useMultiSelect } from "~/composables/useMultiSelect";
+  import { useStreamingUpload } from "~/composables/useStreamingUpload";
 
   const props = defineProps<{
     gameServerId: string;
@@ -558,8 +560,13 @@
 
   const route = useRoute();
   const router = useRouter();
+  const { uploadFile, isUploading: isStreamUploading, error: uploadError } = useStreamingUpload();
 
   const showUpload = ref(false);
+  const isDragDropUploading = ref(false);
+  const dragDropProgressMap = ref<Record<string, { bytesUploaded: number; totalBytes: number; percentComplete: number; speedBytesPerSec?: number }>>({});
+  const dragDropCompletedBytes = ref(0);
+  const dragDropTotalBytes = ref(0);
   const hasMounted = ref(false);
   const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
   const isLoadingFile = ref(false); // Track if a file load is in progress
@@ -845,6 +852,16 @@
       return parent?.path || "/";
     }
     return explorer.root.path || "/";
+  });
+
+  const currentDirectoryNode = computed((): ExplorerNode | undefined => {
+    if (currentNode.value?.type === "directory") {
+      return currentNode.value;
+    }
+    if (currentNode.value?.type === "file") {
+      return findNode(currentNode.value.parentPath || "/") ?? undefined;
+    }
+    return explorer.root;
   });
 
   function handleSwitchSource(type: "container" | "volume", name?: string) {
@@ -2383,46 +2400,149 @@
     if (filesToUpload.length === 0) return;
 
     const destinationPath = node.path || "/";
+    isDragDropUploading.value = true;
+    dragDropProgressMap.value = {};
+    dragDropCompletedBytes.value = 0;
+    dragDropTotalBytes.value = filesToUpload.reduce((acc, f) => acc + f.size, 0);
+
+    // Create abort controller for cancellation
+    const abortController = new AbortController();
+
+    // Initialize node upload progress with file tracking
+    node.uploadProgress = {
+      isUploading: true,
+      bytesUploaded: 0,
+      totalBytes: dragDropTotalBytes.value,
+      fileCount: filesToUpload.length,
+      files: filesToUpload.map(f => ({
+        fileName: f.name,
+        bytesUploaded: 0,
+        totalBytes: f.size,
+        percentComplete: 0,
+      })),
+      onCancel: () => {
+        abortController.abort();
+        toast.info("Upload cancelled", "Stopping upload...");
+      },
+    };
+
+    // Show toast with initial progress
+    const progressToastId = toast.loading(
+      `Uploading ${filesToUpload.length} file(s)...`,
+      "0% complete"
+    );
 
     try {
-      // Create tar archive
-      const tarData = await createTarArchive(filesToUpload);
-
-      // Call the upload using the client adapter
-      const response = await fileBrowserClient.uploadFiles({
-        destinationPath: destinationPath,
-        tarData: new Uint8Array(tarData),
-        files: filesToUpload.map((f: File) => ({
-          name: f.name,
-          size: f.size,
-          isDirectory: false,
-          path: f.name,
-        })),
-        volumeName: source.type === "volume" ? source.volumeName : undefined,
-      });
-
-      if (response.success) {
-        // Refresh the directory where files were uploaded
-        const dirNode = findNode(destinationPath);
-        if (dirNode && dirNode.type === "directory") {
-          await loadChildren(dirNode);
-        } else {
-          // Fallback to root if directory not found
-          await refreshRoot();
+      let uploadedCount = 0;
+      for (const file of filesToUpload) {
+        if (abortController.signal.aborted) {
+          throw new Error("Upload cancelled");
         }
-        toast.success(
-          "Files uploaded successfully",
-          `${filesToUpload.length} file(s) uploaded to ${destinationPath}`
-        );
+
+        dragDropProgressMap.value[file.name] = {
+          bytesUploaded: 0,
+          totalBytes: file.size,
+          percentComplete: 0,
+        };
+
+        const success = await uploadFile(file, {
+          gameServerId: props.gameServerId,
+          destinationPath,
+          volumeName: source.type === "volume" ? source.volumeName : undefined,
+          abortSignal: abortController.signal,
+          onProgress: (progress) => {
+            dragDropProgressMap.value[file.name] = {
+              bytesUploaded: progress.bytesUploaded,
+              totalBytes: progress.totalBytes,
+              percentComplete: progress.percentComplete,
+              speedBytesPerSec: progress.speedBytesPerSec,
+            };
+            
+            // Update individual file progress in node
+            const fileProgress = node.uploadProgress?.files.find(f => f.fileName === file.name);
+            if (fileProgress) {
+              fileProgress.bytesUploaded = progress.bytesUploaded;
+              fileProgress.percentComplete = progress.percentComplete;
+            }
+            
+            // Update overall node progress
+            const totalUploaded = dragDropCompletedBytes.value + 
+              Object.values(dragDropProgressMap.value).reduce((acc, p) => acc + p.bytesUploaded, 0);
+            
+            if (node.uploadProgress) {
+              node.uploadProgress.bytesUploaded = totalUploaded;
+            }
+            
+            // Update toast progress
+            const percent = Math.round((totalUploaded / dragDropTotalBytes.value) * 100);
+            toast.update(
+              progressToastId,
+              `Uploading ${filesToUpload.length} file(s)...`,
+              `${percent}% complete`
+            );
+          },
+          onFileComplete: () => {
+            uploadedCount++;
+            dragDropCompletedBytes.value += file.size;
+            
+            // Mark file as complete in node progress
+            const fileProgress = node.uploadProgress?.files.find(f => f.fileName === file.name);
+            if (fileProgress) {
+              fileProgress.percentComplete = 100;
+              fileProgress.bytesUploaded = fileProgress.totalBytes;
+            }
+            
+            setTimeout(() => {
+              delete dragDropProgressMap.value[file.name];
+              // Remove file from node progress list
+              if (node.uploadProgress) {
+                node.uploadProgress.files = node.uploadProgress.files.filter(f => f.fileName !== file.name);
+              }
+            }, 1500);
+          },
+        });
+
+        if (!success) {
+          throw new Error(uploadError.value || "Upload failed");
+        }
+      }
+
+      // Clear node progress
+      node.uploadProgress = undefined;
+      
+      // Dismiss loading toast and show success
+      toast.dismiss(progressToastId);
+      toast.success(
+        "Files uploaded successfully",
+        `${uploadedCount} file(s) uploaded to ${destinationPath}`
+      );
+      
+      // Refresh the directory where files were uploaded
+      const dirNode = findNode(destinationPath);
+      if (dirNode && dirNode.type === "directory") {
+        await loadChildren(dirNode);
       } else {
-        toast.error(
-          "Upload Failed",
-          response.error || "Failed to upload files"
-        );
+        await refreshRoot();
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      toast.error("Upload Error", error.message || "Failed to upload files");
+      
+      // Clear node progress
+      node.uploadProgress = undefined;
+      
+      // Dismiss loading toast and show error
+      toast.dismiss(progressToastId);
+      
+      if (abortController.signal.aborted || error.message === "Upload cancelled") {
+        toast.info("Upload cancelled", "Upload was stopped");
+      } else {
+        toast.error("Upload Error", error.message || "Failed to upload files");
+      }
+    } finally {
+      isDragDropUploading.value = false;
+      dragDropProgressMap.value = {};
+      dragDropCompletedBytes.value = 0;
+      dragDropTotalBytes.value = 0;
     }
   }
 

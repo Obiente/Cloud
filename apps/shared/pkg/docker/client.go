@@ -644,6 +644,77 @@ func (c *Client) ContainerUploadFiles(ctx context.Context, containerID, destPath
 	return nil
 }
 
+// ContainerUploadFromTar uploads a tar stream directly to a container path using Docker Copy API.
+// The provided tarReader will be streamed directly to Docker without buffering the entire tar in memory.
+func (c *Client) ContainerUploadFromTar(ctx context.Context, containerID, destPath string, tarReader io.Reader) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+
+	if !strings.HasPrefix(destPath, "/") {
+		destPath = "/" + destPath
+	}
+
+	if _, err := c.api.CopyToContainer(ctx, containerID, client.CopyToContainerOptions{
+		DestinationPath: destPath,
+		Content:         tarReader,
+	}); err != nil {
+		return fmt.Errorf("copy to container: %w", err)
+	}
+	return nil
+}
+
+// UploadVolumeFromTar extracts a tar stream directly into a host volume path without buffering whole files in memory.
+func (c *Client) UploadVolumeFromTar(volumePath string, tarReader io.Reader) error {
+	// Ensure the volume path exists
+	if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+		return fmt.Errorf("volume path does not exist: %s", volumePath)
+	}
+
+	tr := tar.NewReader(tarReader)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("reading tar: %w", err)
+		}
+
+		// Skip directories
+		if hdr.Typeflag == tar.TypeDir {
+			continue
+		}
+
+		// Construct destination path inside volume
+		dest := filepath.Join(volumePath, filepath.Clean(hdr.Name))
+
+		// Ensure path stays within volume
+		resolved, err := resolvePathWithinVolume(volumePath, dest)
+		if err != nil {
+			return fmt.Errorf("invalid tar entry path: %w", err)
+		}
+
+		dir := filepath.Dir(resolved)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create directory: %w", err)
+		}
+
+		// Create file and stream copy
+		f, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode))
+		if err != nil {
+			return fmt.Errorf("create file: %w", err)
+		}
+		if _, err := io.CopyN(f, tr, hdr.Size); err != nil && err != io.EOF {
+			f.Close()
+			return fmt.Errorf("write file: %w", err)
+		}
+		f.Close()
+	}
+
+	return nil
+}
+
 func (c *Client) ContainerRemoveEntries(ctx context.Context, containerID string, paths []string, recursive, force bool) error {
 	if c == nil || c.api == nil {
 		return ErrUninitialized

@@ -1,5 +1,12 @@
 export type ExplorerEntryType = "directory" | "file" | "symlink";
 
+export interface FileUploadProgress {
+  fileName: string;
+  bytesUploaded: number;
+  totalBytes: number;
+  percentComplete: number;
+}
+
 export interface ExplorerNode {
   id: string;
   name: string;
@@ -21,6 +28,15 @@ export interface ExplorerNode {
   hasMore: boolean;
   nextCursor: string | null;
   isExpanded: boolean;
+  // Upload progress tracking
+  uploadProgress?: {
+    isUploading: boolean;
+    bytesUploaded: number;
+    totalBytes: number;
+    fileCount: number;
+    files: FileUploadProgress[];
+    onCancel?: () => void;
+  };
 }
 
 

@@ -58,7 +58,7 @@
 
     <template #resources>
       <!-- Skeleton for resources -->
-      <OuiGrid :cols="{ sm: resources.length }" v-if="loading" gap="sm">
+      <OuiGrid :cols="gridCols" v-if="loading" gap="sm">
         <OuiBox
           v-for="(resource, idx) in resources"
           :key="idx"
@@ -86,7 +86,7 @@
       </OuiGrid>
 
       <!-- Actual resources content -->
-      <OuiGrid :cols="{ sm: resources.length }" v-else gap="sm">
+      <OuiGrid :cols="gridCols" v-else gap="sm">
         <OuiBox
           v-for="(resource, idx) in resources"
           :key="idx"
@@ -272,6 +272,13 @@
         value: getMemoryBytesValue(props.gameServer.memoryBytes),
       },
     ];
+  });
+
+  // Compute Grid columns in a type-safe way for OuiGrid
+  const gridCols = computed(() => {
+    const count = resources.value ? resources.value.length : 0;
+    const sm = (count > 0 ? Math.min(4, count) : 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+    return { base: 1, sm } as const;
   });
 
   const handleStart = async () => {

@@ -176,6 +176,7 @@ func RegisterGameServerServiceProcedures() {
 		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerMetrics":    "GetGameServerMetrics",
 		"/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerMetrics": "StreamGameServerMetrics",
 		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerUsage":      "GetGameServerUsage",
+		"/obiente.cloud.gameservers.v1.GameServerService/ChunkUploadGameServerFiles": "ChunkUploadGameServerFiles",
 	}
 
 	RegisterServiceProcedures("GameServerService", procedures, public)
