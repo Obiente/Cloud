@@ -23,8 +23,12 @@ permissions:
 
 jobs:
   build-and-push-notifications-service:
-    name: Build and Push Notifications Service
+    name: Build and Push Notifications Service (${{ matrix.platform }})
     runs-on: self-hosted
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+      fail-fast: false
     env:
       REGISTRY: ghcr.io
       SERVICE_NAME: notifications-service
@@ -80,7 +84,7 @@ jobs:
           echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build and push Notifications Service Docker image (attempt 1)
+      - name: Build and push Notifications Service Docker image (${{ matrix.platform }}) - attempt 1
         id: build-attempt-1
         uses: docker/build-push-action@v5
         continue-on-error: true
@@ -88,17 +92,21 @@ jobs:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }},mode=max
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Notifications Service Docker image (attempt 2)
+      - name: Build and push Notifications Service Docker image (${{ matrix.platform }}) - attempt 2
         if: steps.build-attempt-1.outcome == 'failure'
         id: build-attempt-2
         uses: docker/build-push-action@v5
@@ -107,30 +115,35 @@ jobs:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-to: type=gha,mode=max,compression=zstd
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Notifications Service Docker image (attempt 3)
+      - name: Build and push Notifications Service Docker image (${{ matrix.platform }}) - attempt 3
         if: steps.build-attempt-2.outcome == 'failure'
+        id: build-attempt-3
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          cache-to: type=gha,mode=max,compression=zstd
+          platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 

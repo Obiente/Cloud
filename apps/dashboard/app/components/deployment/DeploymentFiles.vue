@@ -355,7 +355,7 @@
             v-if="showUpload"
             class="h-full flex items-center justify-center p-8"
           >
-            <DeploymentFileUploader
+            <FileUploader
               :deploymentId="deploymentId"
               :destinationPath="currentDirectory"
               :volumeName="
@@ -583,7 +583,7 @@
   } from "@ark-ui/vue/collection";
   import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
   import FileBrowserSearch from "../shared/FileBrowserSearch.vue";
-  import DeploymentFileUploader from "./DeploymentFileUploader.vue";
+  import FileUploader from "./FileUploader.vue";
   import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import OuiMenuItem from "~/components/oui/MenuItem.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";

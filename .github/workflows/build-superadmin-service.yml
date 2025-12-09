@@ -94,7 +94,7 @@ jobs:
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -113,7 +113,7 @@ jobs:
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -130,7 +130,7 @@ jobs:
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
 

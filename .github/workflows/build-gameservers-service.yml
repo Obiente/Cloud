@@ -101,12 +101,14 @@ jobs:
           build-args: |
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
-      - name: Build and push Gameservers Service Docker image (${{ matrix.platform }}) - attempt 2
+      - name: Build and push GameServers Service Docker image (${{ matrix.platform }}) - attempt 2
         if: steps.build-attempt-1.outcome == 'failure'
         id: build-attempt-2
         uses: docker/build-push-action@v5
@@ -123,7 +125,7 @@ jobs:
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -143,7 +145,7 @@ jobs:
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 

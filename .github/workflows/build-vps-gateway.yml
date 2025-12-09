@@ -100,10 +100,12 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VPS_GATEWAY_COMMIT=${{ github.sha }}
-            VPS_GATEWAY_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            COMMIT=${{ github.sha }}
+            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -124,7 +126,7 @@ jobs:
             VPS_GATEWAY_COMMIT=${{ github.sha }}
             VPS_GATEWAY_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -144,7 +146,7 @@ jobs:
             VPS_GATEWAY_COMMIT=${{ github.sha }}
             VPS_GATEWAY_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max,compression=zstd
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
