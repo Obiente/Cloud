@@ -26,6 +26,8 @@
     selectedPath: string | null;
     selectedNodes?: Set<string>;
     allowEditing?: boolean;
+    siblings?: ExplorerNode[];
+    siblingIndex?: number;
   }>();
 
   const emit = defineEmits<{
@@ -40,55 +42,169 @@
   const isDirectory = computed(() => props.node.type === "directory" || !!props.node.children?.length);
   const isSymlink = computed(() => props.node.type === "symlink");
   const isExpanded = computed(() => !!props.node.isExpanded);
-  const isSelected = computed(() => {
+
+  // Track descendants that are selected; apply styling only when the folder is open
+  const hasSelectedDescendant = computed(() => {
+    if (!props.selectedNodes || props.selectedNodes.size === 0) return false;
+    const base = props.node.path === "/" ? "/" : props.node.path + "/";
+    for (const path of props.selectedNodes) {
+      if (path !== props.node.path && path.startsWith(base)) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  const hasInheritedDescendantSelected = computed(() => {
+    if (!isExpanded.value) return false;
+
+    // If any explicit descendant is selected, inherit the grouping state
+    if (hasSelectedDescendant.value) return true;
+
+    // When this node is explicitly selected and has children, its open
+    // children are inherited-selected even if they are not explicitly selected
+    if (isExplicitSelected.value && (props.node.children?.length ?? 0) > 0) {
+      return true;
+    }
+
+    return false;
+  });
+
+  const hasSelectedAncestor = computed(() => {
+    if (!props.selectedNodes || props.selectedNodes.size === 0) return false;
+    const segments = props.node.path.split('/').filter(Boolean);
+    let current = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      current += '/' + segments[i];
+      if (props.selectedNodes.has(current || '/')) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  const isExplicitSelected = computed(() => {
     if (props.selectedNodes) {
-      return props.selectedNodes.has(props.node.path);
+      const selfSelected = props.selectedNodes.has(props.node.path);
+      return selfSelected && !hasSelectedAncestor.value;
     }
     return props.selectedPath === props.node.path;
   });
+
+  const isSelected = computed(() => isExplicitSelected.value || hasSelectedAncestor.value);
+  const isInheritedSelected = computed(() => hasSelectedAncestor.value && !isExplicitSelected.value);
   const depth = computed(() => Math.max(props.indexPath.length, 1));
   const iconPadding = computed(() => `${(depth.value - 1) * 14 + 4}px`);
 
   // Detect if this is the first or last selected node in a continuous sequence
   // This works by checking if there are selected siblings before/after this node
   const selectedSiblingsInfo = computed(() => {
-    // Not selected: no position in a group
-    if (!isSelected.value) {
+    if (!isExplicitSelected.value) {
       return { isFirst: false, isLast: false };
     }
 
-    // No multi-select set provided, or only one selected: treat as both first and last
+    const isPathSelected = (path?: string | null) => {
+      if (!path) return false;
+      if (props.selectedNodes) return props.selectedNodes.has(path);
+      return props.selectedPath === path;
+    };
+
+    // Prefer explicit sibling order when provided
+    if (props.siblings && typeof props.siblingIndex === "number") {
+      const siblings = props.siblings;
+      const idx = props.siblingIndex;
+      const prevSelected = idx > 0 && isPathSelected(siblings[idx - 1]?.path);
+      const nextSelected = idx < siblings.length - 1 && isPathSelected(siblings[idx + 1]?.path);
+
+      return {
+        isFirst: !prevSelected,
+        isLast: !nextSelected,
+      };
+    }
+
+    // Fallback: if no sibling info, keep single selection rounded; multi-set only marks outermost
     if (!props.selectedNodes || props.selectedNodes.size <= 1) {
       return { isFirst: true, isLast: true };
     }
-    
+
     // Get parent path
     const nodePathSegments = props.node.path.split('/').filter(s => s);
     const parentPath = '/' + (nodePathSegments.slice(0, -1).join('/'));
-    
-    // Get all selected paths as array
-    const allSelectedPaths = Array.from(props.selectedNodes);
-    
-    // Find selected siblings (same parent) and sort by path
-    const selectedSiblings = allSelectedPaths
+
+    const selectedSiblings = Array.from(props.selectedNodes)
       .filter(path => {
         const segments = path.split('/').filter(s => s);
         const sParent = '/' + (segments.slice(0, -1).join('/'));
         return sParent === parentPath;
       })
-      .sort();
-    
-    const isFirst = selectedSiblings.length > 1 && selectedSiblings[0] === props.node.path;
-    const isLast = selectedSiblings.length > 1 && selectedSiblings[selectedSiblings.length - 1] === props.node.path;
-    
+      .sort((a, b) => a.localeCompare(b));
+
+    if (selectedSiblings.length === 1) {
+      return { isFirst: true, isLast: true };
+    }
+
+    const pos = selectedSiblings.indexOf(props.node.path);
     return {
-      isFirst,
-      isLast
+      isFirst: pos === 0,
+      isLast: pos === selectedSiblings.length - 1,
     };
   });
 
   const isFirstSelected = computed(() => selectedSiblingsInfo.value.isFirst);
   const isLastSelected = computed(() => selectedSiblingsInfo.value.isLast);
+
+  // Inherited selection grouping: round the bottom of the last inherited child for a softer end cap
+  const inheritedSiblingsInfo = computed(() => {
+    if (!isInheritedSelected.value) {
+      return { isLast: false };
+    }
+
+    const isPathInheritedSelected = (path?: string) => {
+      if (!path || !props.selectedNodes || props.selectedNodes.size === 0) return false;
+      const segments = path.split('/').filter(Boolean);
+      let current = '';
+      for (let i = 0; i < segments.length - 1; i++) {
+        current += '/' + segments[i];
+        if (props.selectedNodes.has(current || '/')) {
+          // If the node itself is explicitly selected, it's not inherited-selected
+          return !props.selectedNodes.has(path);
+        }
+      }
+      return false;
+    };
+
+    if (props.siblings && typeof props.siblingIndex === "number") {
+      const siblings = props.siblings;
+      const idx = props.siblingIndex;
+      const nextSibling = siblings[idx + 1];
+      const nextIsInherited = isPathInheritedSelected(nextSibling?.path);
+      return { isLast: !nextIsInherited };
+    }
+
+    if (props.selectedNodes && props.selectedNodes.size > 0) {
+      const nodePathSegments = props.node.path.split('/').filter(s => s);
+      const parentPath = '/' + (nodePathSegments.slice(0, -1).join('/'));
+
+      const selectedSiblings = Array.from(props.selectedNodes)
+        .filter(path => {
+          const segments = path.split('/').filter(s => s);
+          const sParent = '/' + (segments.slice(0, -1).join('/'));
+          return sParent === parentPath;
+        })
+        .sort();
+
+      if (selectedSiblings.length === 0) {
+        return { isLast: true };
+      }
+
+      const pos = selectedSiblings.indexOf(props.node.path);
+      return { isLast: pos === selectedSiblings.length - 1 };
+    }
+
+    return { isLast: true };
+  });
+
+  const isLastInheritedSelected = computed(() => inheritedSiblingsInfo.value.isLast);
 
   const menuSections = computed(() => {
     const sections: Array<{
@@ -406,6 +522,7 @@
         class="tree-node"
         :class="{
           'is-selected': isSelected,
+          'is-inherited-selected': isInheritedSelected,
           'is-first-selected': isFirstSelected,
           'is-last-selected': isLastSelected,
           'is-directory': true,
@@ -421,15 +538,34 @@
         <TreeView.BranchTrigger
           :style="{ 
             paddingLeft: iconPadding,
-            borderTopLeftRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderTopRightRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderBottomLeftRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderBottomRightRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomLeftRadius: isInheritedSelected
+              ? (isLastInheritedSelected ? '6px' : '0px')
+              : isSelected && hasInheritedDescendantSelected
+              ? '0px'
+              : isLastSelected
+              ? '6px'
+              : isSelected
+              ? '0px'
+              : undefined,
+            borderBottomRightRadius: isInheritedSelected
+              ? (isLastInheritedSelected ? '6px' : '0px')
+              : isSelected && hasInheritedDescendantSelected
+              ? '0px'
+              : isLastSelected
+              ? '6px'
+              : isSelected
+              ? '0px'
+              : undefined,
           }"
           class="tree-trigger"
           :class="{ 
             'is-dragging-over': isDraggingOver,
             'is-selected': isSelected,
+            'is-inherited-selected': isInheritedSelected,
+            'has-inherited-selected-children': hasInheritedDescendantSelected,
+            'is-last-inherited': isLastInheritedSelected,
             'is-first-selected': isFirstSelected,
             'is-last-selected': isLastSelected,
           }"
@@ -560,6 +696,8 @@
               :key="child.id"
               :node="child"
               :indexPath="[...props.indexPath, idx]"
+              :siblings="node.children"
+              :siblingIndex="idx"
               :selectedPath="selectedPath"
               :selectedNodes="selectedNodes"
               :allowEditing="props.allowEditing ?? true"
@@ -588,6 +726,7 @@
         class="tree-node"
         :class="{
           'is-selected': isSelected,
+          'is-inherited-selected': isInheritedSelected,
           'is-first-selected': isFirstSelected,
           'is-last-selected': isLastSelected,
           'is-loading': node.isLoading,
@@ -596,14 +735,33 @@
         <div
           :style="{ 
             paddingLeft: iconPadding,
-            borderTopLeftRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderTopRightRadius: isFirstSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderBottomLeftRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
-            borderBottomRightRadius: isLastSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopLeftRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderTopRightRadius: isFirstSelected && !isInheritedSelected ? '6px' : isSelected ? '0px' : undefined,
+            borderBottomLeftRadius: isInheritedSelected
+              ? (isLastInheritedSelected ? '6px' : '0px')
+              : isSelected && hasInheritedDescendantSelected
+              ? '0px'
+              : isLastSelected
+              ? '6px'
+              : isSelected
+              ? '0px'
+              : undefined,
+            borderBottomRightRadius: isInheritedSelected
+              ? (isLastInheritedSelected ? '6px' : '0px')
+              : isSelected && hasInheritedDescendantSelected
+              ? '0px'
+              : isLastSelected
+              ? '6px'
+              : isSelected
+              ? '0px'
+              : undefined,
           }"
           class="tree-trigger"
           :class="{ 
             'is-selected': isSelected,
+            'is-inherited-selected': isInheritedSelected,
+            'has-inherited-selected-children': hasInheritedDescendantSelected,
+            'is-last-inherited': isLastInheritedSelected,
             'is-first-selected': isFirstSelected,
             'is-last-selected': isLastSelected,
           }"
@@ -692,30 +850,30 @@
   }
 
   /* Selection styling - only apply to the direct trigger of the selected node */
-  .tree-node.is-selected > .tree-trigger,
-  .tree-node.is-selected > TreeView.BranchTrigger {
+  .tree-node.is-selected:not(.is-inherited-selected) > .tree-trigger,
+  .tree-node.is-selected:not(.is-inherited-selected) > TreeView.BranchTrigger {
     position: relative;
     background: var(--oui-surface-selected) !important;
     border: none !important;
     color: var(--oui-text-primary);
     margin-bottom: -1px;
-    border-radius: 0;
+    border-radius: 0; /* Reset border radius to 0 */
   }
 
-  .tree-node.is-selected > .tree-trigger::before,
-  .tree-node.is-selected > TreeView.BranchTrigger::before {
+  .tree-node.is-selected:not(.is-inherited-selected) > .tree-trigger::before,
+  .tree-node.is-selected:not(.is-inherited-selected) > TreeView.BranchTrigger::before {
     content: '';
     position: absolute;
     inset: 0;
     background: var(--oui-accent-primary);
     opacity: 0.12;
     pointer-events: none;
-    border-radius: 0;
+    border-radius: 0; /* Reset border radius to 0 */
     z-index: 0;
   }
 
   /* Base selection (both file + branch) */
-  .tree-trigger.is-selected {
+  .tree-trigger.is-selected:not(.is-inherited-selected) {
     position: relative;
     background: var(--oui-surface-selected) !important;
     border: none !important;
@@ -723,7 +881,7 @@
     margin-bottom: -1px;
   }
 
-  .tree-trigger.is-selected::before {
+  .tree-trigger.is-selected:not(.is-inherited-selected)::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -735,76 +893,123 @@
   }
 
   /* Single selection: round all corners */
-  .tree-trigger.is-selected.is-first-selected.is-last-selected {
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected.is-last-selected {
     border-radius: 6px;
   }
 
-  .tree-trigger.is-selected.is-first-selected.is-last-selected::before {
+  .tree-trigger.is-selected.has-inherited-selected-children.is-first-selected.is-last-selected {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected.is-last-selected::before {
     border-radius: 4px;
   }
 
+  .tree-trigger.is-selected.has-inherited-selected-children.is-first-selected.is-last-selected::before {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
   /* Multi-selection grouping (items) */
-  .tree-trigger.is-selected.is-first-selected:not(.is-last-selected) {
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected:not(.is-last-selected) {
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
 
-  .tree-trigger.is-selected.is-last-selected:not(.is-first-selected) {
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-last-selected:not(.is-first-selected) {
     border-bottom-left-radius: 6px;
     border-bottom-right-radius: 6px;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
 
-  .tree-trigger.is-selected:not(.is-first-selected):not(.is-last-selected) {
+  .tree-trigger.is-selected:not(.is-inherited-selected):not(.is-first-selected):not(.is-last-selected) {
     border-radius: 0;
   }
 
   /* Match overlay rounding to item rounding */
-  .tree-trigger.is-selected.is-first-selected:not(.is-last-selected)::before {
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-first-selected:not(.is-last-selected)::before {
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
 
-  .tree-trigger.is-selected.is-last-selected:not(.is-first-selected)::before {
+  .tree-trigger.is-selected:not(.is-inherited-selected).is-last-selected:not(.is-first-selected)::before {
     border-bottom-left-radius: 4px;
     border-bottom-right-radius: 4px;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
 
-  .tree-trigger.is-selected:not(.is-first-selected):not(.is-last-selected)::before {
+  .tree-trigger.is-selected:not(.is-inherited-selected):not(.is-first-selected):not(.is-last-selected)::before {
     border-radius: 0;
   }
 
-  /* Ensure children don't inherit selection styling - be very specific */
-  .tree-node.is-selected .tree-children-wrapper,
-  .tree-node.is-selected .tree-children-wrapper .tree-node,
-  .tree-node.is-selected .tree-children-wrapper .tree-node .tree-trigger,
-  .tree-node.is-selected TreeView.BranchContent .tree-node,
-  .tree-node.is-selected TreeView.BranchContent .tree-node .tree-trigger {
-    background: transparent !important;
-    border: none !important;
+  /* Muted overlay for descendants of a selected folder (without overriding their own selection) */
+  .tree-node.is-inherited-selected > .tree-trigger,
+  .tree-node.is-inherited-selected > TreeView.BranchTrigger,
+  .tree-trigger.is-inherited-selected {
+    position: relative;
+    background: var(--oui-surface-selected);
+    color: var(--oui-text-secondary);
+    opacity: 0.6;
+    border: none;
+    border-radius: 0;
   }
 
-  .tree-node.is-selected .tree-children-wrapper .tree-node .tree-trigger::before,
-  .tree-node.is-selected TreeView.BranchContent .tree-node .tree-trigger::before {
-    display: none !important;
+  .tree-trigger.is-inherited-selected.is-last-inherited {
+    border-bottom-left-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+  }
+
+  .tree-trigger.is-inherited-selected.is-last-inherited::before {
+    border-bottom-left-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+  }
+
+  .tree-trigger.is-inherited-selected.is-last-inherited.has-inherited-selected-children {
+    border-bottom-left-radius: 6px !important;
+    border-bottom-right-radius: 6px !important;
+  }
+
+  .tree-trigger.is-inherited-selected.is-last-inherited.has-inherited-selected-children::before {
+    border-bottom-left-radius: 4px !important;
+    border-bottom-right-radius: 4px !important;
+  }
+
+  .tree-node.is-inherited-selected > .tree-trigger:hover,
+  .tree-node.is-inherited-selected > TreeView.BranchTrigger:hover,
+  .tree-trigger.is-inherited-selected:hover {
+    background: var(--oui-surface-selected);
+    opacity: 0.65;
+  }
+
+  .tree-node.is-inherited-selected > .tree-trigger::before,
+  .tree-node.is-inherited-selected > TreeView.BranchTrigger::before,
+  .tree-trigger.is-inherited-selected::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--oui-accent-primary);
+    opacity: 0.05;
+    pointer-events: none;
+    border-radius: 0;
+    z-index: 0;
   }
 
   /* Ensure selection styling takes priority over directory/expanded states */
 
   /* Ensure selection styling takes priority over directory/expanded states */
-  .tree-node.is-selected.is-directory > .tree-trigger,
-  .tree-node.is-selected.is-directory > TreeView.BranchTrigger,
-  .tree-node.is-selected[data-state="open"] > .tree-trigger,
-  .tree-node.is-selected[data-state="open"] > TreeView.BranchTrigger,
-  .tree-node.is-selected[data-state="closed"] > .tree-trigger,
-  .tree-node.is-selected[data-state="closed"] > TreeView.BranchTrigger {
+  .tree-node.is-selected:not(.is-inherited-selected).is-directory > .tree-trigger,
+  .tree-node.is-selected:not(.is-inherited-selected).is-directory > TreeView.BranchTrigger,
+  .tree-node.is-selected:not(.is-inherited-selected)[data-state="open"] > .tree-trigger,
+  .tree-node.is-selected:not(.is-inherited-selected)[data-state="open"] > TreeView.BranchTrigger,
+  .tree-node.is-selected:not(.is-inherited-selected)[data-state="closed"] > .tree-trigger,
+  .tree-node.is-selected:not(.is-inherited-selected)[data-state="closed"] > TreeView.BranchTrigger {
     background: var(--oui-surface-selected) !important;
     border: none !important;
   }
@@ -944,23 +1149,23 @@
     z-index: 0;
   }
 
-  .tree-node.is-selected > .tree-trigger:hover,
-  .tree-node.is-selected > TreeView.BranchTrigger:hover {
+  .tree-node.is-selected:not(.is-inherited-selected) > .tree-trigger:hover,
+  .tree-node.is-selected:not(.is-inherited-selected) > TreeView.BranchTrigger:hover {
     background: var(--oui-surface-selected) !important;
     border: none !important;
   }
 
-  .tree-node.is-selected > .tree-trigger:hover::before,
-  .tree-node.is-selected > TreeView.BranchTrigger:hover::before {
+  .tree-node.is-selected:not(.is-inherited-selected) > .tree-trigger:hover::before,
+  .tree-node.is-selected:not(.is-inherited-selected) > TreeView.BranchTrigger:hover::before {
     opacity: 0.12;
   }
 
-  .tree-trigger.is-selected:hover {
+  .tree-trigger.is-selected:not(.is-inherited-selected):hover {
     background: var(--oui-surface-selected) !important;
     border: none !important;
   }
 
-  .tree-trigger.is-selected:hover::before {
+  .tree-trigger.is-selected:not(.is-inherited-selected):hover::before {
     opacity: 0.12;
   }
 

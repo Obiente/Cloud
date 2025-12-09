@@ -14,6 +14,32 @@ export interface MultiSelectOptions {
 export function useMultiSelect(options: MultiSelectOptions) {
   const { selectedNodes, lastSelectedIndex, visibleNodes } = options;
 
+  function collectNodeAndDescendants(node: ExplorerNode): string[] {
+    const paths: string[] = [];
+    const stack: ExplorerNode[] = [node];
+
+    while (stack.length) {
+      const current = stack.pop();
+      if (!current) continue;
+      if (current.path && current.path !== "/") {
+        paths.push(current.path);
+      }
+      if (current.children?.length) {
+        stack.push(...current.children);
+      }
+    }
+
+    return paths;
+  }
+
+  function addNodeWithDescendants(node: ExplorerNode) {
+    collectNodeAndDescendants(node).forEach(path => selectedNodes.value.add(path));
+  }
+
+  function removeNodeWithDescendants(node: ExplorerNode) {
+    collectNodeAndDescendants(node).forEach(path => selectedNodes.value.delete(path));
+  }
+
   /**
    * Get all visible nodes in a flat array (for range selection)
    */
@@ -81,13 +107,13 @@ export function useMultiSelect(options: MultiSelectOptions) {
 
     if (event.ctrlKey || event.metaKey) {
       console.log("[useMultiSelect] Ctrl/Cmd+Click detected");
-      // Ctrl/Cmd+Click: Toggle selection
+      // Ctrl/Cmd+Click: Toggle selection (node + descendants)
       if (selectedNodes.value.has(node.path)) {
-        console.log("[useMultiSelect] Removing from selection");
-        selectedNodes.value.delete(node.path);
+        console.log("[useMultiSelect] Removing from selection (with descendants)");
+        removeNodeWithDescendants(node);
       } else {
-        console.log("[useMultiSelect] Adding to selection");
-        selectedNodes.value.add(node.path);
+        console.log("[useMultiSelect] Adding to selection (with descendants)");
+        addNodeWithDescendants(node);
       }
       lastSelectedIndex.value = nodeIndex;
     } else if (event.shiftKey && lastSelectedIndex.value !== null) {
@@ -102,7 +128,7 @@ export function useMultiSelect(options: MultiSelectOptions) {
       for (let i = start; i <= end; i++) {
         const rangeNode = visibleNodes.value[i];
         if (rangeNode && rangeNode.path !== "/") {
-          selectedNodes.value.add(rangeNode.path);
+          addNodeWithDescendants(rangeNode);
         }
       }
       // Don't update lastSelectedIndex for range selection
@@ -110,7 +136,7 @@ export function useMultiSelect(options: MultiSelectOptions) {
       console.log("[useMultiSelect] Normal click, clearing and selecting single node");
       // Normal click: Clear selection and select only this node
       selectedNodes.value.clear();
-      selectedNodes.value.add(node.path);
+      addNodeWithDescendants(node);
       lastSelectedIndex.value = nodeIndex;
     }
 
@@ -177,6 +203,8 @@ export function useMultiSelect(options: MultiSelectOptions) {
     getSelectedPaths,
     selectNodes,
     getAllVisibleNodes,
+    addNodeWithDescendants,
+    removeNodeWithDescendants,
   };
 }
 

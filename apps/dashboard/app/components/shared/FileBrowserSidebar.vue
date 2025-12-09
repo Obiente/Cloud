@@ -172,6 +172,8 @@
                 :key="child.id"
                 :node="child"
                 :indexPath="[idx]"
+                :siblings="root.children"
+                :siblingIndex="idx"
                 :selectedPath="selectedPath"
                 :selectedNodes="selectedNodes"
                 :allowEditing="allowEditing"
