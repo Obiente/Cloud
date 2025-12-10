@@ -8,9 +8,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 
@@ -342,12 +342,12 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 
 	// Get metrics streamer for live streaming
 	metricsStreamer := orchestrator.GetGlobalMetricsStreamer()
-	
+
 	// If streamer is available, use live streaming (much more efficient)
 	if metricsStreamer != nil {
 		return s.streamLiveMetrics(ctx, stream, deploymentID, targetContainerID, shouldAggregate)
 	}
-	
+
 	// Fallback to database polling if streamer is not available
 	intervalSeconds := int(req.Msg.GetIntervalSeconds())
 	if intervalSeconds <= 0 {
@@ -465,7 +465,7 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				query := `SELECT MAX(timestamp) as max_timestamp FROM deployment_metrics WHERE deployment_id = $1`
 				args := []interface{}{deploymentID}
 				argIndex := 2
-				
+
 				if targetContainerID != "" {
 					query += ` AND container_id = $` + fmt.Sprintf("%d", argIndex)
 					args = append(args, targetContainerID)
@@ -476,11 +476,11 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 					args = append(args, lastSentTimestamp)
 					argIndex++
 				}
-				
+
 				if err := metricsDB.Raw(query, args...).Scan(&timestampValue).Error; err == nil && !timestampValue.IsZero() {
 					latestTimestamp = &timestampValue
 				}
-				
+
 				if latestTimestamp != nil && !latestTimestamp.IsZero() {
 					// Get all metrics at that timestamp
 					if err := metricsDB.Where("deployment_id = ? AND timestamp = ?", deploymentID, *latestTimestamp).
@@ -569,6 +569,13 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				}
 
 				if err := stream.Send(metric); err != nil {
+					// Log the error with context
+					log.Printf("[StreamDeploymentMetrics] Error sending metric stream: %v", err)
+					// Check if it's a context cancellation
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					// For other errors, return them
 					return err
 				}
 			}
@@ -605,7 +612,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
-	
+
 	// Parse requested month for historical queries
 	requestedMonthStart := monthStart
 	if month != now.Format("2006-01") {
@@ -664,12 +671,12 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			ErrorCount        int64
 		}
 		var recentUsage recentMetric
-		
+
 		// Calculate CPU and Memory from raw metrics (grouped by timestamp)
 		type metricTimestamp struct {
-			CPUUsage    float64
-			MemorySum   int64
-			Timestamp   time.Time
+			CPUUsage  float64
+			MemorySum int64
+			Timestamp time.Time
 		}
 		var metricTimestamps []metricTimestamp
 		metricsDB.Table("deployment_metrics dm").
@@ -682,7 +689,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			Group("dm.timestamp").
 			Order("dm.timestamp ASC").
 			Scan(&metricTimestamps)
-		
+
 		// Calculate byte-seconds from timestamped metrics
 		metricInterval := int64(5)
 		if len(metricTimestamps) > 0 {
@@ -696,7 +703,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			}
 			recentUsage.CPUCoreSeconds += int64((metricTimestamps[0].CPUUsage / 100.0) * float64(firstInterval))
 			recentUsage.MemoryByteSeconds += metricTimestamps[0].MemorySum * firstInterval
-			
+
 			// Subsequent timestamps: use actual interval between timestamps
 			// For each interval from timestamps[i-1] to timestamps[i], use memory[i-1] (the value at the start of the interval)
 			for i := 1; i < len(metricTimestamps); i++ {
@@ -729,7 +736,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + recentUsage.BandwidthTxBytes
 		currentRequestCount = recentUsage.RequestCount
 		currentErrorCount = recentUsage.ErrorCount
-		
+
 		// Get storage from deployments table
 		var storage struct {
 			StorageBytes int64
@@ -739,7 +746,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			Where("id = ?", deploymentID).
 			Scan(&storage)
 		currentStorageBytes = storage.StorageBytes
-		
+
 		// Calculate uptime from deployment_locations
 		var uptime struct {
 			UptimeSeconds int64
@@ -776,12 +783,12 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			`).
 			Where("duh.deployment_id = ? AND duh.hour >= ? AND duh.hour <= ?", deploymentID, requestedMonthStart, monthEnd).
 			Scan(&hourlyUsage)
-		
+
 		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds
 		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds
 		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes
-		
+
 		// Get request/error counts from raw metrics for the month
 		var reqCount struct {
 			RequestCount int64
@@ -796,7 +803,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			Scan(&reqCount)
 		currentRequestCount = reqCount.RequestCount
 		currentErrorCount = reqCount.ErrorCount
-		
+
 		// Get storage from deployments table (historical snapshot not available, use current)
 		var storage struct {
 			StorageBytes int64
@@ -806,7 +813,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			Where("id = ?", deploymentID).
 			Scan(&storage)
 		currentStorageBytes = storage.StorageBytes
-		
+
 		// Calculate uptime from deployment_locations for historical month
 		var uptime struct {
 			UptimeSeconds int64
@@ -822,7 +829,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 					END
 				))), 0)::bigint as uptime_seconds
 			`, monthEnd, monthEnd, monthEnd, requestedMonthStart, monthEnd, monthEnd).
-			Where("dl.deployment_id = ? AND ((dl.created_at >= ? AND dl.created_at <= ?) OR (dl.updated_at >= ? AND dl.updated_at <= ?))", 
+			Where("dl.deployment_id = ? AND ((dl.created_at >= ? AND dl.created_at <= ?) OR (dl.updated_at >= ? AND dl.updated_at <= ?))",
 				deploymentID, requestedMonthStart, monthEnd, requestedMonthStart, monthEnd).
 			Scan(&uptime)
 		currentUptimeSeconds = uptime.UptimeSeconds
@@ -875,14 +882,14 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 	// Calculate estimated cost using centralized pricing model
 	pricingModel := pricing.GetPricing()
 	estBandwidthBytes := estimatedMonthly.BandwidthRxBytes + estimatedMonthly.BandwidthTxBytes
-	
+
 	// Calculate per-resource costs for estimated monthly
 	estCPUCost := pricingModel.CalculateCPUCost(estimatedMonthly.CpuCoreSeconds)
 	estMemoryCost := pricingModel.CalculateMemoryCost(estimatedMonthly.MemoryByteSeconds)
 	estBandwidthCost := pricingModel.CalculateBandwidthCost(estBandwidthBytes)
 	estStorageCost := pricingModel.CalculateStorageCost(estimatedMonthly.StorageBytes) // Full month for estimate
 	estimatedMonthly.EstimatedCostCents = estCPUCost + estMemoryCost + estBandwidthCost + estStorageCost
-	
+
 	// Set per-resource cost breakdown for estimated monthly
 	cpuCostPtr := int64(estCPUCost)
 	memoryCostPtr := int64(estMemoryCost)
@@ -899,7 +906,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 	// Bandwidth is one-time cost per byte transferred, no prorating needed
 	// Storage is monthly cost per byte, so must prorate based on elapsed time
 	currBandwidthBytes := currentBandwidthRxBytes + currentBandwidthTxBytes
-	
+
 	// Calculate elapsed ratio for storage prorating
 	var elapsedRatio float64
 	if month == now.Format("2006-01") {
@@ -910,7 +917,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		// Historical month: use full month (1.0) for prorating
 		elapsedRatio = 1.0
 	}
-	
+
 	// Calculate per-resource costs for current usage (using live calculated values)
 	currCPUCost := pricingModel.CalculateCPUCost(currentCPUCoreSeconds)
 	currMemoryCost := pricingModel.CalculateMemoryCost(currentMemoryByteSeconds)
@@ -928,9 +935,9 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		RequestCount:       currentRequestCount,
 		ErrorCount:         currentErrorCount,
 		UptimeSeconds:      currentUptimeSeconds, // Uptime calculated from deployment_locations
-		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side with live data)
+		EstimatedCostCents: currentCostCents,     // Current usage cost (calculated server-side with live data)
 	}
-	
+
 	// Set per-resource cost breakdown for current usage
 	currCPUCostPtr := int64(currCPUCost)
 	currMemoryCostPtr := int64(currMemoryCost)

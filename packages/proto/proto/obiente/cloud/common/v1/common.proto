@@ -72,3 +72,24 @@ message CreateServerFileArchiveResponse {
   int32 files_archived = 4; // Number of files archived
 }
 
+// ChunkedUploadPayload standardizes chunked file uploads across resources (gameservers, deployments, etc.)
+// Resource-specific services should wrap this in their own requests alongside resource identifiers.
+message ChunkedUploadPayload {
+  string destination_path = 1; // Directory path where files should be extracted (default: "/")
+  optional string volume_name = 2; // Optional target volume instead of container filesystem
+  string file_name = 3; // Name of the file being uploaded
+  int64 file_size = 4; // Total size of the complete file (for validation)
+  int32 chunk_index = 5; // 0-based index of this chunk
+  int32 total_chunks = 6; // Total number of chunks for this file
+  bytes chunk_data = 7; // Raw file data for this chunk
+  optional string file_mode = 8; // File permissions (e.g., "0644"), optional
+}
+
+// ChunkedUploadResponsePayload represents the result of processing a single chunk.
+message ChunkedUploadResponsePayload {
+  bool success = 1;
+  optional string error = 2;
+  string file_name = 3; // Name of the uploaded file
+  int64 bytes_received = 4; // Total bytes received for this file so far
+}
+

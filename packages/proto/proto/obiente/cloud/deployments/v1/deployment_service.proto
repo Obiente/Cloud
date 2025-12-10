@@ -181,6 +181,9 @@ service DeploymentService {
   // Upload files to a deployment container
   rpc UploadContainerFiles(UploadContainerFilesRequest) returns (UploadContainerFilesResponse);
 
+  // Chunk-based file upload for deployment containers using shared payloads
+  rpc ChunkUploadContainerFiles(ChunkUploadContainerFilesRequest) returns (ChunkUploadContainerFilesResponse);
+
   // Delete one or more files/directories in a deployment container
   rpc DeleteContainerEntries(DeleteContainerEntriesRequest) returns (DeleteContainerEntriesResponse);
 
@@ -649,6 +652,19 @@ message UploadContainerFilesResponse {
   bool success = 1;
   optional string error = 2;
   int32 files_uploaded = 3; // Number of files successfully uploaded
+}
+
+// Chunked upload for deployments using shared payload for consistency with other services.
+message ChunkUploadContainerFilesRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  obiente.cloud.common.v1.ChunkedUploadPayload upload = 3;
+  optional string container_id = 4; // Optional: target a specific container
+  optional string service_name = 5; // Optional: target a specific service (ignored if container_id provided)
+}
+
+message ChunkUploadContainerFilesResponse {
+  obiente.cloud.common.v1.ChunkedUploadResponsePayload result = 1;
 }
 
 enum ContainerEntryType {

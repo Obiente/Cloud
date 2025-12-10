@@ -538,6 +538,177 @@ func (x *CreateServerFileArchiveResponse) GetFilesArchived() int32 {
 	return 0
 }
 
+// ChunkedUploadPayload standardizes chunked file uploads across resources (gameservers, deployments, etc.)
+// Resource-specific services should wrap this in their own requests alongside resource identifiers.
+type ChunkedUploadPayload struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	DestinationPath string                 `protobuf:"bytes,1,opt,name=destination_path,json=destinationPath,proto3" json:"destination_path,omitempty"` // Directory path where files should be extracted (default: "/")
+	VolumeName      *string                `protobuf:"bytes,2,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`          // Optional target volume instead of container filesystem
+	FileName        string                 `protobuf:"bytes,3,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`                      // Name of the file being uploaded
+	FileSize        int64                  `protobuf:"varint,4,opt,name=file_size,json=fileSize,proto3" json:"file_size,omitempty"`                     // Total size of the complete file (for validation)
+	ChunkIndex      int32                  `protobuf:"varint,5,opt,name=chunk_index,json=chunkIndex,proto3" json:"chunk_index,omitempty"`               // 0-based index of this chunk
+	TotalChunks     int32                  `protobuf:"varint,6,opt,name=total_chunks,json=totalChunks,proto3" json:"total_chunks,omitempty"`            // Total number of chunks for this file
+	ChunkData       []byte                 `protobuf:"bytes,7,opt,name=chunk_data,json=chunkData,proto3" json:"chunk_data,omitempty"`                   // Raw file data for this chunk
+	FileMode        *string                `protobuf:"bytes,8,opt,name=file_mode,json=fileMode,proto3,oneof" json:"file_mode,omitempty"`                // File permissions (e.g., "0644"), optional
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ChunkedUploadPayload) Reset() {
+	*x = ChunkedUploadPayload{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChunkedUploadPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChunkedUploadPayload) ProtoMessage() {}
+
+func (x *ChunkedUploadPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChunkedUploadPayload.ProtoReflect.Descriptor instead.
+func (*ChunkedUploadPayload) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ChunkedUploadPayload) GetDestinationPath() string {
+	if x != nil {
+		return x.DestinationPath
+	}
+	return ""
+}
+
+func (x *ChunkedUploadPayload) GetVolumeName() string {
+	if x != nil && x.VolumeName != nil {
+		return *x.VolumeName
+	}
+	return ""
+}
+
+func (x *ChunkedUploadPayload) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ChunkedUploadPayload) GetFileSize() int64 {
+	if x != nil {
+		return x.FileSize
+	}
+	return 0
+}
+
+func (x *ChunkedUploadPayload) GetChunkIndex() int32 {
+	if x != nil {
+		return x.ChunkIndex
+	}
+	return 0
+}
+
+func (x *ChunkedUploadPayload) GetTotalChunks() int32 {
+	if x != nil {
+		return x.TotalChunks
+	}
+	return 0
+}
+
+func (x *ChunkedUploadPayload) GetChunkData() []byte {
+	if x != nil {
+		return x.ChunkData
+	}
+	return nil
+}
+
+func (x *ChunkedUploadPayload) GetFileMode() string {
+	if x != nil && x.FileMode != nil {
+		return *x.FileMode
+	}
+	return ""
+}
+
+// ChunkedUploadResponsePayload represents the result of processing a single chunk.
+type ChunkedUploadResponsePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	FileName      string                 `protobuf:"bytes,3,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`                 // Name of the uploaded file
+	BytesReceived int64                  `protobuf:"varint,4,opt,name=bytes_received,json=bytesReceived,proto3" json:"bytes_received,omitempty"` // Total bytes received for this file so far
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChunkedUploadResponsePayload) Reset() {
+	*x = ChunkedUploadResponsePayload{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChunkedUploadResponsePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChunkedUploadResponsePayload) ProtoMessage() {}
+
+func (x *ChunkedUploadResponsePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChunkedUploadResponsePayload.ProtoReflect.Descriptor instead.
+func (*ChunkedUploadResponsePayload) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ChunkedUploadResponsePayload) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ChunkedUploadResponsePayload) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *ChunkedUploadResponsePayload) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ChunkedUploadResponsePayload) GetBytesReceived() int64 {
+	if x != nil {
+		return x.BytesReceived
+	}
+	return 0
+}
+
 var File_obiente_cloud_common_v1_common_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
@@ -590,6 +761,27 @@ const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01\x12!\n" +
 	"\farchive_path\x18\x03 \x01(\tR\varchivePath\x12%\n" +
 	"\x0efiles_archived\x18\x04 \x01(\x05R\rfilesArchivedB\b\n" +
+	"\x06_error\"\xc4\x02\n" +
+	"\x14ChunkedUploadPayload\x12)\n" +
+	"\x10destination_path\x18\x01 \x01(\tR\x0fdestinationPath\x12$\n" +
+	"\vvolume_name\x18\x02 \x01(\tH\x00R\n" +
+	"volumeName\x88\x01\x01\x12\x1b\n" +
+	"\tfile_name\x18\x03 \x01(\tR\bfileName\x12\x1b\n" +
+	"\tfile_size\x18\x04 \x01(\x03R\bfileSize\x12\x1f\n" +
+	"\vchunk_index\x18\x05 \x01(\x05R\n" +
+	"chunkIndex\x12!\n" +
+	"\ftotal_chunks\x18\x06 \x01(\x05R\vtotalChunks\x12\x1d\n" +
+	"\n" +
+	"chunk_data\x18\a \x01(\fR\tchunkData\x12 \n" +
+	"\tfile_mode\x18\b \x01(\tH\x01R\bfileMode\x88\x01\x01B\x0e\n" +
+	"\f_volume_nameB\f\n" +
+	"\n" +
+	"_file_mode\"\xa1\x01\n" +
+	"\x1cChunkedUploadResponsePayload\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01\x12\x1b\n" +
+	"\tfile_name\x18\x03 \x01(\tR\bfileName\x12%\n" +
+	"\x0ebytes_received\x18\x04 \x01(\x03R\rbytesReceivedB\b\n" +
 	"\x06_error*\x8c\x01\n" +
 	"\bLogLevel\x12\x19\n" +
 	"\x15LOG_LEVEL_UNSPECIFIED\x10\x00\x12\x13\n" +
@@ -612,7 +804,7 @@ func file_obiente_cloud_common_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_common_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_obiente_cloud_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_obiente_cloud_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_obiente_cloud_common_v1_common_proto_goTypes = []any{
 	(LogLevel)(0),                           // 0: obiente.cloud.common.v1.LogLevel
 	(*Pagination)(nil),                      // 1: obiente.cloud.common.v1.Pagination
@@ -621,11 +813,13 @@ var file_obiente_cloud_common_v1_common_proto_goTypes = []any{
 	(*ExtractServerFileResponse)(nil),       // 4: obiente.cloud.common.v1.ExtractServerFileResponse
 	(*CreateServerFileArchiveRequest)(nil),  // 5: obiente.cloud.common.v1.CreateServerFileArchiveRequest
 	(*CreateServerFileArchiveResponse)(nil), // 6: obiente.cloud.common.v1.CreateServerFileArchiveResponse
-	(*timestamppb.Timestamp)(nil),           // 7: google.protobuf.Timestamp
+	(*ChunkedUploadPayload)(nil),            // 7: obiente.cloud.common.v1.ChunkedUploadPayload
+	(*ChunkedUploadResponsePayload)(nil),    // 8: obiente.cloud.common.v1.ChunkedUploadResponsePayload
+	(*timestamppb.Timestamp)(nil),           // 9: google.protobuf.Timestamp
 }
 var file_obiente_cloud_common_v1_common_proto_depIdxs = []int32{
-	7, // 0: obiente.cloud.common.v1.VPSSize.created_at:type_name -> google.protobuf.Timestamp
-	7, // 1: obiente.cloud.common.v1.VPSSize.updated_at:type_name -> google.protobuf.Timestamp
+	9, // 0: obiente.cloud.common.v1.VPSSize.created_at:type_name -> google.protobuf.Timestamp
+	9, // 1: obiente.cloud.common.v1.VPSSize.updated_at:type_name -> google.protobuf.Timestamp
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -642,13 +836,15 @@ func file_obiente_cloud_common_v1_common_proto_init() {
 	file_obiente_cloud_common_v1_common_proto_msgTypes[2].OneofWrappers = []any{}
 	file_obiente_cloud_common_v1_common_proto_msgTypes[3].OneofWrappers = []any{}
 	file_obiente_cloud_common_v1_common_proto_msgTypes[5].OneofWrappers = []any{}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[6].OneofWrappers = []any{}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_common_v1_common_proto_rawDesc), len(file_obiente_cloud_common_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

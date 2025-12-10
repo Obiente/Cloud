@@ -169,7 +169,7 @@ type GameServerServiceClient interface {
 	// Upload files to a game server container or volume
 	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
 	// Chunk-based file upload that streams without buffering large payloads in memory.
-	// Clients send a single unary request with file data split into chunks.
+	// Uses shared chunk payload for consistency across resources.
 	ChunkUploadGameServerFiles(context.Context, *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error)
 	// Delete files or directories from a game server
 	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)
@@ -638,7 +638,7 @@ type GameServerServiceHandler interface {
 	// Upload files to a game server container or volume
 	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
 	// Chunk-based file upload that streams without buffering large payloads in memory.
-	// Clients send a single unary request with file data split into chunks.
+	// Uses shared chunk payload for consistency across resources.
 	ChunkUploadGameServerFiles(context.Context, *connect.Request[v1.ChunkUploadGameServerFilesRequest]) (*connect.Response[v1.ChunkUploadGameServerFilesResponse], error)
 	// Delete files or directories from a game server
 	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)

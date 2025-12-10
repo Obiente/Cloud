@@ -547,7 +547,7 @@
   import ZipPreview from "~/components/shared/ZipPreview.vue";
   import FolderOverview from "~/components/shared/FolderOverview.vue";
   import { useMultiSelect } from "~/composables/useMultiSelect";
-  import { useStreamingUpload } from "~/composables/useStreamingUpload";
+  import { useChunkedGameServerUpload } from "~/composables/useStreamingUpload";
   import { useUploadManager } from "~/composables/useUploadManager";
 
   const props = defineProps<{
@@ -556,7 +556,7 @@
 
   const route = useRoute();
   const router = useRouter();
-  const { uploadFile, isUploading: isStreamUploading, error: uploadError } = useStreamingUpload();
+  const { uploadFile, isUploading: isStreamUploading, error: uploadError } = useChunkedGameServerUpload();
   const uploadManager = useUploadManager();
 
   const showUpload = ref(false);

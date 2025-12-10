@@ -14,19 +14,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
-	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// ChunkUploadManager handles chunk upload session management
+var chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
+
 
 // ListContainerFiles lists files in a deployment container or volume
 func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ListContainerFilesRequest]) (*connect.Response[deploymentsv1.ListContainerFilesResponse], error) {
@@ -368,7 +374,9 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		return connect.NewResponse(resp), nil
 	}
 
-	// Otherwise, read file from container filesystem (only works if running)
+	// Otherwise, read file from container filesystem
+	// Note: We inspect the container to verify it exists, but we don't strictly require it to be "running"
+	// since Docker might report stale state. We'll attempt the read and let Docker API handle the actual state check.
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
 			// Container might have been deleted - try to refresh and find again
@@ -383,13 +391,13 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		}
 	}
 
-	if !containerInfo.State.Running {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running. Use volume_name parameter to read files from persistent volumes"))
-	}
-
-	// Read file using Docker exec (container must be running)
+	// Read file using Docker exec (attempt even if state shows not running, as state might be stale)
 	content, err := dcli.ContainerReadFile(ctx, loc.ContainerID, path)
 	if err != nil {
+		// If the read fails and container is not running, provide a more helpful error message
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running (status: %s). Use volume_name parameter to read files from persistent volumes", containerInfo.State.Status))
+		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
 	}
 
@@ -443,10 +451,16 @@ func (s *Service) UploadContainerFiles(ctx context.Context, req *connect.Request
 	}
 
 	// Get deployment locations
-	// Validate and refresh locations to ensure we have valid container IDs
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
+	// Try to get all locations first (including stopped containers)
+	// This matches the behavior of ListContainerFiles and allows uploads to containers that may not be marked as running
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		// Fallback to validate and refresh if we don't have any locations
+		// This will discover containers from Docker and register them
+		locations, err = database.ValidateAndRefreshLocations(deploymentID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
+		}
 	}
 	if len(locations) == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
@@ -556,6 +570,149 @@ func (s *Service) UploadContainerFiles(ctx context.Context, req *connect.Request
 		Success:       true,
 		FilesUploaded: int32(len(files)),
 	}), nil
+}
+
+// ChunkUploadContainerFiles handles chunked uploads for container files
+func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ChunkUploadContainerFilesRequest]) (*connect.Response[deploymentsv1.ChunkUploadContainerFilesResponse], error) {
+	msg := req.Msg
+	deploymentID := msg.GetDeploymentId()
+	orgID := msg.GetOrganizationId()
+
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentUpdate, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	// Extract upload payload
+	upload := msg.GetUpload()
+
+	// Validate upload payload using shared validator
+	if err := chunkupload.ValidatePayload(upload); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Get or create session
+	sess, err := chunkUploadManager.GetOrCreateSession(deploymentID, upload)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Store the chunk
+	_, err = chunkUploadManager.StoreChunk(deploymentID, upload, upload.ChunkIndex)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	bytesReceived := sess.BytesReceived
+
+	// Check if this is the last chunk
+	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
+	allChunksReceived := chunkUploadManager.IsComplete(deploymentID, upload.FileName, upload.TotalChunks)
+
+	resp := &deploymentsv1.ChunkUploadContainerFilesResponse{
+		Result: &commonv1.ChunkedUploadResponsePayload{
+			Success:       true,
+			FileName:      upload.FileName,
+			BytesReceived: bytesReceived,
+		},
+	}
+
+	// If this is the last chunk and we have all chunks, assemble and upload
+	if isLastChunk && allChunksReceived {
+		if err := s.uploadAssembledContainerFile(ctx, deploymentID, upload); err != nil {
+			resp.Result.Success = false
+			errorMsg := fmt.Sprintf("failed to upload assembled file: %v", err)
+			resp.Result.Error = &errorMsg
+			return connect.NewResponse(resp), nil
+		}
+
+		// Clean up the session after successful upload
+		chunkUploadManager.RemoveSession(deploymentID, upload.FileName)
+	}
+
+	return connect.NewResponse(resp), nil
+}
+
+// uploadAssembledContainerFile assembles all chunks from the session and uploads the complete file
+func (s *Service) uploadAssembledContainerFile(ctx context.Context, deploymentID string, upload *commonv1.ChunkedUploadPayload) error {
+	// Assemble file from chunks using shared manager
+	completeData, err := chunkUploadManager.AssembleChunks(deploymentID, upload.FileName, upload.TotalChunks)
+	if err != nil {
+		return err
+	}
+
+	if int64(len(completeData)) != upload.FileSize {
+		return fmt.Errorf("assembled file size mismatch: expected %d, got %d", upload.FileSize, len(completeData))
+	}
+
+	// Create docker client
+	dcli, err := docker.New()
+	if err != nil {
+		return fmt.Errorf("docker client: %w", err)
+	}
+	defer dcli.Close()
+
+	// Find container - use first available for deployment
+	containerID := ""    // Optional from request
+	serviceName := ""    // Optional from request
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return err
+	}
+
+	// Prepare files map
+	files := map[string][]byte{
+		upload.FileName: completeData,
+	}
+
+	// Log target info for debugging
+	volumeNameStr := ""
+	if upload.VolumeName != nil {
+		volumeNameStr = *upload.VolumeName
+	}
+	log.Printf("uploadAssembledContainerFile: container=%s, destPath=%q, volumeName=%q, file=%s", loc.ContainerID, upload.DestinationPath, volumeNameStr, upload.FileName)
+
+	// If a volume name was provided, upload directly to the host volume path
+	volumeName := volumeNameStr
+
+	if volumeName != "" {
+		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
+		if err != nil {
+			return fmt.Errorf("failed to list container volumes: %w", err)
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, v := range volumes {
+			if v.Name == volumeName {
+				targetVolume = &v
+				break
+			}
+		}
+		if targetVolume == nil {
+			return fmt.Errorf("volume not found: %s", volumeName)
+		}
+
+		// Combine destination path with file names to build paths inside the volume
+		uploadFiles := make(map[string][]byte)
+		destPath := upload.DestinationPath
+		if destPath == "" {
+			destPath = "/"
+		}
+		for fname, content := range files {
+			fullPath := filepath.Join(destPath, fname)
+			uploadFiles[fullPath] = content
+		}
+
+		if err := dcli.UploadVolumeFiles(targetVolume.Source, uploadFiles); err != nil {
+			return fmt.Errorf("failed to upload to volume: %w", err)
+		}
+	} else {
+		if err := dcli.ContainerUploadFiles(ctx, loc.ContainerID, upload.DestinationPath, files); err != nil {
+			return fmt.Errorf("failed to upload to container: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // isZipFile checks if a file is a zip archive based on its name
@@ -726,16 +883,24 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 		}
 	}
 
-	if !containerInfo.State.Running {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running"))
-	}
-
+	// Note: Deleted files must be from a running container since we need to execute commands
+	// However, we don't return an error here immediately - we'll try to delete and let docker API handle the error
+	// This matches the behavior of ListContainerFiles and UploadContainerFiles which work on both running and stopped containers
+	
 	for _, p := range paths {
 		if strings.TrimSpace(p) == "" {
 			continue
 		}
 		if err := dcli.ContainerRemoveEntries(ctx, loc.ContainerID, []string{p}, recursive, force); err != nil {
-			errs = append(errs, &deploymentsv1.DeleteContainerEntriesError{Path: p, Message: err.Error()})
+			// If container is not running, provide a more user-friendly error message
+			if !containerInfo.State.Running {
+				errs = append(errs, &deploymentsv1.DeleteContainerEntriesError{
+					Path:    p,
+					Message: fmt.Sprintf("container is not running (status: %s) - cannot delete from container filesystem", containerInfo.State.Status),
+				})
+			} else {
+				errs = append(errs, &deploymentsv1.DeleteContainerEntriesError{Path: p, Message: err.Error()})
+			}
 			continue
 		}
 		deleted = append(deleted, p)
@@ -881,29 +1046,30 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 		}
 	}
 
-	if !containerInfo.State.Running {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running"))
-	}
-
+	// Attempt to create the entry - let Docker API handle state validation
+	// Container state might be stale, so we'll try the operation and provide helpful error if it fails
+	var createErr error
 	switch entryType {
 	case deploymentsv1.ContainerEntryType_CONTAINER_ENTRY_TYPE_DIRECTORY:
-		if err := dcli.ContainerCreateDirectory(ctx, loc.ContainerID, targetPath, mode); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+		createErr = dcli.ContainerCreateDirectory(ctx, loc.ContainerID, targetPath, mode)
 	case deploymentsv1.ContainerEntryType_CONTAINER_ENTRY_TYPE_FILE:
-		if err := dcli.ContainerWriteFile(ctx, loc.ContainerID, targetPath, []byte{}, mode); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+		createErr = dcli.ContainerWriteFile(ctx, loc.ContainerID, targetPath, []byte{}, mode)
 	case deploymentsv1.ContainerEntryType_CONTAINER_ENTRY_TYPE_SYMLINK:
 		target := req.Msg.GetTemplate()
 		if target == "" {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("template is required for symlink creation"))
 		}
-		if err := dcli.ContainerCreateSymlink(ctx, loc.ContainerID, target, targetPath, true); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+		createErr = dcli.ContainerCreateSymlink(ctx, loc.ContainerID, target, targetPath, true)
 	default:
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unsupported entry type"))
+	}
+
+	if createErr != nil {
+		// If the operation fails and container is not running, provide a more helpful error message
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running (status: %s)", containerInfo.State.Status))
+		}
+		return nil, connect.NewError(connect.CodeInternal, createErr)
 	}
 
 	info, err := dcli.ContainerStat(ctx, loc.ContainerID, targetPath)
@@ -1037,10 +1203,9 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 		}
 	}
 
-	if !containerInfo.State.Running {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running"))
-	}
-
+	// Attempt to read existing file info before writing
+	// Note: We don't strictly check if container is running here - we'll attempt the operation
+	// and let Docker API handle the actual state check, as container state might be stale
 	var priorInfo *docker.FileInfo
 	if !createIfMissing {
 		var statErr error
@@ -1060,6 +1225,10 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 	}
 
 	if err := dcli.ContainerWriteFile(ctx, loc.ContainerID, pathValue, content, modeToUse); err != nil {
+		// If the write fails and container is not running, provide a more helpful error message
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running (status: %s)", containerInfo.State.Status))
+		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 

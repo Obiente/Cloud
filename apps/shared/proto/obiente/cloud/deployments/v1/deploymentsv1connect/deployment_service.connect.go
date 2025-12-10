@@ -144,6 +144,9 @@ const (
 	// DeploymentServiceUploadContainerFilesProcedure is the fully-qualified name of the
 	// DeploymentService's UploadContainerFiles RPC.
 	DeploymentServiceUploadContainerFilesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UploadContainerFiles"
+	// DeploymentServiceChunkUploadContainerFilesProcedure is the fully-qualified name of the
+	// DeploymentService's ChunkUploadContainerFiles RPC.
+	DeploymentServiceChunkUploadContainerFilesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ChunkUploadContainerFiles"
 	// DeploymentServiceDeleteContainerEntriesProcedure is the fully-qualified name of the
 	// DeploymentService's DeleteContainerEntries RPC.
 	DeploymentServiceDeleteContainerEntriesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/DeleteContainerEntries"
@@ -279,6 +282,8 @@ type DeploymentServiceClient interface {
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
 	UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
+	// Chunk-based file upload for deployment containers using shared payloads
+	ChunkUploadContainerFiles(context.Context, *connect.Request[v1.ChunkUploadContainerFilesRequest]) (*connect.Response[v1.ChunkUploadContainerFilesResponse], error)
 	// Delete one or more files/directories in a deployment container
 	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
 	// Rename or move a file/directory within a deployment container
@@ -549,6 +554,12 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("UploadContainerFiles")),
 			connect.WithClientOptions(opts...),
 		),
+		chunkUploadContainerFiles: connect.NewClient[v1.ChunkUploadContainerFilesRequest, v1.ChunkUploadContainerFilesResponse](
+			httpClient,
+			baseURL+DeploymentServiceChunkUploadContainerFilesProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ChunkUploadContainerFiles")),
+			connect.WithClientOptions(opts...),
+		),
 		deleteContainerEntries: connect.NewClient[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse](
 			httpClient,
 			baseURL+DeploymentServiceDeleteContainerEntriesProcedure,
@@ -687,6 +698,7 @@ type deploymentServiceClient struct {
 	listContainerFiles              *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
 	getContainerFile                *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
 	uploadContainerFiles            *connect.Client[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
+	chunkUploadContainerFiles       *connect.Client[v1.ChunkUploadContainerFilesRequest, v1.ChunkUploadContainerFilesResponse]
 	deleteContainerEntries          *connect.Client[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse]
 	renameContainerEntry            *connect.Client[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse]
 	createContainerEntry            *connect.Client[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse]
@@ -896,6 +908,12 @@ func (c *deploymentServiceClient) UploadContainerFiles(ctx context.Context, req 
 	return c.uploadContainerFiles.CallUnary(ctx, req)
 }
 
+// ChunkUploadContainerFiles calls
+// obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles.
+func (c *deploymentServiceClient) ChunkUploadContainerFiles(ctx context.Context, req *connect.Request[v1.ChunkUploadContainerFilesRequest]) (*connect.Response[v1.ChunkUploadContainerFilesResponse], error) {
+	return c.chunkUploadContainerFiles.CallUnary(ctx, req)
+}
+
 // DeleteContainerEntries calls
 // obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries.
 func (c *deploymentServiceClient) DeleteContainerEntries(ctx context.Context, req *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error) {
@@ -1067,6 +1085,8 @@ type DeploymentServiceHandler interface {
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
 	UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
+	// Chunk-based file upload for deployment containers using shared payloads
+	ChunkUploadContainerFiles(context.Context, *connect.Request[v1.ChunkUploadContainerFilesRequest]) (*connect.Response[v1.ChunkUploadContainerFilesResponse], error)
 	// Delete one or more files/directories in a deployment container
 	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
 	// Rename or move a file/directory within a deployment container
@@ -1332,6 +1352,12 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("UploadContainerFiles")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceChunkUploadContainerFilesHandler := connect.NewUnaryHandler(
+		DeploymentServiceChunkUploadContainerFilesProcedure,
+		svc.ChunkUploadContainerFiles,
+		connect.WithSchema(deploymentServiceMethods.ByName("ChunkUploadContainerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceDeleteContainerEntriesHandler := connect.NewUnaryHandler(
 		DeploymentServiceDeleteContainerEntriesProcedure,
 		svc.DeleteContainerEntries,
@@ -1504,6 +1530,8 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetContainerFileHandler.ServeHTTP(w, r)
 		case DeploymentServiceUploadContainerFilesProcedure:
 			deploymentServiceUploadContainerFilesHandler.ServeHTTP(w, r)
+		case DeploymentServiceChunkUploadContainerFilesProcedure:
+			deploymentServiceChunkUploadContainerFilesHandler.ServeHTTP(w, r)
 		case DeploymentServiceDeleteContainerEntriesProcedure:
 			deploymentServiceDeleteContainerEntriesHandler.ServeHTTP(w, r)
 		case DeploymentServiceRenameContainerEntryProcedure:
@@ -1691,6 +1719,10 @@ func (UnimplementedDeploymentServiceHandler) GetContainerFile(context.Context, *
 
 func (UnimplementedDeploymentServiceHandler) UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ChunkUploadContainerFiles(context.Context, *connect.Request[v1.ChunkUploadContainerFilesRequest]) (*connect.Response[v1.ChunkUploadContainerFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error) {

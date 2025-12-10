@@ -355,8 +355,9 @@
             v-if="showUpload"
             class="h-full flex items-center justify-center p-8"
           >
-            <FileUploader
+            <DeploymentFileUploader
               :deploymentId="deploymentId"
+              :organizationId="organizationId"
               :destinationPath="currentDirectory"
               :volumeName="
                 source.type === 'volume' ? source.volumeName : undefined
@@ -371,7 +372,10 @@
                   ? selectedServiceName
                   : undefined
               "
+              :targetNode="uploadTargetNode"
+              :sourceObject="currentDirectory === '/' ? source : undefined"
               @uploaded="handleFilesUploaded"
+              @uploadProgress="handleUploadProgress"
             />
           </div>
           <!-- File Preview/Editor (shown when not uploading) -->
@@ -583,7 +587,7 @@
   } from "@ark-ui/vue/collection";
   import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
   import FileBrowserSearch from "../shared/FileBrowserSearch.vue";
-  import FileUploader from "./FileUploader.vue";
+  import DeploymentFileUploader from "./DeploymentFileUploader.vue";
   import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import OuiMenuItem from "~/components/oui/MenuItem.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
@@ -898,6 +902,14 @@
       return parent?.path || "/";
     }
     return explorer.root.path || "/";
+  });
+
+  const uploadTargetNode = computed(() => {
+    // Always return the directory node (root for "/" paths)
+    if (currentDirectory.value === "/") {
+      return explorer.root;
+    }
+    return findNode(currentDirectory.value);
   });
 
   function handleSwitchSource(type: "container" | "volume", name?: string) {
@@ -2305,6 +2317,30 @@
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(value));
+  }
+
+  function handleUploadProgress(progress: { 
+    bytesUploaded: number; 
+    totalBytes: number; 
+    percentComplete: number;
+    files: Array<{ fileName: string; bytesUploaded: number; totalBytes: number; percentComplete: number }>;
+  }) {
+    // Update the tree node for the upload directory
+    const uploadDir = currentDirectory.value || "/";
+    
+    // For root directory, always use explorer.root
+    let dirNode = uploadDir === "/" ? explorer.root : findNode(uploadDir);
+    
+    if (dirNode) {
+      dirNode.uploadProgress = {
+        isUploading: true,
+        bytesUploaded: progress.bytesUploaded,
+        totalBytes: progress.totalBytes,
+        fileCount: progress.files.length,
+        files: progress.files,
+        onCancel: undefined,
+      };
+    }
   }
 
   async function handleFilesUploaded() {

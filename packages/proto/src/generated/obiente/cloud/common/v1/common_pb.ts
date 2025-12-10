@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/common/v1/common.proto.
  */
 export const file_obiente_cloud_common_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBSLzAgoHVlBTU2l6ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxISCgpkaXNrX2J5dGVzGAYgASgDEh0KFWJhbmR3aWR0aF9ieXRlc19tb250aBgHIAEoAxIdChVtaW5pbXVtX3BheW1lbnRfY2VudHMYCCABKAMSEQoJYXZhaWxhYmxlGAkgASgIEg4KBnJlZ2lvbhgKIAEoCRIzCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjMKCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCDgoMX2Rlc2NyaXB0aW9uQg0KC19jcmVhdGVkX2F0Qg0KC191cGRhdGVkX2F0InAKGEV4dHJhY3RTZXJ2ZXJGaWxlUmVxdWVzdBIQCgh6aXBfcGF0aBgBIAEoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEhgKC3ZvbHVtZV9uYW1lGAMgASgJSACIAQFCDgoMX3ZvbHVtZV9uYW1lImMKGUV4dHJhY3RTZXJ2ZXJGaWxlUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBISCgVlcnJvchgCIAEoCUgAiAEBEhcKD2ZpbGVzX2V4dHJhY3RlZBgDIAEoBUIICgZfZXJyb3IibwoeQ3JlYXRlU2VydmVyRmlsZUFyY2hpdmVSZXF1ZXN0EhQKDHNvdXJjZV9wYXRocxgBIAMoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEh0KFWluY2x1ZGVfcGFyZW50X2ZvbGRlchgDIAEoCCJ+Ch9DcmVhdGVTZXJ2ZXJGaWxlQXJjaGl2ZVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSEgoFZXJyb3IYAiABKAlIAIgBARIUCgxhcmNoaXZlX3BhdGgYAyABKAkSFgoOZmlsZXNfYXJjaGl2ZWQYBCABKAVCCAoGX2Vycm9yKowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCTVpLZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvY29tbW9uL3YxO2NvbW1vbnYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBSLzAgoHVlBTU2l6ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxISCgpkaXNrX2J5dGVzGAYgASgDEh0KFWJhbmR3aWR0aF9ieXRlc19tb250aBgHIAEoAxIdChVtaW5pbXVtX3BheW1lbnRfY2VudHMYCCABKAMSEQoJYXZhaWxhYmxlGAkgASgIEg4KBnJlZ2lvbhgKIAEoCRIzCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjMKCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCDgoMX2Rlc2NyaXB0aW9uQg0KC19jcmVhdGVkX2F0Qg0KC191cGRhdGVkX2F0InAKGEV4dHJhY3RTZXJ2ZXJGaWxlUmVxdWVzdBIQCgh6aXBfcGF0aBgBIAEoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEhgKC3ZvbHVtZV9uYW1lGAMgASgJSACIAQFCDgoMX3ZvbHVtZV9uYW1lImMKGUV4dHJhY3RTZXJ2ZXJGaWxlUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBISCgVlcnJvchgCIAEoCUgAiAEBEhcKD2ZpbGVzX2V4dHJhY3RlZBgDIAEoBUIICgZfZXJyb3IibwoeQ3JlYXRlU2VydmVyRmlsZUFyY2hpdmVSZXF1ZXN0EhQKDHNvdXJjZV9wYXRocxgBIAMoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEh0KFWluY2x1ZGVfcGFyZW50X2ZvbGRlchgDIAEoCCJ+Ch9DcmVhdGVTZXJ2ZXJGaWxlQXJjaGl2ZVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSEgoFZXJyb3IYAiABKAlIAIgBARIUCgxhcmNoaXZlX3BhdGgYAyABKAkSFgoOZmlsZXNfYXJjaGl2ZWQYBCABKAVCCAoGX2Vycm9yIuUBChRDaHVua2VkVXBsb2FkUGF5bG9hZBIYChBkZXN0aW5hdGlvbl9wYXRoGAEgASgJEhgKC3ZvbHVtZV9uYW1lGAIgASgJSACIAQESEQoJZmlsZV9uYW1lGAMgASgJEhEKCWZpbGVfc2l6ZRgEIAEoAxITCgtjaHVua19pbmRleBgFIAEoBRIUCgx0b3RhbF9jaHVua3MYBiABKAUSEgoKY2h1bmtfZGF0YRgHIAEoDBIWCglmaWxlX21vZGUYCCABKAlIAYgBAUIOCgxfdm9sdW1lX25hbWVCDAoKX2ZpbGVfbW9kZSJ4ChxDaHVua2VkVXBsb2FkUmVzcG9uc2VQYXlsb2FkEg8KB3N1Y2Nlc3MYASABKAgSEgoFZXJyb3IYAiABKAlIAIgBARIRCglmaWxlX25hbWUYAyABKAkSFgoOYnl0ZXNfcmVjZWl2ZWQYBCABKANCCAoGX2Vycm9yKowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCTVpLZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvY29tbW9uL3YxO2NvbW1vbnYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Pagination represents pagination information for list responses
@@ -291,6 +291,115 @@ export type CreateServerFileArchiveResponse = Message<"obiente.cloud.common.v1.C
  */
 export const CreateServerFileArchiveResponseSchema: GenMessage<CreateServerFileArchiveResponse> = /*@__PURE__*/
   messageDesc(file_obiente_cloud_common_v1_common, 5);
+
+/**
+ * ChunkedUploadPayload standardizes chunked file uploads across resources (gameservers, deployments, etc.)
+ * Resource-specific services should wrap this in their own requests alongside resource identifiers.
+ *
+ * @generated from message obiente.cloud.common.v1.ChunkedUploadPayload
+ */
+export type ChunkedUploadPayload = Message<"obiente.cloud.common.v1.ChunkedUploadPayload"> & {
+  /**
+   * Directory path where files should be extracted (default: "/")
+   *
+   * @generated from field: string destination_path = 1;
+   */
+  destinationPath: string;
+
+  /**
+   * Optional target volume instead of container filesystem
+   *
+   * @generated from field: optional string volume_name = 2;
+   */
+  volumeName?: string;
+
+  /**
+   * Name of the file being uploaded
+   *
+   * @generated from field: string file_name = 3;
+   */
+  fileName: string;
+
+  /**
+   * Total size of the complete file (for validation)
+   *
+   * @generated from field: int64 file_size = 4;
+   */
+  fileSize: bigint;
+
+  /**
+   * 0-based index of this chunk
+   *
+   * @generated from field: int32 chunk_index = 5;
+   */
+  chunkIndex: number;
+
+  /**
+   * Total number of chunks for this file
+   *
+   * @generated from field: int32 total_chunks = 6;
+   */
+  totalChunks: number;
+
+  /**
+   * Raw file data for this chunk
+   *
+   * @generated from field: bytes chunk_data = 7;
+   */
+  chunkData: Uint8Array;
+
+  /**
+   * File permissions (e.g., "0644"), optional
+   *
+   * @generated from field: optional string file_mode = 8;
+   */
+  fileMode?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.ChunkedUploadPayload.
+ * Use `create(ChunkedUploadPayloadSchema)` to create a new message.
+ */
+export const ChunkedUploadPayloadSchema: GenMessage<ChunkedUploadPayload> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 6);
+
+/**
+ * ChunkedUploadResponsePayload represents the result of processing a single chunk.
+ *
+ * @generated from message obiente.cloud.common.v1.ChunkedUploadResponsePayload
+ */
+export type ChunkedUploadResponsePayload = Message<"obiente.cloud.common.v1.ChunkedUploadResponsePayload"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: optional string error = 2;
+   */
+  error?: string;
+
+  /**
+   * Name of the uploaded file
+   *
+   * @generated from field: string file_name = 3;
+   */
+  fileName: string;
+
+  /**
+   * Total bytes received for this file so far
+   *
+   * @generated from field: int64 bytes_received = 4;
+   */
+  bytesReceived: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.ChunkedUploadResponsePayload.
+ * Use `create(ChunkedUploadResponsePayloadSchema)` to create a new message.
+ */
+export const ChunkedUploadResponsePayloadSchema: GenMessage<ChunkedUploadResponsePayload> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 7);
 
 /**
  * LogLevel represents the severity/type of a log line

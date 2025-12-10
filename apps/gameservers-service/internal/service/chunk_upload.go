@@ -4,118 +4,22 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 )
 
-// chunkUploadSessions tracks in-flight file uploads keyed by (gameServerId, fileName)
-// to reassemble chunks and detect completion.
-var (
-	chunkUploadSessionsMux sync.RWMutex
-	chunkUploadSessions    = make(map[string]*chunkUploadSession)
-)
-
-type chunkUploadSession struct {
-	mu             sync.Mutex
-	gameServerId   string
-	fileName       string
-	destPath       string
-	volumeName     string
-	fileSize       int64
-	totalChunks    int32
-	receivedChunks map[int32][]byte // chunk index -> data
-	fileMode       string
-	lastActivityAt time.Time
-	tempFilePath   string // temporary file to assemble chunks
-}
-
-const (
-	chunkUploadTimeout = 30 * time.Minute
-	sessionCleanupTick = 5 * time.Minute
-)
+// ChunkUploadManager handles chunk upload session management
+var chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
 
 func init() {
-	// Periodically clean up stale sessions
-	go func() {
-		ticker := time.NewTicker(sessionCleanupTick)
-		defer ticker.Stop()
-		for range ticker.C {
-			cleanupStaleSessions()
-		}
-	}()
-}
-
-func cleanupStaleSessions() {
-	chunkUploadSessionsMux.Lock()
-	defer chunkUploadSessionsMux.Unlock()
-
-	now := time.Now()
-	for key, sess := range chunkUploadSessions {
-		if now.Sub(sess.lastActivityAt) > chunkUploadTimeout {
-			if sess.tempFilePath != "" {
-				os.Remove(sess.tempFilePath)
-			}
-			delete(chunkUploadSessions, key)
-		}
-	}
-}
-
-func getChunkUploadSessionKey(gameServerId, fileName string) string {
-	return gameServerId + ":" + fileName
-}
-
-func getOrCreateChunkSession(req *gameserversv1.ChunkUploadGameServerFilesRequest) *chunkUploadSession {
-	key := getChunkUploadSessionKey(req.GameServerId, req.FileName)
-
-	chunkUploadSessionsMux.Lock()
-	defer chunkUploadSessionsMux.Unlock()
-
-	if sess, ok := chunkUploadSessions[key]; ok {
-		sess.mu.Lock()
-		sess.lastActivityAt = time.Now()
-		sess.mu.Unlock()
-		return sess
-	}
-
-	// Create new session with temp file for assembly
-	tempFile, _ := os.CreateTemp("", "chunk-upload-*")
-	tempFilePath := ""
-	if tempFile != nil {
-		tempFilePath = tempFile.Name()
-		tempFile.Close()
-	}
-
-	volumeName := ""
-	if req.VolumeName != nil {
-		volumeName = *req.VolumeName
-	}
-	fileMode := ""
-	if req.FileMode != nil {
-		fileMode = *req.FileMode
-	}
-
-	sess := &chunkUploadSession{
-		gameServerId:   req.GameServerId,
-		fileName:       req.FileName,
-		destPath:       req.DestinationPath,
-		volumeName:     volumeName,
-		fileSize:       req.FileSize,
-		totalChunks:    req.TotalChunks,
-		receivedChunks: make(map[int32][]byte),
-		fileMode:       fileMode,
-		lastActivityAt: time.Now(),
-		tempFilePath:   tempFilePath,
-	}
-
-	chunkUploadSessions[key] = sess
-	return sess
+	// Cleanup is handled by the manager's goroutine
 }
 
 // ChunkUploadGameServerFiles handles a single file chunk upload request.
@@ -123,115 +27,76 @@ func getOrCreateChunkSession(req *gameserversv1.ChunkUploadGameServerFilesReques
 // When all chunks are received, the file is uploaded to the target destination.
 func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.Request[gameserversv1.ChunkUploadGameServerFilesRequest]) (*connect.Response[gameserversv1.ChunkUploadGameServerFilesResponse], error) {
 	msg := req.Msg
+	gameServerId := msg.GameServerId
+	upload := msg.Upload
 
 	// Permission check
-	if err := s.checkGameServerPermission(ctx, msg.GameServerId, "update"); err != nil {
+	if err := s.checkGameServerPermission(ctx, gameServerId, "update"); err != nil {
 		return nil, err
 	}
 
 	// Validate request
-	if msg.GameServerId == "" {
+	if gameServerId == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
 	}
-	if msg.FileName == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("file_name is required"))
-	}
-	if msg.FileSize <= 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("file_size must be > 0"))
-	}
-	if msg.TotalChunks <= 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("total_chunks must be > 0"))
-	}
-	if msg.ChunkIndex < 0 || msg.ChunkIndex >= msg.TotalChunks {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid chunk_index: must be in range [0, %d)", msg.TotalChunks))
-	}
-	if len(msg.ChunkData) == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("chunk_data is required"))
+
+	// Validate upload payload using shared validator
+	if err := chunkupload.ValidatePayload(upload); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	// Get or create session for this file
-	sess := getOrCreateChunkSession(msg)
+	// Get or create session
+	sess, err := chunkUploadManager.GetOrCreateSession(gameServerId, upload)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
+	// Store the chunk
+	_, err = chunkUploadManager.StoreChunk(gameServerId, upload, upload.ChunkIndex)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 
-	// Check for duplicate chunk (idempotence)
-	if _, exists := sess.receivedChunks[msg.ChunkIndex]; exists {
-		// Return success (idempotent)
-		bytesReceived := int64(0)
-		for _, data := range sess.receivedChunks {
-			bytesReceived += int64(len(data))
-		}
-		return connect.NewResponse(&gameserversv1.ChunkUploadGameServerFilesResponse{
+	bytesReceived := sess.BytesReceived
+
+	// Check if this is the last chunk
+	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
+	allChunksReceived := chunkUploadManager.IsComplete(gameServerId, upload.FileName, upload.TotalChunks)
+
+	resp := &gameserversv1.ChunkUploadGameServerFilesResponse{
+		Result: &commonv1.ChunkedUploadResponsePayload{
 			Success:       true,
-			FileName:      msg.FileName,
+			FileName:      upload.FileName,
 			BytesReceived: bytesReceived,
-		}), nil
+		},
 	}
 
-	// Write chunk to temp file at the correct offset
-	if sess.tempFilePath != "" {
-		f, err := os.OpenFile(sess.tempFilePath, os.O_WRONLY|os.O_CREATE, 0644)
-		if err == nil {
-			defer f.Close()
-			offset := int64(msg.ChunkIndex) * (msg.FileSize / int64(msg.TotalChunks))
-			if msg.ChunkIndex == msg.TotalChunks-1 {
-				// Last chunk may be smaller
-				offset = msg.FileSize - int64(len(msg.ChunkData))
-			}
-			if _, err := f.WriteAt(msg.ChunkData, offset); err != nil {
-				log.Printf("Failed to write chunk to temp file: %v", err)
-			}
+	// If this is the last chunk and we have all chunks, assemble and upload
+	if isLastChunk && allChunksReceived {
+		if err := s.uploadAssembledFile(ctx, gameServerId, upload); err != nil {
+			resp.Result.Success = false
+			errorMsg := fmt.Sprintf("failed to upload assembled file: %v", err)
+			resp.Result.Error = &errorMsg
+			return connect.NewResponse(resp), nil
 		}
+
+		// Clean up the session after successful upload
+		chunkUploadManager.RemoveSession(gameServerId, upload.FileName)
 	}
 
-	// Store chunk in memory for reference
-	sess.receivedChunks[msg.ChunkIndex] = msg.ChunkData
-
-	// Calculate total bytes received
-	bytesReceived := int64(0)
-	for _, data := range sess.receivedChunks {
-		bytesReceived += int64(len(data))
-	}
-
-	// Check if all chunks received
-	if int32(len(sess.receivedChunks)) == msg.TotalChunks {
-		// All chunks received, upload the file to target
-		defer func() {
-			// Clean up session and temp file
-			chunkUploadSessionsMux.Lock()
-			defer chunkUploadSessionsMux.Unlock()
-			key := getChunkUploadSessionKey(msg.GameServerId, msg.FileName)
-			if sess.tempFilePath != "" {
-				os.Remove(sess.tempFilePath)
-			}
-			delete(chunkUploadSessions, key)
-		}()
-
-		// Assemble chunks in order and upload
-		if err := s.uploadAssembledFile(ctx, msg); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload file: %w", err))
-		}
-	}
-
-	return connect.NewResponse(&gameserversv1.ChunkUploadGameServerFilesResponse{
-		Success:       true,
-		FileName:      msg.FileName,
-		BytesReceived: bytesReceived,
-	}), nil
+	return connect.NewResponse(resp), nil
 }
 
 // uploadAssembledFile assembles all chunks from the session and uploads the complete file.
-func (s *Service) uploadAssembledFile(ctx context.Context, req *gameserversv1.ChunkUploadGameServerFilesRequest) error {
-	// Get the session to read all chunks
-	key := getChunkUploadSessionKey(req.GameServerId, req.FileName)
+func (s *Service) uploadAssembledFile(ctx context.Context, gameServerId string, upload *commonv1.ChunkedUploadPayload) error {
+	// Assemble file from chunks using shared manager
+	completeData, err := chunkUploadManager.AssembleChunks(gameServerId, upload.FileName, upload.TotalChunks)
+	if err != nil {
+		return err
+	}
 
-	chunkUploadSessionsMux.RLock()
-	sess, ok := chunkUploadSessions[key]
-	chunkUploadSessionsMux.RUnlock()
-
-	if !ok || len(sess.receivedChunks) == 0 {
-		return fmt.Errorf("no chunks found for upload")
+	if int64(len(completeData)) != int64(upload.FileSize) {
+		return fmt.Errorf("assembled file size mismatch: expected %d, got %d", upload.FileSize, len(completeData))
 	}
 
 	// Create docker client
@@ -242,36 +107,25 @@ func (s *Service) uploadAssembledFile(ctx context.Context, req *gameserversv1.Ch
 	defer dcli.Close()
 
 	// Find container
-	containerID, err := s.findContainerForGameServer(ctx, req.GameServerId, dcli)
+	containerID, err := s.findContainerForGameServer(ctx, gameServerId, dcli)
 	if err != nil {
 		return err
 	}
 
-	// Assemble file from chunks (in order)
-	var completeData []byte
-	for i := int32(0); i < req.TotalChunks; i++ {
-		if chunk, ok := sess.receivedChunks[i]; ok {
-			completeData = append(completeData, chunk...)
-		}
-	}
-
-	if int64(len(completeData)) != req.FileSize {
-		return fmt.Errorf("assembled file size mismatch: expected %d, got %d", req.FileSize, len(completeData))
-	}
-
-	// Upload single file using the docker client
+	// Prepare files map
 	files := map[string][]byte{
-		req.FileName: completeData,
+		upload.FileName: completeData,
 	}
 
 	// Log target info for debugging
-	log.Printf("uploadAssembledFile: container=%s, destPath=%q, volumeName=%q, file=%s", containerID, req.DestinationPath, req.GetVolumeName(), req.FileName)
+	volumeNameStr := ""
+	if upload.VolumeName != nil {
+		volumeNameStr = *upload.VolumeName
+	}
+	log.Printf("uploadAssembledFile: container=%s, destPath=%q, volumeName=%q, file=%s", containerID, upload.DestinationPath, volumeNameStr, upload.FileName)
 
 	// If a volume name was provided, upload directly to the host volume path
-	volumeName := ""
-	if req.VolumeName != nil {
-		volumeName = *req.VolumeName
-	}
+	volumeName := volumeNameStr
 
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, containerID)
@@ -292,7 +146,7 @@ func (s *Service) uploadAssembledFile(ctx context.Context, req *gameserversv1.Ch
 
 		// Combine destination path with file names to build paths inside the volume
 		uploadFiles := make(map[string][]byte)
-		destPath := req.DestinationPath
+		destPath := upload.DestinationPath
 		if destPath == "" {
 			destPath = "/"
 		}
@@ -305,7 +159,7 @@ func (s *Service) uploadAssembledFile(ctx context.Context, req *gameserversv1.Ch
 			return fmt.Errorf("failed to upload to volume: %w", err)
 		}
 	} else {
-		if err := dcli.ContainerUploadFiles(ctx, containerID, req.DestinationPath, files); err != nil {
+		if err := dcli.ContainerUploadFiles(ctx, containerID, upload.DestinationPath, files); err != nil {
 			return fmt.Errorf("failed to upload to container: %w", err)
 		}
 	}

@@ -176,6 +176,13 @@ func (s *Service) streamLiveMetrics(
 					}
 
 					if err := stream.Send(metric); err != nil {
+						// Log the error but don't return immediately - might be transient
+						log.Printf("[streamLiveMetrics] Error sending metric to stream: %v", err)
+						// Check if it's a context cancellation
+						if ctx.Err() != nil {
+							return ctx.Err()
+						}
+						// For other errors, return them
 						return err
 					}
 				}
@@ -193,6 +200,13 @@ func (s *Service) streamLiveMetrics(
 				}
 
 				if err := stream.Send(metric); err != nil {
+					// Log the error but don't return immediately - might be transient
+					log.Printf("[streamLiveMetrics] Error sending metric to stream: %v", err)
+					// Check if it's a context cancellation
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					// For other errors, return them
 					return err
 				}
 			}

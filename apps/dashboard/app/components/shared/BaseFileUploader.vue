@@ -361,14 +361,17 @@
     XMarkIcon,
   } from "@heroicons/vue/24/outline";
   import OuiDuration from "~/components/oui/Duration.vue";
-  import type { UploadProgress } from "~/composables/useStreamingUpload";
-  import { useStreamingUpload } from "~/composables/useStreamingUpload";
+  import type { GameServerUploadProgress } from "~/composables/useStreamingUpload";
+  import { useChunkedGameServerUpload } from "~/composables/useStreamingUpload";
+  import { useDeploymentUpload } from "../../composables/useDeploymentUpload";
   import { useToast } from "~/composables/useToast";
 
   interface Props {
     uploaderId: string;
     destinationPath?: string;
     volumeName?: string;
+    organizationId?: string;
+    uploadKind?: "gameserver" | "deployment";
     additionalParams?: Record<string, any>;
     maxFiles?: number;
     maxFileSize?: number;
@@ -391,11 +394,13 @@
     maxFiles: 500,
     maxFileSize: 1024 * 1024 * 1024, // 1GB default
     showProgress: true,
+    uploadKind: "gameserver",
   });
 
   const emit = defineEmits<Emits>();
 
-  const { uploadFile } = useStreamingUpload();
+  const { uploadFile } = useChunkedGameServerUpload();
+  const { uploadFile: uploadDeploymentFile } = useDeploymentUpload();
   const { toast } = useToast();
 
   const isUploading = ref(false);
@@ -645,90 +650,155 @@
       for (const file of files) {
         if (uploadCancelled.value) break;
 
-        await uploadFile(file, {
-          gameServerId: props.uploaderId,
-          destinationPath: props.destinationPath || "/",
-          volumeName: props.volumeName,
-          ...props.additionalParams,
-          onProgress: (progress: UploadProgress) => {
-            // Update current file progress
-            progressMap.value[file.name] = {
-              fileName: file.name,
-              bytesUploaded: progress.bytesUploaded,
-              totalBytes: progress.totalBytes,
-              percentComplete: progress.percentComplete,
-              speedBytesPerSec: progress.speedBytesPerSec,
-              etaSeconds: progress.etaSeconds,
-            };
-            
-            // Throttled toast update
-            const now = Date.now();
-            if (now - lastToastUpdate > 200) {
-              const totalLoaded = Object.values(progressMap.value).reduce(
-                (sum, p) => sum + p.bytesUploaded,
-                0
-              );
-              const percent = totalBytes > 0 
-                ? Math.round((totalLoaded / totalBytes) * 100)
-                : 0;
-              
-              toast.update(toastId, `Uploading ${files.length} file(s)...`, `${percent}% complete`);
-              
-              // Build progress data
-              const progressData = {
-                bytesUploaded: totalLoaded,
-                totalBytes: totalBytes,
-                percentComplete: percent,
-                files: Object.values(progressMap.value).map(p => ({
-                  fileName: p.fileName || '',
-                  bytesUploaded: p.bytesUploaded,
-                  totalBytes: p.totalBytes,
-                  percentComplete: p.percentComplete || 0
-                }))
-              };
-              
-              // Emit progress to parent with file details
-              emit('uploadProgress', progressData);
-              
-              // Also update target node directly if provided
-              if (props.targetNode) {
-                props.targetNode.uploadProgress = {
-                  isUploading: true,
-                  bytesUploaded: totalLoaded,
-                  totalBytes: totalBytes,
-                  fileCount: progressData.files.length,
-                  files: progressData.files,
-                  onCancel: undefined,
+        const isDeployment = props.uploadKind === "deployment";
+
+        await (isDeployment
+          ? uploadDeploymentFile(file, {
+              deploymentId: props.uploaderId,
+              organizationId: props.organizationId,
+              destinationPath: props.destinationPath || "/",
+              volumeName: props.volumeName,
+              containerId: props.additionalParams?.containerId,
+              serviceName: props.additionalParams?.serviceName,
+              onProgress: (progress: { fileName: string; bytesUploaded: number; totalBytes: number; percentComplete: number; }) => {
+                progressMap.value[file.name] = {
+                  fileName: file.name,
+                  bytesUploaded: progress.bytesUploaded,
+                  totalBytes: progress.totalBytes,
+                  percentComplete: progress.percentComplete,
+                  speedBytesPerSec: undefined,
+                  etaSeconds: undefined,
                 };
-              }
-              
-              // Also update source object if provided (for root uploads UI)
-              if (props.sourceObject) {
-                props.sourceObject.uploadProgress = {
-                  isUploading: true,
-                  bytesUploaded: totalLoaded,
-                  totalBytes: totalBytes,
-                  fileCount: progressData.files.length,
-                  files: progressData.files,
-                  onCancel: undefined,
+
+                const now = Date.now();
+                if (now - lastToastUpdate > 200) {
+                  const totalLoaded = Object.values(progressMap.value).reduce(
+                    (sum, p) => sum + p.bytesUploaded,
+                    0
+                  );
+                  const percent = totalBytes > 0
+                    ? Math.round((totalLoaded / totalBytes) * 100)
+                    : 0;
+
+                  toast.update(toastId, `Uploading ${files.length} file(s)...`, `${percent}% complete`);
+
+                  const progressData = {
+                    bytesUploaded: totalLoaded,
+                    totalBytes: totalBytes,
+                    percentComplete: percent,
+                    files: Object.values(progressMap.value).map(p => ({
+                      fileName: p.fileName || '',
+                      bytesUploaded: p.bytesUploaded,
+                      totalBytes: p.totalBytes,
+                      percentComplete: p.percentComplete || 0
+                    }))
+                  };
+
+                  emit('uploadProgress', progressData);
+
+                  if (props.targetNode) {
+                    props.targetNode.uploadProgress = {
+                      isUploading: true,
+                      bytesUploaded: totalLoaded,
+                      totalBytes: totalBytes,
+                      fileCount: progressData.files.length,
+                      files: progressData.files,
+                      onCancel: undefined,
+                    };
+                  }
+
+                  if (props.sourceObject) {
+                    props.sourceObject.uploadProgress = {
+                      isUploading: true,
+                      bytesUploaded: totalLoaded,
+                      totalBytes: totalBytes,
+                      fileCount: progressData.files.length,
+                      files: progressData.files,
+                      onCancel: undefined,
+                    };
+                  }
+
+                  lastToastUpdate = now;
+                }
+              },
+            })
+          : uploadFile(file, {
+              gameServerId: props.uploaderId,
+              destinationPath: props.destinationPath || "/",
+              volumeName: props.volumeName,
+              ...props.additionalParams,
+              onProgress: (progress: GameServerUploadProgress) => {
+                progressMap.value[file.name] = {
+                  fileName: file.name,
+                  bytesUploaded: progress.bytesUploaded,
+                  totalBytes: progress.totalBytes,
+                  percentComplete: progress.percentComplete,
+                  speedBytesPerSec: progress.speedBytesPerSec,
+                  etaSeconds: progress.etaSeconds,
                 };
-              }
-              
-              lastToastUpdate = now;
-            }
-          },
-          onFileComplete: () => {
-            // Mark file as 100% complete with no speed
-            progressMap.value[file.name] = {
-              fileName: file.name,
-              bytesUploaded: file.size,
-              totalBytes: file.size,
-              percentComplete: 100,
-              speedBytesPerSec: 0,
-              etaSeconds: 0,
-            };
-          },
-        });
+                
+                const now = Date.now();
+                if (now - lastToastUpdate > 200) {
+                  const totalLoaded = Object.values(progressMap.value).reduce(
+                    (sum, p) => sum + p.bytesUploaded,
+                    0
+                  );
+                  const percent = totalBytes > 0 
+                    ? Math.round((totalLoaded / totalBytes) * 100)
+                    : 0;
+                  
+                  toast.update(toastId, `Uploading ${files.length} file(s)...`, `${percent}% complete`);
+                  
+                  const progressData = {
+                    bytesUploaded: totalLoaded,
+                    totalBytes: totalBytes,
+                    percentComplete: percent,
+                    files: Object.values(progressMap.value).map(p => ({
+                      fileName: p.fileName || '',
+                      bytesUploaded: p.bytesUploaded,
+                      totalBytes: p.totalBytes,
+                      percentComplete: p.percentComplete || 0
+                    }))
+                  };
+                  
+                  emit('uploadProgress', progressData);
+                  
+                  if (props.targetNode) {
+                    props.targetNode.uploadProgress = {
+                      isUploading: true,
+                      bytesUploaded: totalLoaded,
+                      totalBytes: totalBytes,
+                      fileCount: progressData.files.length,
+                      files: progressData.files,
+                      onCancel: undefined,
+                    };
+                  }
+                  
+                  if (props.sourceObject) {
+                    props.sourceObject.uploadProgress = {
+                      isUploading: true,
+                      bytesUploaded: totalLoaded,
+                      totalBytes: totalBytes,
+                      fileCount: progressData.files.length,
+                      files: progressData.files,
+                      onCancel: undefined,
+                    };
+                  }
+                  
+                  lastToastUpdate = now;
+                }
+              },
+              onFileComplete: () => {
+                progressMap.value[file.name] = {
+                  fileName: file.name,
+                  bytesUploaded: file.size,
+                  totalBytes: file.size,
+                  percentComplete: 100,
+                  speedBytesPerSec: 0,
+                  etaSeconds: 0,
+                };
+              },
+            }));
       }
 
       toast.dismiss(toastId);
