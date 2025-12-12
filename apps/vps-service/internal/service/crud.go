@@ -554,7 +554,16 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 	// Send notification before deletion
 	s.notifyVPSDeleted(ctx, &vps)
 
-	// Delete from database (hard delete)
+	// Clear IP addresses before soft-deleting to prevent stale IPs showing on new VPS with same VM ID
+	if err := database.DB.Model(&vps).Updates(map[string]interface{}{
+		"ipv4_addresses": "[]",
+		"ipv6_addresses": "[]",
+		"instance_id":    nil, // Clear instance ID to allow VM ID reuse
+	}).Error; err != nil {
+		logger.Warn("[VPS Service] Failed to clear IP addresses for VPS %s: %v (continuing with deletion)", vpsID, err)
+	}
+
+	// Delete from database (soft delete - sets deleted_at timestamp)
 	if err := database.DB.Delete(&vps).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS: %w", err))
 	}

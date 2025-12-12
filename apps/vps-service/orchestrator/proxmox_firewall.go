@@ -8,9 +8,87 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
+
+// parseNodeGatewayIPs parses the VPS_NODE_GATEWAY_IPS environment variable
+// Format: "node1:10.15.3.10,node2:10.15.3.11"
+// Returns a map of node name -> gateway IP
+func parseNodeGatewayIPs() (map[string]string, error) {
+	mapping := make(map[string]string)
+	envValue := os.Getenv("VPS_NODE_GATEWAY_IPS")
+	if envValue == "" {
+		return mapping, nil
+	}
+
+	// Parse comma-separated node mappings
+	nodeStrings := strings.Split(envValue, ",")
+	for _, nodeStr := range nodeStrings {
+		nodeStr = strings.TrimSpace(nodeStr)
+		if nodeStr == "" {
+			continue
+		}
+
+		// Parse "nodeName:gatewayIP" format
+		parts := strings.SplitN(nodeStr, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid gateway IP mapping format: %s (expected 'nodeName:gatewayIP')", nodeStr)
+		}
+
+		nodeName := strings.TrimSpace(parts[0])
+		gatewayIP := strings.TrimSpace(parts[1])
+		if nodeName == "" || gatewayIP == "" {
+			return nil, fmt.Errorf("invalid gateway IP mapping: node name and IP cannot be empty in '%s'", nodeStr)
+		}
+
+		mapping[nodeName] = gatewayIP
+	}
+
+	return mapping, nil
+}
+
+// resolveGatewayIPForNode resolves the gateway IP for a given node name
+// Uses VPS_NODE_GATEWAY_IPS mapping, falling back to VPS_GATEWAY_IP or default
+func resolveGatewayIPForNode(nodeName string) string {
+	// Log the node name we're looking up
+	logger.Debug("[ProxmoxClient] Resolving gateway IP for node: '%s'", nodeName)
+	
+	// Try node-specific mapping first
+	if nodeName != "" {
+		mapping, err := parseNodeGatewayIPs()
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to parse VPS_NODE_GATEWAY_IPS: %v, using fallback", err)
+		} else if len(mapping) > 0 {
+			logger.Debug("[ProxmoxClient] VPS_NODE_GATEWAY_IPS mapping has %d entries: %v", len(mapping), mapping)
+			if gatewayIP, ok := mapping[nodeName]; ok {
+				logger.Info("[ProxmoxClient] Found gateway IP %s for node '%s' from VPS_NODE_GATEWAY_IPS", gatewayIP, nodeName)
+				return gatewayIP
+			}
+			// Log available node names to help debug mismatches
+			availableNodes := make([]string, 0, len(mapping))
+			for node := range mapping {
+				availableNodes = append(availableNodes, node)
+			}
+			logger.Warn("[ProxmoxClient] No gateway IP configured for node '%s' in VPS_NODE_GATEWAY_IPS. Available nodes: %v", nodeName, availableNodes)
+		} else {
+			envValue := os.Getenv("VPS_NODE_GATEWAY_IPS")
+			logger.Debug("[ProxmoxClient] VPS_NODE_GATEWAY_IPS is empty or not set (raw value: '%s')", envValue)
+		}
+	}
+
+	// Fallback to VPS_GATEWAY_IP environment variable
+	gatewayIP := os.Getenv("VPS_GATEWAY_IP")
+	if gatewayIP != "" {
+		logger.Info("[ProxmoxClient] Using fallback VPS_GATEWAY_IP: %s", gatewayIP)
+		return gatewayIP
+	}
+
+	// Default gateway IP for VPS subnet (10.15.3.0/24)
+	logger.Info("[ProxmoxClient] Using default gateway IP: 10.15.3.10")
+	return "10.15.3.10"
+}
 
 // Firewall operations
 
@@ -43,13 +121,10 @@ func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName strin
 		// Get bridge name (default to vmbr0)
 		bridgeName := "vmbr0"
 
-		// Get gateway IP from environment or use default subnet gateway
-		// Gateway IP is 10.15.3.10 for the 10.15.3.0/24 subnet (as per docs)
-		gatewayIP := os.Getenv("VPS_GATEWAY_IP")
-		if gatewayIP == "" {
-			// Default gateway IP for VPS subnet (10.15.3.0/24)
-			gatewayIP = "10.15.3.10"
-		}
+		// Resolve gateway IP for this specific node
+		// Uses VPS_NODE_GATEWAY_IPS for per-node mapping, falls back to VPS_GATEWAY_IP or default
+		gatewayIP := resolveGatewayIPForNode(nodeName)
+		logger.Debug("[ProxmoxClient] Using gateway IP %s for node %s", gatewayIP, nodeName)
 
 		// First, add a rule to ALLOW SSH from the gateway (before the blocking rule)
 		// This ensures the gateway can connect to VPS instances for SSH proxying

@@ -1069,8 +1069,9 @@ func (vm *VPSManager) GetVPSStatus(ctx context.Context, vpsID string) (string, e
 	return status, nil
 }
 
-// GetVPSIPAddresses retrieves IP addresses of a VPS from Proxmox
-// Falls back to gateway if guest agent is not available
+// GetVPSIPAddresses retrieves IP addresses of a VPS
+// Priority: 1. Gateway (authoritative for DHCP leases), 2. Guest agent, 3. Database cache
+// Updates database cache when IP is discovered from gateway or guest agent
 func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]string, []string, error) {
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
@@ -1081,75 +1082,128 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 		return nil, nil, fmt.Errorf("VPS has no instance ID")
 	}
 
-	// Get Proxmox client for the node where VPS is running
+	var ipv4, ipv6 []string
+	var gatewayErr, guestAgentErr error
+
+	// Priority 1: Try gateway first (authoritative source for DHCP-assigned IPs)
+	// The gateway manages DHCP leases so it has the most up-to-date IP information
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
+		if err == nil {
+			allocations, listErr := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
+			if listErr == nil && len(allocations) > 0 {
+				gatewayIP := allocations[0].IpAddress
+				logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
+				ipv4 = []string{gatewayIP}
+
+				// Update database cache if IP changed
+				vm.updateIPCacheIfChanged(&vps, ipv4, ipv6)
+				return ipv4, ipv6, nil
+			} else if listErr != nil {
+				gatewayErr = listErr
+				logger.Debug("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, listErr)
+			} else {
+				logger.Debug("[VPSManager] Gateway returned no IP allocations for VPS %s", vpsID)
+			}
+		} else {
+			gatewayErr = err
+			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+		}
+	}
+
+	// Priority 2: Try Proxmox guest agent
 	nodeName := ""
 	if vps.NodeID != nil && *vps.NodeID != "" {
 		nodeName = *vps.NodeID
 	}
 
 	proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get Proxmox client for node %s: %w", nodeName, err)
-	}
-
-	vmIDInt := 0
-	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-	if vmIDInt == 0 {
-		return nil, nil, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
-	}
-
-	// Find node if not stored in VPS
-	if nodeName == "" {
-		nodes, err := proxmoxClient.ListNodes(ctx)
-		if err != nil || len(nodes) == 0 {
-			return nil, nil, fmt.Errorf("failed to find Proxmox node: %w", err)
-		}
-		nodeName = nodes[0]
-	}
-
-	// Try to get IPs from Proxmox guest agent first
-	guestAgentErr := error(nil)
-	ipv4, ipv6, guestAgentErr := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-	if guestAgentErr == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
-		// Successfully got IPs from guest agent
-		logger.Info("[VPSManager] Got IPs from guest agent for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
-		return ipv4, ipv6, nil
-	}
-
-	// Guest agent not available or returned no IPs - fall back to gateway
-	// Get gateway client for the node where VPS is running
-	if vps.NodeID != nil && *vps.NodeID != "" {
-		gatewayClient, gatewayErr := vm.GetGatewayClientForNode(*vps.NodeID)
-		if gatewayErr == nil {
-			if guestAgentErr != nil {
-				logger.Info("[VPSManager] Guest agent unavailable for VPS %s (%v), falling back to gateway on node %s", vpsID, guestAgentErr, *vps.NodeID)
-			} else {
-				logger.Info("[VPSManager] Guest agent returned no IPs for VPS %s, falling back to gateway on node %s", vpsID, *vps.NodeID)
+	if err == nil {
+		vmIDInt := 0
+		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+		if vmIDInt > 0 {
+			// Find node if not stored in VPS
+			if nodeName == "" {
+				nodes, err := proxmoxClient.ListNodes(ctx)
+				if err == nil && len(nodes) > 0 {
+					nodeName = nodes[0]
+				}
 			}
-			allocations, listErr := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
-			if listErr == nil && len(allocations) > 0 {
-				// Return gateway-allocated IP as IPv4
-				gatewayIP := allocations[0].IpAddress
-				logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
-				return []string{gatewayIP}, []string{}, nil
-			} else if listErr != nil {
-				logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, listErr)
-			} else {
-				logger.Debug("[VPSManager] Gateway returned no IP allocations for VPS %s", vpsID)
+
+			if nodeName != "" {
+				ipv4, ipv6, guestAgentErr = proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+				if guestAgentErr == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
+					logger.Info("[VPSManager] Got IPs from guest agent for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
+
+					// Update database cache if IP changed
+					vm.updateIPCacheIfChanged(&vps, ipv4, ipv6)
+					return ipv4, ipv6, nil
+				} else if guestAgentErr != nil {
+					logger.Debug("[VPSManager] Guest agent unavailable for VPS %s: %v", vpsID, guestAgentErr)
+				}
 			}
-		} else {
-			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, gatewayErr)
 		}
-	} else {
-		logger.Debug("[VPSManager] VPS %s has no NodeID, cannot fall back to gateway", vpsID)
 	}
 
-	// Both guest agent and gateway failed
+	// Priority 3: Fall back to database cache (may be stale but better than nothing)
+	var cachedIPv4, cachedIPv6 []string
+	if vps.IPv4Addresses != "" && vps.IPv4Addresses != "[]" {
+		if err := json.Unmarshal([]byte(vps.IPv4Addresses), &cachedIPv4); err == nil && len(cachedIPv4) > 0 {
+			logger.Info("[VPSManager] Using cached IPs from database for VPS %s (gateway/guest agent unavailable): IPv4=%v", vpsID, cachedIPv4)
+			return cachedIPv4, cachedIPv6, nil
+		}
+	}
+	if vps.IPv6Addresses != "" && vps.IPv6Addresses != "[]" {
+		if err := json.Unmarshal([]byte(vps.IPv6Addresses), &cachedIPv6); err == nil && len(cachedIPv6) > 0 {
+			logger.Info("[VPSManager] Using cached IPv6 from database for VPS %s: IPv6=%v", vpsID, cachedIPv6)
+			return cachedIPv4, cachedIPv6, nil
+		}
+	}
+
+	// All sources failed
+	if gatewayErr != nil {
+		return nil, nil, fmt.Errorf("failed to get VM IP addresses: gateway error: %w", gatewayErr)
+	}
 	if guestAgentErr != nil {
 		return nil, nil, fmt.Errorf("failed to get VM IP addresses: guest agent error: %w", guestAgentErr)
 	}
-	// Guest agent succeeded but returned no IPs, and gateway also failed
 	return []string{}, []string{}, nil
+}
+
+// updateIPCacheIfChanged updates the database cache if IPs have changed
+func (vm *VPSManager) updateIPCacheIfChanged(vps *database.VPSInstance, ipv4, ipv6 []string) {
+	updates := map[string]interface{}{}
+
+	// Check IPv4
+	if len(ipv4) > 0 {
+		newIPv4JSON, err := json.Marshal(ipv4)
+		if err == nil {
+			currentIPv4 := vps.IPv4Addresses
+			if currentIPv4 != string(newIPv4JSON) {
+				updates["ipv4_addresses"] = string(newIPv4JSON)
+				logger.Info("[VPSManager] Updating IPv4 cache for VPS %s: %s -> %s", vps.ID, currentIPv4, string(newIPv4JSON))
+			}
+		}
+	}
+
+	// Check IPv6
+	if len(ipv6) > 0 {
+		newIPv6JSON, err := json.Marshal(ipv6)
+		if err == nil {
+			currentIPv6 := vps.IPv6Addresses
+			if currentIPv6 != string(newIPv6JSON) {
+				updates["ipv6_addresses"] = string(newIPv6JSON)
+				logger.Info("[VPSManager] Updating IPv6 cache for VPS %s: %s -> %s", vps.ID, currentIPv6, string(newIPv6JSON))
+			}
+		}
+	}
+
+	// Apply updates if any
+	if len(updates) > 0 {
+		if err := database.DB.Model(vps).Updates(updates).Error; err != nil {
+			logger.Warn("[VPSManager] Failed to update IP cache for VPS %s: %v", vps.ID, err)
+		}
+	}
 }
 
 // DeleteVPS deletes a VPS instance from Proxmox
@@ -1960,6 +2014,33 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 			continue
 		}
 
+		// Also check if another VPS with the same VM ID already exists
+		// This prevents importing the same Proxmox VM under a different VPS ID
+		vmIDStr := fmt.Sprintf("%d", proxmoxVM.VMID)
+		var existingVPSByVMID database.VPSInstance
+		err = database.DB.Where("instance_id = ? AND deleted_at IS NULL", vmIDStr).First(&existingVPSByVMID).Error
+		if err == nil {
+			// VM ID already exists in another VPS record
+			logger.Warn("[VPSManager] VM ID %d is already associated with VPS %s, skipping duplicate import for VPS %s",
+				proxmoxVM.VMID, existingVPSByVMID.ID, vpsID)
+			results = append(results, ImportVPSResult{
+				VPS:     &existingVPSByVMID,
+				Skipped: true,
+				Error:   fmt.Errorf("VM ID %d already associated with VPS %s", proxmoxVM.VMID, existingVPSByVMID.ID),
+			})
+			skippedCount++
+			continue
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// Database error
+			logger.Warn("[VPSManager] Database error checking for VM ID %d: %v", proxmoxVM.VMID, err)
+			results = append(results, ImportVPSResult{
+				Error:   fmt.Errorf("database error checking VM ID: %w", err),
+				Skipped: true,
+			})
+			skippedCount++
+			continue
+		}
+
 		// VPS doesn't exist, import it
 		logger.Info("[VPSManager] Importing VPS %s (VM %d) from Proxmox", vpsID, proxmoxVM.VMID)
 
@@ -2163,7 +2244,6 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 		}
 
 		// Create VPS instance record
-		vmIDStr := fmt.Sprintf("%d", proxmoxVM.VMID)
 		nodeID := &proxmoxVM.NodeName
 		vpsInstance := &database.VPSInstance{
 			ID:             vpsID,
@@ -2248,6 +2328,17 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 				deletedCount++
 				deletedVPSs[vps.ID] = oldStatus
 				logger.Info("[VPSManager] VPS %s marked as DELETED during sync", vps.ID)
+				
+				// Clear IP addresses and instance ID to prevent stale data when VM ID is reused
+				if err := database.DB.Model(&updatedVPS).Updates(map[string]interface{}{
+					"ipv4_addresses": "[]",
+					"ipv6_addresses": "[]",
+					"instance_id":    nil,
+				}).Error; err != nil {
+					logger.Warn("[VPSManager] Failed to clear IP addresses for deleted VPS %s: %v", vps.ID, err)
+				} else {
+					logger.Info("[VPSManager] Cleared IP addresses and instance ID for deleted VPS %s", vps.ID)
+				}
 			} else if updatedVPS.Status != oldStatus {
 				syncedCount++
 			}

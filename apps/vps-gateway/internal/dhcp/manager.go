@@ -719,10 +719,12 @@ func (m *Manager) syncWithLeases() error {
 	}
 	defer file.Close()
 
-	// Map of VPS ID -> actual lease info
+	// Map of MAC address -> actual lease info
+	// We use MAC address as the key because the hostname in dnsmasq leases
+	// is set by the VM's OS (e.g., "ubuntu") not the VPS ID
 	leaseMap := make(map[string]struct {
 		ip       net.IP
-		mac      string
+		hostname string
 		expires  int64
 	})
 
@@ -750,28 +752,24 @@ func (m *Manager) syncWithLeases() error {
 			continue
 		}
 
-		mac := parts[1]
+		mac := strings.ToLower(parts[1]) // Normalize MAC to lowercase
 		ip := net.ParseIP(parts[2])
 		if ip == nil {
 			continue
 		}
 
 		hostname := parts[3]
-		// Skip if hostname is "*" (unknown hostname)
-		if hostname == "*" {
-			continue
-		}
 
-		// Store lease info by hostname (VPS ID)
-		if existing, exists := leaseMap[hostname]; !exists || existing.expires < leaseExpiry {
-			leaseMap[hostname] = struct {
+		// Store lease info by MAC address (most reliable identifier)
+		if existing, exists := leaseMap[mac]; !exists || existing.expires < leaseExpiry {
+			leaseMap[mac] = struct {
 				ip       net.IP
-				mac      string
+				hostname string
 				expires  int64
 			}{
-				ip:      ip,
-				mac:     mac,
-				expires: leaseExpiry,
+				ip:       ip,
+				hostname: hostname,
+				expires:  leaseExpiry,
 			}
 		}
 	}
@@ -781,27 +779,25 @@ func (m *Manager) syncWithLeases() error {
 	}
 
 	// Update allocations with actual lease information
+	// Match by MAC address since that's stored in both allocation and lease
 	updated := false
-	for vpsID, lease := range leaseMap {
-		alloc, exists := m.allocations[vpsID]
+	for vpsID, alloc := range m.allocations {
+		if alloc.MACAddress == "" {
+			continue
+		}
+
+		// Normalize MAC for comparison
+		allocMAC := strings.ToLower(alloc.MACAddress)
+		lease, exists := leaseMap[allocMAC]
 		if !exists {
-			// New lease for a VPS we don't have in allocations
-			// This can happen if a VM was created outside our system
-			logger.Debug("Found lease for unknown VPS %s with IP %s", vpsID, lease.ip.String())
+			logger.Debug("No active lease found for VPS %s (MAC %s)", vpsID, allocMAC)
 			continue
 		}
 
 		// Update IP if it differs
 		if !alloc.IPAddress.Equal(lease.ip) {
-			logger.Info("Syncing allocation for VPS %s: updating IP from %s to %s (from DHCP lease)", vpsID, alloc.IPAddress.String(), lease.ip.String())
+			logger.Info("Syncing allocation for VPS %s: updating IP from %s to %s (from DHCP lease, MAC=%s)", vpsID, alloc.IPAddress.String(), lease.ip.String(), allocMAC)
 			alloc.IPAddress = lease.ip
-			updated = true
-		}
-
-		// Update MAC if it differs
-		if alloc.MACAddress != lease.mac {
-			logger.Info("Syncing allocation for VPS %s: updating MAC from %s to %s (from DHCP lease)", vpsID, alloc.MACAddress, lease.mac)
-			alloc.MACAddress = lease.mac
 			updated = true
 		}
 

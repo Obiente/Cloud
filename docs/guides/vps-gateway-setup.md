@@ -23,12 +23,15 @@ For multi-node deployments, each Proxmox node has its own gateway service instan
 
 This guide uses **Proxmox SDN (Software-Defined Networking)** for network topology management, while the vps-gateway service handles DHCP allocation and SSH proxying. SDN is recommended for **all deployments** (both single-node and multi-node clusters) because it provides:
 
-- **Automatic SNAT**: Handles source NAT for internet access automatically
 - **Centralized Management**: Configure networks at the datacenter level
 - **Automatic Bridge Creation**: Proxmox creates and manages bridges automatically
 - **Better Scalability**: Easy to add nodes without manual bridge configuration
 - **Network Isolation**: Built-in support for network segmentation
 - **Consistent Configuration**: Same setup works for single-node and multi-node deployments
+
+**Important**: While SDN creates the network infrastructure, you still need to:
+1. **Assign the gateway IP** to the Proxmox host on the SDN bridge (see [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway))
+2. **Configure NAT rules** on each Proxmox node for outbound internet access (see [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway))
 
 ## Architecture
 
@@ -160,6 +163,191 @@ pvesh get /cluster/sdn/zones
 pvesh get /cluster/sdn/vnets
 # Should show your zone and VNet configuration
 ```
+
+## Step 1.5: Configure Proxmox Host Network for SDN Gateway
+
+**CRITICAL**: While Proxmox SDN creates the bridges and VNets, it does **not** automatically configure the gateway IP on the host or set up NAT rules for outbound internet access. You must manually configure these on **each Proxmox node** that hosts VPS instances.
+
+### Assign Gateway IP to the SDN Bridge
+
+The SDN gateway IP (e.g., `10.15.3.1`) must be assigned to the Proxmox host on the SDN bridge (`OCvpsnet`). Without this, VPS instances and the vps-gateway container cannot route traffic through the gateway.
+
+1. **Add Gateway IP to the SDN Bridge**:
+
+```bash
+# Add the subnet gateway IP to the OCvpsnet bridge (same on all nodes)
+ip addr add 10.15.3.1/24 dev OCvpsnet
+```
+
+2. **Make the Configuration Persistent**:
+
+Create a dedicated configuration file in `/etc/network/interfaces.d/` to keep Obiente Cloud networking separate from the main interfaces file:
+
+```bash
+# Ensure interfaces.d is sourced (usually already configured)
+grep -q 'source /etc/network/interfaces.d' /etc/network/interfaces || \
+  echo 'source /etc/network/interfaces.d/*' >> /etc/network/interfaces
+
+# Create the Obiente Cloud VPS network configuration
+cat > /etc/network/interfaces.d/ocvps << 'EOF'
+# Obiente Cloud VPS Network Configuration
+# This assigns the subnet gateway IP to the SDN bridge
+# so the Proxmox host can route traffic for VPS instances.
+#
+# This IP (10.15.3.1) is the same on all nodes - it's the subnet gateway.
+# The vps-gateway container has a separate IP (e.g., 10.15.3.10) configured in Step 2.
+
+auto OCvpsnet
+iface OCvpsnet inet static
+    address 10.15.3.1/24
+EOF
+```
+
+**Note**: The `10.15.3.1` address is the **subnet gateway** - the same on all nodes. This is different from the vps-gateway container IP (`10.15.3.10`, `10.15.3.11`, etc.) which is configured when creating the LXC container in Step 2.
+
+3. **Verify the Gateway IP**:
+
+```bash
+# Check the IP is assigned
+ip addr show OCvpsnet
+# Should show 10.15.3.1/24
+
+# Test connectivity from a VPS or gateway container
+ping -c 3 10.15.3.1
+# Should receive replies
+```
+
+### Configure NAT Rules for Outbound Internet Access
+
+**CRITICAL**: VPS instances need NAT (Network Address Translation) to access the internet. Proxmox SDN's SNAT option may not work correctly in all configurations. You must manually configure NAT rules on **each Proxmox node**.
+
+#### Option A: Using nftables (Recommended for Proxmox 8+)
+
+Create or edit `/etc/nftables.conf`:
+
+```nft
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+# Basic filter table (allow all by default)
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy accept;
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+
+# NAT table for SDN subnet
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        
+        # DNAT for vps-gateway API port (adjust IP and port as needed)
+        # This allows API instances to connect to the gateway from external networks
+        # Change 10.15.3.10 to match your vps-gateway container's IP on this node
+        ip daddr <YOUR_PUBLIC_IP> tcp dport 1537 dnat to 10.15.3.10:1537
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        
+        # SNAT for VPS subnet - allows VPS instances to access the internet
+        # Replace vmbr0 with your external interface and <YOUR_PUBLIC_IP> with your node's public IP
+        ip saddr 10.15.3.0/24 oifname "vmbr0" snat to <YOUR_PUBLIC_IP>
+    }
+}
+```
+
+Apply the rules:
+
+```bash
+# Load the nftables configuration
+nft -f /etc/nftables.conf
+
+# Enable nftables to start on boot
+systemctl enable nftables
+systemctl start nftables
+
+# Verify the rules are loaded
+nft list ruleset
+```
+
+#### Option B: Using iptables (Legacy)
+
+If you prefer iptables:
+
+```bash
+# Enable IP forwarding (required for NAT)
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Make IP forwarding persistent
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+sysctl -p
+
+# Add SNAT rule for VPS subnet
+iptables -t nat -A POSTROUTING -s 10.15.3.0/24 -o vmbr0 -j SNAT --to-source <YOUR_PUBLIC_IP>
+
+# Or use MASQUERADE (automatically uses the outgoing interface's IP)
+iptables -t nat -A POSTROUTING -s 10.15.3.0/24 -o vmbr0 -j MASQUERADE
+
+# Add DNAT rule for vps-gateway API port (optional, for external API access)
+# Change 10.15.3.10 to match your vps-gateway container's IP on this node
+iptables -t nat -A PREROUTING -d <YOUR_PUBLIC_IP> -p tcp --dport 1537 -j DNAT --to-destination 10.15.3.10:1537
+
+# Save iptables rules to persist across reboots
+iptables-save > /etc/iptables/rules.v4
+```
+
+### Verify NAT Configuration
+
+1. **Check NAT Rules**:
+
+```bash
+# For nftables
+nft list ruleset | grep -A 10 "chain postrouting"
+
+# For iptables
+iptables -t nat -L POSTROUTING -v -n
+```
+
+2. **Test Internet Access from VPS/Gateway**:
+
+```bash
+# From inside the vps-gateway container or a VPS
+ping -c 3 8.8.8.8
+curl ifconfig.me
+# Should show your node's public IP
+```
+
+3. **Debug with conntrack**:
+
+```bash
+# Watch NAT translations in real-time
+conntrack -L | grep 10.15.3
+# Should show source IP being translated
+```
+
+### Multi-Node NAT Configuration
+
+For multi-node clusters, **each node** needs its own NAT configuration:
+
+| Node   | SDN Bridge IP | NAT Source IP (SNAT)    | vps-gateway IP |
+|--------|---------------|-------------------------|----------------|
+| Node 1 | `10.15.3.1`   | Node 1's public IP      | `10.15.3.10`   |
+| Node 2 | `10.15.3.1`*  | Node 2's public IP      | `10.15.3.11`   |
+| Node 3 | `10.15.3.1`*  | Node 3's public IP      | `10.15.3.12`   |
+
+*Each node can use `10.15.3.1` because VXLAN traffic is local to each node.
+
+**Important**: Ensure each node's SNAT rule uses that node's own public IP. This ensures VPS traffic from each node exits through that node's network interface.
 
 ## Step 2: Create Gateway LXC Container
 
@@ -734,6 +922,98 @@ sudo firewall-cmd --reload
    - **"VPS_NODE_GATEWAY_ENDPOINTS not configured"**: Ensure node-to-gateway mapping is set in API service
    - **"No gateway endpoint configured for node"**: Verify the node name matches the mapping in `VPS_NODE_GATEWAY_ENDPOINTS`
 
+### No Internet Access from VPS/Gateway
+
+This is one of the most common issues. If VPS instances or the vps-gateway cannot reach the internet, follow these steps:
+
+1. **Verify Gateway IP is Assigned to Proxmox Host**:
+
+   ```bash
+   # On Proxmox node, check if gateway IP is assigned to SDN bridge
+   ip addr show OCvpsnet | grep 10.15.3.1
+   # Should show: inet 10.15.3.1/24
+   
+   # If missing, add it:
+   ip addr add 10.15.3.1/24 dev OCvpsnet
+   ```
+
+2. **Verify NAT Rules are Configured**:
+
+   ```bash
+   # For nftables
+   nft list ruleset | grep -A 5 "chain postrouting"
+   # Should show SNAT rule for 10.15.3.0/24
+   
+   # For iptables
+   iptables -t nat -L POSTROUTING -v -n
+   # Should show MASQUERADE or SNAT rule for 10.15.3.0/24
+   ```
+
+3. **Check IP Forwarding is Enabled**:
+
+   ```bash
+   sysctl net.ipv4.ip_forward
+   # Should return: net.ipv4.ip_forward = 1
+   
+   # If disabled, enable it:
+   sysctl -w net.ipv4.ip_forward=1
+   echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+   ```
+
+4. **Test Connectivity Step by Step**:
+
+   ```bash
+   # From VPS/Gateway: Test gateway reachability
+   ping -c 3 10.15.3.1
+   
+   # From Proxmox node: Test if traffic reaches the node
+   tcpdump -i OCvpsnet host 10.15.3.11
+   
+   # From Proxmox node: Test if traffic is being NATed
+   tcpdump -i vmbr0 host 8.8.8.8
+   ```
+
+5. **Check conntrack for NAT Translations**:
+
+   ```bash
+   # On Proxmox node
+   conntrack -L | grep 10.15.3
+   # Look for entries showing source IP translation
+   # If entries show [UNREPLIED], NAT is not working correctly
+   ```
+
+6. **Verify Default Route on VPS/Gateway**:
+
+   ```bash
+   # Inside VPS or gateway container
+   ip route
+   # Should show: default via 10.15.3.1 dev eth0
+   
+   # If missing, add it:
+   ip route add default via 10.15.3.1
+   ```
+
+7. **Check DNS Configuration**:
+
+   ```bash
+   # Inside VPS or gateway container
+   cat /etc/resolv.conf
+   # Should contain valid DNS servers (e.g., 1.1.1.1 or 8.8.8.8)
+   
+   # Test DNS resolution
+   nslookup google.com
+   ```
+
+**Common Causes:**
+
+- **Missing gateway IP on Proxmox host**: SDN does not automatically assign the gateway IP to the host
+- **Missing NAT rules**: SDN's SNAT option may not work; manual NAT configuration is required
+- **IP forwarding disabled**: Required for the Proxmox node to route traffic
+- **Firewall blocking traffic**: Check Proxmox firewall and nftables/iptables rules
+- **Wrong default route**: VPS/gateway must use the SDN gateway IP as default route
+
+See [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway) for detailed configuration instructions.
+
 ### DHCP Not Working
 
 1. **Check dnsmasq Process**:
@@ -908,7 +1188,7 @@ VPS VMs:
   - Outbound traffic routes through the gateway on the same node
 ```
 
-**Note**: With SDN, SNAT is handled automatically when enabled in the subnet configuration. However, for multi-node deployments, each gateway should route outbound traffic through its node's network interface, and optionally use a dedicated outbound IP for traffic isolation.
+**Important**: While SDN provides the SNAT option in subnet configuration, it may not work correctly in all setups. You should **manually configure NAT rules** on each Proxmox node (see [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway)). For multi-node deployments, each gateway should route outbound traffic through its node's network interface, and optionally use a dedicated outbound IP for traffic isolation.
 
 ## Multi-Node Network Routing
 
@@ -1100,13 +1380,18 @@ SDN is recommended for **all deployments** (single-node and multi-node) because 
 
 **Key Advantages:**
 
-- **Automatic SNAT**: Handles source NAT for internet access automatically - no manual iptables configuration needed
 - **Centralized Management**: Configure networks at datacenter level
 - **Automatic Bridge Creation**: Proxmox creates and manages bridges automatically
 - **Better Scalability**: Easy to add nodes without manual bridge configuration
 - **Network Isolation**: Built-in support for network segmentation
 - **Consistent Configuration**: Same setup works for single-node and multi-node deployments
 - **Multi-Node Support**: SDN spans entire Proxmox cluster automatically when you scale
+
+**Important Notes:**
+
+- SDN creates the network infrastructure (bridges, VNets, subnets) but does **not** automatically configure the gateway IP on the host or NAT rules
+- You must manually assign the gateway IP to the SDN bridge on each Proxmox node (see [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway))
+- You must manually configure NAT rules (iptables or nftables) on each node for outbound internet access (see [Step 1.5](#step-15-configure-proxmox-host-network-for-sdn-gateway))
 
 **SDN Zone and VNet Naming**
 
