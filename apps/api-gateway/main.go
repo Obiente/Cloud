@@ -29,9 +29,11 @@ import (
 )
 
 const (
-	readHeaderTimeout       = 10 * time.Second
-	writeTimeout            = 30 * time.Second
-	idleTimeout             = 2 * time.Minute
+	readHeaderTimeout = 10 * time.Second
+	// Longer write timeout to keep server-streaming responses (VPS logs, terminals) alive
+	writeTimeout = 10 * time.Minute
+	// Allow longer idle periods because streaming uses periodic heartbeats
+	idleTimeout             = 5 * time.Minute
 	gracefulShutdownMessage = "shutting down server"
 )
 
@@ -685,7 +687,8 @@ func (p *ReverseProxy) getHTTPClient() *http.Client {
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+			// Creation calls can take minutes; give backends room to respond
+			ResponseHeaderTimeout: 2 * time.Minute,
 			DisableKeepAlives:     false,
 			ForceAttemptHTTP2:     false, // Disable forced HTTP/2 - let it negotiate naturally
 			WriteBufferSize:       4096,
@@ -694,7 +697,8 @@ func (p *ReverseProxy) getHTTPClient() *http.Client {
 
 		p.httpClient = &http.Client{
 			Transport: transport,
-			Timeout:   30 * time.Second,
+			// Allow long-running unary requests like CreateVPS; streaming still uses the zero-timeout client branch
+			Timeout: 5 * time.Minute,
 		}
 	})
 	return p.httpClient
@@ -810,6 +814,41 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, value := range values {
 			req.Header.Add(key, value)
+		}
+	}
+
+	// Preserve client IP information from Traefik
+	// Traefik sets X-Forwarded-For when trustedIPs are configured
+	// We need to preserve this header so backend services can identify the real client
+	// If X-Forwarded-For is already set by Traefik, keep it as-is
+	// If not, try to extract from X-Real-IP or RemoteAddr
+	xffFromRequest := r.Header.Get("X-Forwarded-For")
+	xrealFromRequest := r.Header.Get("X-Real-IP")
+	logger.Debug("[API Gateway] IP Headers from request - X-Forwarded-For: %s, X-Real-IP: %s, RemoteAddr: %s",
+		xffFromRequest, xrealFromRequest, r.RemoteAddr)
+
+	if req.Header.Get("X-Forwarded-For") == "" {
+		// No X-Forwarded-For from Traefik, try X-Real-IP
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+			req.Header.Set("X-Forwarded-For", realIP)
+			logger.Debug("[API Gateway] Set X-Forwarded-For from X-Real-IP: %s", realIP)
+		} else {
+			// Fallback: use RemoteAddr (but this will be the proxy/Traefik IP)
+			clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err == nil && clientIP != "" {
+				req.Header.Set("X-Forwarded-For", clientIP)
+				logger.Debug("[API Gateway] Set X-Forwarded-For from RemoteAddr: %s", clientIP)
+			}
+		}
+	} else {
+		logger.Debug("[API Gateway] X-Forwarded-For already set by upstream: %s", xffFromRequest)
+	}
+
+	// Also preserve X-Real-IP if present from Traefik
+	if req.Header.Get("X-Real-IP") == "" {
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+			req.Header.Set("X-Real-IP", realIP)
+			logger.Debug("[API Gateway] Set X-Real-IP: %s", realIP)
 		}
 	}
 
@@ -1227,11 +1266,19 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	}
 
 	hostHeaderSet := false
+	xForwardedForSet := false
+	xRealIPSet := false
 	for key, values := range r.Header {
 		if strings.EqualFold(key, "Host") {
 			backendConn.Write([]byte(fmt.Sprintf("Host: %s\r\n", target.Host)))
 			hostHeaderSet = true
 			continue
+		}
+		if strings.EqualFold(key, "X-Forwarded-For") {
+			xForwardedForSet = true
+		}
+		if strings.EqualFold(key, "X-Real-IP") {
+			xRealIPSet = true
 		}
 		for _, value := range values {
 			if _, err := backendConn.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value))); err != nil {
@@ -1244,6 +1291,29 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	if !hostHeaderSet {
 		backendConn.Write([]byte(fmt.Sprintf("Host: %s\r\n", target.Host)))
 	}
+
+	// Preserve client IP information for WebSocket connections
+	// Traefik sets X-Forwarded-For when trustedIPs are configured
+	if !xForwardedForSet {
+		// No X-Forwarded-For from Traefik, try X-Real-IP or RemoteAddr
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" && !xRealIPSet {
+			backendConn.Write([]byte(fmt.Sprintf("X-Forwarded-For: %s\r\n", realIP)))
+		} else {
+			// Fallback: use RemoteAddr (but this will be the proxy/Traefik IP)
+			clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err == nil && clientIP != "" {
+				backendConn.Write([]byte(fmt.Sprintf("X-Forwarded-For: %s\r\n", clientIP)))
+			}
+		}
+	}
+
+	// Also preserve X-Real-IP if present from Traefik
+	if !xRealIPSet {
+		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+			backendConn.Write([]byte(fmt.Sprintf("X-Real-IP: %s\r\n", realIP)))
+		}
+	}
+
 	backendConn.Write([]byte("\r\n"))
 
 	if r.Body != nil {

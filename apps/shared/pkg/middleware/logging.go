@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -65,8 +66,9 @@ func RequestLogger(next http.Handler) http.Handler {
 			statusCode:     http.StatusOK,
 		}
 
-		// Log incoming request (only at info level or above)
-		logger.Debug("[Request] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		// Log incoming request with real client IP (extracted from proxied headers if available)
+		clientIP := GetClientIP(r)
+		logger.Debug("[Request] %s %s from %s (RemoteAddr: %s)", r.Method, r.URL.Path, clientIP, r.RemoteAddr)
 
 		if debug {
 			// Log important headers
@@ -123,6 +125,34 @@ func maskAuth(auth string) string {
 		return auth[:15] + "..."
 	}
 	return auth
+}
+
+// GetClientIP extracts the real client IP from the request, checking proxied headers first
+// Order of precedence:
+// 1. X-Forwarded-For (standard, comma-separated list; uses first IP)
+// 2. X-Real-IP (alternative header set by some proxies)
+// 3. r.RemoteAddr (fallback to direct connection)
+func GetClientIP(r *http.Request) string {
+	// Check X-Forwarded-For first (may contain multiple IPs)
+	if xForwardedFor := r.Header.Get("X-Forwarded-For"); xForwardedFor != "" {
+		// X-Forwarded-For can contain multiple IPs separated by commas
+		// The first one is typically the real client IP
+		if idx := strings.Index(xForwardedFor, ","); idx != -1 {
+			return strings.TrimSpace(xForwardedFor[:idx])
+		}
+		return strings.TrimSpace(xForwardedFor)
+	}
+
+	// Check X-Real-IP as fallback
+	if xRealIP := r.Header.Get("X-Real-IP"); xRealIP != "" {
+		return strings.TrimSpace(xRealIP)
+	}
+
+	// Fallback to RemoteAddr (direct connection)
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // CORSDebugLogger specifically logs CORS-related information
