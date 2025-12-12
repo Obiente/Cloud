@@ -265,6 +265,7 @@ message GameServerLogLine {
   string line = 1;
   google.protobuf.Timestamp timestamp = 2;
   optional obiente.cloud.common.v1.LogLevel level = 3;
+  bool stderr = 4;
 }
 
 message GetGameServerMetricsRequest {

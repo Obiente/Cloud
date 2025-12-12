@@ -20,6 +20,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	"github.com/obiente/cloud/apps/shared/pkg/redis"
 	vpssvc "github.com/obiente/cloud/apps/vps-service/internal/service"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
@@ -61,6 +62,20 @@ func main() {
 		logger.Fatalf("failed to initialize database: %v", err)
 	}
 	logger.Info("✓ Database initialized")
+
+	// Initialize Redis
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "redis:6379"
+	}
+	if err := redis.InitRedis(redis.Config{
+		Addr:     redisAddr,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	}); err != nil {
+		logger.Fatalf("failed to initialize Redis: %v", err)
+	}
+	logger.Info("✓ Redis initialized")
 
 	port := os.Getenv("PORT")
 	if port == "" {

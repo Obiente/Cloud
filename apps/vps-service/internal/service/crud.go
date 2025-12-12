@@ -11,6 +11,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/redis"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -135,8 +136,8 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// Generate VPS ID
 	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
 
-	// Get or create log streamer for this VPS
-	logStreamer := GetVPSLogStreamer(vpsID)
+	// Create Redis log writer for this VPS using shared helper
+	logWriter := redis.NewLogStreamer(vpsID).WithAutoExpiry(24 * time.Hour).AsLogWriter()
 
 	// Convert proto to VPSConfig
 	config := &orchestrator.VPSConfig{
@@ -308,7 +309,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// VPS creation can take 1-2 minutes, but HTTP requests typically timeout at 30-60 seconds
 	createCtx, createCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer createCancel()
-	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(createCtx, config, logStreamer)
+	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(createCtx, config, logWriter)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS: %w", err))
 	}
@@ -355,6 +356,9 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 		return nil, err
 	}
 
+	// Keep external calls bounded so the API response doesn't hang for minutes
+	const lookupTimeout = 5 * time.Second
+
 	vpsID := req.Msg.GetVpsId()
 	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
 		return nil, err
@@ -368,80 +372,69 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	// Sync status from Proxmox to ensure we show current status
-	// This prevents showing stale status like REBOOTING when VPS has actually finished rebooting
-	if vps.InstanceID != nil {
-		s.syncVPSStatusFromProxmox(ctx, vpsID)
-		// Refresh VPS after sync to get updated status
-		if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-			// If refresh fails, continue with original vps - sync is best-effort
-			logger.Warn("[VPS Service] Failed to refresh VPS after status sync: %v", err)
-		}
-	}
+	// Return current (cached) details immediately
+	resp := connect.NewResponse(&vpsv1.GetVPSResponse{Vps: vpsToProto(&vps)})
 
-	// If VPS has an instance ID, try to fetch latest disk size and IP addresses from Proxmox
+	// Best-effort async refresh: status, disk, IPs with bounded timeouts
 	if vps.InstanceID != nil {
-		// Try to get IP addresses from VPS manager (tries guest agent first, falls back to gateway)
-		// This uses the VPS's NodeID to get the correct Proxmox client and gateway client
-		vpsManager, err := orchestrator.NewVPSManager()
-		if err == nil {
-			defer vpsManager.Close()
-			
-			// Get node name for Proxmox operations
-			nodeName := ""
-			if vps.NodeID != nil && *vps.NodeID != "" {
-				nodeName = *vps.NodeID
+		cachedVPS := vps // capture for goroutine
+		go func() {
+			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), lookupTimeout)
+			defer refreshCancel()
+
+			// Sync status (best effort)
+			s.syncVPSStatusFromProxmox(refreshCtx, vpsID)
+
+			// Fetch disk/IPs
+			vpsManager, err := orchestrator.NewVPSManager()
+			if err != nil {
+				logger.Warn("[VPS Service] Failed to create VPS manager for IP/disk refresh: %v", err)
+				return
 			}
-			
-			// Try to get disk size from Proxmox if we have a node
+			defer vpsManager.Close()
+
+			nodeName := ""
+			if cachedVPS.NodeID != nil && *cachedVPS.NodeID != "" {
+				nodeName = *cachedVPS.NodeID
+			}
+
 			if nodeName != "" {
 				proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
 				if err == nil {
 					vmIDInt := 0
-					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+					fmt.Sscanf(*cachedVPS.InstanceID, "%d", &vmIDInt)
 					if vmIDInt > 0 {
-						// Try to get disk size from Proxmox
-						if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodeName, vmIDInt); err == nil && diskSize > 0 {
-							// Update database if disk size is different
-							if vps.DiskBytes != diskSize {
-								vps.DiskBytes = diskSize
-								database.DB.Model(&vps).Update("disk_bytes", diskSize)
-							}
+						if diskSize, err := proxmoxClient.GetVMDiskSize(refreshCtx, nodeName, vmIDInt); err == nil && diskSize > 0 && cachedVPS.DiskBytes != diskSize {
+							database.DB.Model(&cachedVPS).Update("disk_bytes", diskSize)
 						}
 					}
 				}
 			}
-			
-			// Try to get IP addresses (uses VPS's NodeID for gateway client)
-			ipv4, ipv6, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
+
+			// IP refresh
+			ipv4, ipv6, err := vpsManager.GetVPSIPAddresses(refreshCtx, vpsID)
 			if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
-				// Update database with IP addresses (from guest agent or gateway)
+				updates := map[string]interface{}{}
 				if len(ipv4) > 0 {
-					ipv4JSON, _ := json.Marshal(ipv4)
-					vps.IPv4Addresses = string(ipv4JSON)
+					if ipv4JSON, mErr := json.Marshal(ipv4); mErr == nil {
+						updates["ipv4_addresses"] = string(ipv4JSON)
+					}
 				}
 				if len(ipv6) > 0 {
-					ipv6JSON, _ := json.Marshal(ipv6)
-					vps.IPv6Addresses = string(ipv6JSON)
+					if ipv6JSON, mErr := json.Marshal(ipv6); mErr == nil {
+						updates["ipv6_addresses"] = string(ipv6JSON)
+					}
 				}
-				if len(ipv4) > 0 || len(ipv6) > 0 {
-					database.DB.Model(&vps).Updates(map[string]interface{}{
-						"ipv4_addresses": vps.IPv4Addresses,
-						"ipv6_addresses": vps.IPv6Addresses,
-					})
-					logger.Info("[VPS Service] Updated IP addresses for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
+				if len(updates) > 0 {
+					database.DB.Model(&cachedVPS).Updates(updates)
 				}
 			} else if err != nil {
-				logger.Debug("[VPS Service] Failed to get IP addresses for VPS %s (guest agent and gateway both unavailable): %v", vpsID, err)
+				logger.Debug("[VPS Service] Failed to get IP addresses for VPS %s (guest agent/gateway unavailable): %v", vpsID, err)
 			}
-		} else {
-			logger.Warn("[VPS Service] Failed to create VPS manager for IP sync: %v", err)
-		}
+		}()
 	}
 
-	return connect.NewResponse(&vpsv1.GetVPSResponse{
-		Vps: vpsToProto(&vps),
-	}), nil
+	return resp, nil
 }
 
 // UpdateVPS updates a VPS instance

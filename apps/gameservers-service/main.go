@@ -19,6 +19,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/redis"
 
 	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 
@@ -64,11 +65,25 @@ func main() {
 		logger.Info("✓ Metrics database initialized")
 	}
 
-	// Initialize Redis (for caching)
+	// Initialize Redis (for log streaming)
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "redis:6379"
+	}
+	if err := redis.InitRedis(redis.Config{
+		Addr:     redisAddr,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	}); err != nil {
+		logger.Fatalf("failed to initialize Redis: %v", err)
+	}
+	logger.Info("✓ Redis initialized for log streaming")
+
+	// Also initialize the old Redis cache (database.InitRedis) if needed for other features
 	if err := database.InitRedis(); err != nil {
-		logger.Warn("Redis initialization failed: %v. Some features may not work correctly.", err)
+		logger.Warn("Redis cache initialization failed: %v. Some features may not work correctly.", err)
 	} else {
-		logger.Info("✓ Redis initialized")
+		logger.Info("✓ Redis cache initialized")
 	}
 
 	port := os.Getenv("PORT")

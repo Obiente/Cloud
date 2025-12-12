@@ -12,6 +12,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/redis"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -83,7 +84,7 @@ func (s *Service) StreamVPSStatus(ctx context.Context, req *connect.Request[vpsv
 	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("not implemented"))
 }
 
-// StreamVPSLogs streams VPS provisioning logs
+// StreamVPSLogs streams VPS provisioning logs from Redis
 func (s *Service) StreamVPSLogs(ctx context.Context, req *connect.Request[vpsv1.StreamVPSLogsRequest], stream *connect.ServerStream[vpsv1.VPSLogLine]) error {
 	ctx, err := s.ensureAuthenticated(ctx, req)
 	if err != nil {
@@ -95,22 +96,28 @@ func (s *Service) StreamVPSLogs(ctx context.Context, req *connect.Request[vpsv1.
 		return err
 	}
 
-	// Get or create log streamer
-	logStreamer := GetVPSLogStreamer(vpsID)
+	// Read and send buffered logs first from Redis
+	streamer := redis.NewLogStreamer(vpsID)
+	bufferedLogs, lastID, err := streamer.ReadBufferedLogs(ctx, "0", 1000)
+	if err != nil {
+		logger.Error("[StreamVPSLogs] Failed to read buffered logs from Redis for VPS %s: %v", vpsID, err)
+		// Don't fail, just continue with empty buffer
+		lastID = "0"
+	}
 
-	// Subscribe to log updates
-	logChan := logStreamer.Subscribe()
-	defer logStreamer.Unsubscribe(logChan)
-
-	// Send buffered logs first
-	bufferedLogs := logStreamer.GetLogs()
-	for _, logLine := range bufferedLogs {
+	for _, logEntry := range bufferedLogs {
 		// Check context before sending
 		if ctx.Err() != nil {
 			return nil
 		}
+		// Convert Redis log entry to protobuf VPSLogLine
+		logLine := &vpsv1.VPSLogLine{
+			Line:       logEntry.Line,
+			Stderr:     logEntry.Stderr,
+			LineNumber: logEntry.LineNumber,
+			Timestamp:  timestamppb.New(logEntry.Timestamp),
+		}
 		if err := stream.Send(logLine); err != nil {
-			// Check if context was cancelled
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -118,46 +125,51 @@ func (s *Service) StreamVPSLogs(ctx context.Context, req *connect.Request[vpsv1.
 		}
 	}
 
+	// Stream new logs from Redis
+	logChan, errChan := streamer.Stream(ctx, lastID)
+
 	// Start keepalive ticker to prevent connection timeout
-	// Send a heartbeat every 15 seconds to keep the connection alive
-	keepaliveTicker := time.NewTicker(15 * time.Second)
+	keepaliveTicker := time.NewTicker(5 * time.Second)
 	defer keepaliveTicker.Stop()
 
-	// Stream new logs as they arrive
 	for {
 		select {
 		case <-ctx.Done():
-			// Context cancelled (client disconnected or timeout)
+			return nil
+		case err := <-errChan:
+			if err != nil {
+				logger.Error("[StreamVPSLogs] Error streaming logs from Redis for VPS %s: %v", vpsID, err)
+			}
 			return nil
 		case <-keepaliveTicker.C:
-			// Send keepalive heartbeat to prevent connection timeout
-			// Use an empty log line to keep the connection alive
-			// The frontend can ignore empty lines or use them to detect connection health
+			// Send keepalive heartbeat
 			heartbeat := &vpsv1.VPSLogLine{
-				Line:       "", // Empty line for keepalive (frontend will ignore)
+				Line:       "",
 				Stderr:     false,
-				LineNumber: 0, // Keepalive doesn't increment line number
+				LineNumber: 0,
 				Timestamp:  timestamppb.Now(),
 			}
 			if err := stream.Send(heartbeat); err != nil {
-				// If send fails, check if context was cancelled
 				if ctx.Err() != nil {
 					return nil
 				}
-				// For other errors, return nil to ensure proper stream closure
 				return nil
 			}
-		case logLine, ok := <-logChan:
+		case logEntry, ok := <-logChan:
 			if !ok {
-				// Channel closed, stream ended normally
 				return nil
+			}
+			// Convert Redis log entry to protobuf VPSLogLine
+			logLine := &vpsv1.VPSLogLine{
+				Line:       logEntry.Line,
+				Stderr:     logEntry.Stderr,
+				LineNumber: logEntry.LineNumber,
+				Timestamp:  timestamppb.New(logEntry.Timestamp),
 			}
 			if err := stream.Send(logLine); err != nil {
-				// Check if context was cancelled
 				if ctx.Err() != nil {
 					return nil
 				}
-				// For other errors, return nil to ensure proper stream closure
 				return nil
 			}
 		}

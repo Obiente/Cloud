@@ -1459,6 +1459,7 @@ type GameServerLogLine struct {
 	Line          string                 `protobuf:"bytes,1,opt,name=line,proto3" json:"line,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Level         *v1.LogLevel           `protobuf:"varint,3,opt,name=level,proto3,enum=obiente.cloud.common.v1.LogLevel,oneof" json:"level,omitempty"`
+	Stderr        bool                   `protobuf:"varint,4,opt,name=stderr,proto3" json:"stderr,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1512,6 +1513,13 @@ func (x *GameServerLogLine) GetLevel() v1.LogLevel {
 		return *x.Level
 	}
 	return v1.LogLevel(0)
+}
+
+func (x *GameServerLogLine) GetStderr() bool {
+	if x != nil {
+		return x.Stderr
+	}
+	return false
 }
 
 type GetGameServerMetricsRequest struct {
@@ -5369,11 +5377,12 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x05_tailB\b\n" +
 	"\x06_sinceB\b\n" +
 	"\x06_untilB\x0f\n" +
-	"\r_search_query\"\xa9\x01\n" +
+	"\r_search_query\"\xc1\x01\n" +
 	"\x11GameServerLogLine\x12\x12\n" +
 	"\x04line\x18\x01 \x01(\tR\x04line\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12<\n" +
-	"\x05level\x18\x03 \x01(\x0e2!.obiente.cloud.common.v1.LogLevelH\x00R\x05level\x88\x01\x01B\b\n" +
+	"\x05level\x18\x03 \x01(\x0e2!.obiente.cloud.common.v1.LogLevelH\x00R\x05level\x88\x01\x01\x12\x16\n" +
+	"\x06stderr\x18\x04 \x01(\bR\x06stderrB\b\n" +
 	"\x06_level\"\x92\x02\n" +
 	"\x1bGetGameServerMetricsRequest\x12$\n" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12>\n" +

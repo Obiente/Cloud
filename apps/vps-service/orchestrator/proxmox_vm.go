@@ -1218,7 +1218,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									// Use separate context to avoid parent context cancellation
 									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size) after move", actualDiskKey, vmID, diskSizeGB)
 									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
-									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
 									resizeCancel()
 									if resizeErr != nil {
@@ -1234,7 +1234,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 									// Use separate context to avoid parent context cancellation
 									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
 									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
-									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
 									resizeCancel()
 									if resizeErr != nil {
@@ -1435,7 +1435,8 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 		// Now update the config with all other parameters
 		// Use separate context to avoid parent context cancellation during long operations
-		configCtx, configCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Allow generous time because Proxmox config writes can exceed 30s under load
+		configCtx, configCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer configCancel()
 		resp, err := pc.apiRequestForm(configCtx, "PUT", updateEndpoint, formData)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
