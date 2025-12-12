@@ -22,13 +22,39 @@ type CORSConfig struct {
 func DefaultCORSConfig() *CORSConfig {
 	// Get allowed origins from environment
 	originsEnv := os.Getenv("CORS_ORIGIN")
-	allowedOrigins := []string{"*"}
+	allowedOrigins := []string{}
+	allowCredentials := true
+
 	if originsEnv != "" {
 		allowedOrigins = strings.Split(originsEnv, ",")
 		// Trim spaces
 		for i, origin := range allowedOrigins {
 			allowedOrigins[i] = strings.TrimSpace(origin)
 		}
+	} else {
+		// Developer-friendly defaults for local environments so dashboard → API calls don't need extra env config
+		allowedOrigins = []string{
+			"http://localhost",
+			"http://127.0.0.1",
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"http://localhost:3001",
+			"http://127.0.0.1:3001",
+			"http://api.localhost",
+			"http://api.localhost:80",
+			"http://api.localhost:8080",
+			"http://api.localhost:880",
+		}
+
+		// When relying on the defaults we only need Authorization headers (no cookies),
+		// so disable credentials to keep wildcard/preflight logic simple.
+		allowCredentials = false
+	}
+
+	// If nothing is configured, fall back to permissive wildcard without credentials
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"*"}
+		allowCredentials = false
 	}
 
 	return &CORSConfig{
@@ -74,7 +100,7 @@ func DefaultCORSConfig() *CORSConfig {
 			"Grpc-Message",
 			"Grpc-Status-Details-Bin",
 		},
-		AllowCredentials: true,
+		AllowCredentials: allowCredentials,
 		MaxAge:           "7200", // 2 hours
 	}
 }
@@ -94,12 +120,10 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				allowedOrigin := ""
 				isWildcard := len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*"
 
-				// CORS Best Practice: Never use wildcard (*) with credentials
-				// If wildcard is configured but credentials are enabled, treat as invalid config
+				// If wildcard is configured with credentials, automatically fall back to non-credentialed wildcard
 				if isWildcard && config.AllowCredentials {
-					logger.Warn("[CORS] Invalid configuration: wildcard (*) cannot be used with credentials. Ignoring wildcard.")
-					isWildcard = false
-					// Don't allow any origin - this is a configuration error
+					logger.Warn("[CORS] Wildcard (*) cannot be combined with credentials - disabling credentials for compatibility")
+					config.AllowCredentials = false
 				}
 
 				// Determine if origin is allowed

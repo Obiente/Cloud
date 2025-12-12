@@ -206,7 +206,7 @@
         </ResourceHeader>
 
         <!-- Overview Cards -->
-        <ResourceDetailsGrid cols="1" cols-md="2" cols-lg="4">
+        <ResourceDetailsGrid :cols="{sm: 2, lg: 4}">
           <ResourceDetailCard
             label="CPU Cores"
             :icon="CpuChipIcon"
@@ -221,13 +221,13 @@
           </ResourceDetailCard>
           <ResourceDetailCard
             label="Storage"
-            :icon="ServerIcon"
+            :icon="ArchiveBoxIcon"
           >
             <OuiByte :value="vps.diskBytes" />
           </ResourceDetailCard>
           <ResourceDetailCard
             label="Instance Size"
-            :icon="CubeIcon"
+            :icon="ServerIcon"
           >
             {{ vps.size || "N/A" }}
           </ResourceDetailCard>
@@ -1515,7 +1515,7 @@ import {
   PencilIcon,
   CpuChipIcon,
   CircleStackIcon,
-  CubeIcon,
+  ArchiveBoxIcon,
   ShieldExclamationIcon,
   UserIcon,
   CogIcon,

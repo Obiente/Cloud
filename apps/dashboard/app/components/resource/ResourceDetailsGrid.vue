@@ -17,6 +17,6 @@
   }>();
 
   const finalCols = computed<Responsive<GridColumns>>(() => {
-    return props.cols ?? { sm: 1, md: 2, lg: 4 };
+    return props.cols ?? { sm: 2, lg: 4 };
   });
 </script>

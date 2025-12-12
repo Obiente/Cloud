@@ -319,8 +319,14 @@ export function useVPSProgress(options: VPSProgressOptions) {
   };
 
   const startStreamingInternal = async (isReconnect = false) => {
-    if (isStreaming.value || (streamController && !isReconnect)) {
+    // Avoid parallel streams; allow reconnection even if we still consider ourselves streaming
+    if (streamController && !isReconnect) {
       return;
+    }
+
+    // If a previous controller exists during reconnect, abort it before starting fresh
+    if (streamController && isReconnect) {
+      streamController.abort();
     }
 
     // Only reset progress if this is a fresh start, not a reconnect
@@ -333,7 +339,7 @@ export function useVPSProgress(options: VPSProgressOptions) {
     }
 
     isStreaming.value = true;
-    isReconnecting = false;
+    isReconnecting = isReconnect;
     lastLogUpdateTime.value = Date.now();
     
     // Abort previous stream if reconnecting
@@ -369,7 +375,9 @@ export function useVPSProgress(options: VPSProgressOptions) {
         }
       }
     } catch (err: any) {
-      if (err.name === "AbortError" || streamController?.signal.aborted) {
+      const message = err?.message?.toLowerCase?.() || "";
+      const isCanceledCode = err?.code === "canceled" || err?.code === "cancelled";
+      if (err.name === "AbortError" || streamController?.signal.aborted || isCanceledCode || message.includes("aborted")) {
         return;
       }
       // Suppress benign stream errors
@@ -384,14 +392,13 @@ export function useVPSProgress(options: VPSProgressOptions) {
     } finally {
       const wasAborted = streamController?.signal.aborted || false;
       const shouldReconnect = isReconnecting || (!wasAborted && isStreaming.value);
-      streamController = null;
       stopIncrementalProgress();
+      streamController = null;
       
       // Only attempt to reconnect if the stream wasn't explicitly aborted
       // and we're still supposed to be streaming (or were in the process of reconnecting)
       if (shouldReconnect) {
-        // Stream ended unexpectedly, attempt to reconnect
-        // Don't set isStreaming to false yet - let reconnect handle it
+        isReconnecting = true;
         scheduleReconnect();
       } else {
         isStreaming.value = false;

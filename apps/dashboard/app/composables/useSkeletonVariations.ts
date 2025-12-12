@@ -76,6 +76,7 @@ export function useSkeletonVariations(seed?: number) {
       subtitleWidth: `${(6 + random() * 8).toFixed(2)}rem`,
       labelWidth: `${(4 + random() * 4).toFixed(2)}rem`,
       valueWidth: `${(3 + random() * 3).toFixed(2)}rem`,
+      shortWidth: `${(2 + random() * 2).toFixed(2)}rem`,
       iconOpacity: 0.2 + random() * 0.3,
       iconScale: 0.9 + random() * 0.2,
     };
@@ -87,6 +88,7 @@ export function useSkeletonVariations(seed?: number) {
     subtitleWidth: randomTextWidthByType("subtitle"),
     labelWidth: randomTextWidthByType("label"),
     valueWidth: randomTextWidthByType("value"),
+    shortWidth: randomTextWidthByType("short"),
     iconOpacity: iconVar.opacity,
     iconScale: iconVar.scale,
   };
