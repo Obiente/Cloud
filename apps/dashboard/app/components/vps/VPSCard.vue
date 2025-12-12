@@ -125,10 +125,10 @@
         <OuiText size="xs" weight="medium" color="secondary" class="opacity-50">IP Addresses</OuiText>
         <OuiFlex gap="xs" wrap="wrap">
           <OuiBadge variant="secondary" size="xs" class="opacity-30">
-            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+            <OuiSkeleton :width="skeletonVariations.shortWidth" height="0.875rem" variant="text" class="bg-transparent" />
           </OuiBadge>
           <OuiBadge variant="secondary" size="xs" class="opacity-30">
-            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+            <OuiSkeleton :width="skeletonVariations.shortWidth" height="0.875rem" variant="text" class="bg-transparent" />
           </OuiBadge>
         </OuiFlex>
       </OuiStack>
@@ -169,6 +169,8 @@
     CircleStackIcon,
     Cog6ToothIcon,
     ExclamationTriangleIcon,
+    CpuChipIcon,
+    ArchiveBoxIcon,
   } from "@heroicons/vue/24/outline";
   import { VPSStatus, type VPSInstance } from "@obiente/proto";
   import { date } from "@obiente/proto/utils";
@@ -183,7 +185,7 @@
   import OuiStack from "~/components/oui/Stack.vue";
   import OuiFlex from "~/components/oui/Flex.vue";
   import OuiText from "~/components/oui/Text.vue";
-  import { randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
+  import { useSkeletonVariations } from "~/composables/useSkeletonVariations";
   import { useVPSProgress } from "~/composables/useVPSProgress";
 
   interface Props {
@@ -205,8 +207,20 @@
   const organizationId = useOrganizationId();
   const isActioning = ref(false);
 
-  // Generate random variations for skeleton icons
-  const iconVar = randomIconVariation();
+  // Deterministic skeleton variations to avoid SSR/client mismatches
+  const stringToSeed = (value: string) => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash * 31 + value.charCodeAt(i)) % 233280;
+    }
+    return hash;
+  };
+
+  const skeletonSeed = computed(() =>
+    stringToSeed(props.vps?.id || props.vps?.name || "vps-card"),
+  );
+
+  const skeletonVariations = computed(() => useSkeletonVariations(skeletonSeed.value));
 
   // VPS progress tracking - initialize with placeholder values
   const vpsProgress = ref<ReturnType<typeof useVPSProgress> | null>(null);
@@ -473,23 +487,24 @@
   const resources = computed(() => {
     if (props.loading || !props.vps) {
       return [
-        { icon: ServerIcon, label: "CPU" },
+        { icon: CpuChipIcon, label: "CPU" },
         { icon: CircleStackIcon, label: "Memory" },
+        { icon: ArchiveBoxIcon, label: "Storage" },
       ];
     }
     return [
       {
-        icon: ServerIcon,
-        label: `${props.vps.cpuCores} CPU`,
+        icon: CpuChipIcon,
+        label: `${props.vps.cpuCores} Core${props.vps.cpuCores !== 1 ? 's' : ''}`,
       },
-    {
-      icon: CircleStackIcon,
-      label: formatMemory(props.vps.memoryBytes),
-    },
-    {
-      icon: CircleStackIcon,
-      label: formatDisk(props.vps.diskBytes),
-    },
+      {
+        icon: CircleStackIcon,
+        label: formatMemory(props.vps.memoryBytes),
+      },
+      {
+        icon: ArchiveBoxIcon,
+        label: formatDisk(props.vps.diskBytes),
+      },
     ];
   });
 
