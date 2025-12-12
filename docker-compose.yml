@@ -269,11 +269,13 @@ services:
     container_name: obiente-gameservers-service
     environment:
       PORT: 3006
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-notifications, *common-redis]
     depends_on:
       postgres:
         condition: service_healthy
       timescaledb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     dns_search: []
     networks:
@@ -349,9 +351,11 @@ services:
     container_name: obiente-vps-service
     environment:
       PORT: 3008
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications, *common-redis]
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     dns_search: []
     networks:

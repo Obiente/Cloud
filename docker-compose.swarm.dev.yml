@@ -575,7 +575,7 @@ services:
       dockerfile: apps/vps-service/Dockerfile
     environment:
       PORT: 3008
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications, *common-redis]
     deploy:
       mode: replicated
       replicas: 1
