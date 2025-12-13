@@ -12,7 +12,129 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/vpsgateway/v1/gateway_service.proto.
  */
 export const file_obiente_cloud_vpsgateway_v1_gateway_service: GenFile = /*@__PURE__*/
-  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAijAEKF0FsbG9jYXRlUHVibGljSVBSZXF1ZXN0Eg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEQoJcHVibGljX2lwGAQgASgJEg8KB2dhdGV3YXkYBSABKAkSDwoHbmV0bWFzaxgGIAEoCSJyChhBbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USEgoKaXBfYWRkcmVzcxgBIAEoCRIPCgdnYXRld2F5GAIgASgJEg8KB25ldG1hc2sYAyABKAkSDwoHc3VjY2VzcxgEIAEoCBIPCgdtZXNzYWdlGAUgASgJIjYKEFJlbGVhc2VJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkiNQoRUmVsZWFzZUlQUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIlAKFlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhEKCXB1YmxpY19pcBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCSI7ChdSZWxlYXNlUHVibGljSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iegoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMEhYKDnNzaF9wdWJsaWNfa2V5GAYgASgJIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkieAoLTGVhc2VSZWNvcmQSEwoLbWFjX2FkZHJlc3MYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCRIQCghob3N0bmFtZRgDIAEoCRIuCgpleHBpcmVzX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKlAQoOT3JnTGVhc2VSZWNvcmQSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRISCgppcF9hZGRyZXNzGAQgASgJEi4KCmV4cGlyZXNfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKCWlzX3B1YmxpYxgGIAEoCCISChBHZXRMZWFzZXNSZXF1ZXN0Ik0KEUdldExlYXNlc1Jlc3BvbnNlEjgKBmxlYXNlcxgBIAMoCzIoLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MZWFzZVJlY29yZCI+ChNHZXRPcmdMZWFzZXNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiUwoUR2V0T3JnTGVhc2VzUmVzcG9uc2USOwoGbGVhc2VzGAEgAygLMisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLk9yZ0xlYXNlUmVjb3JkIngKEURlc2lyZWRBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIRCglpc19wdWJsaWMYBSABKAgiXQoWU3luY0FsbG9jYXRpb25zUmVxdWVzdBJDCgthbGxvY2F0aW9ucxgBIAMoCzIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5EZXNpcmVkQWxsb2NhdGlvbiJbChdTeW5jQWxsb2NhdGlvbnNSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg0KBWFkZGVkGAIgASgFEg8KB3JlbW92ZWQYAyABKAUSDwoHbWVzc2FnZRgEIAEoCTKLCgoRVlBTR2F0ZXdheVNlcnZpY2USbwoPUmVnaXN0ZXJHYXRld2F5Eisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdhdGV3YXlNZXNzYWdlGisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdhdGV3YXlNZXNzYWdlKAEwARJtCgpBbGxvY2F0ZUlQEi4ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXNwb25zZRJ/ChBBbGxvY2F0ZVB1YmxpY0lQEjQub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlUHVibGljSVBSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlUHVibGljSVBSZXNwb25zZRJqCglSZWxlYXNlSVASLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVxdWVzdBouLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5SZWxlYXNlSVBSZXNwb25zZRJ8Cg9SZWxlYXNlUHVibGljSVASMy5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZVB1YmxpY0lQUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5SZWxlYXNlUHVibGljSVBSZXNwb25zZRJkCgdMaXN0SVBzEisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXNwb25zZRJrCghQcm94eVNTSBIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5Qcm94eVNTSFJlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXNwb25zZSgBMAESeQoOR2V0R2F0ZXdheUluZm8SMi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0R2F0ZXdheUluZm9SZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVzcG9uc2USagoJR2V0TGVhc2VzEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldExlYXNlc1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0TGVhc2VzUmVzcG9uc2UScwoMR2V0T3JnTGVhc2VzEjAub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldE9yZ0xlYXNlc1JlcXVlc3QaMS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0T3JnTGVhc2VzUmVzcG9uc2USfAoPU3luY0FsbG9jYXRpb25zEjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlN5bmNBbGxvY2F0aW9uc1JlcXVlc3QaNC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuU3luY0FsbG9jYXRpb25zUmVzcG9uc2VCVVpTZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvdnBzZ2F0ZXdheS92MTt2cHNnYXRld2F5djFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEigAEKGUFkZFN0YXRpY0RIQ1BMZWFzZVJlcXVlc3QSEwoLbWFjX2FkZHJlc3MYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCRIOCgZ2cHNfaWQYAyABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAQgASgJEhEKCWlzX3B1YmxpYxgFIAEoCCI+ChpBZGRTdGF0aWNESENQTGVhc2VSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkigwEKHFJlbW92ZVN0YXRpY0RIQ1BMZWFzZVJlcXVlc3QSEwoLbWFjX2FkZHJlc3MYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCRIOCgZ2cHNfaWQYAyABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAQgASgJEhEKCWlzX3B1YmxpYxgFIAEoCCJBCh1SZW1vdmVTdGF0aWNESENQTGVhc2VSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAijAEKF0FsbG9jYXRlUHVibGljSVBSZXF1ZXN0Eg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEQoJcHVibGljX2lwGAQgASgJEg8KB2dhdGV3YXkYBSABKAkSDwoHbmV0bWFzaxgGIAEoCSJyChhBbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USEgoKaXBfYWRkcmVzcxgBIAEoCRIPCgdnYXRld2F5GAIgASgJEg8KB25ldG1hc2sYAyABKAkSDwoHc3VjY2VzcxgEIAEoCBIPCgdtZXNzYWdlGAUgASgJIjYKEFJlbGVhc2VJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkiNQoRUmVsZWFzZUlQUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIlAKFlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhEKCXB1YmxpY19pcBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCSI7ChdSZWxlYXNlUHVibGljSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLYAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKCWlzX3B1YmxpYxgHIAEoCCJRCg9MaXN0SVBzUmVzcG9uc2USPgoLYWxsb2NhdGlvbnMYASADKAsyKS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuSVBBbGxvY2F0aW9uInoKD1Byb3h5U1NIUmVxdWVzdBIVCg1jb25uZWN0aW9uX2lkGAEgASgJEgwKBHR5cGUYAiABKAkSDgoGdGFyZ2V0GAMgASgJEgwKBHBvcnQYBCABKAUSDAoEZGF0YRgFIAEoDBIWCg5zc2hfcHVibGljX2tleRgGIAEoCSJUChBQcm94eVNTSFJlc3BvbnNlEhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMEg0KBWVycm9yGAQgASgJIhcKFUdldEdhdGV3YXlJbmZvUmVxdWVzdCLwAQoWR2V0R2F0ZXdheUluZm9SZXNwb25zZRIPCgd2ZXJzaW9uGAEgASgJEhcKD2RoY3BfcG9vbF9zdGFydBgCIAEoCRIVCg1kaGNwX3Bvb2xfZW5kGAMgASgJEhMKC3N1Ym5ldF9tYXNrGAQgASgJEhIKCmdhdGV3YXlfaXAYBSABKAkSEwoLZG5zX3NlcnZlcnMYBiADKAkSEQoJdG90YWxfaXBzGAcgASgFEhUKDWFsbG9jYXRlZF9pcHMYCCABKAUSEwoLZGhjcF9zdGF0dXMYCSABKAkSGAoQc3NoX3Byb3h5X3N0YXR1cxgKIAEoCSKkAgoOR2F0ZXdheU1lc3NhZ2USDAoEdHlwZRgBIAEoCRJGCgxyZWdpc3RyYXRpb24YAiABKAsyMC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2F0ZXdheVJlZ2lzdHJhdGlvbhIPCgdtZXRyaWNzGAMgASgJEjwKB3JlcXVlc3QYBCABKAsyKy5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2F0ZXdheVJlcXVlc3QSPgoIcmVzcG9uc2UYBSABKAsyLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2F0ZXdheVJlc3BvbnNlEi0KCWhlYXJ0YmVhdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAirAEKE0dhdGV3YXlSZWdpc3RyYXRpb24SEgoKZ2F0ZXdheV9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEhIKCmdhdGV3YXlfaXAYAyABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAQgASgJEhUKDWRoY3BfcG9vbF9lbmQYBSABKAkSEwoLc3VibmV0X21hc2sYBiABKAkSFwoPZ2F0ZXdheV9pcF9kaGNwGAcgASgJIkUKDkdhdGV3YXlSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSDgoGbWV0aG9kGAIgASgJEg8KB3BheWxvYWQYAyABKAwiVgoPR2F0ZXdheVJlc3BvbnNlEhIKCnJlcXVlc3RfaWQYASABKAkSDwoHc3VjY2VzcxgCIAEoCBIPCgdwYXlsb2FkGAMgASgMEg0KBWVycm9yGAQgASgJIngKC0xlYXNlUmVjb3JkEhMKC21hY19hZGRyZXNzGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkSEAoIaG9zdG5hbWUYAyABKAkSLgoKZXhwaXJlc19hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAipQEKDk9yZ0xlYXNlUmVjb3JkEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEgoKaXBfYWRkcmVzcxgEIAEoCRIuCgpleHBpcmVzX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIRCglpc19wdWJsaWMYBiABKAgiEgoQR2V0TGVhc2VzUmVxdWVzdCJNChFHZXRMZWFzZXNSZXNwb25zZRI4CgZsZWFzZXMYASADKAsyKC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuTGVhc2VSZWNvcmQiPgoTR2V0T3JnTGVhc2VzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIlMKFEdldE9yZ0xlYXNlc1Jlc3BvbnNlEjsKBmxlYXNlcxgBIAMoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5PcmdMZWFzZVJlY29yZCJ4ChFEZXNpcmVkQWxsb2NhdGlvbhIOCgZ2cHNfaWQYASABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAIgASgJEhIKCmlwX2FkZHJlc3MYAyABKAkSEwoLbWFjX2FkZHJlc3MYBCABKAkSEQoJaXNfcHVibGljGAUgASgIIl0KFlN5bmNBbGxvY2F0aW9uc1JlcXVlc3QSQwoLYWxsb2NhdGlvbnMYASADKAsyLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuRGVzaXJlZEFsbG9jYXRpb24iWwoXU3luY0FsbG9jYXRpb25zUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBINCgVhZGRlZBgCIAEoBRIPCgdyZW1vdmVkGAMgASgFEg8KB21lc3NhZ2UYBCABKAkypAwKEVZQU0dhdGV3YXlTZXJ2aWNlEm8KD1JlZ2lzdGVyR2F0ZXdheRIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZRorLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZSgBMAESbQoKQWxsb2NhdGVJUBIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVzcG9uc2USfwoQQWxsb2NhdGVQdWJsaWNJUBI0Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USagoJUmVsZWFzZUlQEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VJUFJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVzcG9uc2USfAoPUmVsZWFzZVB1YmxpY0lQEjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZVB1YmxpY0lQUmVzcG9uc2USZAoHTGlzdElQcxIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVzcG9uc2USawoIUHJveHlTU0gSLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlByb3h5U1NIUmVzcG9uc2UoATABEnkKDkdldEdhdGV3YXlJbmZvEjIub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRHYXRld2F5SW5mb1Jlc3BvbnNlEmoKCUdldExlYXNlcxItLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRMZWFzZXNSZXF1ZXN0Gi4ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldExlYXNlc1Jlc3BvbnNlEnMKDEdldE9yZ0xlYXNlcxIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRPcmdMZWFzZXNSZXF1ZXN0GjEub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldE9yZ0xlYXNlc1Jlc3BvbnNlEnwKD1N5bmNBbGxvY2F0aW9ucxIzLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5TeW5jQWxsb2NhdGlvbnNSZXF1ZXN0GjQub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlN5bmNBbGxvY2F0aW9uc1Jlc3BvbnNlEoUBChJBZGRTdGF0aWNESENQTGVhc2USNi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuQWRkU3RhdGljREhDUExlYXNlUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BZGRTdGF0aWNESENQTGVhc2VSZXNwb25zZRKOAQoVUmVtb3ZlU3RhdGljREhDUExlYXNlEjkub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbW92ZVN0YXRpY0RIQ1BMZWFzZVJlcXVlc3QaOi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVtb3ZlU3RhdGljREhDUExlYXNlUmVzcG9uc2VCVVpTZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvdnBzZ2F0ZXdheS92MTt2cHNnYXRld2F5djFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+
+/**
+ * AddStaticDHCPLeaseRequest adds a static DHCP lease for a MAC/IP pair
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest
+ */
+export type AddStaticDHCPLeaseRequest = Message<"obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest"> & {
+  /**
+   * @generated from field: string mac_address = 1;
+   */
+  macAddress: string;
+
+  /**
+   * @generated from field: string ip_address = 2;
+   */
+  ipAddress: string;
+
+  /**
+   * @generated from field: string vps_id = 3;
+   */
+  vpsId: string;
+
+  /**
+   * @generated from field: string organization_id = 4;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: bool is_public = 5;
+   */
+  isPublic: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest.
+ * Use `create(AddStaticDHCPLeaseRequestSchema)` to create a new message.
+ */
+export const AddStaticDHCPLeaseRequestSchema: GenMessage<AddStaticDHCPLeaseRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 0);
+
+/**
+ * @generated from message obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse
+ */
+export type AddStaticDHCPLeaseResponse = Message<"obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse.
+ * Use `create(AddStaticDHCPLeaseResponseSchema)` to create a new message.
+ */
+export const AddStaticDHCPLeaseResponseSchema: GenMessage<AddStaticDHCPLeaseResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 1);
+
+/**
+ * RemoveStaticDHCPLeaseRequest removes a static DHCP lease for a MAC/IP pair
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest
+ */
+export type RemoveStaticDHCPLeaseRequest = Message<"obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest"> & {
+  /**
+   * @generated from field: string mac_address = 1;
+   */
+  macAddress: string;
+
+  /**
+   * @generated from field: string ip_address = 2;
+   */
+  ipAddress: string;
+
+  /**
+   * @generated from field: string vps_id = 3;
+   */
+  vpsId: string;
+
+  /**
+   * @generated from field: string organization_id = 4;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: bool is_public = 5;
+   */
+  isPublic: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest.
+ * Use `create(RemoveStaticDHCPLeaseRequestSchema)` to create a new message.
+ */
+export const RemoveStaticDHCPLeaseRequestSchema: GenMessage<RemoveStaticDHCPLeaseRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 2);
+
+/**
+ * @generated from message obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse
+ */
+export type RemoveStaticDHCPLeaseResponse = Message<"obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse.
+ * Use `create(RemoveStaticDHCPLeaseResponseSchema)` to create a new message.
+ */
+export const RemoveStaticDHCPLeaseResponseSchema: GenMessage<RemoveStaticDHCPLeaseResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 3);
 
 /**
  * AllocateIPRequest requests IP allocation for a VPS
@@ -54,7 +176,7 @@ export type AllocateIPRequest = Message<"obiente.cloud.vpsgateway.v1.AllocateIPR
  * Use `create(AllocateIPRequestSchema)` to create a new message.
  */
 export const AllocateIPRequestSchema: GenMessage<AllocateIPRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 0);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 4);
 
 /**
  * AllocateIPResponse returns the allocated IP address
@@ -103,7 +225,7 @@ export type AllocateIPResponse = Message<"obiente.cloud.vpsgateway.v1.AllocateIP
  * Use `create(AllocateIPResponseSchema)` to create a new message.
  */
 export const AllocateIPResponseSchema: GenMessage<AllocateIPResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 1);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 5);
 
 /**
  * AllocatePublicIPRequest requests public IP allocation for a VPS
@@ -159,7 +281,7 @@ export type AllocatePublicIPRequest = Message<"obiente.cloud.vpsgateway.v1.Alloc
  * Use `create(AllocatePublicIPRequestSchema)` to create a new message.
  */
 export const AllocatePublicIPRequestSchema: GenMessage<AllocatePublicIPRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 2);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 6);
 
 /**
  * AllocatePublicIPResponse returns the allocated public IP with configuration
@@ -208,7 +330,7 @@ export type AllocatePublicIPResponse = Message<"obiente.cloud.vpsgateway.v1.Allo
  * Use `create(AllocatePublicIPResponseSchema)` to create a new message.
  */
 export const AllocatePublicIPResponseSchema: GenMessage<AllocatePublicIPResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 3);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 7);
 
 /**
  * ReleaseIPRequest requests IP release for a VPS
@@ -236,7 +358,7 @@ export type ReleaseIPRequest = Message<"obiente.cloud.vpsgateway.v1.ReleaseIPReq
  * Use `create(ReleaseIPRequestSchema)` to create a new message.
  */
 export const ReleaseIPRequestSchema: GenMessage<ReleaseIPRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 4);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 8);
 
 /**
  * ReleaseIPResponse confirms IP release
@@ -264,7 +386,7 @@ export type ReleaseIPResponse = Message<"obiente.cloud.vpsgateway.v1.ReleaseIPRe
  * Use `create(ReleaseIPResponseSchema)` to create a new message.
  */
 export const ReleaseIPResponseSchema: GenMessage<ReleaseIPResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 5);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 9);
 
 /**
  * ReleasePublicIPRequest requests public IP release for a VPS
@@ -299,7 +421,7 @@ export type ReleasePublicIPRequest = Message<"obiente.cloud.vpsgateway.v1.Releas
  * Use `create(ReleasePublicIPRequestSchema)` to create a new message.
  */
 export const ReleasePublicIPRequestSchema: GenMessage<ReleasePublicIPRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 6);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 10);
 
 /**
  * ReleasePublicIPResponse confirms public IP release
@@ -327,7 +449,7 @@ export type ReleasePublicIPResponse = Message<"obiente.cloud.vpsgateway.v1.Relea
  * Use `create(ReleasePublicIPResponseSchema)` to create a new message.
  */
 export const ReleasePublicIPResponseSchema: GenMessage<ReleasePublicIPResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 7);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 11);
 
 /**
  * ListIPsRequest requests list of allocated IPs
@@ -355,7 +477,7 @@ export type ListIPsRequest = Message<"obiente.cloud.vpsgateway.v1.ListIPsRequest
  * Use `create(ListIPsRequestSchema)` to create a new message.
  */
 export const ListIPsRequestSchema: GenMessage<ListIPsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 8);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 12);
 
 /**
  * IPAllocation represents an allocated IP address
@@ -404,6 +526,13 @@ export type IPAllocation = Message<"obiente.cloud.vpsgateway.v1.IPAllocation"> &
    * @generated from field: google.protobuf.Timestamp lease_expires = 6;
    */
   leaseExpires?: Timestamp;
+
+  /**
+   * Whether this is a public IP (outside DHCP pool)
+   *
+   * @generated from field: bool is_public = 7;
+   */
+  isPublic: boolean;
 };
 
 /**
@@ -411,7 +540,7 @@ export type IPAllocation = Message<"obiente.cloud.vpsgateway.v1.IPAllocation"> &
  * Use `create(IPAllocationSchema)` to create a new message.
  */
 export const IPAllocationSchema: GenMessage<IPAllocation> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 9);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 13);
 
 /**
  * ListIPsResponse returns list of allocated IPs
@@ -432,7 +561,7 @@ export type ListIPsResponse = Message<"obiente.cloud.vpsgateway.v1.ListIPsRespon
  * Use `create(ListIPsResponseSchema)` to create a new message.
  */
 export const ListIPsResponseSchema: GenMessage<ListIPsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 10);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 14);
 
 /**
  * ProxySSHRequest is a message in the SSH proxy stream
@@ -489,7 +618,7 @@ export type ProxySSHRequest = Message<"obiente.cloud.vpsgateway.v1.ProxySSHReque
  * Use `create(ProxySSHRequestSchema)` to create a new message.
  */
 export const ProxySSHRequestSchema: GenMessage<ProxySSHRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 11);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 15);
 
 /**
  * ProxySSHResponse is a response in the SSH proxy stream
@@ -531,7 +660,7 @@ export type ProxySSHResponse = Message<"obiente.cloud.vpsgateway.v1.ProxySSHResp
  * Use `create(ProxySSHResponseSchema)` to create a new message.
  */
 export const ProxySSHResponseSchema: GenMessage<ProxySSHResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 12);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 16);
 
 /**
  * GetGatewayInfoRequest requests gateway information
@@ -548,7 +677,7 @@ export type GetGatewayInfoRequest = Message<"obiente.cloud.vpsgateway.v1.GetGate
  * Use `create(GetGatewayInfoRequestSchema)` to create a new message.
  */
 export const GetGatewayInfoRequestSchema: GenMessage<GetGatewayInfoRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 13);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 17);
 
 /**
  * GetGatewayInfoResponse returns gateway status and configuration
@@ -632,7 +761,7 @@ export type GetGatewayInfoResponse = Message<"obiente.cloud.vpsgateway.v1.GetGat
  * Use `create(GetGatewayInfoResponseSchema)` to create a new message.
  */
 export const GetGatewayInfoResponseSchema: GenMessage<GetGatewayInfoResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 14);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 18);
 
 /**
  * GatewayMessage is used in the RegisterGateway bidirectional stream
@@ -689,7 +818,7 @@ export type GatewayMessage = Message<"obiente.cloud.vpsgateway.v1.GatewayMessage
  * Use `create(GatewayMessageSchema)` to create a new message.
  */
 export const GatewayMessageSchema: GenMessage<GatewayMessage> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 15);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 19);
 
 /**
  * GatewayRegistration contains gateway registration information
@@ -746,7 +875,7 @@ export type GatewayRegistration = Message<"obiente.cloud.vpsgateway.v1.GatewayRe
  * Use `create(GatewayRegistrationSchema)` to create a new message.
  */
 export const GatewayRegistrationSchema: GenMessage<GatewayRegistration> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 16);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 20);
 
 /**
  * GatewayRequest wraps an RPC request from API to Gateway
@@ -781,7 +910,7 @@ export type GatewayRequest = Message<"obiente.cloud.vpsgateway.v1.GatewayRequest
  * Use `create(GatewayRequestSchema)` to create a new message.
  */
 export const GatewayRequestSchema: GenMessage<GatewayRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 17);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 21);
 
 /**
  * GatewayResponse wraps an RPC response from Gateway to API
@@ -823,7 +952,7 @@ export type GatewayResponse = Message<"obiente.cloud.vpsgateway.v1.GatewayRespon
  * Use `create(GatewayResponseSchema)` to create a new message.
  */
 export const GatewayResponseSchema: GenMessage<GatewayResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 18);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 22);
 
 /**
  * LeaseRecord represents an active DHCP lease
@@ -865,7 +994,7 @@ export type LeaseRecord = Message<"obiente.cloud.vpsgateway.v1.LeaseRecord"> & {
  * Use `create(LeaseRecordSchema)` to create a new message.
  */
 export const LeaseRecordSchema: GenMessage<LeaseRecord> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 19);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 23);
 
 /**
  * OrgLeaseRecord represents a lease associated with a VPS in an organization
@@ -921,7 +1050,7 @@ export type OrgLeaseRecord = Message<"obiente.cloud.vpsgateway.v1.OrgLeaseRecord
  * Use `create(OrgLeaseRecordSchema)` to create a new message.
  */
 export const OrgLeaseRecordSchema: GenMessage<OrgLeaseRecord> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 20);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 24);
 
 /**
  * GetLeasesRequest requests list of active DHCP leases
@@ -938,7 +1067,7 @@ export type GetLeasesRequest = Message<"obiente.cloud.vpsgateway.v1.GetLeasesReq
  * Use `create(GetLeasesRequestSchema)` to create a new message.
  */
 export const GetLeasesRequestSchema: GenMessage<GetLeasesRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 21);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 25);
 
 /**
  * GetLeasesResponse returns active DHCP leases from dnsmasq
@@ -959,7 +1088,7 @@ export type GetLeasesResponse = Message<"obiente.cloud.vpsgateway.v1.GetLeasesRe
  * Use `create(GetLeasesResponseSchema)` to create a new message.
  */
 export const GetLeasesResponseSchema: GenMessage<GetLeasesResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 22);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 26);
 
 /**
  * GetOrgLeasesRequest requests active leases for a specific organization
@@ -987,7 +1116,7 @@ export type GetOrgLeasesRequest = Message<"obiente.cloud.vpsgateway.v1.GetOrgLea
  * Use `create(GetOrgLeasesRequestSchema)` to create a new message.
  */
 export const GetOrgLeasesRequestSchema: GenMessage<GetOrgLeasesRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 23);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 27);
 
 /**
  * GetOrgLeasesResponse returns leases for an organization (for frontend display)
@@ -1008,7 +1137,7 @@ export type GetOrgLeasesResponse = Message<"obiente.cloud.vpsgateway.v1.GetOrgLe
  * Use `create(GetOrgLeasesResponseSchema)` to create a new message.
  */
 export const GetOrgLeasesResponseSchema: GenMessage<GetOrgLeasesResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 24);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 28);
 
 /**
  * DesiredAllocation represents an allocation desired from the database
@@ -1057,7 +1186,7 @@ export type DesiredAllocation = Message<"obiente.cloud.vpsgateway.v1.DesiredAllo
  * Use `create(DesiredAllocationSchema)` to create a new message.
  */
 export const DesiredAllocationSchema: GenMessage<DesiredAllocation> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 25);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 29);
 
 /**
  * SyncAllocationsRequest requests synchronization of allocations from database
@@ -1078,7 +1207,7 @@ export type SyncAllocationsRequest = Message<"obiente.cloud.vpsgateway.v1.SyncAl
  * Use `create(SyncAllocationsRequestSchema)` to create a new message.
  */
 export const SyncAllocationsRequestSchema: GenMessage<SyncAllocationsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 26);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 30);
 
 /**
  * SyncAllocationsResponse returns the result of sync operation
@@ -1120,7 +1249,7 @@ export type SyncAllocationsResponse = Message<"obiente.cloud.vpsgateway.v1.SyncA
  * Use `create(SyncAllocationsResponseSchema)` to create a new message.
  */
 export const SyncAllocationsResponseSchema: GenMessage<SyncAllocationsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 27);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 31);
 
 /**
  * VPSGatewayService provides DHCP management and SSH proxying for VPS instances
@@ -1243,6 +1372,26 @@ export const VPSGatewayService: GenService<{
     methodKind: "unary";
     input: typeof SyncAllocationsRequestSchema;
     output: typeof SyncAllocationsResponseSchema;
+  },
+  /**
+   * Add a static DHCP lease (MAC -> IP)
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease
+   */
+  addStaticDHCPLease: {
+    methodKind: "unary";
+    input: typeof AddStaticDHCPLeaseRequestSchema;
+    output: typeof AddStaticDHCPLeaseResponseSchema;
+  },
+  /**
+   * Remove a static DHCP lease (MAC -> IP)
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease
+   */
+  removeStaticDHCPLease: {
+    methodKind: "unary";
+    input: typeof RemoveStaticDHCPLeaseRequestSchema;
+    output: typeof RemoveStaticDHCPLeaseResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 0);

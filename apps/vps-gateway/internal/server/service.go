@@ -239,6 +239,7 @@ func (s *GatewayService) ListIPs(
 
 	protoAllocations := make([]*vpsgatewayv1.IPAllocation, len(allocations))
 	for i, alloc := range allocations {
+		isPublic := !s.dhcpManager.IsIPInPool(alloc.IPAddress)
 		protoAllocations[i] = &vpsgatewayv1.IPAllocation{
 			VpsId:          alloc.VPSID,
 			OrganizationId: alloc.OrganizationID,
@@ -246,6 +247,7 @@ func (s *GatewayService) ListIPs(
 			MacAddress:     alloc.MACAddress,
 			AllocatedAt:    timestamppb.New(alloc.AllocatedAt),
 			LeaseExpires:   timestamppb.New(alloc.LeaseExpires),
+			IsPublic:       isPublic,
 		}
 	}
 

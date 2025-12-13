@@ -46,6 +46,39 @@ service VPSGatewayService {
   // SyncAllocations syncs allocations from database as source of truth
   // Gateway releases IPs not in the list and ensures desired IPs are allocated
   rpc SyncAllocations(SyncAllocationsRequest) returns (SyncAllocationsResponse);
+  // Add a static DHCP lease (MAC -> IP)
+  rpc AddStaticDHCPLease(AddStaticDHCPLeaseRequest) returns (AddStaticDHCPLeaseResponse);
+
+  // Remove a static DHCP lease (MAC -> IP)
+  rpc RemoveStaticDHCPLease(RemoveStaticDHCPLeaseRequest) returns (RemoveStaticDHCPLeaseResponse);
+}
+
+// AddStaticDHCPLeaseRequest adds a static DHCP lease for a MAC/IP pair
+message AddStaticDHCPLeaseRequest {
+  string mac_address = 1;
+  string ip_address = 2;
+  string vps_id = 3;
+  string organization_id = 4;
+  bool is_public = 5;
+}
+
+message AddStaticDHCPLeaseResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// RemoveStaticDHCPLeaseRequest removes a static DHCP lease for a MAC/IP pair
+message RemoveStaticDHCPLeaseRequest {
+  string mac_address = 1;
+  string ip_address = 2;
+  string vps_id = 3;
+  string organization_id = 4;
+  bool is_public = 5;
+}
+
+message RemoveStaticDHCPLeaseResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // AllocateIPRequest requests IP allocation for a VPS
@@ -187,6 +220,9 @@ message IPAllocation {
   
   // Lease expiration time
   google.protobuf.Timestamp lease_expires = 6;
+  
+  // Whether this is a public IP (outside DHCP pool)
+  bool is_public = 7;
 }
 
 // ListIPsResponse returns list of allocated IPs

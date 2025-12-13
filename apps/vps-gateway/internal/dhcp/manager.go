@@ -1149,6 +1149,64 @@ func (m *Manager) releaseLeaseWithAPI(ctx context.Context, vpsID, macAddress str
 		return nil
 	}
 
+
 	logger.Debug("Successfully released lease with VPS Service for VPS %s", vpsID)
 	return nil
-}
+	}
+
+	// AddStaticDHCPLease adds a static DHCP lease for a MAC/IP pair (including public IPs)
+	func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		ip := net.ParseIP(ipAddress)
+		if ip == nil {
+			return fmt.Errorf("invalid IP address: %s", ipAddress)
+		}
+		alloc := &Allocation{
+			VPSID:          vpsID,
+			OrganizationID: orgID,
+			IPAddress:      ip,
+			MACAddress:     macAddress,
+			AllocatedAt:    time.Now(),
+			LeaseExpires:   time.Now().Add(24 * time.Hour),
+		}
+		m.allocations[vpsID] = alloc
+		if err := m.updateHostsFile(); err != nil {
+			delete(m.allocations, vpsID)
+			return fmt.Errorf("failed to update hosts file: %w", err)
+		}
+		if err := m.reloadDNSMasq(); err != nil {
+			logger.Error("Failed to reload dnsmasq after static lease add: %v", err)
+		}
+		if err := m.saveAllocations(); err != nil {
+			logger.Warn("Failed to persist allocations after static lease add: %v", err)
+		}
+		logger.Info("Added static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
+		return nil
+	}
+
+	// RemoveStaticDHCPLease removes a static DHCP lease for a MAC/IP pair (including public IPs)
+	func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		alloc, ok := m.allocations[vpsID]
+		if !ok {
+			return fmt.Errorf("no allocation found for VPSID %s", vpsID)
+		}
+		if alloc.MACAddress != macAddress || alloc.IPAddress.String() != ipAddress {
+			return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
+		}
+		delete(m.allocations, vpsID)
+		if err := m.updateHostsFile(); err != nil {
+			return fmt.Errorf("failed to update hosts file: %w", err)
+		}
+		if err := m.reloadDNSMasq(); err != nil {
+			logger.Error("Failed to reload dnsmasq after static lease removal: %v", err)
+		}
+		if err := m.saveAllocations(); err != nil {
+			logger.Warn("Failed to persist allocations after static lease removal: %v", err)
+		}
+		logger.Info("Removed static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
+		return nil
+	}
