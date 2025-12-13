@@ -516,6 +516,42 @@ func (VPSPublicIP) TableName() string {
 	return "vps_public_ips"
 }
 
+// DHCPLease represents a DHCP lease allocated to a VPS instance
+type DHCPLease struct {
+	ID             string     `gorm:"primaryKey;column:id" json:"id"`
+	VPSID          string     `gorm:"column:vps_id;index;not null" json:"vps_id"`                 // VPS instance ID
+	OrganizationID string     `gorm:"column:organization_id;index;not null" json:"organization_id"` // Organization ID
+	MACAddress     string     `gorm:"column:mac_address;uniqueIndex;not null" json:"mac_address"` // MAC address
+	IPAddress      string     `gorm:"column:ip_address;index;not null" json:"ip_address"`         // Allocated IP address
+	IsPublic       bool       `gorm:"column:is_public;default:false;not null" json:"is_public"`   // Is this a public IP
+	ExpiresAt      time.Time  `gorm:"column:expires_at;index;not null" json:"expires_at"`         // Lease expiration time
+	GatewayNode    string     `gorm:"column:gateway_node;index;not null" json:"gateway_node"`     // Gateway node that created the lease
+	CreatedAt      time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (DHCPLease) TableName() string {
+	return "dhcp_leases"
+}
+
+// BeforeCreate hook to set timestamps
+func (l *DHCPLease) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if l.CreatedAt.IsZero() {
+		l.CreatedAt = now
+	}
+	if l.UpdatedAt.IsZero() {
+		l.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (l *DHCPLease) BeforeUpdate(tx *gorm.DB) error {
+	l.UpdatedAt = time.Now()
+	return nil
+}
+
 // BeforeCreate hook to set timestamps
 func (ip *VPSPublicIP) BeforeCreate(tx *gorm.DB) error {
 	now := time.Now()
