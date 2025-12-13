@@ -428,6 +428,13 @@
                     </OuiStack>
                   </OuiCardBody>
                 </OuiCard>
+
+                <!-- Network Leases -->
+                <VpsLeases
+                  :leases="leases"
+                  :loading="leasesLoading"
+                  :error="leasesError"
+                />
               </ResourceDetailsGrid>
 
               <!-- Usage Statistics Section -->
@@ -2018,6 +2025,9 @@
   const AuditLogs = defineAsyncComponent(
     () => import("~/components/audit/AuditLogs.vue")
   );
+  const VpsLeases = defineAsyncComponent(
+    () => import("~/components/vps/VpsLeases.vue")
+  );
   const ResourceHeader = defineAsyncComponent(
     () => import("~/components/resource/ResourceHeader.vue")
   );
@@ -2036,6 +2046,7 @@
   import type { TabItem } from "~/components/oui/Tabs.vue";
   import { date } from "@obiente/proto/utils";
   import { formatDate } from "~/utils/common";
+  import { useVpsLeases } from "~/composables/useVpsLeases";
 
   definePageMeta({
     layout: "default",
@@ -2207,20 +2218,6 @@
     { immediate: true }
   );
 
-  // Refresh function with loading state
-  // This keeps existing data visible while refreshing in the background
-  const refreshVPS = async () => {
-    if (isRefreshing.value) return;
-    isRefreshing.value = true;
-    try {
-      // Use execute instead of refresh to avoid setting pending to true
-      // This keeps the existing UI visible while data is being fetched
-      await executeVPSData();
-    } finally {
-      isRefreshing.value = false;
-    }
-  };
-
   // Fetch SSH connection info
   const sshInfo = ref<{
     sshProxyCommand: string;
@@ -2285,6 +2282,43 @@
     },
     { immediate: true }
   );
+
+  // VPS Leases Management
+  const { leases, loading: leasesLoading, error: leasesError, fetchLeases } = useVpsLeases();
+
+  const fetchVpsLeases = async () => {
+    if (!orgId.value || !vpsId.value) return;
+    await fetchLeases(orgId.value, vpsId.value);
+  };
+
+  // Fetch leases when VPS or org changes
+  watch(
+    [() => vps.value?.id, orgId],
+    () => {
+      if (vps.value?.id && orgId.value) {
+        fetchVpsLeases();
+      }
+    },
+    { immediate: true }
+  );
+
+  // Refresh function with loading state
+  // This keeps existing data visible while refreshing in the background
+  const refreshVPS = async () => {
+    if (isRefreshing.value) return;
+    isRefreshing.value = true;
+    try {
+      // Use execute instead of refresh to avoid setting pending to true
+      // This keeps the existing UI visible while data is being fetched
+      await Promise.all([
+        executeVPSData(),
+        fetchVpsLeases(),
+        fetchSSHInfo(),
+      ]);
+    } finally {
+      isRefreshing.value = false;
+    }
+  };
 
   // SSH Keys Management
   const sshKeys = ref<

@@ -13,23 +13,31 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
+	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 	"vps-gateway/internal/logger"
+	"vps-gateway/internal/redis"
 )
 
 // Manager manages DHCP leases using dnsmasq
 type Manager struct {
-	poolStart      net.IP
-	poolEnd        net.IP
-	subnetMask     net.IPMask
-	gateway        net.IP
-	listenIP       net.IP // IP address to listen on (for multi-node support)
-	dnsServers     []net.IP
-	interfaceName  string
-	leasesFile     string
-	hostsFile      string
-	allocations    map[string]*Allocation // vps_id -> allocation
-	mu             sync.RWMutex
-	dhcpRunning    bool
+	poolStart              net.IP
+	poolEnd                net.IP
+	subnetMask             net.IPMask
+	gateway                net.IP
+	listenIP               net.IP // IP address to listen on (for multi-node support)
+	dnsServers             []net.IP
+	interfaceName          string
+	leasesFile             string
+	hostsFile              string
+	allocations            map[string]*Allocation // vps_id -> allocation
+	mu                     sync.RWMutex
+	dhcpRunning            bool
+	redisClient            *redis.Client
+	vpsServiceClient       vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
+	vpsServiceClientMu     sync.RWMutex                  // Protects client access
 }
 
 // Allocation represents an IP allocation for a VPS
@@ -40,6 +48,14 @@ type Allocation struct {
 	MACAddress    string
 	AllocatedAt   time.Time
 	LeaseExpires  time.Time
+}
+
+// LeaseInfo represents an active DHCP lease from dnsmasq
+type LeaseInfo struct {
+	MAC       string
+	IP        net.IP
+	Hostname  string
+	ExpiresAt time.Time
 }
 
 // Config holds DHCP configuration
@@ -177,6 +193,14 @@ func NewManager() (*Manager, error) {
 		allocations:   make(map[string]*Allocation),
 	}
 
+	// Initialize Redis client for cross-node coordination (optional)
+	if rc, err := redis.NewClient(); err != nil {
+		logger.Warn("Redis not available, proceeding without distributed reservation: %v", err)
+	} else {
+		manager.redisClient = rc
+		logger.Info("DHCP Manager: Redis enabled for atomic IP reservations")
+	}
+
 	// Load existing allocations from file
 	if err := manager.loadAllocations(); err != nil {
 		logger.Warn("Failed to load existing allocations: %v", err)
@@ -205,6 +229,15 @@ func NewManager() (*Manager, error) {
 	return manager, nil
 }
 
+// SetVPSServiceClient sets the VPS Service gRPC client for lease registration/release
+// This should be called from main() after the client is created
+func (m *Manager) SetVPSServiceClient(client vpsv1connect.VPSServiceClient) {
+	m.vpsServiceClientMu.Lock()
+	defer m.vpsServiceClientMu.Unlock()
+	m.vpsServiceClient = client
+	logger.Info("VPS Service client configured for lease operations")
+}
+
 // AllocateIP allocates an IP address for a VPS
 // If preferredIP is provided and allowPublicIP is true, it can allocate IPs outside the DHCP pool (for public IPs)
 func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, preferredIP string, allowPublicIP bool) (*Allocation, error) {
@@ -216,7 +249,7 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		return alloc, nil
 	}
 
-	// Determine IP to allocate
+	// Determine IP to allocate (with optional distributed reservation)
 	var ip net.IP
 	if preferredIP != "" {
 		ip = net.ParseIP(preferredIP)
@@ -224,19 +257,29 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 			return nil, fmt.Errorf("invalid preferred IP address: %s", preferredIP)
 		}
 		// Check if IP is in pool (unless allowPublicIP is true)
-		if !allowPublicIP && !m.isIPInPool(ip) {
+		if !allowPublicIP && !m.IsIPInPool(ip) {
 			return nil, fmt.Errorf("preferred IP %s is not in DHCP pool", preferredIP)
 		}
-		// Check if IP is already allocated
+		// Check if IP is already allocated locally
 		for _, alloc := range m.allocations {
 			if alloc.IPAddress.Equal(ip) {
 				return nil, fmt.Errorf("IP %s is already allocated", preferredIP)
 			}
 		}
+		// Attempt a distributed reservation to avoid double leases
+		if m.redisClient != nil && m.IsIPInPool(ip) {
+			key := m.redisReservationKey(ip)
+			ok, err := m.redisClient.SetNX(ctx, key, map[string]string{"vpsID": vpsID, "mac": macAddress}, 25*time.Hour)
+			if err != nil {
+				logger.Warn("Redis SetNX failed for preferred IP %s: %v", ip.String(), err)
+			} else if !ok {
+				return nil, fmt.Errorf("preferred IP %s is already reserved (distributed)", ip.String())
+			}
+		}
 	} else {
-		// Find next available IP
+		// Find next available IP, using Redis for atomic reservation if available
 		var err error
-		ip, err = m.findNextAvailableIP()
+		ip, err = m.findNextAvailableIPDistributed(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find available IP: %w", err)
 		}
@@ -256,7 +299,7 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 
 	// For public IPs (outside DHCP pool), skip dnsmasq configuration
 	// Public IPs are statically configured on the VPS, not via DHCP
-	if allowPublicIP && !m.isIPInPool(ip) {
+	if allowPublicIP && !m.IsIPInPool(ip) {
 		logger.Info("Allocated public IP %s (outside DHCP pool) for VPS %s - skipping dnsmasq configuration", ip.String(), vpsID)
 	} else {
 		// Update dnsmasq hosts file (for DHCP pool IPs)
@@ -275,6 +318,22 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 	// Persist allocation
 	if err := m.saveAllocations(); err != nil {
 		logger.Error("Failed to save allocations: %v", err)
+	}
+
+	// Save mapping to Redis for visibility (non-authoritative)
+	if m.redisClient != nil && m.IsIPInPool(ip) {
+		_ = m.redisClient.Set(ctx, m.redisAllocationKey(vpsID), map[string]string{"ip": ip.String(), "mac": macAddress, "org": orgID}, 25*time.Hour)
+	}
+
+	// Register lease with VPS Service API (database as source of truth)
+	// This prevents duplicate IP allocations across gateways
+	isPublic := allowPublicIP && !m.IsIPInPool(ip)
+	if err := m.registerLeaseWithAPI(ctx, vpsID, orgID, ip, isPublic); err != nil {
+		logger.Error("Failed to register lease with VPS Service: %v", err)
+		// Remove local allocation if API registration fails
+		delete(m.allocations, vpsID)
+		m.saveAllocations()
+		return nil, fmt.Errorf("failed to register lease with API: %w", err)
 	}
 
 	logger.Info("Allocated IP %s for VPS %s (org: %s)", ip.String(), vpsID, orgID)
@@ -310,6 +369,20 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 	// Persist allocation
 	if err := m.saveAllocations(); err != nil {
 		logger.Error("Failed to save allocations: %v", err)
+	}
+
+	// Cleanup Redis reservation and allocation mapping
+	if m.redisClient != nil {
+		_ = m.redisClient.Del(ctx, m.redisAllocationKey(vpsID))
+		if alloc.IPAddress.To4() != nil && m.IsIPInPool(alloc.IPAddress) {
+			_ = m.redisClient.Del(ctx, m.redisReservationKey(alloc.IPAddress))
+		}
+	}
+
+	// Release lease from VPS Service API
+	if err := m.releaseLeaseWithAPI(ctx, vpsID, alloc.MACAddress); err != nil {
+		logger.Error("Failed to release lease with VPS Service: %v", err)
+		// Non-fatal - local release is complete, will clean up eventually
 	}
 
 	logger.Info("Released IP %s for VPS %s", alloc.IPAddress.String(), vpsID)
@@ -386,7 +459,7 @@ func (m *Manager) Close() error {
 
 // Helper methods
 
-func (m *Manager) isIPInPool(ip net.IP) bool {
+func (m *Manager) IsIPInPool(ip net.IP) bool {
 	ip4 := ip.To4()
 	if ip4 == nil {
 		return false
@@ -440,6 +513,65 @@ func (m *Manager) findNextAvailableIP() (net.IP, error) {
 	return nil, fmt.Errorf("no available IPs in pool")
 }
 
+// findNextAvailableIPDistributed finds and atomically reserves the next free IP across nodes using Redis when available.
+func (m *Manager) findNextAvailableIPDistributed(ctx context.Context) (net.IP, error) {
+	// Fallback to local if Redis is not available
+	if m.redisClient == nil {
+		return m.findNextAvailableIP()
+	}
+
+	start4 := m.poolStart.To4()
+	end4 := m.poolEnd.To4()
+	if start4 == nil || end4 == nil {
+		return nil, fmt.Errorf("invalid pool configuration")
+	}
+
+	startInt := uint32(start4[0])<<24 | uint32(start4[1])<<16 | uint32(start4[2])<<8 | uint32(start4[3])
+	endInt := uint32(end4[0])<<24 | uint32(end4[1])<<16 | uint32(end4[2])<<8 | uint32(end4[3])
+
+	// Build a local set of allocations to skip
+	allocatedSet := make(map[uint32]bool)
+	for _, alloc := range m.allocations {
+		ip4 := alloc.IPAddress.To4()
+		if ip4 != nil {
+			ipInt := uint32(ip4[0])<<24 | uint32(ip4[1])<<16 | uint32(ip4[2])<<8 | uint32(ip4[3])
+			allocatedSet[ipInt] = true
+		}
+	}
+
+	// Iterate pool and attempt to reserve via Redis SETNX
+	for ipInt := startInt; ipInt <= endInt; ipInt++ {
+		if allocatedSet[ipInt] {
+			continue
+		}
+		ip := net.IP{byte(ipInt >> 24), byte(ipInt >> 16), byte(ipInt >> 8), byte(ipInt)}
+
+		ok, err := m.redisClient.SetNX(ctx, m.redisReservationKey(ip), map[string]any{"reserved": true}, 25*time.Hour)
+		if err != nil {
+			// If Redis fails, log and fallback to local strategy
+			logger.Warn("Redis reservation check failed: %v", err)
+			return m.findNextAvailableIP()
+		}
+		if ok {
+			// Successfully reserved globally
+			return ip, nil
+		}
+		// Already reserved by another node; continue
+	}
+
+	return nil, fmt.Errorf("no available IPs in pool (distributed)")
+}
+
+// redisReservationKey builds a key for IP reservations
+func (m *Manager) redisReservationKey(ip net.IP) string {
+	return fmt.Sprintf("vps:dhcp:pool:%s-%s:ip:%s", m.poolStart.String(), m.poolEnd.String(), ip.String())
+}
+
+// redisAllocationKey builds a key for VPS -> IP mapping
+func (m *Manager) redisAllocationKey(vpsID string) string {
+	return fmt.Sprintf("vps:dhcp:alloc:%s", vpsID)
+}
+
 func (m *Manager) countIPsInPool() int {
 	start4 := m.poolStart.To4()
 	end4 := m.poolEnd.To4()
@@ -468,17 +600,18 @@ func (m *Manager) updateHostsFile() error {
 	defer writer.Flush()
 
 	// Write header
-	writer.WriteString("# dnsmasq hosts file - managed by vps-gateway\n")
-	writer.WriteString("# Format: <ip> <hostname> [mac]\n\n")
+	writer.WriteString("# dnsmasq hosts/dhcp file - managed by vps-gateway\n")
+	writer.WriteString("# DNS entries: <ip> <hostname>\n")
+	writer.WriteString("# DHCP static entries: dhcp-host=<mac>,<ip>,<hostname>\n\n")
 
 	// Write allocations
 	for _, alloc := range m.allocations {
-		line := fmt.Sprintf("%s %s", alloc.IPAddress.String(), alloc.VPSID)
+		// DNS host entry
+		writer.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), alloc.VPSID))
+		// DHCP static mapping when MAC is known (works for in-pool and public IPs)
 		if alloc.MACAddress != "" {
-			line += fmt.Sprintf(" %s", alloc.MACAddress)
+			writer.WriteString(fmt.Sprintf("dhcp-host=%s,%s,%s\n", strings.ToLower(alloc.MACAddress), alloc.IPAddress.String(), alloc.VPSID))
 		}
-		line += "\n"
-		writer.WriteString(line)
 	}
 
 	return nil
@@ -817,4 +950,167 @@ func (m *Manager) syncWithLeases() error {
 
 	return nil
 }
+
+// GetActiveLeases returns current active leases parsed from dnsmasq lease file
+func (m *Manager) GetActiveLeases() ([]LeaseInfo, error) {
+	file, err := os.Open(m.leasesFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []LeaseInfo{}, nil
+		}
+		return nil, fmt.Errorf("failed to open leases file: %w", err)
+	}
+	defer file.Close()
+
+	var leases []LeaseInfo
+	scanner := bufio.NewScanner(file)
+	now := time.Now().Unix()
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
+			continue
+		}
+
+		// expiry mac ip hostname [client_id]
+		var expiry int64
+		if _, err := fmt.Sscanf(parts[0], "%d", &expiry); err != nil {
+			continue
+		}
+		if expiry < now {
+			continue
+		}
+		mac := strings.ToLower(parts[1])
+		ip := net.ParseIP(parts[2])
+		if ip == nil {
+			continue
+		}
+		hostname := parts[3]
+
+		leases = append(leases, LeaseInfo{
+			MAC:       mac,
+			IP:        ip,
+			Hostname:  hostname,
+			ExpiresAt: time.Unix(expiry, 0),
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read leases file: %w", err)
+	}
+
+	// Optional: cache leases in Redis for quick retrieval by other nodes
+	if m.redisClient != nil {
+		if cacheErr := m.cacheLeases(leases); cacheErr != nil {
+			logger.Debug("Failed to cache leases in Redis (non-fatal): %v", cacheErr)
+		}
+	}
+
+	return leases, nil
+}
+
+// cacheLeases stores active leases in Redis for quick retrieval
+// Uses a sorted set keyed by pool range for visibility
+func (m *Manager) cacheLeases(leases []LeaseInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
+	
+	// Store leases as JSON array with TTL
+	return m.redisClient.Set(ctx, cacheKey, leases, 30*time.Second)
+}
+
+// registerLeaseWithAPI registers a lease with the VPS Service API through persistent gRPC connection
+// This ensures the lease is recorded in the central database and prevents duplicate allocations
+func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationID string, ipAddress net.IP, isPublic bool) error {
+	m.vpsServiceClientMu.RLock()
+	client := m.vpsServiceClient
+	m.vpsServiceClientMu.RUnlock()
+
+	// Check if client is configured
+	if client == nil {
+		logger.Warn("VPS Service client not yet configured - lease registration deferred")
+		// Non-fatal for now; lease is already allocated locally
+		// In production, this would indicate a configuration problem
+		return nil
+	}
+
+	// Calculate lease expiry (e.g., 24 hours from now)
+	expiresAt := time.Now().Add(24 * time.Hour)
+	expiresPb := timestamppb.New(expiresAt)
+
+	// Create the gRPC request
+	req := &vpsv1.RegisterLeaseRequest{
+		VpsId:          vpsID,
+		OrganizationId: organizationID,
+		MacAddress:     "", // Gateway doesn't provide MAC - will be filled from allocation tracking
+		IpAddress:      ipAddress.String(),
+		ExpiresAt:      expiresPb,
+		IsPublic:       isPublic,
+	}
+
+	// Call the VPS Service RPC with a timeout
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := client.RegisterLease(ctx, connect.NewRequest(req))
+	if err != nil {
+		logger.Error("Failed to register lease with VPS Service: %v", err)
+		return fmt.Errorf("register lease API call failed: %w", err)
+	}
+
+	if !resp.Msg.Success {
+		logger.Error("VPS Service rejected lease registration: %s", resp.Msg.Message)
+		return fmt.Errorf("lease registration rejected by VPS Service: %s", resp.Msg.Message)
+	}
+
+	logger.Debug("Successfully registered lease with VPS Service for VPS %s (IP %s)", vpsID, ipAddress.String())
+	return nil
+}
+
+// releaseLeaseWithAPI releases a lease from the VPS Service API
+// This removes the lease from the central database
+func (m *Manager) releaseLeaseWithAPI(ctx context.Context, vpsID, macAddress string) error {
+	m.vpsServiceClientMu.RLock()
+	client := m.vpsServiceClient
+	m.vpsServiceClientMu.RUnlock()
+
+	// Check if client is configured
+	if client == nil {
+		logger.Debug("VPS Service client not yet configured - lease release deferred")
+		// Non-fatal; lease is already released locally
+		return nil
+	}
+
+	// Create the gRPC request
+	req := &vpsv1.ReleaseLeaseRequest{
+		VpsId:      vpsID,
+		MacAddress: macAddress,
+	}
+
+	// Call the VPS Service RPC with a timeout
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	resp, err := client.ReleaseLease(ctx, connect.NewRequest(req))
+	if err != nil {
+		logger.Error("Failed to release lease with VPS Service: %v", err)
+		return fmt.Errorf("release lease API call failed: %w", err)
+	}
+
+	if !resp.Msg.Success {
+		logger.Debug("VPS Service rejected lease release: %s", resp.Msg.Message)
+		// Non-fatal - lease is already released locally
+		return nil
+	}
+
+	logger.Debug("Successfully released lease with VPS Service for VPS %s", vpsID)
+	return nil
+}
+
+
 

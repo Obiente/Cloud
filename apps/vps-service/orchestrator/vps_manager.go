@@ -12,10 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"github.com/moby/moby/client"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 )
 
@@ -2292,8 +2295,8 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 	return results, nil
 }
 
-// SyncAllVPSStatuses syncs status for all VPS instances from Proxmox
-// This is used for periodic background sync to detect deleted VPSs
+// SyncAllVPSStatuses syncs status and IP addresses for all VPS instances from Proxmox
+// This is used for periodic background sync to detect deleted VPSs and update IP addresses
 // Returns a map of VPS IDs that were marked as DELETED (oldStatus -> newStatus)
 func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32, error) {
 	// Get all VPS instances that have an instance ID (are provisioned)
@@ -2302,10 +2305,11 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 		return nil, fmt.Errorf("failed to get VPS instances: %w", err)
 	}
 
-	logger.Info("[VPSManager] Syncing status for %d VPS instances", len(vpsInstances))
+	logger.Info("[VPSManager] Syncing status and IPs for %d VPS instances", len(vpsInstances))
 
 	syncedCount := 0
 	deletedCount := 0
+	ipUpdatedCount := 0
 	errorCount := 0
 	deletedVPSs := make(map[string]int32) // vpsID -> oldStatus
 
@@ -2328,7 +2332,7 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 				deletedCount++
 				deletedVPSs[vps.ID] = oldStatus
 				logger.Info("[VPSManager] VPS %s marked as DELETED during sync", vps.ID)
-				
+
 				// Clear IP addresses and instance ID to prevent stale data when VM ID is reused
 				if err := database.DB.Model(&updatedVPS).Updates(map[string]interface{}{
 					"ipv4_addresses": "[]",
@@ -2342,10 +2346,24 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 			} else if updatedVPS.Status != oldStatus {
 				syncedCount++
 			}
+
+			// For running VPSs, also sync IP addresses
+			// Status 1 = RUNNING (from mapProxmoxStatusToVPSStatus)
+			if updatedVPS.Status == 1 {
+				// Use a timeout for IP fetching to not block the sync
+				ipCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				_, _, err := vm.GetVPSIPAddresses(ipCtx, vps.ID)
+				cancel()
+				if err != nil {
+					logger.Debug("[VPSManager] Failed to sync IPs for VPS %s: %v", vps.ID, err)
+				} else {
+					ipUpdatedCount++
+				}
+			}
 		}
 	}
 
-	logger.Info("[VPSManager] Sync completed: %d synced, %d marked as deleted, %d errors", syncedCount, deletedCount, errorCount)
+	logger.Info("[VPSManager] Sync completed: %d status changed, %d IPs updated, %d marked as deleted, %d errors", syncedCount, ipUpdatedCount, deletedCount, errorCount)
 	return deletedVPSs, nil
 }
 
@@ -2434,5 +2452,94 @@ func (vm *VPSManager) ImportMissingVPSForAllOrgs(ctx context.Context) error {
 	}
 
 	logger.Info("[VPSManager] Import for all orgs completed: %d imported, %d skipped", totalImported, totalSkipped)
+	return nil
+}
+
+// GetVPSLeases retrieves DHCP lease information from the database
+func (vm *VPSManager) GetVPSLeases(ctx context.Context, organizationID string, vpsID *string) ([]*vpsv1.VPSLease, error) {
+	var leases []database.DHCPLease
+	query := database.DB.WithContext(ctx).Where("organization_id = ?", organizationID)
+
+	if vpsID != nil && *vpsID != "" {
+		query = query.Where("vps_id = ?", *vpsID)
+	}
+
+	if err := query.Find(&leases).Error; err != nil {
+		return nil, fmt.Errorf("failed to query DHCP leases: %w", err)
+	}
+
+	// Convert database leases to proto format
+	result := make([]*vpsv1.VPSLease, 0, len(leases))
+	for _, lease := range leases {
+		result = append(result, &vpsv1.VPSLease{
+			VpsId:          lease.VPSID,
+			OrganizationId: lease.OrganizationID,
+			MacAddress:     lease.MACAddress,
+			IpAddress:      lease.IPAddress,
+			ExpiresAt:      timestamppb.New(lease.ExpiresAt),
+			IsPublic:       lease.IsPublic,
+		})
+	}
+
+	return result, nil
+}
+
+// RegisterLease creates or updates a DHCP lease in the database
+func (vm *VPSManager) RegisterLease(ctx context.Context, req *vpsv1.RegisterLeaseRequest, gatewayNode string) error {
+	// Verify VPS exists and belongs to the organization
+	var vps database.VPSInstance
+	if err := database.DB.WithContext(ctx).Where("id = ? AND organization_id = ?", req.VpsId, req.OrganizationId).First(&vps).Error; err != nil {
+		return fmt.Errorf("VPS not found or organization mismatch: %w", err)
+	}
+
+	// Create or update the lease
+	lease := database.DHCPLease{
+		VPSID:          req.VpsId,
+		OrganizationID: req.OrganizationId,
+		MACAddress:     req.MacAddress,
+		IPAddress:      req.IpAddress,
+		IsPublic:       req.IsPublic,
+		ExpiresAt:      req.ExpiresAt.AsTime(),
+		GatewayNode:    gatewayNode,
+	}
+
+	// Check if lease with this MAC already exists
+	var existing database.DHCPLease
+	result := database.DB.WithContext(ctx).Where("mac_address = ?", req.MacAddress).First(&existing)
+
+	if result.Error == nil {
+		// Update existing lease
+		lease.ID = existing.ID
+		lease.CreatedAt = existing.CreatedAt
+		if err := database.DB.WithContext(ctx).Save(&lease).Error; err != nil {
+			return fmt.Errorf("failed to update lease: %w", err)
+		}
+		logger.Info("Updated DHCP lease: VPS=%s MAC=%s IP=%s", req.VpsId, req.MacAddress, req.IpAddress)
+	} else {
+		// Create new lease
+		lease.ID = uuid.New().String()
+		if err := database.DB.WithContext(ctx).Create(&lease).Error; err != nil {
+			return fmt.Errorf("failed to create lease: %w", err)
+		}
+		logger.Info("Created DHCP lease: VPS=%s MAC=%s IP=%s", req.VpsId, req.MacAddress, req.IpAddress)
+	}
+
+	return nil
+}
+
+// ReleaseLease removes a DHCP lease from the database
+func (vm *VPSManager) ReleaseLease(ctx context.Context, req *vpsv1.ReleaseLeaseRequest, gatewayNode string) error {
+	query := database.DB.WithContext(ctx).Where("vps_id = ?", req.VpsId)
+
+	// Optional: verify MAC address if provided
+	if req.MacAddress != "" {
+		query = query.Where("mac_address = ?", req.MacAddress)
+	}
+
+	if err := query.Delete(&database.DHCPLease{}).Error; err != nil {
+		return fmt.Errorf("failed to release lease: %w", err)
+	}
+
+	logger.Info("Released DHCP lease: VPS=%s MAC=%s", req.VpsId, req.MacAddress)
 	return nil
 }

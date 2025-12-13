@@ -112,6 +112,16 @@ service VPSService {
   // This will scan Proxmox for VMs with Obiente Cloud descriptions and import
   // any that are missing from the database, ensuring they belong to the requesting organization
   rpc ImportVPS(ImportVPSRequest) returns (ImportVPSResponse);
+  
+  // Get DHCP leases for VPS instances in an organization
+  // Leases are stored in the database and synced from gateway nodes
+  rpc GetVPSLeases(GetVPSLeasesRequest) returns (GetVPSLeasesResponse);
+  
+  // Register a new DHCP lease (called by gateway nodes via persistent connection)
+  rpc RegisterLease(RegisterLeaseRequest) returns (RegisterLeaseResponse);
+  
+  // Release a DHCP lease (called by gateway nodes via persistent connection)
+  rpc ReleaseLease(ReleaseLeaseRequest) returns (ReleaseLeaseResponse);
 }
 
 message ListVPSRequest {
@@ -650,3 +660,47 @@ message ImportVPSResponse {
   repeated string errors = 4;         // Any errors encountered during import
 }
 
+// GetVPSLeases retrieves DHCP lease information for VPS instances
+message GetVPSLeasesRequest {
+  string organization_id = 1;
+  optional string vps_id = 2; // Optional: filter by specific VPS
+}
+
+message VPSLease {
+  string vps_id = 1;
+  string organization_id = 2;
+  string mac_address = 3;
+  string ip_address = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool is_public = 6; // True if IP is public (outside DHCP pool)
+}
+
+message GetVPSLeasesResponse {
+  repeated VPSLease leases = 1;
+}
+
+// RegisterLeaseRequest is called by gateway nodes to register a new DHCP lease
+message RegisterLeaseRequest {
+  string vps_id = 1;
+  string organization_id = 2;
+  string mac_address = 3;
+  string ip_address = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool is_public = 6; // True if IP is public (outside DHCP pool)
+}
+
+message RegisterLeaseResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ReleaseLeaseRequest is called by gateway nodes to release a DHCP lease
+message ReleaseLeaseRequest {
+  string vps_id = 1;
+  string mac_address = 2; // Optional: for verification
+}
+
+message ReleaseLeaseResponse {
+  bool success = 1;
+  string message = 2;
+}

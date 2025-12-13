@@ -108,6 +108,13 @@ const (
 	VPSServiceStreamVPSLogsProcedure = "/obiente.cloud.vps.v1.VPSService/StreamVPSLogs"
 	// VPSServiceImportVPSProcedure is the fully-qualified name of the VPSService's ImportVPS RPC.
 	VPSServiceImportVPSProcedure = "/obiente.cloud.vps.v1.VPSService/ImportVPS"
+	// VPSServiceGetVPSLeasesProcedure is the fully-qualified name of the VPSService's GetVPSLeases RPC.
+	VPSServiceGetVPSLeasesProcedure = "/obiente.cloud.vps.v1.VPSService/GetVPSLeases"
+	// VPSServiceRegisterLeaseProcedure is the fully-qualified name of the VPSService's RegisterLease
+	// RPC.
+	VPSServiceRegisterLeaseProcedure = "/obiente.cloud.vps.v1.VPSService/RegisterLease"
+	// VPSServiceReleaseLeaseProcedure is the fully-qualified name of the VPSService's ReleaseLease RPC.
+	VPSServiceReleaseLeaseProcedure = "/obiente.cloud.vps.v1.VPSService/ReleaseLease"
 )
 
 // VPSServiceClient is a client for the obiente.cloud.vps.v1.VPSService service.
@@ -168,6 +175,13 @@ type VPSServiceClient interface {
 	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
 	// any that are missing from the database, ensuring they belong to the requesting organization
 	ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error)
+	// Get DHCP leases for VPS instances in an organization
+	// Leases are stored in the database and synced from gateway nodes
+	GetVPSLeases(context.Context, *connect.Request[v1.GetVPSLeasesRequest]) (*connect.Response[v1.GetVPSLeasesResponse], error)
+	// Register a new DHCP lease (called by gateway nodes via persistent connection)
+	RegisterLease(context.Context, *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error)
+	// Release a DHCP lease (called by gateway nodes via persistent connection)
+	ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error)
 }
 
 // NewVPSServiceClient constructs a client for the obiente.cloud.vps.v1.VPSService service. By
@@ -361,6 +375,24 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("ImportVPS")),
 			connect.WithClientOptions(opts...),
 		),
+		getVPSLeases: connect.NewClient[v1.GetVPSLeasesRequest, v1.GetVPSLeasesResponse](
+			httpClient,
+			baseURL+VPSServiceGetVPSLeasesProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("GetVPSLeases")),
+			connect.WithClientOptions(opts...),
+		),
+		registerLease: connect.NewClient[v1.RegisterLeaseRequest, v1.RegisterLeaseResponse](
+			httpClient,
+			baseURL+VPSServiceRegisterLeaseProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("RegisterLease")),
+			connect.WithClientOptions(opts...),
+		),
+		releaseLease: connect.NewClient[v1.ReleaseLeaseRequest, v1.ReleaseLeaseResponse](
+			httpClient,
+			baseURL+VPSServiceReleaseLeaseProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("ReleaseLease")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -396,6 +428,9 @@ type vPSServiceClient struct {
 	reinitializeVPS       *connect.Client[v1.ReinitializeVPSRequest, v1.ReinitializeVPSResponse]
 	streamVPSLogs         *connect.Client[v1.StreamVPSLogsRequest, v1.VPSLogLine]
 	importVPS             *connect.Client[v1.ImportVPSRequest, v1.ImportVPSResponse]
+	getVPSLeases          *connect.Client[v1.GetVPSLeasesRequest, v1.GetVPSLeasesResponse]
+	registerLease         *connect.Client[v1.RegisterLeaseRequest, v1.RegisterLeaseResponse]
+	releaseLease          *connect.Client[v1.ReleaseLeaseRequest, v1.ReleaseLeaseResponse]
 }
 
 // ListVPS calls obiente.cloud.vps.v1.VPSService.ListVPS.
@@ -548,6 +583,21 @@ func (c *vPSServiceClient) ImportVPS(ctx context.Context, req *connect.Request[v
 	return c.importVPS.CallUnary(ctx, req)
 }
 
+// GetVPSLeases calls obiente.cloud.vps.v1.VPSService.GetVPSLeases.
+func (c *vPSServiceClient) GetVPSLeases(ctx context.Context, req *connect.Request[v1.GetVPSLeasesRequest]) (*connect.Response[v1.GetVPSLeasesResponse], error) {
+	return c.getVPSLeases.CallUnary(ctx, req)
+}
+
+// RegisterLease calls obiente.cloud.vps.v1.VPSService.RegisterLease.
+func (c *vPSServiceClient) RegisterLease(ctx context.Context, req *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error) {
+	return c.registerLease.CallUnary(ctx, req)
+}
+
+// ReleaseLease calls obiente.cloud.vps.v1.VPSService.ReleaseLease.
+func (c *vPSServiceClient) ReleaseLease(ctx context.Context, req *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error) {
+	return c.releaseLease.CallUnary(ctx, req)
+}
+
 // VPSServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSService service.
 type VPSServiceHandler interface {
 	// List organization VPS instances
@@ -606,6 +656,13 @@ type VPSServiceHandler interface {
 	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
 	// any that are missing from the database, ensuring they belong to the requesting organization
 	ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error)
+	// Get DHCP leases for VPS instances in an organization
+	// Leases are stored in the database and synced from gateway nodes
+	GetVPSLeases(context.Context, *connect.Request[v1.GetVPSLeasesRequest]) (*connect.Response[v1.GetVPSLeasesResponse], error)
+	// Register a new DHCP lease (called by gateway nodes via persistent connection)
+	RegisterLease(context.Context, *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error)
+	// Release a DHCP lease (called by gateway nodes via persistent connection)
+	ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error)
 }
 
 // NewVPSServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -795,6 +852,24 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("ImportVPS")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceGetVPSLeasesHandler := connect.NewUnaryHandler(
+		VPSServiceGetVPSLeasesProcedure,
+		svc.GetVPSLeases,
+		connect.WithSchema(vPSServiceMethods.ByName("GetVPSLeases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceRegisterLeaseHandler := connect.NewUnaryHandler(
+		VPSServiceRegisterLeaseProcedure,
+		svc.RegisterLease,
+		connect.WithSchema(vPSServiceMethods.ByName("RegisterLease")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceReleaseLeaseHandler := connect.NewUnaryHandler(
+		VPSServiceReleaseLeaseProcedure,
+		svc.ReleaseLease,
+		connect.WithSchema(vPSServiceMethods.ByName("ReleaseLease")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSServiceListVPSProcedure:
@@ -857,6 +932,12 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceStreamVPSLogsHandler.ServeHTTP(w, r)
 		case VPSServiceImportVPSProcedure:
 			vPSServiceImportVPSHandler.ServeHTTP(w, r)
+		case VPSServiceGetVPSLeasesProcedure:
+			vPSServiceGetVPSLeasesHandler.ServeHTTP(w, r)
+		case VPSServiceRegisterLeaseProcedure:
+			vPSServiceRegisterLeaseHandler.ServeHTTP(w, r)
+		case VPSServiceReleaseLeaseProcedure:
+			vPSServiceReleaseLeaseHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -984,4 +1065,16 @@ func (UnimplementedVPSServiceHandler) StreamVPSLogs(context.Context, *connect.Re
 
 func (UnimplementedVPSServiceHandler) ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ImportVPS is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) GetVPSLeases(context.Context, *connect.Request[v1.GetVPSLeasesRequest]) (*connect.Response[v1.GetVPSLeasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.GetVPSLeases is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) RegisterLease(context.Context, *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.RegisterLease is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ReleaseLease is not implemented"))
 }
