@@ -8,13 +8,17 @@ on:
       - 'v*'
     paths:
       - 'apps/dns-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/proto/**'
+      - 'packages/proto/proto/obiente/cloud/**'
   pull_request:
     branches:
       - main
     paths:
       - 'apps/dns-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/proto/**'
+      - 'packages/proto/proto/obiente/cloud/**'
   workflow_dispatch:
 
 permissions:

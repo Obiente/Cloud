@@ -8,13 +8,29 @@ on:
       - 'v*'
     paths:
       - 'apps/auth-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/auth/**'
+      - 'apps/shared/pkg/database/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/pkg/health/**'
+      - 'apps/shared/pkg/middleware/**'
+      - 'apps/shared/proto/obiente/cloud/auth/**'
+      - 'apps/shared/proto/obiente/cloud/common/**'
+      - 'packages/proto/proto/obiente/cloud/auth/**'
+      - 'packages/proto/proto/obiente/cloud/common/**'
   pull_request:
     branches:
       - main
     paths:
       - 'apps/auth-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/auth/**'
+      - 'apps/shared/pkg/database/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/pkg/health/**'
+      - 'apps/shared/pkg/middleware/**'
+      - 'apps/shared/proto/obiente/cloud/auth/**'
+      - 'apps/shared/proto/obiente/cloud/common/**'
+      - 'packages/proto/proto/obiente/cloud/auth/**'
+      - 'packages/proto/proto/obiente/cloud/common/**'
   workflow_dispatch:
 
 permissions:

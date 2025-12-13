@@ -8,13 +8,35 @@ on:
       - 'v*'
     paths:
       - 'apps/vps-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/auth/**'
+      - 'apps/shared/pkg/database/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/pkg/health/**'
+      - 'apps/shared/pkg/middleware/**'
+      - 'apps/shared/pkg/notifications/**'
+      - 'apps/shared/pkg/redis/**'
+      - 'apps/shared/pkg/services/common/**'
+      - 'apps/shared/proto/obiente/cloud/vps/**'
+      - 'apps/shared/proto/obiente/cloud/common/**'
+      - 'packages/proto/proto/obiente/cloud/vps/**'
+      - 'packages/proto/proto/obiente/cloud/common/**'
   pull_request:
     branches:
       - main
     paths:
       - 'apps/vps-service/**'
-      - 'apps/shared/**'
+      - 'apps/shared/pkg/auth/**'
+      - 'apps/shared/pkg/database/**'
+      - 'apps/shared/pkg/logger/**'
+      - 'apps/shared/pkg/health/**'
+      - 'apps/shared/pkg/middleware/**'
+      - 'apps/shared/pkg/notifications/**'
+      - 'apps/shared/pkg/redis/**'
+      - 'apps/shared/pkg/services/common/**'
+      - 'apps/shared/proto/obiente/cloud/vps/**'
+      - 'apps/shared/proto/obiente/cloud/common/**'
+      - 'packages/proto/proto/obiente/cloud/vps/**'
+      - 'packages/proto/proto/obiente/cloud/common/**'
   workflow_dispatch:
 
 permissions:

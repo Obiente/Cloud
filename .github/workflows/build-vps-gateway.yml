@@ -8,13 +8,19 @@ on:
       - 'v*'
     paths:
       - 'apps/vps-gateway/**'
-      - 'apps/shared/**'
+      - 'apps/shared/proto/obiente/cloud/vps/**'
+      - 'apps/shared/proto/obiente/cloud/vpsgateway/**'
+      - 'packages/proto/proto/obiente/cloud/vps/**'
+      - 'packages/proto/proto/obiente/cloud/vpsgateway/**'
   pull_request:
     branches:
       - main
     paths:
       - 'apps/vps-gateway/**'
-      - 'apps/shared/**'
+      - 'apps/shared/proto/obiente/cloud/vps/**'
+      - 'apps/shared/proto/obiente/cloud/vpsgateway/**'
+      - 'packages/proto/proto/obiente/cloud/vps/**'
+      - 'packages/proto/proto/obiente/cloud/vpsgateway/**'
   workflow_dispatch:
 
 permissions:
