@@ -208,15 +208,15 @@ func main() {
 
 	// Start background sync jobs if VPS manager is available
 	if vpsManager != nil {
-		// Start periodic VPS status sync (every 5 minutes)
-		// This detects VPSs that were deleted from Proxmox and marks them as DELETED
+		// Start periodic VPS status sync (every 2 minutes)
+		// This detects VPSs that were deleted from Proxmox, updates statuses, and syncs IP addresses
 		go startVPSStatusSync(shutdownCtx, vpsManager)
-		logger.Info("✓ VPS status sync service started")
+		logger.Info("✓ VPS status sync service started (2 minute interval)")
 
-		// Start periodic VPS import (every 15 minutes)
+		// Start periodic VPS import (every 10 minutes)
 		// This imports VPSs that exist in Proxmox but are missing from the database
 		go startVPSImportSync(shutdownCtx, vpsManager)
-		logger.Info("✓ VPS import sync service started")
+		logger.Info("✓ VPS import sync service started (10 minute interval)")
 	}
 
 	// Start server in a goroutine
@@ -253,10 +253,10 @@ func main() {
 }
 
 // startVPSStatusSync starts the periodic VPS status sync background service
-// This syncs all VPS statuses from Proxmox to detect deleted VPSs
+// This syncs all VPS statuses and IP addresses from Proxmox to detect deleted VPSs and keep data fresh
 func startVPSStatusSync(ctx context.Context, vpsManager *orchestrator.VPSManager) {
-	// Run every 5 minutes
-	ticker := time.NewTicker(5 * time.Minute)
+	// Run every 2 minutes for more responsive status updates
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
 	// Run once on startup (after a short delay to ensure DB is ready)
@@ -348,8 +348,8 @@ func sendDeletedVPSNotifications(ctx context.Context, deletedVPSs map[string]int
 // startVPSImportSync starts the periodic VPS import background service
 // This imports VPSs that exist in Proxmox but are missing from the database
 func startVPSImportSync(ctx context.Context, vpsManager *orchestrator.VPSManager) {
-	// Run every 15 minutes
-	ticker := time.NewTicker(15 * time.Minute)
+	// Run every 10 minutes for quicker discovery of new VMs
+	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 
 	// Run once on startup (after a short delay to ensure DB is ready)

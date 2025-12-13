@@ -82,6 +82,28 @@ func (c *Client) Set(ctx context.Context, key string, value interface{}, expirat
 	return c.client.Set(ctx, key, data, expiration).Err()
 }
 
+// SetNX sets a key only if it does not already exist. Returns true if set.
+func (c *Client) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	if c.client == nil {
+		return false, fmt.Errorf("Redis client not initialized")
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		return false, err
+	}
+
+	return c.client.SetNX(ctx, key, data, expiration).Result()
+}
+
+// Del deletes the provided keys.
+func (c *Client) Del(ctx context.Context, keys ...string) error {
+	if c.client == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return c.client.Del(ctx, keys...).Err()
+}
+
 func (c *Client) Keys(ctx context.Context, pattern string) ([]string, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("Redis client not initialized")
