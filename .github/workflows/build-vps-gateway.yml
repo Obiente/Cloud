@@ -110,8 +110,8 @@ jobs:
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: |
             type=gha
-            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }}
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform }},mode=max
+            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
