@@ -939,6 +939,43 @@ func (m *Manager) syncWithLeases() error {
 		alloc.LeaseExpires = time.Unix(lease.expires, 0)
 	}
 
+	// Remove stale allocations that have no active lease entry (DHCP file is source of truth)
+	for vpsID, alloc := range m.allocations {
+		if alloc.MACAddress == "" {
+			continue
+		}
+
+		allocMAC := strings.ToLower(alloc.MACAddress)
+		if _, exists := leaseMap[allocMAC]; exists {
+			continue
+		}
+
+		// Only clean up pool-backed leases automatically; public/static IPs are handled separately
+		if !m.IsIPInPool(alloc.IPAddress) {
+			continue
+		}
+
+		logger.Info("Removing stale DHCP allocation with no active lease",
+			"vps_id", vpsID,
+			"ip", alloc.IPAddress.String(),
+			"mac", allocMAC,
+		)
+
+		delete(m.allocations, vpsID)
+		updated = true
+
+		if m.redisClient != nil {
+			_ = m.redisClient.Del(context.Background(), m.redisAllocationKey(vpsID))
+		}
+
+		// Inform API that the lease is gone; ignore errors to avoid blocking cleanup
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := m.releaseLeaseWithAPI(ctx, vpsID, allocMAC); err != nil {
+			logger.Debug("Non-fatal: failed to release lease with API during stale cleanup: %v", err)
+		}
+		cancel()
+	}
+
 	// Update hosts file if allocations changed
 	if updated {
 		if err := m.updateHostsFile(); err != nil {
@@ -946,6 +983,9 @@ func (m *Manager) syncWithLeases() error {
 		}
 		if err := m.reloadDNSMasq(); err != nil {
 			logger.Warn("Failed to reload dnsmasq after sync: %v", err)
+		}
+		if err := m.saveAllocations(); err != nil {
+			logger.Warn("Failed to persist allocations after sync: %v", err)
 		}
 	}
 

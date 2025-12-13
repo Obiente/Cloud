@@ -105,6 +105,28 @@ func main() {
 		logger.Info("✓ Created VPS manager")
 	}
 
+	// Start background lease sync from gateways (API-initiated)
+	var leaseSyncCancel context.CancelFunc
+	if vpsManager != nil {
+		leaseSyncCtx, cancel := context.WithCancel(context.Background())
+		leaseSyncCancel = cancel
+		go func() {
+			ticker := time.NewTicker(30 * time.Second)
+			defer ticker.Stop()
+			for {
+				if err := vpsManager.SyncLeasesFromGateways(leaseSyncCtx); err != nil {
+					logger.Debug("[LeaseSync] %v", err)
+				}
+
+				select {
+				case <-leaseSyncCtx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
+
 	// Create services
 	qc := quota.NewChecker()
 	vpsService := vpssvc.NewService(vpsManager, qc)
@@ -205,6 +227,12 @@ func main() {
 	// Set up graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if leaseSyncCancel != nil {
+		go func() {
+			<-shutdownCtx.Done()
+			leaseSyncCancel()
+		}()
+	}
 
 	// Start background sync jobs if VPS manager is available
 	if vpsManager != nil {

@@ -9,6 +9,7 @@ import "obiente/cloud/deployments/v1/deployment_service.proto";
 import "obiente/cloud/billing/v1/billing_service.proto";
 import "obiente/cloud/common/v1/common.proto";
 import "obiente/cloud/vps/v1/vps_service.proto";
+import "obiente/cloud/vpsgateway/v1/gateway_service.proto";
 
 service SuperadminService {
   // Returns a system-wide overview for superadmin operators.
@@ -73,6 +74,10 @@ service SuperadminService {
   rpc DeleteVPSPublicIP(DeleteVPSPublicIPRequest) returns (DeleteVPSPublicIPResponse);
   rpc AssignVPSPublicIP(AssignVPSPublicIPRequest) returns (AssignVPSPublicIPResponse);
   rpc UnassignVPSPublicIP(UnassignVPSPublicIPRequest) returns (UnassignVPSPublicIPResponse);
+  
+  // DHCP lease management endpoints
+  // Get all DHCP leases for an organization (from VPSGatewayService)
+  rpc GetOrgLeases(obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest) returns (obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse);
   
   // Stripe webhook events management endpoints
   rpc ListStripeWebhookEvents(ListStripeWebhookEventsRequest) returns (ListStripeWebhookEventsResponse);

@@ -18,14 +18,13 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	"github.com/obiente/cloud/apps/shared/pkg/stripe"
 
+	"errors"
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	billingv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	superadminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
 	superadminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1/superadminv1connect"
-
-	"errors"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -43,6 +42,7 @@ type Service struct {
 
 func NewService() superadminv1connect.SuperadminServiceHandler {
 	stripeClient, _ := stripe.NewClient() // Stripe is optional for superadmin
+
 	return &Service{
 		stripeClient: stripeClient,
 	}
@@ -154,22 +154,22 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	}
 
 	parts := strings.Split(strings.ToLower(domain), ".")
-	
+
 	// Handle SRV queries: _minecraft._tcp.gs-123.my.obiente.cloud
 	// Also supports: _minecraft._udp (Bedrock), _rust._udp
 	if recordType == "SRV" {
 		if len(parts) < 4 {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid SRV domain format"))
 		}
-		
-		service := parts[0]  // _minecraft, _rust, etc.
-		protocol := parts[1]  // _tcp, _udp
+
+		service := parts[0]      // _minecraft, _rust, etc.
+		protocol := parts[1]     // _tcp, _udp
 		gameServerID := parts[2] // gs-123
-		
+
 		if !strings.HasPrefix(gameServerID, "gs-") {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid game server ID format"))
 		}
-		
+
 		// Get game server type to validate SRV service matches
 		gameType, err := database.GetGameServerType(gameServerID)
 		if err != nil {
@@ -180,7 +180,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 				Ttl:        int64(cacheTTL.Seconds()),
 			}), nil
 		}
-		
+
 		// Validate SRV service/protocol matches game type
 		// GameType enum values: MINECRAFT = 1, MINECRAFT_JAVA = 2, MINECRAFT_BEDROCK = 3, RUST = 6
 		isValid := false
@@ -196,11 +196,11 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 			// Rust uses UDP
 			isValid = true
 		}
-		
+
 		if !isValid {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unsupported SRV service/protocol for this game type"))
 		}
-		
+
 		// Get game server location
 		_, port, err := database.GetGameServerLocation(gameServerID)
 		if err != nil {
@@ -211,7 +211,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 				Ttl:        int64(cacheTTL.Seconds()),
 			}), nil
 		}
-		
+
 		// Return SRV record format: priority weight port target
 		// Target should be the A record hostname
 		targetHostname := gameServerID + ".my.obiente.cloud"
@@ -230,7 +230,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	}
 
 	resourceID := parts[0]
-	
+
 	// Check if this is a game server (starts with gs-)
 	if strings.HasPrefix(resourceID, "gs-") {
 		// Get game server IP
@@ -243,7 +243,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 				Ttl:        int64(cacheTTL.Seconds()),
 			}), nil
 		}
-		
+
 		return connect.NewResponse(&superadminv1.QueryDNSResponse{
 			Domain:     domain,
 			RecordType: recordType,
@@ -251,7 +251,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 			Ttl:        int64(cacheTTL.Seconds()),
 		}), nil
 	}
-	
+
 	// Otherwise, treat as deployment
 	deploymentID := resourceID
 
@@ -271,7 +271,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	logger.Debug("[SuperAdmin] QueryDNS - Parsed NODE_IPS: %+v", nodeIPMap)
 
 	// Query database for deployment location
-		ips, err := database.GetDeploymentNodeIP(deploymentID, nodeIPMap)
+	ips, err := database.GetDeploymentNodeIP(deploymentID, nodeIPMap)
 	if err != nil {
 		return connect.NewResponse(&superadminv1.QueryDNSResponse{
 			Domain:     domain,
@@ -392,7 +392,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		// Get IPs for this deployment
 		var ips []string
 		var region string
-		
+
 		// First, try to get IPs from the region in the query result
 		if row.Region != nil && *row.Region != "" {
 			region = *row.Region
@@ -537,8 +537,8 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 			GameServerName: row.GameServerName,
 			Domain:         aRecordDomain,
 			IpAddresses:    ipAddresses, // IP addresses for A record (frontend displays this)
-			Target:         targetIP,     // Also set target for consistency
-			Port:           0,            // A records don't have ports
+			Target:         targetIP,    // Also set target for consistency
+			Port:           0,           // A records don't have ports
 			Region:         region,
 			Status:         fmt.Sprintf("%d", row.Status),
 			LastResolved:   timestamppb.New(now),
@@ -563,7 +563,7 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 				LastResolved:   timestamppb.New(now),
 			})
 		}
-		
+
 		if row.GameType == 1 || row.GameType == 3 {
 			// Minecraft Bedrock Edition - UDP SRV record
 			// Format: _minecraft._udp.gs-123.my.obiente.cloud
@@ -581,7 +581,7 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 				LastResolved:   timestamppb.New(now),
 			})
 		}
-		
+
 		if row.GameType == 6 {
 			// Rust - UDP SRV record
 			// Format: _rust._udp.gs-123.my.obiente.cloud
@@ -613,14 +613,14 @@ func (s *Service) listDelegatedDNSRecordsAsDNSRecords(req *connect.Request[super
 	if recordTypeFilter != "" {
 		recordType = recordTypeFilter
 	}
-	
+
 	dbRecords, err := database.ListDelegatedDNSRecords("", "", recordType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list delegated DNS records: %w", err)
 	}
 
 	records := make([]*superadminv1.DNSRecord, 0, len(dbRecords))
-	
+
 	for _, dbRecord := range dbRecords {
 		// Apply organization filter if specified
 		if orgID := req.Msg.GetOrganizationId(); orgID != "" {
@@ -799,10 +799,10 @@ func (s *Service) GetDNSConfig(ctx context.Context, _ *connect.Request[superadmi
 	}
 
 	config := &superadminv1.DNSConfig{
-		TraefikIps:          traefikIPsList,
-		TraefikIpsByRegion:  traefikIPsByRegion,
+		TraefikIps:         traefikIPsList,
+		TraefikIpsByRegion: traefikIPsByRegion,
 		DnsServerIps:       dnsIPs,
-		DnsPort:             dnsPort,
+		DnsPort:            dnsPort,
 		CacheTtlSeconds:    int64(cacheTTL.Seconds()),
 	}
 
@@ -819,7 +819,7 @@ func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Requ
 	}
 
 	isSuperAdmin := auth.HasSuperadminPermission(ctx, user, "superadmin.dns.read")
-	
+
 	// Non-superadmins can only see their own organization's records
 	var organizationID string
 	if !isSuperAdmin {
@@ -828,13 +828,13 @@ func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Requ
 		if err := database.DB.Where("user_id = ? AND status = ?", user.Id, "active").Find(&memberships).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get user memberships: %w", err))
 		}
-		
+
 		if len(memberships) == 0 {
 			return connect.NewResponse(&superadminv1.ListDelegatedDNSRecordsResponse{
 				Records: []*superadminv1.DelegatedDNSRecord{},
 			}), nil
 		}
-		
+
 		// If user specified an organization ID, verify they're a member
 		if reqOrgID := req.Msg.GetOrganizationId(); reqOrgID != "" {
 			hasAccess := false
@@ -870,7 +870,7 @@ func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Requ
 	var tableExists bool
 	database.DB.Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'delegated_dns_records')").Scan(&tableExists)
 	logger.Info("[SuperAdmin] delegated_dns_records table exists: %v", tableExists)
-	
+
 	// Debug: Check if we can query the table directly
 	var directCount int64
 	if tableExists {
@@ -936,8 +936,8 @@ func (s *Service) HasDelegatedDNS(ctx context.Context, _ *connect.Request[supera
 		if err == nil && apiKey != nil {
 			return connect.NewResponse(&superadminv1.HasDelegatedDNSResponse{
 				HasDelegatedDns: true,
-				OrganizationId:   membership.OrganizationID,
-				ApiKeyId:         apiKey.ID,
+				OrganizationId:  membership.OrganizationID,
+				ApiKeyId:        apiKey.ID,
 			}), nil
 		}
 	}
@@ -950,13 +950,13 @@ func (s *Service) HasDelegatedDNS(ctx context.Context, _ *connect.Request[supera
 // GetPricing returns current pricing information - public endpoint, no authentication required
 func (s *Service) GetPricing(ctx context.Context, _ *connect.Request[superadminv1.GetPricingRequest]) (*connect.Response[superadminv1.GetPricingResponse], error) {
 	pricingModel := pricing.GetPricing()
-	
+
 	return connect.NewResponse(&superadminv1.GetPricingResponse{
-		CpuCostPerCoreSecond:     pricingModel.CPUCostPerCoreSecond,
-		MemoryCostPerByteSecond:  pricingModel.MemoryCostPerByteSecond,
-		BandwidthCostPerByte:      pricingModel.BandwidthCostPerByte,
-		StorageCostPerByteMonth:  pricingModel.StorageCostPerByteMonth,
-		PricingInfo:               pricingModel.GetPricingInfo(),
+		CpuCostPerCoreSecond:    pricingModel.CPUCostPerCoreSecond,
+		MemoryCostPerByteSecond: pricingModel.MemoryCostPerByteSecond,
+		BandwidthCostPerByte:    pricingModel.BandwidthCostPerByte,
+		StorageCostPerByteMonth: pricingModel.StorageCostPerByteMonth,
+		PricingInfo:             pricingModel.GetPricingInfo(),
 	}), nil
 }
 
@@ -988,7 +988,7 @@ func (s *Service) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 	if orgID := req.Msg.GetOrganizationId(); orgID != "" {
 		organizationID = strings.TrimSpace(orgID)
 		logger.Debug("[SuperAdmin] Organization ID from request: %s", organizationID)
-		
+
 		// Verify user is a member of this organization (for non-superadmins)
 		if !isSuperAdmin {
 			var member database.OrganizationMember
@@ -1026,7 +1026,7 @@ func (s *Service) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 			logger.Error("[SuperAdmin] Failed to check subscription: %v", err)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check subscription: %w", err))
 		}
-		
+
 		// If not found in database, check Stripe directly (webhook might not have processed yet)
 		if !hasSubscription || subscriptionID == "" {
 			// Get billing account to find Stripe customer ID
@@ -1042,7 +1042,7 @@ func (s *Service) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 				}
 			}
 		}
-		
+
 		if !hasSubscription {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("your organization must have an active DNS delegation subscription. Subscribe at $2/month to enable DNS delegation"))
 		}
@@ -1084,8 +1084,8 @@ func (s *Service) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 	logger.Info("[SuperAdmin] Created DNS delegation API key for: %s (source: %s, org: %s, subscription: %v)", description, sourceAPI, organizationID, stripeSubscriptionID != nil && *stripeSubscriptionID != "")
 
 	return connect.NewResponse(&superadminv1.CreateDNSDelegationAPIKeyResponse{
-		ApiKey:     apiKey,
-		Message:    "API key created successfully. Save this key securely - it will not be shown again.",
+		ApiKey:      apiKey,
+		Message:     "API key created successfully. Save this key securely - it will not be shown again.",
 		Description: description,
 	}), nil
 }
@@ -1194,22 +1194,22 @@ func (s *Service) ListDNSDelegationAPIKeys(ctx context.Context, req *connect.Req
 	apiKeys := make([]*superadminv1.DNSDelegationAPIKeyInfo, 0, len(keys))
 	for _, key := range keys {
 		info := &superadminv1.DNSDelegationAPIKeyInfo{
-			Id:                  key.ID,
-			Description:         key.Description,
-			SourceApi:           key.SourceAPI,
-			OrganizationId:      key.OrganizationID,
-			IsActive:            key.IsActive,
-			CreatedAt:           timestamppb.New(key.CreatedAt),
+			Id:             key.ID,
+			Description:    key.Description,
+			SourceApi:      key.SourceAPI,
+			OrganizationId: key.OrganizationID,
+			IsActive:       key.IsActive,
+			CreatedAt:      timestamppb.New(key.CreatedAt),
 		}
-		
+
 		if key.RevokedAt != nil {
 			info.RevokedAt = timestamppb.New(*key.RevokedAt)
 		}
-		
+
 		if key.StripeSubscriptionID != nil {
 			info.StripeSubscriptionId = *key.StripeSubscriptionID
 		}
-		
+
 		apiKeys = append(apiKeys, info)
 	}
 
@@ -1401,7 +1401,7 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 	month := now.Format("2006-01")
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
-	
+
 	// Check if table exists first
 	var tableExists bool
 	if err := database.MetricsDB.Raw(`
@@ -1414,12 +1414,12 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 		logger.Warn("[SuperAdmin] Failed to check if deployment_usage_hourly table exists: %v", err)
 		return []*superadminv1.OrganizationUsage{}, nil
 	}
-	
+
 	if !tableExists {
 		logger.Debug("[SuperAdmin] deployment_usage_hourly table does not exist, returning empty usage list")
 		return []*superadminv1.OrganizationUsage{}, nil
 	}
-	
+
 	// Query usage from metrics database - combine deployment and game server usage
 	// Check if game_server_usage_hourly table exists
 	var gameServerTableExists bool
@@ -1430,7 +1430,7 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 			AND table_name = 'game_server_usage_hourly'
 		)
 	`).Scan(&gameServerTableExists)
-	
+
 	// Query deployment usage
 	var deploymentRows []usageRow
 	if err := database.MetricsDB.Table("deployment_usage_hourly duh").
@@ -1451,7 +1451,7 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 		logger.Error("[SuperAdmin] Failed to query deployment_usage_hourly: %v", err)
 		return nil, fmt.Errorf("load usage: %w", err)
 	}
-	
+
 	// Query game server usage if table exists
 	var gameServerRows []usageRow
 	if gameServerTableExists {
@@ -1474,13 +1474,13 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 			// Continue with deployment data only
 		}
 	}
-	
+
 	// Combine deployment and game server usage by organization
 	usageMap := make(map[string]*usageRow)
 	for _, row := range deploymentRows {
 		usageMap[row.OrganizationID] = &row
 	}
-	
+
 	// Add game server usage to existing organizations or create new entries
 	for _, row := range gameServerRows {
 		if existing, ok := usageMap[row.OrganizationID]; ok {
@@ -1494,18 +1494,18 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 			usageMap[row.OrganizationID] = &row
 		}
 	}
-	
+
 	// Convert map to slice
 	var rows []usageRow
 	for _, row := range usageMap {
 		rows = append(rows, *row)
 	}
-	
+
 	// Sort by CPU core seconds descending
 	sort.Slice(rows, func(i, j int) bool {
 		return rows[i].CPUCoreSeconds > rows[j].CPUCoreSeconds
 	})
-	
+
 	// Limit results
 	if len(rows) > overviewLimit {
 		rows = rows[:overviewLimit]
@@ -1516,7 +1516,7 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 	for _, row := range rows {
 		orgIDs = append(orgIDs, row.OrganizationID)
 	}
-	
+
 	orgNames := make(map[string]string)
 	if len(orgIDs) > 0 {
 		type orgRow struct {
@@ -1560,7 +1560,7 @@ func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
 			orgName = row.OrganizationName
 		}
 		storageBytes := storageByOrg[row.OrganizationID]
-		
+
 		items = append(items, &superadminv1.OrganizationUsage{
 			OrganizationId:        row.OrganizationID,
 			OrganizationName:      orgName,
@@ -1698,13 +1698,13 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 	}
 
 	summary := &superadminv1.IncomeSummary{
-		TotalRevenue:          totalRevenue,
+		TotalRevenue:            totalRevenue,
 		MonthlyRecurringRevenue: mrr,
-		AverageMonthlyRevenue: avgMonthlyRevenue,
-		TotalTransactions:     totalTransactionCount,
-		TotalRefunds:          totalRefunds,
-		NetRevenue:           netRevenue,
-		EstimatedMonthlyIncome: estimatedMonthlyIncome,
+		AverageMonthlyRevenue:   avgMonthlyRevenue,
+		TotalTransactions:       totalTransactionCount,
+		TotalRefunds:            totalRefunds,
+		NetRevenue:              netRevenue,
+		EstimatedMonthlyIncome:  estimatedMonthlyIncome,
 	}
 
 	// Calculate monthly income breakdown
@@ -1737,10 +1737,10 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 	var monthlyIncome []*superadminv1.MonthlyIncome
 	for month, data := range monthlyIncomeMap {
 		monthlyIncome = append(monthlyIncome, &superadminv1.MonthlyIncome{
-			Month:           month,
-			Revenue:         data.Revenue,
+			Month:            month,
+			Revenue:          data.Revenue,
 			TransactionCount: data.Count,
-			Refunds:         data.Refunds,
+			Refunds:          data.Refunds,
 		})
 	}
 	sort.Slice(monthlyIncome, func(i, j int) bool {
@@ -1753,10 +1753,10 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 		if t.Type == "payment" && t.AmountCents > 0 {
 			if _, ok := customerRevenue[t.OrganizationID]; !ok {
 				customerRevenue[t.OrganizationID] = &customerData{
-					TotalRevenue:  0,
-					Count:         0,
-					FirstPayment:  t.CreatedAt,
-					LastPayment:   t.CreatedAt,
+					TotalRevenue: 0,
+					Count:        0,
+					FirstPayment: t.CreatedAt,
+					LastPayment:  t.CreatedAt,
 				}
 			}
 			customerRevenue[t.OrganizationID].TotalRevenue += float64(t.AmountCents) / 100.0
@@ -1806,12 +1806,12 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 	for i := 0; i < topCustomersLimit; i++ {
 		tc := topCustomersData[i]
 		topCustomers = append(topCustomers, &superadminv1.TopCustomer{
-			OrganizationId:  tc.OrgID,
+			OrganizationId:   tc.OrgID,
 			OrganizationName: tc.OrgName,
-			TotalRevenue:    tc.TotalRevenue,
+			TotalRevenue:     tc.TotalRevenue,
 			TransactionCount: tc.Count,
-			FirstPayment:    timestamppb.New(tc.FirstPayment),
-			LastPayment:     timestamppb.New(tc.LastPayment),
+			FirstPayment:     timestamppb.New(tc.FirstPayment),
+			LastPayment:      timestamppb.New(tc.LastPayment),
 		})
 	}
 
@@ -1856,14 +1856,14 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 			Id:                    t.ID,
 			OrganizationId:        t.OrganizationID,
 			OrganizationName:      orgNames[t.OrganizationID],
-			Type:                 t.Type,
-			AmountCents:          float64(t.AmountCents),
-			Currency:             "USD",
-			Status:               status,
-			StripeInvoiceId:      stripeInvoiceID,
+			Type:                  t.Type,
+			AmountCents:           float64(t.AmountCents),
+			Currency:              "USD",
+			Status:                status,
+			StripeInvoiceId:       stripeInvoiceID,
 			StripePaymentIntentId: stripePaymentIntentID,
-			Note:                 t.Note,
-			CreatedAt:            timestamppb.New(t.CreatedAt),
+			Note:                  t.Note,
+			CreatedAt:             timestamppb.New(t.CreatedAt),
 		})
 	}
 
@@ -1915,7 +1915,7 @@ func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
-	
+
 	// Get all organizations
 	var orgs []database.Organization
 	if err := database.DB.Find(&orgs).Error; err != nil {
@@ -1958,7 +1958,7 @@ func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
 	}
 
 	var usages []orgUsage
-	
+
 	// Get usage from hourly aggregates
 	metricsDB.Table("deployment_usage_hourly duh").
 		Select(`
@@ -2009,7 +2009,7 @@ func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
 		estimatedCPUCoreSeconds := int64(float64(usage.CPUCoreSeconds) / elapsedRatio)
 		estimatedMemoryByteSeconds := int64(float64(usage.MemoryByteSeconds) / elapsedRatio)
 		estimatedBandwidthBytes := usage.BandwidthRxBytes + usage.BandwidthTxBytes // Bandwidth is cumulative
-		estimatedStorageBytes := usage.StorageBytes // Storage is already monthly
+		estimatedStorageBytes := usage.StorageBytes                                // Storage is already monthly
 
 		// Calculate costs
 		estCPUCost := pricingModel.CalculateCPUCost(estimatedCPUCoreSeconds)
@@ -2092,9 +2092,9 @@ func (s *Service) ListAllInvoices(ctx context.Context, req *connect.Request[supe
 				var org database.Organization
 				if err := database.DB.First(&org, "id = ?", ba.OrganizationID).Error; err == nil {
 					customerToOrg[*ba.StripeCustomerID] = &customerOrgInfo{
-						OrganizationID: ba.OrganizationID,
+						OrganizationID:   ba.OrganizationID,
 						OrganizationName: org.Name,
-						BillingEmail: ba.BillingEmail,
+						BillingEmail:     ba.BillingEmail,
 					}
 				}
 			}
@@ -2419,7 +2419,7 @@ func (s *Service) AssignPlanToOrganization(ctx context.Context, req *connect.Req
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			quota = database.OrgQuota{
 				OrganizationID: req.Msg.GetOrganizationId(),
-				PlanID:        req.Msg.GetPlanId(),
+				PlanID:         req.Msg.GetPlanId(),
 			}
 			if err := database.DB.Create(&quota).Error; err != nil {
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create quota: %w", err))
@@ -2526,10 +2526,10 @@ func (s *Service) ListStripeWebhookEvents(ctx context.Context, req *connect.Requ
 	protoEvents := make([]*superadminv1.StripeWebhookEvent, 0, len(events))
 	for _, event := range events {
 		protoEvent := &superadminv1.StripeWebhookEvent{
-			Id:         event.ID,
-			EventType:  event.EventType,
+			Id:          event.ID,
+			EventType:   event.EventType,
 			ProcessedAt: timestamppb.New(event.ProcessedAt),
-			CreatedAt:  timestamppb.New(event.CreatedAt),
+			CreatedAt:   timestamppb.New(event.CreatedAt),
 		}
 
 		if event.OrganizationID != nil {
@@ -2620,7 +2620,7 @@ func (s *Service) ListUsers(ctx context.Context, req *connect.Request[superadmin
 	// Resolve user profiles using the user profile resolver
 	resolver := organizations.GetUserProfileResolver()
 	users := make([]*superadminv1.UserInfo, 0, len(userIDs))
-	
+
 	for _, userID := range userIDs {
 		userInfo := &superadminv1.UserInfo{
 			Id: userID,
@@ -2744,9 +2744,9 @@ func (s *Service) GetUser(ctx context.Context, req *connect.Request[superadminv1
 		orgs = append(orgs, &superadminv1.UserOrganization{
 			OrganizationId:   org.ID,
 			OrganizationName: org.Name,
-			Role:            member.Role,
-			Status:          member.Status,
-			JoinedAt:        timestamppb.New(member.JoinedAt),
+			Role:             member.Role,
+			Status:           member.Status,
+			JoinedAt:         timestamppb.New(member.JoinedAt),
 		})
 	}
 
@@ -2846,7 +2846,7 @@ func (s *Service) UpdateNodeConfig(ctx context.Context, req *connect.Request[sup
 	// Check if this is a compose deployment node (node ID starts with "local-")
 	// Subdomain configuration is only allowed for Swarm stack services
 	isComposeDeployment := strings.HasPrefix(node.ID, "local-")
-	
+
 	// Reject subdomain-related config updates for compose deployments
 	if isComposeDeployment {
 		if req.Msg.Subdomain != nil {
@@ -3064,12 +3064,12 @@ func (s *Service) GetMySuperadminPermissions(ctx context.Context, req *connect.R
 
 	// Check if user is a full superadmin (email-based)
 	isFullSuperadmin := auth.HasRole(user, auth.RoleSuperAdmin)
-	
+
 	// If full superadmin, return all superadmin permissions
 	if isFullSuperadmin {
 		registry := auth.GetPermissionRegistry()
 		_ = registry.AutoDiscoverProcedures()
-		
+
 		// Get all superadmin-only permissions
 		allPerms := registry.GetAllPermissions(false)
 		permissions := make([]string, 0)
@@ -3078,7 +3078,7 @@ func (s *Service) GetMySuperadminPermissions(ctx context.Context, req *connect.R
 				permissions = append(permissions, perm.Permission)
 			}
 		}
-		
+
 		return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
 			Permissions:      permissions,
 			IsFullSuperadmin: true,

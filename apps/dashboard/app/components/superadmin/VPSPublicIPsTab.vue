@@ -312,7 +312,11 @@ const tableColumns = computed(() => [
   { key: "actions", label: "Actions", defaultWidth: 200, minWidth: 180, resizable: false },
 ]);
 
-const tableRows = computed(() => ips.value);
+const tableRows = computed(() => ips.value.map(ip => ({
+  ...ip,
+  // Transform monthlyCostCents to cost in cents for OuiCurrency
+  cost: Number(ip.monthlyCostCents || 0n),
+})));
 
 const vpsOptions = computed(() => 
   vpsList.value

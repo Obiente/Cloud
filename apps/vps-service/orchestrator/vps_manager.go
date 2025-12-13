@@ -2527,6 +2527,56 @@ func (vm *VPSManager) RegisterLease(ctx context.Context, req *vpsv1.RegisterLeas
 	return nil
 }
 
+// SyncLeasesFromGateways pulls allocations from all configured gateways and upserts them into the database.
+// This keeps the API's lease view in sync while the API is the connection initiator.
+func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
+	mapping, err := parseNodeGatewayMapping()
+	if err != nil {
+		return fmt.Errorf("failed to parse gateway mapping: %w", err)
+	}
+
+	if len(mapping) == 0 {
+		return fmt.Errorf("no gateways configured via VPS_NODE_GATEWAY_ENDPOINTS")
+	}
+
+	for nodeName := range mapping {
+		client, err := vm.GetGatewayClientForNode(nodeName)
+		if err != nil {
+			logger.Warn("[LeaseSync] Skipping node %s: %v", nodeName, err)
+			continue
+		}
+
+		nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		allocations, err := client.ListIPs(nodeCtx, "", "")
+		cancel()
+		if err != nil {
+			logger.Warn("[LeaseSync] Failed to list IPs from node %s: %v", nodeName, err)
+			continue
+		}
+
+		for _, alloc := range allocations {
+			if alloc == nil || alloc.LeaseExpires == nil {
+				continue
+			}
+
+			req := &vpsv1.RegisterLeaseRequest{
+				VpsId:          alloc.VpsId,
+				OrganizationId: alloc.OrganizationId,
+				MacAddress:     alloc.MacAddress,
+				IpAddress:      alloc.IpAddress,
+				ExpiresAt:      alloc.LeaseExpires,
+				IsPublic:       false,
+			}
+
+			if err := vm.RegisterLease(ctx, req, nodeName); err != nil {
+				logger.Warn("[LeaseSync] Failed to upsert lease for VPS %s (%s) from node %s: %v", alloc.VpsId, alloc.IpAddress, nodeName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // ReleaseLease removes a DHCP lease from the database
 func (vm *VPSManager) ReleaseLease(ctx context.Context, req *vpsv1.ReleaseLeaseRequest, gatewayNode string) error {
 	query := database.DB.WithContext(ctx).Where("vps_id = ?", req.VpsId)

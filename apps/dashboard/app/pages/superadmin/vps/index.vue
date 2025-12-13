@@ -12,12 +12,13 @@
 </template>
 
 <script setup lang="ts">
-import { ServerIcon, CubeIcon, GlobeAltIcon } from "@heroicons/vue/24/outline";
+import { ServerIcon, CubeIcon, GlobeAltIcon, WifiIcon } from "@heroicons/vue/24/outline";
 import { ref } from "vue";
 import OuiTabs from "~/components/oui/Tabs.vue";
 import VPSInstancesTab from "~/components/superadmin/VPSInstancesTab.vue";
 import VPSSizesTab from "~/components/superadmin/VPSSizesTab.vue";
 import VPSPublicIPsTab from "~/components/superadmin/VPSPublicIPsTab.vue";
+import VPSLeasesTab from "~/components/superadmin/VPSLeasesTab.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -43,6 +44,12 @@ const tabs = [
     label: "Public IPs",
     icon: GlobeAltIcon,
     component: VPSPublicIPsTab,
+  },
+  {
+    id: "dhcp-leases",
+    label: "DHCP Leases",
+    icon: WifiIcon,
+    component: VPSLeasesTab,
   },
 ];
 </script>

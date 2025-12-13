@@ -9,6 +9,7 @@ import (
 	context "context"
 	errors "errors"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
+	v11 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 	http "net/http"
 	strings "strings"
 )
@@ -153,6 +154,9 @@ const (
 	// SuperadminServiceUnassignVPSPublicIPProcedure is the fully-qualified name of the
 	// SuperadminService's UnassignVPSPublicIP RPC.
 	SuperadminServiceUnassignVPSPublicIPProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnassignVPSPublicIP"
+	// SuperadminServiceGetOrgLeasesProcedure is the fully-qualified name of the SuperadminService's
+	// GetOrgLeases RPC.
+	SuperadminServiceGetOrgLeasesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetOrgLeases"
 	// SuperadminServiceListStripeWebhookEventsProcedure is the fully-qualified name of the
 	// SuperadminService's ListStripeWebhookEvents RPC.
 	SuperadminServiceListStripeWebhookEventsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListStripeWebhookEvents"
@@ -249,6 +253,9 @@ type SuperadminServiceClient interface {
 	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
 	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
 	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
+	// DHCP lease management endpoints
+	// Get all DHCP leases for an organization (from VPSGatewayService)
+	GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -522,6 +529,12 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("UnassignVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
+		getOrgLeases: connect.NewClient[v11.GetOrgLeasesRequest, v11.GetOrgLeasesResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetOrgLeasesProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetOrgLeases")),
+			connect.WithClientOptions(opts...),
+		),
 		listStripeWebhookEvents: connect.NewClient[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse](
 			httpClient,
 			baseURL+SuperadminServiceListStripeWebhookEventsProcedure,
@@ -645,6 +658,7 @@ type superadminServiceClient struct {
 	deleteVPSPublicIP                        *connect.Client[v1.DeleteVPSPublicIPRequest, v1.DeleteVPSPublicIPResponse]
 	assignVPSPublicIP                        *connect.Client[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse]
 	unassignVPSPublicIP                      *connect.Client[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse]
+	getOrgLeases                             *connect.Client[v11.GetOrgLeasesRequest, v11.GetOrgLeasesResponse]
 	listStripeWebhookEvents                  *connect.Client[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse]
 	listNodes                                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	getNode                                  *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
@@ -870,6 +884,11 @@ func (c *superadminServiceClient) UnassignVPSPublicIP(ctx context.Context, req *
 	return c.unassignVPSPublicIP.CallUnary(ctx, req)
 }
 
+// GetOrgLeases calls obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases.
+func (c *superadminServiceClient) GetOrgLeases(ctx context.Context, req *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error) {
+	return c.getOrgLeases.CallUnary(ctx, req)
+}
+
 // ListStripeWebhookEvents calls
 // obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents.
 func (c *superadminServiceClient) ListStripeWebhookEvents(ctx context.Context, req *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
@@ -996,6 +1015,9 @@ type SuperadminServiceHandler interface {
 	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
 	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
 	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
+	// DHCP lease management endpoints
+	// Get all DHCP leases for an organization (from VPSGatewayService)
+	GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -1264,6 +1286,12 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("UnassignVPSPublicIP")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceGetOrgLeasesHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetOrgLeasesProcedure,
+		svc.GetOrgLeases,
+		connect.WithSchema(superadminServiceMethods.ByName("GetOrgLeases")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceListStripeWebhookEventsHandler := connect.NewUnaryHandler(
 		SuperadminServiceListStripeWebhookEventsProcedure,
 		svc.ListStripeWebhookEvents,
@@ -1424,6 +1452,8 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceAssignVPSPublicIPHandler.ServeHTTP(w, r)
 		case SuperadminServiceUnassignVPSPublicIPProcedure:
 			superadminServiceUnassignVPSPublicIPHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetOrgLeasesProcedure:
+			superadminServiceGetOrgLeasesHandler.ServeHTTP(w, r)
 		case SuperadminServiceListStripeWebhookEventsProcedure:
 			superadminServiceListStripeWebhookEventsHandler.ServeHTTP(w, r)
 		case SuperadminServiceListNodesProcedure:
@@ -1617,6 +1647,10 @@ func (UnimplementedSuperadminServiceHandler) AssignVPSPublicIP(context.Context, 
 
 func (UnimplementedSuperadminServiceHandler) UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
