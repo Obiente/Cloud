@@ -66,6 +66,12 @@ const (
 	// VPSGatewayServiceSyncAllocationsProcedure is the fully-qualified name of the VPSGatewayService's
 	// SyncAllocations RPC.
 	VPSGatewayServiceSyncAllocationsProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/SyncAllocations"
+	// VPSGatewayServiceAddStaticDHCPLeaseProcedure is the fully-qualified name of the
+	// VPSGatewayService's AddStaticDHCPLease RPC.
+	VPSGatewayServiceAddStaticDHCPLeaseProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/AddStaticDHCPLease"
+	// VPSGatewayServiceRemoveStaticDHCPLeaseProcedure is the fully-qualified name of the
+	// VPSGatewayService's RemoveStaticDHCPLease RPC.
+	VPSGatewayServiceRemoveStaticDHCPLeaseProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/RemoveStaticDHCPLease"
 )
 
 // VPSGatewayServiceClient is a client for the obiente.cloud.vpsgateway.v1.VPSGatewayService
@@ -99,6 +105,10 @@ type VPSGatewayServiceClient interface {
 	// SyncAllocations syncs allocations from database as source of truth
 	// Gateway releases IPs not in the list and ensures desired IPs are allocated
 	SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error)
+	// Add a static DHCP lease (MAC -> IP)
+	AddStaticDHCPLease(context.Context, *connect.Request[v1.AddStaticDHCPLeaseRequest]) (*connect.Response[v1.AddStaticDHCPLeaseResponse], error)
+	// Remove a static DHCP lease (MAC -> IP)
+	RemoveStaticDHCPLease(context.Context, *connect.Request[v1.RemoveStaticDHCPLeaseRequest]) (*connect.Response[v1.RemoveStaticDHCPLeaseResponse], error)
 }
 
 // NewVPSGatewayServiceClient constructs a client for the
@@ -179,22 +189,36 @@ func NewVPSGatewayServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(vPSGatewayServiceMethods.ByName("SyncAllocations")),
 			connect.WithClientOptions(opts...),
 		),
+		addStaticDHCPLease: connect.NewClient[v1.AddStaticDHCPLeaseRequest, v1.AddStaticDHCPLeaseResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceAddStaticDHCPLeaseProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("AddStaticDHCPLease")),
+			connect.WithClientOptions(opts...),
+		),
+		removeStaticDHCPLease: connect.NewClient[v1.RemoveStaticDHCPLeaseRequest, v1.RemoveStaticDHCPLeaseResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceRemoveStaticDHCPLeaseProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("RemoveStaticDHCPLease")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // vPSGatewayServiceClient implements VPSGatewayServiceClient.
 type vPSGatewayServiceClient struct {
-	registerGateway  *connect.Client[v1.GatewayMessage, v1.GatewayMessage]
-	allocateIP       *connect.Client[v1.AllocateIPRequest, v1.AllocateIPResponse]
-	allocatePublicIP *connect.Client[v1.AllocatePublicIPRequest, v1.AllocatePublicIPResponse]
-	releaseIP        *connect.Client[v1.ReleaseIPRequest, v1.ReleaseIPResponse]
-	releasePublicIP  *connect.Client[v1.ReleasePublicIPRequest, v1.ReleasePublicIPResponse]
-	listIPs          *connect.Client[v1.ListIPsRequest, v1.ListIPsResponse]
-	proxySSH         *connect.Client[v1.ProxySSHRequest, v1.ProxySSHResponse]
-	getGatewayInfo   *connect.Client[v1.GetGatewayInfoRequest, v1.GetGatewayInfoResponse]
-	getLeases        *connect.Client[v1.GetLeasesRequest, v1.GetLeasesResponse]
-	getOrgLeases     *connect.Client[v1.GetOrgLeasesRequest, v1.GetOrgLeasesResponse]
-	syncAllocations  *connect.Client[v1.SyncAllocationsRequest, v1.SyncAllocationsResponse]
+	registerGateway       *connect.Client[v1.GatewayMessage, v1.GatewayMessage]
+	allocateIP            *connect.Client[v1.AllocateIPRequest, v1.AllocateIPResponse]
+	allocatePublicIP      *connect.Client[v1.AllocatePublicIPRequest, v1.AllocatePublicIPResponse]
+	releaseIP             *connect.Client[v1.ReleaseIPRequest, v1.ReleaseIPResponse]
+	releasePublicIP       *connect.Client[v1.ReleasePublicIPRequest, v1.ReleasePublicIPResponse]
+	listIPs               *connect.Client[v1.ListIPsRequest, v1.ListIPsResponse]
+	proxySSH              *connect.Client[v1.ProxySSHRequest, v1.ProxySSHResponse]
+	getGatewayInfo        *connect.Client[v1.GetGatewayInfoRequest, v1.GetGatewayInfoResponse]
+	getLeases             *connect.Client[v1.GetLeasesRequest, v1.GetLeasesResponse]
+	getOrgLeases          *connect.Client[v1.GetOrgLeasesRequest, v1.GetOrgLeasesResponse]
+	syncAllocations       *connect.Client[v1.SyncAllocationsRequest, v1.SyncAllocationsResponse]
+	addStaticDHCPLease    *connect.Client[v1.AddStaticDHCPLeaseRequest, v1.AddStaticDHCPLeaseResponse]
+	removeStaticDHCPLease *connect.Client[v1.RemoveStaticDHCPLeaseRequest, v1.RemoveStaticDHCPLeaseResponse]
 }
 
 // RegisterGateway calls obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway.
@@ -252,6 +276,16 @@ func (c *vPSGatewayServiceClient) SyncAllocations(ctx context.Context, req *conn
 	return c.syncAllocations.CallUnary(ctx, req)
 }
 
+// AddStaticDHCPLease calls obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease.
+func (c *vPSGatewayServiceClient) AddStaticDHCPLease(ctx context.Context, req *connect.Request[v1.AddStaticDHCPLeaseRequest]) (*connect.Response[v1.AddStaticDHCPLeaseResponse], error) {
+	return c.addStaticDHCPLease.CallUnary(ctx, req)
+}
+
+// RemoveStaticDHCPLease calls obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease.
+func (c *vPSGatewayServiceClient) RemoveStaticDHCPLease(ctx context.Context, req *connect.Request[v1.RemoveStaticDHCPLeaseRequest]) (*connect.Response[v1.RemoveStaticDHCPLeaseResponse], error) {
+	return c.removeStaticDHCPLease.CallUnary(ctx, req)
+}
+
 // VPSGatewayServiceHandler is an implementation of the
 // obiente.cloud.vpsgateway.v1.VPSGatewayService service.
 type VPSGatewayServiceHandler interface {
@@ -283,6 +317,10 @@ type VPSGatewayServiceHandler interface {
 	// SyncAllocations syncs allocations from database as source of truth
 	// Gateway releases IPs not in the list and ensures desired IPs are allocated
 	SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error)
+	// Add a static DHCP lease (MAC -> IP)
+	AddStaticDHCPLease(context.Context, *connect.Request[v1.AddStaticDHCPLeaseRequest]) (*connect.Response[v1.AddStaticDHCPLeaseResponse], error)
+	// Remove a static DHCP lease (MAC -> IP)
+	RemoveStaticDHCPLease(context.Context, *connect.Request[v1.RemoveStaticDHCPLeaseRequest]) (*connect.Response[v1.RemoveStaticDHCPLeaseResponse], error)
 }
 
 // NewVPSGatewayServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -358,6 +396,18 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 		connect.WithSchema(vPSGatewayServiceMethods.ByName("SyncAllocations")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSGatewayServiceAddStaticDHCPLeaseHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceAddStaticDHCPLeaseProcedure,
+		svc.AddStaticDHCPLease,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("AddStaticDHCPLease")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSGatewayServiceRemoveStaticDHCPLeaseHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceRemoveStaticDHCPLeaseProcedure,
+		svc.RemoveStaticDHCPLease,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("RemoveStaticDHCPLease")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vpsgateway.v1.VPSGatewayService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSGatewayServiceRegisterGatewayProcedure:
@@ -382,6 +432,10 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 			vPSGatewayServiceGetOrgLeasesHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceSyncAllocationsProcedure:
 			vPSGatewayServiceSyncAllocationsHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceAddStaticDHCPLeaseProcedure:
+			vPSGatewayServiceAddStaticDHCPLeaseHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceRemoveStaticDHCPLeaseProcedure:
+			vPSGatewayServiceRemoveStaticDHCPLeaseHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -433,4 +487,12 @@ func (UnimplementedVPSGatewayServiceHandler) GetOrgLeases(context.Context, *conn
 
 func (UnimplementedVPSGatewayServiceHandler) SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) AddStaticDHCPLease(context.Context, *connect.Request[v1.AddStaticDHCPLeaseRequest]) (*connect.Response[v1.AddStaticDHCPLeaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) RemoveStaticDHCPLease(context.Context, *connect.Request[v1.RemoveStaticDHCPLeaseRequest]) (*connect.Response[v1.RemoveStaticDHCPLeaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease is not implemented"))
 }

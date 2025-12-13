@@ -22,6 +22,264 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// AddStaticDHCPLeaseRequest adds a static DHCP lease for a MAC/IP pair
+type AddStaticDHCPLeaseRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MacAddress     string                 `protobuf:"bytes,1,opt,name=mac_address,json=macAddress,proto3" json:"mac_address,omitempty"`
+	IpAddress      string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	VpsId          string                 `protobuf:"bytes,3,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,4,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	IsPublic       bool                   `protobuf:"varint,5,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AddStaticDHCPLeaseRequest) Reset() {
+	*x = AddStaticDHCPLeaseRequest{}
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddStaticDHCPLeaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddStaticDHCPLeaseRequest) ProtoMessage() {}
+
+func (x *AddStaticDHCPLeaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddStaticDHCPLeaseRequest.ProtoReflect.Descriptor instead.
+func (*AddStaticDHCPLeaseRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *AddStaticDHCPLeaseRequest) GetMacAddress() string {
+	if x != nil {
+		return x.MacAddress
+	}
+	return ""
+}
+
+func (x *AddStaticDHCPLeaseRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *AddStaticDHCPLeaseRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+func (x *AddStaticDHCPLeaseRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *AddStaticDHCPLeaseRequest) GetIsPublic() bool {
+	if x != nil {
+		return x.IsPublic
+	}
+	return false
+}
+
+type AddStaticDHCPLeaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddStaticDHCPLeaseResponse) Reset() {
+	*x = AddStaticDHCPLeaseResponse{}
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddStaticDHCPLeaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddStaticDHCPLeaseResponse) ProtoMessage() {}
+
+func (x *AddStaticDHCPLeaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddStaticDHCPLeaseResponse.ProtoReflect.Descriptor instead.
+func (*AddStaticDHCPLeaseResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AddStaticDHCPLeaseResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *AddStaticDHCPLeaseResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// RemoveStaticDHCPLeaseRequest removes a static DHCP lease for a MAC/IP pair
+type RemoveStaticDHCPLeaseRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MacAddress     string                 `protobuf:"bytes,1,opt,name=mac_address,json=macAddress,proto3" json:"mac_address,omitempty"`
+	IpAddress      string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	VpsId          string                 `protobuf:"bytes,3,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,4,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	IsPublic       bool                   `protobuf:"varint,5,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) Reset() {
+	*x = RemoveStaticDHCPLeaseRequest{}
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveStaticDHCPLeaseRequest) ProtoMessage() {}
+
+func (x *RemoveStaticDHCPLeaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveStaticDHCPLeaseRequest.ProtoReflect.Descriptor instead.
+func (*RemoveStaticDHCPLeaseRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) GetMacAddress() string {
+	if x != nil {
+		return x.MacAddress
+	}
+	return ""
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *RemoveStaticDHCPLeaseRequest) GetIsPublic() bool {
+	if x != nil {
+		return x.IsPublic
+	}
+	return false
+}
+
+type RemoveStaticDHCPLeaseResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveStaticDHCPLeaseResponse) Reset() {
+	*x = RemoveStaticDHCPLeaseResponse{}
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveStaticDHCPLeaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveStaticDHCPLeaseResponse) ProtoMessage() {}
+
+func (x *RemoveStaticDHCPLeaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveStaticDHCPLeaseResponse.ProtoReflect.Descriptor instead.
+func (*RemoveStaticDHCPLeaseResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RemoveStaticDHCPLeaseResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RemoveStaticDHCPLeaseResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 // AllocateIPRequest requests IP allocation for a VPS
 type AllocateIPRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -39,7 +297,7 @@ type AllocateIPRequest struct {
 
 func (x *AllocateIPRequest) Reset() {
 	*x = AllocateIPRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[0]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +309,7 @@ func (x *AllocateIPRequest) String() string {
 func (*AllocateIPRequest) ProtoMessage() {}
 
 func (x *AllocateIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[0]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +322,7 @@ func (x *AllocateIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIPRequest.ProtoReflect.Descriptor instead.
 func (*AllocateIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{0}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AllocateIPRequest) GetVpsId() string {
@@ -114,7 +372,7 @@ type AllocateIPResponse struct {
 
 func (x *AllocateIPResponse) Reset() {
 	*x = AllocateIPResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[1]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -126,7 +384,7 @@ func (x *AllocateIPResponse) String() string {
 func (*AllocateIPResponse) ProtoMessage() {}
 
 func (x *AllocateIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[1]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -139,7 +397,7 @@ func (x *AllocateIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIPResponse.ProtoReflect.Descriptor instead.
 func (*AllocateIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{1}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AllocateIPResponse) GetIpAddress() string {
@@ -198,7 +456,7 @@ type AllocatePublicIPRequest struct {
 
 func (x *AllocatePublicIPRequest) Reset() {
 	*x = AllocatePublicIPRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +468,7 @@ func (x *AllocatePublicIPRequest) String() string {
 func (*AllocatePublicIPRequest) ProtoMessage() {}
 
 func (x *AllocatePublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +481,7 @@ func (x *AllocatePublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocatePublicIPRequest.ProtoReflect.Descriptor instead.
 func (*AllocatePublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{2}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AllocatePublicIPRequest) GetVpsId() string {
@@ -287,7 +545,7 @@ type AllocatePublicIPResponse struct {
 
 func (x *AllocatePublicIPResponse) Reset() {
 	*x = AllocatePublicIPResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +557,7 @@ func (x *AllocatePublicIPResponse) String() string {
 func (*AllocatePublicIPResponse) ProtoMessage() {}
 
 func (x *AllocatePublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +570,7 @@ func (x *AllocatePublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocatePublicIPResponse.ProtoReflect.Descriptor instead.
 func (*AllocatePublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{3}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AllocatePublicIPResponse) GetIpAddress() string {
@@ -363,7 +621,7 @@ type ReleaseIPRequest struct {
 
 func (x *ReleaseIPRequest) Reset() {
 	*x = ReleaseIPRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -375,7 +633,7 @@ func (x *ReleaseIPRequest) String() string {
 func (*ReleaseIPRequest) ProtoMessage() {}
 
 func (x *ReleaseIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -388,7 +646,7 @@ func (x *ReleaseIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseIPRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{4}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ReleaseIPRequest) GetVpsId() string {
@@ -418,7 +676,7 @@ type ReleaseIPResponse struct {
 
 func (x *ReleaseIPResponse) Reset() {
 	*x = ReleaseIPResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[5]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -430,7 +688,7 @@ func (x *ReleaseIPResponse) String() string {
 func (*ReleaseIPResponse) ProtoMessage() {}
 
 func (x *ReleaseIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[5]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -443,7 +701,7 @@ func (x *ReleaseIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseIPResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{5}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ReleaseIPResponse) GetSuccess() bool {
@@ -475,7 +733,7 @@ type ReleasePublicIPRequest struct {
 
 func (x *ReleasePublicIPRequest) Reset() {
 	*x = ReleasePublicIPRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[6]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -487,7 +745,7 @@ func (x *ReleasePublicIPRequest) String() string {
 func (*ReleasePublicIPRequest) ProtoMessage() {}
 
 func (x *ReleasePublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[6]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -500,7 +758,7 @@ func (x *ReleasePublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePublicIPRequest.ProtoReflect.Descriptor instead.
 func (*ReleasePublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{6}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ReleasePublicIPRequest) GetVpsId() string {
@@ -537,7 +795,7 @@ type ReleasePublicIPResponse struct {
 
 func (x *ReleasePublicIPResponse) Reset() {
 	*x = ReleasePublicIPResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[7]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -549,7 +807,7 @@ func (x *ReleasePublicIPResponse) String() string {
 func (*ReleasePublicIPResponse) ProtoMessage() {}
 
 func (x *ReleasePublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[7]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -562,7 +820,7 @@ func (x *ReleasePublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePublicIPResponse.ProtoReflect.Descriptor instead.
 func (*ReleasePublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{7}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ReleasePublicIPResponse) GetSuccess() bool {
@@ -592,7 +850,7 @@ type ListIPsRequest struct {
 
 func (x *ListIPsRequest) Reset() {
 	*x = ListIPsRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[8]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -604,7 +862,7 @@ func (x *ListIPsRequest) String() string {
 func (*ListIPsRequest) ProtoMessage() {}
 
 func (x *ListIPsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[8]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -617,7 +875,7 @@ func (x *ListIPsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIPsRequest.ProtoReflect.Descriptor instead.
 func (*ListIPsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{8}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListIPsRequest) GetOrganizationId() string {
@@ -648,14 +906,16 @@ type IPAllocation struct {
 	// Allocation time
 	AllocatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=allocated_at,json=allocatedAt,proto3" json:"allocated_at,omitempty"`
 	// Lease expiration time
-	LeaseExpires  *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=lease_expires,json=leaseExpires,proto3" json:"lease_expires,omitempty"`
+	LeaseExpires *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=lease_expires,json=leaseExpires,proto3" json:"lease_expires,omitempty"`
+	// Whether this is a public IP (outside DHCP pool)
+	IsPublic      bool `protobuf:"varint,7,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IPAllocation) Reset() {
 	*x = IPAllocation{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[9]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -667,7 +927,7 @@ func (x *IPAllocation) String() string {
 func (*IPAllocation) ProtoMessage() {}
 
 func (x *IPAllocation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[9]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -680,7 +940,7 @@ func (x *IPAllocation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IPAllocation.ProtoReflect.Descriptor instead.
 func (*IPAllocation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{9}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *IPAllocation) GetVpsId() string {
@@ -725,6 +985,13 @@ func (x *IPAllocation) GetLeaseExpires() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *IPAllocation) GetIsPublic() bool {
+	if x != nil {
+		return x.IsPublic
+	}
+	return false
+}
+
 // ListIPsResponse returns list of allocated IPs
 type ListIPsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -736,7 +1003,7 @@ type ListIPsResponse struct {
 
 func (x *ListIPsResponse) Reset() {
 	*x = ListIPsResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -748,7 +1015,7 @@ func (x *ListIPsResponse) String() string {
 func (*ListIPsResponse) ProtoMessage() {}
 
 func (x *ListIPsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -761,7 +1028,7 @@ func (x *ListIPsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListIPsResponse.ProtoReflect.Descriptor instead.
 func (*ListIPsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{10}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListIPsResponse) GetAllocations() []*IPAllocation {
@@ -793,7 +1060,7 @@ type ProxySSHRequest struct {
 
 func (x *ProxySSHRequest) Reset() {
 	*x = ProxySSHRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[11]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +1072,7 @@ func (x *ProxySSHRequest) String() string {
 func (*ProxySSHRequest) ProtoMessage() {}
 
 func (x *ProxySSHRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[11]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +1085,7 @@ func (x *ProxySSHRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxySSHRequest.ProtoReflect.Descriptor instead.
 func (*ProxySSHRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{11}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ProxySSHRequest) GetConnectionId() string {
@@ -880,7 +1147,7 @@ type ProxySSHResponse struct {
 
 func (x *ProxySSHResponse) Reset() {
 	*x = ProxySSHResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[12]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -892,7 +1159,7 @@ func (x *ProxySSHResponse) String() string {
 func (*ProxySSHResponse) ProtoMessage() {}
 
 func (x *ProxySSHResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[12]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -905,7 +1172,7 @@ func (x *ProxySSHResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxySSHResponse.ProtoReflect.Descriptor instead.
 func (*ProxySSHResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{12}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ProxySSHResponse) GetConnectionId() string {
@@ -945,7 +1212,7 @@ type GetGatewayInfoRequest struct {
 
 func (x *GetGatewayInfoRequest) Reset() {
 	*x = GetGatewayInfoRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -957,7 +1224,7 @@ func (x *GetGatewayInfoRequest) String() string {
 func (*GetGatewayInfoRequest) ProtoMessage() {}
 
 func (x *GetGatewayInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -970,7 +1237,7 @@ func (x *GetGatewayInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetGatewayInfoRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{13}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{17}
 }
 
 // GetGatewayInfoResponse returns gateway status and configuration
@@ -1002,7 +1269,7 @@ type GetGatewayInfoResponse struct {
 
 func (x *GetGatewayInfoResponse) Reset() {
 	*x = GetGatewayInfoResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1014,7 +1281,7 @@ func (x *GetGatewayInfoResponse) String() string {
 func (*GetGatewayInfoResponse) ProtoMessage() {}
 
 func (x *GetGatewayInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1027,7 +1294,7 @@ func (x *GetGatewayInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGatewayInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetGatewayInfoResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{14}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GetGatewayInfoResponse) GetVersion() string {
@@ -1122,7 +1389,7 @@ type GatewayMessage struct {
 
 func (x *GatewayMessage) Reset() {
 	*x = GatewayMessage{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1134,7 +1401,7 @@ func (x *GatewayMessage) String() string {
 func (*GatewayMessage) ProtoMessage() {}
 
 func (x *GatewayMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1147,7 +1414,7 @@ func (x *GatewayMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayMessage.ProtoReflect.Descriptor instead.
 func (*GatewayMessage) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{15}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GatewayMessage) GetType() string {
@@ -1212,7 +1479,7 @@ type GatewayRegistration struct {
 
 func (x *GatewayRegistration) Reset() {
 	*x = GatewayRegistration{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1224,7 +1491,7 @@ func (x *GatewayRegistration) String() string {
 func (*GatewayRegistration) ProtoMessage() {}
 
 func (x *GatewayRegistration) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1237,7 +1504,7 @@ func (x *GatewayRegistration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayRegistration.ProtoReflect.Descriptor instead.
 func (*GatewayRegistration) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GatewayRegistration) GetGatewayId() string {
@@ -1304,7 +1571,7 @@ type GatewayRequest struct {
 
 func (x *GatewayRequest) Reset() {
 	*x = GatewayRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1316,7 +1583,7 @@ func (x *GatewayRequest) String() string {
 func (*GatewayRequest) ProtoMessage() {}
 
 func (x *GatewayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1329,7 +1596,7 @@ func (x *GatewayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayRequest.ProtoReflect.Descriptor instead.
 func (*GatewayRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GatewayRequest) GetRequestId() string {
@@ -1370,7 +1637,7 @@ type GatewayResponse struct {
 
 func (x *GatewayResponse) Reset() {
 	*x = GatewayResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1382,7 +1649,7 @@ func (x *GatewayResponse) String() string {
 func (*GatewayResponse) ProtoMessage() {}
 
 func (x *GatewayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1395,7 +1662,7 @@ func (x *GatewayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GatewayResponse.ProtoReflect.Descriptor instead.
 func (*GatewayResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GatewayResponse) GetRequestId() string {
@@ -1443,7 +1710,7 @@ type LeaseRecord struct {
 
 func (x *LeaseRecord) Reset() {
 	*x = LeaseRecord{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1455,7 +1722,7 @@ func (x *LeaseRecord) String() string {
 func (*LeaseRecord) ProtoMessage() {}
 
 func (x *LeaseRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1468,7 +1735,7 @@ func (x *LeaseRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseRecord.ProtoReflect.Descriptor instead.
 func (*LeaseRecord) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{19}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LeaseRecord) GetMacAddress() string {
@@ -1520,7 +1787,7 @@ type OrgLeaseRecord struct {
 
 func (x *OrgLeaseRecord) Reset() {
 	*x = OrgLeaseRecord{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1532,7 +1799,7 @@ func (x *OrgLeaseRecord) String() string {
 func (*OrgLeaseRecord) ProtoMessage() {}
 
 func (x *OrgLeaseRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1545,7 +1812,7 @@ func (x *OrgLeaseRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrgLeaseRecord.ProtoReflect.Descriptor instead.
 func (*OrgLeaseRecord) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{20}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *OrgLeaseRecord) GetVpsId() string {
@@ -1599,7 +1866,7 @@ type GetLeasesRequest struct {
 
 func (x *GetLeasesRequest) Reset() {
 	*x = GetLeasesRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1611,7 +1878,7 @@ func (x *GetLeasesRequest) String() string {
 func (*GetLeasesRequest) ProtoMessage() {}
 
 func (x *GetLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1624,7 +1891,7 @@ func (x *GetLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLeasesRequest.ProtoReflect.Descriptor instead.
 func (*GetLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{21}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{25}
 }
 
 // GetLeasesResponse returns active DHCP leases from dnsmasq
@@ -1638,7 +1905,7 @@ type GetLeasesResponse struct {
 
 func (x *GetLeasesResponse) Reset() {
 	*x = GetLeasesResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1650,7 +1917,7 @@ func (x *GetLeasesResponse) String() string {
 func (*GetLeasesResponse) ProtoMessage() {}
 
 func (x *GetLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1663,7 +1930,7 @@ func (x *GetLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLeasesResponse.ProtoReflect.Descriptor instead.
 func (*GetLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{22}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *GetLeasesResponse) GetLeases() []*LeaseRecord {
@@ -1686,7 +1953,7 @@ type GetOrgLeasesRequest struct {
 
 func (x *GetOrgLeasesRequest) Reset() {
 	*x = GetOrgLeasesRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1698,7 +1965,7 @@ func (x *GetOrgLeasesRequest) String() string {
 func (*GetOrgLeasesRequest) ProtoMessage() {}
 
 func (x *GetOrgLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1711,7 +1978,7 @@ func (x *GetOrgLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgLeasesRequest.ProtoReflect.Descriptor instead.
 func (*GetOrgLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{23}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetOrgLeasesRequest) GetOrganizationId() string {
@@ -1739,7 +2006,7 @@ type GetOrgLeasesResponse struct {
 
 func (x *GetOrgLeasesResponse) Reset() {
 	*x = GetOrgLeasesResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1751,7 +2018,7 @@ func (x *GetOrgLeasesResponse) String() string {
 func (*GetOrgLeasesResponse) ProtoMessage() {}
 
 func (x *GetOrgLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1764,7 +2031,7 @@ func (x *GetOrgLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrgLeasesResponse.ProtoReflect.Descriptor instead.
 func (*GetOrgLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{24}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GetOrgLeasesResponse) GetLeases() []*OrgLeaseRecord {
@@ -1793,7 +2060,7 @@ type DesiredAllocation struct {
 
 func (x *DesiredAllocation) Reset() {
 	*x = DesiredAllocation{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1805,7 +2072,7 @@ func (x *DesiredAllocation) String() string {
 func (*DesiredAllocation) ProtoMessage() {}
 
 func (x *DesiredAllocation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1818,7 +2085,7 @@ func (x *DesiredAllocation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DesiredAllocation.ProtoReflect.Descriptor instead.
 func (*DesiredAllocation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{25}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *DesiredAllocation) GetVpsId() string {
@@ -1867,7 +2134,7 @@ type SyncAllocationsRequest struct {
 
 func (x *SyncAllocationsRequest) Reset() {
 	*x = SyncAllocationsRequest{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1879,7 +2146,7 @@ func (x *SyncAllocationsRequest) String() string {
 func (*SyncAllocationsRequest) ProtoMessage() {}
 
 func (x *SyncAllocationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1892,7 +2159,7 @@ func (x *SyncAllocationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAllocationsRequest.ProtoReflect.Descriptor instead.
 func (*SyncAllocationsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{26}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *SyncAllocationsRequest) GetAllocations() []*DesiredAllocation {
@@ -1919,7 +2186,7 @@ type SyncAllocationsResponse struct {
 
 func (x *SyncAllocationsResponse) Reset() {
 	*x = SyncAllocationsResponse{}
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1931,7 +2198,7 @@ func (x *SyncAllocationsResponse) String() string {
 func (*SyncAllocationsResponse) ProtoMessage() {}
 
 func (x *SyncAllocationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1944,7 +2211,7 @@ func (x *SyncAllocationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncAllocationsResponse.ProtoReflect.Descriptor instead.
 func (*SyncAllocationsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{27}
+	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *SyncAllocationsResponse) GetSuccess() bool {
@@ -1979,7 +2246,29 @@ var File_obiente_cloud_vpsgateway_v1_gateway_service_proto protoreflect.FileDesc
 
 const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\n" +
-	"1obiente/cloud/vpsgateway/v1/gateway_service.proto\x12\x1bobiente.cloud.vpsgateway.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x97\x01\n" +
+	"1obiente/cloud/vpsgateway/v1/gateway_service.proto\x12\x1bobiente.cloud.vpsgateway.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb8\x01\n" +
+	"\x19AddStaticDHCPLeaseRequest\x12\x1f\n" +
+	"\vmac_address\x18\x01 \x01(\tR\n" +
+	"macAddress\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x15\n" +
+	"\x06vps_id\x18\x03 \x01(\tR\x05vpsId\x12'\n" +
+	"\x0forganization_id\x18\x04 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tis_public\x18\x05 \x01(\bR\bisPublic\"P\n" +
+	"\x1aAddStaticDHCPLeaseResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xbb\x01\n" +
+	"\x1cRemoveStaticDHCPLeaseRequest\x12\x1f\n" +
+	"\vmac_address\x18\x01 \x01(\tR\n" +
+	"macAddress\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x15\n" +
+	"\x06vps_id\x18\x03 \x01(\tR\x05vpsId\x12'\n" +
+	"\x0forganization_id\x18\x04 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tis_public\x18\x05 \x01(\bR\bisPublic\"S\n" +
+	"\x1dRemoveStaticDHCPLeaseResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x97\x01\n" +
 	"\x11AllocateIPRequest\x12\x15\n" +
 	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1f\n" +
@@ -2027,7 +2316,7 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"P\n" +
 	"\x0eListIPsRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
-	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"\x8e\x02\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"\xab\x02\n" +
 	"\fIPAllocation\x12\x15\n" +
 	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1d\n" +
@@ -2036,7 +2325,8 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\vmac_address\x18\x04 \x01(\tR\n" +
 	"macAddress\x12=\n" +
 	"\fallocated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vallocatedAt\x12?\n" +
-	"\rlease_expires\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\fleaseExpires\"^\n" +
+	"\rlease_expires\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\fleaseExpires\x12\x1b\n" +
+	"\tis_public\x18\a \x01(\bR\bisPublic\"^\n" +
 	"\x0fListIPsResponse\x12K\n" +
 	"\vallocations\x18\x01 \x03(\v2).obiente.cloud.vpsgateway.v1.IPAllocationR\vallocations\"\xb0\x01\n" +
 	"\x0fProxySSHRequest\x12#\n" +
@@ -2137,8 +2427,7 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05added\x18\x02 \x01(\x05R\x05added\x12\x18\n" +
 	"\aremoved\x18\x03 \x01(\x05R\aremoved\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage2\x8b\n" +
-	"\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage2\xa4\f\n" +
 	"\x11VPSGatewayService\x12o\n" +
 	"\x0fRegisterGateway\x12+.obiente.cloud.vpsgateway.v1.GatewayMessage\x1a+.obiente.cloud.vpsgateway.v1.GatewayMessage(\x010\x01\x12m\n" +
 	"\n" +
@@ -2151,7 +2440,9 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\x0eGetGatewayInfo\x122.obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest\x1a3.obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse\x12j\n" +
 	"\tGetLeases\x12-.obiente.cloud.vpsgateway.v1.GetLeasesRequest\x1a..obiente.cloud.vpsgateway.v1.GetLeasesResponse\x12s\n" +
 	"\fGetOrgLeases\x120.obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest\x1a1.obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse\x12|\n" +
-	"\x0fSyncAllocations\x123.obiente.cloud.vpsgateway.v1.SyncAllocationsRequest\x1a4.obiente.cloud.vpsgateway.v1.SyncAllocationsResponseBUZSgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1b\x06proto3"
+	"\x0fSyncAllocations\x123.obiente.cloud.vpsgateway.v1.SyncAllocationsRequest\x1a4.obiente.cloud.vpsgateway.v1.SyncAllocationsResponse\x12\x85\x01\n" +
+	"\x12AddStaticDHCPLease\x126.obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest\x1a7.obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse\x12\x8e\x01\n" +
+	"\x15RemoveStaticDHCPLease\x129.obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest\x1a:.obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponseBUZSgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1b\x06proto3"
 
 var (
 	file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescOnce sync.Once
@@ -2165,76 +2456,84 @@ func file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescGZIP() []byte
 	return file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescData
 }
 
-var file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_obiente_cloud_vpsgateway_v1_gateway_service_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_obiente_cloud_vpsgateway_v1_gateway_service_proto_goTypes = []any{
-	(*AllocateIPRequest)(nil),        // 0: obiente.cloud.vpsgateway.v1.AllocateIPRequest
-	(*AllocateIPResponse)(nil),       // 1: obiente.cloud.vpsgateway.v1.AllocateIPResponse
-	(*AllocatePublicIPRequest)(nil),  // 2: obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
-	(*AllocatePublicIPResponse)(nil), // 3: obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
-	(*ReleaseIPRequest)(nil),         // 4: obiente.cloud.vpsgateway.v1.ReleaseIPRequest
-	(*ReleaseIPResponse)(nil),        // 5: obiente.cloud.vpsgateway.v1.ReleaseIPResponse
-	(*ReleasePublicIPRequest)(nil),   // 6: obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
-	(*ReleasePublicIPResponse)(nil),  // 7: obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
-	(*ListIPsRequest)(nil),           // 8: obiente.cloud.vpsgateway.v1.ListIPsRequest
-	(*IPAllocation)(nil),             // 9: obiente.cloud.vpsgateway.v1.IPAllocation
-	(*ListIPsResponse)(nil),          // 10: obiente.cloud.vpsgateway.v1.ListIPsResponse
-	(*ProxySSHRequest)(nil),          // 11: obiente.cloud.vpsgateway.v1.ProxySSHRequest
-	(*ProxySSHResponse)(nil),         // 12: obiente.cloud.vpsgateway.v1.ProxySSHResponse
-	(*GetGatewayInfoRequest)(nil),    // 13: obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
-	(*GetGatewayInfoResponse)(nil),   // 14: obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
-	(*GatewayMessage)(nil),           // 15: obiente.cloud.vpsgateway.v1.GatewayMessage
-	(*GatewayRegistration)(nil),      // 16: obiente.cloud.vpsgateway.v1.GatewayRegistration
-	(*GatewayRequest)(nil),           // 17: obiente.cloud.vpsgateway.v1.GatewayRequest
-	(*GatewayResponse)(nil),          // 18: obiente.cloud.vpsgateway.v1.GatewayResponse
-	(*LeaseRecord)(nil),              // 19: obiente.cloud.vpsgateway.v1.LeaseRecord
-	(*OrgLeaseRecord)(nil),           // 20: obiente.cloud.vpsgateway.v1.OrgLeaseRecord
-	(*GetLeasesRequest)(nil),         // 21: obiente.cloud.vpsgateway.v1.GetLeasesRequest
-	(*GetLeasesResponse)(nil),        // 22: obiente.cloud.vpsgateway.v1.GetLeasesResponse
-	(*GetOrgLeasesRequest)(nil),      // 23: obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
-	(*GetOrgLeasesResponse)(nil),     // 24: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
-	(*DesiredAllocation)(nil),        // 25: obiente.cloud.vpsgateway.v1.DesiredAllocation
-	(*SyncAllocationsRequest)(nil),   // 26: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
-	(*SyncAllocationsResponse)(nil),  // 27: obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
-	(*timestamppb.Timestamp)(nil),    // 28: google.protobuf.Timestamp
+	(*AddStaticDHCPLeaseRequest)(nil),     // 0: obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest
+	(*AddStaticDHCPLeaseResponse)(nil),    // 1: obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse
+	(*RemoveStaticDHCPLeaseRequest)(nil),  // 2: obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest
+	(*RemoveStaticDHCPLeaseResponse)(nil), // 3: obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse
+	(*AllocateIPRequest)(nil),             // 4: obiente.cloud.vpsgateway.v1.AllocateIPRequest
+	(*AllocateIPResponse)(nil),            // 5: obiente.cloud.vpsgateway.v1.AllocateIPResponse
+	(*AllocatePublicIPRequest)(nil),       // 6: obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
+	(*AllocatePublicIPResponse)(nil),      // 7: obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
+	(*ReleaseIPRequest)(nil),              // 8: obiente.cloud.vpsgateway.v1.ReleaseIPRequest
+	(*ReleaseIPResponse)(nil),             // 9: obiente.cloud.vpsgateway.v1.ReleaseIPResponse
+	(*ReleasePublicIPRequest)(nil),        // 10: obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
+	(*ReleasePublicIPResponse)(nil),       // 11: obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
+	(*ListIPsRequest)(nil),                // 12: obiente.cloud.vpsgateway.v1.ListIPsRequest
+	(*IPAllocation)(nil),                  // 13: obiente.cloud.vpsgateway.v1.IPAllocation
+	(*ListIPsResponse)(nil),               // 14: obiente.cloud.vpsgateway.v1.ListIPsResponse
+	(*ProxySSHRequest)(nil),               // 15: obiente.cloud.vpsgateway.v1.ProxySSHRequest
+	(*ProxySSHResponse)(nil),              // 16: obiente.cloud.vpsgateway.v1.ProxySSHResponse
+	(*GetGatewayInfoRequest)(nil),         // 17: obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
+	(*GetGatewayInfoResponse)(nil),        // 18: obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
+	(*GatewayMessage)(nil),                // 19: obiente.cloud.vpsgateway.v1.GatewayMessage
+	(*GatewayRegistration)(nil),           // 20: obiente.cloud.vpsgateway.v1.GatewayRegistration
+	(*GatewayRequest)(nil),                // 21: obiente.cloud.vpsgateway.v1.GatewayRequest
+	(*GatewayResponse)(nil),               // 22: obiente.cloud.vpsgateway.v1.GatewayResponse
+	(*LeaseRecord)(nil),                   // 23: obiente.cloud.vpsgateway.v1.LeaseRecord
+	(*OrgLeaseRecord)(nil),                // 24: obiente.cloud.vpsgateway.v1.OrgLeaseRecord
+	(*GetLeasesRequest)(nil),              // 25: obiente.cloud.vpsgateway.v1.GetLeasesRequest
+	(*GetLeasesResponse)(nil),             // 26: obiente.cloud.vpsgateway.v1.GetLeasesResponse
+	(*GetOrgLeasesRequest)(nil),           // 27: obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+	(*GetOrgLeasesResponse)(nil),          // 28: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+	(*DesiredAllocation)(nil),             // 29: obiente.cloud.vpsgateway.v1.DesiredAllocation
+	(*SyncAllocationsRequest)(nil),        // 30: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
+	(*SyncAllocationsResponse)(nil),       // 31: obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
+	(*timestamppb.Timestamp)(nil),         // 32: google.protobuf.Timestamp
 }
 var file_obiente_cloud_vpsgateway_v1_gateway_service_proto_depIdxs = []int32{
-	28, // 0: obiente.cloud.vpsgateway.v1.AllocateIPResponse.lease_expires:type_name -> google.protobuf.Timestamp
-	28, // 1: obiente.cloud.vpsgateway.v1.IPAllocation.allocated_at:type_name -> google.protobuf.Timestamp
-	28, // 2: obiente.cloud.vpsgateway.v1.IPAllocation.lease_expires:type_name -> google.protobuf.Timestamp
-	9,  // 3: obiente.cloud.vpsgateway.v1.ListIPsResponse.allocations:type_name -> obiente.cloud.vpsgateway.v1.IPAllocation
-	16, // 4: obiente.cloud.vpsgateway.v1.GatewayMessage.registration:type_name -> obiente.cloud.vpsgateway.v1.GatewayRegistration
-	17, // 5: obiente.cloud.vpsgateway.v1.GatewayMessage.request:type_name -> obiente.cloud.vpsgateway.v1.GatewayRequest
-	18, // 6: obiente.cloud.vpsgateway.v1.GatewayMessage.response:type_name -> obiente.cloud.vpsgateway.v1.GatewayResponse
-	28, // 7: obiente.cloud.vpsgateway.v1.GatewayMessage.heartbeat:type_name -> google.protobuf.Timestamp
-	28, // 8: obiente.cloud.vpsgateway.v1.LeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
-	28, // 9: obiente.cloud.vpsgateway.v1.OrgLeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
-	19, // 10: obiente.cloud.vpsgateway.v1.GetLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.LeaseRecord
-	20, // 11: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.OrgLeaseRecord
-	25, // 12: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest.allocations:type_name -> obiente.cloud.vpsgateway.v1.DesiredAllocation
-	15, // 13: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:input_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
-	0,  // 14: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:input_type -> obiente.cloud.vpsgateway.v1.AllocateIPRequest
-	2,  // 15: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:input_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
-	4,  // 16: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:input_type -> obiente.cloud.vpsgateway.v1.ReleaseIPRequest
-	6,  // 17: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:input_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
-	8,  // 18: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:input_type -> obiente.cloud.vpsgateway.v1.ListIPsRequest
-	11, // 19: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:input_type -> obiente.cloud.vpsgateway.v1.ProxySSHRequest
-	13, // 20: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:input_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
-	21, // 21: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:input_type -> obiente.cloud.vpsgateway.v1.GetLeasesRequest
-	23, // 22: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
-	26, // 23: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:input_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
-	15, // 24: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:output_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
-	1,  // 25: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:output_type -> obiente.cloud.vpsgateway.v1.AllocateIPResponse
-	3,  // 26: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:output_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
-	5,  // 27: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:output_type -> obiente.cloud.vpsgateway.v1.ReleaseIPResponse
-	7,  // 28: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:output_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
-	10, // 29: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:output_type -> obiente.cloud.vpsgateway.v1.ListIPsResponse
-	12, // 30: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:output_type -> obiente.cloud.vpsgateway.v1.ProxySSHResponse
-	14, // 31: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:output_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
-	22, // 32: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:output_type -> obiente.cloud.vpsgateway.v1.GetLeasesResponse
-	24, // 33: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
-	27, // 34: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:output_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
-	24, // [24:35] is the sub-list for method output_type
-	13, // [13:24] is the sub-list for method input_type
+	32, // 0: obiente.cloud.vpsgateway.v1.AllocateIPResponse.lease_expires:type_name -> google.protobuf.Timestamp
+	32, // 1: obiente.cloud.vpsgateway.v1.IPAllocation.allocated_at:type_name -> google.protobuf.Timestamp
+	32, // 2: obiente.cloud.vpsgateway.v1.IPAllocation.lease_expires:type_name -> google.protobuf.Timestamp
+	13, // 3: obiente.cloud.vpsgateway.v1.ListIPsResponse.allocations:type_name -> obiente.cloud.vpsgateway.v1.IPAllocation
+	20, // 4: obiente.cloud.vpsgateway.v1.GatewayMessage.registration:type_name -> obiente.cloud.vpsgateway.v1.GatewayRegistration
+	21, // 5: obiente.cloud.vpsgateway.v1.GatewayMessage.request:type_name -> obiente.cloud.vpsgateway.v1.GatewayRequest
+	22, // 6: obiente.cloud.vpsgateway.v1.GatewayMessage.response:type_name -> obiente.cloud.vpsgateway.v1.GatewayResponse
+	32, // 7: obiente.cloud.vpsgateway.v1.GatewayMessage.heartbeat:type_name -> google.protobuf.Timestamp
+	32, // 8: obiente.cloud.vpsgateway.v1.LeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
+	32, // 9: obiente.cloud.vpsgateway.v1.OrgLeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
+	23, // 10: obiente.cloud.vpsgateway.v1.GetLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.LeaseRecord
+	24, // 11: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.OrgLeaseRecord
+	29, // 12: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest.allocations:type_name -> obiente.cloud.vpsgateway.v1.DesiredAllocation
+	19, // 13: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:input_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
+	4,  // 14: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:input_type -> obiente.cloud.vpsgateway.v1.AllocateIPRequest
+	6,  // 15: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:input_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
+	8,  // 16: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:input_type -> obiente.cloud.vpsgateway.v1.ReleaseIPRequest
+	10, // 17: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:input_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
+	12, // 18: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:input_type -> obiente.cloud.vpsgateway.v1.ListIPsRequest
+	15, // 19: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:input_type -> obiente.cloud.vpsgateway.v1.ProxySSHRequest
+	17, // 20: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:input_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
+	25, // 21: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:input_type -> obiente.cloud.vpsgateway.v1.GetLeasesRequest
+	27, // 22: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+	30, // 23: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:input_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
+	0,  // 24: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest
+	2,  // 25: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest
+	19, // 26: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:output_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
+	5,  // 27: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:output_type -> obiente.cloud.vpsgateway.v1.AllocateIPResponse
+	7,  // 28: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:output_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
+	9,  // 29: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:output_type -> obiente.cloud.vpsgateway.v1.ReleaseIPResponse
+	11, // 30: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:output_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
+	14, // 31: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:output_type -> obiente.cloud.vpsgateway.v1.ListIPsResponse
+	16, // 32: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:output_type -> obiente.cloud.vpsgateway.v1.ProxySSHResponse
+	18, // 33: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:output_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
+	26, // 34: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:output_type -> obiente.cloud.vpsgateway.v1.GetLeasesResponse
+	28, // 35: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+	31, // 36: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:output_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
+	1,  // 37: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse
+	3,  // 38: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse
+	26, // [26:39] is the sub-list for method output_type
+	13, // [13:26] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -2251,7 +2550,7 @@ func file_obiente_cloud_vpsgateway_v1_gateway_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc), len(file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
