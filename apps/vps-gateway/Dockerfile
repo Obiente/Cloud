@@ -10,27 +10,15 @@ WORKDIR /build
 # Use --no-scripts to disable triggers and avoid QEMU emulation issues
 RUN apk add --no-cache --no-scripts git make
 
-# Copy go mod files for vps-gateway and shared (copy separately to improve cache hits)
-COPY apps/vps-gateway/go.mod apps/vps-gateway/go.sum ./apps/vps-gateway/
-COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
-
-# Copy shared proto source code (needed for imports)
-COPY apps/shared/proto ./apps/shared/proto/
-
-# Download dependencies (this layer will be cached unless go.mod/go.sum change)
-# The replace directive is already in go.mod
-WORKDIR /build/apps/vps-gateway
-RUN --mount=type=cache,target=/root/go/pkg/mod \
+RUN --mount=type=bind,source=.,target=/src,rw \
+    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Copy source code
-WORKDIR /build
-COPY apps/vps-gateway/ ./apps/vps-gateway/
-
-# Build the application
-WORKDIR /build/apps/vps-gateway
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o vps-gateway ./main.go
+    sh -c "export GOWORK=off && \
+           cd /src/apps/shared && go mod download && \
+           cd /src/apps/vps-gateway && go mod download && \
+           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+           GOWORK=off go build -a -installsuffix cgo \
+           -o /build/apps/vps-gateway/vps-gateway /src/apps/vps-gateway/main.go"
 
 # Final stage
 FROM alpine:latest

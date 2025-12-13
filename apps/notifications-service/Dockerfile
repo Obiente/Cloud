@@ -16,35 +16,15 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files for shared and service
-COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
-COPY apps/notifications-service/go.mod apps/notifications-service/go.sum ./apps/notifications-service/
-
-# Download dependencies for shared module
-WORKDIR /build/apps/shared
-RUN --mount=type=cache,target=/root/go/pkg/mod \
+RUN --mount=type=bind,source=.,target=/src,rw \
+    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Download dependencies for service module
-WORKDIR /build/apps/notifications-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Copy all source code
-WORKDIR /build
-COPY apps/shared/ ./apps/shared/
-COPY apps/notifications-service/ ./apps/notifications-service/
-
-# Build the service from its own module directory
-WORKDIR /build/apps/notifications-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -trimpath \
-    -ldflags="-w -s -extldflags '-static'" \
-    -o /build/notifications-service .
+    sh -c "export GOWORK=off && \
+           cd /src/apps/shared && go mod download && \
+           cd /src/apps/notifications-service && go mod download && \
+           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+           GOWORK=off go build -trimpath -ldflags=\"-w -s -extldflags '-static'\" \
+           -o /build/notifications-service /src/apps/notifications-service"
 
 # Final stage
 FROM alpine:latest

@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/vpsgateway/v1/gateway_service.proto.
  */
 export const file_obiente_cloud_vpsgateway_v1_gateway_service: GenFile = /*@__PURE__*/
-  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAijAEKF0FsbG9jYXRlUHVibGljSVBSZXF1ZXN0Eg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEQoJcHVibGljX2lwGAQgASgJEg8KB2dhdGV3YXkYBSABKAkSDwoHbmV0bWFzaxgGIAEoCSJyChhBbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USEgoKaXBfYWRkcmVzcxgBIAEoCRIPCgdnYXRld2F5GAIgASgJEg8KB25ldG1hc2sYAyABKAkSDwoHc3VjY2VzcxgEIAEoCBIPCgdtZXNzYWdlGAUgASgJIjYKEFJlbGVhc2VJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkiNQoRUmVsZWFzZUlQUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIlAKFlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhEKCXB1YmxpY19pcBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCSI7ChdSZWxlYXNlUHVibGljSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iegoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMEhYKDnNzaF9wdWJsaWNfa2V5GAYgASgJIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkyrAcKEVZQU0dhdGV3YXlTZXJ2aWNlEm8KD1JlZ2lzdGVyR2F0ZXdheRIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZRorLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZSgBMAESbQoKQWxsb2NhdGVJUBIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVzcG9uc2USfwoQQWxsb2NhdGVQdWJsaWNJUBI0Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USagoJUmVsZWFzZUlQEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VJUFJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVzcG9uc2USfAoPUmVsZWFzZVB1YmxpY0lQEjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZVB1YmxpY0lQUmVzcG9uc2USZAoHTGlzdElQcxIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVzcG9uc2USawoIUHJveHlTU0gSLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlByb3h5U1NIUmVzcG9uc2UoATABEnkKDkdldEdhdGV3YXlJbmZvEjIub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRHYXRld2F5SW5mb1Jlc3BvbnNlQlVaU2dpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjE7dnBzZ2F0ZXdheXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAijAEKF0FsbG9jYXRlUHVibGljSVBSZXF1ZXN0Eg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEQoJcHVibGljX2lwGAQgASgJEg8KB2dhdGV3YXkYBSABKAkSDwoHbmV0bWFzaxgGIAEoCSJyChhBbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USEgoKaXBfYWRkcmVzcxgBIAEoCRIPCgdnYXRld2F5GAIgASgJEg8KB25ldG1hc2sYAyABKAkSDwoHc3VjY2VzcxgEIAEoCBIPCgdtZXNzYWdlGAUgASgJIjYKEFJlbGVhc2VJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkiNQoRUmVsZWFzZUlQUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIlAKFlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhEKCXB1YmxpY19pcBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCSI7ChdSZWxlYXNlUHVibGljSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iegoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMEhYKDnNzaF9wdWJsaWNfa2V5GAYgASgJIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkieAoLTGVhc2VSZWNvcmQSEwoLbWFjX2FkZHJlc3MYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCRIQCghob3N0bmFtZRgDIAEoCRIuCgpleHBpcmVzX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKlAQoOT3JnTGVhc2VSZWNvcmQSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRISCgppcF9hZGRyZXNzGAQgASgJEi4KCmV4cGlyZXNfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKCWlzX3B1YmxpYxgGIAEoCCISChBHZXRMZWFzZXNSZXF1ZXN0Ik0KEUdldExlYXNlc1Jlc3BvbnNlEjgKBmxlYXNlcxgBIAMoCzIoLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MZWFzZVJlY29yZCI+ChNHZXRPcmdMZWFzZXNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiUwoUR2V0T3JnTGVhc2VzUmVzcG9uc2USOwoGbGVhc2VzGAEgAygLMisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLk9yZ0xlYXNlUmVjb3JkIngKEURlc2lyZWRBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIRCglpc19wdWJsaWMYBSABKAgiXQoWU3luY0FsbG9jYXRpb25zUmVxdWVzdBJDCgthbGxvY2F0aW9ucxgBIAMoCzIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5EZXNpcmVkQWxsb2NhdGlvbiJbChdTeW5jQWxsb2NhdGlvbnNSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg0KBWFkZGVkGAIgASgFEg8KB3JlbW92ZWQYAyABKAUSDwoHbWVzc2FnZRgEIAEoCTKLCgoRVlBTR2F0ZXdheVNlcnZpY2USbwoPUmVnaXN0ZXJHYXRld2F5Eisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdhdGV3YXlNZXNzYWdlGisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdhdGV3YXlNZXNzYWdlKAEwARJtCgpBbGxvY2F0ZUlQEi4ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXNwb25zZRJ/ChBBbGxvY2F0ZVB1YmxpY0lQEjQub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlUHVibGljSVBSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlUHVibGljSVBSZXNwb25zZRJqCglSZWxlYXNlSVASLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVxdWVzdBouLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5SZWxlYXNlSVBSZXNwb25zZRJ8Cg9SZWxlYXNlUHVibGljSVASMy5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZVB1YmxpY0lQUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5SZWxlYXNlUHVibGljSVBSZXNwb25zZRJkCgdMaXN0SVBzEisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXNwb25zZRJrCghQcm94eVNTSBIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5Qcm94eVNTSFJlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXNwb25zZSgBMAESeQoOR2V0R2F0ZXdheUluZm8SMi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0R2F0ZXdheUluZm9SZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVzcG9uc2USagoJR2V0TGVhc2VzEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldExlYXNlc1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0TGVhc2VzUmVzcG9uc2UScwoMR2V0T3JnTGVhc2VzEjAub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldE9yZ0xlYXNlc1JlcXVlc3QaMS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0T3JnTGVhc2VzUmVzcG9uc2USfAoPU3luY0FsbG9jYXRpb25zEjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlN5bmNBbGxvY2F0aW9uc1JlcXVlc3QaNC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuU3luY0FsbG9jYXRpb25zUmVzcG9uc2VCVVpTZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvdnBzZ2F0ZXdheS92MTt2cHNnYXRld2F5djFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * AllocateIPRequest requests IP allocation for a VPS
@@ -826,6 +826,303 @@ export const GatewayResponseSchema: GenMessage<GatewayResponse> = /*@__PURE__*/
   messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 18);
 
 /**
+ * LeaseRecord represents an active DHCP lease
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.LeaseRecord
+ */
+export type LeaseRecord = Message<"obiente.cloud.vpsgateway.v1.LeaseRecord"> & {
+  /**
+   * MAC address
+   *
+   * @generated from field: string mac_address = 1;
+   */
+  macAddress: string;
+
+  /**
+   * IP address
+   *
+   * @generated from field: string ip_address = 2;
+   */
+  ipAddress: string;
+
+  /**
+   * Hostname from DHCP
+   *
+   * @generated from field: string hostname = 3;
+   */
+  hostname: string;
+
+  /**
+   * Lease expiration time
+   *
+   * @generated from field: google.protobuf.Timestamp expires_at = 4;
+   */
+  expiresAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.LeaseRecord.
+ * Use `create(LeaseRecordSchema)` to create a new message.
+ */
+export const LeaseRecordSchema: GenMessage<LeaseRecord> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 19);
+
+/**
+ * OrgLeaseRecord represents a lease associated with a VPS in an organization
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.OrgLeaseRecord
+ */
+export type OrgLeaseRecord = Message<"obiente.cloud.vpsgateway.v1.OrgLeaseRecord"> & {
+  /**
+   * VPS ID
+   *
+   * @generated from field: string vps_id = 1;
+   */
+  vpsId: string;
+
+  /**
+   * Organization ID
+   *
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * MAC address of the VPS network interface
+   *
+   * @generated from field: string mac_address = 3;
+   */
+  macAddress: string;
+
+  /**
+   * Allocated IP address
+   *
+   * @generated from field: string ip_address = 4;
+   */
+  ipAddress: string;
+
+  /**
+   * Lease expiration time
+   *
+   * @generated from field: google.protobuf.Timestamp expires_at = 5;
+   */
+  expiresAt?: Timestamp;
+
+  /**
+   * Whether this is a public IP (outside DHCP pool)
+   *
+   * @generated from field: bool is_public = 6;
+   */
+  isPublic: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.OrgLeaseRecord.
+ * Use `create(OrgLeaseRecordSchema)` to create a new message.
+ */
+export const OrgLeaseRecordSchema: GenMessage<OrgLeaseRecord> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 20);
+
+/**
+ * GetLeasesRequest requests list of active DHCP leases
+ *
+ * No parameters
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GetLeasesRequest
+ */
+export type GetLeasesRequest = Message<"obiente.cloud.vpsgateway.v1.GetLeasesRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GetLeasesRequest.
+ * Use `create(GetLeasesRequestSchema)` to create a new message.
+ */
+export const GetLeasesRequestSchema: GenMessage<GetLeasesRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 21);
+
+/**
+ * GetLeasesResponse returns active DHCP leases from dnsmasq
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GetLeasesResponse
+ */
+export type GetLeasesResponse = Message<"obiente.cloud.vpsgateway.v1.GetLeasesResponse"> & {
+  /**
+   * Active leases
+   *
+   * @generated from field: repeated obiente.cloud.vpsgateway.v1.LeaseRecord leases = 1;
+   */
+  leases: LeaseRecord[];
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GetLeasesResponse.
+ * Use `create(GetLeasesResponseSchema)` to create a new message.
+ */
+export const GetLeasesResponseSchema: GenMessage<GetLeasesResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 22);
+
+/**
+ * GetOrgLeasesRequest requests active leases for a specific organization
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+ */
+export type GetOrgLeasesRequest = Message<"obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest"> & {
+  /**
+   * Organization ID (required)
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Optional VPS ID filter
+   *
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest.
+ * Use `create(GetOrgLeasesRequestSchema)` to create a new message.
+ */
+export const GetOrgLeasesRequestSchema: GenMessage<GetOrgLeasesRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 23);
+
+/**
+ * GetOrgLeasesResponse returns leases for an organization (for frontend display)
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+ */
+export type GetOrgLeasesResponse = Message<"obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse"> & {
+  /**
+   * Organization's active leases with VPS info
+   *
+   * @generated from field: repeated obiente.cloud.vpsgateway.v1.OrgLeaseRecord leases = 1;
+   */
+  leases: OrgLeaseRecord[];
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse.
+ * Use `create(GetOrgLeasesResponseSchema)` to create a new message.
+ */
+export const GetOrgLeasesResponseSchema: GenMessage<GetOrgLeasesResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 24);
+
+/**
+ * DesiredAllocation represents an allocation desired from the database
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.DesiredAllocation
+ */
+export type DesiredAllocation = Message<"obiente.cloud.vpsgateway.v1.DesiredAllocation"> & {
+  /**
+   * VPS ID
+   *
+   * @generated from field: string vps_id = 1;
+   */
+  vpsId: string;
+
+  /**
+   * Organization ID
+   *
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * IP address (in pool or public)
+   *
+   * @generated from field: string ip_address = 3;
+   */
+  ipAddress: string;
+
+  /**
+   * MAC address
+   *
+   * @generated from field: string mac_address = 4;
+   */
+  macAddress: string;
+
+  /**
+   * Is public IP (outside DHCP pool)
+   *
+   * @generated from field: bool is_public = 5;
+   */
+  isPublic: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.DesiredAllocation.
+ * Use `create(DesiredAllocationSchema)` to create a new message.
+ */
+export const DesiredAllocationSchema: GenMessage<DesiredAllocation> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 25);
+
+/**
+ * SyncAllocationsRequest requests synchronization of allocations from database
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
+ */
+export type SyncAllocationsRequest = Message<"obiente.cloud.vpsgateway.v1.SyncAllocationsRequest"> & {
+  /**
+   * Desired allocations from database (source of truth)
+   *
+   * @generated from field: repeated obiente.cloud.vpsgateway.v1.DesiredAllocation allocations = 1;
+   */
+  allocations: DesiredAllocation[];
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.SyncAllocationsRequest.
+ * Use `create(SyncAllocationsRequestSchema)` to create a new message.
+ */
+export const SyncAllocationsRequestSchema: GenMessage<SyncAllocationsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 26);
+
+/**
+ * SyncAllocationsResponse returns the result of sync operation
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
+ */
+export type SyncAllocationsResponse = Message<"obiente.cloud.vpsgateway.v1.SyncAllocationsResponse"> & {
+  /**
+   * Success status
+   *
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * Number of allocations added
+   *
+   * @generated from field: int32 added = 2;
+   */
+  added: number;
+
+  /**
+   * Number of allocations removed
+   *
+   * @generated from field: int32 removed = 3;
+   */
+  removed: number;
+
+  /**
+   * Message with details
+   *
+   * @generated from field: string message = 4;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.SyncAllocationsResponse.
+ * Use `create(SyncAllocationsResponseSchema)` to create a new message.
+ */
+export const SyncAllocationsResponseSchema: GenMessage<SyncAllocationsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 27);
+
+/**
  * VPSGatewayService provides DHCP management and SSH proxying for VPS instances
  *
  * @generated from service obiente.cloud.vpsgateway.v1.VPSGatewayService
@@ -914,6 +1211,38 @@ export const VPSGatewayService: GenService<{
     methodKind: "unary";
     input: typeof GetGatewayInfoRequestSchema;
     output: typeof GetGatewayInfoResponseSchema;
+  },
+  /**
+   * GetLeases retrieves all active DHCP leases from dnsmasq
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases
+   */
+  getLeases: {
+    methodKind: "unary";
+    input: typeof GetLeasesRequestSchema;
+    output: typeof GetLeasesResponseSchema;
+  },
+  /**
+   * GetOrgLeases retrieves active DHCP leases for a specific organization (for frontend display)
+   * Filters by organization ID and optionally by VPS ID
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases
+   */
+  getOrgLeases: {
+    methodKind: "unary";
+    input: typeof GetOrgLeasesRequestSchema;
+    output: typeof GetOrgLeasesResponseSchema;
+  },
+  /**
+   * SyncAllocations syncs allocations from database as source of truth
+   * Gateway releases IPs not in the list and ensures desired IPs are allocated
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations
+   */
+  syncAllocations: {
+    methodKind: "unary";
+    input: typeof SyncAllocationsRequestSchema;
+    output: typeof SyncAllocationsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 0);

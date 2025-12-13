@@ -12,3 +12,4 @@ export * from "./generated/obiente/cloud/common/v1/common_pb.js";
 export * from "./generated/obiente/cloud/superadmin/v1/superadmin_service_pb.js";
 export * from "./generated/obiente/cloud/vps/v1/vps_service_pb.js";
 export * from "./generated/obiente/cloud/vps/v1/vps_config_service_pb.js";
+export * from "./generated/obiente/cloud/vpsgateway/v1/gateway_service_pb.js";

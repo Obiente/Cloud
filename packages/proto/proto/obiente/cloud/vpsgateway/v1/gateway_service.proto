@@ -35,6 +35,17 @@ service VPSGatewayService {
   
   // GetGatewayInfo returns gateway status and configuration
   rpc GetGatewayInfo(GetGatewayInfoRequest) returns (GetGatewayInfoResponse);
+  
+  // GetLeases retrieves all active DHCP leases from dnsmasq
+  rpc GetLeases(GetLeasesRequest) returns (GetLeasesResponse);
+  
+  // GetOrgLeases retrieves active DHCP leases for a specific organization (for frontend display)
+  // Filters by organization ID and optionally by VPS ID
+  rpc GetOrgLeases(GetOrgLeasesRequest) returns (GetOrgLeasesResponse);
+  
+  // SyncAllocations syncs allocations from database as source of truth
+  // Gateway releases IPs not in the list and ensures desired IPs are allocated
+  rpc SyncAllocations(SyncAllocationsRequest) returns (SyncAllocationsResponse);
 }
 
 // AllocateIPRequest requests IP allocation for a VPS
@@ -324,5 +335,106 @@ message GatewayResponse {
   
   // Error message (if success is false)
   string error = 4;
+}
+
+// LeaseRecord represents an active DHCP lease
+message LeaseRecord {
+  // MAC address
+  string mac_address = 1;
+  
+  // IP address
+  string ip_address = 2;
+  
+  // Hostname from DHCP
+  string hostname = 3;
+  
+  // Lease expiration time
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+// OrgLeaseRecord represents a lease associated with a VPS in an organization
+message OrgLeaseRecord {
+  // VPS ID
+  string vps_id = 1;
+  
+  // Organization ID
+  string organization_id = 2;
+  
+  // MAC address of the VPS network interface
+  string mac_address = 3;
+  
+  // Allocated IP address
+  string ip_address = 4;
+  
+  // Lease expiration time
+  google.protobuf.Timestamp expires_at = 5;
+  
+  // Whether this is a public IP (outside DHCP pool)
+  bool is_public = 6;
+}
+
+// GetLeasesRequest requests list of active DHCP leases
+message GetLeasesRequest {
+  // No parameters
+}
+
+// GetLeasesResponse returns active DHCP leases from dnsmasq
+message GetLeasesResponse {
+  // Active leases
+  repeated LeaseRecord leases = 1;
+}
+
+// GetOrgLeasesRequest requests active leases for a specific organization
+message GetOrgLeasesRequest {
+  // Organization ID (required)
+  string organization_id = 1;
+  
+  // Optional VPS ID filter
+  string vps_id = 2;
+}
+
+// GetOrgLeasesResponse returns leases for an organization (for frontend display)
+message GetOrgLeasesResponse {
+  // Organization's active leases with VPS info
+  repeated OrgLeaseRecord leases = 1;
+}
+
+// DesiredAllocation represents an allocation desired from the database
+message DesiredAllocation {
+  // VPS ID
+  string vps_id = 1;
+  
+  // Organization ID
+  string organization_id = 2;
+  
+  // IP address (in pool or public)
+  string ip_address = 3;
+  
+  // MAC address
+  string mac_address = 4;
+  
+  // Is public IP (outside DHCP pool)
+  bool is_public = 5;
+}
+
+// SyncAllocationsRequest requests synchronization of allocations from database
+message SyncAllocationsRequest {
+  // Desired allocations from database (source of truth)
+  repeated DesiredAllocation allocations = 1;
+}
+
+// SyncAllocationsResponse returns the result of sync operation
+message SyncAllocationsResponse {
+  // Success status
+  bool success = 1;
+  
+  // Number of allocations added
+  int32 added = 2;
+  
+  // Number of allocations removed
+  int32 removed = 3;
+  
+  // Message with details
+  string message = 4;
 }
 

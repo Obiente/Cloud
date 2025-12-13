@@ -16,35 +16,17 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files for shared and service
-COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
-COPY apps/vps-service/go.mod apps/vps-service/go.sum ./apps/vps-service/
-
-# Download dependencies for shared module
-WORKDIR /build/apps/shared
-RUN --mount=type=cache,target=/root/go/pkg/mod \
+## Build using bind mounts so source changes invalidate cache correctly
+# Make the bind mount writable and disable Go workspace mode to avoid writing go.work.sum
+RUN --mount=type=bind,source=.,target=/src,rw \
+    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Download dependencies for service module
-WORKDIR /build/apps/vps-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Copy all source code
-WORKDIR /build
-COPY apps/shared/ ./apps/shared/
-COPY apps/vps-service/ ./apps/vps-service/
-
-# Build the service from its own module directory
-WORKDIR /build/apps/vps-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -trimpath \
-    -ldflags="-w -s -extldflags '-static'" \
-    -o /build/vps-service .
+    sh -c "export GOWORK=off && \
+           cd /src/apps/shared && go mod download && \
+           cd /src/apps/vps-service && go mod download && \
+           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+           GOWORK=off go build -trimpath -ldflags=\"-w -s -extldflags '-static'\" \
+           -o /build/vps-service /src/apps/vps-service"
 
 # Final stage
 FROM alpine:latest

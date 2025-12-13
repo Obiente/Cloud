@@ -57,6 +57,15 @@ const (
 	// VPSGatewayServiceGetGatewayInfoProcedure is the fully-qualified name of the VPSGatewayService's
 	// GetGatewayInfo RPC.
 	VPSGatewayServiceGetGatewayInfoProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/GetGatewayInfo"
+	// VPSGatewayServiceGetLeasesProcedure is the fully-qualified name of the VPSGatewayService's
+	// GetLeases RPC.
+	VPSGatewayServiceGetLeasesProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/GetLeases"
+	// VPSGatewayServiceGetOrgLeasesProcedure is the fully-qualified name of the VPSGatewayService's
+	// GetOrgLeases RPC.
+	VPSGatewayServiceGetOrgLeasesProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/GetOrgLeases"
+	// VPSGatewayServiceSyncAllocationsProcedure is the fully-qualified name of the VPSGatewayService's
+	// SyncAllocations RPC.
+	VPSGatewayServiceSyncAllocationsProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/SyncAllocations"
 )
 
 // VPSGatewayServiceClient is a client for the obiente.cloud.vpsgateway.v1.VPSGatewayService
@@ -82,6 +91,14 @@ type VPSGatewayServiceClient interface {
 	ProxySSH(context.Context) *connect.BidiStreamForClient[v1.ProxySSHRequest, v1.ProxySSHResponse]
 	// GetGatewayInfo returns gateway status and configuration
 	GetGatewayInfo(context.Context, *connect.Request[v1.GetGatewayInfoRequest]) (*connect.Response[v1.GetGatewayInfoResponse], error)
+	// GetLeases retrieves all active DHCP leases from dnsmasq
+	GetLeases(context.Context, *connect.Request[v1.GetLeasesRequest]) (*connect.Response[v1.GetLeasesResponse], error)
+	// GetOrgLeases retrieves active DHCP leases for a specific organization (for frontend display)
+	// Filters by organization ID and optionally by VPS ID
+	GetOrgLeases(context.Context, *connect.Request[v1.GetOrgLeasesRequest]) (*connect.Response[v1.GetOrgLeasesResponse], error)
+	// SyncAllocations syncs allocations from database as source of truth
+	// Gateway releases IPs not in the list and ensures desired IPs are allocated
+	SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error)
 }
 
 // NewVPSGatewayServiceClient constructs a client for the
@@ -144,6 +161,24 @@ func NewVPSGatewayServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(vPSGatewayServiceMethods.ByName("GetGatewayInfo")),
 			connect.WithClientOptions(opts...),
 		),
+		getLeases: connect.NewClient[v1.GetLeasesRequest, v1.GetLeasesResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceGetLeasesProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("GetLeases")),
+			connect.WithClientOptions(opts...),
+		),
+		getOrgLeases: connect.NewClient[v1.GetOrgLeasesRequest, v1.GetOrgLeasesResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceGetOrgLeasesProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("GetOrgLeases")),
+			connect.WithClientOptions(opts...),
+		),
+		syncAllocations: connect.NewClient[v1.SyncAllocationsRequest, v1.SyncAllocationsResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceSyncAllocationsProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("SyncAllocations")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -157,6 +192,9 @@ type vPSGatewayServiceClient struct {
 	listIPs          *connect.Client[v1.ListIPsRequest, v1.ListIPsResponse]
 	proxySSH         *connect.Client[v1.ProxySSHRequest, v1.ProxySSHResponse]
 	getGatewayInfo   *connect.Client[v1.GetGatewayInfoRequest, v1.GetGatewayInfoResponse]
+	getLeases        *connect.Client[v1.GetLeasesRequest, v1.GetLeasesResponse]
+	getOrgLeases     *connect.Client[v1.GetOrgLeasesRequest, v1.GetOrgLeasesResponse]
+	syncAllocations  *connect.Client[v1.SyncAllocationsRequest, v1.SyncAllocationsResponse]
 }
 
 // RegisterGateway calls obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway.
@@ -199,6 +237,21 @@ func (c *vPSGatewayServiceClient) GetGatewayInfo(ctx context.Context, req *conne
 	return c.getGatewayInfo.CallUnary(ctx, req)
 }
 
+// GetLeases calls obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases.
+func (c *vPSGatewayServiceClient) GetLeases(ctx context.Context, req *connect.Request[v1.GetLeasesRequest]) (*connect.Response[v1.GetLeasesResponse], error) {
+	return c.getLeases.CallUnary(ctx, req)
+}
+
+// GetOrgLeases calls obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases.
+func (c *vPSGatewayServiceClient) GetOrgLeases(ctx context.Context, req *connect.Request[v1.GetOrgLeasesRequest]) (*connect.Response[v1.GetOrgLeasesResponse], error) {
+	return c.getOrgLeases.CallUnary(ctx, req)
+}
+
+// SyncAllocations calls obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations.
+func (c *vPSGatewayServiceClient) SyncAllocations(ctx context.Context, req *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error) {
+	return c.syncAllocations.CallUnary(ctx, req)
+}
+
 // VPSGatewayServiceHandler is an implementation of the
 // obiente.cloud.vpsgateway.v1.VPSGatewayService service.
 type VPSGatewayServiceHandler interface {
@@ -222,6 +275,14 @@ type VPSGatewayServiceHandler interface {
 	ProxySSH(context.Context, *connect.BidiStream[v1.ProxySSHRequest, v1.ProxySSHResponse]) error
 	// GetGatewayInfo returns gateway status and configuration
 	GetGatewayInfo(context.Context, *connect.Request[v1.GetGatewayInfoRequest]) (*connect.Response[v1.GetGatewayInfoResponse], error)
+	// GetLeases retrieves all active DHCP leases from dnsmasq
+	GetLeases(context.Context, *connect.Request[v1.GetLeasesRequest]) (*connect.Response[v1.GetLeasesResponse], error)
+	// GetOrgLeases retrieves active DHCP leases for a specific organization (for frontend display)
+	// Filters by organization ID and optionally by VPS ID
+	GetOrgLeases(context.Context, *connect.Request[v1.GetOrgLeasesRequest]) (*connect.Response[v1.GetOrgLeasesResponse], error)
+	// SyncAllocations syncs allocations from database as source of truth
+	// Gateway releases IPs not in the list and ensures desired IPs are allocated
+	SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error)
 }
 
 // NewVPSGatewayServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -279,6 +340,24 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 		connect.WithSchema(vPSGatewayServiceMethods.ByName("GetGatewayInfo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSGatewayServiceGetLeasesHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceGetLeasesProcedure,
+		svc.GetLeases,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("GetLeases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSGatewayServiceGetOrgLeasesHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceGetOrgLeasesProcedure,
+		svc.GetOrgLeases,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("GetOrgLeases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSGatewayServiceSyncAllocationsHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceSyncAllocationsProcedure,
+		svc.SyncAllocations,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("SyncAllocations")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vpsgateway.v1.VPSGatewayService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSGatewayServiceRegisterGatewayProcedure:
@@ -297,6 +376,12 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 			vPSGatewayServiceProxySSHHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceGetGatewayInfoProcedure:
 			vPSGatewayServiceGetGatewayInfoHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceGetLeasesProcedure:
+			vPSGatewayServiceGetLeasesHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceGetOrgLeasesProcedure:
+			vPSGatewayServiceGetOrgLeasesHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceSyncAllocationsProcedure:
+			vPSGatewayServiceSyncAllocationsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -336,4 +421,16 @@ func (UnimplementedVPSGatewayServiceHandler) ProxySSH(context.Context, *connect.
 
 func (UnimplementedVPSGatewayServiceHandler) GetGatewayInfo(context.Context, *connect.Request[v1.GetGatewayInfoRequest]) (*connect.Response[v1.GetGatewayInfoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) GetLeases(context.Context, *connect.Request[v1.GetLeasesRequest]) (*connect.Response[v1.GetLeasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) GetOrgLeases(context.Context, *connect.Request[v1.GetOrgLeasesRequest]) (*connect.Response[v1.GetOrgLeasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) SyncAllocations(context.Context, *connect.Request[v1.SyncAllocationsRequest]) (*connect.Response[v1.SyncAllocationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations is not implemented"))
 }

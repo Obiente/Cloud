@@ -13,41 +13,42 @@ import (
 	"sync"
 	"time"
 
-	"connectrpc.com/connect"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
-	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 	"vps-gateway/internal/logger"
 	"vps-gateway/internal/redis"
+
+	"connectrpc.com/connect"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
+	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Manager manages DHCP leases using dnsmasq
 type Manager struct {
-	poolStart              net.IP
-	poolEnd                net.IP
-	subnetMask             net.IPMask
-	gateway                net.IP
-	listenIP               net.IP // IP address to listen on (for multi-node support)
-	dnsServers             []net.IP
-	interfaceName          string
-	leasesFile             string
-	hostsFile              string
-	allocations            map[string]*Allocation // vps_id -> allocation
-	mu                     sync.RWMutex
-	dhcpRunning            bool
-	redisClient            *redis.Client
-	vpsServiceClient       vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
-	vpsServiceClientMu     sync.RWMutex                  // Protects client access
+	poolStart          net.IP
+	poolEnd            net.IP
+	subnetMask         net.IPMask
+	gateway            net.IP
+	listenIP           net.IP // IP address to listen on (for multi-node support)
+	dnsServers         []net.IP
+	interfaceName      string
+	leasesFile         string
+	hostsFile          string
+	allocations        map[string]*Allocation // vps_id -> allocation
+	mu                 sync.RWMutex
+	dhcpRunning        bool
+	redisClient        *redis.Client
+	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
+	vpsServiceClientMu sync.RWMutex                  // Protects client access
 }
 
 // Allocation represents an IP allocation for a VPS
 type Allocation struct {
-	VPSID         string
+	VPSID          string
 	OrganizationID string
-	IPAddress     net.IP
-	MACAddress    string
-	AllocatedAt   time.Time
-	LeaseExpires  time.Time
+	IPAddress      net.IP
+	MACAddress     string
+	AllocatedAt    time.Time
+	LeaseExpires   time.Time
 }
 
 // LeaseInfo represents an active DHCP lease from dnsmasq
@@ -60,14 +61,14 @@ type LeaseInfo struct {
 
 // Config holds DHCP configuration
 type Config struct {
-	PoolStart     string
-	PoolEnd       string
-	SubnetMask    string
-	Gateway       string
-	ListenIP      string // IP to listen on (optional, defaults to gateway IP)
-	DNSServers    string // Comma-separated
-	Interface     string
-	LeasesDir     string
+	PoolStart  string
+	PoolEnd    string
+	SubnetMask string
+	Gateway    string
+	ListenIP   string // IP to listen on (optional, defaults to gateway IP)
+	DNSServers string // Comma-separated
+	Interface  string
+	LeasesDir  string
 }
 
 // NewManager creates a new DHCP manager
@@ -104,7 +105,7 @@ func NewManager() (*Manager, error) {
 	poolStart := net.ParseIP(config.PoolStart)
 	poolEnd := net.ParseIP(config.PoolEnd)
 	gateway := net.ParseIP(config.Gateway)
-	
+
 	// Parse listen IP (optional, defaults to gateway IP for backward compatibility)
 	var listenIP net.IP
 	if config.ListenIP != "" {
@@ -118,7 +119,7 @@ func NewManager() (*Manager, error) {
 		listenIP = gateway
 		logger.Info("Using gateway IP as listen address: %s", listenIP.String())
 	}
-	
+
 	// Parse subnet mask - can be in CIDR notation (e.g., "24") or dotted decimal (e.g., "255.255.255.0")
 	var subnetMask net.IPMask
 	if strings.Contains(config.SubnetMask, ".") {
@@ -149,7 +150,7 @@ func NewManager() (*Manager, error) {
 	if subnetMask == nil {
 		return nil, fmt.Errorf("invalid subnet mask")
 	}
-	
+
 	// Validate subnet mask
 	ones, bits := subnetMask.Size()
 	if ones == 0 || bits == 0 {
@@ -215,7 +216,7 @@ func NewManager() (*Manager, error) {
 	if err := manager.startDNSMasq(); err != nil {
 		return nil, fmt.Errorf("failed to start dnsmasq: %w", err)
 	}
-	
+
 	// Ensure dnsmasq has the latest hosts file (in case it was updated before dnsmasq started)
 	// This is a safety measure - dnsmasq should have read it during start, but reload to be sure
 	if len(manager.allocations) > 0 {
@@ -287,12 +288,12 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 
 	// Create allocation
 	alloc := &Allocation{
-		VPSID:         vpsID,
+		VPSID:          vpsID,
 		OrganizationID: orgID,
-		IPAddress:     ip,
-		MACAddress:    macAddress,
-		AllocatedAt:   time.Now(),
-		LeaseExpires:  time.Now().Add(24 * time.Hour), // 24 hour lease
+		IPAddress:      ip,
+		MACAddress:     macAddress,
+		AllocatedAt:    time.Now(),
+		LeaseExpires:   time.Now().Add(24 * time.Hour), // 24 hour lease
 	}
 
 	m.allocations[vpsID] = alloc
@@ -439,7 +440,7 @@ func (m *Manager) GetStats() (totalIPs, allocatedIPs int, dhcpStatus string) {
 
 	totalIPs = m.countIPsInPool()
 	allocatedIPs = len(m.allocations)
-	
+
 	if m.dhcpRunning {
 		dhcpStatus = "running"
 	} else {
@@ -469,12 +470,12 @@ func (m *Manager) IsIPInPool(ip net.IP) bool {
 	if start4 == nil || end4 == nil {
 		return false
 	}
-	
+
 	// Compare IPs as 32-bit integers
 	ipInt := uint32(ip4[0])<<24 | uint32(ip4[1])<<16 | uint32(ip4[2])<<8 | uint32(ip4[3])
 	startInt := uint32(start4[0])<<24 | uint32(start4[1])<<16 | uint32(start4[2])<<8 | uint32(start4[3])
 	endInt := uint32(end4[0])<<24 | uint32(end4[1])<<16 | uint32(end4[2])<<8 | uint32(end4[3])
-	
+
 	return ipInt >= startInt && ipInt <= endInt
 }
 
@@ -620,7 +621,7 @@ func (m *Manager) updateHostsFile() error {
 func (m *Manager) startDNSMasq() error {
 	// Generate dnsmasq config file path
 	configFile := filepath.Join(filepath.Dir(m.hostsFile), "dnsmasq.conf")
-	
+
 	// Check if dnsmasq is already running (check for our specific config file)
 	// This ensures we only detect our own dnsmasq instance, not system dnsmasq
 	cmd := exec.Command("pgrep", "-f", fmt.Sprintf("dnsmasq.*%s", configFile))
@@ -654,7 +655,7 @@ func (m *Manager) startDNSMasq() error {
 
 	// Wait a moment for dnsmasq to start
 	time.Sleep(500 * time.Millisecond)
-	
+
 	// Check if process is still running by checking if it exists
 	// Use pgrep to verify the process is running
 	checkCmd := exec.Command("pgrep", "-f", fmt.Sprintf("dnsmasq.*%s", configFile))
@@ -706,12 +707,12 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	// Write dnsmasq configuration
 	writer.WriteString("# dnsmasq configuration - managed by vps-gateway\n")
 	writer.WriteString("# Do not edit manually - this file is auto-generated\n\n")
-	
+
 	// Run as root (container is already privileged, no need to drop privileges)
 	// This prevents "unknown user or group: dnsmasq" errors in containers
 	writer.WriteString("user=root\n")
 	writer.WriteString("\n")
-	
+
 	// Network interface and listen addresses
 	// Use listen-address instead of bind-interfaces to have more control
 	// Listen on the listen IP (for DHCP) and 127.0.0.1 (for local DNS queries)
@@ -720,7 +721,7 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString(fmt.Sprintf("listen-address=%s\n", m.listenIP.String()))
 	writer.WriteString("listen-address=127.0.0.1\n")
 	writer.WriteString("\n")
-	
+
 	// DNS server configuration
 	// Enable DNS server on port 53
 	writer.WriteString("port=53\n")
@@ -737,7 +738,7 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	// Enable reading hostnames from hosts file
 	writer.WriteString(fmt.Sprintf("addn-hosts=%s\n", m.hostsFile))
 	writer.WriteString("\n")
-	
+
 	// DHCP configuration
 	// Enable authoritative mode to prevent unauthorized DHCP servers
 	// This ensures dnsmasq only responds to DHCP requests for known MAC addresses
@@ -749,7 +750,7 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	netmaskStr := maskIP.String()
 	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%s,12h\n", m.poolStart.String(), m.poolEnd.String(), netmaskStr))
 	writer.WriteString(fmt.Sprintf("dhcp-option=option:router,%s\n", m.gateway.String()))
-	
+
 	// DNS servers (for upstream DNS resolution)
 	// Combine all DNS servers into a single dhcp-option line (option 6 = DNS)
 	if len(m.dnsServers) > 0 {
@@ -762,11 +763,11 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 		// Format: dhcp-option=6,1.1.1.1,1.0.0.1 (option number, comma-separated DNS servers)
 		writer.WriteString(fmt.Sprintf("dhcp-option=6,%s\n", strings.Join(dnsList, ",")))
 	}
-	
+
 	// File paths
 	writer.WriteString(fmt.Sprintf("dhcp-hostsfile=%s\n", m.hostsFile))
 	writer.WriteString(fmt.Sprintf("dhcp-leasefile=%s\n", m.leasesFile))
-	
+
 	// DHCP options
 	writer.WriteString("dhcp-authoritative\n")
 	writer.WriteString("log-dhcp\n")
@@ -829,11 +830,11 @@ func (m *Manager) loadAllocations() error {
 
 		// Create allocation (we don't have org ID or timestamps from file)
 		m.allocations[vpsID] = &Allocation{
-			VPSID:         vpsID,
-			IPAddress:     ip,
-			MACAddress:    macAddress,
-			AllocatedAt:   time.Now(),
-			LeaseExpires:  time.Now().Add(24 * time.Hour),
+			VPSID:        vpsID,
+			IPAddress:    ip,
+			MACAddress:   macAddress,
+			AllocatedAt:  time.Now(),
+			LeaseExpires: time.Now().Add(24 * time.Hour),
 		}
 	}
 
@@ -1019,7 +1020,7 @@ func (m *Manager) cacheLeases(leases []LeaseInfo) error {
 	defer cancel()
 
 	cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
-	
+
 	// Store leases as JSON array with TTL
 	return m.redisClient.Set(ctx, cacheKey, leases, 30*time.Second)
 }
@@ -1111,6 +1112,3 @@ func (m *Manager) releaseLeaseWithAPI(ctx context.Context, vpsID, macAddress str
 	logger.Debug("Successfully released lease with VPS Service for VPS %s", vpsID)
 	return nil
 }
-
-
-

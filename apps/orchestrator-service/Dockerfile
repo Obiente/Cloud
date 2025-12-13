@@ -16,43 +16,16 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files for shared, vps-service, and service
-COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
-COPY apps/vps-service/go.mod apps/vps-service/go.sum ./apps/vps-service/
-COPY apps/orchestrator-service/go.mod apps/orchestrator-service/go.sum ./apps/orchestrator-service/
-
-# Download dependencies for shared module
-WORKDIR /build/apps/shared
-RUN --mount=type=cache,target=/root/go/pkg/mod \
+RUN --mount=type=bind,source=.,target=/src,rw \
+    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Download dependencies for vps-service module
-WORKDIR /build/apps/vps-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Download dependencies for service module
-WORKDIR /build/apps/orchestrator-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
-
-# Copy all source code
-WORKDIR /build
-COPY apps/shared/ ./apps/shared/
-COPY apps/vps-service/ ./apps/vps-service/
-COPY apps/orchestrator-service/ ./apps/orchestrator-service/
-
-# Build the service from its own module directory
-WORKDIR /build/apps/orchestrator-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
-    -trimpath \
-    -ldflags="-w -s -extldflags '-static'" \
-    -o /build/orchestrator-service .
+    sh -c "export GOWORK=off && \
+           cd /src/apps/shared && go mod download && \
+           cd /src/apps/vps-service && go mod download && \
+           cd /src/apps/orchestrator-service && go mod download && \
+           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+           GOWORK=off go build -trimpath -ldflags=\"-w -s -extldflags '-static'\" \
+           -o /build/orchestrator-service /src/apps/orchestrator-service"
 
 # Final stage
 FROM alpine:latest

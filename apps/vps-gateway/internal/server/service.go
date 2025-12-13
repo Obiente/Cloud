@@ -645,3 +645,130 @@ func (s *GatewayService) RegisterGateway(
 	logger.Info("[GatewayService] API instance %s connection closed (duration: %.2fs)", apiInstanceID, duration)
 	return nil
 }
+
+// GetLeases retrieves all active DHCP leases from dnsmasq
+func (s *GatewayService) GetLeases(
+	ctx context.Context,
+	req *connect.Request[vpsgatewayv1.GetLeasesRequest],
+) (*connect.Response[vpsgatewayv1.GetLeasesResponse], error) {
+	leases, err := s.dhcpManager.GetActiveLeases()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read leases: %w", err))
+	}
+
+	protoLeases := make([]*vpsgatewayv1.LeaseRecord, len(leases))
+	for i, lease := range leases {
+		protoLeases[i] = &vpsgatewayv1.LeaseRecord{
+			MacAddress: lease.MAC,
+			IpAddress:  lease.IP.String(),
+			Hostname:   lease.Hostname,
+			ExpiresAt:  timestamppb.New(lease.ExpiresAt),
+		}
+	}
+
+	resp := &vpsgatewayv1.GetLeasesResponse{
+		Leases: protoLeases,
+	}
+
+	logger.Debug("GetLeases: returned %d active leases", len(leases))
+	return connect.NewResponse(resp), nil
+}
+
+// GetOrgLeases retrieves active DHCP leases for a specific organization
+// Filters by organization ID and optionally by VPS ID for frontend display
+func (s *GatewayService) GetOrgLeases(
+	ctx context.Context,
+	req *connect.Request[vpsgatewayv1.GetOrgLeasesRequest],
+) (*connect.Response[vpsgatewayv1.GetOrgLeasesResponse], error) {
+	if req.Msg.OrganizationId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Get allocations for this organization
+	allocations, err := s.dhcpManager.ListIPs(ctx, req.Msg.OrganizationId, req.Msg.VpsId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list IPs: %w", err))
+	}
+
+	// Build result with lease info
+	protoLeases := make([]*vpsgatewayv1.OrgLeaseRecord, len(allocations))
+	for i, alloc := range allocations {
+		// Determine if this is a public IP (outside DHCP pool)
+		isPublic := !s.dhcpManager.IsIPInPool(alloc.IPAddress)
+
+		protoLeases[i] = &vpsgatewayv1.OrgLeaseRecord{
+			VpsId:          alloc.VPSID,
+			OrganizationId: alloc.OrganizationID,
+			MacAddress:     alloc.MACAddress,
+			IpAddress:      alloc.IPAddress.String(),
+			ExpiresAt:      timestamppb.New(alloc.LeaseExpires),
+			IsPublic:       isPublic,
+		}
+	}
+
+	resp := &vpsgatewayv1.GetOrgLeasesResponse{
+		Leases: protoLeases,
+	}
+
+	logger.Debug("GetOrgLeases: returned %d leases for org %s", len(allocations), req.Msg.OrganizationId)
+	return connect.NewResponse(resp), nil
+}
+
+// SyncAllocations syncs allocations from database as source of truth
+// Releases IPs not in the list and ensures desired IPs are allocated
+func (s *GatewayService) SyncAllocations(
+	ctx context.Context,
+	req *connect.Request[vpsgatewayv1.SyncAllocationsRequest],
+) (*connect.Response[vpsgatewayv1.SyncAllocationsResponse], error) {
+	// Build desired allocations map
+	desiredMap := make(map[string]*vpsgatewayv1.DesiredAllocation)
+	for _, alloc := range req.Msg.Allocations {
+		desiredMap[alloc.VpsId] = alloc
+	}
+
+	// Get current allocations
+	existing, err := s.dhcpManager.ListIPs(ctx, "", "")
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list current IPs: %w", err))
+	}
+
+	var removed, added int
+
+	// Release IPs not in desired set
+	for _, alloc := range existing {
+		if _, ok := desiredMap[alloc.VPSID]; !ok {
+			if err := s.dhcpManager.ReleaseIP(ctx, alloc.VPSID, alloc.IPAddress.String()); err != nil {
+				logger.Warn("SyncAllocations: failed to release %s: %v", alloc.VPSID, err)
+			} else {
+				removed++
+			}
+		}
+	}
+
+	// Ensure desired allocations exist
+	for vpsID, desired := range desiredMap {
+		_, err := s.dhcpManager.AllocateIP(
+			ctx,
+			vpsID,
+			desired.OrganizationId,
+			desired.MacAddress,
+			desired.IpAddress,
+			desired.IsPublic,
+		)
+		if err != nil {
+			logger.Warn("SyncAllocations: failed to allocate %s -> %s: %v", vpsID, desired.IpAddress, err)
+		} else {
+			added++
+		}
+	}
+
+	resp := &vpsgatewayv1.SyncAllocationsResponse{
+		Success: true,
+		Added:   int32(added),
+		Removed: int32(removed),
+		Message: fmt.Sprintf("Synced allocations: added %d, removed %d", added, removed),
+	}
+
+	logger.Info("SyncAllocations: completed with added=%d removed=%d", added, removed)
+	return connect.NewResponse(resp), nil
+}
