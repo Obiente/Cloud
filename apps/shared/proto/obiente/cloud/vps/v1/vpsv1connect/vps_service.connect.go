@@ -115,6 +115,12 @@ const (
 	VPSServiceRegisterLeaseProcedure = "/obiente.cloud.vps.v1.VPSService/RegisterLease"
 	// VPSServiceReleaseLeaseProcedure is the fully-qualified name of the VPSService's ReleaseLease RPC.
 	VPSServiceReleaseLeaseProcedure = "/obiente.cloud.vps.v1.VPSService/ReleaseLease"
+	// VPSServiceAssignVPSPublicIPProcedure is the fully-qualified name of the VPSService's
+	// AssignVPSPublicIP RPC.
+	VPSServiceAssignVPSPublicIPProcedure = "/obiente.cloud.vps.v1.VPSService/AssignVPSPublicIP"
+	// VPSServiceUnassignVPSPublicIPProcedure is the fully-qualified name of the VPSService's
+	// UnassignVPSPublicIP RPC.
+	VPSServiceUnassignVPSPublicIPProcedure = "/obiente.cloud.vps.v1.VPSService/UnassignVPSPublicIP"
 )
 
 // VPSServiceClient is a client for the obiente.cloud.vps.v1.VPSService service.
@@ -182,6 +188,10 @@ type VPSServiceClient interface {
 	RegisterLease(context.Context, *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error)
 	// Release a DHCP lease (called by gateway nodes via persistent connection)
 	ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error)
+	// Assign a public IP to a VPS (triggers DHCP static lease creation)
+	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
+	// Unassign a public IP from a VPS (removes DHCP static lease)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
 }
 
 // NewVPSServiceClient constructs a client for the obiente.cloud.vps.v1.VPSService service. By
@@ -393,6 +403,18 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("ReleaseLease")),
 			connect.WithClientOptions(opts...),
 		),
+		assignVPSPublicIP: connect.NewClient[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse](
+			httpClient,
+			baseURL+VPSServiceAssignVPSPublicIPProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("AssignVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
+		unassignVPSPublicIP: connect.NewClient[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse](
+			httpClient,
+			baseURL+VPSServiceUnassignVPSPublicIPProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("UnassignVPSPublicIP")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -431,6 +453,8 @@ type vPSServiceClient struct {
 	getVPSLeases          *connect.Client[v1.GetVPSLeasesRequest, v1.GetVPSLeasesResponse]
 	registerLease         *connect.Client[v1.RegisterLeaseRequest, v1.RegisterLeaseResponse]
 	releaseLease          *connect.Client[v1.ReleaseLeaseRequest, v1.ReleaseLeaseResponse]
+	assignVPSPublicIP     *connect.Client[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse]
+	unassignVPSPublicIP   *connect.Client[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse]
 }
 
 // ListVPS calls obiente.cloud.vps.v1.VPSService.ListVPS.
@@ -598,6 +622,16 @@ func (c *vPSServiceClient) ReleaseLease(ctx context.Context, req *connect.Reques
 	return c.releaseLease.CallUnary(ctx, req)
 }
 
+// AssignVPSPublicIP calls obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP.
+func (c *vPSServiceClient) AssignVPSPublicIP(ctx context.Context, req *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+	return c.assignVPSPublicIP.CallUnary(ctx, req)
+}
+
+// UnassignVPSPublicIP calls obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP.
+func (c *vPSServiceClient) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+	return c.unassignVPSPublicIP.CallUnary(ctx, req)
+}
+
 // VPSServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSService service.
 type VPSServiceHandler interface {
 	// List organization VPS instances
@@ -663,6 +697,10 @@ type VPSServiceHandler interface {
 	RegisterLease(context.Context, *connect.Request[v1.RegisterLeaseRequest]) (*connect.Response[v1.RegisterLeaseResponse], error)
 	// Release a DHCP lease (called by gateway nodes via persistent connection)
 	ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error)
+	// Assign a public IP to a VPS (triggers DHCP static lease creation)
+	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
+	// Unassign a public IP from a VPS (removes DHCP static lease)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
 }
 
 // NewVPSServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -870,6 +908,18 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("ReleaseLease")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceAssignVPSPublicIPHandler := connect.NewUnaryHandler(
+		VPSServiceAssignVPSPublicIPProcedure,
+		svc.AssignVPSPublicIP,
+		connect.WithSchema(vPSServiceMethods.ByName("AssignVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceUnassignVPSPublicIPHandler := connect.NewUnaryHandler(
+		VPSServiceUnassignVPSPublicIPProcedure,
+		svc.UnassignVPSPublicIP,
+		connect.WithSchema(vPSServiceMethods.ByName("UnassignVPSPublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSServiceListVPSProcedure:
@@ -938,6 +988,10 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceRegisterLeaseHandler.ServeHTTP(w, r)
 		case VPSServiceReleaseLeaseProcedure:
 			vPSServiceReleaseLeaseHandler.ServeHTTP(w, r)
+		case VPSServiceAssignVPSPublicIPProcedure:
+			vPSServiceAssignVPSPublicIPHandler.ServeHTTP(w, r)
+		case VPSServiceUnassignVPSPublicIPProcedure:
+			vPSServiceUnassignVPSPublicIPHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1077,4 +1131,12 @@ func (UnimplementedVPSServiceHandler) RegisterLease(context.Context, *connect.Re
 
 func (UnimplementedVPSServiceHandler) ReleaseLease(context.Context, *connect.Request[v1.ReleaseLeaseRequest]) (*connect.Response[v1.ReleaseLeaseResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ReleaseLease is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP is not implemented"))
 }

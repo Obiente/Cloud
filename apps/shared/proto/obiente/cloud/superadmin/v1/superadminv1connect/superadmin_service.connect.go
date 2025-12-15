@@ -9,7 +9,8 @@ import (
 	context "context"
 	errors "errors"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
-	v11 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
+	v11 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
+	v12 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 	http "net/http"
 	strings "strings"
 )
@@ -247,15 +248,16 @@ type SuperadminServiceClient interface {
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 	// VPS public IP management endpoints
-	ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error)
-	CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error)
-	UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error)
-	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
-	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
-	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
+	// VPS public IP management uses the canonical types from the vps package
+	ListVPSPublicIPs(context.Context, *connect.Request[v11.ListVPSPublicIPsRequest]) (*connect.Response[v11.ListVPSPublicIPsResponse], error)
+	CreateVPSPublicIP(context.Context, *connect.Request[v11.CreateVPSPublicIPRequest]) (*connect.Response[v11.CreateVPSPublicIPResponse], error)
+	UpdateVPSPublicIP(context.Context, *connect.Request[v11.UpdateVPSPublicIPRequest]) (*connect.Response[v11.UpdateVPSPublicIPResponse], error)
+	DeleteVPSPublicIP(context.Context, *connect.Request[v11.DeleteVPSPublicIPRequest]) (*connect.Response[v11.DeleteVPSPublicIPResponse], error)
+	AssignVPSPublicIP(context.Context, *connect.Request[v11.AssignVPSPublicIPRequest]) (*connect.Response[v11.AssignVPSPublicIPResponse], error)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v11.UnassignVPSPublicIPRequest]) (*connect.Response[v11.UnassignVPSPublicIPResponse], error)
 	// DHCP lease management endpoints
 	// Get all DHCP leases for an organization (from VPSGatewayService)
-	GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error)
+	GetOrgLeases(context.Context, *connect.Request[v12.GetOrgLeasesRequest]) (*connect.Response[v12.GetOrgLeasesResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -493,43 +495,43 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
 			connect.WithClientOptions(opts...),
 		),
-		listVPSPublicIPs: connect.NewClient[v1.ListVPSPublicIPsRequest, v1.ListVPSPublicIPsResponse](
+		listVPSPublicIPs: connect.NewClient[v11.ListVPSPublicIPsRequest, v11.ListVPSPublicIPsResponse](
 			httpClient,
 			baseURL+SuperadminServiceListVPSPublicIPsProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("ListVPSPublicIPs")),
 			connect.WithClientOptions(opts...),
 		),
-		createVPSPublicIP: connect.NewClient[v1.CreateVPSPublicIPRequest, v1.CreateVPSPublicIPResponse](
+		createVPSPublicIP: connect.NewClient[v11.CreateVPSPublicIPRequest, v11.CreateVPSPublicIPResponse](
 			httpClient,
 			baseURL+SuperadminServiceCreateVPSPublicIPProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("CreateVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
-		updateVPSPublicIP: connect.NewClient[v1.UpdateVPSPublicIPRequest, v1.UpdateVPSPublicIPResponse](
+		updateVPSPublicIP: connect.NewClient[v11.UpdateVPSPublicIPRequest, v11.UpdateVPSPublicIPResponse](
 			httpClient,
 			baseURL+SuperadminServiceUpdateVPSPublicIPProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("UpdateVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
-		deleteVPSPublicIP: connect.NewClient[v1.DeleteVPSPublicIPRequest, v1.DeleteVPSPublicIPResponse](
+		deleteVPSPublicIP: connect.NewClient[v11.DeleteVPSPublicIPRequest, v11.DeleteVPSPublicIPResponse](
 			httpClient,
 			baseURL+SuperadminServiceDeleteVPSPublicIPProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
-		assignVPSPublicIP: connect.NewClient[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse](
+		assignVPSPublicIP: connect.NewClient[v11.AssignVPSPublicIPRequest, v11.AssignVPSPublicIPResponse](
 			httpClient,
 			baseURL+SuperadminServiceAssignVPSPublicIPProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("AssignVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
-		unassignVPSPublicIP: connect.NewClient[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse](
+		unassignVPSPublicIP: connect.NewClient[v11.UnassignVPSPublicIPRequest, v11.UnassignVPSPublicIPResponse](
 			httpClient,
 			baseURL+SuperadminServiceUnassignVPSPublicIPProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("UnassignVPSPublicIP")),
 			connect.WithClientOptions(opts...),
 		),
-		getOrgLeases: connect.NewClient[v11.GetOrgLeasesRequest, v11.GetOrgLeasesResponse](
+		getOrgLeases: connect.NewClient[v12.GetOrgLeasesRequest, v12.GetOrgLeasesResponse](
 			httpClient,
 			baseURL+SuperadminServiceGetOrgLeasesProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("GetOrgLeases")),
@@ -652,13 +654,13 @@ type superadminServiceClient struct {
 	createVPSSize                            *connect.Client[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse]
 	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
 	deleteVPSSize                            *connect.Client[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse]
-	listVPSPublicIPs                         *connect.Client[v1.ListVPSPublicIPsRequest, v1.ListVPSPublicIPsResponse]
-	createVPSPublicIP                        *connect.Client[v1.CreateVPSPublicIPRequest, v1.CreateVPSPublicIPResponse]
-	updateVPSPublicIP                        *connect.Client[v1.UpdateVPSPublicIPRequest, v1.UpdateVPSPublicIPResponse]
-	deleteVPSPublicIP                        *connect.Client[v1.DeleteVPSPublicIPRequest, v1.DeleteVPSPublicIPResponse]
-	assignVPSPublicIP                        *connect.Client[v1.AssignVPSPublicIPRequest, v1.AssignVPSPublicIPResponse]
-	unassignVPSPublicIP                      *connect.Client[v1.UnassignVPSPublicIPRequest, v1.UnassignVPSPublicIPResponse]
-	getOrgLeases                             *connect.Client[v11.GetOrgLeasesRequest, v11.GetOrgLeasesResponse]
+	listVPSPublicIPs                         *connect.Client[v11.ListVPSPublicIPsRequest, v11.ListVPSPublicIPsResponse]
+	createVPSPublicIP                        *connect.Client[v11.CreateVPSPublicIPRequest, v11.CreateVPSPublicIPResponse]
+	updateVPSPublicIP                        *connect.Client[v11.UpdateVPSPublicIPRequest, v11.UpdateVPSPublicIPResponse]
+	deleteVPSPublicIP                        *connect.Client[v11.DeleteVPSPublicIPRequest, v11.DeleteVPSPublicIPResponse]
+	assignVPSPublicIP                        *connect.Client[v11.AssignVPSPublicIPRequest, v11.AssignVPSPublicIPResponse]
+	unassignVPSPublicIP                      *connect.Client[v11.UnassignVPSPublicIPRequest, v11.UnassignVPSPublicIPResponse]
+	getOrgLeases                             *connect.Client[v12.GetOrgLeasesRequest, v12.GetOrgLeasesResponse]
 	listStripeWebhookEvents                  *connect.Client[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse]
 	listNodes                                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	getNode                                  *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
@@ -855,37 +857,37 @@ func (c *superadminServiceClient) DeleteVPSSize(ctx context.Context, req *connec
 }
 
 // ListVPSPublicIPs calls obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs.
-func (c *superadminServiceClient) ListVPSPublicIPs(ctx context.Context, req *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error) {
+func (c *superadminServiceClient) ListVPSPublicIPs(ctx context.Context, req *connect.Request[v11.ListVPSPublicIPsRequest]) (*connect.Response[v11.ListVPSPublicIPsResponse], error) {
 	return c.listVPSPublicIPs.CallUnary(ctx, req)
 }
 
 // CreateVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP.
-func (c *superadminServiceClient) CreateVPSPublicIP(ctx context.Context, req *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error) {
+func (c *superadminServiceClient) CreateVPSPublicIP(ctx context.Context, req *connect.Request[v11.CreateVPSPublicIPRequest]) (*connect.Response[v11.CreateVPSPublicIPResponse], error) {
 	return c.createVPSPublicIP.CallUnary(ctx, req)
 }
 
 // UpdateVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP.
-func (c *superadminServiceClient) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error) {
+func (c *superadminServiceClient) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[v11.UpdateVPSPublicIPRequest]) (*connect.Response[v11.UpdateVPSPublicIPResponse], error) {
 	return c.updateVPSPublicIP.CallUnary(ctx, req)
 }
 
 // DeleteVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP.
-func (c *superadminServiceClient) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error) {
+func (c *superadminServiceClient) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[v11.DeleteVPSPublicIPRequest]) (*connect.Response[v11.DeleteVPSPublicIPResponse], error) {
 	return c.deleteVPSPublicIP.CallUnary(ctx, req)
 }
 
 // AssignVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP.
-func (c *superadminServiceClient) AssignVPSPublicIP(ctx context.Context, req *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+func (c *superadminServiceClient) AssignVPSPublicIP(ctx context.Context, req *connect.Request[v11.AssignVPSPublicIPRequest]) (*connect.Response[v11.AssignVPSPublicIPResponse], error) {
 	return c.assignVPSPublicIP.CallUnary(ctx, req)
 }
 
 // UnassignVPSPublicIP calls obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP.
-func (c *superadminServiceClient) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+func (c *superadminServiceClient) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[v11.UnassignVPSPublicIPRequest]) (*connect.Response[v11.UnassignVPSPublicIPResponse], error) {
 	return c.unassignVPSPublicIP.CallUnary(ctx, req)
 }
 
 // GetOrgLeases calls obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases.
-func (c *superadminServiceClient) GetOrgLeases(ctx context.Context, req *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error) {
+func (c *superadminServiceClient) GetOrgLeases(ctx context.Context, req *connect.Request[v12.GetOrgLeasesRequest]) (*connect.Response[v12.GetOrgLeasesResponse], error) {
 	return c.getOrgLeases.CallUnary(ctx, req)
 }
 
@@ -1009,15 +1011,16 @@ type SuperadminServiceHandler interface {
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 	// VPS public IP management endpoints
-	ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error)
-	CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error)
-	UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error)
-	DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error)
-	AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error)
-	UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error)
+	// VPS public IP management uses the canonical types from the vps package
+	ListVPSPublicIPs(context.Context, *connect.Request[v11.ListVPSPublicIPsRequest]) (*connect.Response[v11.ListVPSPublicIPsResponse], error)
+	CreateVPSPublicIP(context.Context, *connect.Request[v11.CreateVPSPublicIPRequest]) (*connect.Response[v11.CreateVPSPublicIPResponse], error)
+	UpdateVPSPublicIP(context.Context, *connect.Request[v11.UpdateVPSPublicIPRequest]) (*connect.Response[v11.UpdateVPSPublicIPResponse], error)
+	DeleteVPSPublicIP(context.Context, *connect.Request[v11.DeleteVPSPublicIPRequest]) (*connect.Response[v11.DeleteVPSPublicIPResponse], error)
+	AssignVPSPublicIP(context.Context, *connect.Request[v11.AssignVPSPublicIPRequest]) (*connect.Response[v11.AssignVPSPublicIPResponse], error)
+	UnassignVPSPublicIP(context.Context, *connect.Request[v11.UnassignVPSPublicIPRequest]) (*connect.Response[v11.UnassignVPSPublicIPResponse], error)
 	// DHCP lease management endpoints
 	// Get all DHCP leases for an organization (from VPSGatewayService)
-	GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error)
+	GetOrgLeases(context.Context, *connect.Request[v12.GetOrgLeasesRequest]) (*connect.Response[v12.GetOrgLeasesResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 	// Node management endpoints
@@ -1625,31 +1628,31 @@ func (UnimplementedSuperadminServiceHandler) DeleteVPSSize(context.Context, *con
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) ListVPSPublicIPs(context.Context, *connect.Request[v1.ListVPSPublicIPsRequest]) (*connect.Response[v1.ListVPSPublicIPsResponse], error) {
+func (UnimplementedSuperadminServiceHandler) ListVPSPublicIPs(context.Context, *connect.Request[v11.ListVPSPublicIPsRequest]) (*connect.Response[v11.ListVPSPublicIPsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) CreateVPSPublicIP(context.Context, *connect.Request[v1.CreateVPSPublicIPRequest]) (*connect.Response[v1.CreateVPSPublicIPResponse], error) {
+func (UnimplementedSuperadminServiceHandler) CreateVPSPublicIP(context.Context, *connect.Request[v11.CreateVPSPublicIPRequest]) (*connect.Response[v11.CreateVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) UpdateVPSPublicIP(context.Context, *connect.Request[v1.UpdateVPSPublicIPRequest]) (*connect.Response[v1.UpdateVPSPublicIPResponse], error) {
+func (UnimplementedSuperadminServiceHandler) UpdateVPSPublicIP(context.Context, *connect.Request[v11.UpdateVPSPublicIPRequest]) (*connect.Response[v11.UpdateVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) DeleteVPSPublicIP(context.Context, *connect.Request[v1.DeleteVPSPublicIPRequest]) (*connect.Response[v1.DeleteVPSPublicIPResponse], error) {
+func (UnimplementedSuperadminServiceHandler) DeleteVPSPublicIP(context.Context, *connect.Request[v11.DeleteVPSPublicIPRequest]) (*connect.Response[v11.DeleteVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) AssignVPSPublicIP(context.Context, *connect.Request[v1.AssignVPSPublicIPRequest]) (*connect.Response[v1.AssignVPSPublicIPResponse], error) {
+func (UnimplementedSuperadminServiceHandler) AssignVPSPublicIP(context.Context, *connect.Request[v11.AssignVPSPublicIPRequest]) (*connect.Response[v11.AssignVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) UnassignVPSPublicIP(context.Context, *connect.Request[v1.UnassignVPSPublicIPRequest]) (*connect.Response[v1.UnassignVPSPublicIPResponse], error) {
+func (UnimplementedSuperadminServiceHandler) UnassignVPSPublicIP(context.Context, *connect.Request[v11.UnassignVPSPublicIPRequest]) (*connect.Response[v11.UnassignVPSPublicIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP is not implemented"))
 }
 
-func (UnimplementedSuperadminServiceHandler) GetOrgLeases(context.Context, *connect.Request[v11.GetOrgLeasesRequest]) (*connect.Response[v11.GetOrgLeasesResponse], error) {
+func (UnimplementedSuperadminServiceHandler) GetOrgLeases(context.Context, *connect.Request[v12.GetOrgLeasesRequest]) (*connect.Response[v12.GetOrgLeasesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases is not implemented"))
 }
 

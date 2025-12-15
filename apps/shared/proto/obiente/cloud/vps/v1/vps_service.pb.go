@@ -5246,6 +5246,813 @@ func (x *ReleaseLeaseResponse) GetMessage() string {
 	return ""
 }
 
+// AssignVPSPublicIP assigns a public IP to a VPS and triggers DHCP lease creation
+type AssignVPSPublicIPRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	VpsId          string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	PublicIp       string                 `protobuf:"bytes,3,opt,name=public_ip,json=publicIp,proto3" json:"public_ip,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AssignVPSPublicIPRequest) Reset() {
+	*x = AssignVPSPublicIPRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssignVPSPublicIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssignVPSPublicIPRequest) ProtoMessage() {}
+
+func (x *AssignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
+func (*AssignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *AssignVPSPublicIPRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *AssignVPSPublicIPRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+func (x *AssignVPSPublicIPRequest) GetPublicIp() string {
+	if x != nil {
+		return x.PublicIp
+	}
+	return ""
+}
+
+type AssignVPSPublicIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AssignVPSPublicIPResponse) Reset() {
+	*x = AssignVPSPublicIPResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssignVPSPublicIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssignVPSPublicIPResponse) ProtoMessage() {}
+
+func (x *AssignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
+func (*AssignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *AssignVPSPublicIPResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *AssignVPSPublicIPResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// UnassignVPSPublicIP removes a public IP from a VPS and removes DHCP lease
+type UnassignVPSPublicIPRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	VpsId          string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	PublicIp       string                 `protobuf:"bytes,3,opt,name=public_ip,json=publicIp,proto3" json:"public_ip,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UnassignVPSPublicIPRequest) Reset() {
+	*x = UnassignVPSPublicIPRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnassignVPSPublicIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnassignVPSPublicIPRequest) ProtoMessage() {}
+
+func (x *UnassignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnassignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
+func (*UnassignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *UnassignVPSPublicIPRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UnassignVPSPublicIPRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+func (x *UnassignVPSPublicIPRequest) GetPublicIp() string {
+	if x != nil {
+		return x.PublicIp
+	}
+	return ""
+}
+
+type UnassignVPSPublicIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnassignVPSPublicIPResponse) Reset() {
+	*x = UnassignVPSPublicIPResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnassignVPSPublicIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnassignVPSPublicIPResponse) ProtoMessage() {}
+
+func (x *UnassignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnassignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
+func (*UnassignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{79}
+}
+
+func (x *UnassignVPSPublicIPResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *UnassignVPSPublicIPResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// VPS Public IP
+type VPSPublicIP struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                           // IP record ID
+	IpAddress        string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                            // IPv4 or IPv6 address
+	VpsId            *string                `protobuf:"bytes,3,opt,name=vps_id,json=vpsId,proto3,oneof" json:"vps_id,omitempty"`                                  // Assigned VPS instance ID (null if unassigned)
+	OrganizationId   *string                `protobuf:"bytes,4,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`       // Organization that owns the VPS (null if unassigned)
+	VpsName          *string                `protobuf:"bytes,5,opt,name=vps_name,json=vpsName,proto3,oneof" json:"vps_name,omitempty"`                            // VPS name (for display, null if unassigned)
+	OrganizationName *string                `protobuf:"bytes,6,opt,name=organization_name,json=organizationName,proto3,oneof" json:"organization_name,omitempty"` // Organization name (for display, null if unassigned)
+	MonthlyCostCents int64                  `protobuf:"varint,7,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3" json:"monthly_cost_cents,omitempty"`    // Monthly cost in cents
+	Gateway          *string                `protobuf:"bytes,11,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                          // Gateway IP for this public IP (null if not set)
+	Netmask          *string                `protobuf:"bytes,12,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                          // Netmask/CIDR for this public IP (null if not set, e.g., "24" or "255.255.255.0")
+	AssignedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=assigned_at,json=assignedAt,proto3,oneof" json:"assigned_at,omitempty"`                   // When IP was assigned to VPS
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *VPSPublicIP) Reset() {
+	*x = VPSPublicIP{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VPSPublicIP) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VPSPublicIP) ProtoMessage() {}
+
+func (x *VPSPublicIP) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VPSPublicIP.ProtoReflect.Descriptor instead.
+func (*VPSPublicIP) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *VPSPublicIP) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetVpsId() string {
+	if x != nil && x.VpsId != nil {
+		return *x.VpsId
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetVpsName() string {
+	if x != nil && x.VpsName != nil {
+		return *x.VpsName
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetOrganizationName() string {
+	if x != nil && x.OrganizationName != nil {
+		return *x.OrganizationName
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetMonthlyCostCents() int64 {
+	if x != nil {
+		return x.MonthlyCostCents
+	}
+	return 0
+}
+
+func (x *VPSPublicIP) GetGateway() string {
+	if x != nil && x.Gateway != nil {
+		return *x.Gateway
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetNetmask() string {
+	if x != nil && x.Netmask != nil {
+		return *x.Netmask
+	}
+	return ""
+}
+
+func (x *VPSPublicIP) GetAssignedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.AssignedAt
+	}
+	return nil
+}
+
+func (x *VPSPublicIP) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *VPSPublicIP) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+// List VPS Public IPs Request
+type ListVPSPublicIPsRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	VpsId             *string                `protobuf:"bytes,1,opt,name=vps_id,json=vpsId,proto3,oneof" json:"vps_id,omitempty"`                                      // Filter by VPS ID (optional)
+	OrganizationId    *string                `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`           // Filter by organization ID (optional)
+	IncludeUnassigned *bool                  `protobuf:"varint,3,opt,name=include_unassigned,json=includeUnassigned,proto3,oneof" json:"include_unassigned,omitempty"` // Include unassigned IPs (default: true)
+	Page              int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty"`                                                          // Page number (default: 1)
+	PerPage           int32                  `protobuf:"varint,5,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`                                     // Items per page (default: 50, max: 100)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ListVPSPublicIPsRequest) Reset() {
+	*x = ListVPSPublicIPsRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListVPSPublicIPsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListVPSPublicIPsRequest) ProtoMessage() {}
+
+func (x *ListVPSPublicIPsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListVPSPublicIPsRequest.ProtoReflect.Descriptor instead.
+func (*ListVPSPublicIPsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *ListVPSPublicIPsRequest) GetVpsId() string {
+	if x != nil && x.VpsId != nil {
+		return *x.VpsId
+	}
+	return ""
+}
+
+func (x *ListVPSPublicIPsRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ListVPSPublicIPsRequest) GetIncludeUnassigned() bool {
+	if x != nil && x.IncludeUnassigned != nil {
+		return *x.IncludeUnassigned
+	}
+	return false
+}
+
+func (x *ListVPSPublicIPsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListVPSPublicIPsRequest) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+// List VPS Public IPs Response
+type ListVPSPublicIPsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ips           []*VPSPublicIP         `protobuf:"bytes,1,rep,name=ips,proto3" json:"ips,omitempty"`
+	TotalCount    int64                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"` // Total number of IPs matching filters
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListVPSPublicIPsResponse) Reset() {
+	*x = ListVPSPublicIPsResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListVPSPublicIPsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListVPSPublicIPsResponse) ProtoMessage() {}
+
+func (x *ListVPSPublicIPsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListVPSPublicIPsResponse.ProtoReflect.Descriptor instead.
+func (*ListVPSPublicIPsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *ListVPSPublicIPsResponse) GetIps() []*VPSPublicIP {
+	if x != nil {
+		return x.Ips
+	}
+	return nil
+}
+
+func (x *ListVPSPublicIPsResponse) GetTotalCount() int64 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+// Create VPS Public IP Request
+type CreateVPSPublicIPRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	IpAddress        string                 `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                         // IPv4 or IPv6 address
+	MonthlyCostCents int64                  `protobuf:"varint,2,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3" json:"monthly_cost_cents,omitempty"` // Monthly cost in cents (set by superadmin)
+	Gateway          *string                `protobuf:"bytes,3,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                        // Gateway IP for this public IP (set by superadmin)
+	Netmask          *string                `protobuf:"bytes,4,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                        // Netmask/CIDR for this public IP (set by superadmin, e.g., "24" or "255.255.255.0")
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CreateVPSPublicIPRequest) Reset() {
+	*x = CreateVPSPublicIPRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateVPSPublicIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateVPSPublicIPRequest) ProtoMessage() {}
+
+func (x *CreateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
+func (*CreateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *CreateVPSPublicIPRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *CreateVPSPublicIPRequest) GetMonthlyCostCents() int64 {
+	if x != nil {
+		return x.MonthlyCostCents
+	}
+	return 0
+}
+
+func (x *CreateVPSPublicIPRequest) GetGateway() string {
+	if x != nil && x.Gateway != nil {
+		return *x.Gateway
+	}
+	return ""
+}
+
+func (x *CreateVPSPublicIPRequest) GetNetmask() string {
+	if x != nil && x.Netmask != nil {
+		return *x.Netmask
+	}
+	return ""
+}
+
+// Create VPS Public IP Response
+type CreateVPSPublicIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateVPSPublicIPResponse) Reset() {
+	*x = CreateVPSPublicIPResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateVPSPublicIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateVPSPublicIPResponse) ProtoMessage() {}
+
+func (x *CreateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
+func (*CreateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *CreateVPSPublicIPResponse) GetIp() *VPSPublicIP {
+	if x != nil {
+		return x.Ip
+	}
+	return nil
+}
+
+// Update VPS Public IP Request
+type UpdateVPSPublicIPRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                              // IP ID to update
+	MonthlyCostCents *int64                 `protobuf:"varint,2,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3,oneof" json:"monthly_cost_cents,omitempty"` // Update monthly cost in cents
+	Gateway          *string                `protobuf:"bytes,3,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                              // Update gateway IP for this public IP
+	Netmask          *string                `protobuf:"bytes,4,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                              // Update netmask/CIDR for this public IP (e.g., "24" or "255.255.255.0")
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *UpdateVPSPublicIPRequest) Reset() {
+	*x = UpdateVPSPublicIPRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateVPSPublicIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateVPSPublicIPRequest) ProtoMessage() {}
+
+func (x *UpdateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
+func (*UpdateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *UpdateVPSPublicIPRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateVPSPublicIPRequest) GetMonthlyCostCents() int64 {
+	if x != nil && x.MonthlyCostCents != nil {
+		return *x.MonthlyCostCents
+	}
+	return 0
+}
+
+func (x *UpdateVPSPublicIPRequest) GetGateway() string {
+	if x != nil && x.Gateway != nil {
+		return *x.Gateway
+	}
+	return ""
+}
+
+func (x *UpdateVPSPublicIPRequest) GetNetmask() string {
+	if x != nil && x.Netmask != nil {
+		return *x.Netmask
+	}
+	return ""
+}
+
+// Update VPS Public IP Response
+type UpdateVPSPublicIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateVPSPublicIPResponse) Reset() {
+	*x = UpdateVPSPublicIPResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateVPSPublicIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateVPSPublicIPResponse) ProtoMessage() {}
+
+func (x *UpdateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
+func (*UpdateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *UpdateVPSPublicIPResponse) GetIp() *VPSPublicIP {
+	if x != nil {
+		return x.Ip
+	}
+	return nil
+}
+
+// Delete VPS Public IP Request
+type DeleteVPSPublicIPRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // IP ID to delete
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteVPSPublicIPRequest) Reset() {
+	*x = DeleteVPSPublicIPRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteVPSPublicIPRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteVPSPublicIPRequest) ProtoMessage() {}
+
+func (x *DeleteVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteVPSPublicIPRequest.ProtoReflect.Descriptor instead.
+func (*DeleteVPSPublicIPRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *DeleteVPSPublicIPRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// Delete VPS Public IP Response
+type DeleteVPSPublicIPResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteVPSPublicIPResponse) Reset() {
+	*x = DeleteVPSPublicIPResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteVPSPublicIPResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteVPSPublicIPResponse) ProtoMessage() {}
+
+func (x *DeleteVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteVPSPublicIPResponse.ProtoReflect.Descriptor instead.
+func (*DeleteVPSPublicIPResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *DeleteVPSPublicIPResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_obiente_cloud_vps_v1_vps_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
@@ -5719,7 +6526,89 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"macAddress\"J\n" +
 	"\x14ReleaseLeaseResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage*\xb0\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"w\n" +
+	"\x18AssignVPSPublicIPRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\x12\x1b\n" +
+	"\tpublic_ip\x18\x03 \x01(\tR\bpublicIp\"O\n" +
+	"\x19AssignVPSPublicIPResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"y\n" +
+	"\x1aUnassignVPSPublicIPRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\x12\x1b\n" +
+	"\tpublic_ip\x18\x03 \x01(\tR\bpublicIp\"Q\n" +
+	"\x1bUnassignVPSPublicIPResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xe6\x04\n" +
+	"\vVPSPublicIP\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1a\n" +
+	"\x06vps_id\x18\x03 \x01(\tH\x00R\x05vpsId\x88\x01\x01\x12,\n" +
+	"\x0forganization_id\x18\x04 \x01(\tH\x01R\x0eorganizationId\x88\x01\x01\x12\x1e\n" +
+	"\bvps_name\x18\x05 \x01(\tH\x02R\avpsName\x88\x01\x01\x120\n" +
+	"\x11organization_name\x18\x06 \x01(\tH\x03R\x10organizationName\x88\x01\x01\x12,\n" +
+	"\x12monthly_cost_cents\x18\a \x01(\x03R\x10monthlyCostCents\x12\x1d\n" +
+	"\agateway\x18\v \x01(\tH\x04R\agateway\x88\x01\x01\x12\x1d\n" +
+	"\anetmask\x18\f \x01(\tH\x05R\anetmask\x88\x01\x01\x12@\n" +
+	"\vassigned_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x06R\n" +
+	"assignedAt\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\t\n" +
+	"\a_vps_idB\x12\n" +
+	"\x10_organization_idB\v\n" +
+	"\t_vps_nameB\x14\n" +
+	"\x12_organization_nameB\n" +
+	"\n" +
+	"\b_gatewayB\n" +
+	"\n" +
+	"\b_netmaskB\x0e\n" +
+	"\f_assigned_at\"\xfc\x01\n" +
+	"\x17ListVPSPublicIPsRequest\x12\x1a\n" +
+	"\x06vps_id\x18\x01 \x01(\tH\x00R\x05vpsId\x88\x01\x01\x12,\n" +
+	"\x0forganization_id\x18\x02 \x01(\tH\x01R\x0eorganizationId\x88\x01\x01\x122\n" +
+	"\x12include_unassigned\x18\x03 \x01(\bH\x02R\x11includeUnassigned\x88\x01\x01\x12\x12\n" +
+	"\x04page\x18\x04 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x05 \x01(\x05R\aperPageB\t\n" +
+	"\a_vps_idB\x12\n" +
+	"\x10_organization_idB\x15\n" +
+	"\x13_include_unassigned\"p\n" +
+	"\x18ListVPSPublicIPsResponse\x123\n" +
+	"\x03ips\x18\x01 \x03(\v2!.obiente.cloud.vps.v1.VPSPublicIPR\x03ips\x12\x1f\n" +
+	"\vtotal_count\x18\x02 \x01(\x03R\n" +
+	"totalCount\"\xbd\x01\n" +
+	"\x18CreateVPSPublicIPRequest\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x01 \x01(\tR\tipAddress\x12,\n" +
+	"\x12monthly_cost_cents\x18\x02 \x01(\x03R\x10monthlyCostCents\x12\x1d\n" +
+	"\agateway\x18\x03 \x01(\tH\x00R\agateway\x88\x01\x01\x12\x1d\n" +
+	"\anetmask\x18\x04 \x01(\tH\x01R\anetmask\x88\x01\x01B\n" +
+	"\n" +
+	"\b_gatewayB\n" +
+	"\n" +
+	"\b_netmask\"N\n" +
+	"\x19CreateVPSPublicIPResponse\x121\n" +
+	"\x02ip\x18\x01 \x01(\v2!.obiente.cloud.vps.v1.VPSPublicIPR\x02ip\"\xca\x01\n" +
+	"\x18UpdateVPSPublicIPRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
+	"\x12monthly_cost_cents\x18\x02 \x01(\x03H\x00R\x10monthlyCostCents\x88\x01\x01\x12\x1d\n" +
+	"\agateway\x18\x03 \x01(\tH\x01R\agateway\x88\x01\x01\x12\x1d\n" +
+	"\anetmask\x18\x04 \x01(\tH\x02R\anetmask\x88\x01\x01B\x15\n" +
+	"\x13_monthly_cost_centsB\n" +
+	"\n" +
+	"\b_gatewayB\n" +
+	"\n" +
+	"\b_netmask\"N\n" +
+	"\x19UpdateVPSPublicIPResponse\x121\n" +
+	"\x02ip\x18\x01 \x01(\v2!.obiente.cloud.vps.v1.VPSPublicIPR\x02ip\"*\n" +
+	"\x18DeleteVPSPublicIPRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"5\n" +
+	"\x19DeleteVPSPublicIPResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess*\xb0\x01\n" +
 	"\tVPSStatus\x12\x1a\n" +
 	"\x16VPS_STATUS_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bCREATING\x10\x01\x12\f\n" +
@@ -5762,7 +6651,7 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x04ICMP\x10\x03\x12\n" +
 	"\n" +
 	"\x06ICMPV6\x10\x04\x12\a\n" +
-	"\x03ALL\x10\x052\x8f\x1b\n" +
+	"\x03ALL\x10\x052\x81\x1d\n" +
 	"\n" +
 	"VPSService\x12V\n" +
 	"\aListVPS\x12$.obiente.cloud.vps.v1.ListVPSRequest\x1a%.obiente.cloud.vps.v1.ListVPSResponse\x12\\\n" +
@@ -5797,7 +6686,9 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\tImportVPS\x12&.obiente.cloud.vps.v1.ImportVPSRequest\x1a'.obiente.cloud.vps.v1.ImportVPSResponse\x12e\n" +
 	"\fGetVPSLeases\x12).obiente.cloud.vps.v1.GetVPSLeasesRequest\x1a*.obiente.cloud.vps.v1.GetVPSLeasesResponse\x12h\n" +
 	"\rRegisterLease\x12*.obiente.cloud.vps.v1.RegisterLeaseRequest\x1a+.obiente.cloud.vps.v1.RegisterLeaseResponse\x12e\n" +
-	"\fReleaseLease\x12).obiente.cloud.vps.v1.ReleaseLeaseRequest\x1a*.obiente.cloud.vps.v1.ReleaseLeaseResponseBGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
+	"\fReleaseLease\x12).obiente.cloud.vps.v1.ReleaseLeaseRequest\x1a*.obiente.cloud.vps.v1.ReleaseLeaseResponse\x12t\n" +
+	"\x11AssignVPSPublicIP\x12..obiente.cloud.vps.v1.AssignVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.AssignVPSPublicIPResponse\x12z\n" +
+	"\x13UnassignVPSPublicIP\x120.obiente.cloud.vps.v1.UnassignVPSPublicIPRequest\x1a1.obiente.cloud.vps.v1.UnassignVPSPublicIPResponseBGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_vps_v1_vps_service_proto_rawDescOnce sync.Once
@@ -5812,7 +6703,7 @@ func file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_vps_v1_vps_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 79)
+var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
 var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(VPSStatus)(0),                        // 0: obiente.cloud.vps.v1.VPSStatus
 	(VPSImage)(0),                         // 1: obiente.cloud.vps.v1.VPSImage
@@ -5895,46 +6786,59 @@ var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(*RegisterLeaseResponse)(nil),         // 78: obiente.cloud.vps.v1.RegisterLeaseResponse
 	(*ReleaseLeaseRequest)(nil),           // 79: obiente.cloud.vps.v1.ReleaseLeaseRequest
 	(*ReleaseLeaseResponse)(nil),          // 80: obiente.cloud.vps.v1.ReleaseLeaseResponse
-	nil,                                   // 81: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
-	nil,                                   // 82: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
-	nil,                                   // 83: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	(*v1.Pagination)(nil),                 // 84: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),         // 85: google.protobuf.Timestamp
-	(*v1.VPSSize)(nil),                    // 86: obiente.cloud.common.v1.VPSSize
+	(*AssignVPSPublicIPRequest)(nil),      // 81: obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	(*AssignVPSPublicIPResponse)(nil),     // 82: obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	(*UnassignVPSPublicIPRequest)(nil),    // 83: obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	(*UnassignVPSPublicIPResponse)(nil),   // 84: obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	(*VPSPublicIP)(nil),                   // 85: obiente.cloud.vps.v1.VPSPublicIP
+	(*ListVPSPublicIPsRequest)(nil),       // 86: obiente.cloud.vps.v1.ListVPSPublicIPsRequest
+	(*ListVPSPublicIPsResponse)(nil),      // 87: obiente.cloud.vps.v1.ListVPSPublicIPsResponse
+	(*CreateVPSPublicIPRequest)(nil),      // 88: obiente.cloud.vps.v1.CreateVPSPublicIPRequest
+	(*CreateVPSPublicIPResponse)(nil),     // 89: obiente.cloud.vps.v1.CreateVPSPublicIPResponse
+	(*UpdateVPSPublicIPRequest)(nil),      // 90: obiente.cloud.vps.v1.UpdateVPSPublicIPRequest
+	(*UpdateVPSPublicIPResponse)(nil),     // 91: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse
+	(*DeleteVPSPublicIPRequest)(nil),      // 92: obiente.cloud.vps.v1.DeleteVPSPublicIPRequest
+	(*DeleteVPSPublicIPResponse)(nil),     // 93: obiente.cloud.vps.v1.DeleteVPSPublicIPResponse
+	nil,                                   // 94: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	nil,                                   // 95: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	nil,                                   // 96: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	(*v1.Pagination)(nil),                 // 97: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),         // 98: google.protobuf.Timestamp
+	(*v1.VPSSize)(nil),                    // 99: obiente.cloud.common.v1.VPSSize
 }
 var file_obiente_cloud_vps_v1_vps_service_proto_depIdxs = []int32{
 	0,  // 0: obiente.cloud.vps.v1.ListVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
 	40, // 1: obiente.cloud.vps.v1.ListVPSResponse.vps_instances:type_name -> obiente.cloud.vps.v1.VPSInstance
-	84, // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	97, // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	1,  // 3: obiente.cloud.vps.v1.CreateVPSRequest.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	81, // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	94, // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
 	8,  // 5: obiente.cloud.vps.v1.CreateVPSRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
 	9,  // 6: obiente.cloud.vps.v1.CloudInitConfig.users:type_name -> obiente.cloud.vps.v1.CloudInitUser
 	10, // 7: obiente.cloud.vps.v1.CloudInitConfig.write_files:type_name -> obiente.cloud.vps.v1.CloudInitWriteFile
 	40, // 8: obiente.cloud.vps.v1.CreateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 9: obiente.cloud.vps.v1.GetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	82, // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	95, // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
 	40, // 11: obiente.cloud.vps.v1.UpdateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 12: obiente.cloud.vps.v1.StartVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 13: obiente.cloud.vps.v1.StopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	40, // 14: obiente.cloud.vps.v1.RebootVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	0,  // 15: obiente.cloud.vps.v1.VPSStatusUpdate.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	85, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	85, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	85, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	98, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	98, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	98, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
 	29, // 19: obiente.cloud.vps.v1.GetVPSMetricsResponse.metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
-	85, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
+	98, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
 	32, // 21: obiente.cloud.vps.v1.GetVPSUsageResponse.current:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
 	32, // 22: obiente.cloud.vps.v1.GetVPSUsageResponse.estimated_monthly:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
-	86, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
+	99, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
 	39, // 24: obiente.cloud.vps.v1.ListVPSRegionsResponse.regions:type_name -> obiente.cloud.vps.v1.VPSRegion
 	0,  // 25: obiente.cloud.vps.v1.VPSInstance.status:type_name -> obiente.cloud.vps.v1.VPSStatus
 	1,  // 26: obiente.cloud.vps.v1.VPSInstance.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	83, // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	85, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
-	85, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
-	85, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
-	85, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
+	96, // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	98, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
+	98, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
+	98, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
+	98, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
 	29, // 32: obiente.cloud.vps.v1.VPSInstance.current_metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
 	55, // 33: obiente.cloud.vps.v1.ListFirewallRulesResponse.rules:type_name -> obiente.cloud.vps.v1.FirewallRule
 	55, // 34: obiente.cloud.vps.v1.GetFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
@@ -5948,88 +6852,98 @@ var file_obiente_cloud_vps_v1_vps_service_proto_depIdxs = []int32{
 	2,  // 42: obiente.cloud.vps.v1.FirewallRule.action:type_name -> obiente.cloud.vps.v1.FirewallAction
 	3,  // 43: obiente.cloud.vps.v1.FirewallRule.type:type_name -> obiente.cloud.vps.v1.FirewallDirection
 	4,  // 44: obiente.cloud.vps.v1.FirewallRule.protocol:type_name -> obiente.cloud.vps.v1.FirewallProtocol
-	85, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
-	85, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
+	98, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
+	98, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
 	57, // 47: obiente.cloud.vps.v1.ListSSHKeysResponse.keys:type_name -> obiente.cloud.vps.v1.SSHKey
 	57, // 48: obiente.cloud.vps.v1.AddSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
 	57, // 49: obiente.cloud.vps.v1.UpdateSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
 	40, // 50: obiente.cloud.vps.v1.ReinitializeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	85, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	98, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
 	40, // 52: obiente.cloud.vps.v1.ImportVPSResponse.imported_vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	85, // 53: obiente.cloud.vps.v1.VPSLease.expires_at:type_name -> google.protobuf.Timestamp
+	98, // 53: obiente.cloud.vps.v1.VPSLease.expires_at:type_name -> google.protobuf.Timestamp
 	75, // 54: obiente.cloud.vps.v1.GetVPSLeasesResponse.leases:type_name -> obiente.cloud.vps.v1.VPSLease
-	85, // 55: obiente.cloud.vps.v1.RegisterLeaseRequest.expires_at:type_name -> google.protobuf.Timestamp
-	5,  // 56: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
-	7,  // 57: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
-	12, // 58: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
-	14, // 59: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
-	16, // 60: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
-	18, // 61: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
-	20, // 62: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
-	22, // 63: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
-	24, // 64: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
-	26, // 65: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
-	28, // 66: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
-	30, // 67: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
-	33, // 68: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
-	35, // 69: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
-	37, // 70: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
-	41, // 71: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
-	43, // 72: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
-	45, // 73: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
-	47, // 74: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
-	49, // 75: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
-	51, // 76: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
-	53, // 77: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
-	58, // 78: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
-	60, // 79: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
-	62, // 80: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
-	64, // 81: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
-	66, // 82: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
-	68, // 83: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
-	70, // 84: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
-	72, // 85: obiente.cloud.vps.v1.VPSService.ImportVPS:input_type -> obiente.cloud.vps.v1.ImportVPSRequest
-	74, // 86: obiente.cloud.vps.v1.VPSService.GetVPSLeases:input_type -> obiente.cloud.vps.v1.GetVPSLeasesRequest
-	77, // 87: obiente.cloud.vps.v1.VPSService.RegisterLease:input_type -> obiente.cloud.vps.v1.RegisterLeaseRequest
-	79, // 88: obiente.cloud.vps.v1.VPSService.ReleaseLease:input_type -> obiente.cloud.vps.v1.ReleaseLeaseRequest
-	6,  // 89: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
-	11, // 90: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
-	13, // 91: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
-	15, // 92: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
-	17, // 93: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
-	19, // 94: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
-	21, // 95: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
-	23, // 96: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
-	25, // 97: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
-	27, // 98: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
-	29, // 99: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
-	31, // 100: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
-	34, // 101: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
-	36, // 102: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
-	38, // 103: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
-	42, // 104: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
-	44, // 105: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
-	46, // 106: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
-	48, // 107: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
-	50, // 108: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
-	52, // 109: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
-	54, // 110: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
-	59, // 111: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
-	61, // 112: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
-	63, // 113: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
-	65, // 114: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
-	67, // 115: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
-	69, // 116: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
-	71, // 117: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
-	73, // 118: obiente.cloud.vps.v1.VPSService.ImportVPS:output_type -> obiente.cloud.vps.v1.ImportVPSResponse
-	76, // 119: obiente.cloud.vps.v1.VPSService.GetVPSLeases:output_type -> obiente.cloud.vps.v1.GetVPSLeasesResponse
-	78, // 120: obiente.cloud.vps.v1.VPSService.RegisterLease:output_type -> obiente.cloud.vps.v1.RegisterLeaseResponse
-	80, // 121: obiente.cloud.vps.v1.VPSService.ReleaseLease:output_type -> obiente.cloud.vps.v1.ReleaseLeaseResponse
-	89, // [89:122] is the sub-list for method output_type
-	56, // [56:89] is the sub-list for method input_type
-	56, // [56:56] is the sub-list for extension type_name
-	56, // [56:56] is the sub-list for extension extendee
-	0,  // [0:56] is the sub-list for field type_name
+	98, // 55: obiente.cloud.vps.v1.RegisterLeaseRequest.expires_at:type_name -> google.protobuf.Timestamp
+	98, // 56: obiente.cloud.vps.v1.VPSPublicIP.assigned_at:type_name -> google.protobuf.Timestamp
+	98, // 57: obiente.cloud.vps.v1.VPSPublicIP.created_at:type_name -> google.protobuf.Timestamp
+	98, // 58: obiente.cloud.vps.v1.VPSPublicIP.updated_at:type_name -> google.protobuf.Timestamp
+	85, // 59: obiente.cloud.vps.v1.ListVPSPublicIPsResponse.ips:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	85, // 60: obiente.cloud.vps.v1.CreateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	85, // 61: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	5,  // 62: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
+	7,  // 63: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
+	12, // 64: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
+	14, // 65: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
+	16, // 66: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
+	18, // 67: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
+	20, // 68: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
+	22, // 69: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
+	24, // 70: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
+	26, // 71: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
+	28, // 72: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
+	30, // 73: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
+	33, // 74: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
+	35, // 75: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
+	37, // 76: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
+	41, // 77: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
+	43, // 78: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
+	45, // 79: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
+	47, // 80: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
+	49, // 81: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
+	51, // 82: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
+	53, // 83: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
+	58, // 84: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
+	60, // 85: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
+	62, // 86: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
+	64, // 87: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
+	66, // 88: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
+	68, // 89: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
+	70, // 90: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
+	72, // 91: obiente.cloud.vps.v1.VPSService.ImportVPS:input_type -> obiente.cloud.vps.v1.ImportVPSRequest
+	74, // 92: obiente.cloud.vps.v1.VPSService.GetVPSLeases:input_type -> obiente.cloud.vps.v1.GetVPSLeasesRequest
+	77, // 93: obiente.cloud.vps.v1.VPSService.RegisterLease:input_type -> obiente.cloud.vps.v1.RegisterLeaseRequest
+	79, // 94: obiente.cloud.vps.v1.VPSService.ReleaseLease:input_type -> obiente.cloud.vps.v1.ReleaseLeaseRequest
+	81, // 95: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:input_type -> obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	83, // 96: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:input_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	6,  // 97: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
+	11, // 98: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
+	13, // 99: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
+	15, // 100: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
+	17, // 101: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
+	19, // 102: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
+	21, // 103: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
+	23, // 104: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
+	25, // 105: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
+	27, // 106: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
+	29, // 107: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
+	31, // 108: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
+	34, // 109: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
+	36, // 110: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
+	38, // 111: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
+	42, // 112: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
+	44, // 113: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
+	46, // 114: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
+	48, // 115: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
+	50, // 116: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
+	52, // 117: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
+	54, // 118: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
+	59, // 119: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
+	61, // 120: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
+	63, // 121: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
+	65, // 122: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
+	67, // 123: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
+	69, // 124: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
+	71, // 125: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
+	73, // 126: obiente.cloud.vps.v1.VPSService.ImportVPS:output_type -> obiente.cloud.vps.v1.ImportVPSResponse
+	76, // 127: obiente.cloud.vps.v1.VPSService.GetVPSLeases:output_type -> obiente.cloud.vps.v1.GetVPSLeasesResponse
+	78, // 128: obiente.cloud.vps.v1.VPSService.RegisterLease:output_type -> obiente.cloud.vps.v1.RegisterLeaseResponse
+	80, // 129: obiente.cloud.vps.v1.VPSService.ReleaseLease:output_type -> obiente.cloud.vps.v1.ReleaseLeaseResponse
+	82, // 130: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:output_type -> obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	84, // 131: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:output_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	97, // [97:132] is the sub-list for method output_type
+	62, // [62:97] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_vps_v1_vps_service_proto_init() }
@@ -6058,13 +6972,17 @@ func file_obiente_cloud_vps_v1_vps_service_proto_init() {
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc), len(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   79,
+			NumMessages:   92,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

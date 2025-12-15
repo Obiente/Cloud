@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	vpsorch "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
-	superadminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -22,7 +23,7 @@ import (
 )
 
 // ListVPSPublicIPs lists all public IPs with optional filters (superadmin only)
-func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[superadminv1.ListVPSPublicIPsRequest]) (*connect.Response[superadminv1.ListVPSPublicIPsResponse], error) {
+func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[vpsv1.ListVPSPublicIPsRequest]) (*connect.Response[vpsv1.ListVPSPublicIPsResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -85,9 +86,9 @@ func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[sup
 	}
 
 	// Convert to proto
-	ips := make([]*superadminv1.VPSPublicIP, 0, len(ipRows))
+	ips := make([]*vpsv1.VPSPublicIP, 0, len(ipRows))
 	for _, row := range ipRows {
-		ip := &superadminv1.VPSPublicIP{
+		ip := &vpsv1.VPSPublicIP{
 			Id:              row.ID,
 			IpAddress:       row.IPAddress,
 			MonthlyCostCents: row.MonthlyCostCents,
@@ -118,14 +119,14 @@ func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[sup
 		ips = append(ips, ip)
 	}
 
-	return connect.NewResponse(&superadminv1.ListVPSPublicIPsResponse{
+	return connect.NewResponse(&vpsv1.ListVPSPublicIPsResponse{
 		Ips:        ips,
 		TotalCount: totalCount,
 	}), nil
 }
 
 // CreateVPSPublicIP creates a new public IP (superadmin only)
-func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[superadminv1.CreateVPSPublicIPRequest]) (*connect.Response[superadminv1.CreateVPSPublicIPResponse], error) {
+func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[vpsv1.CreateVPSPublicIPRequest]) (*connect.Response[vpsv1.CreateVPSPublicIPResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -186,7 +187,7 @@ func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[su
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create public IP: %w", err))
 	}
 
-	responseIP := &superadminv1.VPSPublicIP{
+	responseIP := &vpsv1.VPSPublicIP{
 		Id:               ip.ID,
 		IpAddress:        ip.IPAddress,
 		MonthlyCostCents: ip.MonthlyCostCents,
@@ -200,13 +201,13 @@ func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[su
 		responseIP.Netmask = ip.Netmask
 	}
 
-	return connect.NewResponse(&superadminv1.CreateVPSPublicIPResponse{
+	return connect.NewResponse(&vpsv1.CreateVPSPublicIPResponse{
 		Ip: responseIP,
 	}), nil
 }
 
 // UpdateVPSPublicIP updates a public IP's monthly cost (superadmin only)
-func (s *Service) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[superadminv1.UpdateVPSPublicIPRequest]) (*connect.Response[superadminv1.UpdateVPSPublicIPResponse], error) {
+func (s *Service) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[vpsv1.UpdateVPSPublicIPRequest]) (*connect.Response[vpsv1.UpdateVPSPublicIPResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -279,7 +280,7 @@ func (s *Service) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[su
 		}
 	}
 
-	responseIP := &superadminv1.VPSPublicIP{
+	responseIP := &vpsv1.VPSPublicIP{
 		Id:               ip.ID,
 		IpAddress:        ip.IPAddress,
 		MonthlyCostCents: ip.MonthlyCostCents,
@@ -308,13 +309,13 @@ func (s *Service) UpdateVPSPublicIP(ctx context.Context, req *connect.Request[su
 		responseIP.AssignedAt = timestamppb.New(*ip.AssignedAt)
 	}
 
-	return connect.NewResponse(&superadminv1.UpdateVPSPublicIPResponse{
+	return connect.NewResponse(&vpsv1.UpdateVPSPublicIPResponse{
 		Ip: responseIP,
 	}), nil
 }
 
 // DeleteVPSPublicIP deletes a public IP (superadmin only)
-func (s *Service) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[superadminv1.DeleteVPSPublicIPRequest]) (*connect.Response[superadminv1.DeleteVPSPublicIPResponse], error) {
+func (s *Service) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[vpsv1.DeleteVPSPublicIPRequest]) (*connect.Response[vpsv1.DeleteVPSPublicIPResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -347,13 +348,13 @@ func (s *Service) DeleteVPSPublicIP(ctx context.Context, req *connect.Request[su
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete public IP: %w", err))
 	}
 
-	return connect.NewResponse(&superadminv1.DeleteVPSPublicIPResponse{
+	return connect.NewResponse(&vpsv1.DeleteVPSPublicIPResponse{
 		Success: true,
 	}), nil
 }
 
 // AssignVPSPublicIP assigns a public IP to a VPS (superadmin only)
-func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[superadminv1.AssignVPSPublicIPRequest]) (*connect.Response[superadminv1.AssignVPSPublicIPResponse], error) {
+func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vpsv1.AssignVPSPublicIPRequest]) (*connect.Response[vpsv1.AssignVPSPublicIPResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -362,27 +363,27 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[su
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
-	ipID := req.Msg.GetIpId()
+	publicIP := req.Msg.GetPublicIp()
 	vpsID := req.Msg.GetVpsId()
-	if ipID == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("ip_id is required"))
+	if publicIP == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("public_ip is required"))
 	}
 	if vpsID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
 	}
 
-	// Get IP
+	// Get IP (by address)
 	var ip database.VPSPublicIP
-	if err := database.DB.Where("id = ?", ipID).First(&ip).Error; err != nil {
+	if err := database.DB.Where("ip_address = ?", publicIP).First(&ip).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("public IP %s not found", ipID))
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("public IP %s not found", publicIP))
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get public IP: %w", err))
 	}
 
 	// Check if IP is already assigned
 	if ip.VPSID != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("public IP %s is already assigned to VPS %s", ipID, *ip.VPSID))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("public IP %s is already assigned to VPS %s", publicIP, *ip.VPSID))
 	}
 
 	// Get VPS
@@ -500,43 +501,35 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[su
 		}
 	}
 
-	// Get VPS and organization names for response
-	vpsName := vps.Name
-	var orgName *string
-	var org database.Organization
-	if err := database.DB.Where("id = ?", vps.OrganizationID).First(&org).Error; err == nil {
-		orgName = &org.Name
+	// Create DHCP lease record for the public IP (so it appears in lease listings)
+	// Public IPs are static (configured via cloud-init), not DHCP, but we track them as leases
+	lease := database.DHCPLease{
+		ID:             uuid.New().String(),
+		VPSID:          vpsID,
+		OrganizationID: vps.OrganizationID,
+		MACAddress:     "", // Public IPs don't have MAC (configured as static)
+		IPAddress:      ip.IPAddress,
+		IsPublic:       true,
+		ExpiresAt:      time.Now().Add(365 * 24 * time.Hour), // Long expiry for public IPs
+		GatewayNode:    "",                                    // Not gateway-specific
+	}
+	if err := database.DB.Create(&lease).Error; err != nil {
+		logger.Warn("[SuperAdmin] Failed to create lease record for public IP %s: %v", ip.IPAddress, err)
+		// Non-fatal - IP is assigned, just not tracked in leases
+	} else {
+		logger.Info("[SuperAdmin] Created lease record for public IP %s on VPS %s", ip.IPAddress, vpsID)
 	}
 
-	responseIP := &superadminv1.VPSPublicIP{
-		Id:               ip.ID,
-		IpAddress:        ip.IPAddress,
-		MonthlyCostCents: ip.MonthlyCostCents,
-		VpsId:            &vpsID,
-		OrganizationId:   &vps.OrganizationID,
-		VpsName:          &vpsName,
-		CreatedAt:        timestamppb.New(ip.CreatedAt),
-		UpdatedAt:        timestamppb.New(ip.UpdatedAt),
-		AssignedAt:       timestamppb.New(now),
-	}
-	if orgName != nil {
-		responseIP.OrganizationName = orgName
-	}
-	if ip.Gateway != nil {
-		responseIP.Gateway = ip.Gateway
-	}
-	if ip.Netmask != nil {
-		responseIP.Netmask = ip.Netmask
-	}
+	// (no response payload with IP object for vpsv1 API)
 
-	return connect.NewResponse(&superadminv1.AssignVPSPublicIPResponse{
-		Ip:      responseIP,
+	return connect.NewResponse(&vpsv1.AssignVPSPublicIPResponse{
+		Success: true,
 		Message: fmt.Sprintf("Public IP %s assigned to VPS %s", ip.IPAddress, vpsID),
 	}), nil
 }
 
 // UnassignVPSPublicIP unassigns a public IP from a VPS (superadmin only)
-func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[superadminv1.UnassignVPSPublicIPRequest]) (*connect.Response[superadminv1.UnassignVPSPublicIPResponse], error) {
+func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[vpsv1.UnassignVPSPublicIPRequest]) (*connect.Response[vpsv1.UnassignVPSPublicIPResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -545,23 +538,23 @@ func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
-	ipID := req.Msg.GetIpId()
-	if ipID == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("ip_id is required"))
+	publicIP := req.Msg.GetPublicIp()
+	if publicIP == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("public_ip is required"))
 	}
 
-	// Get IP
+	// Get IP (by address)
 	var ip database.VPSPublicIP
-	if err := database.DB.Where("id = ?", ipID).First(&ip).Error; err != nil {
+	if err := database.DB.Where("ip_address = ?", publicIP).First(&ip).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("public IP %s not found", ipID))
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("public IP %s not found", publicIP))
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get public IP: %w", err))
 	}
 
 	// Check if IP is assigned
 	if ip.VPSID == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("public IP %s is not assigned to any VPS", ipID))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("public IP %s is not assigned to any VPS", publicIP))
 	}
 
 	vpsID := *ip.VPSID
@@ -599,16 +592,16 @@ func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to unassign public IP: %w", err))
 	}
 
-	responseIP := &superadminv1.VPSPublicIP{
-		Id:               ip.ID,
-		IpAddress:        ip.IPAddress,
-		MonthlyCostCents: ip.MonthlyCostCents,
-		CreatedAt:        timestamppb.New(ip.CreatedAt),
-		UpdatedAt:        timestamppb.New(ip.UpdatedAt),
+	// Remove DHCP lease record for the public IP
+	if err := database.DB.Where("ip_address = ? AND vps_id = ? AND is_public = ?", ip.IPAddress, vpsID, true).Delete(&database.DHCPLease{}).Error; err != nil {
+		logger.Warn("[SuperAdmin] Failed to remove lease record for public IP %s: %v", ip.IPAddress, err)
+		// Non-fatal
+	} else {
+		logger.Info("[SuperAdmin] Removed lease record for public IP %s from VPS %s", ip.IPAddress, vpsID)
 	}
 
-	return connect.NewResponse(&superadminv1.UnassignVPSPublicIPResponse{
-		Ip:      responseIP,
+	return connect.NewResponse(&vpsv1.UnassignVPSPublicIPResponse{
+		Success: true,
 		Message: fmt.Sprintf("Public IP %s unassigned from VPS %s", ip.IPAddress, vpsID),
 	}), nil
 }

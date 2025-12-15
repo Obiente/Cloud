@@ -5332,791 +5332,6 @@ func (x *DeleteVPSSizeResponse) GetSuccess() bool {
 	return false
 }
 
-// List VPS Public IPs Request
-type ListVPSPublicIPsRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	VpsId             *string                `protobuf:"bytes,1,opt,name=vps_id,json=vpsId,proto3,oneof" json:"vps_id,omitempty"`                                      // Filter by VPS ID (optional)
-	OrganizationId    *string                `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`           // Filter by organization ID (optional)
-	IncludeUnassigned *bool                  `protobuf:"varint,3,opt,name=include_unassigned,json=includeUnassigned,proto3,oneof" json:"include_unassigned,omitempty"` // Include unassigned IPs (default: true)
-	Page              int32                  `protobuf:"varint,4,opt,name=page,proto3" json:"page,omitempty"`                                                          // Page number (default: 1)
-	PerPage           int32                  `protobuf:"varint,5,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`                                     // Items per page (default: 50, max: 100)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
-
-func (x *ListVPSPublicIPsRequest) Reset() {
-	*x = ListVPSPublicIPsRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[77]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListVPSPublicIPsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListVPSPublicIPsRequest) ProtoMessage() {}
-
-func (x *ListVPSPublicIPsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[77]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListVPSPublicIPsRequest.ProtoReflect.Descriptor instead.
-func (*ListVPSPublicIPsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{77}
-}
-
-func (x *ListVPSPublicIPsRequest) GetVpsId() string {
-	if x != nil && x.VpsId != nil {
-		return *x.VpsId
-	}
-	return ""
-}
-
-func (x *ListVPSPublicIPsRequest) GetOrganizationId() string {
-	if x != nil && x.OrganizationId != nil {
-		return *x.OrganizationId
-	}
-	return ""
-}
-
-func (x *ListVPSPublicIPsRequest) GetIncludeUnassigned() bool {
-	if x != nil && x.IncludeUnassigned != nil {
-		return *x.IncludeUnassigned
-	}
-	return false
-}
-
-func (x *ListVPSPublicIPsRequest) GetPage() int32 {
-	if x != nil {
-		return x.Page
-	}
-	return 0
-}
-
-func (x *ListVPSPublicIPsRequest) GetPerPage() int32 {
-	if x != nil {
-		return x.PerPage
-	}
-	return 0
-}
-
-// List VPS Public IPs Response
-type ListVPSPublicIPsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ips           []*VPSPublicIP         `protobuf:"bytes,1,rep,name=ips,proto3" json:"ips,omitempty"`
-	TotalCount    int64                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"` // Total number of IPs matching filters
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ListVPSPublicIPsResponse) Reset() {
-	*x = ListVPSPublicIPsResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListVPSPublicIPsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListVPSPublicIPsResponse) ProtoMessage() {}
-
-func (x *ListVPSPublicIPsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListVPSPublicIPsResponse.ProtoReflect.Descriptor instead.
-func (*ListVPSPublicIPsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{78}
-}
-
-func (x *ListVPSPublicIPsResponse) GetIps() []*VPSPublicIP {
-	if x != nil {
-		return x.Ips
-	}
-	return nil
-}
-
-func (x *ListVPSPublicIPsResponse) GetTotalCount() int64 {
-	if x != nil {
-		return x.TotalCount
-	}
-	return 0
-}
-
-// Create VPS Public IP Request
-type CreateVPSPublicIPRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	IpAddress        string                 `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                         // IPv4 or IPv6 address
-	MonthlyCostCents int64                  `protobuf:"varint,2,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3" json:"monthly_cost_cents,omitempty"` // Monthly cost in cents (set by superadmin)
-	Gateway          *string                `protobuf:"bytes,3,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                        // Gateway IP for this public IP (set by superadmin)
-	Netmask          *string                `protobuf:"bytes,4,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                        // Netmask/CIDR for this public IP (set by superadmin, e.g., "24" or "255.255.255.0")
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *CreateVPSPublicIPRequest) Reset() {
-	*x = CreateVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[79]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CreateVPSPublicIPRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CreateVPSPublicIPRequest) ProtoMessage() {}
-
-func (x *CreateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[79]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CreateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
-func (*CreateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{79}
-}
-
-func (x *CreateVPSPublicIPRequest) GetIpAddress() string {
-	if x != nil {
-		return x.IpAddress
-	}
-	return ""
-}
-
-func (x *CreateVPSPublicIPRequest) GetMonthlyCostCents() int64 {
-	if x != nil {
-		return x.MonthlyCostCents
-	}
-	return 0
-}
-
-func (x *CreateVPSPublicIPRequest) GetGateway() string {
-	if x != nil && x.Gateway != nil {
-		return *x.Gateway
-	}
-	return ""
-}
-
-func (x *CreateVPSPublicIPRequest) GetNetmask() string {
-	if x != nil && x.Netmask != nil {
-		return *x.Netmask
-	}
-	return ""
-}
-
-// Create VPS Public IP Response
-type CreateVPSPublicIPResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CreateVPSPublicIPResponse) Reset() {
-	*x = CreateVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[80]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CreateVPSPublicIPResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CreateVPSPublicIPResponse) ProtoMessage() {}
-
-func (x *CreateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[80]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CreateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
-func (*CreateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{80}
-}
-
-func (x *CreateVPSPublicIPResponse) GetIp() *VPSPublicIP {
-	if x != nil {
-		return x.Ip
-	}
-	return nil
-}
-
-// Update VPS Public IP Request
-type UpdateVPSPublicIPRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                              // IP ID to update
-	MonthlyCostCents *int64                 `protobuf:"varint,2,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3,oneof" json:"monthly_cost_cents,omitempty"` // Update monthly cost in cents
-	Gateway          *string                `protobuf:"bytes,3,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                              // Update gateway IP for this public IP
-	Netmask          *string                `protobuf:"bytes,4,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                              // Update netmask/CIDR for this public IP (e.g., "24" or "255.255.255.0")
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *UpdateVPSPublicIPRequest) Reset() {
-	*x = UpdateVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateVPSPublicIPRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateVPSPublicIPRequest) ProtoMessage() {}
-
-func (x *UpdateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
-func (*UpdateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{81}
-}
-
-func (x *UpdateVPSPublicIPRequest) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *UpdateVPSPublicIPRequest) GetMonthlyCostCents() int64 {
-	if x != nil && x.MonthlyCostCents != nil {
-		return *x.MonthlyCostCents
-	}
-	return 0
-}
-
-func (x *UpdateVPSPublicIPRequest) GetGateway() string {
-	if x != nil && x.Gateway != nil {
-		return *x.Gateway
-	}
-	return ""
-}
-
-func (x *UpdateVPSPublicIPRequest) GetNetmask() string {
-	if x != nil && x.Netmask != nil {
-		return *x.Netmask
-	}
-	return ""
-}
-
-// Update VPS Public IP Response
-type UpdateVPSPublicIPResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UpdateVPSPublicIPResponse) Reset() {
-	*x = UpdateVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[82]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UpdateVPSPublicIPResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UpdateVPSPublicIPResponse) ProtoMessage() {}
-
-func (x *UpdateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[82]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UpdateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
-func (*UpdateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{82}
-}
-
-func (x *UpdateVPSPublicIPResponse) GetIp() *VPSPublicIP {
-	if x != nil {
-		return x.Ip
-	}
-	return nil
-}
-
-// Delete VPS Public IP Request
-type DeleteVPSPublicIPRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // IP ID to delete
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteVPSPublicIPRequest) Reset() {
-	*x = DeleteVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[83]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteVPSPublicIPRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteVPSPublicIPRequest) ProtoMessage() {}
-
-func (x *DeleteVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[83]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteVPSPublicIPRequest.ProtoReflect.Descriptor instead.
-func (*DeleteVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{83}
-}
-
-func (x *DeleteVPSPublicIPRequest) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-// Delete VPS Public IP Response
-type DeleteVPSPublicIPResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeleteVPSPublicIPResponse) Reset() {
-	*x = DeleteVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[84]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeleteVPSPublicIPResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeleteVPSPublicIPResponse) ProtoMessage() {}
-
-func (x *DeleteVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[84]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeleteVPSPublicIPResponse.ProtoReflect.Descriptor instead.
-func (*DeleteVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{84}
-}
-
-func (x *DeleteVPSPublicIPResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-// Assign VPS Public IP Request
-type AssignVPSPublicIPRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IpId          string                 `protobuf:"bytes,1,opt,name=ip_id,json=ipId,proto3" json:"ip_id,omitempty"`    // IP ID to assign
-	VpsId         string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"` // VPS ID to assign the IP to
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AssignVPSPublicIPRequest) Reset() {
-	*x = AssignVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[85]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AssignVPSPublicIPRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AssignVPSPublicIPRequest) ProtoMessage() {}
-
-func (x *AssignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[85]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AssignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
-func (*AssignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{85}
-}
-
-func (x *AssignVPSPublicIPRequest) GetIpId() string {
-	if x != nil {
-		return x.IpId
-	}
-	return ""
-}
-
-func (x *AssignVPSPublicIPRequest) GetVpsId() string {
-	if x != nil {
-		return x.VpsId
-	}
-	return ""
-}
-
-// Assign VPS Public IP Response
-type AssignVPSPublicIPResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"` // Success message
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AssignVPSPublicIPResponse) Reset() {
-	*x = AssignVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[86]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AssignVPSPublicIPResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AssignVPSPublicIPResponse) ProtoMessage() {}
-
-func (x *AssignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[86]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AssignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
-func (*AssignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{86}
-}
-
-func (x *AssignVPSPublicIPResponse) GetIp() *VPSPublicIP {
-	if x != nil {
-		return x.Ip
-	}
-	return nil
-}
-
-func (x *AssignVPSPublicIPResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-// Unassign VPS Public IP Request
-type UnassignVPSPublicIPRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	IpId          string                 `protobuf:"bytes,1,opt,name=ip_id,json=ipId,proto3" json:"ip_id,omitempty"` // IP ID to unassign
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UnassignVPSPublicIPRequest) Reset() {
-	*x = UnassignVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[87]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UnassignVPSPublicIPRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UnassignVPSPublicIPRequest) ProtoMessage() {}
-
-func (x *UnassignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[87]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UnassignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
-func (*UnassignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{87}
-}
-
-func (x *UnassignVPSPublicIPRequest) GetIpId() string {
-	if x != nil {
-		return x.IpId
-	}
-	return ""
-}
-
-// Unassign VPS Public IP Response
-type UnassignVPSPublicIPResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ip            *VPSPublicIP           `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"` // Success message
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UnassignVPSPublicIPResponse) Reset() {
-	*x = UnassignVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[88]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UnassignVPSPublicIPResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UnassignVPSPublicIPResponse) ProtoMessage() {}
-
-func (x *UnassignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[88]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UnassignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
-func (*UnassignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{88}
-}
-
-func (x *UnassignVPSPublicIPResponse) GetIp() *VPSPublicIP {
-	if x != nil {
-		return x.Ip
-	}
-	return nil
-}
-
-func (x *UnassignVPSPublicIPResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-// VPS Public IP
-type VPSPublicIP struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                           // IP record ID
-	IpAddress        string                 `protobuf:"bytes,2,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                            // IPv4 or IPv6 address
-	VpsId            *string                `protobuf:"bytes,3,opt,name=vps_id,json=vpsId,proto3,oneof" json:"vps_id,omitempty"`                                  // Assigned VPS instance ID (null if unassigned)
-	OrganizationId   *string                `protobuf:"bytes,4,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`       // Organization that owns the VPS (null if unassigned)
-	VpsName          *string                `protobuf:"bytes,5,opt,name=vps_name,json=vpsName,proto3,oneof" json:"vps_name,omitempty"`                            // VPS name (for display, null if unassigned)
-	OrganizationName *string                `protobuf:"bytes,6,opt,name=organization_name,json=organizationName,proto3,oneof" json:"organization_name,omitempty"` // Organization name (for display, null if unassigned)
-	MonthlyCostCents int64                  `protobuf:"varint,7,opt,name=monthly_cost_cents,json=monthlyCostCents,proto3" json:"monthly_cost_cents,omitempty"`    // Monthly cost in cents
-	Gateway          *string                `protobuf:"bytes,11,opt,name=gateway,proto3,oneof" json:"gateway,omitempty"`                                          // Gateway IP for this public IP (null if not set)
-	Netmask          *string                `protobuf:"bytes,12,opt,name=netmask,proto3,oneof" json:"netmask,omitempty"`                                          // Netmask/CIDR for this public IP (null if not set, e.g., "24" or "255.255.255.0")
-	AssignedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=assigned_at,json=assignedAt,proto3,oneof" json:"assigned_at,omitempty"`                   // When IP was assigned to VPS
-	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *VPSPublicIP) Reset() {
-	*x = VPSPublicIP{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[89]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *VPSPublicIP) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VPSPublicIP) ProtoMessage() {}
-
-func (x *VPSPublicIP) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[89]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VPSPublicIP.ProtoReflect.Descriptor instead.
-func (*VPSPublicIP) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{89}
-}
-
-func (x *VPSPublicIP) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetIpAddress() string {
-	if x != nil {
-		return x.IpAddress
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetVpsId() string {
-	if x != nil && x.VpsId != nil {
-		return *x.VpsId
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetOrganizationId() string {
-	if x != nil && x.OrganizationId != nil {
-		return *x.OrganizationId
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetVpsName() string {
-	if x != nil && x.VpsName != nil {
-		return *x.VpsName
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetOrganizationName() string {
-	if x != nil && x.OrganizationName != nil {
-		return *x.OrganizationName
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetMonthlyCostCents() int64 {
-	if x != nil {
-		return x.MonthlyCostCents
-	}
-	return 0
-}
-
-func (x *VPSPublicIP) GetGateway() string {
-	if x != nil && x.Gateway != nil {
-		return *x.Gateway
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetNetmask() string {
-	if x != nil && x.Netmask != nil {
-		return *x.Netmask
-	}
-	return ""
-}
-
-func (x *VPSPublicIP) GetAssignedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.AssignedAt
-	}
-	return nil
-}
-
-func (x *VPSPublicIP) GetCreatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return nil
-}
-
-func (x *VPSPublicIP) GetUpdatedAt() *timestamppb.Timestamp {
-	if x != nil {
-		return x.UpdatedAt
-	}
-	return nil
-}
-
 // Superadmin Get VPS Request (superadmin - bypasses organization checks)
 type SuperadminGetVPSRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -6127,7 +5342,7 @@ type SuperadminGetVPSRequest struct {
 
 func (x *SuperadminGetVPSRequest) Reset() {
 	*x = SuperadminGetVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[90]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6139,7 +5354,7 @@ func (x *SuperadminGetVPSRequest) String() string {
 func (*SuperadminGetVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminGetVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[90]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6152,7 +5367,7 @@ func (x *SuperadminGetVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminGetVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminGetVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{90}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *SuperadminGetVPSRequest) GetVpsId() string {
@@ -6174,7 +5389,7 @@ type SuperadminGetVPSResponse struct {
 
 func (x *SuperadminGetVPSResponse) Reset() {
 	*x = SuperadminGetVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6186,7 +5401,7 @@ func (x *SuperadminGetVPSResponse) String() string {
 func (*SuperadminGetVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminGetVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6199,7 +5414,7 @@ func (x *SuperadminGetVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminGetVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminGetVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{91}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *SuperadminGetVPSResponse) GetVps() *v13.VPSInstance {
@@ -6240,7 +5455,7 @@ type SuperadminResizeVPSRequest struct {
 
 func (x *SuperadminResizeVPSRequest) Reset() {
 	*x = SuperadminResizeVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6252,7 +5467,7 @@ func (x *SuperadminResizeVPSRequest) String() string {
 func (*SuperadminResizeVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminResizeVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6265,7 +5480,7 @@ func (x *SuperadminResizeVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminResizeVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminResizeVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{92}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *SuperadminResizeVPSRequest) GetVpsId() string {
@@ -6328,7 +5543,7 @@ type SuperadminResizeVPSResponse struct {
 
 func (x *SuperadminResizeVPSResponse) Reset() {
 	*x = SuperadminResizeVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6340,7 +5555,7 @@ func (x *SuperadminResizeVPSResponse) String() string {
 func (*SuperadminResizeVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminResizeVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6353,7 +5568,7 @@ func (x *SuperadminResizeVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminResizeVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminResizeVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{93}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *SuperadminResizeVPSResponse) GetVps() *v13.VPSInstance {
@@ -6381,7 +5596,7 @@ type SuperadminSuspendVPSRequest struct {
 
 func (x *SuperadminSuspendVPSRequest) Reset() {
 	*x = SuperadminSuspendVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[94]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6393,7 +5608,7 @@ func (x *SuperadminSuspendVPSRequest) String() string {
 func (*SuperadminSuspendVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminSuspendVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[94]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6406,7 +5621,7 @@ func (x *SuperadminSuspendVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminSuspendVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminSuspendVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{94}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *SuperadminSuspendVPSRequest) GetVpsId() string {
@@ -6434,7 +5649,7 @@ type SuperadminSuspendVPSResponse struct {
 
 func (x *SuperadminSuspendVPSResponse) Reset() {
 	*x = SuperadminSuspendVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[95]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6446,7 +5661,7 @@ func (x *SuperadminSuspendVPSResponse) String() string {
 func (*SuperadminSuspendVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminSuspendVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[95]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6459,7 +5674,7 @@ func (x *SuperadminSuspendVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminSuspendVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminSuspendVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{95}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *SuperadminSuspendVPSResponse) GetVps() *v13.VPSInstance {
@@ -6486,7 +5701,7 @@ type SuperadminUnsuspendVPSRequest struct {
 
 func (x *SuperadminUnsuspendVPSRequest) Reset() {
 	*x = SuperadminUnsuspendVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[96]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6498,7 +5713,7 @@ func (x *SuperadminUnsuspendVPSRequest) String() string {
 func (*SuperadminUnsuspendVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminUnsuspendVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[96]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6511,7 +5726,7 @@ func (x *SuperadminUnsuspendVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminUnsuspendVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminUnsuspendVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{96}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *SuperadminUnsuspendVPSRequest) GetVpsId() string {
@@ -6532,7 +5747,7 @@ type SuperadminUnsuspendVPSResponse struct {
 
 func (x *SuperadminUnsuspendVPSResponse) Reset() {
 	*x = SuperadminUnsuspendVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[97]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6544,7 +5759,7 @@ func (x *SuperadminUnsuspendVPSResponse) String() string {
 func (*SuperadminUnsuspendVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminUnsuspendVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[97]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6557,7 +5772,7 @@ func (x *SuperadminUnsuspendVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminUnsuspendVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminUnsuspendVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{97}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *SuperadminUnsuspendVPSResponse) GetVps() *v13.VPSInstance {
@@ -6586,7 +5801,7 @@ type SuperadminUpdateVPSCloudInitRequest struct {
 
 func (x *SuperadminUpdateVPSCloudInitRequest) Reset() {
 	*x = SuperadminUpdateVPSCloudInitRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[98]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6598,7 +5813,7 @@ func (x *SuperadminUpdateVPSCloudInitRequest) String() string {
 func (*SuperadminUpdateVPSCloudInitRequest) ProtoMessage() {}
 
 func (x *SuperadminUpdateVPSCloudInitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[98]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6611,7 +5826,7 @@ func (x *SuperadminUpdateVPSCloudInitRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SuperadminUpdateVPSCloudInitRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminUpdateVPSCloudInitRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{98}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *SuperadminUpdateVPSCloudInitRequest) GetVpsId() string {
@@ -6646,7 +5861,7 @@ type SuperadminUpdateVPSCloudInitResponse struct {
 
 func (x *SuperadminUpdateVPSCloudInitResponse) Reset() {
 	*x = SuperadminUpdateVPSCloudInitResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[99]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6658,7 +5873,7 @@ func (x *SuperadminUpdateVPSCloudInitResponse) String() string {
 func (*SuperadminUpdateVPSCloudInitResponse) ProtoMessage() {}
 
 func (x *SuperadminUpdateVPSCloudInitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[99]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6671,7 +5886,7 @@ func (x *SuperadminUpdateVPSCloudInitResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use SuperadminUpdateVPSCloudInitResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminUpdateVPSCloudInitResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{99}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *SuperadminUpdateVPSCloudInitResponse) GetVps() *v13.VPSInstance {
@@ -6698,7 +5913,7 @@ type SuperadminForceStopVPSRequest struct {
 
 func (x *SuperadminForceStopVPSRequest) Reset() {
 	*x = SuperadminForceStopVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[100]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6710,7 +5925,7 @@ func (x *SuperadminForceStopVPSRequest) String() string {
 func (*SuperadminForceStopVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminForceStopVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[100]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6723,7 +5938,7 @@ func (x *SuperadminForceStopVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminForceStopVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminForceStopVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{100}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *SuperadminForceStopVPSRequest) GetVpsId() string {
@@ -6744,7 +5959,7 @@ type SuperadminForceStopVPSResponse struct {
 
 func (x *SuperadminForceStopVPSResponse) Reset() {
 	*x = SuperadminForceStopVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[101]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6756,7 +5971,7 @@ func (x *SuperadminForceStopVPSResponse) String() string {
 func (*SuperadminForceStopVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminForceStopVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[101]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6769,7 +5984,7 @@ func (x *SuperadminForceStopVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminForceStopVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminForceStopVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{101}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *SuperadminForceStopVPSResponse) GetVps() *v13.VPSInstance {
@@ -6797,7 +6012,7 @@ type SuperadminForceDeleteVPSRequest struct {
 
 func (x *SuperadminForceDeleteVPSRequest) Reset() {
 	*x = SuperadminForceDeleteVPSRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[102]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6809,7 +6024,7 @@ func (x *SuperadminForceDeleteVPSRequest) String() string {
 func (*SuperadminForceDeleteVPSRequest) ProtoMessage() {}
 
 func (x *SuperadminForceDeleteVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[102]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6822,7 +6037,7 @@ func (x *SuperadminForceDeleteVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminForceDeleteVPSRequest.ProtoReflect.Descriptor instead.
 func (*SuperadminForceDeleteVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{102}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *SuperadminForceDeleteVPSRequest) GetVpsId() string {
@@ -6850,7 +6065,7 @@ type SuperadminForceDeleteVPSResponse struct {
 
 func (x *SuperadminForceDeleteVPSResponse) Reset() {
 	*x = SuperadminForceDeleteVPSResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[103]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6862,7 +6077,7 @@ func (x *SuperadminForceDeleteVPSResponse) String() string {
 func (*SuperadminForceDeleteVPSResponse) ProtoMessage() {}
 
 func (x *SuperadminForceDeleteVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[103]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6875,7 +6090,7 @@ func (x *SuperadminForceDeleteVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminForceDeleteVPSResponse.ProtoReflect.Descriptor instead.
 func (*SuperadminForceDeleteVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{103}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *SuperadminForceDeleteVPSResponse) GetSuccess() bool {
@@ -6908,7 +6123,7 @@ type ListStripeWebhookEventsRequest struct {
 
 func (x *ListStripeWebhookEventsRequest) Reset() {
 	*x = ListStripeWebhookEventsRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[104]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6920,7 +6135,7 @@ func (x *ListStripeWebhookEventsRequest) String() string {
 func (*ListStripeWebhookEventsRequest) ProtoMessage() {}
 
 func (x *ListStripeWebhookEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[104]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6933,7 +6148,7 @@ func (x *ListStripeWebhookEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStripeWebhookEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListStripeWebhookEventsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{104}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *ListStripeWebhookEventsRequest) GetOrganizationId() string {
@@ -7004,7 +6219,7 @@ type StripeWebhookEvent struct {
 
 func (x *StripeWebhookEvent) Reset() {
 	*x = StripeWebhookEvent{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[105]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7016,7 +6231,7 @@ func (x *StripeWebhookEvent) String() string {
 func (*StripeWebhookEvent) ProtoMessage() {}
 
 func (x *StripeWebhookEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[105]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7029,7 +6244,7 @@ func (x *StripeWebhookEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StripeWebhookEvent.ProtoReflect.Descriptor instead.
 func (*StripeWebhookEvent) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{105}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *StripeWebhookEvent) GetId() string {
@@ -7113,7 +6328,7 @@ type ListStripeWebhookEventsResponse struct {
 
 func (x *ListStripeWebhookEventsResponse) Reset() {
 	*x = ListStripeWebhookEventsResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[106]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7125,7 +6340,7 @@ func (x *ListStripeWebhookEventsResponse) String() string {
 func (*ListStripeWebhookEventsResponse) ProtoMessage() {}
 
 func (x *ListStripeWebhookEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[106]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7138,7 +6353,7 @@ func (x *ListStripeWebhookEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListStripeWebhookEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListStripeWebhookEventsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{106}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ListStripeWebhookEventsResponse) GetEvents() []*StripeWebhookEvent {
@@ -7168,7 +6383,7 @@ type ListNodesRequest struct {
 
 func (x *ListNodesRequest) Reset() {
 	*x = ListNodesRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[107]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7180,7 +6395,7 @@ func (x *ListNodesRequest) String() string {
 func (*ListNodesRequest) ProtoMessage() {}
 
 func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[107]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7193,7 +6408,7 @@ func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
 func (*ListNodesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{107}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ListNodesRequest) GetRole() string {
@@ -7234,7 +6449,7 @@ type ListNodesResponse struct {
 
 func (x *ListNodesResponse) Reset() {
 	*x = ListNodesResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[108]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7246,7 +6461,7 @@ func (x *ListNodesResponse) String() string {
 func (*ListNodesResponse) ProtoMessage() {}
 
 func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[108]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7259,7 +6474,7 @@ func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
 func (*ListNodesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{108}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ListNodesResponse) GetNodes() []*NodeInfo {
@@ -7279,7 +6494,7 @@ type GetNodeRequest struct {
 
 func (x *GetNodeRequest) Reset() {
 	*x = GetNodeRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[109]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7291,7 +6506,7 @@ func (x *GetNodeRequest) String() string {
 func (*GetNodeRequest) ProtoMessage() {}
 
 func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[109]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7304,7 +6519,7 @@ func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{109}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *GetNodeRequest) GetNodeId() string {
@@ -7324,7 +6539,7 @@ type GetNodeResponse struct {
 
 func (x *GetNodeResponse) Reset() {
 	*x = GetNodeResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[110]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7336,7 +6551,7 @@ func (x *GetNodeResponse) String() string {
 func (*GetNodeResponse) ProtoMessage() {}
 
 func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[110]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7349,7 +6564,7 @@ func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
 func (*GetNodeResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{110}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *GetNodeResponse) GetNode() *NodeInfo {
@@ -7375,7 +6590,7 @@ type UpdateNodeConfigRequest struct {
 
 func (x *UpdateNodeConfigRequest) Reset() {
 	*x = UpdateNodeConfigRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[111]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7387,7 +6602,7 @@ func (x *UpdateNodeConfigRequest) String() string {
 func (*UpdateNodeConfigRequest) ProtoMessage() {}
 
 func (x *UpdateNodeConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[111]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7400,7 +6615,7 @@ func (x *UpdateNodeConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateNodeConfigRequest.ProtoReflect.Descriptor instead.
 func (*UpdateNodeConfigRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{111}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *UpdateNodeConfigRequest) GetNodeId() string {
@@ -7463,7 +6678,7 @@ type UpdateNodeConfigResponse struct {
 
 func (x *UpdateNodeConfigResponse) Reset() {
 	*x = UpdateNodeConfigResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[112]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7475,7 +6690,7 @@ func (x *UpdateNodeConfigResponse) String() string {
 func (*UpdateNodeConfigResponse) ProtoMessage() {}
 
 func (x *UpdateNodeConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[112]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7488,7 +6703,7 @@ func (x *UpdateNodeConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateNodeConfigResponse.ProtoReflect.Descriptor instead.
 func (*UpdateNodeConfigResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{112}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *UpdateNodeConfigResponse) GetNode() *NodeInfo {
@@ -7531,7 +6746,7 @@ type NodeInfo struct {
 
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[113]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7543,7 +6758,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[113]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7556,7 +6771,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{113}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *NodeInfo) GetId() string {
@@ -7691,7 +6906,7 @@ type NodeConfig struct {
 
 func (x *NodeConfig) Reset() {
 	*x = NodeConfig{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[114]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7703,7 +6918,7 @@ func (x *NodeConfig) String() string {
 func (*NodeConfig) ProtoMessage() {}
 
 func (x *NodeConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[114]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7716,7 +6931,7 @@ func (x *NodeConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeConfig.ProtoReflect.Descriptor instead.
 func (*NodeConfig) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{114}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *NodeConfig) GetSubdomain() string {
@@ -7756,7 +6971,7 @@ type ListSuperadminPermissionsRequest struct {
 
 func (x *ListSuperadminPermissionsRequest) Reset() {
 	*x = ListSuperadminPermissionsRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[115]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7768,7 +6983,7 @@ func (x *ListSuperadminPermissionsRequest) String() string {
 func (*ListSuperadminPermissionsRequest) ProtoMessage() {}
 
 func (x *ListSuperadminPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[115]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7781,7 +6996,7 @@ func (x *ListSuperadminPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSuperadminPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSuperadminPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{115}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{102}
 }
 
 type SuperadminPermissionDefinition struct {
@@ -7795,7 +7010,7 @@ type SuperadminPermissionDefinition struct {
 
 func (x *SuperadminPermissionDefinition) Reset() {
 	*x = SuperadminPermissionDefinition{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[116]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7807,7 +7022,7 @@ func (x *SuperadminPermissionDefinition) String() string {
 func (*SuperadminPermissionDefinition) ProtoMessage() {}
 
 func (x *SuperadminPermissionDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[116]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7820,7 +7035,7 @@ func (x *SuperadminPermissionDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminPermissionDefinition.ProtoReflect.Descriptor instead.
 func (*SuperadminPermissionDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{116}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *SuperadminPermissionDefinition) GetId() string {
@@ -7853,7 +7068,7 @@ type ListSuperadminPermissionsResponse struct {
 
 func (x *ListSuperadminPermissionsResponse) Reset() {
 	*x = ListSuperadminPermissionsResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[117]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7865,7 +7080,7 @@ func (x *ListSuperadminPermissionsResponse) String() string {
 func (*ListSuperadminPermissionsResponse) ProtoMessage() {}
 
 func (x *ListSuperadminPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[117]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7878,7 +7093,7 @@ func (x *ListSuperadminPermissionsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListSuperadminPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSuperadminPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{117}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *ListSuperadminPermissionsResponse) GetPermissions() []*SuperadminPermissionDefinition {
@@ -7897,7 +7112,7 @@ type GetMySuperadminPermissionsRequest struct {
 
 func (x *GetMySuperadminPermissionsRequest) Reset() {
 	*x = GetMySuperadminPermissionsRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[118]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7909,7 +7124,7 @@ func (x *GetMySuperadminPermissionsRequest) String() string {
 func (*GetMySuperadminPermissionsRequest) ProtoMessage() {}
 
 func (x *GetMySuperadminPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[118]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7922,7 +7137,7 @@ func (x *GetMySuperadminPermissionsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetMySuperadminPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*GetMySuperadminPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{118}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{105}
 }
 
 type GetMySuperadminPermissionsResponse struct {
@@ -7935,7 +7150,7 @@ type GetMySuperadminPermissionsResponse struct {
 
 func (x *GetMySuperadminPermissionsResponse) Reset() {
 	*x = GetMySuperadminPermissionsResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[119]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7947,7 +7162,7 @@ func (x *GetMySuperadminPermissionsResponse) String() string {
 func (*GetMySuperadminPermissionsResponse) ProtoMessage() {}
 
 func (x *GetMySuperadminPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[119]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7960,7 +7175,7 @@ func (x *GetMySuperadminPermissionsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetMySuperadminPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*GetMySuperadminPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{119}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *GetMySuperadminPermissionsResponse) GetPermissions() []string {
@@ -7986,7 +7201,7 @@ type ListSuperadminRolesRequest struct {
 
 func (x *ListSuperadminRolesRequest) Reset() {
 	*x = ListSuperadminRolesRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[120]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7998,7 +7213,7 @@ func (x *ListSuperadminRolesRequest) String() string {
 func (*ListSuperadminRolesRequest) ProtoMessage() {}
 
 func (x *ListSuperadminRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[120]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8011,7 +7226,7 @@ func (x *ListSuperadminRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSuperadminRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListSuperadminRolesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{120}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{107}
 }
 
 type SuperadminRole struct {
@@ -8026,7 +7241,7 @@ type SuperadminRole struct {
 
 func (x *SuperadminRole) Reset() {
 	*x = SuperadminRole{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[121]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8038,7 +7253,7 @@ func (x *SuperadminRole) String() string {
 func (*SuperadminRole) ProtoMessage() {}
 
 func (x *SuperadminRole) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[121]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8051,7 +7266,7 @@ func (x *SuperadminRole) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminRole.ProtoReflect.Descriptor instead.
 func (*SuperadminRole) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{121}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *SuperadminRole) GetId() string {
@@ -8091,7 +7306,7 @@ type ListSuperadminRolesResponse struct {
 
 func (x *ListSuperadminRolesResponse) Reset() {
 	*x = ListSuperadminRolesResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[122]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8103,7 +7318,7 @@ func (x *ListSuperadminRolesResponse) String() string {
 func (*ListSuperadminRolesResponse) ProtoMessage() {}
 
 func (x *ListSuperadminRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[122]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8116,7 +7331,7 @@ func (x *ListSuperadminRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSuperadminRolesResponse.ProtoReflect.Descriptor instead.
 func (*ListSuperadminRolesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{122}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *ListSuperadminRolesResponse) GetRoles() []*SuperadminRole {
@@ -8137,7 +7352,7 @@ type CreateSuperadminRoleRequest struct {
 
 func (x *CreateSuperadminRoleRequest) Reset() {
 	*x = CreateSuperadminRoleRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[123]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8149,7 +7364,7 @@ func (x *CreateSuperadminRoleRequest) String() string {
 func (*CreateSuperadminRoleRequest) ProtoMessage() {}
 
 func (x *CreateSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[123]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8162,7 +7377,7 @@ func (x *CreateSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSuperadminRoleRequest.ProtoReflect.Descriptor instead.
 func (*CreateSuperadminRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{123}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *CreateSuperadminRoleRequest) GetName() string {
@@ -8195,7 +7410,7 @@ type CreateSuperadminRoleResponse struct {
 
 func (x *CreateSuperadminRoleResponse) Reset() {
 	*x = CreateSuperadminRoleResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[124]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8207,7 +7422,7 @@ func (x *CreateSuperadminRoleResponse) String() string {
 func (*CreateSuperadminRoleResponse) ProtoMessage() {}
 
 func (x *CreateSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[124]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8220,7 +7435,7 @@ func (x *CreateSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSuperadminRoleResponse.ProtoReflect.Descriptor instead.
 func (*CreateSuperadminRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{124}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *CreateSuperadminRoleResponse) GetRole() *SuperadminRole {
@@ -8242,7 +7457,7 @@ type UpdateSuperadminRoleRequest struct {
 
 func (x *UpdateSuperadminRoleRequest) Reset() {
 	*x = UpdateSuperadminRoleRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[125]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8254,7 +7469,7 @@ func (x *UpdateSuperadminRoleRequest) String() string {
 func (*UpdateSuperadminRoleRequest) ProtoMessage() {}
 
 func (x *UpdateSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[125]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8267,7 +7482,7 @@ func (x *UpdateSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSuperadminRoleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSuperadminRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{125}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *UpdateSuperadminRoleRequest) GetId() string {
@@ -8307,7 +7522,7 @@ type UpdateSuperadminRoleResponse struct {
 
 func (x *UpdateSuperadminRoleResponse) Reset() {
 	*x = UpdateSuperadminRoleResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[126]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8319,7 +7534,7 @@ func (x *UpdateSuperadminRoleResponse) String() string {
 func (*UpdateSuperadminRoleResponse) ProtoMessage() {}
 
 func (x *UpdateSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[126]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8332,7 +7547,7 @@ func (x *UpdateSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSuperadminRoleResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSuperadminRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{126}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *UpdateSuperadminRoleResponse) GetRole() *SuperadminRole {
@@ -8351,7 +7566,7 @@ type DeleteSuperadminRoleRequest struct {
 
 func (x *DeleteSuperadminRoleRequest) Reset() {
 	*x = DeleteSuperadminRoleRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[127]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8363,7 +7578,7 @@ func (x *DeleteSuperadminRoleRequest) String() string {
 func (*DeleteSuperadminRoleRequest) ProtoMessage() {}
 
 func (x *DeleteSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[127]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8376,7 +7591,7 @@ func (x *DeleteSuperadminRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSuperadminRoleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSuperadminRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{127}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *DeleteSuperadminRoleRequest) GetId() string {
@@ -8395,7 +7610,7 @@ type DeleteSuperadminRoleResponse struct {
 
 func (x *DeleteSuperadminRoleResponse) Reset() {
 	*x = DeleteSuperadminRoleResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[128]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8407,7 +7622,7 @@ func (x *DeleteSuperadminRoleResponse) String() string {
 func (*DeleteSuperadminRoleResponse) ProtoMessage() {}
 
 func (x *DeleteSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[128]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8420,7 +7635,7 @@ func (x *DeleteSuperadminRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSuperadminRoleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSuperadminRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{128}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *DeleteSuperadminRoleResponse) GetSuccess() bool {
@@ -8439,7 +7654,7 @@ type ListSuperadminRoleBindingsRequest struct {
 
 func (x *ListSuperadminRoleBindingsRequest) Reset() {
 	*x = ListSuperadminRoleBindingsRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[129]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8451,7 +7666,7 @@ func (x *ListSuperadminRoleBindingsRequest) String() string {
 func (*ListSuperadminRoleBindingsRequest) ProtoMessage() {}
 
 func (x *ListSuperadminRoleBindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[129]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8464,7 +7679,7 @@ func (x *ListSuperadminRoleBindingsRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use ListSuperadminRoleBindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListSuperadminRoleBindingsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{129}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{116}
 }
 
 type SuperadminRoleBinding struct {
@@ -8478,7 +7693,7 @@ type SuperadminRoleBinding struct {
 
 func (x *SuperadminRoleBinding) Reset() {
 	*x = SuperadminRoleBinding{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[130]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8490,7 +7705,7 @@ func (x *SuperadminRoleBinding) String() string {
 func (*SuperadminRoleBinding) ProtoMessage() {}
 
 func (x *SuperadminRoleBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[130]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8503,7 +7718,7 @@ func (x *SuperadminRoleBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuperadminRoleBinding.ProtoReflect.Descriptor instead.
 func (*SuperadminRoleBinding) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{130}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *SuperadminRoleBinding) GetId() string {
@@ -8536,7 +7751,7 @@ type ListSuperadminRoleBindingsResponse struct {
 
 func (x *ListSuperadminRoleBindingsResponse) Reset() {
 	*x = ListSuperadminRoleBindingsResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[131]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8548,7 +7763,7 @@ func (x *ListSuperadminRoleBindingsResponse) String() string {
 func (*ListSuperadminRoleBindingsResponse) ProtoMessage() {}
 
 func (x *ListSuperadminRoleBindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[131]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8561,7 +7776,7 @@ func (x *ListSuperadminRoleBindingsResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use ListSuperadminRoleBindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListSuperadminRoleBindingsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{131}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{118}
 }
 
 func (x *ListSuperadminRoleBindingsResponse) GetBindings() []*SuperadminRoleBinding {
@@ -8581,7 +7796,7 @@ type CreateSuperadminRoleBindingRequest struct {
 
 func (x *CreateSuperadminRoleBindingRequest) Reset() {
 	*x = CreateSuperadminRoleBindingRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[132]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8593,7 +7808,7 @@ func (x *CreateSuperadminRoleBindingRequest) String() string {
 func (*CreateSuperadminRoleBindingRequest) ProtoMessage() {}
 
 func (x *CreateSuperadminRoleBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[132]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8606,7 +7821,7 @@ func (x *CreateSuperadminRoleBindingRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use CreateSuperadminRoleBindingRequest.ProtoReflect.Descriptor instead.
 func (*CreateSuperadminRoleBindingRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{132}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *CreateSuperadminRoleBindingRequest) GetUserId() string {
@@ -8632,7 +7847,7 @@ type CreateSuperadminRoleBindingResponse struct {
 
 func (x *CreateSuperadminRoleBindingResponse) Reset() {
 	*x = CreateSuperadminRoleBindingResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[133]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8644,7 +7859,7 @@ func (x *CreateSuperadminRoleBindingResponse) String() string {
 func (*CreateSuperadminRoleBindingResponse) ProtoMessage() {}
 
 func (x *CreateSuperadminRoleBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[133]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8657,7 +7872,7 @@ func (x *CreateSuperadminRoleBindingResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use CreateSuperadminRoleBindingResponse.ProtoReflect.Descriptor instead.
 func (*CreateSuperadminRoleBindingResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{133}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *CreateSuperadminRoleBindingResponse) GetBinding() *SuperadminRoleBinding {
@@ -8676,7 +7891,7 @@ type DeleteSuperadminRoleBindingRequest struct {
 
 func (x *DeleteSuperadminRoleBindingRequest) Reset() {
 	*x = DeleteSuperadminRoleBindingRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[134]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8688,7 +7903,7 @@ func (x *DeleteSuperadminRoleBindingRequest) String() string {
 func (*DeleteSuperadminRoleBindingRequest) ProtoMessage() {}
 
 func (x *DeleteSuperadminRoleBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[134]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8701,7 +7916,7 @@ func (x *DeleteSuperadminRoleBindingRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use DeleteSuperadminRoleBindingRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSuperadminRoleBindingRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{134}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *DeleteSuperadminRoleBindingRequest) GetId() string {
@@ -8720,7 +7935,7 @@ type DeleteSuperadminRoleBindingResponse struct {
 
 func (x *DeleteSuperadminRoleBindingResponse) Reset() {
 	*x = DeleteSuperadminRoleBindingResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[135]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8732,7 +7947,7 @@ func (x *DeleteSuperadminRoleBindingResponse) String() string {
 func (*DeleteSuperadminRoleBindingResponse) ProtoMessage() {}
 
 func (x *DeleteSuperadminRoleBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[135]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8745,7 +7960,7 @@ func (x *DeleteSuperadminRoleBindingResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use DeleteSuperadminRoleBindingResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSuperadminRoleBindingResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{135}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *DeleteSuperadminRoleBindingResponse) GetSuccess() bool {
@@ -9264,86 +8479,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x14DeleteVPSSizeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"1\n" +
 	"\x15DeleteVPSSizeResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xfc\x01\n" +
-	"\x17ListVPSPublicIPsRequest\x12\x1a\n" +
-	"\x06vps_id\x18\x01 \x01(\tH\x00R\x05vpsId\x88\x01\x01\x12,\n" +
-	"\x0forganization_id\x18\x02 \x01(\tH\x01R\x0eorganizationId\x88\x01\x01\x122\n" +
-	"\x12include_unassigned\x18\x03 \x01(\bH\x02R\x11includeUnassigned\x88\x01\x01\x12\x12\n" +
-	"\x04page\x18\x04 \x01(\x05R\x04page\x12\x19\n" +
-	"\bper_page\x18\x05 \x01(\x05R\aperPageB\t\n" +
-	"\a_vps_idB\x12\n" +
-	"\x10_organization_idB\x15\n" +
-	"\x13_include_unassigned\"w\n" +
-	"\x18ListVPSPublicIPsResponse\x12:\n" +
-	"\x03ips\x18\x01 \x03(\v2(.obiente.cloud.superadmin.v1.VPSPublicIPR\x03ips\x12\x1f\n" +
-	"\vtotal_count\x18\x02 \x01(\x03R\n" +
-	"totalCount\"\xbd\x01\n" +
-	"\x18CreateVPSPublicIPRequest\x12\x1d\n" +
-	"\n" +
-	"ip_address\x18\x01 \x01(\tR\tipAddress\x12,\n" +
-	"\x12monthly_cost_cents\x18\x02 \x01(\x03R\x10monthlyCostCents\x12\x1d\n" +
-	"\agateway\x18\x03 \x01(\tH\x00R\agateway\x88\x01\x01\x12\x1d\n" +
-	"\anetmask\x18\x04 \x01(\tH\x01R\anetmask\x88\x01\x01B\n" +
-	"\n" +
-	"\b_gatewayB\n" +
-	"\n" +
-	"\b_netmask\"U\n" +
-	"\x19CreateVPSPublicIPResponse\x128\n" +
-	"\x02ip\x18\x01 \x01(\v2(.obiente.cloud.superadmin.v1.VPSPublicIPR\x02ip\"\xca\x01\n" +
-	"\x18UpdateVPSPublicIPRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
-	"\x12monthly_cost_cents\x18\x02 \x01(\x03H\x00R\x10monthlyCostCents\x88\x01\x01\x12\x1d\n" +
-	"\agateway\x18\x03 \x01(\tH\x01R\agateway\x88\x01\x01\x12\x1d\n" +
-	"\anetmask\x18\x04 \x01(\tH\x02R\anetmask\x88\x01\x01B\x15\n" +
-	"\x13_monthly_cost_centsB\n" +
-	"\n" +
-	"\b_gatewayB\n" +
-	"\n" +
-	"\b_netmask\"U\n" +
-	"\x19UpdateVPSPublicIPResponse\x128\n" +
-	"\x02ip\x18\x01 \x01(\v2(.obiente.cloud.superadmin.v1.VPSPublicIPR\x02ip\"*\n" +
-	"\x18DeleteVPSPublicIPRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"5\n" +
-	"\x19DeleteVPSPublicIPResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"F\n" +
-	"\x18AssignVPSPublicIPRequest\x12\x13\n" +
-	"\x05ip_id\x18\x01 \x01(\tR\x04ipId\x12\x15\n" +
-	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"o\n" +
-	"\x19AssignVPSPublicIPResponse\x128\n" +
-	"\x02ip\x18\x01 \x01(\v2(.obiente.cloud.superadmin.v1.VPSPublicIPR\x02ip\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"1\n" +
-	"\x1aUnassignVPSPublicIPRequest\x12\x13\n" +
-	"\x05ip_id\x18\x01 \x01(\tR\x04ipId\"q\n" +
-	"\x1bUnassignVPSPublicIPResponse\x128\n" +
-	"\x02ip\x18\x01 \x01(\v2(.obiente.cloud.superadmin.v1.VPSPublicIPR\x02ip\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xe6\x04\n" +
-	"\vVPSPublicIP\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
-	"\n" +
-	"ip_address\x18\x02 \x01(\tR\tipAddress\x12\x1a\n" +
-	"\x06vps_id\x18\x03 \x01(\tH\x00R\x05vpsId\x88\x01\x01\x12,\n" +
-	"\x0forganization_id\x18\x04 \x01(\tH\x01R\x0eorganizationId\x88\x01\x01\x12\x1e\n" +
-	"\bvps_name\x18\x05 \x01(\tH\x02R\avpsName\x88\x01\x01\x120\n" +
-	"\x11organization_name\x18\x06 \x01(\tH\x03R\x10organizationName\x88\x01\x01\x12,\n" +
-	"\x12monthly_cost_cents\x18\a \x01(\x03R\x10monthlyCostCents\x12\x1d\n" +
-	"\agateway\x18\v \x01(\tH\x04R\agateway\x88\x01\x01\x12\x1d\n" +
-	"\anetmask\x18\f \x01(\tH\x05R\anetmask\x88\x01\x01\x12@\n" +
-	"\vassigned_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x06R\n" +
-	"assignedAt\x88\x01\x01\x129\n" +
-	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
-	"\n" +
-	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\t\n" +
-	"\a_vps_idB\x12\n" +
-	"\x10_organization_idB\v\n" +
-	"\t_vps_nameB\x14\n" +
-	"\x12_organization_nameB\n" +
-	"\n" +
-	"\b_gatewayB\n" +
-	"\n" +
-	"\b_netmaskB\x0e\n" +
-	"\f_assigned_at\"0\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"0\n" +
 	"\x17SuperadminGetVPSRequest\x12\x15\n" +
 	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\"\xd6\x01\n" +
 	"\x18SuperadminGetVPSResponse\x123\n" +
@@ -9564,7 +8700,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\"DeleteSuperadminRoleBindingRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"?\n" +
 	"#DeleteSuperadminRoleBindingResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xdd8\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\x848\n" +
 	"\x11SuperadminService\x12p\n" +
 	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponse\x12g\n" +
 	"\bQueryDNS\x12,.obiente.cloud.superadmin.v1.QueryDNSRequest\x1a-.obiente.cloud.superadmin.v1.QueryDNSResponse\x12y\n" +
@@ -9604,13 +8740,13 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\fListVPSSizes\x120.obiente.cloud.superadmin.v1.ListVPSSizesRequest\x1a1.obiente.cloud.superadmin.v1.ListVPSSizesResponse\x12v\n" +
 	"\rCreateVPSSize\x121.obiente.cloud.superadmin.v1.CreateVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.CreateVPSSizeResponse\x12v\n" +
 	"\rUpdateVPSSize\x121.obiente.cloud.superadmin.v1.UpdateVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.UpdateVPSSizeResponse\x12v\n" +
-	"\rDeleteVPSSize\x121.obiente.cloud.superadmin.v1.DeleteVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.DeleteVPSSizeResponse\x12\x7f\n" +
-	"\x10ListVPSPublicIPs\x124.obiente.cloud.superadmin.v1.ListVPSPublicIPsRequest\x1a5.obiente.cloud.superadmin.v1.ListVPSPublicIPsResponse\x12\x82\x01\n" +
-	"\x11CreateVPSPublicIP\x125.obiente.cloud.superadmin.v1.CreateVPSPublicIPRequest\x1a6.obiente.cloud.superadmin.v1.CreateVPSPublicIPResponse\x12\x82\x01\n" +
-	"\x11UpdateVPSPublicIP\x125.obiente.cloud.superadmin.v1.UpdateVPSPublicIPRequest\x1a6.obiente.cloud.superadmin.v1.UpdateVPSPublicIPResponse\x12\x82\x01\n" +
-	"\x11DeleteVPSPublicIP\x125.obiente.cloud.superadmin.v1.DeleteVPSPublicIPRequest\x1a6.obiente.cloud.superadmin.v1.DeleteVPSPublicIPResponse\x12\x82\x01\n" +
-	"\x11AssignVPSPublicIP\x125.obiente.cloud.superadmin.v1.AssignVPSPublicIPRequest\x1a6.obiente.cloud.superadmin.v1.AssignVPSPublicIPResponse\x12\x88\x01\n" +
-	"\x13UnassignVPSPublicIP\x127.obiente.cloud.superadmin.v1.UnassignVPSPublicIPRequest\x1a8.obiente.cloud.superadmin.v1.UnassignVPSPublicIPResponse\x12s\n" +
+	"\rDeleteVPSSize\x121.obiente.cloud.superadmin.v1.DeleteVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.DeleteVPSSizeResponse\x12q\n" +
+	"\x10ListVPSPublicIPs\x12-.obiente.cloud.vps.v1.ListVPSPublicIPsRequest\x1a..obiente.cloud.vps.v1.ListVPSPublicIPsResponse\x12t\n" +
+	"\x11CreateVPSPublicIP\x12..obiente.cloud.vps.v1.CreateVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.CreateVPSPublicIPResponse\x12t\n" +
+	"\x11UpdateVPSPublicIP\x12..obiente.cloud.vps.v1.UpdateVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.UpdateVPSPublicIPResponse\x12t\n" +
+	"\x11DeleteVPSPublicIP\x12..obiente.cloud.vps.v1.DeleteVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.DeleteVPSPublicIPResponse\x12t\n" +
+	"\x11AssignVPSPublicIP\x12..obiente.cloud.vps.v1.AssignVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.AssignVPSPublicIPResponse\x12z\n" +
+	"\x13UnassignVPSPublicIP\x120.obiente.cloud.vps.v1.UnassignVPSPublicIPRequest\x1a1.obiente.cloud.vps.v1.UnassignVPSPublicIPResponse\x12s\n" +
 	"\fGetOrgLeases\x120.obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest\x1a1.obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse\x12\x94\x01\n" +
 	"\x17ListStripeWebhookEvents\x12;.obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest\x1a<.obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse\x12j\n" +
 	"\tListNodes\x12-.obiente.cloud.superadmin.v1.ListNodesRequest\x1a..obiente.cloud.superadmin.v1.ListNodesResponse\x12d\n" +
@@ -9638,7 +8774,7 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP() []b
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 139)
+var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 126)
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*GetOverviewRequest)(nil),                               // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
 	(*GetOverviewResponse)(nil),                              // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
@@ -9717,79 +8853,78 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*UpdateVPSSizeResponse)(nil),                            // 74: obiente.cloud.superadmin.v1.UpdateVPSSizeResponse
 	(*DeleteVPSSizeRequest)(nil),                             // 75: obiente.cloud.superadmin.v1.DeleteVPSSizeRequest
 	(*DeleteVPSSizeResponse)(nil),                            // 76: obiente.cloud.superadmin.v1.DeleteVPSSizeResponse
-	(*ListVPSPublicIPsRequest)(nil),                          // 77: obiente.cloud.superadmin.v1.ListVPSPublicIPsRequest
-	(*ListVPSPublicIPsResponse)(nil),                         // 78: obiente.cloud.superadmin.v1.ListVPSPublicIPsResponse
-	(*CreateVPSPublicIPRequest)(nil),                         // 79: obiente.cloud.superadmin.v1.CreateVPSPublicIPRequest
-	(*CreateVPSPublicIPResponse)(nil),                        // 80: obiente.cloud.superadmin.v1.CreateVPSPublicIPResponse
-	(*UpdateVPSPublicIPRequest)(nil),                         // 81: obiente.cloud.superadmin.v1.UpdateVPSPublicIPRequest
-	(*UpdateVPSPublicIPResponse)(nil),                        // 82: obiente.cloud.superadmin.v1.UpdateVPSPublicIPResponse
-	(*DeleteVPSPublicIPRequest)(nil),                         // 83: obiente.cloud.superadmin.v1.DeleteVPSPublicIPRequest
-	(*DeleteVPSPublicIPResponse)(nil),                        // 84: obiente.cloud.superadmin.v1.DeleteVPSPublicIPResponse
-	(*AssignVPSPublicIPRequest)(nil),                         // 85: obiente.cloud.superadmin.v1.AssignVPSPublicIPRequest
-	(*AssignVPSPublicIPResponse)(nil),                        // 86: obiente.cloud.superadmin.v1.AssignVPSPublicIPResponse
-	(*UnassignVPSPublicIPRequest)(nil),                       // 87: obiente.cloud.superadmin.v1.UnassignVPSPublicIPRequest
-	(*UnassignVPSPublicIPResponse)(nil),                      // 88: obiente.cloud.superadmin.v1.UnassignVPSPublicIPResponse
-	(*VPSPublicIP)(nil),                                      // 89: obiente.cloud.superadmin.v1.VPSPublicIP
-	(*SuperadminGetVPSRequest)(nil),                          // 90: obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
-	(*SuperadminGetVPSResponse)(nil),                         // 91: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
-	(*SuperadminResizeVPSRequest)(nil),                       // 92: obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
-	(*SuperadminResizeVPSResponse)(nil),                      // 93: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
-	(*SuperadminSuspendVPSRequest)(nil),                      // 94: obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
-	(*SuperadminSuspendVPSResponse)(nil),                     // 95: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
-	(*SuperadminUnsuspendVPSRequest)(nil),                    // 96: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
-	(*SuperadminUnsuspendVPSResponse)(nil),                   // 97: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
-	(*SuperadminUpdateVPSCloudInitRequest)(nil),              // 98: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
-	(*SuperadminUpdateVPSCloudInitResponse)(nil),             // 99: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
-	(*SuperadminForceStopVPSRequest)(nil),                    // 100: obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
-	(*SuperadminForceStopVPSResponse)(nil),                   // 101: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
-	(*SuperadminForceDeleteVPSRequest)(nil),                  // 102: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
-	(*SuperadminForceDeleteVPSResponse)(nil),                 // 103: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
-	(*ListStripeWebhookEventsRequest)(nil),                   // 104: obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
-	(*StripeWebhookEvent)(nil),                               // 105: obiente.cloud.superadmin.v1.StripeWebhookEvent
-	(*ListStripeWebhookEventsResponse)(nil),                  // 106: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
-	(*ListNodesRequest)(nil),                                 // 107: obiente.cloud.superadmin.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),                                // 108: obiente.cloud.superadmin.v1.ListNodesResponse
-	(*GetNodeRequest)(nil),                                   // 109: obiente.cloud.superadmin.v1.GetNodeRequest
-	(*GetNodeResponse)(nil),                                  // 110: obiente.cloud.superadmin.v1.GetNodeResponse
-	(*UpdateNodeConfigRequest)(nil),                          // 111: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest
-	(*UpdateNodeConfigResponse)(nil),                         // 112: obiente.cloud.superadmin.v1.UpdateNodeConfigResponse
-	(*NodeInfo)(nil),                                         // 113: obiente.cloud.superadmin.v1.NodeInfo
-	(*NodeConfig)(nil),                                       // 114: obiente.cloud.superadmin.v1.NodeConfig
-	(*ListSuperadminPermissionsRequest)(nil),                 // 115: obiente.cloud.superadmin.v1.ListSuperadminPermissionsRequest
-	(*SuperadminPermissionDefinition)(nil),                   // 116: obiente.cloud.superadmin.v1.SuperadminPermissionDefinition
-	(*ListSuperadminPermissionsResponse)(nil),                // 117: obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse
-	(*GetMySuperadminPermissionsRequest)(nil),                // 118: obiente.cloud.superadmin.v1.GetMySuperadminPermissionsRequest
-	(*GetMySuperadminPermissionsResponse)(nil),               // 119: obiente.cloud.superadmin.v1.GetMySuperadminPermissionsResponse
-	(*ListSuperadminRolesRequest)(nil),                       // 120: obiente.cloud.superadmin.v1.ListSuperadminRolesRequest
-	(*SuperadminRole)(nil),                                   // 121: obiente.cloud.superadmin.v1.SuperadminRole
-	(*ListSuperadminRolesResponse)(nil),                      // 122: obiente.cloud.superadmin.v1.ListSuperadminRolesResponse
-	(*CreateSuperadminRoleRequest)(nil),                      // 123: obiente.cloud.superadmin.v1.CreateSuperadminRoleRequest
-	(*CreateSuperadminRoleResponse)(nil),                     // 124: obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse
-	(*UpdateSuperadminRoleRequest)(nil),                      // 125: obiente.cloud.superadmin.v1.UpdateSuperadminRoleRequest
-	(*UpdateSuperadminRoleResponse)(nil),                     // 126: obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse
-	(*DeleteSuperadminRoleRequest)(nil),                      // 127: obiente.cloud.superadmin.v1.DeleteSuperadminRoleRequest
-	(*DeleteSuperadminRoleResponse)(nil),                     // 128: obiente.cloud.superadmin.v1.DeleteSuperadminRoleResponse
-	(*ListSuperadminRoleBindingsRequest)(nil),                // 129: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsRequest
-	(*SuperadminRoleBinding)(nil),                            // 130: obiente.cloud.superadmin.v1.SuperadminRoleBinding
-	(*ListSuperadminRoleBindingsResponse)(nil),               // 131: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse
-	(*CreateSuperadminRoleBindingRequest)(nil),               // 132: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingRequest
-	(*CreateSuperadminRoleBindingResponse)(nil),              // 133: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse
-	(*DeleteSuperadminRoleBindingRequest)(nil),               // 134: obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingRequest
-	(*DeleteSuperadminRoleBindingResponse)(nil),              // 135: obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingResponse
-	nil,                              // 136: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
-	nil,                              // 137: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.CustomLabelsEntry
-	nil,                              // 138: obiente.cloud.superadmin.v1.NodeConfig.CustomLabelsEntry
-	(*timestamppb.Timestamp)(nil),    // 139: google.protobuf.Timestamp
-	(v1.Environment)(0),              // 140: obiente.cloud.deployments.v1.Environment
-	(v1.DeploymentStatus)(0),         // 141: obiente.cloud.deployments.v1.DeploymentStatus
-	(*v11.Invoice)(nil),              // 142: obiente.cloud.billing.v1.Invoice
-	(*v12.Pagination)(nil),           // 143: obiente.cloud.common.v1.Pagination
-	(v13.VPSStatus)(0),               // 144: obiente.cloud.vps.v1.VPSStatus
-	(*v13.VPSInstance)(nil),          // 145: obiente.cloud.vps.v1.VPSInstance
-	(*v12.VPSSize)(nil),              // 146: obiente.cloud.common.v1.VPSSize
-	(*v13.CloudInitConfig)(nil),      // 147: obiente.cloud.vps.v1.CloudInitConfig
-	(*v14.GetOrgLeasesRequest)(nil),  // 148: obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
-	(*v14.GetOrgLeasesResponse)(nil), // 149: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+	(*SuperadminGetVPSRequest)(nil),                          // 77: obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
+	(*SuperadminGetVPSResponse)(nil),                         // 78: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
+	(*SuperadminResizeVPSRequest)(nil),                       // 79: obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
+	(*SuperadminResizeVPSResponse)(nil),                      // 80: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
+	(*SuperadminSuspendVPSRequest)(nil),                      // 81: obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
+	(*SuperadminSuspendVPSResponse)(nil),                     // 82: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
+	(*SuperadminUnsuspendVPSRequest)(nil),                    // 83: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
+	(*SuperadminUnsuspendVPSResponse)(nil),                   // 84: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
+	(*SuperadminUpdateVPSCloudInitRequest)(nil),              // 85: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
+	(*SuperadminUpdateVPSCloudInitResponse)(nil),             // 86: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
+	(*SuperadminForceStopVPSRequest)(nil),                    // 87: obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
+	(*SuperadminForceStopVPSResponse)(nil),                   // 88: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
+	(*SuperadminForceDeleteVPSRequest)(nil),                  // 89: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
+	(*SuperadminForceDeleteVPSResponse)(nil),                 // 90: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
+	(*ListStripeWebhookEventsRequest)(nil),                   // 91: obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
+	(*StripeWebhookEvent)(nil),                               // 92: obiente.cloud.superadmin.v1.StripeWebhookEvent
+	(*ListStripeWebhookEventsResponse)(nil),                  // 93: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
+	(*ListNodesRequest)(nil),                                 // 94: obiente.cloud.superadmin.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),                                // 95: obiente.cloud.superadmin.v1.ListNodesResponse
+	(*GetNodeRequest)(nil),                                   // 96: obiente.cloud.superadmin.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),                                  // 97: obiente.cloud.superadmin.v1.GetNodeResponse
+	(*UpdateNodeConfigRequest)(nil),                          // 98: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest
+	(*UpdateNodeConfigResponse)(nil),                         // 99: obiente.cloud.superadmin.v1.UpdateNodeConfigResponse
+	(*NodeInfo)(nil),                                         // 100: obiente.cloud.superadmin.v1.NodeInfo
+	(*NodeConfig)(nil),                                       // 101: obiente.cloud.superadmin.v1.NodeConfig
+	(*ListSuperadminPermissionsRequest)(nil),                 // 102: obiente.cloud.superadmin.v1.ListSuperadminPermissionsRequest
+	(*SuperadminPermissionDefinition)(nil),                   // 103: obiente.cloud.superadmin.v1.SuperadminPermissionDefinition
+	(*ListSuperadminPermissionsResponse)(nil),                // 104: obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse
+	(*GetMySuperadminPermissionsRequest)(nil),                // 105: obiente.cloud.superadmin.v1.GetMySuperadminPermissionsRequest
+	(*GetMySuperadminPermissionsResponse)(nil),               // 106: obiente.cloud.superadmin.v1.GetMySuperadminPermissionsResponse
+	(*ListSuperadminRolesRequest)(nil),                       // 107: obiente.cloud.superadmin.v1.ListSuperadminRolesRequest
+	(*SuperadminRole)(nil),                                   // 108: obiente.cloud.superadmin.v1.SuperadminRole
+	(*ListSuperadminRolesResponse)(nil),                      // 109: obiente.cloud.superadmin.v1.ListSuperadminRolesResponse
+	(*CreateSuperadminRoleRequest)(nil),                      // 110: obiente.cloud.superadmin.v1.CreateSuperadminRoleRequest
+	(*CreateSuperadminRoleResponse)(nil),                     // 111: obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse
+	(*UpdateSuperadminRoleRequest)(nil),                      // 112: obiente.cloud.superadmin.v1.UpdateSuperadminRoleRequest
+	(*UpdateSuperadminRoleResponse)(nil),                     // 113: obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse
+	(*DeleteSuperadminRoleRequest)(nil),                      // 114: obiente.cloud.superadmin.v1.DeleteSuperadminRoleRequest
+	(*DeleteSuperadminRoleResponse)(nil),                     // 115: obiente.cloud.superadmin.v1.DeleteSuperadminRoleResponse
+	(*ListSuperadminRoleBindingsRequest)(nil),                // 116: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsRequest
+	(*SuperadminRoleBinding)(nil),                            // 117: obiente.cloud.superadmin.v1.SuperadminRoleBinding
+	(*ListSuperadminRoleBindingsResponse)(nil),               // 118: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse
+	(*CreateSuperadminRoleBindingRequest)(nil),               // 119: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingRequest
+	(*CreateSuperadminRoleBindingResponse)(nil),              // 120: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse
+	(*DeleteSuperadminRoleBindingRequest)(nil),               // 121: obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingRequest
+	(*DeleteSuperadminRoleBindingResponse)(nil),              // 122: obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingResponse
+	nil,                                     // 123: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	nil,                                     // 124: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.CustomLabelsEntry
+	nil,                                     // 125: obiente.cloud.superadmin.v1.NodeConfig.CustomLabelsEntry
+	(*timestamppb.Timestamp)(nil),           // 126: google.protobuf.Timestamp
+	(v1.Environment)(0),                     // 127: obiente.cloud.deployments.v1.Environment
+	(v1.DeploymentStatus)(0),                // 128: obiente.cloud.deployments.v1.DeploymentStatus
+	(*v11.Invoice)(nil),                     // 129: obiente.cloud.billing.v1.Invoice
+	(*v12.Pagination)(nil),                  // 130: obiente.cloud.common.v1.Pagination
+	(v13.VPSStatus)(0),                      // 131: obiente.cloud.vps.v1.VPSStatus
+	(*v13.VPSInstance)(nil),                 // 132: obiente.cloud.vps.v1.VPSInstance
+	(*v12.VPSSize)(nil),                     // 133: obiente.cloud.common.v1.VPSSize
+	(*v13.CloudInitConfig)(nil),             // 134: obiente.cloud.vps.v1.CloudInitConfig
+	(*v13.ListVPSPublicIPsRequest)(nil),     // 135: obiente.cloud.vps.v1.ListVPSPublicIPsRequest
+	(*v13.CreateVPSPublicIPRequest)(nil),    // 136: obiente.cloud.vps.v1.CreateVPSPublicIPRequest
+	(*v13.UpdateVPSPublicIPRequest)(nil),    // 137: obiente.cloud.vps.v1.UpdateVPSPublicIPRequest
+	(*v13.DeleteVPSPublicIPRequest)(nil),    // 138: obiente.cloud.vps.v1.DeleteVPSPublicIPRequest
+	(*v13.AssignVPSPublicIPRequest)(nil),    // 139: obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	(*v13.UnassignVPSPublicIPRequest)(nil),  // 140: obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	(*v14.GetOrgLeasesRequest)(nil),         // 141: obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+	(*v13.ListVPSPublicIPsResponse)(nil),    // 142: obiente.cloud.vps.v1.ListVPSPublicIPsResponse
+	(*v13.CreateVPSPublicIPResponse)(nil),   // 143: obiente.cloud.vps.v1.CreateVPSPublicIPResponse
+	(*v13.UpdateVPSPublicIPResponse)(nil),   // 144: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse
+	(*v13.DeleteVPSPublicIPResponse)(nil),   // 145: obiente.cloud.vps.v1.DeleteVPSPublicIPResponse
+	(*v13.AssignVPSPublicIPResponse)(nil),   // 146: obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	(*v13.UnassignVPSPublicIPResponse)(nil), // 147: obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	(*v14.GetOrgLeasesResponse)(nil),        // 148: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
 }
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	2,   // 0: obiente.cloud.superadmin.v1.GetOverviewResponse.counts:type_name -> obiente.cloud.superadmin.v1.OverviewCounts
@@ -9797,204 +8932,196 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	4,   // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.SuperadminPendingInvite
 	5,   // 3: obiente.cloud.superadmin.v1.GetOverviewResponse.deployments:type_name -> obiente.cloud.superadmin.v1.DeploymentOverview
 	6,   // 4: obiente.cloud.superadmin.v1.GetOverviewResponse.usages:type_name -> obiente.cloud.superadmin.v1.OrganizationUsage
-	139, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
-	139, // 6: obiente.cloud.superadmin.v1.SuperadminPendingInvite.invited_at:type_name -> google.protobuf.Timestamp
-	140, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	141, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	139, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
-	139, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
-	139, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
+	126, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
+	126, // 6: obiente.cloud.superadmin.v1.SuperadminPendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	127, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	128, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	126, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
+	126, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
+	126, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
 	10,  // 12: obiente.cloud.superadmin.v1.ListDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DNSRecord
-	136, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	123, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
 	13,  // 14: obiente.cloud.superadmin.v1.GetDNSConfigResponse.config:type_name -> obiente.cloud.superadmin.v1.DNSConfig
-	139, // 15: obiente.cloud.superadmin.v1.DelegatedDNSRecord.expires_at:type_name -> google.protobuf.Timestamp
-	139, // 16: obiente.cloud.superadmin.v1.DelegatedDNSRecord.last_updated:type_name -> google.protobuf.Timestamp
-	139, // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord.created_at:type_name -> google.protobuf.Timestamp
+	126, // 15: obiente.cloud.superadmin.v1.DelegatedDNSRecord.expires_at:type_name -> google.protobuf.Timestamp
+	126, // 16: obiente.cloud.superadmin.v1.DelegatedDNSRecord.last_updated:type_name -> google.protobuf.Timestamp
+	126, // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord.created_at:type_name -> google.protobuf.Timestamp
 	17,  // 18: obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DelegatedDNSRecord
-	139, // 19: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
-	139, // 20: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
+	126, // 19: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
+	126, // 20: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
 	30,  // 21: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.api_keys:type_name -> obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
 	34,  // 22: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_organizations:type_name -> obiente.cloud.superadmin.v1.SuspiciousOrganization
 	35,  // 23: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_activities:type_name -> obiente.cloud.superadmin.v1.SuspiciousActivity
 	36,  // 24: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.metrics:type_name -> obiente.cloud.superadmin.v1.AbuseMetrics
-	139, // 25: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
-	139, // 26: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
-	139, // 27: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
+	126, // 25: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
+	126, // 26: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
+	126, // 27: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
 	39,  // 28: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.summary:type_name -> obiente.cloud.superadmin.v1.IncomeSummary
 	40,  // 29: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.monthly_income:type_name -> obiente.cloud.superadmin.v1.MonthlyIncome
 	41,  // 30: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.top_customers:type_name -> obiente.cloud.superadmin.v1.TopCustomer
 	42,  // 31: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.transactions:type_name -> obiente.cloud.superadmin.v1.BillingTransaction
 	43,  // 32: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.payment_metrics:type_name -> obiente.cloud.superadmin.v1.PaymentMetrics
-	139, // 33: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
-	139, // 34: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
-	139, // 35: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
+	126, // 33: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
+	126, // 34: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
+	126, // 35: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
 	46,  // 36: obiente.cloud.superadmin.v1.ListAllInvoicesResponse.invoices:type_name -> obiente.cloud.superadmin.v1.InvoiceWithOrganization
-	142, // 37: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
+	129, // 37: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
 	57,  // 38: obiente.cloud.superadmin.v1.ListPlansResponse.plans:type_name -> obiente.cloud.superadmin.v1.Plan
 	57,  // 39: obiente.cloud.superadmin.v1.CreatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
 	57,  // 40: obiente.cloud.superadmin.v1.UpdatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
 	64,  // 41: obiente.cloud.superadmin.v1.ListUsersResponse.users:type_name -> obiente.cloud.superadmin.v1.UserInfo
-	143, // 42: obiente.cloud.superadmin.v1.ListUsersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	130, // 42: obiente.cloud.superadmin.v1.ListUsersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	64,  // 43: obiente.cloud.superadmin.v1.GetUserResponse.user:type_name -> obiente.cloud.superadmin.v1.UserInfo
 	65,  // 44: obiente.cloud.superadmin.v1.GetUserResponse.organizations:type_name -> obiente.cloud.superadmin.v1.UserOrganization
-	139, // 45: obiente.cloud.superadmin.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
-	139, // 46: obiente.cloud.superadmin.v1.UserInfo.updated_at:type_name -> google.protobuf.Timestamp
-	139, // 47: obiente.cloud.superadmin.v1.UserOrganization.joined_at:type_name -> google.protobuf.Timestamp
-	144, // 48: obiente.cloud.superadmin.v1.ListAllVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	145, // 49: obiente.cloud.superadmin.v1.VPSOverview.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	126, // 45: obiente.cloud.superadmin.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
+	126, // 46: obiente.cloud.superadmin.v1.UserInfo.updated_at:type_name -> google.protobuf.Timestamp
+	126, // 47: obiente.cloud.superadmin.v1.UserOrganization.joined_at:type_name -> google.protobuf.Timestamp
+	131, // 48: obiente.cloud.superadmin.v1.ListAllVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
+	132, // 49: obiente.cloud.superadmin.v1.VPSOverview.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	67,  // 50: obiente.cloud.superadmin.v1.ListAllVPSResponse.vps_instances:type_name -> obiente.cloud.superadmin.v1.VPSOverview
-	143, // 51: obiente.cloud.superadmin.v1.ListAllVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	146, // 52: obiente.cloud.superadmin.v1.ListVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
-	146, // 53: obiente.cloud.superadmin.v1.CreateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
-	146, // 54: obiente.cloud.superadmin.v1.UpdateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
-	89,  // 55: obiente.cloud.superadmin.v1.ListVPSPublicIPsResponse.ips:type_name -> obiente.cloud.superadmin.v1.VPSPublicIP
-	89,  // 56: obiente.cloud.superadmin.v1.CreateVPSPublicIPResponse.ip:type_name -> obiente.cloud.superadmin.v1.VPSPublicIP
-	89,  // 57: obiente.cloud.superadmin.v1.UpdateVPSPublicIPResponse.ip:type_name -> obiente.cloud.superadmin.v1.VPSPublicIP
-	89,  // 58: obiente.cloud.superadmin.v1.AssignVPSPublicIPResponse.ip:type_name -> obiente.cloud.superadmin.v1.VPSPublicIP
-	89,  // 59: obiente.cloud.superadmin.v1.UnassignVPSPublicIPResponse.ip:type_name -> obiente.cloud.superadmin.v1.VPSPublicIP
-	139, // 60: obiente.cloud.superadmin.v1.VPSPublicIP.assigned_at:type_name -> google.protobuf.Timestamp
-	139, // 61: obiente.cloud.superadmin.v1.VPSPublicIP.created_at:type_name -> google.protobuf.Timestamp
-	139, // 62: obiente.cloud.superadmin.v1.VPSPublicIP.updated_at:type_name -> google.protobuf.Timestamp
-	145, // 63: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	64,  // 64: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.created_by:type_name -> obiente.cloud.superadmin.v1.UserInfo
-	145, // 65: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	145, // 66: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	145, // 67: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	147, // 68: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
-	145, // 69: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	145, // 70: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	139, // 71: obiente.cloud.superadmin.v1.StripeWebhookEvent.processed_at:type_name -> google.protobuf.Timestamp
-	139, // 72: obiente.cloud.superadmin.v1.StripeWebhookEvent.created_at:type_name -> google.protobuf.Timestamp
-	105, // 73: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse.events:type_name -> obiente.cloud.superadmin.v1.StripeWebhookEvent
-	113, // 74: obiente.cloud.superadmin.v1.ListNodesResponse.nodes:type_name -> obiente.cloud.superadmin.v1.NodeInfo
-	113, // 75: obiente.cloud.superadmin.v1.GetNodeResponse.node:type_name -> obiente.cloud.superadmin.v1.NodeInfo
-	137, // 76: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.custom_labels:type_name -> obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.CustomLabelsEntry
-	113, // 77: obiente.cloud.superadmin.v1.UpdateNodeConfigResponse.node:type_name -> obiente.cloud.superadmin.v1.NodeInfo
-	114, // 78: obiente.cloud.superadmin.v1.NodeInfo.config:type_name -> obiente.cloud.superadmin.v1.NodeConfig
-	139, // 79: obiente.cloud.superadmin.v1.NodeInfo.last_heartbeat:type_name -> google.protobuf.Timestamp
-	139, // 80: obiente.cloud.superadmin.v1.NodeInfo.created_at:type_name -> google.protobuf.Timestamp
-	139, // 81: obiente.cloud.superadmin.v1.NodeInfo.updated_at:type_name -> google.protobuf.Timestamp
-	138, // 82: obiente.cloud.superadmin.v1.NodeConfig.custom_labels:type_name -> obiente.cloud.superadmin.v1.NodeConfig.CustomLabelsEntry
-	116, // 83: obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse.permissions:type_name -> obiente.cloud.superadmin.v1.SuperadminPermissionDefinition
-	121, // 84: obiente.cloud.superadmin.v1.ListSuperadminRolesResponse.roles:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
-	121, // 85: obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse.role:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
-	121, // 86: obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse.role:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
-	130, // 87: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse.bindings:type_name -> obiente.cloud.superadmin.v1.SuperadminRoleBinding
-	130, // 88: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse.binding:type_name -> obiente.cloud.superadmin.v1.SuperadminRoleBinding
-	14,  // 89: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
-	0,   // 90: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
-	7,   // 91: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
-	9,   // 92: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
-	12,  // 93: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
-	16,  // 94: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
-	19,  // 95: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:input_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
-	23,  // 96: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
-	29,  // 97: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
-	25,  // 98: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
-	27,  // 99: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
-	21,  // 100: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
-	32,  // 101: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
-	37,  // 102: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
-	44,  // 103: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
-	47,  // 104: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
-	49,  // 105: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:input_type -> obiente.cloud.superadmin.v1.ListPlansRequest
-	51,  // 106: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:input_type -> obiente.cloud.superadmin.v1.CreatePlanRequest
-	53,  // 107: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:input_type -> obiente.cloud.superadmin.v1.UpdatePlanRequest
-	55,  // 108: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:input_type -> obiente.cloud.superadmin.v1.DeletePlanRequest
-	58,  // 109: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:input_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
-	60,  // 110: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:input_type -> obiente.cloud.superadmin.v1.ListUsersRequest
-	62,  // 111: obiente.cloud.superadmin.v1.SuperadminService.GetUser:input_type -> obiente.cloud.superadmin.v1.GetUserRequest
-	66,  // 112: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:input_type -> obiente.cloud.superadmin.v1.ListAllVPSRequest
-	90,  // 113: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
-	92,  // 114: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
-	94,  // 115: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
-	96,  // 116: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
-	98,  // 117: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:input_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
-	100, // 118: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
-	102, // 119: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
-	69,  // 120: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:input_type -> obiente.cloud.superadmin.v1.ListVPSSizesRequest
-	71,  // 121: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:input_type -> obiente.cloud.superadmin.v1.CreateVPSSizeRequest
-	73,  // 122: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:input_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeRequest
-	75,  // 123: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:input_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeRequest
-	77,  // 124: obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs:input_type -> obiente.cloud.superadmin.v1.ListVPSPublicIPsRequest
-	79,  // 125: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP:input_type -> obiente.cloud.superadmin.v1.CreateVPSPublicIPRequest
-	81,  // 126: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP:input_type -> obiente.cloud.superadmin.v1.UpdateVPSPublicIPRequest
-	83,  // 127: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP:input_type -> obiente.cloud.superadmin.v1.DeleteVPSPublicIPRequest
-	85,  // 128: obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP:input_type -> obiente.cloud.superadmin.v1.AssignVPSPublicIPRequest
-	87,  // 129: obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP:input_type -> obiente.cloud.superadmin.v1.UnassignVPSPublicIPRequest
-	148, // 130: obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
-	104, // 131: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:input_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
-	107, // 132: obiente.cloud.superadmin.v1.SuperadminService.ListNodes:input_type -> obiente.cloud.superadmin.v1.ListNodesRequest
-	109, // 133: obiente.cloud.superadmin.v1.SuperadminService.GetNode:input_type -> obiente.cloud.superadmin.v1.GetNodeRequest
-	111, // 134: obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig:input_type -> obiente.cloud.superadmin.v1.UpdateNodeConfigRequest
-	115, // 135: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions:input_type -> obiente.cloud.superadmin.v1.ListSuperadminPermissionsRequest
-	118, // 136: obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions:input_type -> obiente.cloud.superadmin.v1.GetMySuperadminPermissionsRequest
-	120, // 137: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles:input_type -> obiente.cloud.superadmin.v1.ListSuperadminRolesRequest
-	123, // 138: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole:input_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleRequest
-	125, // 139: obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole:input_type -> obiente.cloud.superadmin.v1.UpdateSuperadminRoleRequest
-	127, // 140: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole:input_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleRequest
-	129, // 141: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings:input_type -> obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsRequest
-	132, // 142: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding:input_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingRequest
-	134, // 143: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding:input_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingRequest
-	1,   // 144: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
-	8,   // 145: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
-	11,  // 146: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
-	15,  // 147: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
-	18,  // 148: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
-	20,  // 149: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:output_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
-	24,  // 150: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
-	31,  // 151: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
-	26,  // 152: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
-	28,  // 153: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
-	22,  // 154: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
-	33,  // 155: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
-	38,  // 156: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
-	45,  // 157: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
-	48,  // 158: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
-	50,  // 159: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:output_type -> obiente.cloud.superadmin.v1.ListPlansResponse
-	52,  // 160: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:output_type -> obiente.cloud.superadmin.v1.CreatePlanResponse
-	54,  // 161: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:output_type -> obiente.cloud.superadmin.v1.UpdatePlanResponse
-	56,  // 162: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:output_type -> obiente.cloud.superadmin.v1.DeletePlanResponse
-	59,  // 163: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:output_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
-	61,  // 164: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:output_type -> obiente.cloud.superadmin.v1.ListUsersResponse
-	63,  // 165: obiente.cloud.superadmin.v1.SuperadminService.GetUser:output_type -> obiente.cloud.superadmin.v1.GetUserResponse
-	68,  // 166: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:output_type -> obiente.cloud.superadmin.v1.ListAllVPSResponse
-	91,  // 167: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
-	93,  // 168: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
-	95,  // 169: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
-	97,  // 170: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
-	99,  // 171: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:output_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
-	101, // 172: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
-	103, // 173: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
-	70,  // 174: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:output_type -> obiente.cloud.superadmin.v1.ListVPSSizesResponse
-	72,  // 175: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:output_type -> obiente.cloud.superadmin.v1.CreateVPSSizeResponse
-	74,  // 176: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:output_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeResponse
-	76,  // 177: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:output_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeResponse
-	78,  // 178: obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs:output_type -> obiente.cloud.superadmin.v1.ListVPSPublicIPsResponse
-	80,  // 179: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP:output_type -> obiente.cloud.superadmin.v1.CreateVPSPublicIPResponse
-	82,  // 180: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP:output_type -> obiente.cloud.superadmin.v1.UpdateVPSPublicIPResponse
-	84,  // 181: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP:output_type -> obiente.cloud.superadmin.v1.DeleteVPSPublicIPResponse
-	86,  // 182: obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP:output_type -> obiente.cloud.superadmin.v1.AssignVPSPublicIPResponse
-	88,  // 183: obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP:output_type -> obiente.cloud.superadmin.v1.UnassignVPSPublicIPResponse
-	149, // 184: obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
-	106, // 185: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:output_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
-	108, // 186: obiente.cloud.superadmin.v1.SuperadminService.ListNodes:output_type -> obiente.cloud.superadmin.v1.ListNodesResponse
-	110, // 187: obiente.cloud.superadmin.v1.SuperadminService.GetNode:output_type -> obiente.cloud.superadmin.v1.GetNodeResponse
-	112, // 188: obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig:output_type -> obiente.cloud.superadmin.v1.UpdateNodeConfigResponse
-	117, // 189: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions:output_type -> obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse
-	119, // 190: obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions:output_type -> obiente.cloud.superadmin.v1.GetMySuperadminPermissionsResponse
-	122, // 191: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles:output_type -> obiente.cloud.superadmin.v1.ListSuperadminRolesResponse
-	124, // 192: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole:output_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse
-	126, // 193: obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole:output_type -> obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse
-	128, // 194: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole:output_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleResponse
-	131, // 195: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings:output_type -> obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse
-	133, // 196: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding:output_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse
-	135, // 197: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding:output_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingResponse
-	144, // [144:198] is the sub-list for method output_type
-	90,  // [90:144] is the sub-list for method input_type
-	90,  // [90:90] is the sub-list for extension type_name
-	90,  // [90:90] is the sub-list for extension extendee
-	0,   // [0:90] is the sub-list for field type_name
+	130, // 51: obiente.cloud.superadmin.v1.ListAllVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	133, // 52: obiente.cloud.superadmin.v1.ListVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
+	133, // 53: obiente.cloud.superadmin.v1.CreateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
+	133, // 54: obiente.cloud.superadmin.v1.UpdateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
+	132, // 55: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	64,  // 56: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.created_by:type_name -> obiente.cloud.superadmin.v1.UserInfo
+	132, // 57: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	132, // 58: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	132, // 59: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	134, // 60: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	132, // 61: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	132, // 62: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	126, // 63: obiente.cloud.superadmin.v1.StripeWebhookEvent.processed_at:type_name -> google.protobuf.Timestamp
+	126, // 64: obiente.cloud.superadmin.v1.StripeWebhookEvent.created_at:type_name -> google.protobuf.Timestamp
+	92,  // 65: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse.events:type_name -> obiente.cloud.superadmin.v1.StripeWebhookEvent
+	100, // 66: obiente.cloud.superadmin.v1.ListNodesResponse.nodes:type_name -> obiente.cloud.superadmin.v1.NodeInfo
+	100, // 67: obiente.cloud.superadmin.v1.GetNodeResponse.node:type_name -> obiente.cloud.superadmin.v1.NodeInfo
+	124, // 68: obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.custom_labels:type_name -> obiente.cloud.superadmin.v1.UpdateNodeConfigRequest.CustomLabelsEntry
+	100, // 69: obiente.cloud.superadmin.v1.UpdateNodeConfigResponse.node:type_name -> obiente.cloud.superadmin.v1.NodeInfo
+	101, // 70: obiente.cloud.superadmin.v1.NodeInfo.config:type_name -> obiente.cloud.superadmin.v1.NodeConfig
+	126, // 71: obiente.cloud.superadmin.v1.NodeInfo.last_heartbeat:type_name -> google.protobuf.Timestamp
+	126, // 72: obiente.cloud.superadmin.v1.NodeInfo.created_at:type_name -> google.protobuf.Timestamp
+	126, // 73: obiente.cloud.superadmin.v1.NodeInfo.updated_at:type_name -> google.protobuf.Timestamp
+	125, // 74: obiente.cloud.superadmin.v1.NodeConfig.custom_labels:type_name -> obiente.cloud.superadmin.v1.NodeConfig.CustomLabelsEntry
+	103, // 75: obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse.permissions:type_name -> obiente.cloud.superadmin.v1.SuperadminPermissionDefinition
+	108, // 76: obiente.cloud.superadmin.v1.ListSuperadminRolesResponse.roles:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
+	108, // 77: obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse.role:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
+	108, // 78: obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse.role:type_name -> obiente.cloud.superadmin.v1.SuperadminRole
+	117, // 79: obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse.bindings:type_name -> obiente.cloud.superadmin.v1.SuperadminRoleBinding
+	117, // 80: obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse.binding:type_name -> obiente.cloud.superadmin.v1.SuperadminRoleBinding
+	14,  // 81: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
+	0,   // 82: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
+	7,   // 83: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
+	9,   // 84: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	12,  // 85: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	16,  // 86: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
+	19,  // 87: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:input_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
+	23,  // 88: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+	29,  // 89: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+	25,  // 90: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+	27,  // 91: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+	21,  // 92: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
+	32,  // 93: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+	37,  // 94: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+	44,  // 95: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	47,  // 96: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	49,  // 97: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:input_type -> obiente.cloud.superadmin.v1.ListPlansRequest
+	51,  // 98: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:input_type -> obiente.cloud.superadmin.v1.CreatePlanRequest
+	53,  // 99: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:input_type -> obiente.cloud.superadmin.v1.UpdatePlanRequest
+	55,  // 100: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:input_type -> obiente.cloud.superadmin.v1.DeletePlanRequest
+	58,  // 101: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:input_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
+	60,  // 102: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:input_type -> obiente.cloud.superadmin.v1.ListUsersRequest
+	62,  // 103: obiente.cloud.superadmin.v1.SuperadminService.GetUser:input_type -> obiente.cloud.superadmin.v1.GetUserRequest
+	66,  // 104: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:input_type -> obiente.cloud.superadmin.v1.ListAllVPSRequest
+	77,  // 105: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
+	79,  // 106: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
+	81,  // 107: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
+	83,  // 108: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
+	85,  // 109: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:input_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
+	87,  // 110: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
+	89,  // 111: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
+	69,  // 112: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:input_type -> obiente.cloud.superadmin.v1.ListVPSSizesRequest
+	71,  // 113: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:input_type -> obiente.cloud.superadmin.v1.CreateVPSSizeRequest
+	73,  // 114: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:input_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeRequest
+	75,  // 115: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:input_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeRequest
+	135, // 116: obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs:input_type -> obiente.cloud.vps.v1.ListVPSPublicIPsRequest
+	136, // 117: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP:input_type -> obiente.cloud.vps.v1.CreateVPSPublicIPRequest
+	137, // 118: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP:input_type -> obiente.cloud.vps.v1.UpdateVPSPublicIPRequest
+	138, // 119: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP:input_type -> obiente.cloud.vps.v1.DeleteVPSPublicIPRequest
+	139, // 120: obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP:input_type -> obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	140, // 121: obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP:input_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	141, // 122: obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+	91,  // 123: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:input_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
+	94,  // 124: obiente.cloud.superadmin.v1.SuperadminService.ListNodes:input_type -> obiente.cloud.superadmin.v1.ListNodesRequest
+	96,  // 125: obiente.cloud.superadmin.v1.SuperadminService.GetNode:input_type -> obiente.cloud.superadmin.v1.GetNodeRequest
+	98,  // 126: obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig:input_type -> obiente.cloud.superadmin.v1.UpdateNodeConfigRequest
+	102, // 127: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions:input_type -> obiente.cloud.superadmin.v1.ListSuperadminPermissionsRequest
+	105, // 128: obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions:input_type -> obiente.cloud.superadmin.v1.GetMySuperadminPermissionsRequest
+	107, // 129: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles:input_type -> obiente.cloud.superadmin.v1.ListSuperadminRolesRequest
+	110, // 130: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole:input_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleRequest
+	112, // 131: obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole:input_type -> obiente.cloud.superadmin.v1.UpdateSuperadminRoleRequest
+	114, // 132: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole:input_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleRequest
+	116, // 133: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings:input_type -> obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsRequest
+	119, // 134: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding:input_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingRequest
+	121, // 135: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding:input_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingRequest
+	1,   // 136: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
+	8,   // 137: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
+	11,  // 138: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	15,  // 139: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	18,  // 140: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
+	20,  // 141: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:output_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
+	24,  // 142: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+	31,  // 143: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+	26,  // 144: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+	28,  // 145: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+	22,  // 146: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
+	33,  // 147: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+	38,  // 148: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+	45,  // 149: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	48,  // 150: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	50,  // 151: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:output_type -> obiente.cloud.superadmin.v1.ListPlansResponse
+	52,  // 152: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:output_type -> obiente.cloud.superadmin.v1.CreatePlanResponse
+	54,  // 153: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:output_type -> obiente.cloud.superadmin.v1.UpdatePlanResponse
+	56,  // 154: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:output_type -> obiente.cloud.superadmin.v1.DeletePlanResponse
+	59,  // 155: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:output_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
+	61,  // 156: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:output_type -> obiente.cloud.superadmin.v1.ListUsersResponse
+	63,  // 157: obiente.cloud.superadmin.v1.SuperadminService.GetUser:output_type -> obiente.cloud.superadmin.v1.GetUserResponse
+	68,  // 158: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:output_type -> obiente.cloud.superadmin.v1.ListAllVPSResponse
+	78,  // 159: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
+	80,  // 160: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
+	82,  // 161: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
+	84,  // 162: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
+	86,  // 163: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:output_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
+	88,  // 164: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
+	90,  // 165: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
+	70,  // 166: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:output_type -> obiente.cloud.superadmin.v1.ListVPSSizesResponse
+	72,  // 167: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:output_type -> obiente.cloud.superadmin.v1.CreateVPSSizeResponse
+	74,  // 168: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:output_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeResponse
+	76,  // 169: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:output_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeResponse
+	142, // 170: obiente.cloud.superadmin.v1.SuperadminService.ListVPSPublicIPs:output_type -> obiente.cloud.vps.v1.ListVPSPublicIPsResponse
+	143, // 171: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSPublicIP:output_type -> obiente.cloud.vps.v1.CreateVPSPublicIPResponse
+	144, // 172: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSPublicIP:output_type -> obiente.cloud.vps.v1.UpdateVPSPublicIPResponse
+	145, // 173: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSPublicIP:output_type -> obiente.cloud.vps.v1.DeleteVPSPublicIPResponse
+	146, // 174: obiente.cloud.superadmin.v1.SuperadminService.AssignVPSPublicIP:output_type -> obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	147, // 175: obiente.cloud.superadmin.v1.SuperadminService.UnassignVPSPublicIP:output_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	148, // 176: obiente.cloud.superadmin.v1.SuperadminService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+	93,  // 177: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:output_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
+	95,  // 178: obiente.cloud.superadmin.v1.SuperadminService.ListNodes:output_type -> obiente.cloud.superadmin.v1.ListNodesResponse
+	97,  // 179: obiente.cloud.superadmin.v1.SuperadminService.GetNode:output_type -> obiente.cloud.superadmin.v1.GetNodeResponse
+	99,  // 180: obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig:output_type -> obiente.cloud.superadmin.v1.UpdateNodeConfigResponse
+	104, // 181: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions:output_type -> obiente.cloud.superadmin.v1.ListSuperadminPermissionsResponse
+	106, // 182: obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions:output_type -> obiente.cloud.superadmin.v1.GetMySuperadminPermissionsResponse
+	109, // 183: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles:output_type -> obiente.cloud.superadmin.v1.ListSuperadminRolesResponse
+	111, // 184: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole:output_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleResponse
+	113, // 185: obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole:output_type -> obiente.cloud.superadmin.v1.UpdateSuperadminRoleResponse
+	115, // 186: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole:output_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleResponse
+	118, // 187: obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings:output_type -> obiente.cloud.superadmin.v1.ListSuperadminRoleBindingsResponse
+	120, // 188: obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding:output_type -> obiente.cloud.superadmin.v1.CreateSuperadminRoleBindingResponse
+	122, // 189: obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding:output_type -> obiente.cloud.superadmin.v1.DeleteSuperadminRoleBindingResponse
+	136, // [136:190] is the sub-list for method output_type
+	82,  // [82:136] is the sub-list for method input_type
+	82,  // [82:82] is the sub-list for extension type_name
+	82,  // [82:82] is the sub-list for extension extendee
+	0,   // [0:82] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() }
@@ -10018,26 +9145,22 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[66].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[69].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[73].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[77].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[79].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[89].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[94].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[104].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[105].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[107].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[111].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[113].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[114].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[98].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[100].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[101].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc), len(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   139,
+			NumMessages:   126,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

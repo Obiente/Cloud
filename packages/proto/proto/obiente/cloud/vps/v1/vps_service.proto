@@ -122,6 +122,12 @@ service VPSService {
   
   // Release a DHCP lease (called by gateway nodes via persistent connection)
   rpc ReleaseLease(ReleaseLeaseRequest) returns (ReleaseLeaseResponse);
+
+  // Assign a public IP to a VPS (triggers DHCP static lease creation)
+  rpc AssignVPSPublicIP(AssignVPSPublicIPRequest) returns (AssignVPSPublicIPResponse);
+
+  // Unassign a public IP from a VPS (removes DHCP static lease)
+  rpc UnassignVPSPublicIP(UnassignVPSPublicIPRequest) returns (UnassignVPSPublicIPResponse);
 }
 
 message ListVPSRequest {
@@ -704,3 +710,98 @@ message ReleaseLeaseResponse {
   bool success = 1;
   string message = 2;
 }
+
+// AssignVPSPublicIP assigns a public IP to a VPS and triggers DHCP lease creation
+message AssignVPSPublicIPRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string public_ip = 3;
+}
+
+message AssignVPSPublicIPResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// UnassignVPSPublicIP removes a public IP from a VPS and removes DHCP lease
+message UnassignVPSPublicIPRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string public_ip = 3;
+}
+
+message UnassignVPSPublicIPResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+
+
+// VPS Public IP
+message VPSPublicIP {
+  string id = 1; // IP record ID
+  string ip_address = 2; // IPv4 or IPv6 address
+  optional string vps_id = 3; // Assigned VPS instance ID (null if unassigned)
+  optional string organization_id = 4; // Organization that owns the VPS (null if unassigned)
+  optional string vps_name = 5; // VPS name (for display, null if unassigned)
+  optional string organization_name = 6; // Organization name (for display, null if unassigned)
+  int64 monthly_cost_cents = 7; // Monthly cost in cents
+  optional string gateway = 11; // Gateway IP for this public IP (null if not set)
+  optional string netmask = 12; // Netmask/CIDR for this public IP (null if not set, e.g., "24" or "255.255.255.0")
+  optional google.protobuf.Timestamp assigned_at = 8; // When IP was assigned to VPS
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// List VPS Public IPs Request
+message ListVPSPublicIPsRequest {
+  optional string vps_id = 1; // Filter by VPS ID (optional)
+  optional string organization_id = 2; // Filter by organization ID (optional)
+  optional bool include_unassigned = 3; // Include unassigned IPs (default: true)
+  int32 page = 4; // Page number (default: 1)
+  int32 per_page = 5; // Items per page (default: 50, max: 100)
+}
+
+// List VPS Public IPs Response
+message ListVPSPublicIPsResponse {
+  repeated VPSPublicIP ips = 1;
+  int64 total_count = 2; // Total number of IPs matching filters
+}
+
+// Create VPS Public IP Request
+message CreateVPSPublicIPRequest {
+  string ip_address = 1; // IPv4 or IPv6 address
+  int64 monthly_cost_cents = 2; // Monthly cost in cents (set by superadmin)
+  optional string gateway = 3; // Gateway IP for this public IP (set by superadmin)
+  optional string netmask = 4; // Netmask/CIDR for this public IP (set by superadmin, e.g., "24" or "255.255.255.0")
+}
+
+// Create VPS Public IP Response
+message CreateVPSPublicIPResponse {
+  VPSPublicIP ip = 1;
+}
+
+// Update VPS Public IP Request
+message UpdateVPSPublicIPRequest {
+  string id = 1; // IP ID to update
+  optional int64 monthly_cost_cents = 2; // Update monthly cost in cents
+  optional string gateway = 3; // Update gateway IP for this public IP
+  optional string netmask = 4; // Update netmask/CIDR for this public IP (e.g., "24" or "255.255.255.0")
+}
+
+// Update VPS Public IP Response
+message UpdateVPSPublicIPResponse {
+  VPSPublicIP ip = 1;
+}
+
+// Delete VPS Public IP Request
+message DeleteVPSPublicIPRequest {
+  string id = 1; // IP ID to delete
+}
+
+// Delete VPS Public IP Response
+message DeleteVPSPublicIPResponse {
+  bool success = 1;
+}
+
+// Assign VPS Public IP Request

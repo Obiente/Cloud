@@ -513,9 +513,9 @@ const assignIP = async () => {
   }
 
   isAssigning.value = true;
-  try {
+    try {
     await client.assignVPSPublicIP({
-      ipId: assigningIP.value.id,
+      publicIp: assigningIP.value.ipAddress,
       vpsId: assignForm.value.vpsId,
     });
     toast.success("IP assigned successfully");
@@ -543,9 +543,9 @@ const unassignIP = async () => {
   if (!unassigningIP.value) return;
 
   isUnassigning.value = true;
-  try {
+    try {
     await client.unassignVPSPublicIP({
-      ipId: unassigningIP.value.id,
+      publicIp: unassigningIP.value.ipAddress,
     });
     toast.success("IP unassigned successfully");
     closeUnassignDialog();
