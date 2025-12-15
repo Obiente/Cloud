@@ -9,6 +9,9 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -73,12 +76,86 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 
 	// If this is the last chunk and we have all chunks, assemble and upload
 	if isLastChunk && allChunksReceived {
+		// Attempt to upload the assembled file
 		if err := s.uploadAssembledFile(ctx, gameServerId, upload); err != nil {
 			resp.Result.Success = false
 			errorMsg := fmt.Sprintf("failed to upload assembled file: %v", err)
 			resp.Result.Error = &errorMsg
+
+			// Emit a single audit log for the failed upload (async)
+			go func() {
+				userID := "system"
+				if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
+					userID = u.Id
+				}
+				ip := "unknown"
+				if req != nil {
+					if h := req.Header().Get("X-Forwarded-For"); h != "" {
+						ip = h
+					} else if h := req.Header().Get("X-Real-IP"); h != "" {
+						ip = h
+					}
+				}
+				action := "ChunkUploadGameServerFiles"
+				service := "GameServerService"
+				rt := "game_server"
+				logger.Debug("[ChunkUpload] Emitting audit log (failure): gameServer=%s file=%s", gameServerId, upload.FileName)
+				if err := middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+					UserID:         userID,
+					OrganizationID: nil,
+					Action:         action,
+					Service:        service,
+					ResourceType:   &rt,
+					ResourceID:     &gameServerId,
+					IPAddress:      ip,
+					UserAgent:      req.Header().Get("User-Agent"),
+					RequestData:    "{}",
+					ResponseStatus: 500,
+					ErrorMessage:   &errorMsg,
+					DurationMs:     0,
+				}); err != nil {
+					logger.Error("[ChunkUpload] CreateAuditLog error (failure): %v", err)
+				}
+			}()
+
 			return connect.NewResponse(resp), nil
 		}
+
+		// Emit a single audit log for the successful upload (async)
+		go func() {
+			userID := "system"
+			if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
+				userID = u.Id
+			}
+			ip := "unknown"
+			if req != nil {
+				if h := req.Header().Get("X-Forwarded-For"); h != "" {
+					ip = h
+				} else if h := req.Header().Get("X-Real-IP"); h != "" {
+					ip = h
+				}
+			}
+			action := "ChunkUploadGameServerFiles"
+			service := "GameServerService"
+			rt := "game_server"
+			logger.Debug("[ChunkUpload] Emitting audit log (success): gameServer=%s file=%s", gameServerId, upload.FileName)
+			if err := middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+				UserID:         userID,
+				OrganizationID: nil,
+				Action:         action,
+				Service:        service,
+				ResourceType:   &rt,
+				ResourceID:     &gameServerId,
+				IPAddress:      ip,
+				UserAgent:      req.Header().Get("User-Agent"),
+				RequestData:    "{}",
+				ResponseStatus: 200,
+				ErrorMessage:   nil,
+				DurationMs:     0,
+			}); err != nil {
+				logger.Error("[ChunkUpload] CreateAuditLog error (success): %v", err)
+			}
+		}()
 
 		// Clean up the session after successful upload
 		chunkUploadManager.RemoveSession(gameServerId, upload.FileName)
