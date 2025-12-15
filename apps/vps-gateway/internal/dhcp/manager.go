@@ -806,12 +806,48 @@ func (m *Manager) loadAllocations() error {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	// We support two formats in the hosts file:
+	// 1) "<ip> <vpsID>" (DNS host entry)
+	// 2) "dhcp-host=<mac>,<ip>,<vpsID>" (dnsmasq dhcp-host entry)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
+		// dhcp-host entries contain mac/ip/vps as CSV after the '='
+		if strings.HasPrefix(line, "dhcp-host=") {
+			rhs := strings.TrimPrefix(line, "dhcp-host=")
+			// Format: mac,ip,vpsid
+			parts := strings.Split(rhs, ",")
+			if len(parts) >= 3 {
+				mac := strings.ToLower(strings.TrimSpace(parts[0]))
+				ip := net.ParseIP(strings.TrimSpace(parts[1]))
+				vpsID := strings.TrimSpace(parts[2])
+				if ip == nil || vpsID == "" {
+					continue
+				}
+
+				// Ensure allocation exists and merge data
+				alloc, ok := m.allocations[vpsID]
+				if !ok {
+					alloc = &Allocation{
+						VPSID:        vpsID,
+						IPAddress:    ip,
+						MACAddress:   mac,
+						AllocatedAt:  time.Now(),
+						LeaseExpires: time.Now().Add(24 * time.Hour),
+					}
+					m.allocations[vpsID] = alloc
+				} else {
+					alloc.IPAddress = ip
+					alloc.MACAddress = mac
+				}
+			}
+			continue
+		}
+
+		// Fallback: plain "<ip> <vpsID>" DNS host entry
 		parts := strings.Fields(line)
 		if len(parts) < 2 {
 			continue
@@ -823,18 +859,19 @@ func (m *Manager) loadAllocations() error {
 		}
 
 		vpsID := parts[1]
-		macAddress := ""
-		if len(parts) >= 3 {
-			macAddress = parts[2]
-		}
 
-		// Create allocation (we don't have org ID or timestamps from file)
-		m.allocations[vpsID] = &Allocation{
-			VPSID:        vpsID,
-			IPAddress:    ip,
-			MACAddress:   macAddress,
-			AllocatedAt:  time.Now(),
-			LeaseExpires: time.Now().Add(24 * time.Hour),
+		// Ensure allocation exists; mac may be filled by a dhcp-host line later
+		alloc, ok := m.allocations[vpsID]
+		if !ok {
+			m.allocations[vpsID] = &Allocation{
+				VPSID:        vpsID,
+				IPAddress:    ip,
+				MACAddress:   "",
+				AllocatedAt:  time.Now(),
+				LeaseExpires: time.Now().Add(24 * time.Hour),
+			}
+		} else {
+			alloc.IPAddress = ip
 		}
 	}
 
@@ -913,30 +950,60 @@ func (m *Manager) syncWithLeases() error {
 	}
 
 	// Update allocations with actual lease information
-	// Match by MAC address since that's stored in both allocation and lease
+	// Build an ip->lease map to support matching by IP when MAC is not present
+	ipMap := make(map[string]struct {
+		ip       net.IP
+		hostname string
+		expires  int64
+	})
+	for mac, l := range leaseMap {
+		ipMap[l.ip.String()] = l
+		_ = mac
+	}
+
 	updated := false
 	for vpsID, alloc := range m.allocations {
-		if alloc.MACAddress == "" {
-			continue
-		}
-
-		// Normalize MAC for comparison
-		allocMAC := strings.ToLower(alloc.MACAddress)
-		lease, exists := leaseMap[allocMAC]
-		if !exists {
+		// First try to match by MAC if available
+		if alloc.MACAddress != "" {
+			allocMAC := strings.ToLower(alloc.MACAddress)
+			if lease, exists := leaseMap[allocMAC]; exists {
+				// Update IP if it differs
+				if !alloc.IPAddress.Equal(lease.ip) {
+					logger.Info("Syncing allocation for VPS %s: updating IP from %s to %s (from DHCP lease, MAC=%s)", vpsID, alloc.IPAddress.String(), lease.ip.String(), allocMAC)
+					alloc.IPAddress = lease.ip
+					updated = true
+				}
+				// Update lease expiry
+				alloc.LeaseExpires = time.Unix(lease.expires, 0)
+				continue
+			}
 			logger.Debug("No active lease found for VPS %s (MAC %s)", vpsID, allocMAC)
-			continue
 		}
 
-		// Update IP if it differs
-		if !alloc.IPAddress.Equal(lease.ip) {
-			logger.Info("Syncing allocation for VPS %s: updating IP from %s to %s (from DHCP lease, MAC=%s)", vpsID, alloc.IPAddress.String(), lease.ip.String(), allocMAC)
-			alloc.IPAddress = lease.ip
-			updated = true
-		}
+		// Fallback: try matching by IP (useful when hosts file contains IP->vps mapping but no MAC)
+		if alloc.IPAddress != nil {
+			if lease, exists := ipMap[alloc.IPAddress.String()]; exists {
+				// Fill MAC (if available from leaseMap via reverse lookup)
+				// Find the MAC by searching leaseMap entries for this IP
+				foundMac := ""
+				for mac, l := range leaseMap {
+					if l.ip.Equal(lease.ip) {
+						foundMac = mac
+						break
+					}
+				}
+				if foundMac != "" {
+					alloc.MACAddress = foundMac
+					logger.Debug("Filled MAC for VPS %s from lease IP %s -> %s", vpsID, alloc.IPAddress.String(), foundMac)
+				}
 
-		// Update lease expiry
-		alloc.LeaseExpires = time.Unix(lease.expires, 0)
+				// Update lease expiry
+				alloc.LeaseExpires = time.Unix(lease.expires, 0)
+				updated = true
+			} else {
+				logger.Debug("No active lease found for VPS %s (IP %s)", vpsID, alloc.IPAddress.String())
+			}
+		}
 	}
 
 	// Remove stale allocations that have no active lease entry (DHCP file is source of truth)
@@ -1084,11 +1151,46 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 	expiresAt := time.Now().Add(24 * time.Hour)
 	expiresPb := timestamppb.New(expiresAt)
 
+	// Attempt to determine the MAC address from allocation tracking
+	macAddr := ""
+	m.mu.RLock()
+	if alloc, ok := m.allocations[vpsID]; ok && alloc != nil && alloc.MACAddress != "" {
+		macAddr = alloc.MACAddress
+	} else {
+		// Fallback: try to find allocation by IP if VPSID lookup failed
+		for _, a := range m.allocations {
+			if a != nil && a.IPAddress != nil && a.IPAddress.Equal(ipAddress) && a.MACAddress != "" {
+				macAddr = a.MACAddress
+				break
+			}
+		}
+	}
+	m.mu.RUnlock()
+
+	// If MAC still unknown, try scanning active leases file for IP -> MAC mapping
+	if macAddr == "" {
+		if activeLeases, err := m.GetActiveLeases(); err == nil {
+			for _, l := range activeLeases {
+				if l.IP.Equal(ipAddress) && l.MAC != "" {
+					macAddr = l.MAC
+					break
+				}
+			}
+		}
+	}
+
+	// Log resolved MAC for debugging
+	if macAddr != "" {
+		logger.Debug("Resolved MAC for VPS %s IP %s -> %s", vpsID, ipAddress.String(), macAddr)
+	} else {
+		logger.Debug("No MAC resolved for VPS %s IP %s when registering lease with API", vpsID, ipAddress.String())
+	}
+
 	// Create the gRPC request
 	req := &vpsv1.RegisterLeaseRequest{
 		VpsId:          vpsID,
 		OrganizationId: organizationID,
-		MacAddress:     "", // Gateway doesn't provide MAC - will be filled from allocation tracking
+		MacAddress:     macAddr,
 		IpAddress:      ipAddress.String(),
 		ExpiresAt:      expiresPb,
 		IsPublic:       isPublic,
@@ -1149,64 +1251,63 @@ func (m *Manager) releaseLeaseWithAPI(ctx context.Context, vpsID, macAddress str
 		return nil
 	}
 
-
 	logger.Debug("Successfully released lease with VPS Service for VPS %s", vpsID)
 	return nil
+}
+
+// AddStaticDHCPLease adds a static DHCP lease for a MAC/IP pair (including public IPs)
+func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ip := net.ParseIP(ipAddress)
+	if ip == nil {
+		return fmt.Errorf("invalid IP address: %s", ipAddress)
 	}
-
-	// AddStaticDHCPLease adds a static DHCP lease for a MAC/IP pair (including public IPs)
-	func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		ip := net.ParseIP(ipAddress)
-		if ip == nil {
-			return fmt.Errorf("invalid IP address: %s", ipAddress)
-		}
-		alloc := &Allocation{
-			VPSID:          vpsID,
-			OrganizationID: orgID,
-			IPAddress:      ip,
-			MACAddress:     macAddress,
-			AllocatedAt:    time.Now(),
-			LeaseExpires:   time.Now().Add(24 * time.Hour),
-		}
-		m.allocations[vpsID] = alloc
-		if err := m.updateHostsFile(); err != nil {
-			delete(m.allocations, vpsID)
-			return fmt.Errorf("failed to update hosts file: %w", err)
-		}
-		if err := m.reloadDNSMasq(); err != nil {
-			logger.Error("Failed to reload dnsmasq after static lease add: %v", err)
-		}
-		if err := m.saveAllocations(); err != nil {
-			logger.Warn("Failed to persist allocations after static lease add: %v", err)
-		}
-		logger.Info("Added static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
-		return nil
+	alloc := &Allocation{
+		VPSID:          vpsID,
+		OrganizationID: orgID,
+		IPAddress:      ip,
+		MACAddress:     macAddress,
+		AllocatedAt:    time.Now(),
+		LeaseExpires:   time.Now().Add(24 * time.Hour),
 	}
-
-	// RemoveStaticDHCPLease removes a static DHCP lease for a MAC/IP pair (including public IPs)
-	func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		alloc, ok := m.allocations[vpsID]
-		if !ok {
-			return fmt.Errorf("no allocation found for VPSID %s", vpsID)
-		}
-		if alloc.MACAddress != macAddress || alloc.IPAddress.String() != ipAddress {
-			return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
-		}
+	m.allocations[vpsID] = alloc
+	if err := m.updateHostsFile(); err != nil {
 		delete(m.allocations, vpsID)
-		if err := m.updateHostsFile(); err != nil {
-			return fmt.Errorf("failed to update hosts file: %w", err)
-		}
-		if err := m.reloadDNSMasq(); err != nil {
-			logger.Error("Failed to reload dnsmasq after static lease removal: %v", err)
-		}
-		if err := m.saveAllocations(); err != nil {
-			logger.Warn("Failed to persist allocations after static lease removal: %v", err)
-		}
-		logger.Info("Removed static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
-		return nil
+		return fmt.Errorf("failed to update hosts file: %w", err)
 	}
+	if err := m.reloadDNSMasq(); err != nil {
+		logger.Error("Failed to reload dnsmasq after static lease add: %v", err)
+	}
+	if err := m.saveAllocations(); err != nil {
+		logger.Warn("Failed to persist allocations after static lease add: %v", err)
+	}
+	logger.Info("Added static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
+	return nil
+}
+
+// RemoveStaticDHCPLease removes a static DHCP lease for a MAC/IP pair (including public IPs)
+func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddress, vpsID, orgID string, isPublic bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	alloc, ok := m.allocations[vpsID]
+	if !ok {
+		return fmt.Errorf("no allocation found for VPSID %s", vpsID)
+	}
+	if alloc.MACAddress != macAddress || alloc.IPAddress.String() != ipAddress {
+		return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
+	}
+	delete(m.allocations, vpsID)
+	if err := m.updateHostsFile(); err != nil {
+		return fmt.Errorf("failed to update hosts file: %w", err)
+	}
+	if err := m.reloadDNSMasq(); err != nil {
+		logger.Error("Failed to reload dnsmasq after static lease removal: %v", err)
+	}
+	if err := m.saveAllocations(); err != nil {
+		logger.Warn("Failed to persist allocations after static lease removal: %v", err)
+	}
+	logger.Info("Removed static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
+	return nil
+}

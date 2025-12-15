@@ -14,5 +14,6 @@ use (
 	./apps/shared
 	./apps/superadmin-service
 	./apps/support-service
+	./apps/vps-gateway
 	./apps/vps-service
 )
