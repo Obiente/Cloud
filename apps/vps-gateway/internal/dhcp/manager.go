@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +39,7 @@ type Manager struct {
 	mu                 sync.RWMutex
 	dhcpRunning        bool
 	dnsmasqPID         int
+	allocationTTL      time.Duration
 	redisClient        *redis.Client
 	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
 	vpsServiceClientMu sync.RWMutex                  // Protects client access
@@ -193,7 +196,12 @@ func NewManager() (*Manager, error) {
 		hostsFile:     hostsFile,
 		leasesFile:    leasesFile,
 		allocations:   make(map[string]*Allocation),
+		allocationTTL: 1 * time.Hour,
 	}
+
+	// The gateway does not initiate connections to VPS service endpoints.
+	// VPS services should connect to the gateway and call SetVPSServiceClient
+	// to provide a persistent client. Do not create outgoing clients here.
 
 	// Initialize Redis client for cross-node coordination (optional)
 	if rc, err := redis.NewClient(); err != nil {
@@ -225,6 +233,16 @@ func NewManager() (*Manager, error) {
 			logger.Warn("Failed to reload dnsmasq after loading allocations: %v", err)
 		} else {
 			logger.Debug("Reloaded dnsmasq to ensure hosts file is loaded")
+		}
+	}
+
+	// Allow TTL override via env var (seconds)
+	if ttlStr := os.Getenv("GATEWAY_ALLOCATION_TTL_SECONDS"); ttlStr != "" {
+		if ttlSec, err := strconv.Atoi(ttlStr); err == nil && ttlSec > 0 {
+			manager.allocationTTL = time.Duration(ttlSec) * time.Second
+			logger.Info("Allocation TTL set to %s via env", manager.allocationTTL.String())
+		} else {
+			logger.Warn("Invalid GATEWAY_ALLOCATION_TTL_SECONDS=%s, using default %s", ttlStr, manager.allocationTTL.String())
 		}
 	}
 
@@ -613,12 +631,46 @@ func (m *Manager) updateHostsFile() error {
 	// Attempt to discover MACs from active leases so we can emit dhcp-host entries
 	// even when allocations were created without a MAC (timing race with DHCP).
 	ipToMac := make(map[string]string)
-	if leases, err := m.GetActiveLeases(); err == nil {
-		for _, l := range leases {
+	activeLeases, err := m.GetActiveLeases()
+	if err == nil {
+		for _, l := range activeLeases {
 			if l.MAC != "" && l.IP != nil {
 				ipToMac[l.IP.String()] = strings.ToLower(l.MAC)
 			}
 		}
+
+		// Create allocations from active leases when the lease hostname is a VPS ID
+		// (e.g., dnsmasq hostname set to "vps-<id>"). This helps include those
+		// active leases in the hosts file even if they weren't previously allocated.
+		now := time.Now()
+		m.mu.Lock()
+		for _, l := range activeLeases {
+			if l.Hostname == "" || l.IP == nil {
+				continue
+			}
+			// Treat hostnames that look like our VPS IDs (prefix "vps-") as allocations
+			if strings.HasPrefix(l.Hostname, "vps-") {
+				vpsID := l.Hostname
+				// If allocation exists, merge MAC/IP
+				if alloc, ok := m.allocations[vpsID]; ok {
+					if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
+						alloc.IPAddress = l.IP
+					}
+					if alloc.MACAddress == "" && l.MAC != "" {
+						alloc.MACAddress = strings.ToLower(l.MAC)
+					}
+				} else {
+					m.allocations[vpsID] = &Allocation{
+						VPSID:        vpsID,
+						IPAddress:    l.IP,
+						MACAddress:   strings.ToLower(l.MAC),
+						AllocatedAt:  now,
+						LeaseExpires: l.ExpiresAt,
+					}
+				}
+			}
+		}
+		m.mu.Unlock()
 	} else {
 		logger.Debug("Could not read active leases while updating hosts file: %v", err)
 	}
@@ -1200,30 +1252,40 @@ func (m *Manager) backgroundReconciler() {
 		// Check allocations against VPS Service and remove ones that are deleted
 		m.mu.Lock()
 		var toRemove []string
+		now := time.Now()
 		for vpsID, alloc := range m.allocations {
 			// Skip if this allocation still has an active lease (keep until gone)
 			if alloc.MACAddress != "" {
 				continue
 			}
 
-			// If we don't have a VPS Service client, skip
-			m.vpsServiceClientMu.RLock()
-			client := m.vpsServiceClient
-			m.vpsServiceClientMu.RUnlock()
-			if client == nil {
+			// If allocation is younger than TTL, skip removing (allow time for DHCP)
+			if alloc.AllocatedAt.Add(m.allocationTTL).After(now) {
 				continue
 			}
 
-			// Query VPS service for existence
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_, err := client.GetVPS(ctx, connect.NewRequest(&vpsv1.GetVPSRequest{VpsId: vpsID}))
-			cancel()
-			if err != nil {
-				// If NotFound, schedule removal
-				if cerr, ok := err.(*connect.Error); ok && cerr.Code() == connect.CodeNotFound {
-					toRemove = append(toRemove, vpsID)
+			// If we have a VPS Service client, check whether the VPS exists; only remove
+			// if VPS is NotFound. If client is not configured, fall back to TTL-based removal.
+			// Check configured VPS Service client (if any) to verify VPS existence.
+			m.vpsServiceClientMu.RLock()
+			client := m.vpsServiceClient
+			m.vpsServiceClientMu.RUnlock()
+
+			removedByNotFound := false
+			if client != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_, err := client.GetVPS(ctx, connect.NewRequest(&vpsv1.GetVPSRequest{VpsId: vpsID}))
+				cancel()
+				if err != nil {
+					if cerr, ok := err.(*connect.Error); ok && cerr.Code() == connect.CodeNotFound {
+						removedByNotFound = true
+					}
 				}
-				// On other errors, ignore and continue
+			}
+
+			// If VPS service not configured, fall back to TTL-based removal (keep previous behavior)
+			if removedByNotFound || client == nil {
+				toRemove = append(toRemove, vpsID)
 			}
 		}
 
@@ -1305,12 +1367,31 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 		}
 	}
 
-	// Short wait-and-retry: sometimes dnsmasq writes the lease after allocation
-	// due to DHCP timing. Poll for a few short intervals to try to capture the
-	// MAC before sending the registration to the API.
+	// Also consult Redis-cached leases (if Redis available). This helps in
+	// cross-node scenarios where another gateway recently wrote leases and
+	// populated the Redis cache via cacheLeases().
+	if macAddr == "" && m.redisClient != nil {
+		cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
+		if data, err := m.redisClient.Get(context.Background(), cacheKey); err == nil && data != "" {
+			var cached []LeaseInfo
+			if err := json.Unmarshal([]byte(data), &cached); err == nil {
+				for _, l := range cached {
+					if l.IP != nil && l.IP.Equal(ipAddress) && l.MAC != "" {
+						macAddr = l.MAC
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Enhanced wait-and-retry: sometimes dnsmasq writes the lease after allocation
+	// due to DHCP timing. Poll for a few short intervals (longer than before)
+	// to try to capture the MAC before sending the registration to the API.
 	if macAddr == "" {
-		for i := 0; i < 6; i++ { // ~3s total
+		for i := 0; i < 12; i++ { // ~6s total
 			time.Sleep(500 * time.Millisecond)
+
 			if activeLeases, err := m.GetActiveLeases(); err == nil {
 				for _, l := range activeLeases {
 					if l.IP.Equal(ipAddress) && l.MAC != "" {
@@ -1321,6 +1402,22 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 			}
 			if macAddr != "" {
 				break
+			}
+
+			// Check Redis cache again as a quick second source
+			if m.redisClient != nil {
+				cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
+				if data, err := m.redisClient.Get(context.Background(), cacheKey); err == nil && data != "" {
+					var cached []LeaseInfo
+					if err := json.Unmarshal([]byte(data), &cached); err == nil {
+						for _, l := range cached {
+							if l.IP != nil && l.IP.Equal(ipAddress) && l.MAC != "" {
+								macAddr = l.MAC
+								break
+							}
+						}
+					}
+				}
 			}
 		}
 	}

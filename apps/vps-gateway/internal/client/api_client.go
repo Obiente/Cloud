@@ -25,13 +25,13 @@ import (
 
 // APIConnection represents a connection to a single API instance
 type APIConnection struct {
-	client      vpsgatewayv1connect.VPSGatewayServiceClient
-	apiURL      string
+	client        vpsgatewayv1connect.VPSGatewayServiceClient
+	apiURL        string
 	apiInstanceID string
-	ctx         context.Context
-	cancel      context.CancelFunc
-	connected   bool
-	mu          sync.RWMutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+	connected     bool
+	mu            sync.RWMutex
 }
 
 // APIClient handles connections to all API servers
@@ -180,7 +180,7 @@ func (c *APIClient) discoverAndConnect(ctx context.Context) {
 	// and we only want one connection per unique URL
 	seenURLs := make(map[string]bool)
 	uniqueInstances := make([]APInstanceInfo, 0)
-	
+
 	for _, instance := range apiInstances {
 		if !seenURLs[instance.APIURL] {
 			seenURLs[instance.APIURL] = true
@@ -189,7 +189,7 @@ func (c *APIClient) discoverAndConnect(ctx context.Context) {
 			logger.Debug("[APIClient] Skipping duplicate URL: %s (instance: %s)", instance.APIURL, instance.InstanceID)
 		}
 	}
-	
+
 	logger.Info("[APIClient] Connecting to %d unique API URL(s) (deduplicated from %d instances)", len(uniqueInstances), len(apiInstances))
 
 	// Connect to all unique URLs
@@ -335,6 +335,9 @@ func (c *APIClient) connectToAPIInstance(ctx context.Context, instance APInstanc
 		// Start goroutine to send heartbeats
 		go c.sendHeartbeatLoop(connCtx, stream, instance.InstanceID)
 
+		// Start goroutine to push leases periodically
+		go c.sendLeasesLoop(connCtx, stream, instance.InstanceID)
+
 		// Handle incoming messages from API
 		for {
 			msg, err := stream.Receive()
@@ -451,6 +454,62 @@ func (c *APIClient) sendHeartbeatLoop(ctx context.Context, stream *connect.BidiS
 				logger.Error("[APIClient] Failed to send heartbeat: %v", err)
 				return
 			}
+		}
+	}
+}
+
+// sendLeasesLoop periodically pushes active DHCP leases to the API over the bidi stream
+func (c *APIClient) sendLeasesLoop(ctx context.Context, stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], apiInstanceID string) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	sendNow := func() {
+		leases, err := c.dhcpManager.GetActiveLeases()
+		if err != nil {
+			logger.Debug("[APIClient] Failed to get active leases: %v", err)
+			return
+		}
+
+		protoLeases := make([]*vpsgatewayv1.LeaseRecord, 0, len(leases))
+		for _, lease := range leases {
+			protoLeases = append(protoLeases, &vpsgatewayv1.LeaseRecord{
+				MacAddress: lease.MAC,
+				IpAddress:  lease.IP.String(),
+				Hostname:   lease.Hostname,
+				ExpiresAt:  timestamppb.New(lease.ExpiresAt),
+			})
+		}
+
+		payloadResp := &vpsgatewayv1.GetLeasesResponse{Leases: protoLeases}
+		payloadBytes, err := proto.Marshal(payloadResp)
+		if err != nil {
+			logger.Error("[APIClient] Failed to marshal leases payload: %v", err)
+			return
+		}
+
+		req := &vpsgatewayv1.GatewayRequest{
+			RequestId: fmt.Sprintf("%s-pushleases-%d", c.gatewayID, time.Now().UnixNano()),
+			Method:    "PushLeases",
+			Payload:   payloadBytes,
+		}
+
+		msg := &vpsgatewayv1.GatewayMessage{Type: "request", Request: req}
+		if err := stream.Send(msg); err != nil {
+			logger.Error("[APIClient] Failed to send PushLeases to %s: %v", apiInstanceID, err)
+			return
+		}
+		logger.Debug("[APIClient] Sent PushLeases (%d leases) to API %s", len(protoLeases), apiInstanceID)
+	}
+
+	// Send immediately once on connect
+	sendNow()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sendNow()
 		}
 	}
 }
