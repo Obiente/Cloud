@@ -228,6 +228,9 @@ func NewManager() (*Manager, error) {
 		}
 	}
 
+	// Start background reconciler to pick up leases and remove allocations for deleted VPS
+	go manager.backgroundReconciler()
+
 	return manager, nil
 }
 
@@ -1179,6 +1182,80 @@ func (m *Manager) cacheLeases(leases []LeaseInfo) error {
 
 	// Store leases as JSON array with TTL
 	return m.redisClient.Set(ctx, cacheKey, leases, 30*time.Second)
+}
+
+// backgroundReconciler periodically syncs with dnsmasq leases and prunes
+// allocations for VPS instances that no longer exist in the VPS Service.
+func (m *Manager) backgroundReconciler() {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Sync leases first (updates MACs and expiries)
+		if err := m.syncWithLeases(); err != nil {
+			logger.Debug("backgroundReconciler: syncWithLeases failed: %v", err)
+			continue
+		}
+
+		// Check allocations against VPS Service and remove ones that are deleted
+		m.mu.Lock()
+		var toRemove []string
+		for vpsID, alloc := range m.allocations {
+			// Skip if this allocation still has an active lease (keep until gone)
+			if alloc.MACAddress != "" {
+				continue
+			}
+
+			// If we don't have a VPS Service client, skip
+			m.vpsServiceClientMu.RLock()
+			client := m.vpsServiceClient
+			m.vpsServiceClientMu.RUnlock()
+			if client == nil {
+				continue
+			}
+
+			// Query VPS service for existence
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_, err := client.GetVPS(ctx, connect.NewRequest(&vpsv1.GetVPSRequest{VpsId: vpsID}))
+			cancel()
+			if err != nil {
+				// If NotFound, schedule removal
+				if cerr, ok := err.(*connect.Error); ok && cerr.Code() == connect.CodeNotFound {
+					toRemove = append(toRemove, vpsID)
+				}
+				// On other errors, ignore and continue
+			}
+		}
+
+		for _, vpsID := range toRemove {
+			alloc := m.allocations[vpsID]
+			delete(m.allocations, vpsID)
+			logger.Info("Pruned allocation for deleted VPS: %s (ip=%s)", vpsID, alloc.IPAddress.String())
+
+			if m.redisClient != nil {
+				_ = m.redisClient.Del(context.Background(), m.redisAllocationKey(vpsID))
+			}
+
+			// Best-effort inform API that lease has been released
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = m.releaseLeaseWithAPI(ctx, vpsID, alloc.MACAddress)
+			cancel()
+		}
+
+		if len(toRemove) > 0 {
+			// Persist changes
+			if err := m.updateHostsFile(); err != nil {
+				logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
+			}
+			if err := m.reloadDNSMasq(); err != nil {
+				logger.Warn("backgroundReconciler: failed to reload dnsmasq: %v", err)
+			}
+			if err := m.saveAllocations(); err != nil {
+				logger.Warn("backgroundReconciler: failed to persist allocations: %v", err)
+			}
+		}
+		m.mu.Unlock()
+	}
 }
 
 // registerLeaseWithAPI registers a lease with the VPS Service API through persistent gRPC connection
