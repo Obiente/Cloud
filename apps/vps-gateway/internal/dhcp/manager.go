@@ -36,6 +36,7 @@ type Manager struct {
 	allocations        map[string]*Allocation // vps_id -> allocation
 	mu                 sync.RWMutex
 	dhcpRunning        bool
+	dnsmasqPID         int
 	redisClient        *redis.Client
 	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
 	vpsServiceClientMu sync.RWMutex                  // Protects client access
@@ -291,7 +292,7 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		VPSID:          vpsID,
 		OrganizationID: orgID,
 		IPAddress:      ip,
-		MACAddress:     macAddress,
+		MACAddress:     strings.ToLower(strings.TrimSpace(macAddress)),
 		AllocatedAt:    time.Now(),
 		LeaseExpires:   time.Now().Add(24 * time.Hour), // 24 hour lease
 	}
@@ -393,14 +394,15 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 // ListIPs lists all allocated IPs
 // This function syncs with actual DHCP leases to return the real IP addresses
 func (m *Manager) ListIPs(ctx context.Context, orgID, vpsID string) ([]*Allocation, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Sync allocations with actual DHCP leases
+	// Ensure allocations are synced with actual DHCP leases. `syncWithLeases`
+	// takes its own lock so callers should not hold `m.mu` here.
 	if err := m.syncWithLeases(); err != nil {
 		logger.Warn("Failed to sync with DHCP leases: %v", err)
 		// Continue with existing allocations if sync fails
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	var result []*Allocation
 	for _, alloc := range m.allocations {
@@ -605,13 +607,36 @@ func (m *Manager) updateHostsFile() error {
 	writer.WriteString("# DNS entries: <ip> <hostname>\n")
 	writer.WriteString("# DHCP static entries: dhcp-host=<mac>,<ip>,<hostname>\n\n")
 
+	// Attempt to discover MACs from active leases so we can emit dhcp-host entries
+	// even when allocations were created without a MAC (timing race with DHCP).
+	ipToMac := make(map[string]string)
+	if leases, err := m.GetActiveLeases(); err == nil {
+		for _, l := range leases {
+			if l.MAC != "" && l.IP != nil {
+				ipToMac[l.IP.String()] = strings.ToLower(l.MAC)
+			}
+		}
+	} else {
+		logger.Debug("Could not read active leases while updating hosts file: %v", err)
+	}
+
 	// Write allocations
 	for _, alloc := range m.allocations {
 		// DNS host entry
 		writer.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), alloc.VPSID))
-		// DHCP static mapping when MAC is known (works for in-pool and public IPs)
-		if alloc.MACAddress != "" {
-			writer.WriteString(fmt.Sprintf("dhcp-host=%s,%s,%s\n", strings.ToLower(alloc.MACAddress), alloc.IPAddress.String(), alloc.VPSID))
+
+		// Prefer allocation MAC if present, otherwise fall back to active lease MAC
+		mac := strings.ToLower(strings.TrimSpace(alloc.MACAddress))
+		if mac == "" {
+			if m, ok := ipToMac[alloc.IPAddress.String()]; ok && m != "" {
+				mac = m
+				// Update in-memory allocation so subsequent operations see the MAC
+				alloc.MACAddress = mac
+			}
+		}
+
+		if mac != "" {
+			writer.WriteString(fmt.Sprintf("dhcp-host=%s,%s,%s\n", mac, alloc.IPAddress.String(), alloc.VPSID))
 		}
 	}
 
@@ -651,6 +676,11 @@ func (m *Manager) startDNSMasq() error {
 	// Start in background
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start dnsmasq: %w", err)
+	}
+
+	// Record PID so we can signal the exact process on reload
+	if cmd.Process != nil {
+		m.dnsmasqPID = cmd.Process.Pid
 	}
 
 	// Wait a moment for dnsmasq to start
@@ -769,7 +799,6 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString(fmt.Sprintf("dhcp-leasefile=%s\n", m.leasesFile))
 
 	// DHCP options
-	writer.WriteString("dhcp-authoritative\n")
 	writer.WriteString("log-dhcp\n")
 	writer.WriteString("log-queries\n")
 
@@ -777,14 +806,30 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 }
 
 func (m *Manager) reloadDNSMasq() error {
-	// Send SIGHUP to dnsmasq to reload configuration
+	// Prefer signaling the specific dnsmasq PID we started to avoid affecting
+	// other dnsmasq instances on the host. Fallback to pkill if PID is unknown.
+	if m.dnsmasqPID != 0 {
+		cmd := exec.Command("kill", "-HUP", fmt.Sprintf("%d", m.dnsmasqPID))
+		if err := cmd.Run(); err != nil {
+			logger.Warn("Failed to signal dnsmasq PID %d: %v", m.dnsmasqPID, err)
+			// Fallback to generic reload which may affect other processes
+			fallback := exec.Command("pkill", "-HUP", "dnsmasq")
+			if err := fallback.Run(); err != nil {
+				logger.Warn("Fallback pkill failed, attempting to start dnsmasq: %v", err)
+				return m.startDNSMasq()
+			}
+		}
+		logger.Debug("Signaled dnsmasq PID %d for reload", m.dnsmasqPID)
+		return nil
+	}
+
+	// No PID recorded - fallback to pkill
 	cmd := exec.Command("pkill", "-HUP", "dnsmasq")
 	if err := cmd.Run(); err != nil {
-		// If pkill fails, dnsmasq might not be running - try to start it
 		logger.Warn("Failed to reload dnsmasq, attempting to start: %v", err)
 		return m.startDNSMasq()
 	}
-	logger.Debug("Reloaded dnsmasq configuration")
+	logger.Debug("Reloaded dnsmasq configuration (pkill)")
 	return nil
 }
 
@@ -881,6 +926,10 @@ func (m *Manager) loadAllocations() error {
 // syncWithLeases reads the actual dnsmasq leases file and updates allocations
 // to match the real IP addresses assigned by DHCP
 func (m *Manager) syncWithLeases() error {
+	// Acquire exclusive lock while we inspect and update allocations
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	file, err := os.Open(m.leasesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1179,6 +1228,26 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 		}
 	}
 
+	// Short wait-and-retry: sometimes dnsmasq writes the lease after allocation
+	// due to DHCP timing. Poll for a few short intervals to try to capture the
+	// MAC before sending the registration to the API.
+	if macAddr == "" {
+		for i := 0; i < 6; i++ { // ~3s total
+			time.Sleep(500 * time.Millisecond)
+			if activeLeases, err := m.GetActiveLeases(); err == nil {
+				for _, l := range activeLeases {
+					if l.IP.Equal(ipAddress) && l.MAC != "" {
+						macAddr = l.MAC
+						break
+					}
+				}
+			}
+			if macAddr != "" {
+				break
+			}
+		}
+	}
+
 	// Log resolved MAC for debugging
 	if macAddr != "" {
 		logger.Debug("Resolved MAC for VPS %s IP %s -> %s", vpsID, ipAddress.String(), macAddr)
@@ -1268,7 +1337,7 @@ func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress,
 		VPSID:          vpsID,
 		OrganizationID: orgID,
 		IPAddress:      ip,
-		MACAddress:     macAddress,
+		MACAddress:     strings.ToLower(strings.TrimSpace(macAddress)),
 		AllocatedAt:    time.Now(),
 		LeaseExpires:   time.Now().Add(24 * time.Hour),
 	}
@@ -1295,7 +1364,8 @@ func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddre
 	if !ok {
 		return fmt.Errorf("no allocation found for VPSID %s", vpsID)
 	}
-	if alloc.MACAddress != macAddress || alloc.IPAddress.String() != ipAddress {
+	// Compare MACs case-insensitively and normalize inputs
+	if strings.ToLower(strings.TrimSpace(alloc.MACAddress)) != strings.ToLower(strings.TrimSpace(macAddress)) || alloc.IPAddress.String() != ipAddress {
 		return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
 	}
 	delete(m.allocations, vpsID)
