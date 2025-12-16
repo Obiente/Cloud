@@ -510,11 +510,6 @@ services:
         # Note: Forwarded headers are configured at entrypoint level in Traefik command
         # This ensures real client IPs are forwarded from Docker network IPs
         - "traefik.http.services.api.loadbalancer.server.port=3001"
-        # SSH TCP routing through Traefik
-        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
-        - "traefik.tcp.routers.ssh.entrypoints=ssh"
-        - "traefik.tcp.routers.ssh.service=ssh"
-        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     networks:
       - obiente-network
 
@@ -732,11 +727,6 @@ services:
         - "traefik.http.routers.api-gateway-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.api-gateway-secure.service=api-gateway"
         - "traefik.http.routers.api-gateway-secure.middlewares=api-gateway-retry"
-        # SSH TCP routing through Traefik (handled by api-gateway)
-        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
-        - "traefik.tcp.routers.ssh.entrypoints=ssh"
-        - "traefik.tcp.routers.ssh.service=ssh"
-        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3001 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3001 || exit 1; fi'"]
       interval: 30s
@@ -1078,6 +1068,11 @@ services:
         - "traefik.http.routers.vps-service-secure.entrypoints=websecure"
         - "traefik.http.routers.vps-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.vps-service-secure.service=vps-service"
+        # SSH TCP routing through Traefik (SSH proxy runs in vps-service)
+        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
+        - "traefik.tcp.routers.ssh.entrypoints=ssh"
+        - "traefik.tcp.routers.ssh.service=ssh"
+        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3008 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3008 || exit 1; fi'"]
       interval: 30s
