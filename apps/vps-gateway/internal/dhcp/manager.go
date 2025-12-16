@@ -41,8 +41,15 @@ type Manager struct {
 	dnsmasqPID         int
 	allocationTTL      time.Duration
 	redisClient        *redis.Client
-	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations
+	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations (deprecated)
 	vpsServiceClientMu sync.RWMutex                  // Protects client access
+	apiClient          APIClient                     // API client for bidirectional stream communication
+	apiClientMu        sync.RWMutex                  // Protects API client access
+}
+
+// APIClient interface defines the methods needed from the API client
+type APIClient interface {
+	FindVPSByLease(ctx context.Context, ip string, mac string) (*vpsv1.FindVPSByLeaseResponse, error)
 }
 
 // Allocation represents an IP allocation for a VPS
@@ -265,6 +272,31 @@ func (m *Manager) SetVPSServiceClient(client vpsv1connect.VPSServiceClient) {
 	go func() {
 		time.Sleep(2 * time.Second) // Brief delay to let the client stabilize
 		logger.Info("Triggering initial hosts file sync after VPS Service client configured")
+		if err := m.updateHostsFile(); err != nil {
+			logger.Warn("Initial hosts file sync failed: %v", err)
+		} else {
+			if err := m.reloadDNSMasq(); err != nil {
+				logger.Warn("Failed to reload dnsmasq after initial sync: %v", err)
+			} else {
+				logger.Info("Initial hosts file sync completed successfully")
+			}
+		}
+	}()
+}
+
+// SetAPIClient sets the API client for bidirectional stream communication
+// This should be called from main() after the API client is created
+func (m *Manager) SetAPIClient(client APIClient) {
+	m.apiClientMu.Lock()
+	defer m.apiClientMu.Unlock()
+	m.apiClient = client
+	logger.Info("API client configured for lease resolution")
+	
+	// Trigger initial sync to discover and resolve existing leases to VPS IDs
+	// Run in background to avoid blocking the caller
+	go func() {
+		time.Sleep(2 * time.Second) // Brief delay to let the client stabilize
+		logger.Info("Triggering initial hosts file sync after API client configured")
 		if err := m.updateHostsFile(); err != nil {
 			logger.Warn("Initial hosts file sync failed: %v", err)
 		} else {
@@ -686,16 +718,17 @@ func (m *Manager) updateHostsFile() error {
 				}
 				continue
 			}
-			// If hostname isn't vps-*, attempt to resolve lease -> VPS via VPS Service
-			m.vpsServiceClientMu.RLock()
-			client := m.vpsServiceClient
-			m.vpsServiceClientMu.RUnlock()
+			// If hostname isn't vps-*, attempt to resolve lease -> VPS via API client
+			m.apiClientMu.RLock()
+			client := m.apiClient
+			m.apiClientMu.RUnlock()
 			if client != nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				resp, err := client.FindVPSByLease(ctx, connect.NewRequest(&vpsv1.FindVPSByLeaseRequest{Ip: l.IP.String(), Mac: strings.ToLower(l.MAC)}))
+				resp, err := client.FindVPSByLease(ctx, l.IP.String(), strings.ToLower(l.MAC))
 				cancel()
-				if err == nil && resp != nil && resp.Msg != nil && resp.Msg.GetVpsId() != "" {
-					vpsID := resp.Msg.GetVpsId()
+				if err == nil && resp != nil && resp.GetVpsId() != "" {
+					vpsID := resp.GetVpsId()
+					orgID := resp.GetOrganizationId()
 					if alloc, ok := m.allocations[vpsID]; ok {
 						if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
 							alloc.IPAddress = l.IP
@@ -703,13 +736,17 @@ func (m *Manager) updateHostsFile() error {
 						if alloc.MACAddress == "" && l.MAC != "" {
 							alloc.MACAddress = strings.ToLower(l.MAC)
 						}
+						if alloc.OrganizationID == "" && orgID != "" {
+							alloc.OrganizationID = orgID
+						}
 					} else {
 						m.allocations[vpsID] = &Allocation{
-							VPSID:        vpsID,
-							IPAddress:    l.IP,
-							MACAddress:   strings.ToLower(l.MAC),
-							AllocatedAt:  now,
-							LeaseExpires: l.ExpiresAt,
+							VPSID:          vpsID,
+							OrganizationID: orgID,
+							IPAddress:      l.IP,
+							MACAddress:     strings.ToLower(l.MAC),
+							AllocatedAt:    now,
+							LeaseExpires:   l.ExpiresAt,
 						}
 					}
 					continue

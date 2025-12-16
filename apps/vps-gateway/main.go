@@ -6,17 +6,17 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"vps-gateway/internal/client"
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
 	"vps-gateway/internal/metrics"
 	"vps-gateway/internal/network"
 	"vps-gateway/internal/server"
 	"vps-gateway/internal/sshproxy"
-
-	"strconv"
 )
 
 // getEnvInt gets an integer value from environment variable or returns default
@@ -50,8 +50,30 @@ func main() {
 		log.Fatalf("Failed to initialize DHCP manager: %v", err)
 	}
 
+	// Initialize SSH proxy (used by gateway server for SSH tunneling)
+	sshProxy, err := sshproxy.NewProxy(dhcpManager)
+	if err != nil {
+		log.Fatalf("Failed to initialize SSH proxy: %v", err)
+	}
+
 	// Get subnet configuration from DHCP manager
 	_, _, subnetMask, gatewayIP, _ := dhcpManager.GetConfig()
+
+	// Create API client for bidirectional communication with VPS service
+	apiClient, err := client.NewAPIClient(dhcpManager)
+	if err != nil {
+		log.Fatalf("Failed to create API client: %v", err)
+	}
+
+	// Provide API client to DHCP manager for FindVPSByLease requests
+	dhcpManager.SetAPIClient(apiClient)
+
+	// Start API client in background to maintain persistent connections
+	go func() {
+		if err := apiClient.Connect(context.Background()); err != nil {
+			logger.Error("API client error: %v", err)
+		}
+	}()
 
 	// Get outbound IP configuration (optional)
 	outboundIP := os.Getenv("GATEWAY_OUTBOUND_IP")
@@ -65,19 +87,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize SNAT manager: %v", err)
 		}
-
-		// Configure SNAT rules
-		if err := snatManager.ConfigureSNAT(); err != nil {
-			log.Fatalf("Failed to configure SNAT: %v", err)
-		}
-	} else {
-		logger.Info("GATEWAY_OUTBOUND_IP not set, gateway will use node's default IP for SNAT")
-	}
-
-	// Initialize SSH proxy
-	sshProxy, err := sshproxy.NewProxy(dhcpManager)
-	if err != nil {
-		log.Fatalf("Failed to initialize SSH proxy: %v", err)
 	}
 
 	// Initialize metrics

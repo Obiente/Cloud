@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vps-gateway/internal/dhcp"
@@ -15,6 +16,7 @@ import (
 	"vps-gateway/internal/metrics"
 	"vps-gateway/internal/redis"
 
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
@@ -31,18 +33,22 @@ type APIConnection struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	connected     bool
+	stream        *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
 	mu            sync.RWMutex
 }
 
 // APIClient handles connections to all API servers
 type APIClient struct {
-	connections map[string]*APIConnection // apiInstanceID -> connection
-	apiSecret   string
-	gatewayID   string
-	version     string
-	dhcpManager *dhcp.Manager
-	redisClient *redis.Client
-	mu          sync.RWMutex
+	connections       map[string]*APIConnection // apiInstanceID -> connection
+	apiSecret         string
+	gatewayID         string
+	version           string
+	dhcpManager       *dhcp.Manager
+	redisClient       *redis.Client
+	mu                sync.RWMutex
+	pendingRequests   map[string]chan *vpsgatewayv1.GatewayResponse // requestID -> response channel
+	pendingRequestsMu sync.RWMutex
+	requestCounter    uint64
 }
 
 // NewAPIClient creates a new API client that connects to all API instances
@@ -70,13 +76,147 @@ func NewAPIClient(dhcpManager *dhcp.Manager) (*APIClient, error) {
 	}
 
 	return &APIClient{
-		connections: make(map[string]*APIConnection),
-		apiSecret:   apiSecret,
-		gatewayID:   gatewayID,
-		version:     "1.0.0", // TODO: Get from build info
-		dhcpManager: dhcpManager,
-		redisClient: redisClient,
+		connections:     make(map[string]*APIConnection),
+		apiSecret:       apiSecret,
+		gatewayID:       gatewayID,
+		version:         "1.0.0", // TODO: Get from build info
+		dhcpManager:     dhcpManager,
+		redisClient:     redisClient,
+		pendingRequests: make(map[string]chan *vpsgatewayv1.GatewayResponse),
 	}, nil
+}
+
+// FindVPSByLease sends a FindVPSByLease request to ALL connected API instances and returns the first valid response
+// This is necessary because multiple VPS service instances (beta, production, dev) may be connected
+func (c *APIClient) FindVPSByLease(ctx context.Context, ip string, mac string) (*vpsv1.FindVPSByLeaseResponse, error) {
+	// Marshal request payload once
+	findReq := &vpsv1.FindVPSByLeaseRequest{
+		Ip:  ip,
+		Mac: mac,
+	}
+	payloadBytes, err := proto.Marshal(findReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FindVPSByLease request: %w", err)
+	}
+
+	// Send to all connected API instances with unique request IDs
+	c.mu.RLock()
+	var requestIDs []string
+	var responseChans []chan *vpsgatewayv1.GatewayResponse
+	
+	for instanceID, conn := range c.connections {
+		stream := conn.getStream()
+		if stream == nil {
+			continue
+		}
+
+		// Generate unique request ID for this instance
+		requestID := fmt.Sprintf("%s-findvps-%d-%s", c.gatewayID, atomic.AddUint64(&c.requestCounter, 1), instanceID)
+		
+		// Create response channel for this request
+		respChan := make(chan *vpsgatewayv1.GatewayResponse, 1)
+		responseChans = append(responseChans, respChan)
+		requestIDs = append(requestIDs, requestID)
+		
+		c.pendingRequestsMu.Lock()
+		c.pendingRequests[requestID] = respChan
+		c.pendingRequestsMu.Unlock()
+
+		// Create and send request
+		gatewayReq := &vpsgatewayv1.GatewayRequest{
+			RequestId: requestID,
+			Method:    "FindVPSByLease",
+			Payload:   payloadBytes,
+		}
+		
+		msg := &vpsgatewayv1.GatewayMessage{
+			Type:    "request",
+			Request: gatewayReq,
+		}
+		
+		if sendErr := stream.Send(msg); sendErr != nil {
+			logger.Debug("[APIClient] Failed to send FindVPSByLease request to API instance %s: %v", instanceID, sendErr)
+			// Clean up failed request
+			c.pendingRequestsMu.Lock()
+			delete(c.pendingRequests, requestID)
+			c.pendingRequestsMu.Unlock()
+			close(respChan)
+			// Remove from slices
+			requestIDs = requestIDs[:len(requestIDs)-1]
+			responseChans = responseChans[:len(responseChans)-1]
+		}
+	}
+	c.mu.RUnlock()
+
+	// Clean up all pending requests when done
+	defer func() {
+		c.pendingRequestsMu.Lock()
+		for _, reqID := range requestIDs {
+			delete(c.pendingRequests, reqID)
+		}
+		c.pendingRequestsMu.Unlock()
+		for _, ch := range responseChans {
+			close(ch)
+		}
+	}()
+
+	if len(responseChans) == 0 {
+		return nil, fmt.Errorf("no connected API instances available")
+	}
+
+	// Wait for responses from all instances, return first valid one
+	timeout := 5 * time.Second
+	deadline := time.After(timeout)
+	responsesReceived := 0
+	
+	for responsesReceived < len(responseChans) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			// Timeout - return empty response if no valid results found
+			logger.Debug("[APIClient] Timeout waiting for FindVPSByLease responses (received %d/%d)", responsesReceived, len(responseChans))
+			return &vpsv1.FindVPSByLeaseResponse{}, nil
+		case gatewayResp := <-mergeChannels(responseChans):
+			responsesReceived++
+			
+			if gatewayResp.Error != "" {
+				logger.Debug("[APIClient] FindVPSByLease error from instance: %s", gatewayResp.Error)
+				continue
+			}
+
+			// Unmarshal response payload
+			var findResp vpsv1.FindVPSByLeaseResponse
+			if err := proto.Unmarshal(gatewayResp.Payload, &findResp); err != nil {
+				logger.Debug("[APIClient] Failed to unmarshal FindVPSByLease response: %v", err)
+				continue
+			}
+
+			// If this response has a VPS ID, return it immediately
+			if findResp.GetVpsId() != "" {
+				logger.Debug("[APIClient] Found VPS %s for lease IP=%s MAC=%s", findResp.GetVpsId(), ip, mac)
+				return &findResp, nil
+			}
+		}
+	}
+
+	// All instances responded but none had the VPS
+	return &vpsv1.FindVPSByLeaseResponse{}, nil
+}
+
+// mergeChannels merges multiple response channels into a single channel
+func mergeChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan *vpsgatewayv1.GatewayResponse {
+	merged := make(chan *vpsgatewayv1.GatewayResponse, len(channels))
+	
+	for _, ch := range channels {
+		go func(c chan *vpsgatewayv1.GatewayResponse) {
+			if resp, ok := <-c; ok {
+				merged <- resp
+			}
+		}(ch)
+	}
+	
+	return merged
 }
 
 // apiAuthInterceptor adds the API secret header to requests
@@ -326,6 +466,7 @@ func (c *APIClient) connectToAPIInstance(ctx context.Context, instance APInstanc
 
 		// Mark as connected
 		conn.setConnected(true)
+		conn.setStream(stream) // Store stream in connection for request handling
 		c.updateConnectionStatus(ctx, instance.InstanceID, true)
 		logger.Info("[APIClient] Successfully connected to API instance %s", instance.InstanceID)
 
@@ -344,6 +485,7 @@ func (c *APIClient) connectToAPIInstance(ctx context.Context, instance APInstanc
 			if err == io.EOF {
 				logger.Info("[APIClient] API instance %s closed connection, reconnecting in 5 seconds...", instance.InstanceID)
 				conn.setConnected(false)
+				conn.setStream(nil)
 				c.updateConnectionStatus(ctx, instance.InstanceID, false)
 				time.Sleep(5 * time.Second)
 				break // Break inner loop to reconnect
@@ -351,6 +493,7 @@ func (c *APIClient) connectToAPIInstance(ctx context.Context, instance APInstanc
 			if err != nil {
 				logger.Error("[APIClient] Error receiving from API instance %s: %v, reconnecting in 5 seconds...", instance.InstanceID, err)
 				conn.setConnected(false)
+				conn.setStream(nil)
 				c.updateConnectionStatus(ctx, instance.InstanceID, false)
 				time.Sleep(5 * time.Second)
 				break // Break inner loop to reconnect
@@ -363,6 +506,24 @@ func (c *APIClient) connectToAPIInstance(ctx context.Context, instance APInstanc
 			case "request":
 				if msg.Request != nil {
 					go c.handleRequest(connCtx, stream, msg.Request)
+				}
+
+			case "response":
+				if msg.Response != nil {
+					c.pendingRequestsMu.RLock()
+					respChan, ok := c.pendingRequests[msg.Response.RequestId]
+					c.pendingRequestsMu.RUnlock()
+
+					if ok {
+						// Non-blocking send
+						select {
+						case respChan <- msg.Response:
+						default:
+							logger.Warn("[APIClient] Response channel full for request %s", msg.Response.RequestId)
+						}
+					} else {
+						logger.Debug("[APIClient] Received response for unknown request ID: %s", msg.Response.RequestId)
+					}
 				}
 
 			default:
@@ -403,6 +564,18 @@ func (c *APIConnection) setConnected(connected bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.connected = connected
+}
+
+func (c *APIConnection) setStream(stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stream = stream
+}
+
+func (c *APIConnection) getStream() *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage] {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.stream
 }
 
 // sendMetricsLoop sends Prometheus metrics to the API periodically
