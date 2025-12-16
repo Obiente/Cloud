@@ -12,10 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
+	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 
 	"github.com/moby/moby/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -41,6 +44,7 @@ type VPSManager struct {
 func parseNodeEndpointsMapping() map[string]string {
 	mapping := make(map[string]string)
 	envValue := os.Getenv("PROXMOX_NODE_ENDPOINTS")
+	logger.Debug("[parseNodeEndpointsMapping] PROXMOX_NODE_ENDPOINTS raw: %s", envValue)
 	if envValue == "" {
 		return mapping
 	}
@@ -79,6 +83,7 @@ func parseNodeProxmoxMapping() (map[string]string, error) {
 
 	// First, check for API-specific override
 	envValue := os.Getenv("PROXMOX_NODE_API_ENDPOINTS")
+	logger.Debug("[parseNodeProxmoxMapping] PROXMOX_NODE_API_ENDPOINTS raw: %s", envValue)
 	if envValue != "" {
 		// Parse comma-separated node mappings
 		nodeStrings := strings.Split(envValue, ",")
@@ -139,6 +144,7 @@ func resolveProxmoxURLForNode(nodeName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse Proxmox API mapping: %w", err)
 	}
+	logger.Debug("[resolveProxmoxURLForNode] nodeName='%s', parsed nodes=%v", nodeName, getProxmoxNodeNames(mapping))
 
 	// Mapping is required - no fallback
 	if len(mapping) == 0 {
@@ -156,6 +162,12 @@ func resolveProxmoxURLForNode(nodeName string) (string, error) {
 	}
 
 	// If no node specified but mapping exists, return error (node name is required)
+	// If no node specified but mapping exists, pick the first configured node as a fallback
+	// This makes operations that don't specify a node more resilient in single-node setups.
+	for _, apiURL := range mapping {
+		logger.Warn("[resolveProxmoxURLForNode] No node specified; falling back to first configured node API URL: %s", apiURL)
+		return apiURL, nil
+	}
 	return "", fmt.Errorf("node name is required when using PROXMOX_NODE_ENDPOINTS. Configure PROXMOX_NODE_ENDPOINTS with node mappings (e.g., 'node1:proxmox1.example.com')")
 }
 
@@ -217,6 +229,7 @@ func GetProxmoxConfig(nodeName ...string) (*ProxmoxConfig, error) {
 		}
 		logger.Debug("[GetProxmoxConfig] Using node-specific API URL for node %s: %s", nodeName[0], apiURL)
 	} else {
+		logger.Debug("[GetProxmoxConfig] No nodeName provided, attempting fallback resolution")
 		// Try to resolve without node name (will fail if PROXMOX_NODE_ENDPOINTS is configured)
 		apiURL, err = resolveProxmoxURLForNode("")
 		if err != nil {
@@ -332,6 +345,8 @@ func (vm *VPSManager) GetProxmoxClientForNode(nodeName string) (*ProxmoxClient, 
 	if nodeName == "" {
 		cacheKey = "__default__"
 	}
+
+	logger.Debug("[GetProxmoxClientForNode] requested nodeName='%s' cacheKey='%s'", nodeName, cacheKey)
 
 	// Check cache first
 	if cached, ok := vm.proxmoxClients.Load(cacheKey); ok {
@@ -1247,19 +1262,17 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		nodeName = nodes[0]
 	}
 
-	// Release IP address from gateway if available
-	// Get gateway client for the node where VPS is running
+	// Unassign public IP via DHCP if present (lookup from DHCP lease table)
 	if vps.NodeID != nil && *vps.NodeID != "" {
-		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
+		// Attempt to find any public DHCP lease for this VPS
+		var lease database.DHCPLease
+		err := database.DB.Where("vps_id = ? AND is_public = ?", vps.ID, true).First(&lease).Error
 		if err == nil {
-			if err := gatewayClient.ReleaseIP(ctx, vpsID); err != nil {
-				logger.Warn("[VPSManager] Failed to release IP from gateway for VPS %s: %v (continuing with VM deletion)", vpsID, err)
-				// Continue with VM deletion even if IP release fails
+			if err := vm.UnassignVPSPublicIP(ctx, *vps.NodeID, vps.ID, vps.OrganizationID, lease.MACAddress, lease.IPAddress); err != nil {
+				logger.Warn("[VPSManager] Failed to unassign public IP via DHCP for VPS %s: %v (continuing with VM deletion)", vpsID, err)
 			} else {
-				logger.Info("[VPSManager] Released IP from gateway for VPS %s", vpsID)
+				logger.Info("[VPSManager] Unassigned public IP %s from VPS %s via DHCP", lease.IPAddress, vpsID)
 			}
-		} else {
-			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
 		}
 	}
 
@@ -1474,8 +1487,7 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 		logger.Info("[VPSManager] Created missing terminal SSH key for VPS %s during reinitialization", vpsID)
 	}
 
-	// Allocate IP address from gateway if available
-	// Determine target node from region mapping or use existing node
+	// Allocate public IP via DHCP (if needed) using AssignVPSPublicIP
 	targetNodeName := ""
 	if vps.NodeID != nil && *vps.NodeID != "" {
 		targetNodeName = *vps.NodeID
@@ -1486,36 +1498,24 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 		}
 	}
 
-	var allocatedIP string
-	var macAddress string
-	var gatewayClientForRecreate *VPSGatewayClient
-
+	// If this VPS previously had a public IP, re-assign it via DHCP
 	if targetNodeName != "" {
-		client, err := vm.GetGatewayClientForNode(targetNodeName)
+		var lease database.DHCPLease
+		err := database.DB.Where("vps_id = ? AND is_public = ?", vps.ID, true).First(&lease).Error
 		if err == nil {
-			gatewayClientForRecreate = client
-			macAddress = generateMACAddress()
-			allocResp, err := gatewayClientForRecreate.AllocateIP(ctx, vpsID, vps.OrganizationID, macAddress)
-			if err != nil {
-				logger.Warn("[VPSManager] Failed to allocate IP from gateway during reinitialization: %v (continuing without gateway IP)", err)
+			macAddress := lease.MACAddress
+			publicIP := lease.IPAddress
+			if err := vm.AssignVPSPublicIP(ctx, targetNodeName, vps.ID, vps.OrganizationID, macAddress, publicIP); err != nil {
+				logger.Warn("[VPSManager] Failed to assign public IP via DHCP during reinitialization: %v (continuing without public IP)", err)
 			} else {
-				allocatedIP = allocResp.IpAddress
-				logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway on node %s during reinitialization", allocatedIP, vpsID, targetNodeName)
+				logger.Info("[VPSManager] Assigned public IP %s to VPS %s via DHCP on node %s during reinitialization", publicIP, vpsID, targetNodeName)
 			}
-		} else {
-			logger.Debug("[VPSManager] Failed to get gateway client for node %s during reinitialization: %v", targetNodeName, err)
 		}
 	}
 
 	// Create new VM via Proxmox
 	createResult, err := proxmoxClient.CreateVM(ctx, recreateConfig, org.AllowInterVMCommunication, nil)
 	if err != nil {
-		// If VM creation fails, release the allocated IP
-		if gatewayClientForRecreate != nil && allocatedIP != "" {
-			if releaseErr := gatewayClientForRecreate.ReleaseIP(ctx, vpsID); releaseErr != nil {
-				logger.Warn("[VPSManager] Failed to release IP %s after VM recreation failure: %v", allocatedIP, releaseErr)
-			}
-		}
 		// Restore old instance ID on failure
 		vps.InstanceID = oldInstanceID
 		vps.Status = 7 // FAILED
@@ -2492,6 +2492,12 @@ func (vm *VPSManager) RegisterLease(ctx context.Context, req *vpsv1.RegisterLeas
 		return fmt.Errorf("VPS not found or organization mismatch: %w", err)
 	}
 
+	// Ensure we have a valid expiry: default to 24h from now when missing/zero
+	expiresAt := time.Now().Add(24 * time.Hour)
+	if req.ExpiresAt != nil && !req.ExpiresAt.AsTime().IsZero() {
+		expiresAt = req.ExpiresAt.AsTime()
+	}
+
 	// Create or update the lease
 	lease := database.DHCPLease{
 		VPSID:          req.VpsId,
@@ -2499,13 +2505,20 @@ func (vm *VPSManager) RegisterLease(ctx context.Context, req *vpsv1.RegisterLeas
 		MACAddress:     req.MacAddress,
 		IPAddress:      req.IpAddress,
 		IsPublic:       req.IsPublic,
-		ExpiresAt:      req.ExpiresAt.AsTime(),
+		ExpiresAt:      expiresAt,
 		GatewayNode:    gatewayNode,
 	}
 
-	// Check if lease with this MAC already exists
+	// Check if lease with this MAC already exists. If MAC is empty, try matching
+	// by VPS ID & organization to avoid accidental collisions on empty MAC values.
 	var existing database.DHCPLease
-	result := database.DB.WithContext(ctx).Where("mac_address = ?", req.MacAddress).First(&existing)
+	var result *gorm.DB
+	if req.MacAddress != "" {
+		result = database.DB.WithContext(ctx).Where("mac_address = ?", req.MacAddress).First(&existing)
+	} else {
+		// Match by VPS ID + organization when MAC is not provided
+		result = database.DB.WithContext(ctx).Where("vps_id = ? AND organization_id = ?", req.VpsId, req.OrganizationId).First(&existing)
+	}
 
 	if result.Error == nil {
 		// Update existing lease
@@ -2540,35 +2553,117 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 	}
 
 	for nodeName := range mapping {
-		client, err := vm.GetGatewayClientForNode(nodeName)
-		if err != nil {
-			logger.Warn("[LeaseSync] Skipping node %s: %v", nodeName, err)
-			continue
+		// Prefer using an active bidi-connected gateway (registry) so the API
+		// can request leases over the existing stream without opening new HTTP
+		// clients. Fall back to the HTTP gateway client if no registry connection.
+		var allocations []*vpsgatewayv1.IPAllocation
+
+		registry := sharedorchestrator.GetGlobalGatewayRegistry()
+		if conn, ok := registry.GetGateway(nodeName); ok {
+			// Send request over the bidi stream using the GatewayRequest wrapper
+			respMsg, err := conn.SendRequest(ctx, "ListIPs", &vpsgatewayv1.ListIPsRequest{})
+			if err != nil {
+				logger.Debug("[LeaseSync] Failed to request ListIPs from registry connection for node %s: %v", nodeName, err)
+			} else {
+				if listResp, ok := respMsg.(*vpsgatewayv1.ListIPsResponse); ok {
+					allocations = listResp.Allocations
+				} else {
+					logger.Debug("[LeaseSync] Unexpected response type for ListIPs from node %s", nodeName)
+				}
+			}
 		}
 
-		nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		allocations, err := client.ListIPs(nodeCtx, "", "")
-		cancel()
-		if err != nil {
-			logger.Warn("[LeaseSync] Failed to list IPs from node %s: %v", nodeName, err)
-			continue
+		// Fallback to HTTP client if we didn't obtain allocations from registry
+		if allocations == nil {
+			client, err := vm.GetGatewayClientForNode(nodeName)
+			if err != nil {
+				logger.Warn("[LeaseSync] Skipping node %s: %v", nodeName, err)
+				continue
+			}
+
+			nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			allocs, err := client.ListIPs(nodeCtx, "", "")
+			cancel()
+			if err != nil {
+				logger.Warn("[LeaseSync] Failed to list IPs from node %s: %v", nodeName, err)
+				continue
+			}
+			allocations = allocs
 		}
 
 		for _, alloc := range allocations {
-			if alloc == nil || alloc.LeaseExpires == nil {
+			if alloc == nil {
 				continue
+			}
+
+			// Some gateways don't provide OrganizationId (e.g., gateway itself).
+			// Try to fall back to the VPS record in our DB using the VPS ID.
+			orgID := alloc.OrganizationId
+			if orgID == "" {
+					var vps database.VPSInstance
+					if err := database.DB.WithContext(ctx).Where("id = ?", alloc.VpsId).First(&vps).Error; err == nil && vps.OrganizationID != "" {
+						orgID = vps.OrganizationID
+						logger.Debug("[LeaseSync] Filled missing org for VPS %s from DB: %s", alloc.VpsId, orgID)
+					} else {
+						// Try to resolve via existing DHCP lease records (match by MAC then IP)
+						if alloc.MacAddress != "" {
+							var existing database.DHCPLease
+							if err := database.DB.WithContext(ctx).Where("mac_address = ?", alloc.MacAddress).First(&existing).Error; err == nil {
+								orgID = existing.OrganizationID
+								alloc.VpsId = existing.VPSID
+								logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by MAC: %s", alloc.IpAddress, orgID)
+							}
+						}
+
+						if orgID == "" && alloc.IpAddress != "" {
+							var existing database.DHCPLease
+							if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&existing).Error; err == nil {
+								orgID = existing.OrganizationID
+								alloc.VpsId = existing.VPSID
+								logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by IP: %s", alloc.IpAddress, orgID)
+							}
+						}
+
+						// Final fallback: check public IP assignments
+						if orgID == "" && alloc.IpAddress != "" {
+							var pub database.VPSPublicIP
+							if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&pub).Error; err == nil {
+								if pub.VPSID != nil {
+									alloc.VpsId = *pub.VPSID
+								}
+								if pub.OrganizationID != nil {
+									orgID = *pub.OrganizationID
+								}
+								logger.Debug("[LeaseSync] Filled missing org for IP %s from VPSPublicIP: %s", alloc.IpAddress, orgID)
+							}
+						}
+
+						if orgID == "" {
+							logger.Debug("[LeaseSync] Skipping lease with missing org for VPS %s (%s) on node %s", alloc.VpsId, alloc.IpAddress, nodeName)
+							continue
+						}
+					}
+			}
+
+			expires := alloc.LeaseExpires
+			if expires == nil || expires.AsTime().IsZero() {
+				expires = timestamppb.New(time.Now().Add(24 * time.Hour))
 			}
 
 			req := &vpsv1.RegisterLeaseRequest{
 				VpsId:          alloc.VpsId,
-				OrganizationId: alloc.OrganizationId,
+				OrganizationId: orgID,
 				MacAddress:     alloc.MacAddress,
 				IpAddress:      alloc.IpAddress,
-				ExpiresAt:      alloc.LeaseExpires,
-				IsPublic:       false,
+				ExpiresAt:      expires,
+				IsPublic:       alloc.IsPublic,
 			}
 
 			if err := vm.RegisterLease(ctx, req, nodeName); err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					logger.Debug("[LeaseSync] Skipping lease for unknown/mismatched VPS %s (%s) from node %s", alloc.VpsId, alloc.IpAddress, nodeName)
+					continue
+				}
 				logger.Warn("[LeaseSync] Failed to upsert lease for VPS %s (%s) from node %s: %v", alloc.VpsId, alloc.IpAddress, nodeName, err)
 			}
 		}
@@ -2591,5 +2686,53 @@ func (vm *VPSManager) ReleaseLease(ctx context.Context, req *vpsv1.ReleaseLeaseR
 	}
 
 	logger.Info("Released DHCP lease: VPS=%s MAC=%s", req.VpsId, req.MacAddress)
+	return nil
+}
+
+// AssignVPSPublicIP assigns a public IP to a VPS by adding a static DHCP lease via the gateway
+func (vm *VPSManager) AssignVPSPublicIP(ctx context.Context, nodeName, vpsID, orgID, macAddress, publicIP string) error {
+	gatewayClient, err := vm.GetGatewayClientForNode(nodeName)
+	if err != nil {
+		return fmt.Errorf("failed to get gateway client for node %s: %w", nodeName, err)
+	}
+	req := &vpsgatewayv1.AddStaticDHCPLeaseRequest{
+		MacAddress:     macAddress,
+		IpAddress:      publicIP,
+		VpsId:          vpsID,
+		OrganizationId: orgID,
+		IsPublic:       true,
+	}
+	resp, err := gatewayClient.client.AddStaticDHCPLease(ctx, connect.NewRequest(req))
+	if err != nil {
+		return fmt.Errorf("failed to add static DHCP lease: %w", err)
+	}
+	if !resp.Msg.Success {
+		return fmt.Errorf("gateway error: %s", resp.Msg.Message)
+	}
+	logger.Info("Assigned public IP %s to VPS %s via DHCP (node: %s)", publicIP, vpsID, nodeName)
+	return nil
+}
+
+// UnassignVPSPublicIP removes a public IP from a VPS by removing the static DHCP lease via the gateway
+func (vm *VPSManager) UnassignVPSPublicIP(ctx context.Context, nodeName, vpsID, orgID, macAddress, publicIP string) error {
+	gatewayClient, err := vm.GetGatewayClientForNode(nodeName)
+	if err != nil {
+		return fmt.Errorf("failed to get gateway client for node %s: %w", nodeName, err)
+	}
+	req := &vpsgatewayv1.RemoveStaticDHCPLeaseRequest{
+		MacAddress:     macAddress,
+		IpAddress:      publicIP,
+		VpsId:          vpsID,
+		OrganizationId: orgID,
+		IsPublic:       true,
+	}
+	resp, err := gatewayClient.client.RemoveStaticDHCPLease(ctx, connect.NewRequest(req))
+	if err != nil {
+		return fmt.Errorf("failed to remove static DHCP lease: %w", err)
+	}
+	if !resp.Msg.Success {
+		return fmt.Errorf("gateway error: %s", resp.Msg.Message)
+	}
+	logger.Info("Unassigned public IP %s from VPS %s via DHCP (node: %s)", publicIP, vpsID, nodeName)
 	return nil
 }

@@ -3,6 +3,7 @@ package vps
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -95,6 +96,29 @@ func (s *Service) RegisterLease(ctx context.Context, req *connect.Request[vpsv1.
 		Success: true,
 		Message: "Lease registered successfully",
 	}), nil
+}
+
+// FindVPSByLease looks up a DHCP lease by IP or MAC and returns the associated VPS
+// if found. Gateways use this to resolve active leases to managed VPS IDs when
+// the client-supplied hostname does not match the VPS identifier.
+func (s *Service) FindVPSByLease(ctx context.Context, req *connect.Request[vpsv1.FindVPSByLeaseRequest]) (*connect.Response[vpsv1.FindVPSByLeaseResponse], error) {
+	mac := strings.ToLower(strings.TrimSpace(req.Msg.GetMac()))
+	ip := strings.TrimSpace(req.Msg.GetIp())
+
+	var lease database.DHCPLease
+	if mac != "" {
+		if err := database.DB.WithContext(ctx).Where("mac_address = ?", mac).First(&lease).Error; err == nil {
+			return connect.NewResponse(&vpsv1.FindVPSByLeaseResponse{VpsId: lease.VPSID, OrganizationId: lease.OrganizationID}), nil
+		}
+	}
+	if ip != "" {
+		if err := database.DB.WithContext(ctx).Where("ip_address = ?", ip).First(&lease).Error; err == nil {
+			return connect.NewResponse(&vpsv1.FindVPSByLeaseResponse{VpsId: lease.VPSID, OrganizationId: lease.OrganizationID}), nil
+		}
+	}
+
+	// Not found: return empty response
+	return connect.NewResponse(&vpsv1.FindVPSByLeaseResponse{}), nil
 }
 
 // ReleaseLease handles lease release from gateway nodes (called via persistent connection)

@@ -329,4 +329,3 @@ func (pc *ProxmoxClient) apiRequestForm(ctx context.Context, method, endpoint st
 
 	return pc.httpClient.Do(req)
 }
-
