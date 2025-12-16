@@ -605,6 +605,17 @@ func (s *GatewayService) RegisterGateway(
 					return
 				}
 
+				// Trigger DHCP hosts file sync now that a VPS service is connected
+				// This resolves any existing DHCP leases to VPS IDs
+				go func() {
+					logger.Info("[GatewayService] Triggering DHCP sync after API registration")
+					if err := s.dhcpManager.SyncHostsFromLeases(); err != nil {
+						logger.Warn("[GatewayService] DHCP sync after registration failed: %v", err)
+					} else {
+						logger.Info("[GatewayService] DHCP sync completed successfully")
+					}
+				}()
+
 			case "response":
 				// Handle response to our request
 				if msg.Response != nil {

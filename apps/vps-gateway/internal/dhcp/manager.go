@@ -309,6 +309,23 @@ func (m *Manager) SetAPIClient(client APIClient) {
 	}()
 }
 
+// SyncHostsFromLeases updates the hosts file from current DHCP leases
+// This is called when VPS services connect to resolve existing leases to VPS IDs
+func (m *Manager) SyncHostsFromLeases() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	if err := m.updateHostsFile(); err != nil {
+		return fmt.Errorf("failed to update hosts file: %w", err)
+	}
+	
+	if err := m.reloadDNSMasq(); err != nil {
+		return fmt.Errorf("failed to reload dnsmasq: %w", err)
+	}
+	
+	return nil
+}
+
 // AllocateIP allocates an IP address for a VPS
 // If preferredIP is provided and allowPublicIP is true, it can allocate IPs outside the DHCP pool (for public IPs)
 func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, preferredIP string, allowPublicIP bool) (*Allocation, error) {
