@@ -451,6 +451,23 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 
 	if s.gatewayClient == nil {
 		logger.Error("[SSHProxy] Gateway not available, cannot proxy SSH connection")
+		
+		// Display error message to user
+		errorMsg := createErrorBox("Gateway Unavailable", []string{
+			"The VPS gateway is currently unavailable.",
+			"",
+			"This usually means:",
+			"• The gateway service is starting up",
+			"• Network connectivity issues between services",
+			"• Gateway service is temporarily down",
+			"",
+			"Please try again in a few moments.",
+			"",
+			"If this problem persists, please contact support.",
+		})
+		
+		// Write error message directly to connection
+		clientConn.Write([]byte(errorMsg))
 		clientConn.Close()
 		return
 	}
