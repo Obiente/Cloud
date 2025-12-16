@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vps-gateway/internal/dhcp"
@@ -14,20 +15,29 @@ import (
 	"vps-gateway/internal/security"
 	"vps-gateway/internal/sshproxy"
 
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // GatewayService implements the VPSGatewayService
 type GatewayService struct {
 	vpsgatewayv1connect.UnimplementedVPSGatewayServiceHandler
-	dhcpManager   *dhcp.Manager
-	sshProxy      *sshproxy.Proxy
-	securityMgr   *security.Manager
-	startTime     time.Time
+	dhcpManager     *dhcp.Manager
+	sshProxy        *sshproxy.Proxy
+	securityMgr     *security.Manager
+	startTime       time.Time
+	
+	// Track connected VPS service instances
+	connectedStreams   map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	streamsMu          sync.RWMutex
+	pendingRequests    map[string]chan *vpsgatewayv1.GatewayResponse
+	pendingRequestsMu  sync.RWMutex
+	requestCounter     uint64
 }
 
 // NewGatewayService creates a new gateway service
@@ -39,10 +49,12 @@ func NewGatewayService(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy) (*Ga
 	}
 
 	return &GatewayService{
-		dhcpManager: dhcpManager,
-		sshProxy:    sshProxy,
-		securityMgr: securityMgr,
-		startTime:   time.Now(),
+		dhcpManager:      dhcpManager,
+		sshProxy:         sshProxy,
+		securityMgr:      securityMgr,
+		startTime:        time.Now(),
+		connectedStreams: make(map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]),
+		pendingRequests:  make(map[string]chan *vpsgatewayv1.GatewayResponse),
 	}, nil
 }
 
@@ -548,6 +560,16 @@ func (s *GatewayService) RegisterGateway(
 
 	// Handle incoming messages from API
 	go func() {
+		defer func() {
+			// Clean up on disconnect
+			if apiInstanceID != "" {
+				s.streamsMu.Lock()
+				delete(s.connectedStreams, apiInstanceID)
+				s.streamsMu.Unlock()
+				logger.Info("[GatewayService] Cleaned up stream for disconnected VPS instance %s", apiInstanceID)
+			}
+		}()
+		
 		for {
 			msg, err := stream.Receive()
 			if err == io.EOF {
@@ -570,12 +592,36 @@ func (s *GatewayService) RegisterGateway(
 
 				logger.Info("[GatewayService] API instance %s registered (version: %s)", apiInstanceID, reg.Version)
 
+				// Store stream for this VPS service instance
+				s.streamsMu.Lock()
+				s.connectedStreams[apiInstanceID] = stream
+				s.streamsMu.Unlock()
+
 				// Send registration confirmation
 				if err := stream.Send(&vpsgatewayv1.GatewayMessage{
 					Type: "registered",
 				}); err != nil {
 					logger.Error("[GatewayService] Failed to send registration confirmation: %v", err)
 					return
+				}
+
+			case "response":
+				// Handle response to our request
+				if msg.Response != nil {
+					s.pendingRequestsMu.RLock()
+					respChan, ok := s.pendingRequests[msg.Response.RequestId]
+					s.pendingRequestsMu.RUnlock()
+
+					if ok {
+						// Non-blocking send
+						select {
+						case respChan <- msg.Response:
+						default:
+							logger.Warn("[GatewayService] Response channel full for request %s", msg.Response.RequestId)
+						}
+					} else {
+						logger.Debug("[GatewayService] Received response for unknown request ID: %s", msg.Response.RequestId)
+					}
 				}
 
 			case "metrics":
@@ -773,4 +819,137 @@ func (s *GatewayService) SyncAllocations(
 
 	logger.Info("SyncAllocations: completed with added=%d removed=%d", added, removed)
 	return connect.NewResponse(resp), nil
+}
+
+// FindVPSByLease sends a FindVPSByLease request to ALL connected VPS service instances and returns the first valid response
+// This method implements the dhcp.APIClient interface so DHCP manager can use it
+func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac string) (*vpsv1.FindVPSByLeaseResponse, error) {
+	// Marshal request payload once
+	findReq := &vpsv1.FindVPSByLeaseRequest{
+		Ip:  ip,
+		Mac: mac,
+	}
+	payloadBytes, err := proto.Marshal(findReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FindVPSByLease request: %w", err)
+	}
+
+	// Send to all connected VPS service instances with unique request IDs
+	s.streamsMu.RLock()
+	var requestIDs []string
+	var responseChans []chan *vpsgatewayv1.GatewayResponse
+	
+	for instanceID, stream := range s.connectedStreams {
+		if stream == nil {
+			continue
+		}
+
+		// Generate unique request ID for this instance
+		requestID := fmt.Sprintf("gateway-findvps-%d-%s", atomic.AddUint64(&s.requestCounter, 1), instanceID)
+		
+		// Create response channel for this request
+		respChan := make(chan *vpsgatewayv1.GatewayResponse, 1)
+		responseChans = append(responseChans, respChan)
+		requestIDs = append(requestIDs, requestID)
+		
+		s.pendingRequestsMu.Lock()
+		s.pendingRequests[requestID] = respChan
+		s.pendingRequestsMu.Unlock()
+
+		// Create and send request
+		gatewayReq := &vpsgatewayv1.GatewayRequest{
+			RequestId: requestID,
+			Method:    "FindVPSByLease",
+			Payload:   payloadBytes,
+		}
+		
+		msg := &vpsgatewayv1.GatewayMessage{
+			Type:    "request",
+			Request: gatewayReq,
+		}
+		
+		if sendErr := stream.Send(msg); sendErr != nil {
+			logger.Debug("[GatewayService] Failed to send FindVPSByLease request to VPS instance %s: %v", instanceID, sendErr)
+			// Clean up failed request
+			s.pendingRequestsMu.Lock()
+			delete(s.pendingRequests, requestID)
+			s.pendingRequestsMu.Unlock()
+			close(respChan)
+			// Remove from slices
+			requestIDs = requestIDs[:len(requestIDs)-1]
+			responseChans = responseChans[:len(responseChans)-1]
+		}
+	}
+	s.streamsMu.RUnlock()
+
+	// Clean up all pending requests when done
+	defer func() {
+		s.pendingRequestsMu.Lock()
+		for _, reqID := range requestIDs {
+			delete(s.pendingRequests, reqID)
+		}
+		s.pendingRequestsMu.Unlock()
+		for _, ch := range responseChans {
+			close(ch)
+		}
+	}()
+
+	if len(responseChans) == 0 {
+		logger.Debug("[GatewayService] No connected VPS service instances for FindVPSByLease")
+		return &vpsv1.FindVPSByLeaseResponse{}, nil
+	}
+
+	// Wait for responses from all instances, return first valid one
+	timeout := 5 * time.Second
+	deadline := time.After(timeout)
+	responsesReceived := 0
+	
+	for responsesReceived < len(responseChans) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			// Timeout - return empty response if no valid results found
+			logger.Debug("[GatewayService] Timeout waiting for FindVPSByLease responses (received %d/%d)", responsesReceived, len(responseChans))
+			return &vpsv1.FindVPSByLeaseResponse{}, nil
+		case gatewayResp := <-mergeResponseChannels(responseChans):
+			responsesReceived++
+			
+			if gatewayResp.Error != "" {
+				logger.Debug("[GatewayService] FindVPSByLease error from VPS instance: %s", gatewayResp.Error)
+				continue
+			}
+
+			// Unmarshal response payload
+			var findResp vpsv1.FindVPSByLeaseResponse
+			if err := proto.Unmarshal(gatewayResp.Payload, &findResp); err != nil {
+				logger.Debug("[GatewayService] Failed to unmarshal FindVPSByLease response: %v", err)
+				continue
+			}
+
+			// If this response has a VPS ID, return it immediately
+			if findResp.GetVpsId() != "" {
+				logger.Debug("[GatewayService] Found VPS %s for lease IP=%s MAC=%s", findResp.GetVpsId(), ip, mac)
+				return &findResp, nil
+			}
+		}
+	}
+
+	// All instances responded but none had the VPS
+	return &vpsv1.FindVPSByLeaseResponse{}, nil
+}
+
+// mergeResponseChannels merges multiple response channels into a single channel
+func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan *vpsgatewayv1.GatewayResponse {
+	merged := make(chan *vpsgatewayv1.GatewayResponse, len(channels))
+	
+	for _, ch := range channels {
+		go func(c chan *vpsgatewayv1.GatewayResponse) {
+			if resp, ok := <-c; ok {
+				merged <- resp
+			}
+		}(ch)
+	}
+	
+	return merged
 }

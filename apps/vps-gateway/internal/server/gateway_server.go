@@ -85,6 +85,11 @@ func (s *GatewayServer) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
+// GetService returns the gateway service for use by DHCP manager
+func (s *GatewayServer) GetService() *GatewayService {
+	return s.service
+}
+
 // gatewayAuthInterceptor validates the API secret header
 type gatewayAuthInterceptor struct {
 	secret string
