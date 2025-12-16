@@ -783,6 +783,17 @@ func (m *Manager) updateHostsFile() error {
 						}
 					}
 					m.mu.Unlock()
+					
+					// Register the discovered lease with the database
+					// This ensures future lookups will work even if the VPS service restarts
+					isPublic := !m.IsIPInPool(l.IP)
+					regCtx, regCancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if regErr := m.registerLeaseWithAPI(regCtx, vpsID, orgID, l.IP, isPublic); regErr != nil {
+						logger.Warn("[DHCP] Failed to register discovered lease for VPS %s: %v", vpsID, regErr)
+					} else {
+						logger.Info("[DHCP] Registered discovered lease for VPS %s (IP: %s, MAC: %s)", vpsID, l.IP.String(), l.MAC)
+					}
+					regCancel()
 				}
 			}
 		}
