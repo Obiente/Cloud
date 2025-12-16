@@ -413,7 +413,7 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 	// Register lease with VPS Service API (database as source of truth)
 	// This prevents duplicate IP allocations across gateways
 	isPublic := allowPublicIP && !m.IsIPInPool(ip)
-	if err := m.registerLeaseWithAPI(ctx, vpsID, orgID, ip, isPublic); err != nil {
+	if err := m.registerLeaseWithAPI(ctx, vpsID, orgID, ip, isPublic, macAddress); err != nil {
 		logger.Error("Failed to register lease with VPS Service: %v", err)
 		// Remove local allocation if API registration fails
 		delete(m.allocations, vpsID)
@@ -786,9 +786,10 @@ func (m *Manager) updateHostsFile() error {
 					
 					// Register the discovered lease with the database
 					// This ensures future lookups will work even if the VPS service restarts
+					// Pass MAC directly since we already have it from the lease
 					isPublic := !m.IsIPInPool(l.IP)
 					regCtx, regCancel := context.WithTimeout(context.Background(), 5*time.Second)
-					if regErr := m.registerLeaseWithAPI(regCtx, vpsID, orgID, l.IP, isPublic); regErr != nil {
+					if regErr := m.registerLeaseWithAPI(regCtx, vpsID, orgID, l.IP, isPublic, l.MAC); regErr != nil {
 						logger.Warn("[DHCP] Failed to register discovered lease for VPS %s: %v", vpsID, regErr)
 					} else {
 						logger.Info("[DHCP] Registered discovered lease for VPS %s (IP: %s, MAC: %s)", vpsID, l.IP.String(), l.MAC)
@@ -799,6 +800,11 @@ func (m *Manager) updateHostsFile() error {
 		}
 	} else {
 		logger.Debug("Could not read active leases while updating hosts file: %v", err)
+	}
+
+	// Persist updated allocations with discovered MACs (outside of lock)
+	if err := m.saveAllocations(); err != nil {
+		logger.Warn("Failed to persist allocations after MAC discovery: %v", err)
 	}
 
 	// Write allocations (need to hold lock while reading map)
@@ -1467,7 +1473,8 @@ func (m *Manager) backgroundReconciler() {
 
 // registerLeaseWithAPI registers a lease with the VPS Service API through persistent gRPC connection
 // This ensures the lease is recorded in the central database and prevents duplicate allocations
-func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationID string, ipAddress net.IP, isPublic bool) error {
+// If macAddress is provided, it will be used directly; otherwise it will be discovered
+func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationID string, ipAddress net.IP, isPublic bool, macAddress string) error {
 	m.vpsServiceClientMu.RLock()
 	client := m.vpsServiceClient
 	m.vpsServiceClientMu.RUnlock()
@@ -1484,21 +1491,23 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 	expiresAt := time.Now().Add(24 * time.Hour)
 	expiresPb := timestamppb.New(expiresAt)
 
-	// Attempt to determine the MAC address from allocation tracking
-	macAddr := ""
-	m.mu.RLock()
-	if alloc, ok := m.allocations[vpsID]; ok && alloc != nil && alloc.MACAddress != "" {
-		macAddr = alloc.MACAddress
-	} else {
-		// Fallback: try to find allocation by IP if VPSID lookup failed
-		for _, a := range m.allocations {
-			if a != nil && a.IPAddress != nil && a.IPAddress.Equal(ipAddress) && a.MACAddress != "" {
-				macAddr = a.MACAddress
-				break
+	// Use provided MAC address if available, otherwise attempt discovery
+	macAddr := strings.ToLower(strings.TrimSpace(macAddress))
+	if macAddr == "" {
+		m.mu.RLock()
+		if alloc, ok := m.allocations[vpsID]; ok && alloc != nil && alloc.MACAddress != "" {
+			macAddr = alloc.MACAddress
+		} else {
+			// Fallback: try to find allocation by IP if VPSID lookup failed
+			for _, a := range m.allocations {
+				if a != nil && a.IPAddress != nil && a.IPAddress.Equal(ipAddress) && a.MACAddress != "" {
+					macAddr = a.MACAddress
+					break
+				}
 			}
 		}
+		m.mu.RUnlock()
 	}
-	m.mu.RUnlock()
 
 	// If MAC still unknown, try scanning active leases file for IP -> MAC mapping
 	if macAddr == "" {
