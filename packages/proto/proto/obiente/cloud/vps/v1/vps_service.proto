@@ -116,6 +116,12 @@ service VPSService {
   // Get DHCP leases for VPS instances in an organization
   // Leases are stored in the database and synced from gateway nodes
   rpc GetVPSLeases(GetVPSLeasesRequest) returns (GetVPSLeasesResponse);
+
+  // FindVPSByLease finds a VPS by DHCP lease information (IP or MAC). Returns
+  // the VPS ID and organization if a matching DHCP lease exists in the
+  // database. This is used by gateways to resolve a lease to a managed VPS
+  // when the client-supplied hostname does not contain the VPS identifier.
+  rpc FindVPSByLease(FindVPSByLeaseRequest) returns (FindVPSByLeaseResponse);
   
   // Register a new DHCP lease (called by gateway nodes via persistent connection)
   rpc RegisterLease(RegisterLeaseRequest) returns (RegisterLeaseResponse);
@@ -321,6 +327,20 @@ message GetVPSUsageRequest {
   string vps_id = 2;
   // Optional: specify a month (YYYY-MM format). Defaults to current month.
   optional string month = 3;
+}
+
+message FindVPSByLeaseRequest {
+  // IP address to match (optional)
+  string ip = 1;
+  // MAC address to match (optional)
+  string mac = 2;
+}
+
+message FindVPSByLeaseResponse {
+  // VPS ID if found, empty otherwise
+  string vps_id = 1;
+  // Organization ID owning the VPS (if any)
+  string organization_id = 2;
 }
 
 message GetVPSUsageResponse {

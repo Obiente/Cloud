@@ -96,6 +96,8 @@ message UsageMetrics {
   optional int64 memory_cost_cents = 9;
   optional int64 bandwidth_cost_cents = 10;
   optional int64 storage_cost_cents = 11;
+  // VPS public IP cost (monthly rate prorated)
+  optional int64 public_ip_cost_cents = 12;
 }
 
 message UsageQuota {

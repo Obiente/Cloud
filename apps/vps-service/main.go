@@ -21,11 +21,13 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/redis"
+	gateway "github.com/obiente/cloud/apps/vps-service/internal/gateway"
 	vpssvc "github.com/obiente/cloud/apps/vps-service/internal/service"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
+	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
 	"golang.org/x/net/http2"
@@ -138,6 +140,34 @@ func main() {
 	)
 	mux.Handle(vpsPath, vpsHandler)
 
+	// Register VPSGateway bidirectional handler so gateways can register/connect
+	gatewayService := gateway.NewService(vpsManager)
+	gwPath, gwHandler := vpsgatewayv1connect.NewVPSGatewayServiceHandler(gatewayService)
+	mux.Handle(gwPath, gwHandler)
+
+	// Start gateway client to connect to ALL VPS gateways
+	// VPS service initiates connections to gateways, not the other way around
+	if endpoints := os.Getenv("VPS_NODE_GATEWAY_ENDPOINTS"); endpoints != "" {
+		gatewayClient, err := gateway.NewGatewayClient()
+		if err != nil {
+			logger.Warn("⚠️  Failed to create gateway client: %v", err)
+		} else {
+			// Register handlers for gateway requests
+			gatewayClient.RegisterHandler("FindVPSByLease", gateway.NewFindVPSByLeaseHandler())
+			// Future handlers can be registered here:
+			// gatewayClient.RegisterHandler("SomeOtherMethod", gateway.NewSomeOtherHandler())
+			
+			go func() {
+				if err := gatewayClient.Start(context.Background()); err != nil {
+					logger.Error("Gateway client error: %v", err)
+				}
+			}()
+			logger.Info("✓ Gateway client started, connecting to configured gateways")
+		}
+	} else {
+		logger.Warn("⚠️  VPS_NODE_GATEWAY_ENDPOINTS not set, will not connect to gateways")
+	}
+
 	// VPS Config service (for cloud-init and user management)
 	vpsConfigService := vpssvc.NewConfigService(vpsManager)
 	vpsConfigPath, vpsConfigHandler := vpsv1connect.NewVPSConfigServiceHandler(
@@ -178,6 +208,11 @@ func main() {
 		}()
 		logger.Info("✓ SSH proxy server started on port %d", sshProxyPort)
 	}
+
+	// Start lease reconciler to ensure all VPSes have DHCP leases registered
+	// This handles cases where gateway was down during VPS creation
+	go vpsManager.StartLeaseReconciler(context.Background())
+	logger.Info("✓ Lease reconciler started")
 
 	// Health check endpoint with replica ID
 	mux.HandleFunc("/health", health.HandleHealth("vps-service", func() (bool, string, map[string]interface{}) {

@@ -2922,6 +2922,61 @@ func (pc *ProxmoxClient) GetVMConfig(ctx context.Context, nodeName string, vmID 
 	return configResp.Data, nil
 }
 
+// NetworkInterface represents a VM network interface from QEMU guest agent
+type NetworkInterface struct {
+	Name        string
+	MACAddress  string
+	IPAddresses []string
+}
+
+// GetVMNetworkInterfaces retrieves network interfaces from QEMU guest agent
+func (pc *ProxmoxClient) GetVMNetworkInterfaces(ctx context.Context, nodeName string, vmID int) ([]NetworkInterface, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get network interfaces: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Guest agent not available or not running
+		return nil, fmt.Errorf("guest agent not available (status %d)", resp.StatusCode)
+	}
+
+	var result struct {
+		Data struct {
+			Result []struct {
+				Name            string `json:"name"`
+				HardwareAddress string `json:"hardware-address"`
+				IPAddresses     []struct {
+					IPAddress string `json:"ip-address"`
+					IPType    string `json:"ip-address-type"` // ipv4 or ipv6
+				} `json:"ip-addresses"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode network interfaces: %w", err)
+	}
+
+	interfaces := make([]NetworkInterface, 0, len(result.Data.Result))
+	for _, iface := range result.Data.Result {
+		ips := make([]string, 0, len(iface.IPAddresses))
+		for _, ip := range iface.IPAddresses {
+			ips = append(ips, ip.IPAddress)
+		}
+
+		interfaces = append(interfaces, NetworkInterface{
+			Name:        iface.Name,
+			MACAddress:  iface.HardwareAddress,
+			IPAddresses: ips,
+		})
+	}
+
+	return interfaces, nil
+}
+
 func (pc *ProxmoxClient) RebootVM(ctx context.Context, nodeName string, vmID int) error {
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/reboot", nodeName, vmID)
 	// Proxmox API expects form-encoded data for POST requests, even if empty
