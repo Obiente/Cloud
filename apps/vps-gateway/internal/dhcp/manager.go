@@ -312,9 +312,6 @@ func (m *Manager) SetAPIClient(client APIClient) {
 // SyncHostsFromLeases updates the hosts file from current DHCP leases
 // This is called when VPS services connect to resolve existing leases to VPS IDs
 func (m *Manager) SyncHostsFromLeases() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	
 	if err := m.updateHostsFile(); err != nil {
 		return fmt.Errorf("failed to update hosts file: %w", err)
 	}
@@ -708,6 +705,8 @@ func (m *Manager) updateHostsFile() error {
 		// (e.g., dnsmasq hostname set to "vps-<id>"). This helps include those
 		// active leases in the hosts file even if they weren't previously allocated.
 		now := time.Now()
+		
+		// First pass: handle vps-* hostnames (no API calls needed)
 		m.mu.Lock()
 		for _, l := range activeLeases {
 			if l.Hostname == "" || l.IP == nil {
@@ -733,19 +732,36 @@ func (m *Manager) updateHostsFile() error {
 						LeaseExpires: l.ExpiresAt,
 					}
 				}
-				continue
 			}
-			// If hostname isn't vps-*, attempt to resolve lease -> VPS via API client
-			m.apiClientMu.RLock()
-			client := m.apiClient
-			m.apiClientMu.RUnlock()
-			if client != nil {
+		}
+		m.mu.Unlock()
+		
+		// Second pass: resolve non-vps-* hostnames via API (no lock held during network calls)
+		m.apiClientMu.RLock()
+		client := m.apiClient
+		m.apiClientMu.RUnlock()
+		
+		if client != nil {
+			for _, l := range activeLeases {
+				if l.Hostname == "" || l.IP == nil {
+					continue
+				}
+				// Skip vps-* hostnames (already handled above)
+				if strings.HasPrefix(l.Hostname, "vps-") {
+					continue
+				}
+				
+				// Resolve via API without holding mutex
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				resp, err := client.FindVPSByLease(ctx, l.IP.String(), strings.ToLower(l.MAC))
 				cancel()
+				
 				if err == nil && resp != nil && resp.GetVpsId() != "" {
 					vpsID := resp.GetVpsId()
 					orgID := resp.GetOrganizationId()
+					
+					// Now acquire lock to update allocations
+					m.mu.Lock()
 					if alloc, ok := m.allocations[vpsID]; ok {
 						if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
 							alloc.IPAddress = l.IP
@@ -766,16 +782,16 @@ func (m *Manager) updateHostsFile() error {
 							LeaseExpires:   l.ExpiresAt,
 						}
 					}
-					continue
+					m.mu.Unlock()
 				}
 			}
 		}
-		m.mu.Unlock()
 	} else {
 		logger.Debug("Could not read active leases while updating hosts file: %v", err)
 	}
 
-	// Write allocations
+	// Write allocations (need to hold lock while reading map)
+	m.mu.RLock()
 	for _, alloc := range m.allocations {
 		// DNS host entry
 		writer.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), alloc.VPSID))
@@ -797,6 +813,7 @@ func (m *Manager) updateHostsFile() error {
 			logger.Warn("Missing MAC for VPS %s (IP %s) - dhcp-host entry skipped, DNS entry only", alloc.VPSID, alloc.IPAddress.String())
 		}
 	}
+	m.mu.RUnlock()
 
 	return nil
 }
