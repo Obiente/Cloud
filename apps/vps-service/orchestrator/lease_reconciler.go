@@ -122,7 +122,7 @@ func (vm *VPSManager) reconcileAllLeases(ctx context.Context) error {
 		}
 
 		// Allocate IP (gateway will register the lease in database)
-		allocCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		allocCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		allocResp, err := gatewayClient.AllocateIP(allocCtx, vps.ID, vps.OrganizationID, mac)
 		cancel()
 

@@ -2351,7 +2351,7 @@ func (vm *VPSManager) SyncAllVPSStatuses(ctx context.Context) (map[string]int32,
 			// Status 1 = RUNNING (from mapProxmoxStatusToVPSStatus)
 			if updatedVPS.Status == 1 {
 				// Use a timeout for IP fetching to not block the sync
-				ipCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				ipCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 				_, _, err := vm.GetVPSIPAddresses(ipCtx, vps.ID)
 				cancel()
 				if err != nil {
@@ -2581,7 +2581,7 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 				continue
 			}
 
-			nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			nodeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			allocs, err := client.ListIPs(nodeCtx, "", "")
 			cancel()
 			if err != nil {
