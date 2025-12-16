@@ -155,12 +155,15 @@ func (c *GatewayClient) maintainConnection(ctx context.Context, nodeName, gatewa
 }
 
 func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayURL string) error {
-	// Create HTTP client with h2c support
+	// Create HTTP client with h2c support and keep-alive settings
 	transport := &http2.Transport{
 		AllowHTTP: true,
 		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
 			return net.Dial(network, addr)
 		},
+		// Enable HTTP/2 ping frames to keep connection alive
+		ReadIdleTimeout: 45 * time.Second, // Send ping if no reads for 45s
+		PingTimeout:     15 * time.Second, // Wait 15s for pong response
 	}
 	httpClient := &http.Client{
 		Transport: transport,

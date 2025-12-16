@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
@@ -58,7 +59,10 @@ func NewGatewayServer(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy, port 
 	// Wrap with h2c for HTTP/2 support (cleartext HTTP/2)
 	// This allows Connect RPC clients to use HTTP/2, which is more efficient for streaming
 	// h2c handler is backward compatible with HTTP/1.1
-	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
+	// Configure HTTP/2 server to prevent idle timeout disconnections
+	h2cHandler := h2c.NewHandler(mux, &http2.Server{
+		IdleTimeout: 10 * time.Minute, // Allow 10 min idle before closing
+	})
 
 	// Create HTTP server with h2c handler
 	httpServer := &http.Server{
