@@ -259,6 +259,22 @@ func (m *Manager) SetVPSServiceClient(client vpsv1connect.VPSServiceClient) {
 	defer m.vpsServiceClientMu.Unlock()
 	m.vpsServiceClient = client
 	logger.Info("VPS Service client configured for lease operations")
+	
+	// Trigger initial sync to discover and resolve existing leases to VPS IDs
+	// Run in background to avoid blocking the caller
+	go func() {
+		time.Sleep(2 * time.Second) // Brief delay to let the client stabilize
+		logger.Info("Triggering initial hosts file sync after VPS Service client configured")
+		if err := m.updateHostsFile(); err != nil {
+			logger.Warn("Initial hosts file sync failed: %v", err)
+		} else {
+			if err := m.reloadDNSMasq(); err != nil {
+				logger.Warn("Failed to reload dnsmasq after initial sync: %v", err)
+			} else {
+				logger.Info("Initial hosts file sync completed successfully")
+			}
+		}
+	}()
 }
 
 // AllocateIP allocates an IP address for a VPS
@@ -668,6 +684,36 @@ func (m *Manager) updateHostsFile() error {
 						LeaseExpires: l.ExpiresAt,
 					}
 				}
+				continue
+			}
+			// If hostname isn't vps-*, attempt to resolve lease -> VPS via VPS Service
+			m.vpsServiceClientMu.RLock()
+			client := m.vpsServiceClient
+			m.vpsServiceClientMu.RUnlock()
+			if client != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				resp, err := client.FindVPSByLease(ctx, connect.NewRequest(&vpsv1.FindVPSByLeaseRequest{Ip: l.IP.String(), Mac: strings.ToLower(l.MAC)}))
+				cancel()
+				if err == nil && resp != nil && resp.Msg != nil && resp.Msg.GetVpsId() != "" {
+					vpsID := resp.Msg.GetVpsId()
+					if alloc, ok := m.allocations[vpsID]; ok {
+						if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
+							alloc.IPAddress = l.IP
+						}
+						if alloc.MACAddress == "" && l.MAC != "" {
+							alloc.MACAddress = strings.ToLower(l.MAC)
+						}
+					} else {
+						m.allocations[vpsID] = &Allocation{
+							VPSID:        vpsID,
+							IPAddress:    l.IP,
+							MACAddress:   strings.ToLower(l.MAC),
+							AllocatedAt:  now,
+							LeaseExpires: l.ExpiresAt,
+						}
+					}
+					continue
+				}
 			}
 		}
 		m.mu.Unlock()
@@ -692,6 +738,9 @@ func (m *Manager) updateHostsFile() error {
 
 		if mac != "" {
 			writer.WriteString(fmt.Sprintf("dhcp-host=%s,%s,%s\n", mac, alloc.IPAddress.String(), alloc.VPSID))
+		} else {
+			// Log warning when MAC is missing - DHCP won't be enforced but DNS will work
+			logger.Warn("Missing MAC for VPS %s (IP %s) - dhcp-host entry skipped, DNS entry only", alloc.VPSID, alloc.IPAddress.String())
 		}
 	}
 
@@ -828,6 +877,9 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	// Enable authoritative mode to prevent unauthorized DHCP servers
 	// This ensures dnsmasq only responds to DHCP requests for known MAC addresses
 	writer.WriteString("dhcp-authoritative\n")
+	// Ignore client-supplied hostnames and use our static dhcp-host entries
+	// This ensures VPS IDs are always used as hostnames, not guest OS hostnames
+	writer.WriteString("dhcp-ignore-names\n")
 	// dnsmasq dhcp-range format: start,end,netmask,lease-time
 	// The netmask should be in dotted decimal format (e.g., 255.255.255.0)
 	// Convert IPMask back to dotted decimal format
@@ -1243,7 +1295,18 @@ func (m *Manager) backgroundReconciler() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// Sync leases first (updates MACs and expiries)
+		// Update hosts file first (discovers leases, resolves to VPS IDs, writes entries)
+		// This ensures the hosts file is always up-to-date with active leases
+		if err := m.updateHostsFile(); err != nil {
+			logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
+		} else {
+			// Reload dnsmasq to pick up the updated hosts file
+			if err := m.reloadDNSMasq(); err != nil {
+				logger.Warn("backgroundReconciler: failed to reload dnsmasq: %v", err)
+			}
+		}
+
+		// Sync leases (updates MACs and expiries in allocations)
 		if err := m.syncWithLeases(); err != nil {
 			logger.Debug("backgroundReconciler: syncWithLeases failed: %v", err)
 			continue

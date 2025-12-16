@@ -2024,6 +2024,114 @@ func (x *GetVPSUsageRequest) GetMonth() string {
 	return ""
 }
 
+type FindVPSByLeaseRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// IP address to match (optional)
+	Ip string `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
+	// MAC address to match (optional)
+	Mac           string `protobuf:"bytes,2,opt,name=mac,proto3" json:"mac,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FindVPSByLeaseRequest) Reset() {
+	*x = FindVPSByLeaseRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FindVPSByLeaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FindVPSByLeaseRequest) ProtoMessage() {}
+
+func (x *FindVPSByLeaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FindVPSByLeaseRequest.ProtoReflect.Descriptor instead.
+func (*FindVPSByLeaseRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *FindVPSByLeaseRequest) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *FindVPSByLeaseRequest) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
+}
+
+type FindVPSByLeaseResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// VPS ID if found, empty otherwise
+	VpsId string `protobuf:"bytes,1,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	// Organization ID owning the VPS (if any)
+	OrganizationId string `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *FindVPSByLeaseResponse) Reset() {
+	*x = FindVPSByLeaseResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FindVPSByLeaseResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FindVPSByLeaseResponse) ProtoMessage() {}
+
+func (x *FindVPSByLeaseResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FindVPSByLeaseResponse.ProtoReflect.Descriptor instead.
+func (*FindVPSByLeaseResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *FindVPSByLeaseResponse) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+func (x *FindVPSByLeaseResponse) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
 type GetVPSUsageResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	VpsId            string                 `protobuf:"bytes,1,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
@@ -2038,7 +2146,7 @@ type GetVPSUsageResponse struct {
 
 func (x *GetVPSUsageResponse) Reset() {
 	*x = GetVPSUsageResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2050,7 +2158,7 @@ func (x *GetVPSUsageResponse) String() string {
 func (*GetVPSUsageResponse) ProtoMessage() {}
 
 func (x *GetVPSUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2063,7 +2171,7 @@ func (x *GetVPSUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPSUsageResponse.ProtoReflect.Descriptor instead.
 func (*GetVPSUsageResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{26}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GetVPSUsageResponse) GetVpsId() string {
@@ -2122,7 +2230,7 @@ type VPSUsageMetrics struct {
 
 func (x *VPSUsageMetrics) Reset() {
 	*x = VPSUsageMetrics{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2134,7 +2242,7 @@ func (x *VPSUsageMetrics) String() string {
 func (*VPSUsageMetrics) ProtoMessage() {}
 
 func (x *VPSUsageMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2147,7 +2255,7 @@ func (x *VPSUsageMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSUsageMetrics.ProtoReflect.Descriptor instead.
 func (*VPSUsageMetrics) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{27}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *VPSUsageMetrics) GetCpuCoreSeconds() int64 {
@@ -2236,7 +2344,7 @@ type ListAvailableVPSSizesRequest struct {
 
 func (x *ListAvailableVPSSizesRequest) Reset() {
 	*x = ListAvailableVPSSizesRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2248,7 +2356,7 @@ func (x *ListAvailableVPSSizesRequest) String() string {
 func (*ListAvailableVPSSizesRequest) ProtoMessage() {}
 
 func (x *ListAvailableVPSSizesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2261,7 +2369,7 @@ func (x *ListAvailableVPSSizesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAvailableVPSSizesRequest.ProtoReflect.Descriptor instead.
 func (*ListAvailableVPSSizesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{28}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ListAvailableVPSSizesRequest) GetRegion() string {
@@ -2280,7 +2388,7 @@ type ListAvailableVPSSizesResponse struct {
 
 func (x *ListAvailableVPSSizesResponse) Reset() {
 	*x = ListAvailableVPSSizesResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2292,7 +2400,7 @@ func (x *ListAvailableVPSSizesResponse) String() string {
 func (*ListAvailableVPSSizesResponse) ProtoMessage() {}
 
 func (x *ListAvailableVPSSizesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2305,7 +2413,7 @@ func (x *ListAvailableVPSSizesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAvailableVPSSizesResponse.ProtoReflect.Descriptor instead.
 func (*ListAvailableVPSSizesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{29}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListAvailableVPSSizesResponse) GetSizes() []*v1.VPSSize {
@@ -2323,7 +2431,7 @@ type ListVPSRegionsRequest struct {
 
 func (x *ListVPSRegionsRequest) Reset() {
 	*x = ListVPSRegionsRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2335,7 +2443,7 @@ func (x *ListVPSRegionsRequest) String() string {
 func (*ListVPSRegionsRequest) ProtoMessage() {}
 
 func (x *ListVPSRegionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2348,7 +2456,7 @@ func (x *ListVPSRegionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVPSRegionsRequest.ProtoReflect.Descriptor instead.
 func (*ListVPSRegionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{30}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{32}
 }
 
 type ListVPSRegionsResponse struct {
@@ -2360,7 +2468,7 @@ type ListVPSRegionsResponse struct {
 
 func (x *ListVPSRegionsResponse) Reset() {
 	*x = ListVPSRegionsResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2372,7 +2480,7 @@ func (x *ListVPSRegionsResponse) String() string {
 func (*ListVPSRegionsResponse) ProtoMessage() {}
 
 func (x *ListVPSRegionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2385,7 +2493,7 @@ func (x *ListVPSRegionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVPSRegionsResponse.ProtoReflect.Descriptor instead.
 func (*ListVPSRegionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{31}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListVPSRegionsResponse) GetRegions() []*VPSRegion {
@@ -2405,7 +2513,7 @@ type GetVPSProxyInfoRequest struct {
 
 func (x *GetVPSProxyInfoRequest) Reset() {
 	*x = GetVPSProxyInfoRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2417,7 +2525,7 @@ func (x *GetVPSProxyInfoRequest) String() string {
 func (*GetVPSProxyInfoRequest) ProtoMessage() {}
 
 func (x *GetVPSProxyInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2430,7 +2538,7 @@ func (x *GetVPSProxyInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPSProxyInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetVPSProxyInfoRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{32}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetVPSProxyInfoRequest) GetOrganizationId() string {
@@ -2464,7 +2572,7 @@ type GetVPSProxyInfoResponse struct {
 
 func (x *GetVPSProxyInfoResponse) Reset() {
 	*x = GetVPSProxyInfoResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2476,7 +2584,7 @@ func (x *GetVPSProxyInfoResponse) String() string {
 func (*GetVPSProxyInfoResponse) ProtoMessage() {}
 
 func (x *GetVPSProxyInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2489,7 +2597,7 @@ func (x *GetVPSProxyInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPSProxyInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetVPSProxyInfoResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{33}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetVPSProxyInfoResponse) GetVpsId() string {
@@ -2540,7 +2648,7 @@ type VPSRegion struct {
 
 func (x *VPSRegion) Reset() {
 	*x = VPSRegion{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[34]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2552,7 +2660,7 @@ func (x *VPSRegion) String() string {
 func (*VPSRegion) ProtoMessage() {}
 
 func (x *VPSRegion) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[34]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2565,7 +2673,7 @@ func (x *VPSRegion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSRegion.ProtoReflect.Descriptor instead.
 func (*VPSRegion) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{34}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *VPSRegion) GetId() string {
@@ -2644,7 +2752,7 @@ type VPSInstance struct {
 
 func (x *VPSInstance) Reset() {
 	*x = VPSInstance{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[35]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2656,7 +2764,7 @@ func (x *VPSInstance) String() string {
 func (*VPSInstance) ProtoMessage() {}
 
 func (x *VPSInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[35]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2669,7 +2777,7 @@ func (x *VPSInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSInstance.ProtoReflect.Descriptor instead.
 func (*VPSInstance) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{35}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *VPSInstance) GetId() string {
@@ -2858,7 +2966,7 @@ type ListFirewallRulesRequest struct {
 
 func (x *ListFirewallRulesRequest) Reset() {
 	*x = ListFirewallRulesRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[36]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2870,7 +2978,7 @@ func (x *ListFirewallRulesRequest) String() string {
 func (*ListFirewallRulesRequest) ProtoMessage() {}
 
 func (x *ListFirewallRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[36]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2883,7 +2991,7 @@ func (x *ListFirewallRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFirewallRulesRequest.ProtoReflect.Descriptor instead.
 func (*ListFirewallRulesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{36}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListFirewallRulesRequest) GetOrganizationId() string {
@@ -2909,7 +3017,7 @@ type ListFirewallRulesResponse struct {
 
 func (x *ListFirewallRulesResponse) Reset() {
 	*x = ListFirewallRulesResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[37]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2921,7 +3029,7 @@ func (x *ListFirewallRulesResponse) String() string {
 func (*ListFirewallRulesResponse) ProtoMessage() {}
 
 func (x *ListFirewallRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[37]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2934,7 +3042,7 @@ func (x *ListFirewallRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFirewallRulesResponse.ProtoReflect.Descriptor instead.
 func (*ListFirewallRulesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{37}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *ListFirewallRulesResponse) GetRules() []*FirewallRule {
@@ -2955,7 +3063,7 @@ type GetFirewallRuleRequest struct {
 
 func (x *GetFirewallRuleRequest) Reset() {
 	*x = GetFirewallRuleRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[38]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2967,7 +3075,7 @@ func (x *GetFirewallRuleRequest) String() string {
 func (*GetFirewallRuleRequest) ProtoMessage() {}
 
 func (x *GetFirewallRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[38]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2980,7 +3088,7 @@ func (x *GetFirewallRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFirewallRuleRequest.ProtoReflect.Descriptor instead.
 func (*GetFirewallRuleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{38}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetFirewallRuleRequest) GetOrganizationId() string {
@@ -3013,7 +3121,7 @@ type GetFirewallRuleResponse struct {
 
 func (x *GetFirewallRuleResponse) Reset() {
 	*x = GetFirewallRuleResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[39]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3025,7 +3133,7 @@ func (x *GetFirewallRuleResponse) String() string {
 func (*GetFirewallRuleResponse) ProtoMessage() {}
 
 func (x *GetFirewallRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[39]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3038,7 +3146,7 @@ func (x *GetFirewallRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFirewallRuleResponse.ProtoReflect.Descriptor instead.
 func (*GetFirewallRuleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{39}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetFirewallRuleResponse) GetRule() *FirewallRule {
@@ -3060,7 +3168,7 @@ type CreateFirewallRuleRequest struct {
 
 func (x *CreateFirewallRuleRequest) Reset() {
 	*x = CreateFirewallRuleRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[40]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3072,7 +3180,7 @@ func (x *CreateFirewallRuleRequest) String() string {
 func (*CreateFirewallRuleRequest) ProtoMessage() {}
 
 func (x *CreateFirewallRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[40]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3085,7 +3193,7 @@ func (x *CreateFirewallRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFirewallRuleRequest.ProtoReflect.Descriptor instead.
 func (*CreateFirewallRuleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{40}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *CreateFirewallRuleRequest) GetOrganizationId() string {
@@ -3125,7 +3233,7 @@ type CreateFirewallRuleResponse struct {
 
 func (x *CreateFirewallRuleResponse) Reset() {
 	*x = CreateFirewallRuleResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[41]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3137,7 +3245,7 @@ func (x *CreateFirewallRuleResponse) String() string {
 func (*CreateFirewallRuleResponse) ProtoMessage() {}
 
 func (x *CreateFirewallRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[41]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3150,7 +3258,7 @@ func (x *CreateFirewallRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFirewallRuleResponse.ProtoReflect.Descriptor instead.
 func (*CreateFirewallRuleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{41}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CreateFirewallRuleResponse) GetRule() *FirewallRule {
@@ -3172,7 +3280,7 @@ type UpdateFirewallRuleRequest struct {
 
 func (x *UpdateFirewallRuleRequest) Reset() {
 	*x = UpdateFirewallRuleRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[42]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3184,7 +3292,7 @@ func (x *UpdateFirewallRuleRequest) String() string {
 func (*UpdateFirewallRuleRequest) ProtoMessage() {}
 
 func (x *UpdateFirewallRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[42]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3197,7 +3305,7 @@ func (x *UpdateFirewallRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFirewallRuleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateFirewallRuleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{42}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *UpdateFirewallRuleRequest) GetOrganizationId() string {
@@ -3237,7 +3345,7 @@ type UpdateFirewallRuleResponse struct {
 
 func (x *UpdateFirewallRuleResponse) Reset() {
 	*x = UpdateFirewallRuleResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[43]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3249,7 +3357,7 @@ func (x *UpdateFirewallRuleResponse) String() string {
 func (*UpdateFirewallRuleResponse) ProtoMessage() {}
 
 func (x *UpdateFirewallRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[43]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3262,7 +3370,7 @@ func (x *UpdateFirewallRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFirewallRuleResponse.ProtoReflect.Descriptor instead.
 func (*UpdateFirewallRuleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{43}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *UpdateFirewallRuleResponse) GetRule() *FirewallRule {
@@ -3283,7 +3391,7 @@ type DeleteFirewallRuleRequest struct {
 
 func (x *DeleteFirewallRuleRequest) Reset() {
 	*x = DeleteFirewallRuleRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[44]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3295,7 +3403,7 @@ func (x *DeleteFirewallRuleRequest) String() string {
 func (*DeleteFirewallRuleRequest) ProtoMessage() {}
 
 func (x *DeleteFirewallRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[44]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3308,7 +3416,7 @@ func (x *DeleteFirewallRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteFirewallRuleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteFirewallRuleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{44}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *DeleteFirewallRuleRequest) GetOrganizationId() string {
@@ -3341,7 +3449,7 @@ type DeleteFirewallRuleResponse struct {
 
 func (x *DeleteFirewallRuleResponse) Reset() {
 	*x = DeleteFirewallRuleResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[45]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3353,7 +3461,7 @@ func (x *DeleteFirewallRuleResponse) String() string {
 func (*DeleteFirewallRuleResponse) ProtoMessage() {}
 
 func (x *DeleteFirewallRuleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[45]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3366,7 +3474,7 @@ func (x *DeleteFirewallRuleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteFirewallRuleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteFirewallRuleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{45}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *DeleteFirewallRuleResponse) GetSuccess() bool {
@@ -3386,7 +3494,7 @@ type GetFirewallOptionsRequest struct {
 
 func (x *GetFirewallOptionsRequest) Reset() {
 	*x = GetFirewallOptionsRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[46]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3398,7 +3506,7 @@ func (x *GetFirewallOptionsRequest) String() string {
 func (*GetFirewallOptionsRequest) ProtoMessage() {}
 
 func (x *GetFirewallOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[46]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3411,7 +3519,7 @@ func (x *GetFirewallOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFirewallOptionsRequest.ProtoReflect.Descriptor instead.
 func (*GetFirewallOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{46}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *GetFirewallOptionsRequest) GetOrganizationId() string {
@@ -3437,7 +3545,7 @@ type GetFirewallOptionsResponse struct {
 
 func (x *GetFirewallOptionsResponse) Reset() {
 	*x = GetFirewallOptionsResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[47]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3449,7 +3557,7 @@ func (x *GetFirewallOptionsResponse) String() string {
 func (*GetFirewallOptionsResponse) ProtoMessage() {}
 
 func (x *GetFirewallOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[47]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3462,7 +3570,7 @@ func (x *GetFirewallOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFirewallOptionsResponse.ProtoReflect.Descriptor instead.
 func (*GetFirewallOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{47}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetFirewallOptionsResponse) GetOptions() *FirewallOptions {
@@ -3483,7 +3591,7 @@ type UpdateFirewallOptionsRequest struct {
 
 func (x *UpdateFirewallOptionsRequest) Reset() {
 	*x = UpdateFirewallOptionsRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[48]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3495,7 +3603,7 @@ func (x *UpdateFirewallOptionsRequest) String() string {
 func (*UpdateFirewallOptionsRequest) ProtoMessage() {}
 
 func (x *UpdateFirewallOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[48]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3508,7 +3616,7 @@ func (x *UpdateFirewallOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFirewallOptionsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateFirewallOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{48}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *UpdateFirewallOptionsRequest) GetOrganizationId() string {
@@ -3541,7 +3649,7 @@ type UpdateFirewallOptionsResponse struct {
 
 func (x *UpdateFirewallOptionsResponse) Reset() {
 	*x = UpdateFirewallOptionsResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[49]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3553,7 +3661,7 @@ func (x *UpdateFirewallOptionsResponse) String() string {
 func (*UpdateFirewallOptionsResponse) ProtoMessage() {}
 
 func (x *UpdateFirewallOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[49]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3566,7 +3674,7 @@ func (x *UpdateFirewallOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateFirewallOptionsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateFirewallOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{49}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *UpdateFirewallOptionsResponse) GetOptions() *FirewallOptions {
@@ -3601,7 +3709,7 @@ type FirewallRule struct {
 
 func (x *FirewallRule) Reset() {
 	*x = FirewallRule{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[50]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3613,7 +3721,7 @@ func (x *FirewallRule) String() string {
 func (*FirewallRule) ProtoMessage() {}
 
 func (x *FirewallRule) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[50]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3626,7 +3734,7 @@ func (x *FirewallRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FirewallRule.ProtoReflect.Descriptor instead.
 func (*FirewallRule) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{50}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *FirewallRule) GetPos() int32 {
@@ -3746,7 +3854,7 @@ type FirewallOptions struct {
 
 func (x *FirewallOptions) Reset() {
 	*x = FirewallOptions{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[51]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3758,7 +3866,7 @@ func (x *FirewallOptions) String() string {
 func (*FirewallOptions) ProtoMessage() {}
 
 func (x *FirewallOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[51]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3771,7 +3879,7 @@ func (x *FirewallOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FirewallOptions.ProtoReflect.Descriptor instead.
 func (*FirewallOptions) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{51}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *FirewallOptions) GetEnable() bool {
@@ -3867,7 +3975,7 @@ type SSHKey struct {
 
 func (x *SSHKey) Reset() {
 	*x = SSHKey{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[52]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3879,7 +3987,7 @@ func (x *SSHKey) String() string {
 func (*SSHKey) ProtoMessage() {}
 
 func (x *SSHKey) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[52]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3892,7 +4000,7 @@ func (x *SSHKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SSHKey.ProtoReflect.Descriptor instead.
 func (*SSHKey) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{52}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *SSHKey) GetId() string {
@@ -3954,7 +4062,7 @@ type ListSSHKeysRequest struct {
 
 func (x *ListSSHKeysRequest) Reset() {
 	*x = ListSSHKeysRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[53]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3966,7 +4074,7 @@ func (x *ListSSHKeysRequest) String() string {
 func (*ListSSHKeysRequest) ProtoMessage() {}
 
 func (x *ListSSHKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[53]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3979,7 +4087,7 @@ func (x *ListSSHKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSHKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListSSHKeysRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{53}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListSSHKeysRequest) GetOrganizationId() string {
@@ -4005,7 +4113,7 @@ type ListSSHKeysResponse struct {
 
 func (x *ListSSHKeysResponse) Reset() {
 	*x = ListSSHKeysResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[54]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4017,7 +4125,7 @@ func (x *ListSSHKeysResponse) String() string {
 func (*ListSSHKeysResponse) ProtoMessage() {}
 
 func (x *ListSSHKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[54]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4030,7 +4138,7 @@ func (x *ListSSHKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSSHKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListSSHKeysResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{54}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ListSSHKeysResponse) GetKeys() []*SSHKey {
@@ -4052,7 +4160,7 @@ type AddSSHKeyRequest struct {
 
 func (x *AddSSHKeyRequest) Reset() {
 	*x = AddSSHKeyRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4064,7 +4172,7 @@ func (x *AddSSHKeyRequest) String() string {
 func (*AddSSHKeyRequest) ProtoMessage() {}
 
 func (x *AddSSHKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4077,7 +4185,7 @@ func (x *AddSSHKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSSHKeyRequest.ProtoReflect.Descriptor instead.
 func (*AddSSHKeyRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{55}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *AddSSHKeyRequest) GetOrganizationId() string {
@@ -4117,7 +4225,7 @@ type AddSSHKeyResponse struct {
 
 func (x *AddSSHKeyResponse) Reset() {
 	*x = AddSSHKeyResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[56]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4129,7 +4237,7 @@ func (x *AddSSHKeyResponse) String() string {
 func (*AddSSHKeyResponse) ProtoMessage() {}
 
 func (x *AddSSHKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[56]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4142,7 +4250,7 @@ func (x *AddSSHKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSSHKeyResponse.ProtoReflect.Descriptor instead.
 func (*AddSSHKeyResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{56}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *AddSSHKeyResponse) GetKey() *SSHKey {
@@ -4163,7 +4271,7 @@ type UpdateSSHKeyRequest struct {
 
 func (x *UpdateSSHKeyRequest) Reset() {
 	*x = UpdateSSHKeyRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[57]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4175,7 +4283,7 @@ func (x *UpdateSSHKeyRequest) String() string {
 func (*UpdateSSHKeyRequest) ProtoMessage() {}
 
 func (x *UpdateSSHKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[57]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4188,7 +4296,7 @@ func (x *UpdateSSHKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSSHKeyRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSSHKeyRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{57}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *UpdateSSHKeyRequest) GetOrganizationId() string {
@@ -4221,7 +4329,7 @@ type UpdateSSHKeyResponse struct {
 
 func (x *UpdateSSHKeyResponse) Reset() {
 	*x = UpdateSSHKeyResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[58]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4233,7 +4341,7 @@ func (x *UpdateSSHKeyResponse) String() string {
 func (*UpdateSSHKeyResponse) ProtoMessage() {}
 
 func (x *UpdateSSHKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[58]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4246,7 +4354,7 @@ func (x *UpdateSSHKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSSHKeyResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSSHKeyResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{58}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *UpdateSSHKeyResponse) GetKey() *SSHKey {
@@ -4266,7 +4374,7 @@ type RemoveSSHKeyRequest struct {
 
 func (x *RemoveSSHKeyRequest) Reset() {
 	*x = RemoveSSHKeyRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[59]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4278,7 +4386,7 @@ func (x *RemoveSSHKeyRequest) String() string {
 func (*RemoveSSHKeyRequest) ProtoMessage() {}
 
 func (x *RemoveSSHKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[59]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4291,7 +4399,7 @@ func (x *RemoveSSHKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSSHKeyRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSSHKeyRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{59}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *RemoveSSHKeyRequest) GetOrganizationId() string {
@@ -4320,7 +4428,7 @@ type RemoveSSHKeyResponse struct {
 
 func (x *RemoveSSHKeyResponse) Reset() {
 	*x = RemoveSSHKeyResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[60]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4332,7 +4440,7 @@ func (x *RemoveSSHKeyResponse) String() string {
 func (*RemoveSSHKeyResponse) ProtoMessage() {}
 
 func (x *RemoveSSHKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[60]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4345,7 +4453,7 @@ func (x *RemoveSSHKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSSHKeyResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSSHKeyResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{60}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *RemoveSSHKeyResponse) GetAffectedVpsIds() []string {
@@ -4373,7 +4481,7 @@ type ResetVPSPasswordRequest struct {
 
 func (x *ResetVPSPasswordRequest) Reset() {
 	*x = ResetVPSPasswordRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[61]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4385,7 +4493,7 @@ func (x *ResetVPSPasswordRequest) String() string {
 func (*ResetVPSPasswordRequest) ProtoMessage() {}
 
 func (x *ResetVPSPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[61]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4398,7 +4506,7 @@ func (x *ResetVPSPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetVPSPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ResetVPSPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{61}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ResetVPSPasswordRequest) GetOrganizationId() string {
@@ -4427,7 +4535,7 @@ type ResetVPSPasswordResponse struct {
 
 func (x *ResetVPSPasswordResponse) Reset() {
 	*x = ResetVPSPasswordResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[62]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4439,7 +4547,7 @@ func (x *ResetVPSPasswordResponse) String() string {
 func (*ResetVPSPasswordResponse) ProtoMessage() {}
 
 func (x *ResetVPSPasswordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[62]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4452,7 +4560,7 @@ func (x *ResetVPSPasswordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetVPSPasswordResponse.ProtoReflect.Descriptor instead.
 func (*ResetVPSPasswordResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{62}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ResetVPSPasswordResponse) GetVpsId() string {
@@ -4487,7 +4595,7 @@ type ReinitializeVPSRequest struct {
 
 func (x *ReinitializeVPSRequest) Reset() {
 	*x = ReinitializeVPSRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[63]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4499,7 +4607,7 @@ func (x *ReinitializeVPSRequest) String() string {
 func (*ReinitializeVPSRequest) ProtoMessage() {}
 
 func (x *ReinitializeVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[63]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4512,7 +4620,7 @@ func (x *ReinitializeVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReinitializeVPSRequest.ProtoReflect.Descriptor instead.
 func (*ReinitializeVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{63}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ReinitializeVPSRequest) GetOrganizationId() string {
@@ -4540,7 +4648,7 @@ type ReinitializeVPSResponse struct {
 
 func (x *ReinitializeVPSResponse) Reset() {
 	*x = ReinitializeVPSResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4552,7 +4660,7 @@ func (x *ReinitializeVPSResponse) String() string {
 func (*ReinitializeVPSResponse) ProtoMessage() {}
 
 func (x *ReinitializeVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4565,7 +4673,7 @@ func (x *ReinitializeVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReinitializeVPSResponse.ProtoReflect.Descriptor instead.
 func (*ReinitializeVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{64}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ReinitializeVPSResponse) GetVps() *VPSInstance {
@@ -4600,7 +4708,7 @@ type StreamVPSLogsRequest struct {
 
 func (x *StreamVPSLogsRequest) Reset() {
 	*x = StreamVPSLogsRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[65]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4612,7 +4720,7 @@ func (x *StreamVPSLogsRequest) String() string {
 func (*StreamVPSLogsRequest) ProtoMessage() {}
 
 func (x *StreamVPSLogsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[65]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4625,7 +4733,7 @@ func (x *StreamVPSLogsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamVPSLogsRequest.ProtoReflect.Descriptor instead.
 func (*StreamVPSLogsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{65}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *StreamVPSLogsRequest) GetOrganizationId() string {
@@ -4654,7 +4762,7 @@ type VPSLogLine struct {
 
 func (x *VPSLogLine) Reset() {
 	*x = VPSLogLine{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[66]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4666,7 +4774,7 @@ func (x *VPSLogLine) String() string {
 func (*VPSLogLine) ProtoMessage() {}
 
 func (x *VPSLogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[66]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4679,7 +4787,7 @@ func (x *VPSLogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSLogLine.ProtoReflect.Descriptor instead.
 func (*VPSLogLine) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{66}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *VPSLogLine) GetLine() string {
@@ -4720,7 +4828,7 @@ type ImportVPSRequest struct {
 
 func (x *ImportVPSRequest) Reset() {
 	*x = ImportVPSRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4732,7 +4840,7 @@ func (x *ImportVPSRequest) String() string {
 func (*ImportVPSRequest) ProtoMessage() {}
 
 func (x *ImportVPSRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[67]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4745,7 +4853,7 @@ func (x *ImportVPSRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportVPSRequest.ProtoReflect.Descriptor instead.
 func (*ImportVPSRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{67}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *ImportVPSRequest) GetOrganizationId() string {
@@ -4767,7 +4875,7 @@ type ImportVPSResponse struct {
 
 func (x *ImportVPSResponse) Reset() {
 	*x = ImportVPSResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4779,7 +4887,7 @@ func (x *ImportVPSResponse) String() string {
 func (*ImportVPSResponse) ProtoMessage() {}
 
 func (x *ImportVPSResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[68]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4792,7 +4900,7 @@ func (x *ImportVPSResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportVPSResponse.ProtoReflect.Descriptor instead.
 func (*ImportVPSResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{68}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *ImportVPSResponse) GetImportedCount() int32 {
@@ -4834,7 +4942,7 @@ type GetVPSLeasesRequest struct {
 
 func (x *GetVPSLeasesRequest) Reset() {
 	*x = GetVPSLeasesRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4846,7 +4954,7 @@ func (x *GetVPSLeasesRequest) String() string {
 func (*GetVPSLeasesRequest) ProtoMessage() {}
 
 func (x *GetVPSLeasesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4859,7 +4967,7 @@ func (x *GetVPSLeasesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPSLeasesRequest.ProtoReflect.Descriptor instead.
 func (*GetVPSLeasesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{69}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetVPSLeasesRequest) GetOrganizationId() string {
@@ -4890,7 +4998,7 @@ type VPSLease struct {
 
 func (x *VPSLease) Reset() {
 	*x = VPSLease{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[70]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4902,7 +5010,7 @@ func (x *VPSLease) String() string {
 func (*VPSLease) ProtoMessage() {}
 
 func (x *VPSLease) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[70]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4915,7 +5023,7 @@ func (x *VPSLease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSLease.ProtoReflect.Descriptor instead.
 func (*VPSLease) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{70}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *VPSLease) GetVpsId() string {
@@ -4969,7 +5077,7 @@ type GetVPSLeasesResponse struct {
 
 func (x *GetVPSLeasesResponse) Reset() {
 	*x = GetVPSLeasesResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[71]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4981,7 +5089,7 @@ func (x *GetVPSLeasesResponse) String() string {
 func (*GetVPSLeasesResponse) ProtoMessage() {}
 
 func (x *GetVPSLeasesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[71]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4994,7 +5102,7 @@ func (x *GetVPSLeasesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetVPSLeasesResponse.ProtoReflect.Descriptor instead.
 func (*GetVPSLeasesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{71}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *GetVPSLeasesResponse) GetLeases() []*VPSLease {
@@ -5019,7 +5127,7 @@ type RegisterLeaseRequest struct {
 
 func (x *RegisterLeaseRequest) Reset() {
 	*x = RegisterLeaseRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[72]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5031,7 +5139,7 @@ func (x *RegisterLeaseRequest) String() string {
 func (*RegisterLeaseRequest) ProtoMessage() {}
 
 func (x *RegisterLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[72]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5044,7 +5152,7 @@ func (x *RegisterLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RegisterLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{72}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *RegisterLeaseRequest) GetVpsId() string {
@@ -5099,7 +5207,7 @@ type RegisterLeaseResponse struct {
 
 func (x *RegisterLeaseResponse) Reset() {
 	*x = RegisterLeaseResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[73]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5111,7 +5219,7 @@ func (x *RegisterLeaseResponse) String() string {
 func (*RegisterLeaseResponse) ProtoMessage() {}
 
 func (x *RegisterLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[73]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5124,7 +5232,7 @@ func (x *RegisterLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterLeaseResponse.ProtoReflect.Descriptor instead.
 func (*RegisterLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{73}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *RegisterLeaseResponse) GetSuccess() bool {
@@ -5152,7 +5260,7 @@ type ReleaseLeaseRequest struct {
 
 func (x *ReleaseLeaseRequest) Reset() {
 	*x = ReleaseLeaseRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[74]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5164,7 +5272,7 @@ func (x *ReleaseLeaseRequest) String() string {
 func (*ReleaseLeaseRequest) ProtoMessage() {}
 
 func (x *ReleaseLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[74]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5177,7 +5285,7 @@ func (x *ReleaseLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseLeaseRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{74}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ReleaseLeaseRequest) GetVpsId() string {
@@ -5204,7 +5312,7 @@ type ReleaseLeaseResponse struct {
 
 func (x *ReleaseLeaseResponse) Reset() {
 	*x = ReleaseLeaseResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[75]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5216,7 +5324,7 @@ func (x *ReleaseLeaseResponse) String() string {
 func (*ReleaseLeaseResponse) ProtoMessage() {}
 
 func (x *ReleaseLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[75]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5229,7 +5337,7 @@ func (x *ReleaseLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseLeaseResponse.ProtoReflect.Descriptor instead.
 func (*ReleaseLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{75}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ReleaseLeaseResponse) GetSuccess() bool {
@@ -5258,7 +5366,7 @@ type AssignVPSPublicIPRequest struct {
 
 func (x *AssignVPSPublicIPRequest) Reset() {
 	*x = AssignVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5270,7 +5378,7 @@ func (x *AssignVPSPublicIPRequest) String() string {
 func (*AssignVPSPublicIPRequest) ProtoMessage() {}
 
 func (x *AssignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[76]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5283,7 +5391,7 @@ func (x *AssignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
 func (*AssignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{76}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *AssignVPSPublicIPRequest) GetOrganizationId() string {
@@ -5317,7 +5425,7 @@ type AssignVPSPublicIPResponse struct {
 
 func (x *AssignVPSPublicIPResponse) Reset() {
 	*x = AssignVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5329,7 +5437,7 @@ func (x *AssignVPSPublicIPResponse) String() string {
 func (*AssignVPSPublicIPResponse) ProtoMessage() {}
 
 func (x *AssignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[77]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5342,7 +5450,7 @@ func (x *AssignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
 func (*AssignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{77}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *AssignVPSPublicIPResponse) GetSuccess() bool {
@@ -5371,7 +5479,7 @@ type UnassignVPSPublicIPRequest struct {
 
 func (x *UnassignVPSPublicIPRequest) Reset() {
 	*x = UnassignVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5383,7 +5491,7 @@ func (x *UnassignVPSPublicIPRequest) String() string {
 func (*UnassignVPSPublicIPRequest) ProtoMessage() {}
 
 func (x *UnassignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[78]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5396,7 +5504,7 @@ func (x *UnassignVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnassignVPSPublicIPRequest.ProtoReflect.Descriptor instead.
 func (*UnassignVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{78}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *UnassignVPSPublicIPRequest) GetOrganizationId() string {
@@ -5430,7 +5538,7 @@ type UnassignVPSPublicIPResponse struct {
 
 func (x *UnassignVPSPublicIPResponse) Reset() {
 	*x = UnassignVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5442,7 +5550,7 @@ func (x *UnassignVPSPublicIPResponse) String() string {
 func (*UnassignVPSPublicIPResponse) ProtoMessage() {}
 
 func (x *UnassignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[79]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5455,7 +5563,7 @@ func (x *UnassignVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnassignVPSPublicIPResponse.ProtoReflect.Descriptor instead.
 func (*UnassignVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{79}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *UnassignVPSPublicIPResponse) GetSuccess() bool {
@@ -5493,7 +5601,7 @@ type VPSPublicIP struct {
 
 func (x *VPSPublicIP) Reset() {
 	*x = VPSPublicIP{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5505,7 +5613,7 @@ func (x *VPSPublicIP) String() string {
 func (*VPSPublicIP) ProtoMessage() {}
 
 func (x *VPSPublicIP) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5518,7 +5626,7 @@ func (x *VPSPublicIP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VPSPublicIP.ProtoReflect.Descriptor instead.
 func (*VPSPublicIP) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{80}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *VPSPublicIP) GetId() string {
@@ -5619,7 +5727,7 @@ type ListVPSPublicIPsRequest struct {
 
 func (x *ListVPSPublicIPsRequest) Reset() {
 	*x = ListVPSPublicIPsRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5631,7 +5739,7 @@ func (x *ListVPSPublicIPsRequest) String() string {
 func (*ListVPSPublicIPsRequest) ProtoMessage() {}
 
 func (x *ListVPSPublicIPsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5644,7 +5752,7 @@ func (x *ListVPSPublicIPsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVPSPublicIPsRequest.ProtoReflect.Descriptor instead.
 func (*ListVPSPublicIPsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{81}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListVPSPublicIPsRequest) GetVpsId() string {
@@ -5693,7 +5801,7 @@ type ListVPSPublicIPsResponse struct {
 
 func (x *ListVPSPublicIPsResponse) Reset() {
 	*x = ListVPSPublicIPsResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5705,7 +5813,7 @@ func (x *ListVPSPublicIPsResponse) String() string {
 func (*ListVPSPublicIPsResponse) ProtoMessage() {}
 
 func (x *ListVPSPublicIPsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5718,7 +5826,7 @@ func (x *ListVPSPublicIPsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVPSPublicIPsResponse.ProtoReflect.Descriptor instead.
 func (*ListVPSPublicIPsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{82}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListVPSPublicIPsResponse) GetIps() []*VPSPublicIP {
@@ -5748,7 +5856,7 @@ type CreateVPSPublicIPRequest struct {
 
 func (x *CreateVPSPublicIPRequest) Reset() {
 	*x = CreateVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5760,7 +5868,7 @@ func (x *CreateVPSPublicIPRequest) String() string {
 func (*CreateVPSPublicIPRequest) ProtoMessage() {}
 
 func (x *CreateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5773,7 +5881,7 @@ func (x *CreateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
 func (*CreateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{83}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *CreateVPSPublicIPRequest) GetIpAddress() string {
@@ -5814,7 +5922,7 @@ type CreateVPSPublicIPResponse struct {
 
 func (x *CreateVPSPublicIPResponse) Reset() {
 	*x = CreateVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5826,7 +5934,7 @@ func (x *CreateVPSPublicIPResponse) String() string {
 func (*CreateVPSPublicIPResponse) ProtoMessage() {}
 
 func (x *CreateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[84]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5839,7 +5947,7 @@ func (x *CreateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
 func (*CreateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{84}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *CreateVPSPublicIPResponse) GetIp() *VPSPublicIP {
@@ -5862,7 +5970,7 @@ type UpdateVPSPublicIPRequest struct {
 
 func (x *UpdateVPSPublicIPRequest) Reset() {
 	*x = UpdateVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5874,7 +5982,7 @@ func (x *UpdateVPSPublicIPRequest) String() string {
 func (*UpdateVPSPublicIPRequest) ProtoMessage() {}
 
 func (x *UpdateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5887,7 +5995,7 @@ func (x *UpdateVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateVPSPublicIPRequest.ProtoReflect.Descriptor instead.
 func (*UpdateVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{85}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *UpdateVPSPublicIPRequest) GetId() string {
@@ -5928,7 +6036,7 @@ type UpdateVPSPublicIPResponse struct {
 
 func (x *UpdateVPSPublicIPResponse) Reset() {
 	*x = UpdateVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5940,7 +6048,7 @@ func (x *UpdateVPSPublicIPResponse) String() string {
 func (*UpdateVPSPublicIPResponse) ProtoMessage() {}
 
 func (x *UpdateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[86]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5953,7 +6061,7 @@ func (x *UpdateVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateVPSPublicIPResponse.ProtoReflect.Descriptor instead.
 func (*UpdateVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{86}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *UpdateVPSPublicIPResponse) GetIp() *VPSPublicIP {
@@ -5973,7 +6081,7 @@ type DeleteVPSPublicIPRequest struct {
 
 func (x *DeleteVPSPublicIPRequest) Reset() {
 	*x = DeleteVPSPublicIPRequest{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5985,7 +6093,7 @@ func (x *DeleteVPSPublicIPRequest) String() string {
 func (*DeleteVPSPublicIPRequest) ProtoMessage() {}
 
 func (x *DeleteVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5998,7 +6106,7 @@ func (x *DeleteVPSPublicIPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVPSPublicIPRequest.ProtoReflect.Descriptor instead.
 func (*DeleteVPSPublicIPRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{87}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *DeleteVPSPublicIPRequest) GetId() string {
@@ -6018,7 +6126,7 @@ type DeleteVPSPublicIPResponse struct {
 
 func (x *DeleteVPSPublicIPResponse) Reset() {
 	*x = DeleteVPSPublicIPResponse{}
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6030,7 +6138,7 @@ func (x *DeleteVPSPublicIPResponse) String() string {
 func (*DeleteVPSPublicIPResponse) ProtoMessage() {}
 
 func (x *DeleteVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[88]
+	mi := &file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6043,7 +6151,7 @@ func (x *DeleteVPSPublicIPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVPSPublicIPResponse.ProtoReflect.Descriptor instead.
 func (*DeleteVPSPublicIPResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{88}
+	return file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *DeleteVPSPublicIPResponse) GetSuccess() bool {
@@ -6223,7 +6331,13 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
 	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\x12\x19\n" +
 	"\x05month\x18\x03 \x01(\tH\x00R\x05month\x88\x01\x01B\b\n" +
-	"\x06_month\"\x89\x02\n" +
+	"\x06_month\"9\n" +
+	"\x15FindVPSByLeaseRequest\x12\x0e\n" +
+	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x10\n" +
+	"\x03mac\x18\x02 \x01(\tR\x03mac\"X\n" +
+	"\x16FindVPSByLeaseResponse\x12\x15\n" +
+	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\"\x89\x02\n" +
 	"\x13GetVPSUsageResponse\x12\x15\n" +
 	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\x12\x14\n" +
 	"\x05month\x18\x02 \x01(\tR\x05month\x12?\n" +
@@ -6651,7 +6765,7 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x04ICMP\x10\x03\x12\n" +
 	"\n" +
 	"\x06ICMPV6\x10\x04\x12\a\n" +
-	"\x03ALL\x10\x052\x81\x1d\n" +
+	"\x03ALL\x10\x052\xee\x1d\n" +
 	"\n" +
 	"VPSService\x12V\n" +
 	"\aListVPS\x12$.obiente.cloud.vps.v1.ListVPSRequest\x1a%.obiente.cloud.vps.v1.ListVPSResponse\x12\\\n" +
@@ -6684,7 +6798,8 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x0fReinitializeVPS\x12,.obiente.cloud.vps.v1.ReinitializeVPSRequest\x1a-.obiente.cloud.vps.v1.ReinitializeVPSResponse\x12_\n" +
 	"\rStreamVPSLogs\x12*.obiente.cloud.vps.v1.StreamVPSLogsRequest\x1a .obiente.cloud.vps.v1.VPSLogLine0\x01\x12\\\n" +
 	"\tImportVPS\x12&.obiente.cloud.vps.v1.ImportVPSRequest\x1a'.obiente.cloud.vps.v1.ImportVPSResponse\x12e\n" +
-	"\fGetVPSLeases\x12).obiente.cloud.vps.v1.GetVPSLeasesRequest\x1a*.obiente.cloud.vps.v1.GetVPSLeasesResponse\x12h\n" +
+	"\fGetVPSLeases\x12).obiente.cloud.vps.v1.GetVPSLeasesRequest\x1a*.obiente.cloud.vps.v1.GetVPSLeasesResponse\x12k\n" +
+	"\x0eFindVPSByLease\x12+.obiente.cloud.vps.v1.FindVPSByLeaseRequest\x1a,.obiente.cloud.vps.v1.FindVPSByLeaseResponse\x12h\n" +
 	"\rRegisterLease\x12*.obiente.cloud.vps.v1.RegisterLeaseRequest\x1a+.obiente.cloud.vps.v1.RegisterLeaseResponse\x12e\n" +
 	"\fReleaseLease\x12).obiente.cloud.vps.v1.ReleaseLeaseRequest\x1a*.obiente.cloud.vps.v1.ReleaseLeaseResponse\x12t\n" +
 	"\x11AssignVPSPublicIP\x12..obiente.cloud.vps.v1.AssignVPSPublicIPRequest\x1a/.obiente.cloud.vps.v1.AssignVPSPublicIPResponse\x12z\n" +
@@ -6703,7 +6818,7 @@ func file_obiente_cloud_vps_v1_vps_service_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_vps_v1_vps_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
+var file_obiente_cloud_vps_v1_vps_service_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
 var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(VPSStatus)(0),                        // 0: obiente.cloud.vps.v1.VPSStatus
 	(VPSImage)(0),                         // 1: obiente.cloud.vps.v1.VPSImage
@@ -6736,214 +6851,218 @@ var file_obiente_cloud_vps_v1_vps_service_proto_goTypes = []any{
 	(*StreamVPSMetricsRequest)(nil),       // 28: obiente.cloud.vps.v1.StreamVPSMetricsRequest
 	(*VPSMetric)(nil),                     // 29: obiente.cloud.vps.v1.VPSMetric
 	(*GetVPSUsageRequest)(nil),            // 30: obiente.cloud.vps.v1.GetVPSUsageRequest
-	(*GetVPSUsageResponse)(nil),           // 31: obiente.cloud.vps.v1.GetVPSUsageResponse
-	(*VPSUsageMetrics)(nil),               // 32: obiente.cloud.vps.v1.VPSUsageMetrics
-	(*ListAvailableVPSSizesRequest)(nil),  // 33: obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
-	(*ListAvailableVPSSizesResponse)(nil), // 34: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
-	(*ListVPSRegionsRequest)(nil),         // 35: obiente.cloud.vps.v1.ListVPSRegionsRequest
-	(*ListVPSRegionsResponse)(nil),        // 36: obiente.cloud.vps.v1.ListVPSRegionsResponse
-	(*GetVPSProxyInfoRequest)(nil),        // 37: obiente.cloud.vps.v1.GetVPSProxyInfoRequest
-	(*GetVPSProxyInfoResponse)(nil),       // 38: obiente.cloud.vps.v1.GetVPSProxyInfoResponse
-	(*VPSRegion)(nil),                     // 39: obiente.cloud.vps.v1.VPSRegion
-	(*VPSInstance)(nil),                   // 40: obiente.cloud.vps.v1.VPSInstance
-	(*ListFirewallRulesRequest)(nil),      // 41: obiente.cloud.vps.v1.ListFirewallRulesRequest
-	(*ListFirewallRulesResponse)(nil),     // 42: obiente.cloud.vps.v1.ListFirewallRulesResponse
-	(*GetFirewallRuleRequest)(nil),        // 43: obiente.cloud.vps.v1.GetFirewallRuleRequest
-	(*GetFirewallRuleResponse)(nil),       // 44: obiente.cloud.vps.v1.GetFirewallRuleResponse
-	(*CreateFirewallRuleRequest)(nil),     // 45: obiente.cloud.vps.v1.CreateFirewallRuleRequest
-	(*CreateFirewallRuleResponse)(nil),    // 46: obiente.cloud.vps.v1.CreateFirewallRuleResponse
-	(*UpdateFirewallRuleRequest)(nil),     // 47: obiente.cloud.vps.v1.UpdateFirewallRuleRequest
-	(*UpdateFirewallRuleResponse)(nil),    // 48: obiente.cloud.vps.v1.UpdateFirewallRuleResponse
-	(*DeleteFirewallRuleRequest)(nil),     // 49: obiente.cloud.vps.v1.DeleteFirewallRuleRequest
-	(*DeleteFirewallRuleResponse)(nil),    // 50: obiente.cloud.vps.v1.DeleteFirewallRuleResponse
-	(*GetFirewallOptionsRequest)(nil),     // 51: obiente.cloud.vps.v1.GetFirewallOptionsRequest
-	(*GetFirewallOptionsResponse)(nil),    // 52: obiente.cloud.vps.v1.GetFirewallOptionsResponse
-	(*UpdateFirewallOptionsRequest)(nil),  // 53: obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
-	(*UpdateFirewallOptionsResponse)(nil), // 54: obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
-	(*FirewallRule)(nil),                  // 55: obiente.cloud.vps.v1.FirewallRule
-	(*FirewallOptions)(nil),               // 56: obiente.cloud.vps.v1.FirewallOptions
-	(*SSHKey)(nil),                        // 57: obiente.cloud.vps.v1.SSHKey
-	(*ListSSHKeysRequest)(nil),            // 58: obiente.cloud.vps.v1.ListSSHKeysRequest
-	(*ListSSHKeysResponse)(nil),           // 59: obiente.cloud.vps.v1.ListSSHKeysResponse
-	(*AddSSHKeyRequest)(nil),              // 60: obiente.cloud.vps.v1.AddSSHKeyRequest
-	(*AddSSHKeyResponse)(nil),             // 61: obiente.cloud.vps.v1.AddSSHKeyResponse
-	(*UpdateSSHKeyRequest)(nil),           // 62: obiente.cloud.vps.v1.UpdateSSHKeyRequest
-	(*UpdateSSHKeyResponse)(nil),          // 63: obiente.cloud.vps.v1.UpdateSSHKeyResponse
-	(*RemoveSSHKeyRequest)(nil),           // 64: obiente.cloud.vps.v1.RemoveSSHKeyRequest
-	(*RemoveSSHKeyResponse)(nil),          // 65: obiente.cloud.vps.v1.RemoveSSHKeyResponse
-	(*ResetVPSPasswordRequest)(nil),       // 66: obiente.cloud.vps.v1.ResetVPSPasswordRequest
-	(*ResetVPSPasswordResponse)(nil),      // 67: obiente.cloud.vps.v1.ResetVPSPasswordResponse
-	(*ReinitializeVPSRequest)(nil),        // 68: obiente.cloud.vps.v1.ReinitializeVPSRequest
-	(*ReinitializeVPSResponse)(nil),       // 69: obiente.cloud.vps.v1.ReinitializeVPSResponse
-	(*StreamVPSLogsRequest)(nil),          // 70: obiente.cloud.vps.v1.StreamVPSLogsRequest
-	(*VPSLogLine)(nil),                    // 71: obiente.cloud.vps.v1.VPSLogLine
-	(*ImportVPSRequest)(nil),              // 72: obiente.cloud.vps.v1.ImportVPSRequest
-	(*ImportVPSResponse)(nil),             // 73: obiente.cloud.vps.v1.ImportVPSResponse
-	(*GetVPSLeasesRequest)(nil),           // 74: obiente.cloud.vps.v1.GetVPSLeasesRequest
-	(*VPSLease)(nil),                      // 75: obiente.cloud.vps.v1.VPSLease
-	(*GetVPSLeasesResponse)(nil),          // 76: obiente.cloud.vps.v1.GetVPSLeasesResponse
-	(*RegisterLeaseRequest)(nil),          // 77: obiente.cloud.vps.v1.RegisterLeaseRequest
-	(*RegisterLeaseResponse)(nil),         // 78: obiente.cloud.vps.v1.RegisterLeaseResponse
-	(*ReleaseLeaseRequest)(nil),           // 79: obiente.cloud.vps.v1.ReleaseLeaseRequest
-	(*ReleaseLeaseResponse)(nil),          // 80: obiente.cloud.vps.v1.ReleaseLeaseResponse
-	(*AssignVPSPublicIPRequest)(nil),      // 81: obiente.cloud.vps.v1.AssignVPSPublicIPRequest
-	(*AssignVPSPublicIPResponse)(nil),     // 82: obiente.cloud.vps.v1.AssignVPSPublicIPResponse
-	(*UnassignVPSPublicIPRequest)(nil),    // 83: obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
-	(*UnassignVPSPublicIPResponse)(nil),   // 84: obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
-	(*VPSPublicIP)(nil),                   // 85: obiente.cloud.vps.v1.VPSPublicIP
-	(*ListVPSPublicIPsRequest)(nil),       // 86: obiente.cloud.vps.v1.ListVPSPublicIPsRequest
-	(*ListVPSPublicIPsResponse)(nil),      // 87: obiente.cloud.vps.v1.ListVPSPublicIPsResponse
-	(*CreateVPSPublicIPRequest)(nil),      // 88: obiente.cloud.vps.v1.CreateVPSPublicIPRequest
-	(*CreateVPSPublicIPResponse)(nil),     // 89: obiente.cloud.vps.v1.CreateVPSPublicIPResponse
-	(*UpdateVPSPublicIPRequest)(nil),      // 90: obiente.cloud.vps.v1.UpdateVPSPublicIPRequest
-	(*UpdateVPSPublicIPResponse)(nil),     // 91: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse
-	(*DeleteVPSPublicIPRequest)(nil),      // 92: obiente.cloud.vps.v1.DeleteVPSPublicIPRequest
-	(*DeleteVPSPublicIPResponse)(nil),     // 93: obiente.cloud.vps.v1.DeleteVPSPublicIPResponse
-	nil,                                   // 94: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
-	nil,                                   // 95: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
-	nil,                                   // 96: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	(*v1.Pagination)(nil),                 // 97: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),         // 98: google.protobuf.Timestamp
-	(*v1.VPSSize)(nil),                    // 99: obiente.cloud.common.v1.VPSSize
+	(*FindVPSByLeaseRequest)(nil),         // 31: obiente.cloud.vps.v1.FindVPSByLeaseRequest
+	(*FindVPSByLeaseResponse)(nil),        // 32: obiente.cloud.vps.v1.FindVPSByLeaseResponse
+	(*GetVPSUsageResponse)(nil),           // 33: obiente.cloud.vps.v1.GetVPSUsageResponse
+	(*VPSUsageMetrics)(nil),               // 34: obiente.cloud.vps.v1.VPSUsageMetrics
+	(*ListAvailableVPSSizesRequest)(nil),  // 35: obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
+	(*ListAvailableVPSSizesResponse)(nil), // 36: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
+	(*ListVPSRegionsRequest)(nil),         // 37: obiente.cloud.vps.v1.ListVPSRegionsRequest
+	(*ListVPSRegionsResponse)(nil),        // 38: obiente.cloud.vps.v1.ListVPSRegionsResponse
+	(*GetVPSProxyInfoRequest)(nil),        // 39: obiente.cloud.vps.v1.GetVPSProxyInfoRequest
+	(*GetVPSProxyInfoResponse)(nil),       // 40: obiente.cloud.vps.v1.GetVPSProxyInfoResponse
+	(*VPSRegion)(nil),                     // 41: obiente.cloud.vps.v1.VPSRegion
+	(*VPSInstance)(nil),                   // 42: obiente.cloud.vps.v1.VPSInstance
+	(*ListFirewallRulesRequest)(nil),      // 43: obiente.cloud.vps.v1.ListFirewallRulesRequest
+	(*ListFirewallRulesResponse)(nil),     // 44: obiente.cloud.vps.v1.ListFirewallRulesResponse
+	(*GetFirewallRuleRequest)(nil),        // 45: obiente.cloud.vps.v1.GetFirewallRuleRequest
+	(*GetFirewallRuleResponse)(nil),       // 46: obiente.cloud.vps.v1.GetFirewallRuleResponse
+	(*CreateFirewallRuleRequest)(nil),     // 47: obiente.cloud.vps.v1.CreateFirewallRuleRequest
+	(*CreateFirewallRuleResponse)(nil),    // 48: obiente.cloud.vps.v1.CreateFirewallRuleResponse
+	(*UpdateFirewallRuleRequest)(nil),     // 49: obiente.cloud.vps.v1.UpdateFirewallRuleRequest
+	(*UpdateFirewallRuleResponse)(nil),    // 50: obiente.cloud.vps.v1.UpdateFirewallRuleResponse
+	(*DeleteFirewallRuleRequest)(nil),     // 51: obiente.cloud.vps.v1.DeleteFirewallRuleRequest
+	(*DeleteFirewallRuleResponse)(nil),    // 52: obiente.cloud.vps.v1.DeleteFirewallRuleResponse
+	(*GetFirewallOptionsRequest)(nil),     // 53: obiente.cloud.vps.v1.GetFirewallOptionsRequest
+	(*GetFirewallOptionsResponse)(nil),    // 54: obiente.cloud.vps.v1.GetFirewallOptionsResponse
+	(*UpdateFirewallOptionsRequest)(nil),  // 55: obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
+	(*UpdateFirewallOptionsResponse)(nil), // 56: obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
+	(*FirewallRule)(nil),                  // 57: obiente.cloud.vps.v1.FirewallRule
+	(*FirewallOptions)(nil),               // 58: obiente.cloud.vps.v1.FirewallOptions
+	(*SSHKey)(nil),                        // 59: obiente.cloud.vps.v1.SSHKey
+	(*ListSSHKeysRequest)(nil),            // 60: obiente.cloud.vps.v1.ListSSHKeysRequest
+	(*ListSSHKeysResponse)(nil),           // 61: obiente.cloud.vps.v1.ListSSHKeysResponse
+	(*AddSSHKeyRequest)(nil),              // 62: obiente.cloud.vps.v1.AddSSHKeyRequest
+	(*AddSSHKeyResponse)(nil),             // 63: obiente.cloud.vps.v1.AddSSHKeyResponse
+	(*UpdateSSHKeyRequest)(nil),           // 64: obiente.cloud.vps.v1.UpdateSSHKeyRequest
+	(*UpdateSSHKeyResponse)(nil),          // 65: obiente.cloud.vps.v1.UpdateSSHKeyResponse
+	(*RemoveSSHKeyRequest)(nil),           // 66: obiente.cloud.vps.v1.RemoveSSHKeyRequest
+	(*RemoveSSHKeyResponse)(nil),          // 67: obiente.cloud.vps.v1.RemoveSSHKeyResponse
+	(*ResetVPSPasswordRequest)(nil),       // 68: obiente.cloud.vps.v1.ResetVPSPasswordRequest
+	(*ResetVPSPasswordResponse)(nil),      // 69: obiente.cloud.vps.v1.ResetVPSPasswordResponse
+	(*ReinitializeVPSRequest)(nil),        // 70: obiente.cloud.vps.v1.ReinitializeVPSRequest
+	(*ReinitializeVPSResponse)(nil),       // 71: obiente.cloud.vps.v1.ReinitializeVPSResponse
+	(*StreamVPSLogsRequest)(nil),          // 72: obiente.cloud.vps.v1.StreamVPSLogsRequest
+	(*VPSLogLine)(nil),                    // 73: obiente.cloud.vps.v1.VPSLogLine
+	(*ImportVPSRequest)(nil),              // 74: obiente.cloud.vps.v1.ImportVPSRequest
+	(*ImportVPSResponse)(nil),             // 75: obiente.cloud.vps.v1.ImportVPSResponse
+	(*GetVPSLeasesRequest)(nil),           // 76: obiente.cloud.vps.v1.GetVPSLeasesRequest
+	(*VPSLease)(nil),                      // 77: obiente.cloud.vps.v1.VPSLease
+	(*GetVPSLeasesResponse)(nil),          // 78: obiente.cloud.vps.v1.GetVPSLeasesResponse
+	(*RegisterLeaseRequest)(nil),          // 79: obiente.cloud.vps.v1.RegisterLeaseRequest
+	(*RegisterLeaseResponse)(nil),         // 80: obiente.cloud.vps.v1.RegisterLeaseResponse
+	(*ReleaseLeaseRequest)(nil),           // 81: obiente.cloud.vps.v1.ReleaseLeaseRequest
+	(*ReleaseLeaseResponse)(nil),          // 82: obiente.cloud.vps.v1.ReleaseLeaseResponse
+	(*AssignVPSPublicIPRequest)(nil),      // 83: obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	(*AssignVPSPublicIPResponse)(nil),     // 84: obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	(*UnassignVPSPublicIPRequest)(nil),    // 85: obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	(*UnassignVPSPublicIPResponse)(nil),   // 86: obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	(*VPSPublicIP)(nil),                   // 87: obiente.cloud.vps.v1.VPSPublicIP
+	(*ListVPSPublicIPsRequest)(nil),       // 88: obiente.cloud.vps.v1.ListVPSPublicIPsRequest
+	(*ListVPSPublicIPsResponse)(nil),      // 89: obiente.cloud.vps.v1.ListVPSPublicIPsResponse
+	(*CreateVPSPublicIPRequest)(nil),      // 90: obiente.cloud.vps.v1.CreateVPSPublicIPRequest
+	(*CreateVPSPublicIPResponse)(nil),     // 91: obiente.cloud.vps.v1.CreateVPSPublicIPResponse
+	(*UpdateVPSPublicIPRequest)(nil),      // 92: obiente.cloud.vps.v1.UpdateVPSPublicIPRequest
+	(*UpdateVPSPublicIPResponse)(nil),     // 93: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse
+	(*DeleteVPSPublicIPRequest)(nil),      // 94: obiente.cloud.vps.v1.DeleteVPSPublicIPRequest
+	(*DeleteVPSPublicIPResponse)(nil),     // 95: obiente.cloud.vps.v1.DeleteVPSPublicIPResponse
+	nil,                                   // 96: obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	nil,                                   // 97: obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	nil,                                   // 98: obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	(*v1.Pagination)(nil),                 // 99: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),         // 100: google.protobuf.Timestamp
+	(*v1.VPSSize)(nil),                    // 101: obiente.cloud.common.v1.VPSSize
 }
 var file_obiente_cloud_vps_v1_vps_service_proto_depIdxs = []int32{
-	0,  // 0: obiente.cloud.vps.v1.ListVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	40, // 1: obiente.cloud.vps.v1.ListVPSResponse.vps_instances:type_name -> obiente.cloud.vps.v1.VPSInstance
-	97, // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	1,  // 3: obiente.cloud.vps.v1.CreateVPSRequest.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	94, // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
-	8,  // 5: obiente.cloud.vps.v1.CreateVPSRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
-	9,  // 6: obiente.cloud.vps.v1.CloudInitConfig.users:type_name -> obiente.cloud.vps.v1.CloudInitUser
-	10, // 7: obiente.cloud.vps.v1.CloudInitConfig.write_files:type_name -> obiente.cloud.vps.v1.CloudInitWriteFile
-	40, // 8: obiente.cloud.vps.v1.CreateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	40, // 9: obiente.cloud.vps.v1.GetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	95, // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
-	40, // 11: obiente.cloud.vps.v1.UpdateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	40, // 12: obiente.cloud.vps.v1.StartVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	40, // 13: obiente.cloud.vps.v1.StopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	40, // 14: obiente.cloud.vps.v1.RebootVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	0,  // 15: obiente.cloud.vps.v1.VPSStatusUpdate.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	98, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	98, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	98, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
-	29, // 19: obiente.cloud.vps.v1.GetVPSMetricsResponse.metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
-	98, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
-	32, // 21: obiente.cloud.vps.v1.GetVPSUsageResponse.current:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
-	32, // 22: obiente.cloud.vps.v1.GetVPSUsageResponse.estimated_monthly:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
-	99, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
-	39, // 24: obiente.cloud.vps.v1.ListVPSRegionsResponse.regions:type_name -> obiente.cloud.vps.v1.VPSRegion
-	0,  // 25: obiente.cloud.vps.v1.VPSInstance.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	1,  // 26: obiente.cloud.vps.v1.VPSInstance.image:type_name -> obiente.cloud.vps.v1.VPSImage
-	96, // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
-	98, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
-	98, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
-	98, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
-	98, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
-	29, // 32: obiente.cloud.vps.v1.VPSInstance.current_metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
-	55, // 33: obiente.cloud.vps.v1.ListFirewallRulesResponse.rules:type_name -> obiente.cloud.vps.v1.FirewallRule
-	55, // 34: obiente.cloud.vps.v1.GetFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
-	55, // 35: obiente.cloud.vps.v1.CreateFirewallRuleRequest.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
-	55, // 36: obiente.cloud.vps.v1.CreateFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
-	55, // 37: obiente.cloud.vps.v1.UpdateFirewallRuleRequest.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
-	55, // 38: obiente.cloud.vps.v1.UpdateFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
-	56, // 39: obiente.cloud.vps.v1.GetFirewallOptionsResponse.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
-	56, // 40: obiente.cloud.vps.v1.UpdateFirewallOptionsRequest.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
-	56, // 41: obiente.cloud.vps.v1.UpdateFirewallOptionsResponse.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
-	2,  // 42: obiente.cloud.vps.v1.FirewallRule.action:type_name -> obiente.cloud.vps.v1.FirewallAction
-	3,  // 43: obiente.cloud.vps.v1.FirewallRule.type:type_name -> obiente.cloud.vps.v1.FirewallDirection
-	4,  // 44: obiente.cloud.vps.v1.FirewallRule.protocol:type_name -> obiente.cloud.vps.v1.FirewallProtocol
-	98, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
-	98, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
-	57, // 47: obiente.cloud.vps.v1.ListSSHKeysResponse.keys:type_name -> obiente.cloud.vps.v1.SSHKey
-	57, // 48: obiente.cloud.vps.v1.AddSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
-	57, // 49: obiente.cloud.vps.v1.UpdateSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
-	40, // 50: obiente.cloud.vps.v1.ReinitializeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
-	40, // 52: obiente.cloud.vps.v1.ImportVPSResponse.imported_vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98, // 53: obiente.cloud.vps.v1.VPSLease.expires_at:type_name -> google.protobuf.Timestamp
-	75, // 54: obiente.cloud.vps.v1.GetVPSLeasesResponse.leases:type_name -> obiente.cloud.vps.v1.VPSLease
-	98, // 55: obiente.cloud.vps.v1.RegisterLeaseRequest.expires_at:type_name -> google.protobuf.Timestamp
-	98, // 56: obiente.cloud.vps.v1.VPSPublicIP.assigned_at:type_name -> google.protobuf.Timestamp
-	98, // 57: obiente.cloud.vps.v1.VPSPublicIP.created_at:type_name -> google.protobuf.Timestamp
-	98, // 58: obiente.cloud.vps.v1.VPSPublicIP.updated_at:type_name -> google.protobuf.Timestamp
-	85, // 59: obiente.cloud.vps.v1.ListVPSPublicIPsResponse.ips:type_name -> obiente.cloud.vps.v1.VPSPublicIP
-	85, // 60: obiente.cloud.vps.v1.CreateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
-	85, // 61: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
-	5,  // 62: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
-	7,  // 63: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
-	12, // 64: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
-	14, // 65: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
-	16, // 66: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
-	18, // 67: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
-	20, // 68: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
-	22, // 69: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
-	24, // 70: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
-	26, // 71: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
-	28, // 72: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
-	30, // 73: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
-	33, // 74: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
-	35, // 75: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
-	37, // 76: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
-	41, // 77: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
-	43, // 78: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
-	45, // 79: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
-	47, // 80: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
-	49, // 81: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
-	51, // 82: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
-	53, // 83: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
-	58, // 84: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
-	60, // 85: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
-	62, // 86: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
-	64, // 87: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
-	66, // 88: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
-	68, // 89: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
-	70, // 90: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
-	72, // 91: obiente.cloud.vps.v1.VPSService.ImportVPS:input_type -> obiente.cloud.vps.v1.ImportVPSRequest
-	74, // 92: obiente.cloud.vps.v1.VPSService.GetVPSLeases:input_type -> obiente.cloud.vps.v1.GetVPSLeasesRequest
-	77, // 93: obiente.cloud.vps.v1.VPSService.RegisterLease:input_type -> obiente.cloud.vps.v1.RegisterLeaseRequest
-	79, // 94: obiente.cloud.vps.v1.VPSService.ReleaseLease:input_type -> obiente.cloud.vps.v1.ReleaseLeaseRequest
-	81, // 95: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:input_type -> obiente.cloud.vps.v1.AssignVPSPublicIPRequest
-	83, // 96: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:input_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
-	6,  // 97: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
-	11, // 98: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
-	13, // 99: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
-	15, // 100: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
-	17, // 101: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
-	19, // 102: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
-	21, // 103: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
-	23, // 104: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
-	25, // 105: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
-	27, // 106: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
-	29, // 107: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
-	31, // 108: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
-	34, // 109: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
-	36, // 110: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
-	38, // 111: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
-	42, // 112: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
-	44, // 113: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
-	46, // 114: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
-	48, // 115: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
-	50, // 116: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
-	52, // 117: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
-	54, // 118: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
-	59, // 119: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
-	61, // 120: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
-	63, // 121: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
-	65, // 122: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
-	67, // 123: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
-	69, // 124: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
-	71, // 125: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
-	73, // 126: obiente.cloud.vps.v1.VPSService.ImportVPS:output_type -> obiente.cloud.vps.v1.ImportVPSResponse
-	76, // 127: obiente.cloud.vps.v1.VPSService.GetVPSLeases:output_type -> obiente.cloud.vps.v1.GetVPSLeasesResponse
-	78, // 128: obiente.cloud.vps.v1.VPSService.RegisterLease:output_type -> obiente.cloud.vps.v1.RegisterLeaseResponse
-	80, // 129: obiente.cloud.vps.v1.VPSService.ReleaseLease:output_type -> obiente.cloud.vps.v1.ReleaseLeaseResponse
-	82, // 130: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:output_type -> obiente.cloud.vps.v1.AssignVPSPublicIPResponse
-	84, // 131: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:output_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
-	97, // [97:132] is the sub-list for method output_type
-	62, // [62:97] is the sub-list for method input_type
-	62, // [62:62] is the sub-list for extension type_name
-	62, // [62:62] is the sub-list for extension extendee
-	0,  // [0:62] is the sub-list for field type_name
+	0,   // 0: obiente.cloud.vps.v1.ListVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
+	42,  // 1: obiente.cloud.vps.v1.ListVPSResponse.vps_instances:type_name -> obiente.cloud.vps.v1.VPSInstance
+	99,  // 2: obiente.cloud.vps.v1.ListVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	1,   // 3: obiente.cloud.vps.v1.CreateVPSRequest.image:type_name -> obiente.cloud.vps.v1.VPSImage
+	96,  // 4: obiente.cloud.vps.v1.CreateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.CreateVPSRequest.MetadataEntry
+	8,   // 5: obiente.cloud.vps.v1.CreateVPSRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	9,   // 6: obiente.cloud.vps.v1.CloudInitConfig.users:type_name -> obiente.cloud.vps.v1.CloudInitUser
+	10,  // 7: obiente.cloud.vps.v1.CloudInitConfig.write_files:type_name -> obiente.cloud.vps.v1.CloudInitWriteFile
+	42,  // 8: obiente.cloud.vps.v1.CreateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	42,  // 9: obiente.cloud.vps.v1.GetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	97,  // 10: obiente.cloud.vps.v1.UpdateVPSRequest.metadata:type_name -> obiente.cloud.vps.v1.UpdateVPSRequest.MetadataEntry
+	42,  // 11: obiente.cloud.vps.v1.UpdateVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	42,  // 12: obiente.cloud.vps.v1.StartVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	42,  // 13: obiente.cloud.vps.v1.StopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	42,  // 14: obiente.cloud.vps.v1.RebootVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	0,   // 15: obiente.cloud.vps.v1.VPSStatusUpdate.status:type_name -> obiente.cloud.vps.v1.VPSStatus
+	100, // 16: obiente.cloud.vps.v1.VPSStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	100, // 17: obiente.cloud.vps.v1.GetVPSMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	100, // 18: obiente.cloud.vps.v1.GetVPSMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	29,  // 19: obiente.cloud.vps.v1.GetVPSMetricsResponse.metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
+	100, // 20: obiente.cloud.vps.v1.VPSMetric.timestamp:type_name -> google.protobuf.Timestamp
+	34,  // 21: obiente.cloud.vps.v1.GetVPSUsageResponse.current:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
+	34,  // 22: obiente.cloud.vps.v1.GetVPSUsageResponse.estimated_monthly:type_name -> obiente.cloud.vps.v1.VPSUsageMetrics
+	101, // 23: obiente.cloud.vps.v1.ListAvailableVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
+	41,  // 24: obiente.cloud.vps.v1.ListVPSRegionsResponse.regions:type_name -> obiente.cloud.vps.v1.VPSRegion
+	0,   // 25: obiente.cloud.vps.v1.VPSInstance.status:type_name -> obiente.cloud.vps.v1.VPSStatus
+	1,   // 26: obiente.cloud.vps.v1.VPSInstance.image:type_name -> obiente.cloud.vps.v1.VPSImage
+	98,  // 27: obiente.cloud.vps.v1.VPSInstance.metadata:type_name -> obiente.cloud.vps.v1.VPSInstance.MetadataEntry
+	100, // 28: obiente.cloud.vps.v1.VPSInstance.created_at:type_name -> google.protobuf.Timestamp
+	100, // 29: obiente.cloud.vps.v1.VPSInstance.updated_at:type_name -> google.protobuf.Timestamp
+	100, // 30: obiente.cloud.vps.v1.VPSInstance.last_started_at:type_name -> google.protobuf.Timestamp
+	100, // 31: obiente.cloud.vps.v1.VPSInstance.deleted_at:type_name -> google.protobuf.Timestamp
+	29,  // 32: obiente.cloud.vps.v1.VPSInstance.current_metrics:type_name -> obiente.cloud.vps.v1.VPSMetric
+	57,  // 33: obiente.cloud.vps.v1.ListFirewallRulesResponse.rules:type_name -> obiente.cloud.vps.v1.FirewallRule
+	57,  // 34: obiente.cloud.vps.v1.GetFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
+	57,  // 35: obiente.cloud.vps.v1.CreateFirewallRuleRequest.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
+	57,  // 36: obiente.cloud.vps.v1.CreateFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
+	57,  // 37: obiente.cloud.vps.v1.UpdateFirewallRuleRequest.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
+	57,  // 38: obiente.cloud.vps.v1.UpdateFirewallRuleResponse.rule:type_name -> obiente.cloud.vps.v1.FirewallRule
+	58,  // 39: obiente.cloud.vps.v1.GetFirewallOptionsResponse.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
+	58,  // 40: obiente.cloud.vps.v1.UpdateFirewallOptionsRequest.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
+	58,  // 41: obiente.cloud.vps.v1.UpdateFirewallOptionsResponse.options:type_name -> obiente.cloud.vps.v1.FirewallOptions
+	2,   // 42: obiente.cloud.vps.v1.FirewallRule.action:type_name -> obiente.cloud.vps.v1.FirewallAction
+	3,   // 43: obiente.cloud.vps.v1.FirewallRule.type:type_name -> obiente.cloud.vps.v1.FirewallDirection
+	4,   // 44: obiente.cloud.vps.v1.FirewallRule.protocol:type_name -> obiente.cloud.vps.v1.FirewallProtocol
+	100, // 45: obiente.cloud.vps.v1.SSHKey.created_at:type_name -> google.protobuf.Timestamp
+	100, // 46: obiente.cloud.vps.v1.SSHKey.updated_at:type_name -> google.protobuf.Timestamp
+	59,  // 47: obiente.cloud.vps.v1.ListSSHKeysResponse.keys:type_name -> obiente.cloud.vps.v1.SSHKey
+	59,  // 48: obiente.cloud.vps.v1.AddSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
+	59,  // 49: obiente.cloud.vps.v1.UpdateSSHKeyResponse.key:type_name -> obiente.cloud.vps.v1.SSHKey
+	42,  // 50: obiente.cloud.vps.v1.ReinitializeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	100, // 51: obiente.cloud.vps.v1.VPSLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	42,  // 52: obiente.cloud.vps.v1.ImportVPSResponse.imported_vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	100, // 53: obiente.cloud.vps.v1.VPSLease.expires_at:type_name -> google.protobuf.Timestamp
+	77,  // 54: obiente.cloud.vps.v1.GetVPSLeasesResponse.leases:type_name -> obiente.cloud.vps.v1.VPSLease
+	100, // 55: obiente.cloud.vps.v1.RegisterLeaseRequest.expires_at:type_name -> google.protobuf.Timestamp
+	100, // 56: obiente.cloud.vps.v1.VPSPublicIP.assigned_at:type_name -> google.protobuf.Timestamp
+	100, // 57: obiente.cloud.vps.v1.VPSPublicIP.created_at:type_name -> google.protobuf.Timestamp
+	100, // 58: obiente.cloud.vps.v1.VPSPublicIP.updated_at:type_name -> google.protobuf.Timestamp
+	87,  // 59: obiente.cloud.vps.v1.ListVPSPublicIPsResponse.ips:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	87,  // 60: obiente.cloud.vps.v1.CreateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	87,  // 61: obiente.cloud.vps.v1.UpdateVPSPublicIPResponse.ip:type_name -> obiente.cloud.vps.v1.VPSPublicIP
+	5,   // 62: obiente.cloud.vps.v1.VPSService.ListVPS:input_type -> obiente.cloud.vps.v1.ListVPSRequest
+	7,   // 63: obiente.cloud.vps.v1.VPSService.CreateVPS:input_type -> obiente.cloud.vps.v1.CreateVPSRequest
+	12,  // 64: obiente.cloud.vps.v1.VPSService.GetVPS:input_type -> obiente.cloud.vps.v1.GetVPSRequest
+	14,  // 65: obiente.cloud.vps.v1.VPSService.UpdateVPS:input_type -> obiente.cloud.vps.v1.UpdateVPSRequest
+	16,  // 66: obiente.cloud.vps.v1.VPSService.DeleteVPS:input_type -> obiente.cloud.vps.v1.DeleteVPSRequest
+	18,  // 67: obiente.cloud.vps.v1.VPSService.StartVPS:input_type -> obiente.cloud.vps.v1.StartVPSRequest
+	20,  // 68: obiente.cloud.vps.v1.VPSService.StopVPS:input_type -> obiente.cloud.vps.v1.StopVPSRequest
+	22,  // 69: obiente.cloud.vps.v1.VPSService.RebootVPS:input_type -> obiente.cloud.vps.v1.RebootVPSRequest
+	24,  // 70: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:input_type -> obiente.cloud.vps.v1.StreamVPSStatusRequest
+	26,  // 71: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:input_type -> obiente.cloud.vps.v1.GetVPSMetricsRequest
+	28,  // 72: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:input_type -> obiente.cloud.vps.v1.StreamVPSMetricsRequest
+	30,  // 73: obiente.cloud.vps.v1.VPSService.GetVPSUsage:input_type -> obiente.cloud.vps.v1.GetVPSUsageRequest
+	35,  // 74: obiente.cloud.vps.v1.VPSService.ListVPSSizes:input_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesRequest
+	37,  // 75: obiente.cloud.vps.v1.VPSService.ListVPSRegions:input_type -> obiente.cloud.vps.v1.ListVPSRegionsRequest
+	39,  // 76: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:input_type -> obiente.cloud.vps.v1.GetVPSProxyInfoRequest
+	43,  // 77: obiente.cloud.vps.v1.VPSService.ListFirewallRules:input_type -> obiente.cloud.vps.v1.ListFirewallRulesRequest
+	45,  // 78: obiente.cloud.vps.v1.VPSService.GetFirewallRule:input_type -> obiente.cloud.vps.v1.GetFirewallRuleRequest
+	47,  // 79: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:input_type -> obiente.cloud.vps.v1.CreateFirewallRuleRequest
+	49,  // 80: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:input_type -> obiente.cloud.vps.v1.UpdateFirewallRuleRequest
+	51,  // 81: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:input_type -> obiente.cloud.vps.v1.DeleteFirewallRuleRequest
+	53,  // 82: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:input_type -> obiente.cloud.vps.v1.GetFirewallOptionsRequest
+	55,  // 83: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:input_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsRequest
+	60,  // 84: obiente.cloud.vps.v1.VPSService.ListSSHKeys:input_type -> obiente.cloud.vps.v1.ListSSHKeysRequest
+	62,  // 85: obiente.cloud.vps.v1.VPSService.AddSSHKey:input_type -> obiente.cloud.vps.v1.AddSSHKeyRequest
+	64,  // 86: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:input_type -> obiente.cloud.vps.v1.UpdateSSHKeyRequest
+	66,  // 87: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:input_type -> obiente.cloud.vps.v1.RemoveSSHKeyRequest
+	68,  // 88: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:input_type -> obiente.cloud.vps.v1.ResetVPSPasswordRequest
+	70,  // 89: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:input_type -> obiente.cloud.vps.v1.ReinitializeVPSRequest
+	72,  // 90: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:input_type -> obiente.cloud.vps.v1.StreamVPSLogsRequest
+	74,  // 91: obiente.cloud.vps.v1.VPSService.ImportVPS:input_type -> obiente.cloud.vps.v1.ImportVPSRequest
+	76,  // 92: obiente.cloud.vps.v1.VPSService.GetVPSLeases:input_type -> obiente.cloud.vps.v1.GetVPSLeasesRequest
+	31,  // 93: obiente.cloud.vps.v1.VPSService.FindVPSByLease:input_type -> obiente.cloud.vps.v1.FindVPSByLeaseRequest
+	79,  // 94: obiente.cloud.vps.v1.VPSService.RegisterLease:input_type -> obiente.cloud.vps.v1.RegisterLeaseRequest
+	81,  // 95: obiente.cloud.vps.v1.VPSService.ReleaseLease:input_type -> obiente.cloud.vps.v1.ReleaseLeaseRequest
+	83,  // 96: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:input_type -> obiente.cloud.vps.v1.AssignVPSPublicIPRequest
+	85,  // 97: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:input_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPRequest
+	6,   // 98: obiente.cloud.vps.v1.VPSService.ListVPS:output_type -> obiente.cloud.vps.v1.ListVPSResponse
+	11,  // 99: obiente.cloud.vps.v1.VPSService.CreateVPS:output_type -> obiente.cloud.vps.v1.CreateVPSResponse
+	13,  // 100: obiente.cloud.vps.v1.VPSService.GetVPS:output_type -> obiente.cloud.vps.v1.GetVPSResponse
+	15,  // 101: obiente.cloud.vps.v1.VPSService.UpdateVPS:output_type -> obiente.cloud.vps.v1.UpdateVPSResponse
+	17,  // 102: obiente.cloud.vps.v1.VPSService.DeleteVPS:output_type -> obiente.cloud.vps.v1.DeleteVPSResponse
+	19,  // 103: obiente.cloud.vps.v1.VPSService.StartVPS:output_type -> obiente.cloud.vps.v1.StartVPSResponse
+	21,  // 104: obiente.cloud.vps.v1.VPSService.StopVPS:output_type -> obiente.cloud.vps.v1.StopVPSResponse
+	23,  // 105: obiente.cloud.vps.v1.VPSService.RebootVPS:output_type -> obiente.cloud.vps.v1.RebootVPSResponse
+	25,  // 106: obiente.cloud.vps.v1.VPSService.StreamVPSStatus:output_type -> obiente.cloud.vps.v1.VPSStatusUpdate
+	27,  // 107: obiente.cloud.vps.v1.VPSService.GetVPSMetrics:output_type -> obiente.cloud.vps.v1.GetVPSMetricsResponse
+	29,  // 108: obiente.cloud.vps.v1.VPSService.StreamVPSMetrics:output_type -> obiente.cloud.vps.v1.VPSMetric
+	33,  // 109: obiente.cloud.vps.v1.VPSService.GetVPSUsage:output_type -> obiente.cloud.vps.v1.GetVPSUsageResponse
+	36,  // 110: obiente.cloud.vps.v1.VPSService.ListVPSSizes:output_type -> obiente.cloud.vps.v1.ListAvailableVPSSizesResponse
+	38,  // 111: obiente.cloud.vps.v1.VPSService.ListVPSRegions:output_type -> obiente.cloud.vps.v1.ListVPSRegionsResponse
+	40,  // 112: obiente.cloud.vps.v1.VPSService.GetVPSProxyInfo:output_type -> obiente.cloud.vps.v1.GetVPSProxyInfoResponse
+	44,  // 113: obiente.cloud.vps.v1.VPSService.ListFirewallRules:output_type -> obiente.cloud.vps.v1.ListFirewallRulesResponse
+	46,  // 114: obiente.cloud.vps.v1.VPSService.GetFirewallRule:output_type -> obiente.cloud.vps.v1.GetFirewallRuleResponse
+	48,  // 115: obiente.cloud.vps.v1.VPSService.CreateFirewallRule:output_type -> obiente.cloud.vps.v1.CreateFirewallRuleResponse
+	50,  // 116: obiente.cloud.vps.v1.VPSService.UpdateFirewallRule:output_type -> obiente.cloud.vps.v1.UpdateFirewallRuleResponse
+	52,  // 117: obiente.cloud.vps.v1.VPSService.DeleteFirewallRule:output_type -> obiente.cloud.vps.v1.DeleteFirewallRuleResponse
+	54,  // 118: obiente.cloud.vps.v1.VPSService.GetFirewallOptions:output_type -> obiente.cloud.vps.v1.GetFirewallOptionsResponse
+	56,  // 119: obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions:output_type -> obiente.cloud.vps.v1.UpdateFirewallOptionsResponse
+	61,  // 120: obiente.cloud.vps.v1.VPSService.ListSSHKeys:output_type -> obiente.cloud.vps.v1.ListSSHKeysResponse
+	63,  // 121: obiente.cloud.vps.v1.VPSService.AddSSHKey:output_type -> obiente.cloud.vps.v1.AddSSHKeyResponse
+	65,  // 122: obiente.cloud.vps.v1.VPSService.UpdateSSHKey:output_type -> obiente.cloud.vps.v1.UpdateSSHKeyResponse
+	67,  // 123: obiente.cloud.vps.v1.VPSService.RemoveSSHKey:output_type -> obiente.cloud.vps.v1.RemoveSSHKeyResponse
+	69,  // 124: obiente.cloud.vps.v1.VPSService.ResetVPSPassword:output_type -> obiente.cloud.vps.v1.ResetVPSPasswordResponse
+	71,  // 125: obiente.cloud.vps.v1.VPSService.ReinitializeVPS:output_type -> obiente.cloud.vps.v1.ReinitializeVPSResponse
+	73,  // 126: obiente.cloud.vps.v1.VPSService.StreamVPSLogs:output_type -> obiente.cloud.vps.v1.VPSLogLine
+	75,  // 127: obiente.cloud.vps.v1.VPSService.ImportVPS:output_type -> obiente.cloud.vps.v1.ImportVPSResponse
+	78,  // 128: obiente.cloud.vps.v1.VPSService.GetVPSLeases:output_type -> obiente.cloud.vps.v1.GetVPSLeasesResponse
+	32,  // 129: obiente.cloud.vps.v1.VPSService.FindVPSByLease:output_type -> obiente.cloud.vps.v1.FindVPSByLeaseResponse
+	80,  // 130: obiente.cloud.vps.v1.VPSService.RegisterLease:output_type -> obiente.cloud.vps.v1.RegisterLeaseResponse
+	82,  // 131: obiente.cloud.vps.v1.VPSService.ReleaseLease:output_type -> obiente.cloud.vps.v1.ReleaseLeaseResponse
+	84,  // 132: obiente.cloud.vps.v1.VPSService.AssignVPSPublicIP:output_type -> obiente.cloud.vps.v1.AssignVPSPublicIPResponse
+	86,  // 133: obiente.cloud.vps.v1.VPSService.UnassignVPSPublicIP:output_type -> obiente.cloud.vps.v1.UnassignVPSPublicIPResponse
+	98,  // [98:134] is the sub-list for method output_type
+	62,  // [62:98] is the sub-list for method input_type
+	62,  // [62:62] is the sub-list for extension type_name
+	62,  // [62:62] is the sub-list for extension extendee
+	0,   // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_vps_v1_vps_service_proto_init() }
@@ -6960,29 +7079,29 @@ func file_obiente_cloud_vps_v1_vps_service_proto_init() {
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[20].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[21].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[25].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[27].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[28].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[33].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[29].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[30].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[35].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[40].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[50].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[51].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[37].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[42].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[52].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[53].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[54].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[55].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[64].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[69].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[80].OneofWrappers = []any{}
-	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[81].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[57].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[66].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[71].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[82].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[83].OneofWrappers = []any{}
 	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[85].OneofWrappers = []any{}
+	file_obiente_cloud_vps_v1_vps_service_proto_msgTypes[87].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc), len(file_obiente_cloud_vps_v1_vps_service_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   92,
+			NumMessages:   94,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
