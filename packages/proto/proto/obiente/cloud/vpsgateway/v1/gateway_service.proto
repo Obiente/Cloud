@@ -309,7 +309,7 @@ message GetGatewayInfoResponse {
 // GatewayMessage is used in the RegisterGateway bidirectional stream
 // It wraps different message types for gateway-API communication
 message GatewayMessage {
-  // Message type: "register", "metrics", "request", "response", "heartbeat"
+  // Message type: "register", "metrics", "request", "response", "heartbeat", "sync_allocations"
   string type = 1;
   
   // For "register": gateway registration information
@@ -326,6 +326,9 @@ message GatewayMessage {
   
   // For "heartbeat": keepalive message
   google.protobuf.Timestamp heartbeat = 6;
+  
+  // For "sync_allocations": synchronize allocations from database (bidirectional)
+  SyncAllocationsRequest sync_allocations = 7;
 }
 
 // GatewayRegistration contains gateway registration information

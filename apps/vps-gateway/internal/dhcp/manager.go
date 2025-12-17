@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"vps-gateway/internal/logger"
-	"vps-gateway/internal/redis"
 
 	"connectrpc.com/connect"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -40,7 +38,6 @@ type Manager struct {
 	dhcpRunning        bool
 	dnsmasqPID         int
 	allocationTTL      time.Duration
-	redisClient        *redis.Client
 	vpsServiceClient   vpsv1connect.VPSServiceClient // gRPC client to VPS Service for lease operations (deprecated)
 	vpsServiceClientMu sync.RWMutex                  // Protects client access
 	apiClient          APIClient                     // API client for bidirectional stream communication
@@ -210,13 +207,9 @@ func NewManager() (*Manager, error) {
 	// VPS services should connect to the gateway and call SetVPSServiceClient
 	// to provide a persistent client. Do not create outgoing clients here.
 
-	// Initialize Redis client for cross-node coordination (optional)
-	if rc, err := redis.NewClient(); err != nil {
-		logger.Warn("Redis not available, proceeding without distributed reservation: %v", err)
-	} else {
-		manager.redisClient = rc
-		logger.Info("DHCP Manager: Redis enabled for atomic IP reservations")
-	}
+	// Note: Redis is NOT used for cross-gateway coordination.
+	// Redis instances (if configured) are local per gateway, not shared.
+	// The database (accessed via VPS service bidirectional stream) is the source of truth.
 
 	// Load existing allocations from file
 	if err := manager.loadAllocations(); err != nil {
@@ -334,7 +327,9 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		return alloc, nil
 	}
 
-	// Determine IP to allocate (with optional distributed reservation)
+	// Determine IP to allocate
+	// The database (via VPS service) is the source of truth for preventing duplicate allocations
+	// This gateway only manages its local allocations map
 	var ip net.IP
 	if preferredIP != "" {
 		ip = net.ParseIP(preferredIP)
@@ -351,20 +346,10 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 				return nil, fmt.Errorf("IP %s is already allocated", preferredIP)
 			}
 		}
-		// Attempt a distributed reservation to avoid double leases
-		if m.redisClient != nil && m.IsIPInPool(ip) {
-			key := m.redisReservationKey(ip)
-			ok, err := m.redisClient.SetNX(ctx, key, map[string]string{"vpsID": vpsID, "mac": macAddress}, 25*time.Hour)
-			if err != nil {
-				logger.Warn("Redis SetNX failed for preferred IP %s: %v", ip.String(), err)
-			} else if !ok {
-				return nil, fmt.Errorf("preferred IP %s is already reserved (distributed)", ip.String())
-			}
-		}
 	} else {
-		// Find next available IP, using Redis for atomic reservation if available
+		// Find next available IP from local pool
 		var err error
-		ip, err = m.findNextAvailableIPDistributed(ctx)
+		ip, err = m.findNextAvailableIP()
 		if err != nil {
 			return nil, fmt.Errorf("failed to find available IP: %w", err)
 		}
@@ -400,14 +385,9 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		}
 	}
 
-	// Persist allocation
+	// Persist allocation to local file
 	if err := m.saveAllocations(); err != nil {
 		logger.Error("Failed to save allocations: %v", err)
-	}
-
-	// Save mapping to Redis for visibility (non-authoritative)
-	if m.redisClient != nil && m.IsIPInPool(ip) {
-		_ = m.redisClient.Set(ctx, m.redisAllocationKey(vpsID), map[string]string{"ip": ip.String(), "mac": macAddress, "org": orgID}, 25*time.Hour)
 	}
 
 	// Register lease with VPS Service API (database as source of truth)
@@ -451,20 +431,12 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 		logger.Error("Failed to reload dnsmasq after release: %v", err)
 	}
 
-	// Persist allocation
+	// Persist allocation to local file
 	if err := m.saveAllocations(); err != nil {
 		logger.Error("Failed to save allocations: %v", err)
 	}
 
-	// Cleanup Redis reservation and allocation mapping
-	if m.redisClient != nil {
-		_ = m.redisClient.Del(ctx, m.redisAllocationKey(vpsID))
-		if alloc.IPAddress.To4() != nil && m.IsIPInPool(alloc.IPAddress) {
-			_ = m.redisClient.Del(ctx, m.redisReservationKey(alloc.IPAddress))
-		}
-	}
-
-	// Release lease from VPS Service API
+	// Release lease from VPS Service API (database as source of truth)
 	if err := m.releaseLeaseWithAPI(ctx, vpsID, alloc.MACAddress); err != nil {
 		logger.Error("Failed to release lease with VPS Service: %v", err)
 		// Non-fatal - local release is complete, will clean up eventually
@@ -599,64 +571,9 @@ func (m *Manager) findNextAvailableIP() (net.IP, error) {
 	return nil, fmt.Errorf("no available IPs in pool")
 }
 
-// findNextAvailableIPDistributed finds and atomically reserves the next free IP across nodes using Redis when available.
-func (m *Manager) findNextAvailableIPDistributed(ctx context.Context) (net.IP, error) {
-	// Fallback to local if Redis is not available
-	if m.redisClient == nil {
-		return m.findNextAvailableIP()
-	}
-
-	start4 := m.poolStart.To4()
-	end4 := m.poolEnd.To4()
-	if start4 == nil || end4 == nil {
-		return nil, fmt.Errorf("invalid pool configuration")
-	}
-
-	startInt := uint32(start4[0])<<24 | uint32(start4[1])<<16 | uint32(start4[2])<<8 | uint32(start4[3])
-	endInt := uint32(end4[0])<<24 | uint32(end4[1])<<16 | uint32(end4[2])<<8 | uint32(end4[3])
-
-	// Build a local set of allocations to skip
-	allocatedSet := make(map[uint32]bool)
-	for _, alloc := range m.allocations {
-		ip4 := alloc.IPAddress.To4()
-		if ip4 != nil {
-			ipInt := uint32(ip4[0])<<24 | uint32(ip4[1])<<16 | uint32(ip4[2])<<8 | uint32(ip4[3])
-			allocatedSet[ipInt] = true
-		}
-	}
-
-	// Iterate pool and attempt to reserve via Redis SETNX
-	for ipInt := startInt; ipInt <= endInt; ipInt++ {
-		if allocatedSet[ipInt] {
-			continue
-		}
-		ip := net.IP{byte(ipInt >> 24), byte(ipInt >> 16), byte(ipInt >> 8), byte(ipInt)}
-
-		ok, err := m.redisClient.SetNX(ctx, m.redisReservationKey(ip), map[string]any{"reserved": true}, 25*time.Hour)
-		if err != nil {
-			// If Redis fails, log and fallback to local strategy
-			logger.Warn("Redis reservation check failed: %v", err)
-			return m.findNextAvailableIP()
-		}
-		if ok {
-			// Successfully reserved globally
-			return ip, nil
-		}
-		// Already reserved by another node; continue
-	}
-
-	return nil, fmt.Errorf("no available IPs in pool (distributed)")
-}
-
-// redisReservationKey builds a key for IP reservations
-func (m *Manager) redisReservationKey(ip net.IP) string {
-	return fmt.Sprintf("vps:dhcp:pool:%s-%s:ip:%s", m.poolStart.String(), m.poolEnd.String(), ip.String())
-}
-
-// redisAllocationKey builds a key for VPS -> IP mapping
-func (m *Manager) redisAllocationKey(vpsID string) string {
-	return fmt.Sprintf("vps:dhcp:alloc:%s", vpsID)
-}
+// Note: Redis-based distributed reservation has been removed.
+// The database (via VPS service) is the authoritative source for preventing duplicate allocations.
+// Gateway only manages local allocations and syncs from database via bidirectional stream.
 
 func (m *Manager) countIPsInPool() int {
 	start4 := m.poolStart.To4()
@@ -1275,10 +1192,6 @@ func (m *Manager) syncWithLeases() error {
 		delete(m.allocations, vpsID)
 		updated = true
 
-		if m.redisClient != nil {
-			_ = m.redisClient.Del(context.Background(), m.redisAllocationKey(vpsID))
-		}
-
 		// Inform API that the lease is gone; ignore errors to avoid blocking cleanup
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := m.releaseLeaseWithAPI(ctx, vpsID, allocMAC); err != nil {
@@ -1354,26 +1267,7 @@ func (m *Manager) GetActiveLeases() ([]LeaseInfo, error) {
 		return nil, fmt.Errorf("failed to read leases file: %w", err)
 	}
 
-	// Optional: cache leases in Redis for quick retrieval by other nodes
-	if m.redisClient != nil {
-		if cacheErr := m.cacheLeases(leases); cacheErr != nil {
-			logger.Debug("Failed to cache leases in Redis (non-fatal): %v", cacheErr)
-		}
-	}
-
 	return leases, nil
-}
-
-// cacheLeases stores active leases in Redis for quick retrieval
-// Uses a sorted set keyed by pool range for visibility
-func (m *Manager) cacheLeases(leases []LeaseInfo) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
-
-	// Store leases as JSON array with TTL
-	return m.redisClient.Set(ctx, cacheKey, leases, 30*time.Second)
 }
 
 // backgroundReconciler periodically syncs with dnsmasq leases and prunes
@@ -1444,10 +1338,6 @@ func (m *Manager) backgroundReconciler() {
 			alloc := m.allocations[vpsID]
 			delete(m.allocations, vpsID)
 			logger.Info("Pruned allocation for deleted VPS: %s (ip=%s)", vpsID, alloc.IPAddress.String())
-
-			if m.redisClient != nil {
-				_ = m.redisClient.Del(context.Background(), m.redisAllocationKey(vpsID))
-			}
 
 			// Best-effort inform API that lease has been released
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1521,24 +1411,6 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 		}
 	}
 
-	// Also consult Redis-cached leases (if Redis available). This helps in
-	// cross-node scenarios where another gateway recently wrote leases and
-	// populated the Redis cache via cacheLeases().
-	if macAddr == "" && m.redisClient != nil {
-		cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
-		if data, err := m.redisClient.Get(context.Background(), cacheKey); err == nil && data != "" {
-			var cached []LeaseInfo
-			if err := json.Unmarshal([]byte(data), &cached); err == nil {
-				for _, l := range cached {
-					if l.IP != nil && l.IP.Equal(ipAddress) && l.MAC != "" {
-						macAddr = l.MAC
-						break
-					}
-				}
-			}
-		}
-	}
-
 	// Enhanced wait-and-retry: sometimes dnsmasq writes the lease after allocation
 	// due to DHCP timing. Poll for a few short intervals (longer than before)
 	// to try to capture the MAC before sending the registration to the API.
@@ -1556,22 +1428,6 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 			}
 			if macAddr != "" {
 				break
-			}
-
-			// Check Redis cache again as a quick second source
-			if m.redisClient != nil {
-				cacheKey := fmt.Sprintf("vps:leases:%s-%s", m.poolStart.String(), m.poolEnd.String())
-				if data, err := m.redisClient.Get(context.Background(), cacheKey); err == nil && data != "" {
-					var cached []LeaseInfo
-					if err := json.Unmarshal([]byte(data), &cached); err == nil {
-						for _, l := range cached {
-							if l.IP != nil && l.IP.Equal(ipAddress) && l.MAC != "" {
-								macAddr = l.MAC
-								break
-							}
-						}
-					}
-				}
 			}
 		}
 	}

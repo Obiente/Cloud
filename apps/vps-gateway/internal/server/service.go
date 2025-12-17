@@ -649,6 +649,40 @@ func (s *GatewayService) RegisterGateway(
 			case "heartbeat":
 				logger.Debug("[GatewayService] Received heartbeat from API instance %s", apiInstanceID)
 
+			case "sync_allocations":
+				// VPS service is requesting allocation sync from database
+				if msg.SyncAllocations != nil {
+					logger.Info("[GatewayService] Received sync_allocations request from API instance %s with %d allocations", apiInstanceID, len(msg.SyncAllocations.Allocations))
+					
+					// Process the sync (delegate to existing SyncAllocations logic)
+					req := connect.NewRequest(msg.SyncAllocations)
+					resp, err := s.SyncAllocations(ctx, req)
+					
+					var syncResp *vpsgatewayv1.SyncAllocationsResponse
+					if err != nil {
+						logger.Error("[GatewayService] Sync allocations failed: %v", err)
+						syncResp = &vpsgatewayv1.SyncAllocationsResponse{
+							Success: false,
+							Message: fmt.Sprintf("Sync failed: %v", err),
+						}
+					} else {
+						syncResp = resp.Msg
+						logger.Info("[GatewayService] Sync allocations completed: added=%d removed=%d", syncResp.Added, syncResp.Removed)
+					}
+					
+					// Send response back via stream (optional - for confirmation)
+					if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+						Type: "sync_result",
+						Response: &vpsgatewayv1.GatewayResponse{
+							RequestId: "sync_allocations",
+							Success:   syncResp.Success,
+							Error:     syncResp.Message,
+						},
+					}); err != nil {
+						logger.Error("[GatewayService] Failed to send sync result: %v", err)
+					}
+				}
+
 			default:
 				logger.Warn("[GatewayService] Unknown message type: %s", msg.Type)
 			}
