@@ -33,7 +33,8 @@ type Manager struct {
 	interfaceName      string
 	leasesFile         string
 	hostsFile          string
-	allocations        map[string]*Allocation // vps_id -> allocation
+	nodeName           string                     // Gateway node name (provided by VPS service)
+	allocations        map[string]*Allocation     // vps_id -> allocation
 	mu                 sync.RWMutex
 	dhcpRunning        bool
 	dnsmasqPID         int
@@ -488,6 +489,15 @@ func (m *Manager) GetConfig() (poolStart, poolEnd, subnetMask, gateway string, d
 	subnetMaskStr := maskIP.String()
 
 	return m.poolStart.String(), m.poolEnd.String(), subnetMaskStr, m.gateway.String(), dnsStrs
+}
+
+// SetNodeName sets the gateway node name (told to us by VPS service on registration)
+// This is critical for proper lease registration with the correct gateway_node
+func (m *Manager) SetNodeName(nodeName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.nodeName = nodeName
+	logger.Info("[DHCP] Gateway node name set to: %s", nodeName)
 }
 
 // GetStats returns DHCP statistics
@@ -1439,6 +1449,11 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 		logger.Debug("No MAC resolved for VPS %s IP %s when registering lease with API", vpsID, ipAddress.String())
 	}
 
+	// Get our gateway node name
+	m.mu.RLock()
+	gatewayNode := m.nodeName
+	m.mu.RUnlock()
+
 	// Create the gRPC request
 	req := &vpsv1.RegisterLeaseRequest{
 		VpsId:          vpsID,
@@ -1447,6 +1462,7 @@ func (m *Manager) registerLeaseWithAPI(ctx context.Context, vpsID, organizationI
 		IpAddress:      ipAddress.String(),
 		ExpiresAt:      expiresPb,
 		IsPublic:       isPublic,
+		GatewayNode:    gatewayNode, // Tell VPS service which gateway node we are
 	}
 
 	// Call the VPS Service RPC with a timeout

@@ -713,6 +713,7 @@ message RegisterLeaseRequest {
   string ip_address = 4;
   google.protobuf.Timestamp expires_at = 5;
   bool is_public = 6; // True if IP is public (outside DHCP pool)
+  string gateway_node = 7; // Gateway node name - identifies which gateway is registering this lease
 }
 
 message RegisterLeaseResponse {

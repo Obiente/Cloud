@@ -588,9 +588,14 @@ func (s *GatewayService) RegisterGateway(
 					continue
 				}
 				reg := msg.Registration
-				apiInstanceID = reg.GatewayId // Reusing GatewayId field for API instance ID
+				gatewayNodeName := reg.GatewayId  // VPS service tells us which node we are
+				apiInstanceID = reg.GatewayIpDhcp // VPS service instance ID (reusing this field)
 
-				logger.Info("[GatewayService] API instance %s registered (version: %s)", apiInstanceID, reg.Version)
+				logger.Info("[GatewayService] Registered as node %s by VPS service instance %s (version: %s)", 
+					gatewayNodeName, apiInstanceID, reg.Version)
+
+				// Tell DHCP manager which node we are - this is critical for lease registration
+				s.dhcpManager.SetNodeName(gatewayNodeName)
 
 				// Store stream for this VPS service instance
 				s.streamsMu.Lock()

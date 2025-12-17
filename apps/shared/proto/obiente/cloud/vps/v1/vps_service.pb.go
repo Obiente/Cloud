@@ -5120,7 +5120,8 @@ type RegisterLeaseRequest struct {
 	MacAddress     string                 `protobuf:"bytes,3,opt,name=mac_address,json=macAddress,proto3" json:"mac_address,omitempty"`
 	IpAddress      string                 `protobuf:"bytes,4,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
 	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	IsPublic       bool                   `protobuf:"varint,6,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"` // True if IP is public (outside DHCP pool)
+	IsPublic       bool                   `protobuf:"varint,6,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"`         // True if IP is public (outside DHCP pool)
+	GatewayNode    string                 `protobuf:"bytes,7,opt,name=gateway_node,json=gatewayNode,proto3" json:"gateway_node,omitempty"` // Gateway node name - identifies which gateway is registering this lease
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -5195,6 +5196,13 @@ func (x *RegisterLeaseRequest) GetIsPublic() bool {
 		return x.IsPublic
 	}
 	return false
+}
+
+func (x *RegisterLeaseRequest) GetGatewayNode() string {
+	if x != nil {
+		return x.GatewayNode
+	}
+	return ""
 }
 
 type RegisterLeaseResponse struct {
@@ -6620,7 +6628,7 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1b\n" +
 	"\tis_public\x18\x06 \x01(\bR\bisPublic\"N\n" +
 	"\x14GetVPSLeasesResponse\x126\n" +
-	"\x06leases\x18\x01 \x03(\v2\x1e.obiente.cloud.vps.v1.VPSLeaseR\x06leases\"\xee\x01\n" +
+	"\x06leases\x18\x01 \x03(\v2\x1e.obiente.cloud.vps.v1.VPSLeaseR\x06leases\"\x91\x02\n" +
 	"\x14RegisterLeaseRequest\x12\x15\n" +
 	"\x06vps_id\x18\x01 \x01(\tR\x05vpsId\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1f\n" +
@@ -6630,7 +6638,8 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"ip_address\x18\x04 \x01(\tR\tipAddress\x129\n" +
 	"\n" +
 	"expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12\x1b\n" +
-	"\tis_public\x18\x06 \x01(\bR\bisPublic\"K\n" +
+	"\tis_public\x18\x06 \x01(\bR\bisPublic\x12!\n" +
+	"\fgateway_node\x18\a \x01(\tR\vgatewayNode\"K\n" +
 	"\x15RegisterLeaseResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"M\n" +
