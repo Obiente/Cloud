@@ -38,6 +38,11 @@ type GatewayService struct {
 	pendingRequests    map[string]chan *vpsgatewayv1.GatewayResponse
 	pendingRequestsMu  sync.RWMutex
 	requestCounter     uint64
+	
+	// Track stream send errors for rate limiting
+	lastStreamError    time.Time
+	streamErrorCount   int
+	streamErrorMu      sync.Mutex
 }
 
 // NewGatewayService creates a new gateway service
@@ -647,8 +652,7 @@ func (s *GatewayService) RegisterGateway(
 			case "request":
 				// Handle requests from API (forwarded RPCs)
 				if msg.Request != nil {
-					logger.Debug("[GatewayService] Received request %s from API instance %s", msg.Request.Method, apiInstanceID)
-					// Requests are handled directly via the RPC methods, not through the stream
+					go s.handleStreamRequest(ctx, stream, msg.Request, apiInstanceID)
 				}
 
 			case "heartbeat":
@@ -919,7 +923,10 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 		}
 		
 		if sendErr := stream.Send(msg); sendErr != nil {
-			logger.Debug("[GatewayService] Failed to send FindVPSByLease request to VPS instance %s: %v", instanceID, sendErr)
+			// Stream not ready yet or connection issue
+			// Rate limit error logging to avoid spam during startup
+			s.logStreamError(instanceID, sendErr)
+			
 			// Clean up failed request
 			s.pendingRequestsMu.Lock()
 			delete(s.pendingRequests, requestID)
@@ -945,7 +952,8 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	}()
 
 	if len(responseChans) == 0 {
-		logger.Debug("[GatewayService] No connected VPS service instances for FindVPSByLease")
+		// No VPS service connected yet - this is normal during startup
+		// Return empty response (not found)
 		return &vpsv1.FindVPSByLeaseResponse{}, nil
 	}
 
@@ -989,6 +997,42 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	return &vpsv1.FindVPSByLeaseResponse{}, nil
 }
 
+// logStreamError logs stream send errors with rate limiting to prevent log spam
+func (s *GatewayService) logStreamError(instanceID string, err error) {
+	s.streamErrorMu.Lock()
+	defer s.streamErrorMu.Unlock()
+	
+	now := time.Now()
+	timeSinceStart := now.Sub(s.startTime)
+	timeSinceLastError := now.Sub(s.lastStreamError)
+	
+	// During first 30 seconds of startup, only log once every 10 seconds
+	if timeSinceStart < 30*time.Second {
+		if timeSinceLastError > 10*time.Second {
+			logger.Info("[GatewayService] Stream send error during startup (VPS instance %s): %v (further similar errors will be suppressed)", instanceID, err)
+			s.lastStreamError = now
+			s.streamErrorCount = 1
+		} else {
+			s.streamErrorCount++
+		}
+		return
+	}
+	
+	// After startup, log every error but with summary if frequent
+	if timeSinceLastError > 5*time.Second {
+		if s.streamErrorCount > 1 {
+			logger.Error("[GatewayService] Stream send error to VPS instance %s: %v (%d similar errors in last %v)", 
+				instanceID, err, s.streamErrorCount, timeSinceLastError)
+		} else {
+			logger.Error("[GatewayService] Stream send error to VPS instance %s: %v", instanceID, err)
+		}
+		s.lastStreamError = now
+		s.streamErrorCount = 1
+	} else {
+		s.streamErrorCount++
+	}
+}
+
 // mergeResponseChannels merges multiple response channels into a single channel
 func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan *vpsgatewayv1.GatewayResponse {
 	merged := make(chan *vpsgatewayv1.GatewayResponse, len(channels))
@@ -1002,4 +1046,120 @@ func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan
 	}
 	
 	return merged
+}
+
+// handleStreamRequest processes incoming requests from VPS service over the bidirectional stream
+func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], req *vpsgatewayv1.GatewayRequest, instanceID string) {
+	logger.Debug("[GatewayService] Processing request %s (ID: %s) from VPS instance %s", req.Method, req.RequestId, instanceID)
+	
+	var respPayload []byte
+	
+	switch req.Method {
+	case "AllocateIP":
+		// Unmarshal AllocateIP request
+		var allocReq vpsgatewayv1.AllocateIPRequest
+		if err := proto.Unmarshal(req.Payload, &allocReq); err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal AllocateIP request: %v", err))
+			return
+		}
+		
+		// Call AllocateIP method
+		allocResp, err := s.AllocateIP(ctx, connect.NewRequest(&allocReq))
+		if err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("AllocateIP failed: %v", err))
+			return
+		}
+		
+		// Marshal response
+		var marshalErr error
+		respPayload, marshalErr = proto.Marshal(allocResp.Msg)
+		if marshalErr != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal AllocateIP response: %v", marshalErr))
+			return
+		}
+		
+	case "ReleaseIP":
+		// Unmarshal ReleaseIP request
+		var releaseReq vpsgatewayv1.ReleaseIPRequest
+		if err := proto.Unmarshal(req.Payload, &releaseReq); err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ReleaseIP request: %v", err))
+			return
+		}
+		
+		// Call ReleaseIP method
+		releaseResp, err := s.ReleaseIP(ctx, connect.NewRequest(&releaseReq))
+		if err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ReleaseIP failed: %v", err))
+			return
+		}
+		
+		// Marshal response
+		var marshalErr error
+		respPayload, marshalErr = proto.Marshal(releaseResp.Msg)
+		if marshalErr != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ReleaseIP response: %v", marshalErr))
+			return
+		}
+		
+	case "ListIPs":
+		// Unmarshal ListIPs request
+		var listReq vpsgatewayv1.ListIPsRequest
+		if err := proto.Unmarshal(req.Payload, &listReq); err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ListIPs request: %v", err))
+			return
+		}
+		
+		// Call ListIPs method
+		listResp, err := s.ListIPs(ctx, connect.NewRequest(&listReq))
+		if err != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ListIPs failed: %v", err))
+			return
+		}
+		
+		// Marshal response
+		var marshalErr error
+		respPayload, marshalErr = proto.Marshal(listResp.Msg)
+		if marshalErr != nil {
+			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ListIPs response: %v", marshalErr))
+			return
+		}
+		
+	default:
+		s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("unknown method: %s", req.Method))
+		return
+	}
+	
+	// Send success response
+	resp := &vpsgatewayv1.GatewayMessage{
+		Type: "response",
+		Response: &vpsgatewayv1.GatewayResponse{
+			RequestId: req.RequestId,
+			Success:   true,
+			Payload:   respPayload,
+		},
+	}
+	
+	if err := stream.Send(resp); err != nil {
+		logger.Error("[GatewayService] Failed to send response for request %s: %v", req.RequestId, err)
+	} else {
+		logger.Debug("[GatewayService] Sent response for request %s (%s)", req.RequestId, req.Method)
+	}
+}
+
+// sendErrorResponse sends an error response over the stream
+func (s *GatewayService) sendErrorResponse(stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], requestID, errorMsg string) {
+	logger.Error("[GatewayService] Request %s error: %s", requestID, errorMsg)
+	
+	resp := &vpsgatewayv1.GatewayMessage{
+		Type: "response",
+		Response: &vpsgatewayv1.GatewayResponse{
+			RequestId: requestID,
+			Success:   false,
+			Error:     errorMsg,
+		},
+	}
+	
+	if err := stream.Send(resp); err != nil {
+		logger.Error("[GatewayService] Failed to send error response for request %s: %v", requestID, err)
+	}
 }
