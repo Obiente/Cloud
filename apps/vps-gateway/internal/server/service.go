@@ -1007,8 +1007,17 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	}
 	s.streamsMu.RUnlock()
 
-	// Clean up all pending requests when done
-	defer func() {
+	// DON'T clean up pending requests here - they need to stay until responses arrive
+	// The cleanup happens after waiting for responses or timeout below
+
+	if len(responseChans) == 0 {
+		// No VPS service connected yet - this is normal during startup
+		// Return empty response (not found)
+		return &vpsv1.FindVPSByLeaseResponse{}, nil
+	}
+
+	// Cleanup function to remove pending requests and close channels
+	cleanup := func() {
 		s.pendingRequestsMu.Lock()
 		for _, reqID := range requestIDs {
 			delete(s.pendingRequests, reqID)
@@ -1017,13 +1026,8 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 		for _, ch := range responseChans {
 			close(ch)
 		}
-	}()
-
-	if len(responseChans) == 0 {
-		// No VPS service connected yet - this is normal during startup
-		// Return empty response (not found)
-		return &vpsv1.FindVPSByLeaseResponse{}, nil
 	}
+	defer cleanup()
 
 	// Wait for responses from all instances, return first valid one
 	timeout := 5 * time.Second
@@ -1054,6 +1058,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 			}
 
 			// If this response has a VPS ID, return it immediately
+			// The defer cleanup() will still run
 			if findResp.GetVpsId() != "" {
 				logger.Debug("[GatewayService] Found VPS %s for lease IP=%s MAC=%s", findResp.GetVpsId(), ip, mac)
 				return &findResp, nil

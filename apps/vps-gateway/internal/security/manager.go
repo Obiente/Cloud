@@ -6,10 +6,39 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"vps-gateway/internal/logger"
 )
+
+var (
+	// Strict validation patterns to prevent command injection
+	ipv4Pattern = regexp.MustCompile(`^([0-9]{1,3}\.){3}[0-9]{1,3}$`)
+	macPattern  = regexp.MustCompile(`^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$`)
+)
+
+// validateIPv4 validates an IPv4 address string to prevent injection
+func validateIPv4(ip string) error {
+	if !ipv4Pattern.MatchString(ip) {
+		return fmt.Errorf("invalid IPv4 address format: %s", ip)
+	}
+	// Additional validation: ensure octets are in valid range
+	parsed := net.ParseIP(ip)
+	if parsed == nil || parsed.To4() == nil {
+		return fmt.Errorf("invalid IPv4 address: %s", ip)
+	}
+	return nil
+}
+
+// validateMAC validates a MAC address string to prevent injection
+func validateMAC(mac string) error {
+	normalized := strings.ToLower(strings.TrimSpace(mac))
+	if !macPattern.MatchString(normalized) {
+		return fmt.Errorf("invalid MAC address format: %s", mac)
+	}
+	return nil
+}
 
 // Manager manages security measures for IP allocations (firewall rules, ARP entries)
 type Manager struct {
@@ -42,13 +71,21 @@ func NewManager() (*Manager, error) {
 func (s *Manager) SecurePublicIP(ctx context.Context, publicIP, macAddress, vpsID string) error {
 	logger.Info("Securing public IP %s for VPS %s (MAC: %s)", publicIP, vpsID, macAddress)
 
-	// Validate inputs
+	// SECURITY: Validate inputs to prevent command injection
+	if err := validateIPv4(publicIP); err != nil {
+		return fmt.Errorf("invalid public IP: %w", err)
+	}
+	if err := validateMAC(macAddress); err != nil {
+		return fmt.Errorf("invalid MAC address: %w", err)
+	}
+
+	// Validate inputs (secondary check using net.ParseIP)
 	ip := net.ParseIP(publicIP)
 	if ip == nil || ip.To4() == nil {
 		return fmt.Errorf("invalid IPv4 address: %s", publicIP)
 	}
 
-	mac := strings.TrimSpace(macAddress)
+	mac := strings.ToLower(strings.TrimSpace(macAddress))
 	if mac == "" {
 		return fmt.Errorf("MAC address is required for public IP security")
 	}
@@ -79,6 +116,18 @@ func (s *Manager) SecurePublicIP(ctx context.Context, publicIP, macAddress, vpsI
 // RemovePublicIPSecurity removes security measures for a public IP
 func (s *Manager) RemovePublicIPSecurity(ctx context.Context, publicIP, macAddress string) error {
 	logger.Info("Removing security for public IP %s (MAC: %s)", publicIP, macAddress)
+
+	// SECURITY: Validate inputs to prevent command injection
+	if err := validateIPv4(publicIP); err != nil {
+		logger.Warn("Invalid public IP during removal: %v", err)
+		return err
+	}
+	if macAddress != "" {
+		if err := validateMAC(macAddress); err != nil {
+			logger.Warn("Invalid MAC address during removal: %v", err)
+			// Continue - we still want to try removing firewall rules
+		}
+	}
 
 	// Remove firewall rule
 	if err := s.removeFirewallRule(publicIP, macAddress); err != nil {
