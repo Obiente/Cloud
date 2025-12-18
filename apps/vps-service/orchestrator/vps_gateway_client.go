@@ -1,5 +1,27 @@
 package orchestrator
 
+// DEPRECATED: VPSGatewayClient - Unary RPC Client (Legacy)
+//
+// This file contains the DEPRECATED unary RPC client for gateway communication.
+// It is being phased out in favor of bidirectional stream communication.
+//
+// DEPRECATED USAGE:
+//   - GetGatewayClientForNode() - creates unary RPC client per node
+//   - AllocateIP(), ReleaseIP(), ListIPs() - unary RPC calls to gateway
+//   - Used as fallback in some SSH proxy code
+//
+// ACTIVE REPLACEMENT:
+//   - internal/gateway/client.go: GatewayClient - bidirectional stream client
+//   - VPS service connects TO gateways and maintains persistent streams
+//   - Gateway requests handled by internal/gateway/handlers.go
+//
+// MIGRATION STATUS:
+//   - LeaseReconciler: ✓ Migrated to bidi stream only
+//   - VPS IP allocation: Still uses this for backwards compatibility
+//   - SSH Proxy: Uses per-node clients via GetGatewayClientForNode()
+//
+// TODO: Complete migration and remove this file
+
 import (
 	"context"
 	"crypto/tls"
@@ -139,14 +161,19 @@ func NewVPSGatewayClient(gatewayURL string) (*VPSGatewayClient, error) {
 	// Use http2.Transport with AllowHTTP for cleartext HTTP/2 (h2c) connections
 	transport := &http2.Transport{
 		AllowHTTP: true,
-		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
 			// For h2c, we dial without TLS (cleartext)
-			return net.Dial(network, addr)
+			// Use DialContext for proper timeout and cancellation support
+			var d net.Dialer
+			return d.DialContext(ctx, network, addr)
 		},
+		// Enable HTTP/2 ping frames to keep connection alive
+		ReadIdleTimeout: 45 * time.Second, // Send ping if no reads for 45s
+		PingTimeout:     15 * time.Second, // Wait 15s for pong response
 	}
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		Timeout:   0, // No timeout for streaming connections (SSH proxy, bidirectional streams)
 	}
 
 	// Create Connect client

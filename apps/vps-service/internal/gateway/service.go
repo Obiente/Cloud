@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -186,71 +185,24 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 				_ = stream.Send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: true}})
 
 			} else if req.Method == "FindVPSByLease" {
-				// Handle FindVPSByLease request from gateway
-				var findReq vpsv1.FindVPSByLeaseRequest
-				if err := proto.Unmarshal(req.Payload, &findReq); err != nil {
-					logger.Error("[GatewayListener] Failed to unmarshal FindVPSByLease request: %v", err)
-					_ = stream.Send(&vpsgatewayv1.GatewayMessage{
-						Type: "response",
-						Response: &vpsgatewayv1.GatewayResponse{
-							RequestId: req.RequestId,
-							Success:   false,
-							Error:     fmt.Sprintf("failed to unmarshal request: %v", err),
-						},
-					})
-					continue
-				}
-
-				// Query database directly to find VPS by lease
-				mac := strings.ToLower(strings.TrimSpace(findReq.GetMac()))
-				ip := strings.TrimSpace(findReq.GetIp())
-
-				var lease database.DHCPLease
-				var found bool
-
-				if mac != "" {
-					if err := database.DB.WithContext(ctx).Where("mac_address = ?", mac).First(&lease).Error; err == nil {
-						found = true
-					}
-				}
-				if !found && ip != "" {
-					if err := database.DB.WithContext(ctx).Where("ip_address = ?", ip).First(&lease).Error; err == nil {
-						found = true
-					}
-				}
-
-				// Create response
-				findResp := &vpsv1.FindVPSByLeaseResponse{}
-				if found {
-					findResp.VpsId = lease.VPSID
-					findResp.OrganizationId = lease.OrganizationID
-				}
-
-				// Marshal response
-				respPayload, err := proto.Marshal(findResp)
-				if err != nil {
-					logger.Error("[GatewayListener] Failed to marshal FindVPSByLease response: %v", err)
-					_ = stream.Send(&vpsgatewayv1.GatewayMessage{
-						Type: "response",
-						Response: &vpsgatewayv1.GatewayResponse{
-							RequestId: req.RequestId,
-							Success:   false,
-							Error:     fmt.Sprintf("failed to marshal response: %v", err),
-						},
-					})
-					continue
-				}
-
-				// Send successful response
+				// DEPRECATED: This code path is NOT USED in production
+				// This handles FindVPSByLease in the WRONG direction (Gateway→VPS inbound stream)
+				// The actual implementation is in internal/gateway/handlers.go (VPS→Gateway outbound stream)
+				// Architecture: VPS service connects TO gateways via bidirectional stream
+				//              Gateways send requests over that stream, VPS responds
+				//              Handlers in handlers.go process those requests
+				// This RegisterGateway() endpoint exists for reverse connection (not currently used)
+				
+				logger.Warn("[GatewayListener] Received FindVPSByLease on deprecated inbound stream (ID: %s) - should use outbound stream handler instead", req.RequestId)
+				
 				_ = stream.Send(&vpsgatewayv1.GatewayMessage{
 					Type: "response",
 					Response: &vpsgatewayv1.GatewayResponse{
 						RequestId: req.RequestId,
-						Success:   true,
-						Payload:   respPayload,
+						Success:   false,
+						Error:     "FindVPSByLease not supported on inbound stream - use VPS→Gateway connection",
 					},
 				})
-				logger.Debug("[GatewayListener] FindVPSByLease: IP=%s MAC=%s -> VPS=%s", ip, mac, findResp.VpsId)
 
 			} else {
 				// Unknown request method from gateway; respond with error

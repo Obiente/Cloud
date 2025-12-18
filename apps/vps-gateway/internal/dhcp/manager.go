@@ -1298,8 +1298,8 @@ func (m *Manager) syncHostsFileFromAllocations() error {
 	// Write all allocations
 	count := 0
 	for vpsID, alloc := range m.allocations {
-		hostname := fmt.Sprintf("%s.vps", vpsID)
-		buf.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), hostname))
+		// Use VPS ID directly as hostname (already prefixed with "vps-")
+		buf.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), vpsID))
 		count++
 	}
 

@@ -16,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 
@@ -32,10 +31,11 @@ type LogWriter interface {
 
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
-	dockerClient   client.APIClient
-	gatewayClient  *VPSGatewayClient // Deprecated - use GetGatewayClientForNode instead
-	gatewayClients sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
-	proxmoxClients sync.Map          // Cache of Proxmox clients per node (key: nodeName string, value: *ProxmoxClient)
+	dockerClient       client.APIClient
+	gatewayClient      *VPSGatewayClient // Deprecated - use GetGatewayClientForNode or bidiGatewayClient instead
+	bidiGatewayClient  interface{}       // Bidirectional gateway client from internal/gateway package
+	gatewayClients     sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
+	proxmoxClients     sync.Map          // Cache of Proxmox clients per node (key: nodeName string, value: *ProxmoxClient)
 }
 
 // parseNodeEndpointsMapping parses the PROXMOX_NODE_ENDPOINTS environment variable (default mapping)
@@ -1106,26 +1106,54 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 	// Priority 1: Try gateway first (authoritative source for DHCP-assigned IPs)
 	// The gateway manages DHCP leases so it has the most up-to-date IP information
 	if vps.NodeID != nil && *vps.NodeID != "" {
-		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
-		if err == nil {
-			allocations, listErr := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
-			if listErr == nil && len(allocations) > 0 {
-				gatewayIP := allocations[0].IpAddress
-				logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
-				ipv4 = []string{gatewayIP}
-
-				// Update database cache if IP changed
-				vm.updateIPCacheIfChanged(&vps, ipv4, ipv6)
-				return ipv4, ipv6, nil
-			} else if listErr != nil {
-				gatewayErr = listErr
-				logger.Debug("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, listErr)
-			} else {
-				logger.Debug("[VPSManager] Gateway returned no IP allocations for VPS %s", vpsID)
+		// Try bidirectional stream client first
+		bidiClient := vm.GetBidiGatewayClient()
+		if bidiClient != nil {
+			type gatewayClient interface {
+				ListIPs(ctx context.Context, nodeName, organizationID, vpsID string) ([]*vpsgatewayv1.IPAllocation, error)
 			}
-		} else {
-			gatewayErr = err
-			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+			if gc, ok := bidiClient.(gatewayClient); ok {
+				allocations, listErr := gc.ListIPs(ctx, *vps.NodeID, vps.OrganizationID, vpsID)
+				if listErr == nil && len(allocations) > 0 {
+					gatewayIP := allocations[0].IpAddress
+					logger.Info("[VPSManager] Got IP %s from gateway (bidi) for VPS %s", gatewayIP, vpsID)
+					ipv4 = []string{gatewayIP}
+
+					// Update database cache if IP changed
+					vm.updateIPCacheIfChanged(&vps, ipv4, ipv6)
+					return ipv4, ipv6, nil
+				} else if listErr != nil {
+					gatewayErr = listErr
+					logger.Debug("[VPSManager] Failed to get IP from gateway (bidi) for VPS %s: %v", vpsID, listErr)
+				} else {
+					logger.Debug("[VPSManager] Gateway (bidi) returned no IP allocations for VPS %s", vpsID)
+				}
+			}
+		}
+		
+		// Fallback to unary RPC if bidirectional stream failed
+		if len(ipv4) == 0 {
+			gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
+			if err == nil {
+				allocations, listErr := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
+				if listErr == nil && len(allocations) > 0 {
+					gatewayIP := allocations[0].IpAddress
+					logger.Info("[VPSManager] Got IP %s from gateway (unary) for VPS %s", gatewayIP, vpsID)
+					ipv4 = []string{gatewayIP}
+
+					// Update database cache if IP changed
+					vm.updateIPCacheIfChanged(&vps, ipv4, ipv6)
+					return ipv4, ipv6, nil
+				} else if listErr != nil {
+					gatewayErr = listErr
+					logger.Debug("[VPSManager] Failed to get IP from gateway (unary) for VPS %s: %v", vpsID, listErr)
+				} else {
+					logger.Debug("[VPSManager] Gateway (unary) returned no IP allocations for VPS %s", vpsID)
+				}
+			} else {
+				gatewayErr = err
+				logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+			}
 		}
 	}
 
@@ -1563,6 +1591,16 @@ func (vm *VPSManager) GetGatewayClient() *VPSGatewayClient {
 	return vm.gatewayClient
 }
 
+// SetBidiGatewayClient sets the bidirectional gateway client
+func (vm *VPSManager) SetBidiGatewayClient(client interface{}) {
+	vm.bidiGatewayClient = client
+}
+
+// GetBidiGatewayClient returns the bidirectional gateway client
+func (vm *VPSManager) GetBidiGatewayClient() interface{} {
+	return vm.bidiGatewayClient
+}
+
 // Close closes the Docker client
 func (vm *VPSManager) Close() error {
 	return vm.dockerClient.Close()
@@ -1666,6 +1704,23 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 			return nil
 		}
 		return fmt.Errorf("failed to get VM status: %w", err)
+	}
+
+	// Get VM config to extract MAC address (if not already set)
+	if vps.MACAddress == nil || *vps.MACAddress == "" {
+		vmConfig, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmIDInt)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to get VM config for MAC extraction: %v (continuing without MAC)", err)
+		} else {
+			// Try to extract MAC from net0 configuration
+			if net0, ok := vmConfig["net0"].(string); ok && net0 != "" {
+				mac := extractMACFromNetConfig(net0)
+				if mac != "" {
+					vps.MACAddress = &mac
+					logger.Info("[VPSManager] Extracted MAC address for VPS %s: %s", vpsID, mac)
+				}
+			}
+		}
 	}
 
 	// Map and update status
@@ -1880,6 +1935,145 @@ func generateMACAddress() string {
 	randBytes := make([]byte, 3)
 	rand.Read(randBytes)
 	return fmt.Sprintf("00:16:3e:%02x:%02x:%02x", randBytes[0], randBytes[1], randBytes[2])
+}
+
+// extractMACFromNetConfig extracts the MAC address from a Proxmox net configuration string
+// Format: "virtio=BC:24:11:5E:13:8A,bridge=OCvpsnet,firewall=1" or "virtio,bridge=OCvpsnet,firewall=1"
+func extractMACFromNetConfig(netConfig string) string {
+	if netConfig == "" {
+		return ""
+	}
+	
+	// Split by comma to get individual parameters
+	parts := strings.Split(netConfig, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		
+		// Check if this part contains a MAC address
+		// MAC can be in format "virtio=BC:24:11:5E:13:8A" or standalone "BC:24:11:5E:13:8A"
+		if strings.Contains(part, "=") {
+			kv := strings.Split(part, "=")
+			if len(kv) == 2 && strings.ToLower(kv[0]) == "virtio" {
+				mac := strings.TrimSpace(kv[1])
+				// Validate MAC format (XX:XX:XX:XX:XX:XX)
+				if strings.Count(mac, ":") == 5 && len(mac) == 17 {
+					return strings.ToLower(mac)
+				}
+			}
+		}
+		
+		// Check if the part itself is a MAC address (XX:XX:XX:XX:XX:XX)
+		if strings.Count(part, ":") == 5 && len(part) == 17 {
+			return strings.ToLower(part)
+		}
+	}
+	
+	return ""
+}
+
+// FindVPSByMAC searches all Proxmox nodes to find the VM with the specified MAC address
+// Returns the VPS instance if found, or nil if not found
+// This is used for DHCP lease resolution when the dhcp_leases table doesn't have an entry yet
+func (vm *VPSManager) FindVPSByMAC(ctx context.Context, macAddress string) (*database.VPSInstance, error) {
+	macAddress = strings.ToLower(strings.TrimSpace(macAddress))
+	if macAddress == "" {
+		return nil, fmt.Errorf("MAC address cannot be empty")
+	}
+
+	logger.Info("[VPSManager.FindVPSByMAC] ========== START: Searching for MAC %s ==========", macAddress)
+
+	// First try database lookup - much faster if MAC is already synced
+	logger.Debug("[VPSManager.FindVPSByMAC] Step 1: Fast path - checking database for mac_address=%s", macAddress)
+	var vps database.VPSInstance
+	err := database.DB.WithContext(ctx).
+		Where("mac_address = ? AND deleted_at IS NULL", macAddress).
+		First(&vps).Error
+	if err == nil {
+		logger.Info("[VPSManager.FindVPSByMAC] ✓ Found VPS %s by MAC in database (fast path) ========== END ==========", vps.ID)
+		return &vps, nil
+	}
+	logger.Debug("[VPSManager.FindVPSByMAC] Database fast path failed: %v", err)
+
+	// Database lookup failed - query Proxmox API to find the VM
+	logger.Info("[VPSManager.FindVPSByMAC] Step 2: Querying Proxmox API across all nodes...")
+
+	// Get all VPS instances (active only)
+	var allVPS []database.VPSInstance
+	if err := database.DB.WithContext(ctx).
+		Where("deleted_at IS NULL AND instance_id IS NOT NULL AND node_id IS NOT NULL").
+		Find(&allVPS).Error; err != nil {
+		logger.Error("[VPSManager.FindVPSByMAC] ✗ Failed to query VPS instances: %v ========== END ==========", err)
+		return nil, fmt.Errorf("failed to query VPS instances: %w", err)
+	}
+
+	logger.Info("[VPSManager.FindVPSByMAC] Checking %d active VPS instances via Proxmox API", len(allVPS))
+
+	// Query each VPS's Proxmox VM to check its MAC address
+	for i, vpsInstance := range allVPS {
+		logger.Debug("[VPSManager.FindVPSByMAC] [%d/%d] Checking VPS %s", i+1, len(allVPS), vpsInstance.ID)
+		
+		if vpsInstance.InstanceID == nil || *vpsInstance.InstanceID == "" {
+			logger.Debug("[VPSManager.FindVPSByMAC]   Skipping: no instance_id")
+			continue
+		}
+		if vpsInstance.NodeID == nil || *vpsInstance.NodeID == "" {
+			logger.Debug("[VPSManager.FindVPSByMAC]   Skipping: no node_id")
+			continue
+		}
+
+		// Parse VM ID from instance_id string
+		var vmID int
+		if _, err := fmt.Sscanf(*vpsInstance.InstanceID, "%d", &vmID); err != nil || vmID == 0 {
+			logger.Debug("[VPSManager.FindVPSByMAC]   Skipping: invalid instance_id=%s", *vpsInstance.InstanceID)
+			continue
+		}
+		nodeName := *vpsInstance.NodeID
+
+		logger.Debug("[VPSManager.FindVPSByMAC]   VPS=%s VM=%d Node=%s", vpsInstance.ID, vmID, nodeName)
+
+		// Get Proxmox client for this node
+		proxmoxClient, err := vm.GetProxmoxClientForNode(nodeName)
+		if err != nil {
+			logger.Warn("[VPSManager.FindVPSByMAC]   ✗ Failed to get Proxmox client for node %s: %v", nodeName, err)
+			continue
+		}
+
+		// Get VM configuration
+		logger.Debug("[VPSManager.FindVPSByMAC]   Fetching VM config from Proxmox...")
+		config, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmID)
+		if err != nil {
+			logger.Debug("[VPSManager.FindVPSByMAC]   ✗ Failed to get VM %d config on node %s: %v", vmID, nodeName, err)
+			continue
+		}
+
+		// Extract MAC from net0
+		if net0, ok := config["net0"].(string); ok && net0 != "" {
+			logger.Debug("[VPSManager.FindVPSByMAC]   net0 config: %s", net0)
+			vmMAC := extractMACFromNetConfig(net0)
+			logger.Debug("[VPSManager.FindVPSByMAC]   Extracted MAC: %s (comparing with %s)", vmMAC, macAddress)
+			
+			if vmMAC != "" && strings.EqualFold(vmMAC, macAddress) {
+				logger.Info("[VPSManager.FindVPSByMAC] ✓✓✓ MATCH FOUND! VPS %s (VM %d on %s) has MAC %s ========== END ==========", vpsInstance.ID, vmID, nodeName, macAddress)
+				
+				// Update database with MAC for future fast lookups
+				vpsInstance.MACAddress = &vmMAC
+				if err := database.DB.WithContext(ctx).Model(&vpsInstance).Update("mac_address", vmMAC).Error; err != nil {
+					logger.Warn("[VPSManager.FindVPSByMAC] Failed to update MAC address in database: %v", err)
+				} else {
+					logger.Info("[VPSManager.FindVPSByMAC] Updated database with MAC for future fast lookups")
+				}
+				
+				return &vpsInstance, nil
+			} else {
+				logger.Debug("[VPSManager.FindVPSByMAC]   No match (VM MAC=%s)", vmMAC)
+			}
+		} else {
+			logger.Debug("[VPSManager.FindVPSByMAC]   No net0 configuration found")
+		}
+	}
+
+	logger.Warn("[VPSManager.FindVPSByMAC] ✗ No VPS found with MAC %s after checking %d instances ========== END ==========", macAddress, len(allVPS))
+	return nil, nil // Not found, but not an error
 }
 
 // mapProxmoxStatusToVPSStatus maps Proxmox VM status strings to VPSStatus enum values
@@ -2553,27 +2747,27 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 	}
 
 	for nodeName := range mapping {
-		// Prefer using an active bidi-connected gateway (registry) so the API
-		// can request leases over the existing stream without opening new HTTP
-		// clients. Fall back to the HTTP gateway client if no registry connection.
 		var allocations []*vpsgatewayv1.IPAllocation
 
-		registry := sharedorchestrator.GetGlobalGatewayRegistry()
-		if conn, ok := registry.GetGateway(nodeName); ok {
-			// Send request over the bidi stream using the GatewayRequest wrapper
-			respMsg, err := conn.SendRequest(ctx, "ListIPs", &vpsgatewayv1.ListIPsRequest{})
-			if err != nil {
-				logger.Debug("[LeaseSync] Failed to request ListIPs from registry connection for node %s: %v", nodeName, err)
-			} else {
-				if listResp, ok := respMsg.(*vpsgatewayv1.ListIPsResponse); ok {
-					allocations = listResp.Allocations
+		// Try bidirectional stream client first (preferred)
+		bidiClient := vm.GetBidiGatewayClient()
+		if bidiClient != nil {
+			type gatewayClient interface {
+				ListIPs(ctx context.Context, nodeName, organizationID, vpsID string) ([]*vpsgatewayv1.IPAllocation, error)
+			}
+			if gc, ok := bidiClient.(gatewayClient); ok {
+				nodeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+				allocs, err := gc.ListIPs(nodeCtx, nodeName, "", "")
+				cancel()
+				if err == nil {
+					allocations = allocs
 				} else {
-					logger.Debug("[LeaseSync] Unexpected response type for ListIPs from node %s", nodeName)
+					logger.Debug("[LeaseSync] Failed to list IPs via bidirectional stream from node %s: %v", nodeName, err)
 				}
 			}
 		}
 
-		// Fallback to HTTP client if we didn't obtain allocations from registry
+		// Fallback to HTTP client if bidirectional stream didn't work
 		if allocations == nil {
 			client, err := vm.GetGatewayClientForNode(nodeName)
 			if err != nil {

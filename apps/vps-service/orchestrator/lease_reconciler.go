@@ -8,6 +8,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 )
 
 // StartLeaseReconciler starts a background goroutine that ensures all VPSes have their DHCP leases registered
@@ -70,25 +71,61 @@ func (vm *VPSManager) reconcileAllLeases(ctx context.Context) error {
 		}
 
 		// No lease found - try to get MAC from Proxmox and register
-		if vps.NodeID == nil || *vps.NodeID == "" {
-			logger.Debug("[LeaseReconciler] VPS %s has no node_id, skipping", vps.ID)
-			skippedCount++
-			continue
-		}
-
 		if vps.InstanceID == nil || *vps.InstanceID == "" {
 			logger.Debug("[LeaseReconciler] VPS %s has no instance_id, skipping", vps.ID)
 			skippedCount++
 			continue
 		}
 
-		nodeName := *vps.NodeID
 		vmID := 0
 		fmt.Sscanf(*vps.InstanceID, "%d", &vmID)
 		if vmID == 0 {
 			logger.Warn("[LeaseReconciler] VPS %s has invalid instance_id: %s", vps.ID, *vps.InstanceID)
 			errorCount++
 			continue
+		}
+
+		// Determine node - discover if missing
+		nodeName := ""
+		if vps.NodeID != nil && *vps.NodeID != "" {
+			nodeName = *vps.NodeID
+		} else {
+			// NodeID is missing - try to discover it
+			allNodes, err := GetAllProxmoxNodeNames()
+			if err != nil {
+				logger.Warn("[LeaseReconciler] VPS %s has no NodeID and cannot discover: %v", vps.ID, err)
+				errorCount++
+				continue
+			}
+
+			// Try each node to find where the VM is running
+			var discoveryErr error
+			for _, discoveryNode := range allNodes {
+				discoveryClient, err := vm.GetProxmoxClientForNode(discoveryNode)
+				if err != nil {
+					discoveryErr = err
+					continue
+				}
+				foundNode, err := discoveryClient.FindVMNode(ctx, vmID)
+				if err == nil {
+					nodeName = foundNode
+					// Update VPS record with discovered NodeID
+					vps.NodeID = &nodeName
+					if err := database.DB.Model(&vps).Update("node_id", nodeName).Error; err != nil {
+						logger.Warn("[LeaseReconciler] Failed to update NodeID for VPS %s: %v", vps.ID, err)
+					} else {
+						logger.Info("[LeaseReconciler] Discovered and updated NodeID for VPS %s: %s", vps.ID, nodeName)
+					}
+					break
+				}
+				discoveryErr = err
+			}
+
+			if nodeName == "" {
+				logger.Warn("[LeaseReconciler] Failed to discover node for VPS %s (VM %d): %v", vps.ID, vmID, discoveryErr)
+				errorCount++
+				continue
+			}
 		}
 
 		// Get Proxmox client for this node
@@ -113,17 +150,22 @@ func (vm *VPSManager) reconcileAllLeases(ctx context.Context) error {
 			continue
 		}
 
-		// Register the lease via gateway
-		gatewayClient, err := vm.GetGatewayClientForNode(nodeName)
-		if err != nil {
-			logger.Warn("[LeaseReconciler] Failed to get gateway client for node %s: %v", nodeName, err)
+		// Register the lease via gateway bidirectional stream
+		bidiClient := vm.GetBidiGatewayClient()
+		if bidiClient == nil {
+			logger.Error("[LeaseReconciler] Bidirectional gateway client not available for VPS %s", vps.ID)
 			errorCount++
 			continue
 		}
-
-		// Allocate IP (gateway will register the lease in database)
+		
+		// Use bidirectional stream
+		type gatewayClient interface {
+			AllocateIP(ctx context.Context, nodeName, vpsID, organizationID, macAddress string) (*vpsgatewayv1.AllocateIPResponse, error)
+		}
+		gc := bidiClient.(gatewayClient)
+		
 		allocCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		allocResp, err := gatewayClient.AllocateIP(allocCtx, vps.ID, vps.OrganizationID, mac)
+		allocResp, err := gc.AllocateIP(allocCtx, nodeName, vps.ID, vps.OrganizationID, mac)
 		cancel()
 
 		if err != nil {
@@ -189,4 +231,41 @@ func (vm *VPSManager) getVMNetworkInfo(ctx context.Context, client *ProxmoxClien
 	}
 
 	return mac, ip, nil
+}
+
+// GetAllocationsForGateway queries the database and returns all DHCP leases for a specific gateway node
+// This is used for syncing allocations to gateways on startup and periodically
+func (vm *VPSManager) GetAllocationsForGateway(ctx context.Context, nodeName string) ([]*vpsgatewayv1.DesiredAllocation, error) {
+	logger.Debug("[LeaseReconciler] Querying allocations for gateway node: %s", nodeName)
+	
+	var leases []database.DHCPLease
+	if err := database.DB.WithContext(ctx).
+		Where("gateway_node = ?", nodeName).
+		Find(&leases).Error; err != nil {
+		return nil, fmt.Errorf("failed to query DHCP leases for node %s: %w", nodeName, err)
+	}
+
+	allocations := make([]*vpsgatewayv1.DesiredAllocation, 0, len(leases))
+	for _, lease := range leases {
+		// Get organization_id from the VPS record
+		var vps database.VPSInstance
+		if err := database.DB.WithContext(ctx).
+			Select("organization_id").
+			Where("id = ?", lease.VPSID).
+			First(&vps).Error; err != nil {
+			logger.Warn("[LeaseReconciler] Failed to get organization for VPS %s: %v", lease.VPSID, err)
+			continue
+		}
+
+		allocations = append(allocations, &vpsgatewayv1.DesiredAllocation{
+			VpsId:          lease.VPSID,
+			OrganizationId: vps.OrganizationID,
+			IpAddress:      lease.IPAddress,
+			MacAddress:     lease.MACAddress,
+			IsPublic:       lease.IsPublic,
+		})
+	}
+
+	logger.Info("[LeaseReconciler] Found %d allocations for gateway node %s", len(allocations), nodeName)
+	return allocations, nil
 }

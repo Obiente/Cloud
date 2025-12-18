@@ -53,7 +53,7 @@
         <div v-else class="space-y-3">
           <OuiBox
             v-for="lease in leases"
-            :key="`${lease.macAddress}-${lease.ipAddress}`"
+            :key="`${lease.ipAddress}-${lease.macAddress ?? ''}`"
             p="md"
             rounded="lg"
             class="bg-surface-muted/40 ring-1 ring-border-muted"
@@ -89,8 +89,9 @@
                       MAC Address
                     </OuiText>
                     <OuiFlex align="center" gap="sm">
-                      <OuiText size="sm" class="font-mono">{{ lease.macAddress }}</OuiText>
+                      <OuiText size="sm" class="font-mono">{{ lease.macAddress ?? '—' }}</OuiText>
                       <OuiButton
+                        v-if="lease.macAddress"
                         variant="ghost"
                         size="xs"
                         icon-only
@@ -123,7 +124,7 @@
                     :style="'short'"
                   />
                   <span class="text-xs ml-1 text-muted">
-                    ({{ formatLeaseDate(lease.expiresAt) }})
+                    (<OuiDate :value="lease.expiresAt" />)
                   </span>
                 </OuiText>
               </OuiStack>
@@ -143,6 +144,7 @@ import { date } from '@obiente/proto/utils';
 import type { VPSLease } from '@obiente/proto';
 import OuiSkeleton from '~/components/oui/Skeleton.vue';
 import OuiRelativeTime from '~/components/oui/RelativeTime.vue';
+import OuiDate from '~/components/oui/Date.vue';
 
 interface Props {
   leases: VPSLease[];
@@ -166,16 +168,4 @@ const copyToClipboard = async (text: string) => {
   }
 };
 
-const formatLeaseDate = (timestamp: any) => {
-  if (!timestamp) return '';
-  const date = new Date(timestamp.seconds * 1000);
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(date);
-};
 </script>

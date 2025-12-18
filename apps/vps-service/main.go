@@ -152,11 +152,19 @@ func main() {
 		if err != nil {
 			logger.Warn("⚠️  Failed to create gateway client: %v", err)
 		} else {
+			// Store in VPSManager for use by other services
+			vpsManager.SetBidiGatewayClient(gatewayClient)
+
 			// Register handlers for gateway requests
-			gatewayClient.RegisterHandler("FindVPSByLease", gateway.NewFindVPSByLeaseHandler())
+			findVPSHandler := gateway.NewFindVPSByLeaseHandler()
+			findVPSHandler.SetVPSManager(vpsManager) // Inject vpsManager for Proxmox lookups
+			gatewayClient.RegisterHandler("FindVPSByLease", findVPSHandler)
 			// Future handlers can be registered here:
 			// gatewayClient.RegisterHandler("SomeOtherMethod", gateway.NewSomeOtherHandler())
-			
+
+			// Register sync callback to query database for allocations
+			gatewayClient.SetSyncCallback(vpsManager.GetAllocationsForGateway)
+
 			go func() {
 				if err := gatewayClient.Start(context.Background()); err != nil {
 					logger.Error("Gateway client error: %v", err)
@@ -372,11 +380,11 @@ func sendDeletedVPSNotifications(ctx context.Context, deletedVPSs map[string]int
 			message := fmt.Sprintf("Your VPS instance '%s' was detected as deleted from the infrastructure. It has been marked as deleted in the system.", vps.Name)
 
 			metadata := map[string]string{
-				"vps_id":         vps.ID,
-				"vps_name":       vps.Name,
-				"vps_status":     fmt.Sprintf("%d", vps.Status),
+				"vps_id":          vps.ID,
+				"vps_name":        vps.Name,
+				"vps_status":      fmt.Sprintf("%d", vps.Status),
 				"deletion_source": "infrastructure",
-				"event_type":     "vps_deleted_from_proxmox",
+				"event_type":      "vps_deleted_from_proxmox",
 			}
 			if vps.InstanceID != nil {
 				metadata["vm_id"] = *vps.InstanceID
