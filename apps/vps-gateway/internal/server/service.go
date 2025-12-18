@@ -629,6 +629,9 @@ func (s *GatewayService) RegisterGateway(
 			case "response":
 				// Handle response to our request
 				if msg.Response != nil {
+					logger.Debug("[GatewayService] Received response for request ID: %s (success=%v, hasPayload=%v)", 
+						msg.Response.RequestId, msg.Response.Success, len(msg.Response.Payload) > 0)
+					
 					s.pendingRequestsMu.RLock()
 					respChan, ok := s.pendingRequests[msg.Response.RequestId]
 					s.pendingRequestsMu.RUnlock()
@@ -637,6 +640,7 @@ func (s *GatewayService) RegisterGateway(
 						// Non-blocking send
 						select {
 						case respChan <- msg.Response:
+							logger.Debug("[GatewayService] Response delivered to waiting channel for request %s", msg.Response.RequestId)
 						default:
 							logger.Warn("[GatewayService] Response channel full for request %s", msg.Response.RequestId)
 						}
@@ -661,36 +665,40 @@ func (s *GatewayService) RegisterGateway(
 
 			case "sync_allocations":
 				// VPS service is requesting allocation sync from database
+				// IMPORTANT: Process in goroutine to not block stream reader
+				// Stream reader MUST keep reading to receive FindVPSByLease responses
 				if msg.SyncAllocations != nil {
-					logger.Info("[GatewayService] Received sync_allocations request from API instance %s with %d allocations", apiInstanceID, len(msg.SyncAllocations.Allocations))
-					
-					// Process the sync (delegate to existing SyncAllocations logic)
-					req := connect.NewRequest(msg.SyncAllocations)
-					resp, err := s.SyncAllocations(ctx, req)
-					
-					var syncResp *vpsgatewayv1.SyncAllocationsResponse
-					if err != nil {
-						logger.Error("[GatewayService] Sync allocations failed: %v", err)
-						syncResp = &vpsgatewayv1.SyncAllocationsResponse{
-							Success: false,
-							Message: fmt.Sprintf("Sync failed: %v", err),
+					go func(syncMsg *vpsgatewayv1.SyncAllocationsRequest) {
+						logger.Info("[GatewayService] Received sync_allocations request from API instance %s with %d allocations", apiInstanceID, len(syncMsg.Allocations))
+						
+						// Process the sync (delegate to existing SyncAllocations logic)
+						req := connect.NewRequest(syncMsg)
+						resp, err := s.SyncAllocations(ctx, req)
+						
+						var syncResp *vpsgatewayv1.SyncAllocationsResponse
+						if err != nil {
+							logger.Error("[GatewayService] Sync allocations failed: %v", err)
+							syncResp = &vpsgatewayv1.SyncAllocationsResponse{
+								Success: false,
+								Message: fmt.Sprintf("Sync failed: %v", err),
+							}
+						} else {
+							syncResp = resp.Msg
+							logger.Info("[GatewayService] Sync allocations completed: added=%d removed=%d", syncResp.Added, syncResp.Removed)
 						}
-					} else {
-						syncResp = resp.Msg
-						logger.Info("[GatewayService] Sync allocations completed: added=%d removed=%d", syncResp.Added, syncResp.Removed)
-					}
-					
-					// Send response back via stream (optional - for confirmation)
-					if err := stream.Send(&vpsgatewayv1.GatewayMessage{
-						Type: "sync_result",
-						Response: &vpsgatewayv1.GatewayResponse{
-							RequestId: "sync_allocations",
-							Success:   syncResp.Success,
-							Error:     syncResp.Message,
-						},
-					}); err != nil {
-						logger.Error("[GatewayService] Failed to send sync result: %v", err)
-					}
+						
+						// Send response back via stream (optional - for confirmation)
+						if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+							Type: "sync_result",
+							Response: &vpsgatewayv1.GatewayResponse{
+								RequestId: "sync_allocations",
+								Success:   syncResp.Success,
+								Error:     syncResp.Message,
+							},
+						}); err != nil {
+							logger.Error("[GatewayService] Failed to send sync result: %v", err)
+						}
+					}(msg.SyncAllocations)
 				}
 
 			default:
@@ -994,6 +1002,9 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 			Type:    "request",
 			Request: gatewayReq,
 		}
+		
+		logger.Debug("[GatewayService] Sending FindVPSByLease request %s to instance %s (MAC=%s IP=%s)", 
+			requestID, instanceID, mac, ip)
 		
 		if sendErr := stream.Send(msg); sendErr != nil {
 			// Stream not ready yet or connection issue
