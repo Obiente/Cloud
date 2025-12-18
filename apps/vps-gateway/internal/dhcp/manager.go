@@ -33,6 +33,10 @@ type Manager struct {
 	nodeName           string                     // Gateway node name (provided by VPS service)
 	allocations        map[string]*Allocation     // vps_id -> allocation
 	mu                 sync.RWMutex
+	fileOpMu           sync.Mutex    // Serializes file operations to prevent FD exhaustion
+	lastHostsUpdate    time.Time     // Last time hosts file was updated
+	pendingUpdate      bool          // Whether an update is scheduled
+	updateMu           sync.Mutex    // Protects lastHostsUpdate and pendingUpdate
 	dhcpRunning        bool
 	dnsmasqPID         int
 	allocationTTL      time.Duration
@@ -311,7 +315,7 @@ func (m *Manager) SetAPIClient(client APIClient) {
 		// Brief delay to let the client and streams stabilize
 		time.Sleep(m.clientInitDelay)
 		logger.Info("Triggering initial hosts file sync after API client configured")
-		if err := m.updateHostsFile(); err != nil {
+		if err := m.updateHostsFileSafe(); err != nil {
 			logger.Warn("Initial hosts file sync failed: %v", err)
 		} else {
 			if err := m.reloadDNSMasq(); err != nil {
@@ -394,7 +398,7 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		logger.Info("Allocated public IP %s (outside DHCP pool) for VPS %s - skipping dnsmasq configuration", ip.String(), vpsID)
 	} else {
 		// Update dnsmasq hosts file (for DHCP pool IPs)
-		if err := m.updateHostsFile(); err != nil {
+		if err := m.updateHostsFileSafe(); err != nil {
 			delete(m.allocations, vpsID)
 			return nil, fmt.Errorf("failed to update hosts file: %w", err)
 		}
@@ -435,7 +439,7 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 	delete(m.allocations, vpsID)
 
 	// Update dnsmasq hosts file
-	if err := m.updateHostsFile(); err != nil {
+	if err := m.updateHostsFileSafe(); err != nil {
 		logger.Error("Failed to update hosts file: %v", err)
 	}
 
@@ -617,7 +621,37 @@ func (m *Manager) countIPsInPool() int {
 	return count
 }
 
+// updateHostsFileSafe is a debounced wrapper that prevents excessive concurrent updates
+func (m *Manager) updateHostsFileSafe() error {
+	m.updateMu.Lock()
+	// Debounce: if updated within last 100ms, schedule a delayed update
+	if time.Since(m.lastHostsUpdate) < 100*time.Millisecond {
+		if !m.pendingUpdate {
+			m.pendingUpdate = true
+			m.updateMu.Unlock()
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				m.updateMu.Lock()
+				m.pendingUpdate = false
+				m.updateMu.Unlock()
+				m.updateHostsFile()
+			}()
+			return nil
+		}
+		m.updateMu.Unlock()
+		return nil // Update already pending
+	}
+	m.lastHostsUpdate = time.Now()
+	m.updateMu.Unlock()
+	
+	return m.updateHostsFile()
+}
+
 func (m *Manager) updateHostsFile() error {
+	// Serialize file operations to prevent file descriptor exhaustion
+	m.fileOpMu.Lock()
+	defer m.fileOpMu.Unlock()
+	
 	file, err := os.Create(m.hostsFile)
 	if err != nil {
 		return fmt.Errorf("failed to create hosts file: %w", err)
@@ -954,7 +988,7 @@ func (m *Manager) reloadDNSMasq() error {
 func (m *Manager) saveAllocations() error {
 	// Save to JSON file for persistence
 	// For now, we'll just ensure the hosts file is up to date
-	return m.updateHostsFile()
+	return m.updateHostsFileSafe()
 }
 
 func (m *Manager) loadAllocations() error {
@@ -1211,7 +1245,7 @@ func (m *Manager) syncWithLeases() error {
 
 	// Update hosts file if allocations changed
 	if updated {
-		if err := m.updateHostsFile(); err != nil {
+		if err := m.updateHostsFileSafe(); err != nil {
 			return fmt.Errorf("failed to update hosts file after sync: %w", err)
 		}
 		if err := m.reloadDNSMasq(); err != nil {
@@ -1292,7 +1326,7 @@ func (m *Manager) backgroundReconciler() {
 	for range ticker.C {
 		// Update hosts file first (discovers leases, resolves to VPS IDs, writes entries)
 		// This ensures the hosts file is always up-to-date with active leases
-		if err := m.updateHostsFile(); err != nil {
+		if err := m.updateHostsFileSafe(); err != nil {
 			logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
 		} else {
 			// Reload dnsmasq to pick up the updated hosts file
@@ -1346,7 +1380,7 @@ func (m *Manager) backgroundReconciler() {
 
 		if len(toRemove) > 0 {
 			// Persist changes
-			if err := m.updateHostsFile(); err != nil {
+			if err := m.updateHostsFileSafe(); err != nil {
 				logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
 			}
 			if err := m.reloadDNSMasq(); err != nil {
@@ -1378,7 +1412,7 @@ func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress,
 		LeaseExpires:   time.Now().Add(24 * time.Hour),
 	}
 	m.allocations[vpsID] = alloc
-	if err := m.updateHostsFile(); err != nil {
+	if err := m.updateHostsFileSafe(); err != nil {
 		delete(m.allocations, vpsID)
 		return fmt.Errorf("failed to update hosts file: %w", err)
 	}
@@ -1405,7 +1439,7 @@ func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddre
 		return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
 	}
 	delete(m.allocations, vpsID)
-	if err := m.updateHostsFile(); err != nil {
+	if err := m.updateHostsFileSafe(); err != nil {
 		return fmt.Errorf("failed to update hosts file: %w", err)
 	}
 	if err := m.reloadDNSMasq(); err != nil {
