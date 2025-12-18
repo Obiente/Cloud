@@ -27,22 +27,22 @@ import (
 // GatewayService implements the VPSGatewayService
 type GatewayService struct {
 	vpsgatewayv1connect.UnimplementedVPSGatewayServiceHandler
-	dhcpManager     *dhcp.Manager
-	sshProxy        *sshproxy.Proxy
-	securityMgr     *security.Manager
-	startTime       time.Time
-	
+	dhcpManager *dhcp.Manager
+	sshProxy    *sshproxy.Proxy
+	securityMgr *security.Manager
+	startTime   time.Time
+
 	// Track connected VPS service instances
-	connectedStreams   map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
-	streamsMu          sync.RWMutex
-	pendingRequests    map[string]chan *vpsgatewayv1.GatewayResponse
-	pendingRequestsMu  sync.RWMutex
-	requestCounter     uint64
-	
+	connectedStreams  map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	streamsMu         sync.RWMutex
+	pendingRequests   map[string]chan *vpsgatewayv1.GatewayResponse
+	pendingRequestsMu sync.RWMutex
+	requestCounter    uint64
+
 	// Track stream send errors for rate limiting
-	lastStreamError    time.Time
-	streamErrorCount   int
-	streamErrorMu      sync.Mutex
+	lastStreamError  time.Time
+	streamErrorCount int
+	streamErrorMu    sync.Mutex
 }
 
 // NewGatewayService creates a new gateway service
@@ -145,7 +145,7 @@ func (s *GatewayService) AllocatePublicIP(
 	// Calculate gateway and netmask if not provided
 	gateway := req.Msg.GetGateway()
 	netmask := req.Msg.GetNetmask()
-	
+
 	if gateway == "" {
 		// Auto-calculate gateway (typically .1 in the subnet)
 		ip := net.ParseIP(publicIP)
@@ -155,7 +155,7 @@ func (s *GatewayService) AllocatePublicIP(
 			gateway = ip4.String()
 		}
 	}
-	
+
 	if netmask == "" {
 		netmask = "24" // Default /24
 	}
@@ -285,7 +285,7 @@ func (s *GatewayService) ProxySSH(
 	// Map to track active data forwarding goroutines
 	dataForwardGoroutines := make(map[string]context.CancelFunc)
 	var mu sync.Mutex
-	
+
 	var connectionID string
 	startTime := time.Now()
 
@@ -306,7 +306,7 @@ func (s *GatewayService) ProxySSH(
 			pipe.Close()
 		}
 		mu.Unlock()
-		
+
 		if connectionID != "" {
 			duration := time.Since(startTime).Seconds()
 			metrics.RecordSSHProxyConnectionDuration(connectionID, connectionID, duration)
@@ -344,23 +344,23 @@ func (s *GatewayService) ProxySSH(
 
 			// Create context for this connection's data forwarding
 			forwardCtx, cancelForward := context.WithCancel(handlerCtx)
-			
+
 			// Start data forwarding goroutine BEFORE starting the proxy connection
 			// This ensures we're ready to receive data immediately when the VPS sends it
 			// Handle data forwarding from target to client (read from clientPipe, send to stream)
 			dataForwardReady := make(chan struct{})
 			go func(connID string, pipe net.Conn, fwdCtx context.Context) {
-				defer cancelForward() // Clean up when goroutine exits
+				defer cancelForward()   // Clean up when goroutine exits
 				close(dataForwardReady) // Signal that we're ready to read
 				logger.Debug("Data forwarding goroutine started for connection %s", connID)
 				buf := make([]byte, 4096)
-				
+
 				// Start a goroutine to close the pipe when context is cancelled
 				go func() {
 					<-fwdCtx.Done()
 					pipe.Close()
 				}()
-				
+
 				for {
 					n, err := pipe.Read(buf)
 					if err != nil {
@@ -379,7 +379,7 @@ func (s *GatewayService) ProxySSH(
 					if n > 0 {
 						logger.Debug("Forwarding %d bytes from VPS to client for connection %s", n, connID)
 						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
-						
+
 						// Check context before sending
 						select {
 						case <-fwdCtx.Done():
@@ -387,7 +387,7 @@ func (s *GatewayService) ProxySSH(
 							return
 						default:
 						}
-						
+
 						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connID,
 							Type:         "data",
@@ -400,12 +400,12 @@ func (s *GatewayService) ProxySSH(
 					}
 				}
 			}(connectionID, clientPipe, forwardCtx)
-			
+
 			// Store cancel function for cleanup
 			mu.Lock()
 			dataForwardGoroutines[connectionID] = cancelForward
 			mu.Unlock()
-			
+
 			// Wait for data forwarding goroutine to be ready before starting proxy
 			<-dataForwardReady
 
@@ -437,7 +437,7 @@ func (s *GatewayService) ProxySSH(
 						})
 					}
 				}
-				
+
 				// Clean up pipe when connection closes
 				mu.Lock()
 				if pipe, exists := clientPipes[connectionID]; exists {
@@ -469,7 +469,7 @@ func (s *GatewayService) ProxySSH(
 			mu.Lock()
 			clientPipe, exists := clientPipes[connectionID]
 			mu.Unlock()
-			
+
 			if !exists {
 				logger.Warn("Received data for unknown connection %s (connection may have been closed)", connectionID)
 				// Send error response
@@ -480,7 +480,7 @@ func (s *GatewayService) ProxySSH(
 				})
 				continue
 			}
-			
+
 			if len(req.Data) > 0 {
 				logger.Debug("Forwarding %d bytes from client to VPS for connection %s", len(req.Data), connectionID)
 				metrics.RecordSSHProxyBytes(connectionID, connectionID, "out", int64(len(req.Data)))
@@ -574,7 +574,7 @@ func (s *GatewayService) RegisterGateway(
 				logger.Info("[GatewayService] Cleaned up stream for disconnected VPS instance %s", apiInstanceID)
 			}
 		}()
-		
+
 		for {
 			msg, err := stream.Receive()
 			if err == io.EOF {
@@ -596,7 +596,7 @@ func (s *GatewayService) RegisterGateway(
 				gatewayNodeName := reg.GatewayId  // VPS service tells us which node we are
 				apiInstanceID = reg.GatewayIpDhcp // VPS service instance ID (reusing this field)
 
-				logger.Info("[GatewayService] Registered as node %s by VPS service instance %s (version: %s)", 
+				logger.Info("[GatewayService] Registered as node %s by VPS service instance %s (version: %s)",
 					gatewayNodeName, apiInstanceID, reg.Version)
 
 				// Tell DHCP manager which node we are - this is critical for lease registration
@@ -629,9 +629,9 @@ func (s *GatewayService) RegisterGateway(
 			case "response":
 				// Handle response to our request
 				if msg.Response != nil {
-					logger.Debug("[GatewayService] Received response for request ID: %s (success=%v, hasPayload=%v)", 
+					logger.Debug("[GatewayService] Received response for request ID: %s (success=%v, hasPayload=%v)",
 						msg.Response.RequestId, msg.Response.Success, len(msg.Response.Payload) > 0)
-					
+
 					s.pendingRequestsMu.RLock()
 					respChan, ok := s.pendingRequests[msg.Response.RequestId]
 					s.pendingRequestsMu.RUnlock()
@@ -670,11 +670,11 @@ func (s *GatewayService) RegisterGateway(
 				if msg.SyncAllocations != nil {
 					go func(syncMsg *vpsgatewayv1.SyncAllocationsRequest) {
 						logger.Info("[GatewayService] Received sync_allocations request from API instance %s with %d allocations", apiInstanceID, len(syncMsg.Allocations))
-						
+
 						// Process the sync (delegate to existing SyncAllocations logic)
 						req := connect.NewRequest(syncMsg)
 						resp, err := s.SyncAllocations(ctx, req)
-						
+
 						var syncResp *vpsgatewayv1.SyncAllocationsResponse
 						if err != nil {
 							logger.Error("[GatewayService] Sync allocations failed: %v", err)
@@ -684,17 +684,13 @@ func (s *GatewayService) RegisterGateway(
 							}
 						} else {
 							syncResp = resp.Msg
-							logger.Info("[GatewayService] Sync allocations completed: added=%d removed=%d", syncResp.Added, syncResp.Removed)
+							logger.Info("[GatewayService] Sync allocations completed: added=%d removed=%d discovered=%d", syncResp.Added, syncResp.Removed, len(syncResp.DiscoveredAllocations))
 						}
-						
-						// Send response back via stream (optional - for confirmation)
+
+						// Send complete response back via stream with discovered allocations
 						if err := stream.Send(&vpsgatewayv1.GatewayMessage{
-							Type: "sync_result",
-							Response: &vpsgatewayv1.GatewayResponse{
-								RequestId: "sync_allocations",
-								Success:   syncResp.Success,
-								Error:     syncResp.Message,
-							},
+							Type:       "sync_result",
+							SyncResult: syncResp,
 						}); err != nil {
 							logger.Error("[GatewayService] Failed to send sync result: %v", err)
 						}
@@ -835,14 +831,16 @@ func (s *GatewayService) SyncAllocations(
 	// SELF-HEALING STEP: Discover existing DHCP leases and register them in database
 	// Hostnames in dnsmasq.leases are always "*", so we use MAC lookup to find VPS IDs
 	discovered := 0
+	var discoveredAllocations []*vpsgatewayv1.DesiredAllocation
+
 	if activeLeases, err := s.dhcpManager.GetActiveLeases(); err == nil {
 		logger.Info("[SyncAllocations] Self-healing: checking %d active DHCP leases", len(activeLeases))
-		
+
 		for _, lease := range activeLeases {
 			if lease.IP == nil || lease.MAC == "" {
 				continue
 			}
-			
+
 			// Use FindVPSByLease to resolve MAC address to VPS ID via Proxmox
 			// Use generous timeout since Proxmox API can be slow (10-15s)
 			findCtx, findCancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -850,18 +848,18 @@ func (s *GatewayService) SyncAllocations(
 			vpsResp, findErr := s.FindVPSByLease(findCtx, lease.IP.String(), lease.MAC)
 			findDuration := time.Since(findStart)
 			findCancel()
-			
+
 			if findErr != nil || vpsResp == nil || vpsResp.GetVpsId() == "" {
 				// Not a VPS lease or VPS service not ready - skip
-				logger.Debug("[SyncAllocations] Self-healing: lease %s (MAC %s) not resolved to VPS (took %v)", 
+				logger.Debug("[SyncAllocations] Self-healing: lease %s (MAC %s) not resolved to VPS (took %v)",
 					lease.IP.String(), lease.MAC, findDuration)
 				continue
 			}
-			
+
 			logger.Debug("[SyncAllocations] FindVPSByLease for %s took %v", lease.IP.String(), findDuration)
 			vpsID := vpsResp.GetVpsId()
 			orgID := vpsResp.GetOrganizationId()
-			
+
 			// Check if this VPS is already in the desired allocations from database
 			alreadyInSync := false
 			for _, alloc := range req.Msg.Allocations {
@@ -870,34 +868,38 @@ func (s *GatewayService) SyncAllocations(
 					break
 				}
 			}
-			
+
 			if alreadyInSync {
 				// Already in database sync, no need to register
 				continue
 			}
-			
+
 			// Register this discovered lease with the database
 			registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			isPublic := !s.dhcpManager.IsIPInPool(lease.IP)
-			
+
 			if err := s.dhcpManager.RegisterLeaseDirectly(registerCtx, vpsID, orgID, lease.IP, isPublic, lease.MAC); err != nil {
 				logger.Warn("[SyncAllocations] Self-healing: failed to register existing lease %s: %v", vpsID, err)
 			} else {
 				logger.Info("[SyncAllocations] Self-healing: registered existing lease %s (IP: %s, MAC: %s)", vpsID, lease.IP.String(), lease.MAC)
-				
-				// Add to the sync request so it won't be removed
-				req.Msg.Allocations = append(req.Msg.Allocations, &vpsgatewayv1.DesiredAllocation{
+
+				// Track discovered allocation to send back to VPS service
+				discoveredAlloc := &vpsgatewayv1.DesiredAllocation{
 					VpsId:          vpsID,
 					OrganizationId: orgID,
 					IpAddress:      lease.IP.String(),
 					MacAddress:     lease.MAC,
 					IsPublic:       isPublic,
-				})
+				}
+				discoveredAllocations = append(discoveredAllocations, discoveredAlloc)
+
+				// Add to the sync request so it won't be removed
+				req.Msg.Allocations = append(req.Msg.Allocations, discoveredAlloc)
 				discovered++
 			}
 			cancel()
 		}
-		
+
 		if discovered > 0 {
 			logger.Info("[SyncAllocations] Self-healing: discovered and registered %d existing leases", discovered)
 		}
@@ -946,10 +948,11 @@ func (s *GatewayService) SyncAllocations(
 	}
 
 	resp := &vpsgatewayv1.SyncAllocationsResponse{
-		Success: true,
-		Added:   int32(added),
-		Removed: int32(removed),
-		Message: fmt.Sprintf("Synced allocations: discovered %d, added %d, removed %d", discovered, added, removed),
+		Success:               true,
+		Added:                 int32(added),
+		Removed:               int32(removed),
+		Message:               fmt.Sprintf("Synced allocations: discovered %d, added %d, removed %d", discovered, added, removed),
+		DiscoveredAllocations: discoveredAllocations,
 	}
 
 	logger.Info("SyncAllocations: completed with discovered=%d added=%d removed=%d", discovered, added, removed)
@@ -973,7 +976,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	s.streamsMu.RLock()
 	var requestIDs []string
 	var responseChans []chan *vpsgatewayv1.GatewayResponse
-	
+
 	for instanceID, stream := range s.connectedStreams {
 		if stream == nil {
 			continue
@@ -981,12 +984,12 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 
 		// Generate unique request ID for this instance
 		requestID := fmt.Sprintf("gateway-findvps-%d-%s", atomic.AddUint64(&s.requestCounter, 1), instanceID)
-		
+
 		// Create response channel for this request
 		respChan := make(chan *vpsgatewayv1.GatewayResponse, 1)
 		responseChans = append(responseChans, respChan)
 		requestIDs = append(requestIDs, requestID)
-		
+
 		s.pendingRequestsMu.Lock()
 		s.pendingRequests[requestID] = respChan
 		s.pendingRequestsMu.Unlock()
@@ -997,20 +1000,20 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 			Method:    "FindVPSByLease",
 			Payload:   payloadBytes,
 		}
-		
+
 		msg := &vpsgatewayv1.GatewayMessage{
 			Type:    "request",
 			Request: gatewayReq,
 		}
-		
-		logger.Debug("[GatewayService] Sending FindVPSByLease request %s to instance %s (MAC=%s IP=%s)", 
+
+		logger.Debug("[GatewayService] Sending FindVPSByLease request %s to instance %s (MAC=%s IP=%s)",
 			requestID, instanceID, mac, ip)
-		
+
 		if sendErr := stream.Send(msg); sendErr != nil {
 			// Stream not ready yet or connection issue
 			// Rate limit error logging to avoid spam during startup
 			s.logStreamError(instanceID, sendErr)
-			
+
 			// Clean up failed request
 			s.pendingRequestsMu.Lock()
 			delete(s.pendingRequests, requestID)
@@ -1054,7 +1057,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	}
 	deadlineTimer := time.After(timeout)
 	responsesReceived := 0
-	
+
 	for responsesReceived < len(responseChans) {
 		select {
 		case <-ctx.Done():
@@ -1065,7 +1068,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 			return &vpsv1.FindVPSByLeaseResponse{}, nil
 		case gatewayResp := <-mergeResponseChannels(responseChans):
 			responsesReceived++
-			
+
 			if gatewayResp.Error != "" {
 				logger.Debug("[GatewayService] FindVPSByLease error from VPS instance: %s", gatewayResp.Error)
 				continue
@@ -1102,11 +1105,11 @@ func (s *GatewayService) HasConnectedStreams() bool {
 func (s *GatewayService) logStreamError(instanceID string, err error) {
 	s.streamErrorMu.Lock()
 	defer s.streamErrorMu.Unlock()
-	
+
 	now := time.Now()
 	timeSinceStart := now.Sub(s.startTime)
 	timeSinceLastError := now.Sub(s.lastStreamError)
-	
+
 	// During first 30 seconds of startup, only log once every 10 seconds
 	if timeSinceStart < 30*time.Second {
 		if timeSinceLastError > 10*time.Second {
@@ -1118,11 +1121,11 @@ func (s *GatewayService) logStreamError(instanceID string, err error) {
 		}
 		return
 	}
-	
+
 	// After startup, log every error but with summary if frequent
 	if timeSinceLastError > 5*time.Second {
 		if s.streamErrorCount > 1 {
-			logger.Error("[GatewayService] Stream send error to VPS instance %s: %v (%d similar errors in last %v)", 
+			logger.Error("[GatewayService] Stream send error to VPS instance %s: %v (%d similar errors in last %v)",
 				instanceID, err, s.streamErrorCount, timeSinceLastError)
 		} else {
 			logger.Error("[GatewayService] Stream send error to VPS instance %s: %v", instanceID, err)
@@ -1137,7 +1140,7 @@ func (s *GatewayService) logStreamError(instanceID string, err error) {
 // mergeResponseChannels merges multiple response channels into a single channel
 func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan *vpsgatewayv1.GatewayResponse {
 	merged := make(chan *vpsgatewayv1.GatewayResponse, len(channels))
-	
+
 	for _, ch := range channels {
 		go func(c chan *vpsgatewayv1.GatewayResponse) {
 			if resp, ok := <-c; ok {
@@ -1145,16 +1148,16 @@ func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan
 			}
 		}(ch)
 	}
-	
+
 	return merged
 }
 
 // handleStreamRequest processes incoming requests from VPS service over the bidirectional stream
 func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], req *vpsgatewayv1.GatewayRequest, instanceID string) {
 	logger.Debug("[GatewayService] Processing request %s (ID: %s) from VPS instance %s", req.Method, req.RequestId, instanceID)
-	
+
 	var respPayload []byte
-	
+
 	switch req.Method {
 	case "AllocateIP":
 		// Unmarshal AllocateIP request
@@ -1163,14 +1166,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal AllocateIP request: %v", err))
 			return
 		}
-		
+
 		// Call AllocateIP method
 		allocResp, err := s.AllocateIP(ctx, connect.NewRequest(&allocReq))
 		if err != nil {
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("AllocateIP failed: %v", err))
 			return
 		}
-		
+
 		// Marshal response
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(allocResp.Msg)
@@ -1178,7 +1181,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal AllocateIP response: %v", marshalErr))
 			return
 		}
-		
+
 	case "ReleaseIP":
 		// Unmarshal ReleaseIP request
 		var releaseReq vpsgatewayv1.ReleaseIPRequest
@@ -1186,14 +1189,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ReleaseIP request: %v", err))
 			return
 		}
-		
+
 		// Call ReleaseIP method
 		releaseResp, err := s.ReleaseIP(ctx, connect.NewRequest(&releaseReq))
 		if err != nil {
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ReleaseIP failed: %v", err))
 			return
 		}
-		
+
 		// Marshal response
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(releaseResp.Msg)
@@ -1201,7 +1204,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ReleaseIP response: %v", marshalErr))
 			return
 		}
-		
+
 	case "ListIPs":
 		// Unmarshal ListIPs request
 		var listReq vpsgatewayv1.ListIPsRequest
@@ -1209,14 +1212,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ListIPs request: %v", err))
 			return
 		}
-		
+
 		// Call ListIPs method
 		listResp, err := s.ListIPs(ctx, connect.NewRequest(&listReq))
 		if err != nil {
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ListIPs failed: %v", err))
 			return
 		}
-		
+
 		// Marshal response
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(listResp.Msg)
@@ -1224,12 +1227,12 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ListIPs response: %v", marshalErr))
 			return
 		}
-		
+
 	default:
 		s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("unknown method: %s", req.Method))
 		return
 	}
-	
+
 	// Send success response
 	resp := &vpsgatewayv1.GatewayMessage{
 		Type: "response",
@@ -1239,7 +1242,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 			Payload:   respPayload,
 		},
 	}
-	
+
 	if err := stream.Send(resp); err != nil {
 		logger.Error("[GatewayService] Failed to send response for request %s: %v", req.RequestId, err)
 	} else {
@@ -1250,7 +1253,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 // sendErrorResponse sends an error response over the stream
 func (s *GatewayService) sendErrorResponse(stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], requestID, errorMsg string) {
 	logger.Error("[GatewayService] Request %s error: %s", requestID, errorMsg)
-	
+
 	resp := &vpsgatewayv1.GatewayMessage{
 		Type: "response",
 		Response: &vpsgatewayv1.GatewayResponse{
@@ -1259,7 +1262,7 @@ func (s *GatewayService) sendErrorResponse(stream *connect.BidiStream[vpsgateway
 			Error:     errorMsg,
 		},
 	}
-	
+
 	if err := stream.Send(resp); err != nil {
 		logger.Error("[GatewayService] Failed to send error response for request %s: %v", requestID, err)
 	}

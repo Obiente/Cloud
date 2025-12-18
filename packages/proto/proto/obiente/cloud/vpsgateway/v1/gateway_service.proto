@@ -309,7 +309,7 @@ message GetGatewayInfoResponse {
 // GatewayMessage is used in the RegisterGateway bidirectional stream
 // It wraps different message types for gateway-API communication
 message GatewayMessage {
-  // Message type: "register", "metrics", "request", "response", "heartbeat", "sync_allocations"
+  // Message type: "register", "metrics", "request", "response", "heartbeat", "sync_allocations", "sync_result"
   string type = 1;
   
   // For "register": gateway registration information
@@ -329,6 +329,9 @@ message GatewayMessage {
   
   // For "sync_allocations": synchronize allocations from database (bidirectional)
   SyncAllocationsRequest sync_allocations = 7;
+  
+  // For "sync_result": response to sync_allocations with discovered allocations
+  SyncAllocationsResponse sync_result = 8;
 }
 
 // GatewayRegistration contains gateway registration information
@@ -475,5 +478,10 @@ message SyncAllocationsResponse {
   
   // Message with details
   string message = 4;
+  
+  // Allocations discovered by gateway during self-healing
+  // These should be registered in the database
+  repeated DesiredAllocation discovered_allocations = 5;
 }
+
 

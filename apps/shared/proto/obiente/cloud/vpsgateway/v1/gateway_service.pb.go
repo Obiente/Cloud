@@ -1371,7 +1371,7 @@ func (x *GetGatewayInfoResponse) GetSshProxyStatus() string {
 // It wraps different message types for gateway-API communication
 type GatewayMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Message type: "register", "metrics", "request", "response", "heartbeat", "sync_allocations"
+	// Message type: "register", "metrics", "request", "response", "heartbeat", "sync_allocations", "sync_result"
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// For "register": gateway registration information
 	Registration *GatewayRegistration `protobuf:"bytes,2,opt,name=registration,proto3" json:"registration,omitempty"`
@@ -1385,8 +1385,10 @@ type GatewayMessage struct {
 	Heartbeat *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=heartbeat,proto3" json:"heartbeat,omitempty"`
 	// For "sync_allocations": synchronize allocations from database (bidirectional)
 	SyncAllocations *SyncAllocationsRequest `protobuf:"bytes,7,opt,name=sync_allocations,json=syncAllocations,proto3" json:"sync_allocations,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// For "sync_result": response to sync_allocations with discovered allocations
+	SyncResult    *SyncAllocationsResponse `protobuf:"bytes,8,opt,name=sync_result,json=syncResult,proto3" json:"sync_result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GatewayMessage) Reset() {
@@ -1464,6 +1466,13 @@ func (x *GatewayMessage) GetHeartbeat() *timestamppb.Timestamp {
 func (x *GatewayMessage) GetSyncAllocations() *SyncAllocationsRequest {
 	if x != nil {
 		return x.SyncAllocations
+	}
+	return nil
+}
+
+func (x *GatewayMessage) GetSyncResult() *SyncAllocationsResponse {
+	if x != nil {
+		return x.SyncResult
 	}
 	return nil
 }
@@ -2188,9 +2197,12 @@ type SyncAllocationsResponse struct {
 	// Number of allocations removed
 	Removed int32 `protobuf:"varint,3,opt,name=removed,proto3" json:"removed,omitempty"`
 	// Message with details
-	Message       string `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Message string `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	// Allocations discovered by gateway during self-healing
+	// These should be registered in the database
+	DiscoveredAllocations []*DesiredAllocation `protobuf:"bytes,5,rep,name=discovered_allocations,json=discoveredAllocations,proto3" json:"discovered_allocations,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *SyncAllocationsResponse) Reset() {
@@ -2249,6 +2261,13 @@ func (x *SyncAllocationsResponse) GetMessage() string {
 		return x.Message
 	}
 	return ""
+}
+
+func (x *SyncAllocationsResponse) GetDiscoveredAllocations() []*DesiredAllocation {
+	if x != nil {
+		return x.DiscoveredAllocations
+	}
+	return nil
 }
 
 var File_obiente_cloud_vpsgateway_v1_gateway_service_proto protoreflect.FileDescriptor
@@ -2366,7 +2385,7 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\vdhcp_status\x18\t \x01(\tR\n" +
 	"dhcpStatus\x12(\n" +
 	"\x10ssh_proxy_status\x18\n" +
-	" \x01(\tR\x0esshProxyStatus\"\xbf\x03\n" +
+	" \x01(\tR\x0esshProxyStatus\"\x96\x04\n" +
 	"\x0eGatewayMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12T\n" +
 	"\fregistration\x18\x02 \x01(\v20.obiente.cloud.vpsgateway.v1.GatewayRegistrationR\fregistration\x12\x18\n" +
@@ -2374,7 +2393,9 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\arequest\x18\x04 \x01(\v2+.obiente.cloud.vpsgateway.v1.GatewayRequestR\arequest\x12H\n" +
 	"\bresponse\x18\x05 \x01(\v2,.obiente.cloud.vpsgateway.v1.GatewayResponseR\bresponse\x128\n" +
 	"\theartbeat\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\theartbeat\x12^\n" +
-	"\x10sync_allocations\x18\a \x01(\v23.obiente.cloud.vpsgateway.v1.SyncAllocationsRequestR\x0fsyncAllocations\"\x82\x02\n" +
+	"\x10sync_allocations\x18\a \x01(\v23.obiente.cloud.vpsgateway.v1.SyncAllocationsRequestR\x0fsyncAllocations\x12U\n" +
+	"\vsync_result\x18\b \x01(\v24.obiente.cloud.vpsgateway.v1.SyncAllocationsResponseR\n" +
+	"syncResult\"\x82\x02\n" +
 	"\x13GatewayRegistration\x12\x1d\n" +
 	"\n" +
 	"gateway_id\x18\x01 \x01(\tR\tgatewayId\x12\x18\n" +
@@ -2432,12 +2453,13 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"macAddress\x12\x1b\n" +
 	"\tis_public\x18\x05 \x01(\bR\bisPublic\"j\n" +
 	"\x16SyncAllocationsRequest\x12P\n" +
-	"\vallocations\x18\x01 \x03(\v2..obiente.cloud.vpsgateway.v1.DesiredAllocationR\vallocations\"}\n" +
+	"\vallocations\x18\x01 \x03(\v2..obiente.cloud.vpsgateway.v1.DesiredAllocationR\vallocations\"\xe4\x01\n" +
 	"\x17SyncAllocationsResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
 	"\x05added\x18\x02 \x01(\x05R\x05added\x12\x18\n" +
 	"\aremoved\x18\x03 \x01(\x05R\aremoved\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage2\xa4\f\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12e\n" +
+	"\x16discovered_allocations\x18\x05 \x03(\v2..obiente.cloud.vpsgateway.v1.DesiredAllocationR\x15discoveredAllocations2\xa4\f\n" +
 	"\x11VPSGatewayService\x12o\n" +
 	"\x0fRegisterGateway\x12+.obiente.cloud.vpsgateway.v1.GatewayMessage\x1a+.obiente.cloud.vpsgateway.v1.GatewayMessage(\x010\x01\x12m\n" +
 	"\n" +
@@ -2512,42 +2534,44 @@ var file_obiente_cloud_vpsgateway_v1_gateway_service_proto_depIdxs = []int32{
 	22, // 6: obiente.cloud.vpsgateway.v1.GatewayMessage.response:type_name -> obiente.cloud.vpsgateway.v1.GatewayResponse
 	32, // 7: obiente.cloud.vpsgateway.v1.GatewayMessage.heartbeat:type_name -> google.protobuf.Timestamp
 	30, // 8: obiente.cloud.vpsgateway.v1.GatewayMessage.sync_allocations:type_name -> obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
-	32, // 9: obiente.cloud.vpsgateway.v1.LeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
-	32, // 10: obiente.cloud.vpsgateway.v1.OrgLeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
-	23, // 11: obiente.cloud.vpsgateway.v1.GetLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.LeaseRecord
-	24, // 12: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.OrgLeaseRecord
-	29, // 13: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest.allocations:type_name -> obiente.cloud.vpsgateway.v1.DesiredAllocation
-	19, // 14: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:input_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
-	4,  // 15: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:input_type -> obiente.cloud.vpsgateway.v1.AllocateIPRequest
-	6,  // 16: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:input_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
-	8,  // 17: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:input_type -> obiente.cloud.vpsgateway.v1.ReleaseIPRequest
-	10, // 18: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:input_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
-	12, // 19: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:input_type -> obiente.cloud.vpsgateway.v1.ListIPsRequest
-	15, // 20: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:input_type -> obiente.cloud.vpsgateway.v1.ProxySSHRequest
-	17, // 21: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:input_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
-	25, // 22: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:input_type -> obiente.cloud.vpsgateway.v1.GetLeasesRequest
-	27, // 23: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
-	30, // 24: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:input_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
-	0,  // 25: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest
-	2,  // 26: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest
-	19, // 27: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:output_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
-	5,  // 28: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:output_type -> obiente.cloud.vpsgateway.v1.AllocateIPResponse
-	7,  // 29: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:output_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
-	9,  // 30: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:output_type -> obiente.cloud.vpsgateway.v1.ReleaseIPResponse
-	11, // 31: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:output_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
-	14, // 32: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:output_type -> obiente.cloud.vpsgateway.v1.ListIPsResponse
-	16, // 33: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:output_type -> obiente.cloud.vpsgateway.v1.ProxySSHResponse
-	18, // 34: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:output_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
-	26, // 35: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:output_type -> obiente.cloud.vpsgateway.v1.GetLeasesResponse
-	28, // 36: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
-	31, // 37: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:output_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
-	1,  // 38: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse
-	3,  // 39: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse
-	27, // [27:40] is the sub-list for method output_type
-	14, // [14:27] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	31, // 9: obiente.cloud.vpsgateway.v1.GatewayMessage.sync_result:type_name -> obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
+	32, // 10: obiente.cloud.vpsgateway.v1.LeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
+	32, // 11: obiente.cloud.vpsgateway.v1.OrgLeaseRecord.expires_at:type_name -> google.protobuf.Timestamp
+	23, // 12: obiente.cloud.vpsgateway.v1.GetLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.LeaseRecord
+	24, // 13: obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse.leases:type_name -> obiente.cloud.vpsgateway.v1.OrgLeaseRecord
+	29, // 14: obiente.cloud.vpsgateway.v1.SyncAllocationsRequest.allocations:type_name -> obiente.cloud.vpsgateway.v1.DesiredAllocation
+	29, // 15: obiente.cloud.vpsgateway.v1.SyncAllocationsResponse.discovered_allocations:type_name -> obiente.cloud.vpsgateway.v1.DesiredAllocation
+	19, // 16: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:input_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
+	4,  // 17: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:input_type -> obiente.cloud.vpsgateway.v1.AllocateIPRequest
+	6,  // 18: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:input_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
+	8,  // 19: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:input_type -> obiente.cloud.vpsgateway.v1.ReleaseIPRequest
+	10, // 20: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:input_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
+	12, // 21: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:input_type -> obiente.cloud.vpsgateway.v1.ListIPsRequest
+	15, // 22: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:input_type -> obiente.cloud.vpsgateway.v1.ProxySSHRequest
+	17, // 23: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:input_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest
+	25, // 24: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:input_type -> obiente.cloud.vpsgateway.v1.GetLeasesRequest
+	27, // 25: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:input_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesRequest
+	30, // 26: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:input_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsRequest
+	0,  // 27: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseRequest
+	2,  // 28: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:input_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseRequest
+	19, // 29: obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway:output_type -> obiente.cloud.vpsgateway.v1.GatewayMessage
+	5,  // 30: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP:output_type -> obiente.cloud.vpsgateway.v1.AllocateIPResponse
+	7,  // 31: obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP:output_type -> obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
+	9,  // 32: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP:output_type -> obiente.cloud.vpsgateway.v1.ReleaseIPResponse
+	11, // 33: obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP:output_type -> obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
+	14, // 34: obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs:output_type -> obiente.cloud.vpsgateway.v1.ListIPsResponse
+	16, // 35: obiente.cloud.vpsgateway.v1.VPSGatewayService.ProxySSH:output_type -> obiente.cloud.vpsgateway.v1.ProxySSHResponse
+	18, // 36: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetGatewayInfo:output_type -> obiente.cloud.vpsgateway.v1.GetGatewayInfoResponse
+	26, // 37: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetLeases:output_type -> obiente.cloud.vpsgateway.v1.GetLeasesResponse
+	28, // 38: obiente.cloud.vpsgateway.v1.VPSGatewayService.GetOrgLeases:output_type -> obiente.cloud.vpsgateway.v1.GetOrgLeasesResponse
+	31, // 39: obiente.cloud.vpsgateway.v1.VPSGatewayService.SyncAllocations:output_type -> obiente.cloud.vpsgateway.v1.SyncAllocationsResponse
+	1,  // 40: obiente.cloud.vpsgateway.v1.VPSGatewayService.AddStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.AddStaticDHCPLeaseResponse
+	3,  // 41: obiente.cloud.vpsgateway.v1.VPSGatewayService.RemoveStaticDHCPLease:output_type -> obiente.cloud.vpsgateway.v1.RemoveStaticDHCPLeaseResponse
+	29, // [29:42] is the sub-list for method output_type
+	16, // [16:29] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_vpsgateway_v1_gateway_service_proto_init() }
