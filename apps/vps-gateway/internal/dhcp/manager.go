@@ -34,9 +34,6 @@ type Manager struct {
 	allocations        map[string]*Allocation     // vps_id -> allocation
 	mu                 sync.RWMutex
 	fileOpMu           sync.Mutex    // Serializes file operations to prevent FD exhaustion
-	lastHostsUpdate    time.Time     // Last time hosts file was updated
-	pendingUpdate      bool          // Whether an update is scheduled
-	updateMu           sync.Mutex    // Protects lastHostsUpdate and pendingUpdate
 	dhcpRunning        bool
 	dnsmasqPID         int
 	allocationTTL      time.Duration
@@ -194,16 +191,6 @@ func NewManager() (*Manager, error) {
 		subnetMask = net.CIDRMask(cidr, 32)
 	}
 
-	if poolStart == nil || poolEnd == nil {
-		return nil, fmt.Errorf("invalid IP addresses in pool configuration")
-	}
-	if gateway == nil {
-		return nil, fmt.Errorf("invalid gateway IP address")
-	}
-	if subnetMask == nil {
-		return nil, fmt.Errorf("invalid subnet mask")
-	}
-
 	// Validate subnet mask
 	ones, bits := subnetMask.Size()
 	if ones == 0 || bits == 0 {
@@ -315,30 +302,22 @@ func (m *Manager) SetAPIClient(client APIClient) {
 		// Brief delay to let the client and streams stabilize
 		time.Sleep(m.clientInitDelay)
 		logger.Info("Triggering initial hosts file sync after API client configured")
-		if err := m.updateHostsFileSafe(); err != nil {
+		m.mu.RLock()
+		if err := m.syncHostsFileFromAllocations(); err != nil {
 			logger.Warn("Initial hosts file sync failed: %v", err)
 		} else {
-			if err := m.reloadDNSMasq(); err != nil {
-				logger.Warn("Failed to reload dnsmasq after initial sync: %v", err)
-			} else {
-				logger.Info("Initial hosts file sync completed successfully")
-			}
+			logger.Info("Initial hosts file sync completed successfully")
 		}
+		m.mu.RUnlock()
 	}()
 }
 
 // SyncHostsFromLeases updates the hosts file from current DHCP leases
 // This is called when VPS services connect to resolve existing leases to VPS IDs
 func (m *Manager) SyncHostsFromLeases() error {
-	if err := m.updateHostsFile(); err != nil {
-		return fmt.Errorf("failed to update hosts file: %w", err)
-	}
-	
-	if err := m.reloadDNSMasq(); err != nil {
-		return fmt.Errorf("failed to reload dnsmasq: %w", err)
-	}
-	
-	return nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.syncHostsFileFromAllocations()
 }
 
 // AllocateIP allocates an IP address for a VPS
@@ -349,6 +328,13 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 
 	// Check if already allocated
 	if alloc, exists := m.allocations[vpsID]; exists {
+		logger.Debug("[AllocateIP] VPS %s already allocated to %s, ensuring hosts file is synced", vpsID, alloc.IPAddress.String())
+		// Still sync hosts file in case it was lost
+		m.mu.Unlock()
+		if err := m.syncHostsFileFromAllocations(); err != nil {
+			logger.Warn("[AllocateIP] Failed to sync hosts file: %v", err)
+		}
+		m.mu.Lock()
 		return alloc, nil
 	}
 
@@ -380,34 +366,23 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		}
 	}
 
-	// Create allocation
-	alloc := &Allocation{
-		VPSID:          vpsID,
-		OrganizationID: orgID,
-		IPAddress:      ip,
-		MACAddress:     strings.ToLower(strings.TrimSpace(macAddress)),
-		AllocatedAt:    time.Now(),
-		LeaseExpires:   time.Now().Add(24 * time.Hour), // 24 hour lease
-	}
-
-	m.allocations[vpsID] = alloc
+	// Create allocation using helper
+	alloc := m.addOrUpdateAllocation(vpsID, orgID, ip, macAddress)
 
 	// For public IPs (outside DHCP pool), skip dnsmasq configuration
 	// Public IPs are statically configured on the VPS, not via DHCP
 	if allowPublicIP && !m.IsIPInPool(ip) {
 		logger.Info("Allocated public IP %s (outside DHCP pool) for VPS %s - skipping dnsmasq configuration", ip.String(), vpsID)
 	} else {
-		// Update dnsmasq hosts file (for DHCP pool IPs)
-		if err := m.updateHostsFileSafe(); err != nil {
-			delete(m.allocations, vpsID)
-			return nil, fmt.Errorf("failed to update hosts file: %w", err)
+		// Sync hosts file
+		m.mu.Unlock()
+		if err := m.syncHostsFileFromAllocations(); err != nil {
+			m.mu.Lock()
+			m.removeAllocationByVPSID(vpsID)
+			m.mu.Unlock()
+			return nil, fmt.Errorf("failed to sync hosts file: %w", err)
 		}
-
-		// Reload dnsmasq
-		if err := m.reloadDNSMasq(); err != nil {
-			logger.Error("Failed to reload dnsmasq after allocation: %v", err)
-			// Continue anyway - allocation is saved
-		}
+		m.mu.Lock()
 	}
 
 	// Persist allocation to local file
@@ -436,19 +411,16 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 		return fmt.Errorf("IP %s does not match allocated IP %s for VPS %s", ipAddress, alloc.IPAddress.String(), vpsID)
 	}
 
-	delete(m.allocations, vpsID)
+	m.removeAllocationByVPSID(vpsID)
 
-	// Update dnsmasq hosts file
-	if err := m.updateHostsFileSafe(); err != nil {
-		logger.Error("Failed to update hosts file: %v", err)
+	// Sync hosts file
+	m.mu.Unlock()
+	if err := m.syncHostsFileFromAllocations(); err != nil {
+		logger.Warn("[ReleaseIP] Failed to sync hosts file: %v", err)
 	}
+	m.mu.Lock()
 
-	// Reload dnsmasq
-	if err := m.reloadDNSMasq(); err != nil {
-		logger.Error("Failed to reload dnsmasq after release: %v", err)
-	}
-
-	// Persist allocation to local file
+	// Persist allocations
 	if err := m.saveAllocations(); err != nil {
 		logger.Error("Failed to save allocations: %v", err)
 	}
@@ -621,168 +593,7 @@ func (m *Manager) countIPsInPool() int {
 	return count
 }
 
-// updateHostsFileSafe is a debounced wrapper that prevents excessive concurrent updates
-func (m *Manager) updateHostsFileSafe() error {
-	m.updateMu.Lock()
-	// Debounce: if updated within last 100ms, schedule a delayed update
-	if time.Since(m.lastHostsUpdate) < 100*time.Millisecond {
-		if !m.pendingUpdate {
-			m.pendingUpdate = true
-			m.updateMu.Unlock()
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				m.updateMu.Lock()
-				m.pendingUpdate = false
-				m.updateMu.Unlock()
-				m.updateHostsFile()
-			}()
-			return nil
-		}
-		m.updateMu.Unlock()
-		return nil // Update already pending
-	}
-	m.lastHostsUpdate = time.Now()
-	m.updateMu.Unlock()
-	
-	return m.updateHostsFile()
-}
-
-func (m *Manager) updateHostsFile() error {
-	// Serialize file operations to prevent file descriptor exhaustion
-	m.fileOpMu.Lock()
-	defer m.fileOpMu.Unlock()
-	
-	file, err := os.Create(m.hostsFile)
-	if err != nil {
-		return fmt.Errorf("failed to create hosts file: %w", err)
-	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil {
-			logger.Warn("Failed to close hosts file: %v", closeErr)
-		}
-	}()
-
-	writer := bufio.NewWriter(file)
-	defer func() {
-		if flushErr := writer.Flush(); flushErr != nil {
-			logger.Error("Failed to flush hosts file writer: %v", flushErr)
-		}
-	}()
-
-	// Write header
-	writer.WriteString("# dnsmasq hosts/dhcp file - managed by vps-gateway\n")
-	writer.WriteString("# DNS entries: <ip> <hostname>\n")
-	writer.WriteString("# DHCP static entries: dhcp-host=<mac>,<ip>,<hostname>\n\n")
-
-	// Attempt to discover MACs from active leases so we can emit dhcp-host entries
-	// even when allocations were created without a MAC (timing race with DHCP).
-	ipToMac := make(map[string]string)
-	activeLeases, err := m.GetActiveLeases()
-	if err == nil {
-		for _, l := range activeLeases {
-			if l.MAC != "" && l.IP != nil {
-				ipToMac[l.IP.String()] = strings.ToLower(l.MAC)
-			}
-		}
-
-		// Discover VPS allocations from active DHCP leases using MAC lookup
-		// NEVER trust hostnames - users can change them. Always verify via MAC address.
-		now := time.Now()
-		
-		// Check if we have connected VPS service instances for MAC lookup
-		m.apiClientMu.RLock()
-		client := m.apiClient
-		m.apiClientMu.RUnlock()
-		
-		hasConnectedAPI := false
-		if svc, ok := client.(interface{ HasConnectedStreams() bool }); ok {
-			hasConnectedAPI = svc.HasConnectedStreams()
-		}
-		
-		// Only perform discovery if VPS service is connected (otherwise MAC lookup will fail)
-		if client != nil && hasConnectedAPI {
-			for _, l := range activeLeases {
-				if l.IP == nil || l.MAC == "" {
-					continue
-				}
-				
-				// SECURITY: Always use MAC lookup to find VPS ID, never trust hostname
-				// Users can set any hostname they want in their VM
-				ctx, cancel := context.WithTimeout(context.Background(), m.findVPSTimeout)
-				resp, err := client.FindVPSByLease(ctx, l.IP.String(), strings.ToLower(l.MAC))
-				cancel()
-				
-				if err == nil && resp != nil && resp.GetVpsId() != "" {
-					vpsID := resp.GetVpsId()
-					orgID := resp.GetOrganizationId()
-					
-					// Acquire lock to update allocations
-					m.mu.Lock()
-					if alloc, ok := m.allocations[vpsID]; ok {
-						// Update existing allocation with fresh data
-						if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
-							alloc.IPAddress = l.IP
-						}
-						if alloc.MACAddress == "" && l.MAC != "" {
-							alloc.MACAddress = strings.ToLower(l.MAC)
-						}
-						if alloc.OrganizationID == "" && orgID != "" {
-							alloc.OrganizationID = orgID
-						}
-					} else {
-						// Create new allocation from discovered lease
-						m.allocations[vpsID] = &Allocation{
-							VPSID:          vpsID,
-							OrganizationID: orgID,
-							IPAddress:      l.IP,
-							MACAddress:     strings.ToLower(l.MAC),
-							AllocatedAt:    now,
-							LeaseExpires:   l.ExpiresAt,
-						}
-					}
-					m.mu.Unlock()
-					
-					// NOTE: Lease registration happens via SyncAllocations stream
-					logger.Info("[DHCP] Discovered lease for VPS %s (IP: %s, MAC: %s)", vpsID, l.IP.String(), l.MAC)
-				}
-			}
-		}
-	} else {
-		logger.Debug("Could not read active leases while updating hosts file: %v", err)
-	}
-
-	// Persist updated allocations with discovered MACs (outside of lock)
-	if err := m.saveAllocations(); err != nil {
-		logger.Warn("Failed to persist allocations after MAC discovery: %v", err)
-	}
-
-	// Write allocations (need to hold lock while reading map)
-	m.mu.RLock()
-	for _, alloc := range m.allocations {
-		// DNS host entry
-		writer.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), alloc.VPSID))
-
-		// Prefer allocation MAC if present, otherwise fall back to active lease MAC
-		mac := strings.ToLower(strings.TrimSpace(alloc.MACAddress))
-		if mac == "" {
-			if m, ok := ipToMac[alloc.IPAddress.String()]; ok && m != "" {
-				mac = m
-				// Update in-memory allocation so subsequent operations see the MAC
-				alloc.MACAddress = mac
-			}
-		}
-
-		if mac != "" {
-			writer.WriteString(fmt.Sprintf("dhcp-host=%s,%s,%s\n", mac, alloc.IPAddress.String(), alloc.VPSID))
-		} else {
-			// Log warning when MAC is missing - DHCP won't be enforced but DNS will work
-			logger.Warn("Missing MAC for VPS %s (IP %s) - dhcp-host entry skipped, DNS entry only", alloc.VPSID, alloc.IPAddress.String())
-		}
-	}
-	m.mu.RUnlock()
-
-	return nil
-}
+// DEPRECATED: Old updateHostsFile functions removed - use syncHostsFileFromAllocations instead
 
 func (m *Manager) startDNSMasq() error {
 	// Generate dnsmasq config file path
@@ -986,9 +797,11 @@ func (m *Manager) reloadDNSMasq() error {
 }
 
 func (m *Manager) saveAllocations() error {
-	// Save to JSON file for persistence
-	// For now, we'll just ensure the hosts file is up to date
-	return m.updateHostsFileSafe()
+	// The allocations map is the source of truth
+	// Syncing hosts file ensures it's always up to date
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.syncHostsFileFromAllocations()
 }
 
 func (m *Manager) loadAllocations() error {
@@ -1245,14 +1058,8 @@ func (m *Manager) syncWithLeases() error {
 
 	// Update hosts file if allocations changed
 	if updated {
-		if err := m.updateHostsFileSafe(); err != nil {
-			return fmt.Errorf("failed to update hosts file after sync: %w", err)
-		}
-		if err := m.reloadDNSMasq(); err != nil {
-			logger.Warn("Failed to reload dnsmasq after sync: %v", err)
-		}
-		if err := m.saveAllocations(); err != nil {
-			logger.Warn("Failed to persist allocations after sync: %v", err)
+		if err := m.syncHostsFileFromAllocations(); err != nil {
+			return fmt.Errorf("failed to sync hosts file after sync: %w", err)
 		}
 	}
 
@@ -1324,16 +1131,13 @@ func (m *Manager) backgroundReconciler() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		// Update hosts file first (discovers leases, resolves to VPS IDs, writes entries)
-		// This ensures the hosts file is always up-to-date with active leases
-		if err := m.updateHostsFileSafe(); err != nil {
-			logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
-		} else {
-			// Reload dnsmasq to pick up the updated hosts file
-			if err := m.reloadDNSMasq(); err != nil {
-				logger.Warn("backgroundReconciler: failed to reload dnsmasq: %v", err)
-			}
+		// Sync hosts file from allocations map
+		// The allocations map is kept up to date by SyncAllocations stream
+		m.mu.RLock()
+		if err := m.syncHostsFileFromAllocations(); err != nil {
+			logger.Warn("backgroundReconciler: failed to sync hosts file: %v", err)
 		}
+		m.mu.RUnlock()
 
 		// Sync leases (updates MACs and expiries in allocations)
 		if err := m.syncWithLeases(); err != nil {
@@ -1379,16 +1183,12 @@ func (m *Manager) backgroundReconciler() {
 		}
 
 		if len(toRemove) > 0 {
-			// Persist changes
-			if err := m.updateHostsFileSafe(); err != nil {
-				logger.Warn("backgroundReconciler: failed to update hosts file: %v", err)
+			// Sync hosts file with updated allocations
+			m.mu.Unlock()
+			if err := m.syncHostsFileFromAllocations(); err != nil {
+				logger.Warn("backgroundReconciler: failed to sync hosts file: %v", err)
 			}
-			if err := m.reloadDNSMasq(); err != nil {
-				logger.Warn("backgroundReconciler: failed to reload dnsmasq: %v", err)
-			}
-			if err := m.saveAllocations(); err != nil {
-				logger.Warn("backgroundReconciler: failed to persist allocations: %v", err)
-			}
+			m.mu.Lock()
 		}
 		m.mu.Unlock()
 	}
@@ -1412,16 +1212,14 @@ func (m *Manager) AddStaticDHCPLease(ctx context.Context, macAddress, ipAddress,
 		LeaseExpires:   time.Now().Add(24 * time.Hour),
 	}
 	m.allocations[vpsID] = alloc
-	if err := m.updateHostsFileSafe(); err != nil {
+	m.mu.Unlock()
+	if err := m.syncHostsFileFromAllocations(); err != nil {
+		m.mu.Lock()
 		delete(m.allocations, vpsID)
-		return fmt.Errorf("failed to update hosts file: %w", err)
+		m.mu.Unlock()
+		return fmt.Errorf("failed to sync hosts file: %w", err)
 	}
-	if err := m.reloadDNSMasq(); err != nil {
-		logger.Error("Failed to reload dnsmasq after static lease add: %v", err)
-	}
-	if err := m.saveAllocations(); err != nil {
-		logger.Warn("Failed to persist allocations after static lease add: %v", err)
-	}
+	m.mu.Lock()
 	logger.Info("Added static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
 	return nil
 }
@@ -1435,13 +1233,16 @@ func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddre
 		return fmt.Errorf("no allocation found for VPSID %s", vpsID)
 	}
 	// Compare MACs case-insensitively and normalize inputs
-	if strings.ToLower(strings.TrimSpace(alloc.MACAddress)) != strings.ToLower(strings.TrimSpace(macAddress)) || alloc.IPAddress.String() != ipAddress {
+	if !strings.EqualFold(strings.TrimSpace(alloc.MACAddress), strings.TrimSpace(macAddress)) || alloc.IPAddress.String() != ipAddress {
 		return fmt.Errorf("allocation mismatch for VPSID %s: expected MAC %s IP %s, got MAC %s IP %s", vpsID, macAddress, ipAddress, alloc.MACAddress, alloc.IPAddress.String())
 	}
 	delete(m.allocations, vpsID)
-	if err := m.updateHostsFileSafe(); err != nil {
-		return fmt.Errorf("failed to update hosts file: %w", err)
+	m.mu.Unlock()
+	if err := m.syncHostsFileFromAllocations(); err != nil {
+		m.mu.Lock()
+		return fmt.Errorf("failed to sync hosts file: %w", err)
 	}
+	m.mu.Lock()
 	if err := m.reloadDNSMasq(); err != nil {
 		logger.Error("Failed to reload dnsmasq after static lease removal: %v", err)
 	}
@@ -1452,13 +1253,104 @@ func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddre
 	return nil
 }
 
-// RegisterLeaseDirectly is a no-op placeholder for backward compatibility
-// Lease registration now happens automatically via SyncAllocations bidirectional stream
-// This method is kept to avoid breaking the server/service.go that calls it during self-healing
+// RegisterLeaseDirectly registers a DHCP lease directly during self-healing
+// Called when the gateway discovers active DHCP leases that aren't yet in allocations
 func (m *Manager) RegisterLeaseDirectly(ctx context.Context, vpsID, orgID string, ipAddress net.IP, isPublic bool, macAddress string) error {
-	// No-op: lease registration handled by SyncAllocations stream
-	logger.Debug("[RegisterLeaseDirectly] No-op: lease registration for VPS %s handled by stream", vpsID)
+	m.mu.Lock()
+	
+	// Check if already allocated
+	if _, exists := m.allocations[vpsID]; exists {
+		m.mu.Unlock()
+		logger.Debug("[RegisterLeaseDirectly] VPS %s already allocated (IP: %s, MAC: %s)", vpsID, ipAddress.String(), macAddress)
+		return nil
+	}
+	
+	// Add allocation using helper
+	m.addOrUpdateAllocation(vpsID, orgID, ipAddress, macAddress)
+	m.mu.Unlock()
+	
+	// Sync hosts file
+	if err := m.syncHostsFileFromAllocations(); err != nil {
+		logger.Warn("[RegisterLeaseDirectly] Failed to sync hosts file for VPS %s: %v", vpsID, err)
+		return fmt.Errorf("failed to sync hosts file: %w", err)
+	}
+	
+	logger.Info("[RegisterLeaseDirectly] Registered VPS %s (IP: %s, MAC: %s, public: %v)", vpsID, ipAddress.String(), macAddress, isPublic)
 	return nil
+}
+
+// ==================== CLEAN ARCHITECTURE HELPERS ====================
+// These three functions provide a clean, predictable interface for managing
+// the allocations map and hosts file with a single source of truth.
+
+// syncHostsFileFromAllocations writes the hosts file directly from the allocations map
+// This is the ONLY function that should write to the hosts file
+// Call this after any change to the allocations map
+func (m *Manager) syncHostsFileFromAllocations() error {
+	m.fileOpMu.Lock()
+	defer m.fileOpMu.Unlock()
+
+	var buf bytes.Buffer
+	buf.WriteString("# VPS hostname to IP mappings\n")
+	buf.WriteString("# Auto-generated by VPS Gateway DHCP Manager\n")
+	buf.WriteString(fmt.Sprintf("# Last updated: %s\n\n", time.Now().Format(time.RFC3339)))
+
+	// Write all allocations
+	count := 0
+	for vpsID, alloc := range m.allocations {
+		hostname := fmt.Sprintf("%s.vps", vpsID)
+		buf.WriteString(fmt.Sprintf("%s %s\n", alloc.IPAddress.String(), hostname))
+		count++
+	}
+
+	logger.Debug("[syncHostsFile] Writing %d VPS entries to %s", count, m.hostsFile)
+
+	// Write atomically
+	tmpFile := m.hostsFile + ".tmp"
+	if err := os.WriteFile(tmpFile, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write temp hosts file: %w", err)
+	}
+	if err := os.Rename(tmpFile, m.hostsFile); err != nil {
+		return fmt.Errorf("failed to rename hosts file: %w", err)
+	}
+
+	// Reload dnsmasq to pick up changes
+	if m.dhcpRunning && m.dnsmasqPID > 0 {
+		if err := m.reloadDNSMasq(); err != nil {
+			logger.Warn("[syncHostsFile] Failed to reload dnsmasq: %v", err)
+		} else {
+			logger.Info("[syncHostsFile] Successfully updated hosts file with %d entries and reloaded dnsmasq", count)
+		}
+	}
+
+	return nil
+}
+
+// addOrUpdateAllocation adds or updates an allocation in the map
+// Must be called while holding m.mu lock
+// Returns the allocation
+func (m *Manager) addOrUpdateAllocation(vpsID, organizationID string, ipAddress net.IP, macAddress string) *Allocation {
+	alloc := &Allocation{
+		VPSID:          vpsID,
+		OrganizationID: organizationID,
+		IPAddress:      ipAddress,
+		MACAddress:     strings.ToLower(strings.TrimSpace(macAddress)),
+		AllocatedAt:    time.Now(),
+		LeaseExpires:   time.Now().Add(24 * time.Hour),
+	}
+
+	m.allocations[vpsID] = alloc
+	logger.Debug("[addAllocation] VPS %s -> IP %s (MAC: %s, Org: %s)", vpsID, ipAddress.String(), macAddress, organizationID)
+	return alloc
+}
+
+// removeAllocationByVPSID removes an allocation from the map
+// Must be called while holding m.mu lock
+func (m *Manager) removeAllocationByVPSID(vpsID string) {
+	if alloc, exists := m.allocations[vpsID]; exists {
+		logger.Debug("[removeAllocation] VPS %s (IP: %s)", vpsID, alloc.IPAddress.String())
+		delete(m.allocations, vpsID)
+	}
 }
 
 
