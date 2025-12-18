@@ -628,64 +628,29 @@ func (m *Manager) updateHostsFile() error {
 			}
 		}
 
-		// Create allocations from active leases when the lease hostname is a VPS ID
-		// (e.g., dnsmasq hostname set to "vps-<id>"). This helps include those
-		// active leases in the hosts file even if they weren't previously allocated.
+		// Discover VPS allocations from active DHCP leases using MAC lookup
+		// NEVER trust hostnames - users can change them. Always verify via MAC address.
 		now := time.Now()
 		
-		// First pass: handle vps-* hostnames (no API calls needed)
-		m.mu.Lock()
-		for _, l := range activeLeases {
-			if l.Hostname == "" || l.IP == nil {
-				continue
-			}
-			// Treat hostnames that look like our VPS IDs (prefix "vps-") as allocations
-			if strings.HasPrefix(l.Hostname, "vps-") {
-				vpsID := l.Hostname
-				// If allocation exists, merge MAC/IP
-				if alloc, ok := m.allocations[vpsID]; ok {
-					if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
-						alloc.IPAddress = l.IP
-					}
-					if alloc.MACAddress == "" && l.MAC != "" {
-						alloc.MACAddress = strings.ToLower(l.MAC)
-					}
-				} else {
-					m.allocations[vpsID] = &Allocation{
-						VPSID:        vpsID,
-						IPAddress:    l.IP,
-						MACAddress:   strings.ToLower(l.MAC),
-						AllocatedAt:  now,
-						LeaseExpires: l.ExpiresAt,
-					}
-				}
-			}
-		}
-		m.mu.Unlock()
-		
-		// Second pass: resolve non-vps-* hostnames via API (no lock held during network calls)
-		// Only attempt if we have connected VPS service instances to avoid startup spam
+		// Check if we have connected VPS service instances for MAC lookup
 		m.apiClientMu.RLock()
 		client := m.apiClient
 		m.apiClientMu.RUnlock()
 		
-		// Check if we have any connected streams before attempting API calls
 		hasConnectedAPI := false
 		if svc, ok := client.(interface{ HasConnectedStreams() bool }); ok {
 			hasConnectedAPI = svc.HasConnectedStreams()
 		}
 		
+		// Only perform discovery if VPS service is connected (otherwise MAC lookup will fail)
 		if client != nil && hasConnectedAPI {
 			for _, l := range activeLeases {
-				if l.Hostname == "" || l.IP == nil {
-					continue
-				}
-				// Skip vps-* hostnames (already handled above)
-				if strings.HasPrefix(l.Hostname, "vps-") {
+				if l.IP == nil || l.MAC == "" {
 					continue
 				}
 				
-				// Resolve via API without holding mutex
+				// SECURITY: Always use MAC lookup to find VPS ID, never trust hostname
+				// Users can set any hostname they want in their VM
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				resp, err := client.FindVPSByLease(ctx, l.IP.String(), strings.ToLower(l.MAC))
 				cancel()
@@ -694,9 +659,10 @@ func (m *Manager) updateHostsFile() error {
 					vpsID := resp.GetVpsId()
 					orgID := resp.GetOrganizationId()
 					
-					// Now acquire lock to update allocations
+					// Acquire lock to update allocations
 					m.mu.Lock()
 					if alloc, ok := m.allocations[vpsID]; ok {
+						// Update existing allocation with fresh data
 						if alloc.IPAddress == nil || !alloc.IPAddress.Equal(l.IP) {
 							alloc.IPAddress = l.IP
 						}
@@ -707,6 +673,7 @@ func (m *Manager) updateHostsFile() error {
 							alloc.OrganizationID = orgID
 						}
 					} else {
+						// Create new allocation from discovered lease
 						m.allocations[vpsID] = &Allocation{
 							VPSID:          vpsID,
 							OrganizationID: orgID,
@@ -720,7 +687,6 @@ func (m *Manager) updateHostsFile() error {
 					
 					// Register the discovered lease with the database
 					// This ensures future lookups will work even if the VPS service restarts
-					// Pass MAC directly since we already have it from the lease
 					isPublic := !m.IsIPInPool(l.IP)
 					regCtx, regCancel := context.WithTimeout(context.Background(), 5*time.Second)
 					if regErr := m.registerLeaseWithAPI(regCtx, vpsID, orgID, l.IP, isPublic, l.MAC); regErr != nil {

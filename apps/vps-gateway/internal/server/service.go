@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -826,72 +825,68 @@ func (s *GatewayService) SyncAllocations(
 	req *connect.Request[vpsgatewayv1.SyncAllocationsRequest],
 ) (*connect.Response[vpsgatewayv1.SyncAllocationsResponse], error) {
 	// SELF-HEALING STEP: Discover existing DHCP leases and register them in database
-	// This handles cases where leases exist but aren't in the database yet
+	// Hostnames in dnsmasq.leases are always "*", so we use MAC lookup to find VPS IDs
 	discovered := 0
 	if activeLeases, err := s.dhcpManager.GetActiveLeases(); err == nil {
 		logger.Info("[SyncAllocations] Self-healing: checking %d active DHCP leases", len(activeLeases))
 		
 		for _, lease := range activeLeases {
-			if lease.Hostname == "" || lease.IP == nil {
+			if lease.IP == nil || lease.MAC == "" {
 				continue
 			}
 			
-			// If hostname is vps-*, we can directly register it
-			if strings.HasPrefix(lease.Hostname, "vps-") {
-				vpsID := lease.Hostname
-				
-				// Register this lease with the database
-				// This will persist it so future syncs include it
-				registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				isPublic := !s.dhcpManager.IsIPInPool(lease.IP)
-				
-				// We don't know the org ID yet, but VPS service will fill it in
-				if err := s.dhcpManager.RegisterLeaseDirectly(registerCtx, vpsID, "", lease.IP, isPublic, lease.MAC); err != nil {
-					logger.Warn("[SyncAllocations] Self-healing: failed to register existing lease %s: %v", vpsID, err)
-				} else {
-					logger.Info("[SyncAllocations] Self-healing: registered existing lease %s (IP: %s, MAC: %s)", vpsID, lease.IP.String(), lease.MAC)
-					discovered++
-				}
-				cancel()
+			// Use FindVPSByLease to resolve MAC address to VPS ID via Proxmox
+			findCtx, findCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			vpsResp, findErr := s.FindVPSByLease(findCtx, lease.IP.String(), lease.MAC)
+			findCancel()
+			
+			if findErr != nil || vpsResp == nil || vpsResp.GetVpsId() == "" {
+				// Not a VPS lease or VPS service not ready - skip
+				logger.Debug("[SyncAllocations] Self-healing: lease %s (MAC %s) not resolved to VPS", lease.IP.String(), lease.MAC)
+				continue
 			}
+			
+			vpsID := vpsResp.GetVpsId()
+			orgID := vpsResp.GetOrganizationId()
+			
+			// Check if this VPS is already in the desired allocations from database
+			alreadyInSync := false
+			for _, alloc := range req.Msg.Allocations {
+				if alloc.VpsId == vpsID {
+					alreadyInSync = true
+					break
+				}
+			}
+			
+			if alreadyInSync {
+				// Already in database sync, no need to register
+				continue
+			}
+			
+			// Register this discovered lease with the database
+			registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			isPublic := !s.dhcpManager.IsIPInPool(lease.IP)
+			
+			if err := s.dhcpManager.RegisterLeaseDirectly(registerCtx, vpsID, orgID, lease.IP, isPublic, lease.MAC); err != nil {
+				logger.Warn("[SyncAllocations] Self-healing: failed to register existing lease %s: %v", vpsID, err)
+			} else {
+				logger.Info("[SyncAllocations] Self-healing: registered existing lease %s (IP: %s, MAC: %s)", vpsID, lease.IP.String(), lease.MAC)
+				
+				// Add to the sync request so it won't be removed
+				req.Msg.Allocations = append(req.Msg.Allocations, &vpsgatewayv1.DesiredAllocation{
+					VpsId:          vpsID,
+					OrganizationId: orgID,
+					IpAddress:      lease.IP.String(),
+					MacAddress:     lease.MAC,
+					IsPublic:       isPublic,
+				})
+				discovered++
+			}
+			cancel()
 		}
 		
 		if discovered > 0 {
 			logger.Info("[SyncAllocations] Self-healing: discovered and registered %d existing leases", discovered)
-			
-			// CRITICAL: After registering new leases, we need to merge them into the desired set
-			// Otherwise the sync will immediately remove them (since they weren't in the original database query)
-			// Wait a moment for database writes to propagate
-			time.Sleep(100 * time.Millisecond)
-			
-			// Re-check active leases and add them to the sync request
-			if freshLeases, err := s.dhcpManager.GetActiveLeases(); err == nil {
-				for _, lease := range freshLeases {
-					if lease.Hostname != "" && strings.HasPrefix(lease.Hostname, "vps-") && lease.IP != nil {
-						vpsID := lease.Hostname
-						
-						// Add to the allocations list if not already present
-						found := false
-						for _, existing := range req.Msg.Allocations {
-							if existing.VpsId == vpsID {
-								found = true
-								break
-							}
-						}
-						
-						if !found {
-							// Add the discovered lease to the desired allocations
-							req.Msg.Allocations = append(req.Msg.Allocations, &vpsgatewayv1.DesiredAllocation{
-								VpsId:      vpsID,
-								IpAddress:  lease.IP.String(),
-								MacAddress: lease.MAC,
-								IsPublic:   !s.dhcpManager.IsIPInPool(lease.IP),
-							})
-							logger.Info("[SyncAllocations] Added discovered lease %s to desired allocations", vpsID)
-						}
-					}
-				}
-			}
 		}
 	}
 
