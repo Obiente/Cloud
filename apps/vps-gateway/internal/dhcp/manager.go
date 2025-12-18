@@ -664,11 +664,18 @@ func (m *Manager) updateHostsFile() error {
 		m.mu.Unlock()
 		
 		// Second pass: resolve non-vps-* hostnames via API (no lock held during network calls)
+		// Only attempt if we have connected VPS service instances to avoid startup spam
 		m.apiClientMu.RLock()
 		client := m.apiClient
 		m.apiClientMu.RUnlock()
 		
-		if client != nil {
+		// Check if we have any connected streams before attempting API calls
+		hasConnectedAPI := false
+		if svc, ok := client.(interface{ HasConnectedStreams() bool }); ok {
+			hasConnectedAPI = svc.HasConnectedStreams()
+		}
+		
+		if client != nil && hasConnectedAPI {
 			for _, l := range activeLeases {
 				if l.Hostname == "" || l.IP == nil {
 					continue
@@ -1581,3 +1588,11 @@ func (m *Manager) RemoveStaticDHCPLease(ctx context.Context, macAddress, ipAddre
 	logger.Info("Removed static DHCP lease: MAC=%s IP=%s VPSID=%s is_public=%v", macAddress, ipAddress, vpsID, isPublic)
 	return nil
 }
+
+// RegisterLeaseDirectly registers an existing DHCP lease with the VPS Service API
+// without modifying local allocations. This is used during self-healing to register
+// leases that already exist in dnsmasq but aren't in the database.
+func (m *Manager) RegisterLeaseDirectly(ctx context.Context, vpsID, orgID string, ipAddress net.IP, isPublic bool, macAddress string) error {
+	return m.registerLeaseWithAPI(ctx, vpsID, orgID, ipAddress, isPublic, macAddress)
+}
+

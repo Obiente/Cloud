@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -652,7 +653,8 @@ func (s *GatewayService) RegisterGateway(
 			case "request":
 				// Handle requests from API (forwarded RPCs)
 				if msg.Request != nil {
-					go s.handleStreamRequest(ctx, stream, msg.Request, apiInstanceID)
+					// Use background context for request handling to avoid cancellation issues
+					go s.handleStreamRequest(context.Background(), stream, msg.Request, apiInstanceID)
 				}
 
 			case "heartbeat":
@@ -818,10 +820,81 @@ func (s *GatewayService) GetOrgLeases(
 
 // SyncAllocations syncs allocations from database as source of truth
 // Releases IPs not in the list and ensures desired IPs are allocated
+// SELF-HEALING: Before syncing, discovers and registers existing DHCP leases not in database
 func (s *GatewayService) SyncAllocations(
 	ctx context.Context,
 	req *connect.Request[vpsgatewayv1.SyncAllocationsRequest],
 ) (*connect.Response[vpsgatewayv1.SyncAllocationsResponse], error) {
+	// SELF-HEALING STEP: Discover existing DHCP leases and register them in database
+	// This handles cases where leases exist but aren't in the database yet
+	discovered := 0
+	if activeLeases, err := s.dhcpManager.GetActiveLeases(); err == nil {
+		logger.Info("[SyncAllocations] Self-healing: checking %d active DHCP leases", len(activeLeases))
+		
+		for _, lease := range activeLeases {
+			if lease.Hostname == "" || lease.IP == nil {
+				continue
+			}
+			
+			// If hostname is vps-*, we can directly register it
+			if strings.HasPrefix(lease.Hostname, "vps-") {
+				vpsID := lease.Hostname
+				
+				// Register this lease with the database
+				// This will persist it so future syncs include it
+				registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				isPublic := !s.dhcpManager.IsIPInPool(lease.IP)
+				
+				// We don't know the org ID yet, but VPS service will fill it in
+				if err := s.dhcpManager.RegisterLeaseDirectly(registerCtx, vpsID, "", lease.IP, isPublic, lease.MAC); err != nil {
+					logger.Warn("[SyncAllocations] Self-healing: failed to register existing lease %s: %v", vpsID, err)
+				} else {
+					logger.Info("[SyncAllocations] Self-healing: registered existing lease %s (IP: %s, MAC: %s)", vpsID, lease.IP.String(), lease.MAC)
+					discovered++
+				}
+				cancel()
+			}
+		}
+		
+		if discovered > 0 {
+			logger.Info("[SyncAllocations] Self-healing: discovered and registered %d existing leases", discovered)
+			
+			// CRITICAL: After registering new leases, we need to merge them into the desired set
+			// Otherwise the sync will immediately remove them (since they weren't in the original database query)
+			// Wait a moment for database writes to propagate
+			time.Sleep(100 * time.Millisecond)
+			
+			// Re-check active leases and add them to the sync request
+			if freshLeases, err := s.dhcpManager.GetActiveLeases(); err == nil {
+				for _, lease := range freshLeases {
+					if lease.Hostname != "" && strings.HasPrefix(lease.Hostname, "vps-") && lease.IP != nil {
+						vpsID := lease.Hostname
+						
+						// Add to the allocations list if not already present
+						found := false
+						for _, existing := range req.Msg.Allocations {
+							if existing.VpsId == vpsID {
+								found = true
+								break
+							}
+						}
+						
+						if !found {
+							// Add the discovered lease to the desired allocations
+							req.Msg.Allocations = append(req.Msg.Allocations, &vpsgatewayv1.DesiredAllocation{
+								VpsId:      vpsID,
+								IpAddress:  lease.IP.String(),
+								MacAddress: lease.MAC,
+								IsPublic:   !s.dhcpManager.IsIPInPool(lease.IP),
+							})
+							logger.Info("[SyncAllocations] Added discovered lease %s to desired allocations", vpsID)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Build desired allocations map
 	desiredMap := make(map[string]*vpsgatewayv1.DesiredAllocation)
 	for _, alloc := range req.Msg.Allocations {
@@ -868,10 +941,10 @@ func (s *GatewayService) SyncAllocations(
 		Success: true,
 		Added:   int32(added),
 		Removed: int32(removed),
-		Message: fmt.Sprintf("Synced allocations: added %d, removed %d", added, removed),
+		Message: fmt.Sprintf("Synced allocations: discovered %d, added %d, removed %d", discovered, added, removed),
 	}
 
-	logger.Info("SyncAllocations: completed with added=%d removed=%d", added, removed)
+	logger.Info("SyncAllocations: completed with discovered=%d added=%d removed=%d", discovered, added, removed)
 	return connect.NewResponse(resp), nil
 }
 
