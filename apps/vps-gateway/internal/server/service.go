@@ -1030,15 +1030,20 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	defer cleanup()
 
 	// Wait for responses from all instances, return first valid one
-	timeout := 5 * time.Second
-	deadline := time.After(timeout)
+	// Use the context deadline from caller (DHCP manager sets findVPSTimeout)
+	// Default to 10s if context has no deadline
+	timeout := 10 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+	}
+	deadlineTimer := time.After(timeout)
 	responsesReceived := 0
 	
 	for responsesReceived < len(responseChans) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-deadline:
+		case <-deadlineTimer:
 			// Timeout - return empty response if no valid results found
 			logger.Debug("[GatewayService] Timeout waiting for FindVPSByLease responses (received %d/%d)", responsesReceived, len(responseChans))
 			return &vpsv1.FindVPSByLeaseResponse{}, nil
