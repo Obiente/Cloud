@@ -997,6 +997,13 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	return &vpsv1.FindVPSByLeaseResponse{}, nil
 }
 
+// HasConnectedStreams returns true if there are any connected VPS service instances
+func (s *GatewayService) HasConnectedStreams() bool {
+	s.streamsMu.RLock()
+	defer s.streamsMu.RUnlock()
+	return len(s.connectedStreams) > 0
+}
+
 // logStreamError logs stream send errors with rate limiting to prevent log spam
 func (s *GatewayService) logStreamError(instanceID string, err error) {
 	s.streamErrorMu.Lock()
