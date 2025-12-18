@@ -836,16 +836,21 @@ func (s *GatewayService) SyncAllocations(
 			}
 			
 			// Use FindVPSByLease to resolve MAC address to VPS ID via Proxmox
-			findCtx, findCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			// Use generous timeout since Proxmox API can be slow (10-15s)
+			findCtx, findCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			findStart := time.Now()
 			vpsResp, findErr := s.FindVPSByLease(findCtx, lease.IP.String(), lease.MAC)
+			findDuration := time.Since(findStart)
 			findCancel()
 			
 			if findErr != nil || vpsResp == nil || vpsResp.GetVpsId() == "" {
 				// Not a VPS lease or VPS service not ready - skip
-				logger.Debug("[SyncAllocations] Self-healing: lease %s (MAC %s) not resolved to VPS", lease.IP.String(), lease.MAC)
+				logger.Debug("[SyncAllocations] Self-healing: lease %s (MAC %s) not resolved to VPS (took %v)", 
+					lease.IP.String(), lease.MAC, findDuration)
 				continue
 			}
 			
+			logger.Debug("[SyncAllocations] FindVPSByLease for %s took %v", lease.IP.String(), findDuration)
 			vpsID := vpsResp.GetVpsId()
 			orgID := vpsResp.GetOrganizationId()
 			
