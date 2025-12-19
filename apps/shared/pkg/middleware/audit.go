@@ -27,6 +27,7 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 
 			// Skip audit logging for certain procedures
 			if shouldSkipAuditLog(procedure) {
+				logger.Debug("[Audit] Skipping audit log for procedure: %s", procedure)
 				return next(ctx, req)
 			}
 
@@ -250,11 +251,16 @@ func createAuditLog(ctx context.Context, data auditLogData) error {
 // shouldSkipAuditLog determines if a procedure should be skipped for audit logging
 // We only log actual actions (mutations), not read-only operations
 func shouldSkipAuditLog(procedure string) bool {
+	// (Explicit skip list and prefixes handle chunk upload procedures.)
 	// Skip public endpoints
 	skipProcedures := []string{
 		"/obiente.cloud.auth.v1.AuthService/Login",
 		"/obiente.cloud.auth.v1.AuthService/GetPublicConfig",
 		"/obiente.cloud.superadmin.v1.SuperadminService/GetPricing",
+		// Chunk upload procedures are noisy (many per-file chunks). We handle
+		// a single audit entry per completed upload in the upload handler.
+		"/obiente.cloud.gameservers.v1.GameServerService/ChunkUploadGameServerFiles",
+		"/obiente.cloud.deployments.v1.DeploymentService/ChunkUploadContainerFiles",
 	}
 
 	for _, skip := range skipProcedures {
@@ -281,6 +287,7 @@ func shouldSkipAuditLog(procedure string) bool {
 		"Validate", // ValidateDeploymentCompose, etc. (read-only validation)
 		"Check",    // CheckDomain, CheckStatus, etc.
 		"Has",      // HasDelegatedDNS, HasPermission, etc. (read-only checks)
+		"ChunkUpload", // ChunkUploadGameServerFiles, ChunkUploadContainerFiles
 		"Ping",     // Health checks
 		"Health",   // Health checks
 	}
@@ -294,6 +301,56 @@ func shouldSkipAuditLog(procedure string) bool {
 	// Log all mutations (Create, Update, Delete, Start, Stop, Deploy, Invite, Leave, etc.)
 	// These will be captured for audit logging
 	return false
+}
+
+// AuditEntry is an exported representation of an audit log entry that
+// can be created programmatically by handlers that aggregate multiple
+// low-level requests (for example chunked uploads which emit one audit
+// log per file instead of per chunk).
+type AuditEntry struct {
+	UserID         string
+	OrganizationID *string
+	Action         string
+	Service        string
+	ResourceType   *string
+	ResourceID     *string
+	IPAddress      string
+	UserAgent      string
+	RequestData    string
+	ResponseStatus int32
+	ErrorMessage   *string
+	DurationMs     int64
+}
+
+// CreateAuditLog creates an audit log entry using the same internal path
+// as the audit middleware. It is safe to call from goroutines and will
+// gracefully skip if the metrics DB is not configured.
+func CreateAuditLog(ctx context.Context, entry AuditEntry) error {
+	data := auditLogData{
+		UserID:         entry.UserID,
+		OrganizationID: entry.OrganizationID,
+		Action:         entry.Action,
+		Service:        entry.Service,
+		ResourceType:   entry.ResourceType,
+		ResourceID:     entry.ResourceID,
+		IPAddress:      entry.IPAddress,
+		UserAgent:      entry.UserAgent,
+		RequestData:    entry.RequestData,
+		ResponseStatus: entry.ResponseStatus,
+		ErrorMessage:   entry.ErrorMessage,
+		DurationMs:     entry.DurationMs,
+	}
+
+	// Log that we're creating an audit entry so it's visible in service logs
+	logger.Debug("[Audit] CreateAuditLog called: service=%s action=%s resource=%v user=%s", entry.Service, entry.Action, entry.ResourceID, entry.UserID)
+
+	if err := createAuditLog(ctx, data); err != nil {
+		logger.Error("[Audit] CreateAuditLog failed for %s/%s: %v", entry.Service, entry.Action, err)
+		return err
+	}
+
+	logger.Debug("[Audit] CreateAuditLog succeeded: service=%s action=%s resource=%v", entry.Service, entry.Action, entry.ResourceID)
+	return nil
 }
 
 // parseProcedure extracts service and action from procedure path

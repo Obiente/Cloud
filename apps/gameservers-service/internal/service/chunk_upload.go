@@ -2,16 +2,18 @@ package gameservers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
-	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -19,7 +21,17 @@ import (
 )
 
 // ChunkUploadManager handles chunk upload session management
-var chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
+var (
+	chunkUploadManager     *chunkupload.Manager
+	chunkUploadManagerOnce sync.Once
+)
+
+func getChunkUploadManager() *chunkupload.Manager {
+	chunkUploadManagerOnce.Do(func() {
+		chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
+	})
+	return chunkUploadManager
+}
 
 func init() {
 	// Cleanup is handled by the manager's goroutine
@@ -49,13 +61,13 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 	}
 
 	// Get or create session
-	sess, err := chunkUploadManager.GetOrCreateSession(gameServerId, upload)
+	sess, err := getChunkUploadManager().GetOrCreateSession(gameServerId, upload)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// Store the chunk
-	_, err = chunkUploadManager.StoreChunk(gameServerId, upload, upload.ChunkIndex)
+	// Store the chunk (use returned session so BytesReceived is up-to-date)
+	sess, err = getChunkUploadManager().StoreChunk(gameServerId, upload, upload.ChunkIndex)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -64,7 +76,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 
 	// Check if this is the last chunk
 	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
-	allChunksReceived := chunkUploadManager.IsComplete(gameServerId, upload.FileName, upload.TotalChunks)
+	allChunksReceived := getChunkUploadManager().IsComplete(gameServerId, upload.FileName, upload.TotalChunks)
 
 	resp := &gameserversv1.ChunkUploadGameServerFilesResponse{
 		Result: &commonv1.ChunkedUploadResponsePayload{
@@ -96,10 +108,18 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 						ip = h
 					}
 				}
-				action := "ChunkUploadGameServerFiles"
+				action := "UploadGameServerFile"
 				service := "GameServerService"
 				rt := "game_server"
 				logger.Debug("[ChunkUpload] Emitting audit log (failure): gameServer=%s file=%s", gameServerId, upload.FileName)
+				// Marshal request data for audit log
+				requestDataBytes, marshalErr := json.Marshal(msg)
+				requestData := "{}"
+				if marshalErr != nil {
+					logger.Error("[ChunkUpload] Failed to marshal request data: %v", marshalErr)
+				} else {
+					requestData = string(requestDataBytes)
+				}
 				if err := middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
 					UserID:         userID,
 					OrganizationID: nil,
@@ -109,7 +129,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 					ResourceID:     &gameServerId,
 					IPAddress:      ip,
 					UserAgent:      req.Header().Get("User-Agent"),
-					RequestData:    "{}",
+					RequestData:    requestData,
 					ResponseStatus: 500,
 					ErrorMessage:   &errorMsg,
 					DurationMs:     0,
@@ -135,7 +155,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 					ip = h
 				}
 			}
-			action := "ChunkUploadGameServerFiles"
+			action := "UploadGameServerFile"
 			service := "GameServerService"
 			rt := "game_server"
 			logger.Debug("[ChunkUpload] Emitting audit log (success): gameServer=%s file=%s", gameServerId, upload.FileName)
@@ -158,7 +178,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 		}()
 
 		// Clean up the session after successful upload
-		chunkUploadManager.RemoveSession(gameServerId, upload.FileName)
+		getChunkUploadManager().RemoveSession(gameServerId, upload.FileName)
 	}
 
 	return connect.NewResponse(resp), nil
@@ -167,7 +187,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 // uploadAssembledFile assembles all chunks from the session and uploads the complete file.
 func (s *Service) uploadAssembledFile(ctx context.Context, gameServerId string, upload *commonv1.ChunkedUploadPayload) error {
 	// Assemble file from chunks using shared manager
-	completeData, err := chunkUploadManager.AssembleChunks(gameServerId, upload.FileName, upload.TotalChunks)
+	completeData, err := getChunkUploadManager().AssembleChunks(gameServerId, upload.FileName, upload.TotalChunks)
 	if err != nil {
 		return err
 	}

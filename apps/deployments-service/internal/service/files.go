@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
@@ -31,7 +34,17 @@ import (
 )
 
 // ChunkUploadManager handles chunk upload session management
-var chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
+var (
+	chunkUploadManager     *chunkupload.Manager
+	chunkUploadManagerOnce sync.Once
+)
+
+func getChunkUploadManager() *chunkupload.Manager {
+	chunkUploadManagerOnce.Do(func() {
+		chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
+	})
+	return chunkUploadManager
+}
 
 
 // ListContainerFiles lists files in a deployment container or volume
@@ -592,13 +605,13 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 	}
 
 	// Get or create session
-	sess, err := chunkUploadManager.GetOrCreateSession(deploymentID, upload)
+	sess, err := getChunkUploadManager().GetOrCreateSession(deploymentID, upload)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// Store the chunk
-	_, err = chunkUploadManager.StoreChunk(deploymentID, upload, upload.ChunkIndex)
+	// Store the chunk (use returned session so BytesReceived is up-to-date)
+	sess, err = getChunkUploadManager().StoreChunk(deploymentID, upload, upload.ChunkIndex)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -607,7 +620,7 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 
 	// Check if this is the last chunk
 	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
-	allChunksReceived := chunkUploadManager.IsComplete(deploymentID, upload.FileName, upload.TotalChunks)
+	allChunksReceived := getChunkUploadManager().IsComplete(deploymentID, upload.FileName, upload.TotalChunks)
 
 	resp := &deploymentsv1.ChunkUploadContainerFilesResponse{
 		Result: &commonv1.ChunkedUploadResponsePayload{
@@ -623,11 +636,94 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 			resp.Result.Success = false
 			errorMsg := fmt.Sprintf("failed to upload assembled file: %v", err)
 			resp.Result.Error = &errorMsg
+
+			// Emit a single audit log for the failed upload (async)
+			go func() {
+				userID := "system"
+				if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
+					userID = u.Id
+				}
+				ip := "unknown"
+				if req != nil {
+					if h := req.Header().Get("X-Forwarded-For"); h != "" {
+						ip = h
+					} else if h := req.Header().Get("X-Real-IP"); h != "" {
+						ip = h
+					}
+				}
+				   action := "UploadContainerFile"
+				   service := "DeploymentService"
+				   rt := "deployment"
+				   // Marshal request data for audit log
+				   requestDataBytes, marshalErr := json.Marshal(req.Msg)
+				   requestData := "{}"
+				   if marshalErr != nil {
+					   requestData = "{}"
+				   } else {
+					   requestData = string(requestDataBytes)
+				   }
+				   _ = middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+					   UserID:         userID,
+					   OrganizationID: &orgID,
+					   Action:         action,
+					   Service:        service,
+					   ResourceType:   &rt,
+					   ResourceID:     &deploymentID,
+					   IPAddress:      ip,
+					   UserAgent:      req.Header().Get("User-Agent"),
+					   RequestData:    requestData,
+					   ResponseStatus: 500,
+					   ErrorMessage:   &errorMsg,
+					   DurationMs:     0,
+				   })
+			}()
+
 			return connect.NewResponse(resp), nil
 		}
 
+		// Emit a single audit log for the successful upload (async)
+		go func() {
+			userID := "system"
+			if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
+				userID = u.Id
+			}
+			ip := "unknown"
+			if req != nil {
+				if h := req.Header().Get("X-Forwarded-For"); h != "" {
+					ip = h
+				} else if h := req.Header().Get("X-Real-IP"); h != "" {
+					ip = h
+				}
+			}
+			   action := "UploadContainerFile"
+			   service := "DeploymentService"
+			   rt := "deployment"
+			   // Marshal request data for audit log
+			   requestDataBytes, marshalErr := json.Marshal(req.Msg)
+			   requestData := "{}"
+			   if marshalErr != nil {
+				   requestData = "{}"
+			   } else {
+				   requestData = string(requestDataBytes)
+			   }
+			   _ = middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+				   UserID:         userID,
+				   OrganizationID: &orgID,
+				   Action:         action,
+				   Service:        service,
+				   ResourceType:   &rt,
+				   ResourceID:     &deploymentID,
+				   IPAddress:      ip,
+				   UserAgent:      req.Header().Get("User-Agent"),
+				   RequestData:    requestData,
+				   ResponseStatus: 200,
+				   ErrorMessage:   nil,
+				   DurationMs:     0,
+			   })
+		}()
+
 		// Clean up the session after successful upload
-		chunkUploadManager.RemoveSession(deploymentID, upload.FileName)
+		getChunkUploadManager().RemoveSession(deploymentID, upload.FileName)
 	}
 
 	return connect.NewResponse(resp), nil
@@ -636,7 +732,7 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 // uploadAssembledContainerFile assembles all chunks from the session and uploads the complete file
 func (s *Service) uploadAssembledContainerFile(ctx context.Context, deploymentID string, upload *commonv1.ChunkedUploadPayload) error {
 	// Assemble file from chunks using shared manager
-	completeData, err := chunkUploadManager.AssembleChunks(deploymentID, upload.FileName, upload.TotalChunks)
+	completeData, err := getChunkUploadManager().AssembleChunks(deploymentID, upload.FileName, upload.TotalChunks)
 	if err != nil {
 		return err
 	}
