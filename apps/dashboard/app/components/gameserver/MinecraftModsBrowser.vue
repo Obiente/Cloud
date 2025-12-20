@@ -1345,10 +1345,10 @@ async function fetchVersions(projectId: string) {
       gameServerId: props.gameServerId,
       projectId,
       projectType: projectType.value,
-      loaders: [], // Don't filter by loader - show all versions
-      gameVersions: [], // Don't filter by game version - show all versions
-      limit: 100, // Increased limit to show more versions (backend default is now 100)
-    });
+      loaders: activeLoaderFilter.value ? [activeLoaderFilter.value] : [],
+      gameVersions: activeVersionFilter.value ? [activeVersionFilter.value] : [],
+      limit: 300,
+      });
     versionOptions.value = response.versions ?? [];
     if (versionOptions.value.length && versionOptions.value[0]?.id) {
       selectedVersionId.value = versionOptions.value[0].id;
