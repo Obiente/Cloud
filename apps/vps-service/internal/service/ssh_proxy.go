@@ -581,14 +581,11 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 		return
 	}
 
-	// Get VPS IP or hostname
-	vpsIP, err := s.getVPSIP(ctx, vpsID)
-	if err != nil {
-		logger.Error("[SSHProxy] Failed to get VPS IP for %s: %v", vpsID, err)
-		return
-	}
-
-	logger.Info("[SSHProxy] Forwarding SSH channels to VPS %s at %s as user %s", vpsID, vpsIP, targetUser)
+	// OPTIMIZATION: Skip IP lookup and use VPS ID as hostname
+	// The gateway will resolve it via its hosts file/dnsmasq, which is much faster
+	// This avoids slow GetVPSIPAddresses calls that can hang
+	vpsIP := vpsID
+	logger.Info("[SSHProxy] Forwarding SSH channels to VPS %s (using VPS ID as hostname, gateway will resolve) as user %s", vpsID, targetUser)
 
 	// Use real IP from PROXY protocol if available, otherwise extract from connection
 	var clientIP string
@@ -697,7 +694,14 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 	}
 
 	// Create TCP connection to VPS via gateway
-	targetConn, err := gatewayClient.CreateTCPConnection(ctx, vpsIP, 22)
+	// Use VPS ID as target - gateway will resolve it via hosts file/dnsmasq
+	// This is much faster than looking up the IP address first
+	target := vpsIP
+	if target == "" {
+		// Fallback to VPS ID if vpsIP is empty
+		target = vpsID
+	}
+	targetConn, err := gatewayClient.CreateTCPConnection(ctx, target, 22)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
 	}
@@ -1633,106 +1637,14 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 }
 
 // getVPSIP gets the VPS IP address using multiple fallback methods.
+// OPTIMIZATION: This function now just returns the VPS ID as hostname.
+// The gateway will resolve it via its hosts file/dnsmasq, which is much faster.
+// This avoids slow lookups (gateway ListIPs, GetVPSIPAddresses, Proxmox guest agent).
 func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, error) {
-	var vps database.VPSInstance
-	vpsExists := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error == nil
-
-	if !vpsExists {
-		logger.Debug("[SSHProxy] VPS %s not found in database, using VPS ID as hostname", vpsID)
-		return vpsID, nil
-	}
-
-	var vpsIP string
-	var gatewayIP string
-
-	if s.gatewayClient != nil {
-		logger.Info("[SSHProxy] Attempting to get IP address from gateway for VPS %s", vpsID)
-		allocations, err := s.gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
-		if err == nil && len(allocations) > 0 {
-			gatewayIP = allocations[0].IpAddress
-			logger.Info("[SSHProxy] Got VPS IP from gateway: %s", gatewayIP)
-		} else if err != nil {
-			logger.Warn("[SSHProxy] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
-		} else {
-			logger.Info("[SSHProxy] Gateway returned no IP allocations for VPS %s", vpsID)
-		}
-	}
-
-	var actualVPSIP string
-	logger.Info("[SSHProxy] Attempting to get actual IP address for VPS %s", vpsID)
-	vpsManager, err := orchestrator.NewVPSManager()
-	if err == nil {
-		defer vpsManager.Close()
-		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
-		if err == nil && len(ipv4) > 0 {
-			actualVPSIP = ipv4[0]
-			logger.Info("[SSHProxy] Got actual VPS IP from VPS manager: %s", actualVPSIP)
-		} else if err != nil {
-			logger.Warn("[SSHProxy] Failed to get IP from VPS manager for VPS %s: %v", vpsID, err)
-		}
-	} else {
-		logger.Warn("[SSHProxy] Failed to create VPS manager: %v", err)
-	}
-
-	if actualVPSIP == "" {
-		logger.Info("[SSHProxy] No IP from VPS manager, trying to get internal IP from Proxmox for VPS %s", vpsID)
-		vmIDInt := 0
-		if vps.InstanceID != nil {
-			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-		}
-		if vmIDInt > 0 {
-			// Get node name from VPS (required)
-			nodeName := ""
-			if vps.NodeID != nil && *vps.NodeID != "" {
-				nodeName = *vps.NodeID
-			} else {
-				logger.Warn("[SSHProxy] VPS %s has no node ID - cannot get IP from Proxmox", vpsID)
-			}
-			if nodeName != "" {
-				// Get VPS manager to get Proxmox client for the node
-				vpsManager, err := orchestrator.NewVPSManager()
-				if err == nil {
-					defer vpsManager.Close()
-					proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
-					if err == nil {
-						ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-						if err == nil && len(ipv4) > 0 {
-							actualVPSIP = ipv4[0]
-							logger.Info("[SSHProxy] Got actual VPS IP from Proxmox: %s", actualVPSIP)
-						} else if err != nil {
-							logger.Warn("[SSHProxy] Failed to get IP from Proxmox for VM %d on node %s: %v", vmIDInt, nodeName, err)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if actualVPSIP != "" {
-		if gatewayIP != "" && gatewayIP != actualVPSIP {
-			logger.Warn("[SSHProxy] IP mismatch detected for VPS %s: gateway reports %s but VPS actually has %s", vpsID, gatewayIP, actualVPSIP)
-		}
-		vpsIP = actualVPSIP
-	} else if gatewayIP != "" {
-		logger.Info("[SSHProxy] Using gateway IP %s", gatewayIP)
-		vpsIP = gatewayIP
-	}
-
-	if vpsIP == "" {
-		logger.Warn("[SSHProxy] VPS %s has no IP address, attempting connection using hostname", vpsID)
-		if vps.InstanceID == nil {
-			return "", fmt.Errorf("VPS has no instance ID")
-		}
-		vmIDInt := 0
-		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-		if vmIDInt > 0 {
-			logger.Info("[SSHProxy] Attempting connection using hostname: %s", vpsID)
-			return vpsID, nil
-		}
-		return "", fmt.Errorf("VPS has invalid instance ID")
-	}
-
-	return vpsIP, nil
+	// OPTIMIZED: Just return VPS ID as hostname - gateway will resolve it
+	// This avoids all the slow lookups that were causing hangs
+	logger.Debug("[SSHProxy] Using VPS ID %s as hostname (gateway will resolve via hosts file)", vpsID)
+	return vpsID, nil
 }
 
 // getOrGenerateHostKey gets or generates an SSH host key

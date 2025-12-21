@@ -287,7 +287,19 @@
 
       websocket = new WebSocket(wsUrl);
 
+      // Add connection timeout to detect if upgrade is hanging
+      const connectionTimeout = setTimeout(() => {
+        if (websocket && websocket.readyState === WebSocket.CONNECTING) {
+          console.error("[VPS Terminal] WebSocket connection timeout - upgrade taking too long");
+          error.value = "Connection timeout. The WebSocket upgrade is taking too long.";
+          isLoading.value = false;
+          websocket.close();
+          websocket = null;
+        }
+      }, 10000); // 10 second timeout
+
       websocket.onopen = async () => {
+        clearTimeout(connectionTimeout);
         if (!auth.ready) {
           await new Promise((resolve) => {
             const checkReady = () => {
@@ -387,6 +399,7 @@
       };
 
       websocket.onerror = (err) => {
+        clearTimeout(connectionTimeout);
         console.error("WebSocket error:", err);
         if (!isConnected.value) {
           error.value = "Failed to connect to terminal. Please try again.";
@@ -395,6 +408,7 @@
       };
 
       websocket.onclose = () => {
+        clearTimeout(connectionTimeout);
         const wasConnected = isConnected.value;
         isConnected.value = false;
         websocket = null;
