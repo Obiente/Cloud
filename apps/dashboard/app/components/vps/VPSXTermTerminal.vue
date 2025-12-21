@@ -286,6 +286,10 @@
       wsUrlObject.protocol = wsUrlObject.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = wsUrlObject.toString();
 
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        return;
+      }
+
       websocket = new WebSocket(wsUrl);
 
       // Add connection timeout to detect if upgrade is hanging
@@ -301,9 +305,6 @@
           connectionTimeout = null;
         }
       }, 10000); // 10 second timeout
-
-      // Ping interval to keep connection alive
-      let pingInterval: ReturnType<typeof setInterval> | null = null;
 
       websocket.onopen = async () => {
         if (connectionTimeout) {
@@ -460,25 +461,11 @@
         isConnected.value = false;
         websocket = null;
 
-        // Log close event for debugging
-        console.log("[VPS Terminal] WebSocket closed", {
-          wasConnected,
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-          shouldReconnect: shouldAttemptReconnect.value,
-        });
-
-        // Only reconnect if we were actually connected and it wasn't a clean close
-        // Don't reconnect if it was a clean close (user disconnected or server shutdown)
+        // Reconnect if we were connected and it wasn't a clean close
         if (shouldAttemptReconnect.value && wasConnected && !event.wasClean) {
           isLoading.value = true;
           scheduleReconnect();
-        } else if (!shouldAttemptReconnect.value || event.wasClean) {
-          // User manually disconnected or clean shutdown - don't reconnect
-          isLoading.value = false;
         } else {
-          // Wasn't connected yet - might have been a connection failure
           isLoading.value = false;
         }
       };
@@ -506,20 +493,14 @@
       clearTimeout(reconnectTimer);
     }
 
-    // Exponential backoff with max delay of 30 seconds (increased from 10)
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
     reconnectAttempts += 1;
 
-    console.log(`[VPS Terminal] Scheduling reconnect attempt ${reconnectAttempts} in ${delay}ms`);
-
     reconnectTimer = setTimeout(async () => {
       reconnectTimer = null;
-      // Only reconnect if we should still attempt it
       if (shouldAttemptReconnect.value && !isConnected.value) {
-        console.log(`[VPS Terminal] Attempting reconnect (attempt ${reconnectAttempts})`);
         await connectTerminal();
-      } else {
-        console.log("[VPS Terminal] Skipping reconnect - shouldAttemptReconnect=false or already connected");
       }
     }, delay);
   }
@@ -534,8 +515,7 @@
       reconnectTimer = null;
     }
 
-    // Clear ping interval if it exists
-    if (typeof pingInterval !== "undefined" && pingInterval) {
+    if (pingInterval) {
       clearInterval(pingInterval);
       pingInterval = null;
     }

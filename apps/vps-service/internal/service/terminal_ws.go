@@ -148,9 +148,16 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 	log.Printf("[VPS Terminal WS] WebSocket connection accepted successfully")
 
+	// Create a background context for the WebSocket connection lifecycle
+	// This prevents premature cancellation by HTTP server timeouts or load balancers in swarm
+	// The request context may be cancelled by proxies/load balancers, but we want the WebSocket
+	// to stay alive as long as the client is connected
+	wsCtx, wsCancel := context.WithCancel(context.Background())
+	defer wsCancel()
+
 	var writeMu sync.Mutex
 	writeJSON := func(msg interface{}) error {
-		ctxWrite, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctxWrite, cancel := context.WithTimeout(wsCtx, 10*time.Second)
 		defer cancel()
 		writeMu.Lock()
 		defer writeMu.Unlock()
@@ -158,7 +165,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeBinary := func(data []byte) error {
-		ctxWrite, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctxWrite, cancel := context.WithTimeout(wsCtx, 10*time.Second)
 		defer cancel()
 		writeMu.Lock()
 		defer writeMu.Unlock()
@@ -179,9 +186,11 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 	}()
 
-	// Read the initial message
+	// Read the initial message (use request context with timeout for initial handshake)
+	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer initCancel()
 	var initMsg vpsTerminalWSMessage
-	if err := wsjson.Read(ctx, conn, &initMsg); err != nil {
+	if err := wsjson.Read(initCtx, conn, &initMsg); err != nil {
 		log.Printf("[VPS Terminal WS] Failed to read init message: %v", err)
 		sendError("Failed to read init message")
 		conn.Close(websocket.StatusProtocolError, "missing init message")
@@ -267,7 +276,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		// Keep connection open to display status message, but don't attempt terminal connection
 		for {
 			var msg vpsTerminalWSMessage
-			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+			if err := wsjson.Read(wsCtx, conn, &msg); err != nil {
 				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
 					return
 				}
@@ -339,14 +348,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	var sshConn *SSHConnection
 	if err == nil {
 		defer vpsManager.Close()
-		
+
 		// Try to get IP address with short timeout (optional optimization)
 		// If it fails, we'll use VPS ID as hostname which gateway will resolve
 		var vpsIP string
 		ipLookupCtx, ipLookupCancel := context.WithTimeout(ctx, 2*time.Second)
 		ipv4, _, ipErr := vpsManager.GetVPSIPAddresses(ipLookupCtx, initMsg.VPSID)
 		ipLookupCancel()
-		
+
 		if ipErr == nil && len(ipv4) > 0 {
 			vpsIP = ipv4[0]
 			log.Printf("[VPS Terminal WS] Got VPS IP from lookup: %s", vpsIP)
@@ -354,7 +363,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			log.Printf("[VPS Terminal WS] IP lookup failed or timed out (will use VPS ID as hostname): %v", ipErr)
 			// Will use VPS ID as target - gateway will resolve via hosts file
 		}
-		
+
 		// Attempt SSH connection (using IP if available, otherwise VPS ID)
 		if terminalKey != nil {
 			// Use web terminal SSH key
@@ -382,7 +391,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				log.Printf("[VPS Terminal WS] Failed to get root password: %v", err)
 			}
 		}
-		
+
 		// If connection failed and we used IP, try again with VPS ID as hostname
 		if sshConn == nil && vpsIP != "" {
 			log.Printf("[VPS Terminal WS] Retrying SSH connection using VPS ID as hostname (gateway will resolve)")
@@ -446,7 +455,8 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		// Create audit log for successful web terminal connection
 		go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
 
-		outputCtx, outputCancel := context.WithCancel(ctx)
+		// Use wsCtx for output forwarding to prevent cancellation by HTTP server/load balancer
+		outputCtx, outputCancel := context.WithCancel(wsCtx)
 		defer outputCancel()
 
 		// Forward SSH output to websocket (as binary for better performance)
@@ -540,7 +550,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			}
 
 			var msg vpsTerminalWSMessage
-			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+			if err := wsjson.Read(wsCtx, conn, &msg); err != nil {
 				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
 					log.Printf("[VPS Terminal WS] WebSocket closed normally")
 					return
@@ -736,15 +746,16 @@ func (s *Service) handleProxmoxTermProxy(
 	}
 
 	// Proxy messages bidirectionally using binary for better performance
+	// Use a background context for WebSocket operations to prevent cancellation by HTTP server/load balancer
 	errChan := make(chan error, 2)
-	ctx, cancel := context.WithCancel(ctx)
+	proxyCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Helper to safely send errors
 	sendError := func(err error) {
 		select {
 		case errChan <- err:
-		case <-ctx.Done():
+		case <-proxyCtx.Done():
 		default:
 			// Channel might be full or closed, ignore
 		}
@@ -769,7 +780,7 @@ func (s *Service) handleProxmoxTermProxy(
 		}
 
 		for {
-			messageType, data, err := proxmoxConn.Read(ctx)
+			messageType, data, err := proxmoxConn.Read(proxyCtx)
 			if err != nil {
 				// Check if connection was closed
 				if websocket.CloseStatus(err) != -1 {
@@ -809,7 +820,7 @@ func (s *Service) handleProxmoxTermProxy(
 		}()
 		for {
 			var msg vpsTerminalWSMessage
-			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
+			if err := wsjson.Read(proxyCtx, clientConn, &msg); err != nil {
 				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
 					sendError(nil)
 					return
@@ -827,7 +838,7 @@ func (s *Service) handleProxmoxTermProxy(
 						inputBytes[i] = byte(v)
 					}
 					// Write binary data to Proxmox termproxy WebSocket
-					if err := proxmoxConn.Write(ctx, websocket.MessageBinary, inputBytes); err != nil {
+					if err := proxmoxConn.Write(proxyCtx, websocket.MessageBinary, inputBytes); err != nil {
 						sendError(fmt.Errorf("failed to write to Proxmox termproxy: %w", err))
 						return
 					}
@@ -849,7 +860,7 @@ func (s *Service) handleProxmoxTermProxy(
 
 	// Wait for an error or context cancellation
 	select {
-	case <-ctx.Done():
+	case <-proxyCtx.Done():
 		log.Printf("[VPS Terminal WS] Context cancelled for termproxy WebSocket")
 	case err := <-errChan:
 		if err != nil {

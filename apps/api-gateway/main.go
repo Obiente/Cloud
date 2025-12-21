@@ -1330,16 +1330,16 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	responseBuf := make([]byte, 0, 4096)
 	headerEnd := []byte("\r\n\r\n")
 	headerEndFound := false
-	
+
 	// Set a read deadline to avoid hanging indefinitely
 	backendConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	defer backendConn.SetReadDeadline(time.Time{}) // Clear deadline
-	
+
 	// Read until we find the end of headers (\r\n\r\n)
 	readBuf := make([]byte, 1024)
 	readAttempts := 0
 	maxReadAttempts := 100 // Safety limit
-	
+
 	for !headerEndFound && readAttempts < maxReadAttempts {
 		readAttempts++
 		n, err := backendConn.Read(readBuf)
@@ -1366,9 +1366,9 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		if n == 0 {
 			continue
 		}
-		
+
 		responseBuf = append(responseBuf, readBuf[:n]...)
-		
+
 		// Check if we've found the end of headers
 		if len(responseBuf) >= len(headerEnd) {
 			// Search for \r\n\r\n in the buffer
@@ -1379,7 +1379,7 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 				}
 			}
 		}
-		
+
 		// Safety check: if response is getting too large, something is wrong
 		if len(responseBuf) > 8192 {
 			logger.Error("[API Gateway] WebSocket handshake response too large (>8KB), aborting")
@@ -1399,6 +1399,17 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 		return
 	}
+
+	// Clear read deadline after handshake - WebSocket connections should not have read deadlines
+	// This prevents the 10-second timeout from closing the connection
+	backendConn.SetReadDeadline(time.Time{})
+	clientConn.SetReadDeadline(time.Time{})
+
+	// Also clear write deadlines to prevent timeouts
+	backendConn.SetWriteDeadline(time.Time{})
+	clientConn.SetWriteDeadline(time.Time{})
+
+	logger.Debug("[API Gateway] WebSocket handshake complete, starting bidirectional proxy (no timeouts)")
 
 	go func() {
 		io.Copy(backendConn, clientConn)
