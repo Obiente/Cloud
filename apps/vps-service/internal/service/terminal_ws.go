@@ -146,6 +146,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		log.Printf("[VPS Terminal WS] Failed to accept websocket connection: %v", err)
 		return
 	}
+	log.Printf("[VPS Terminal WS] WebSocket connection accepted successfully")
 
 	var writeMu sync.Mutex
 	writeJSON := func(msg interface{}) error {
@@ -304,56 +305,22 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 	defer vpsManager.Close()
 
-	// Get node name from VPS or discover it
-	nodeName := ""
-	if vps.NodeID != nil && *vps.NodeID != "" {
-		nodeName = *vps.NodeID
-	} else {
-		// NodeID is missing - need to discover it
-		// Get first node from mapping to use for discovery
-		discoveryNode, err := orchestrator.GetFirstProxmoxNodeName()
-		if err != nil {
-			sendError(fmt.Sprintf("VPS has no NodeID and cannot discover node: %v", err))
-			conn.Close(websocket.StatusInternalError, "Node discovery failed")
-			return
-		}
-		// Get Proxmox client for discovery
-		discoveryClient, err := vpsManager.GetProxmoxClientForNode(discoveryNode)
-		if err != nil {
-			sendError(fmt.Sprintf("Failed to get Proxmox client for discovery: %v", err))
-			conn.Close(websocket.StatusInternalError, "Proxmox client error")
-			return
-		}
-		// Discover the node where the VM is running
-		nodeName, err = discoveryClient.FindVMNode(ctx, vmIDInt)
-		if err != nil {
-			// Check if VM was deleted from Proxmox directly
-			if strings.Contains(err.Error(), "not found on any node") {
-				log.Printf("[VPS Terminal WS] VM %d not found in Proxmox - syncing status to DELETED", vmIDInt)
-				// Sync status will mark VPS as DELETED if VM doesn't exist
-				if syncErr := vpsManager.SyncVPSStatusFromProxmox(ctx, initMsg.VPSID); syncErr != nil {
-					log.Printf("[VPS Terminal WS] Failed to sync VPS status: %v", syncErr)
-				}
-			}
-			sendError(fmt.Sprintf("Failed to find Proxmox node for VM: %v", err))
-			conn.Close(websocket.StatusInternalError, "VM node not found")
-			return
-		}
-	}
-
-	// Get Proxmox client for the node where VPS is running
-	proxmoxClient, err := vpsManager.GetProxmoxClientForNode(nodeName)
-	if err != nil {
-		sendError(fmt.Sprintf("Failed to get Proxmox client for node %s: %v", nodeName, err))
-		conn.Close(websocket.StatusInternalError, "Proxmox client error")
+	// Verify VPS has a node ID (needed for gateway client)
+	// We don't need to discover it since we use VPS ID as hostname and gateway resolves it
+	if vps.NodeID == nil || *vps.NodeID == "" {
+		sendError("VPS has no NodeID assigned. Please ensure the VPS is properly configured.")
+		conn.Close(websocket.StatusInternalError, "VPS has no node ID")
 		return
 	}
 
 	// Use SSH for terminal access (xterm.js requires text-based terminal, not VNC)
+	// Note: We no longer need Proxmox client for IP lookup since we use VPS ID as hostname
+	// The gateway resolves VPS ID via its hosts file/dnsmasq
 	// SSH uses the web terminal SSH key (generated per VPS)
 	log.Printf("[VPS Terminal WS] Using SSH for terminal access (xterm.js compatible)")
 
 	// Get web terminal SSH key for this VPS
+	log.Printf("[VPS Terminal WS] Getting terminal SSH key for VPS %s", initMsg.VPSID)
 	terminalKey, err := database.GetVPSTerminalKey(initMsg.VPSID)
 	terminalKeyMissing := false
 	noIPFound := false
@@ -362,94 +329,96 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		// Fall back to password if key not found (for backwards compatibility)
 		terminalKey = nil
 		terminalKeyMissing = true
+	} else {
+		log.Printf("[VPS Terminal WS] Successfully retrieved terminal SSH key")
 	}
 
 	// Try SSH with web terminal key or password fallback
+	// OPTIMIZATION: We can skip IP lookup entirely and use VPS ID as hostname
+	// The gateway will resolve it via its hosts file/dnsmasq, which is much faster
 	var sshConn *SSHConnection
 	if err == nil {
 		defer vpsManager.Close()
-		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, initMsg.VPSID)
-		if err == nil && len(ipv4) > 0 {
-			vpsIP := ipv4[0]
-			if terminalKey != nil {
-				// Use web terminal SSH key
-				sshConn, err = s.connectSSHWithKey(ctx, initMsg.VPSID, vpsIP, terminalKey.PrivateKey, cols, rows)
-				if err != nil {
-					log.Printf("[VPS Terminal WS] SSH connection with terminal key failed: %v", err)
-				}
+		
+		// Try to get IP address with short timeout (optional optimization)
+		// If it fails, we'll use VPS ID as hostname which gateway will resolve
+		var vpsIP string
+		ipLookupCtx, ipLookupCancel := context.WithTimeout(ctx, 2*time.Second)
+		ipv4, _, ipErr := vpsManager.GetVPSIPAddresses(ipLookupCtx, initMsg.VPSID)
+		ipLookupCancel()
+		
+		if ipErr == nil && len(ipv4) > 0 {
+			vpsIP = ipv4[0]
+			log.Printf("[VPS Terminal WS] Got VPS IP from lookup: %s", vpsIP)
+		} else {
+			log.Printf("[VPS Terminal WS] IP lookup failed or timed out (will use VPS ID as hostname): %v", ipErr)
+			// Will use VPS ID as target - gateway will resolve via hosts file
+		}
+		
+		// Attempt SSH connection (using IP if available, otherwise VPS ID)
+		if terminalKey != nil {
+			// Use web terminal SSH key
+			log.Printf("[VPS Terminal WS] Connecting via SSH with terminal key (target: %s)", vpsIP)
+			sshConn, err = s.connectSSHWithKey(ctx, initMsg.VPSID, vpsIP, terminalKey.PrivateKey, cols, rows)
+			_ = err // err checked below
+			if err != nil {
+				log.Printf("[VPS Terminal WS] SSH connection with terminal key failed: %v", err)
 			} else {
-				// Fall back to password authentication
-				rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
-				if err == nil && rootPassword != "" {
-					sshConn, err = s.connectSSH(ctx, initMsg.VPSID, vpsIP, rootPassword, cols, rows)
-					if err != nil {
-						log.Printf("[VPS Terminal WS] SSH connection with password failed: %v", err)
-					}
-				}
+				log.Printf("[VPS Terminal WS] SSH connection with terminal key succeeded")
 			}
 		} else {
-			// No public IP from database, try multiple fallbacks
-			var vpsIP string
-
-			// Fallback 1: Try gateway for allocated IP (most reliable if guest agent isn't working)
-			if vps.NodeID != nil && *vps.NodeID != "" {
-				gatewayClient, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
-				if err == nil {
-					log.Printf("[VPS Terminal WS] No public IP found, attempting to get IP from gateway on node %s", *vps.NodeID)
-					allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, initMsg.VPSID)
-					if err == nil && len(allocations) > 0 {
-						vpsIP = allocations[0].IpAddress
-						log.Printf("[VPS Terminal WS] Found IP %s from gateway allocation", vpsIP)
-					} else if err != nil {
-						log.Printf("[VPS Terminal WS] Failed to get IP from gateway: %v", err)
-					}
+			// Fall back to password authentication
+			log.Printf("[VPS Terminal WS] Getting root password for SSH fallback")
+			rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+			if err == nil && rootPassword != "" {
+				log.Printf("[VPS Terminal WS] Connecting via SSH with password (target: %s)", vpsIP)
+				sshConn, err = s.connectSSH(ctx, initMsg.VPSID, vpsIP, rootPassword, cols, rows)
+				if err != nil {
+					log.Printf("[VPS Terminal WS] SSH connection with password failed: %v", err)
 				} else {
-					log.Printf("[VPS Terminal WS] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+					log.Printf("[VPS Terminal WS] SSH connection with password succeeded")
 				}
 			} else {
-				log.Printf("[VPS Terminal WS] VPS has no node name, cannot get gateway client")
+				log.Printf("[VPS Terminal WS] Failed to get root password: %v", err)
 			}
-
-			// Fallback 2: Try Proxmox guest agent (requires qemu-guest-agent to be installed)
-			if vpsIP == "" {
-				log.Printf("[VPS Terminal WS] Attempting to get IP from Proxmox guest agent")
-				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-				if err == nil && len(ipv4) > 0 {
-					vpsIP = ipv4[0]
-					log.Printf("[VPS Terminal WS] Found IP %s from Proxmox guest agent", vpsIP)
-				} else if err != nil {
-					log.Printf("[VPS Terminal WS] Failed to get IP from Proxmox guest agent: %v", err)
-				}
-			}
-
-			// Connect if we have an IP
-			if vpsIP != "" {
-				if terminalKey != nil {
-					// Use web terminal SSH key
-					sshConn, err = s.connectSSHWithKey(ctx, initMsg.VPSID, vpsIP, terminalKey.PrivateKey, cols, rows)
-					if err != nil {
-						log.Printf("[VPS Terminal WS] SSH connection with terminal key failed: %v", err)
-						sshConn = nil
-					}
-				} else {
-					// Fall back to password authentication
-					rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
-					if err == nil && rootPassword != "" {
-						sshConn, err = s.connectSSH(ctx, initMsg.VPSID, vpsIP, rootPassword, cols, rows)
-						if err != nil {
-							log.Printf("[VPS Terminal WS] SSH connection with password failed: %v", err)
-							sshConn = nil
-						}
-					}
-				}
+		}
+		
+		// If connection failed and we used IP, try again with VPS ID as hostname
+		if sshConn == nil && vpsIP != "" {
+			log.Printf("[VPS Terminal WS] Retrying SSH connection using VPS ID as hostname (gateway will resolve)")
+			if terminalKey != nil {
+				sshConn, err = s.connectSSHWithKey(ctx, initMsg.VPSID, "", terminalKey.PrivateKey, cols, rows)
 			} else {
-				log.Printf("[VPS Terminal WS] Could not find IP address from any source")
-				noIPFound = true
+				rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+				if err == nil && rootPassword != "" {
+					sshConn, err = s.connectSSH(ctx, initMsg.VPSID, "", rootPassword, cols, rows)
+				}
 			}
+			if err == nil && sshConn != nil {
+				log.Printf("[VPS Terminal WS] SSH connection succeeded using VPS ID as hostname")
+			}
+		}
+	} else {
+		// Terminal key retrieval failed - try password authentication
+		log.Printf("[VPS Terminal WS] Terminal key retrieval failed, trying password authentication")
+		rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+		if err == nil && rootPassword != "" {
+			// Use VPS ID as hostname - gateway will resolve it
+			log.Printf("[VPS Terminal WS] Connecting via SSH with password using VPS ID as hostname")
+			sshConn, err = s.connectSSH(ctx, initMsg.VPSID, "", rootPassword, cols, rows)
+			if err != nil {
+				log.Printf("[VPS Terminal WS] SSH connection with password failed: %v", err)
+				sshConn = nil
+			} else {
+				log.Printf("[VPS Terminal WS] SSH connection with password succeeded (using VPS ID)")
+			}
+		} else {
+			log.Printf("[VPS Terminal WS] Failed to get root password: %v", err)
 		}
 	}
 
 	// If SSH connection succeeded, use it
+	log.Printf("[VPS Terminal WS] SSH connection check: sshConn=%v", sshConn != nil)
 	if sshConn != nil {
 		if terminalKey != nil {
 			log.Printf("[VPS Terminal WS] Using SSH connection with web terminal key")
@@ -472,6 +441,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
 			return
 		}
+		log.Printf("[VPS Terminal WS] Sent 'connected' message to client, SSH connection ready")
 
 		// Create audit log for successful web terminal connection
 		go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
@@ -487,15 +457,19 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		go func() {
 			defer outputWg.Done()
 			buf := make([]byte, 4096)
+			totalBytes := 0
 			for {
 				select {
 				case <-outputCtx.Done():
+					log.Printf("[VPS Terminal WS] stdout forwarding goroutine exiting (total bytes forwarded: %d)", totalBytes)
 					return
 				default:
 				}
 
 				n, err := sshConn.stdout.Read(buf)
 				if n > 0 {
+					totalBytes += n
+					log.Printf("[VPS Terminal WS] Forwarding %d bytes from SSH stdout (total: %d)", n, totalBytes)
 					// Send as binary for better performance with xterm
 					if err := writeBinary(buf[:n]); err != nil {
 						log.Printf("[VPS Terminal WS] Failed to forward output: %v", err)
@@ -521,15 +495,19 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		go func() {
 			defer outputWg.Done()
 			buf := make([]byte, 4096)
+			totalBytes := 0
 			for {
 				select {
 				case <-outputCtx.Done():
+					log.Printf("[VPS Terminal WS] stderr forwarding goroutine exiting (total bytes forwarded: %d)", totalBytes)
 					return
 				default:
 				}
 
 				n, err := sshConn.stderr.Read(buf)
 				if n > 0 {
+					totalBytes += n
+					log.Printf("[VPS Terminal WS] Forwarding %d bytes from SSH stderr (total: %d)", n, totalBytes)
 					if err := writeBinary(buf[:n]); err != nil {
 						log.Printf("[VPS Terminal WS] Failed to forward stderr: %v", err)
 						return
@@ -546,9 +524,11 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}()
 
 		// Handle input and resize
+		log.Printf("[VPS Terminal WS] Starting input handler loop")
 		for {
 			select {
 			case <-outputCtx.Done():
+				log.Printf("[VPS Terminal WS] Input handler loop exiting (context cancelled)")
 				return
 			default:
 			}
@@ -556,11 +536,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			var msg vpsTerminalWSMessage
 			if err := wsjson.Read(ctx, conn, &msg); err != nil {
 				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
+					log.Printf("[VPS Terminal WS] WebSocket closed normally")
 					return
 				}
 				log.Printf("[VPS Terminal WS] Read error: %v", err)
 				return
 			}
+
+			log.Printf("[VPS Terminal WS] Received message type: %s", msg.Type)
 
 			switch strings.ToLower(msg.Type) {
 			case "input":
@@ -572,6 +555,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				for i, v := range msg.Input {
 					inputBytes[i] = byte(v)
 				}
+				log.Printf("[VPS Terminal WS] Writing %d bytes to SSH stdin", len(inputBytes))
 				if _, err := sshConn.stdin.Write(inputBytes); err != nil {
 					log.Printf("[VPS Terminal WS] Failed to write input: %v", err)
 					return
@@ -961,11 +945,18 @@ func setupSSHSession(client *ssh.Client, cols, rows int) (*ssh.Session, io.Write
 		return nil, nil, nil, nil, fmt.Errorf("failed to start shell: %w", err)
 	}
 
+	log.Printf("[VPS Terminal WS] SSH shell started successfully (PTY: %dx%d)", cols, rows)
+
+	// Give the shell a moment to initialize and potentially send a prompt
+	// Some shells need a moment before they start producing output
+	time.Sleep(100 * time.Millisecond)
+
 	return session, stdin, stdout, stderr, nil
 }
 
 // connectSSHWithKey establishes an SSH connection to the VPS using a private key
 // Always uses gateway for connection
+// vpsIP can be either an IP address or VPS ID (hostname) - gateway will resolve VPS ID via hosts file
 func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKeyPEM string, cols, rows int) (*SSHConnection, error) {
 	// Parse private key
 	signer, err := ssh.ParsePrivateKey([]byte(privateKeyPEM))
@@ -982,8 +973,16 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 		},
 	}
 
+	// Use VPS ID as target - gateway will resolve it via hosts file/dnsmasq
+	// This avoids needing to look up the IP address first
+	target := vpsID
+	if vpsIP != "" {
+		// If IP is provided, use it (for backwards compatibility or when IP lookup succeeds quickly)
+		target = vpsIP
+	}
+
 	// Create SSH client via gateway
-	client, err := s.createSSHClientViaGateway(ctx, vpsID, vpsIP, sshConfig)
+	client, err := s.createSSHClientViaGateway(ctx, vpsID, target, sshConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1006,6 +1005,7 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 
 // connectSSH establishes an SSH connection to the VPS using password authentication
 // Always uses gateway for connection
+// vpsIP can be either an IP address or VPS ID (hostname) - gateway will resolve VPS ID via hosts file
 func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword string, cols, rows int) (*SSHConnection, error) {
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
@@ -1016,8 +1016,16 @@ func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword str
 		},
 	}
 
+	// Use VPS ID as target - gateway will resolve it via hosts file/dnsmasq
+	// This avoids needing to look up the IP address first
+	target := vpsID
+	if vpsIP != "" {
+		// If IP is provided, use it (for backwards compatibility or when IP lookup succeeds quickly)
+		target = vpsIP
+	}
+
 	// Create SSH client via gateway
-	client, err := s.createSSHClientViaGateway(ctx, vpsID, vpsIP, sshConfig)
+	client, err := s.createSSHClientViaGateway(ctx, vpsID, target, sshConfig)
 	if err != nil {
 		return nil, err
 	}

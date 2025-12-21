@@ -1325,19 +1325,79 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	}
 
 	// Forward WebSocket handshake response to client
-	buf := make([]byte, 4096)
-	n, err := backendConn.Read(buf)
-	if err != nil && err != io.EOF {
-		logger.Error("[API Gateway] Failed to read WebSocket handshake response: %v", err)
-		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
-		return
+	// Read the complete HTTP response headers (until \r\n\r\n)
+	// WebSocket upgrade responses are typically small (<1KB), but we read until we find the header end
+	responseBuf := make([]byte, 0, 4096)
+	headerEnd := []byte("\r\n\r\n")
+	headerEndFound := false
+	
+	// Set a read deadline to avoid hanging indefinitely
+	backendConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	defer backendConn.SetReadDeadline(time.Time{}) // Clear deadline
+	
+	// Read until we find the end of headers (\r\n\r\n)
+	readBuf := make([]byte, 1024)
+	readAttempts := 0
+	maxReadAttempts := 100 // Safety limit
+	
+	for !headerEndFound && readAttempts < maxReadAttempts {
+		readAttempts++
+		n, err := backendConn.Read(readBuf)
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				logger.Error("[API Gateway] Timeout reading WebSocket handshake response from backend")
+				clientConn.Write([]byte("HTTP/1.1 504 Gateway Timeout\r\n\r\n"))
+				return
+			}
+			if err == io.EOF {
+				// EOF before finding header end - might be incomplete response
+				if len(responseBuf) > 0 {
+					logger.Warn("[API Gateway] EOF while reading WebSocket handshake response (read %d bytes)", len(responseBuf))
+					break
+				}
+				logger.Error("[API Gateway] EOF before reading any WebSocket handshake response")
+				clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+				return
+			}
+			logger.Error("[API Gateway] Failed to read WebSocket handshake response: %v", err)
+			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+			return
+		}
+		if n == 0 {
+			continue
+		}
+		
+		responseBuf = append(responseBuf, readBuf[:n]...)
+		
+		// Check if we've found the end of headers
+		if len(responseBuf) >= len(headerEnd) {
+			// Search for \r\n\r\n in the buffer
+			for i := 0; i <= len(responseBuf)-len(headerEnd); i++ {
+				if string(responseBuf[i:i+len(headerEnd)]) == string(headerEnd) {
+					headerEndFound = true
+					break
+				}
+			}
+		}
+		
+		// Safety check: if response is getting too large, something is wrong
+		if len(responseBuf) > 8192 {
+			logger.Error("[API Gateway] WebSocket handshake response too large (>8KB), aborting")
+			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+			return
+		}
 	}
 
-	if n > 0 {
-		if _, err := clientConn.Write(buf[:n]); err != nil {
+	if len(responseBuf) > 0 {
+		if _, err := clientConn.Write(responseBuf); err != nil {
 			logger.Error("[API Gateway] Failed to forward WebSocket handshake response: %v", err)
 			return
 		}
+		logger.Debug("[API Gateway] Forwarded WebSocket handshake response (%d bytes, headerEndFound=%v)", len(responseBuf), headerEndFound)
+	} else {
+		logger.Warn("[API Gateway] No WebSocket handshake response received from backend")
+		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+		return
 	}
 
 	go func() {
