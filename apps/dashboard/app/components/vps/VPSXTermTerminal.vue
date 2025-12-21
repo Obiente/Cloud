@@ -87,6 +87,7 @@
   let reconnectAttempts = 0;
   let Terminal: any = null;
   let FitAddon: any = null;
+  let pingInterval: ReturnType<typeof setInterval> | null = null;
 
   const showSpinner = computed(() => isLoading.value && !isConnected.value);
   const shouldAttemptReconnect = ref(true);
@@ -288,18 +289,27 @@
       websocket = new WebSocket(wsUrl);
 
       // Add connection timeout to detect if upgrade is hanging
-      const connectionTimeout = setTimeout(() => {
+      // Only fire if still connecting after timeout
+      let connectionTimeout: ReturnType<typeof setTimeout> | null = null;
+      connectionTimeout = setTimeout(() => {
         if (websocket && websocket.readyState === WebSocket.CONNECTING) {
           console.error("[VPS Terminal] WebSocket connection timeout - upgrade taking too long");
           error.value = "Connection timeout. The WebSocket upgrade is taking too long.";
           isLoading.value = false;
           websocket.close();
           websocket = null;
+          connectionTimeout = null;
         }
       }, 10000); // 10 second timeout
 
+      // Ping interval to keep connection alive
+      let pingInterval: ReturnType<typeof setInterval> | null = null;
+
       websocket.onopen = async () => {
-        clearTimeout(connectionTimeout);
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          connectionTimeout = null;
+        }
         if (!auth.ready) {
           await new Promise((resolve) => {
             const checkReady = () => {
@@ -369,6 +379,29 @@
             reconnectAttempts = 0;
             shouldAttemptReconnect.value = true;
             terminal?.focus();
+            
+            // Start ping interval to keep connection alive (every 30 seconds)
+            if (pingInterval) {
+              clearInterval(pingInterval);
+            }
+            pingInterval = setInterval(() => {
+              if (websocket && websocket.readyState === WebSocket.OPEN) {
+                try {
+                  websocket.send(JSON.stringify({ type: "ping" }));
+                } catch (err) {
+                  console.error("[VPS Terminal] Failed to send ping:", err);
+                  if (pingInterval) {
+                    clearInterval(pingInterval);
+                    pingInterval = null;
+                  }
+                }
+              } else {
+                if (pingInterval) {
+                  clearInterval(pingInterval);
+                  pingInterval = null;
+                }
+              }
+            }, 30000); // Ping every 30 seconds
           } else if (message.type === "output" && terminal) {
             // Fallback: handle JSON output format (for guest agent)
             if (
@@ -399,7 +432,14 @@
       };
 
       websocket.onerror = (err) => {
-        clearTimeout(connectionTimeout);
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          connectionTimeout = null;
+        }
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
         console.error("WebSocket error:", err);
         if (!isConnected.value) {
           error.value = "Failed to connect to terminal. Please try again.";
@@ -407,19 +447,38 @@
         }
       };
 
-      websocket.onclose = () => {
-        clearTimeout(connectionTimeout);
+      websocket.onclose = (event) => {
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          connectionTimeout = null;
+        }
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
         const wasConnected = isConnected.value;
         isConnected.value = false;
         websocket = null;
 
-        if (shouldAttemptReconnect.value) {
-          if (wasConnected) {
-            isLoading.value = true;
-          }
-          // Keep isLoading true if we're going to reconnect (it should already be true)
+        // Log close event for debugging
+        console.log("[VPS Terminal] WebSocket closed", {
+          wasConnected,
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          shouldReconnect: shouldAttemptReconnect.value,
+        });
+
+        // Only reconnect if we were actually connected and it wasn't a clean close
+        // Don't reconnect if it was a clean close (user disconnected or server shutdown)
+        if (shouldAttemptReconnect.value && wasConnected && !event.wasClean) {
+          isLoading.value = true;
           scheduleReconnect();
+        } else if (!shouldAttemptReconnect.value || event.wasClean) {
+          // User manually disconnected or clean shutdown - don't reconnect
+          isLoading.value = false;
         } else {
+          // Wasn't connected yet - might have been a connection failure
           isLoading.value = false;
         }
       };
@@ -447,12 +506,21 @@
       clearTimeout(reconnectTimer);
     }
 
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+    // Exponential backoff with max delay of 30 seconds (increased from 10)
+    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
     reconnectAttempts += 1;
+
+    console.log(`[VPS Terminal] Scheduling reconnect attempt ${reconnectAttempts} in ${delay}ms`);
 
     reconnectTimer = setTimeout(async () => {
       reconnectTimer = null;
-      await connectTerminal();
+      // Only reconnect if we should still attempt it
+      if (shouldAttemptReconnect.value && !isConnected.value) {
+        console.log(`[VPS Terminal] Attempting reconnect (attempt ${reconnectAttempts})`);
+        await connectTerminal();
+      } else {
+        console.log("[VPS Terminal] Skipping reconnect - shouldAttemptReconnect=false or already connected");
+      }
     }, delay);
   }
 
@@ -464,6 +532,12 @@
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+
+    // Clear ping interval if it exists
+    if (typeof pingInterval !== "undefined" && pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
     }
 
     if (websocket) {

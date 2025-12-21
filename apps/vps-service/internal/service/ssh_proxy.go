@@ -449,28 +449,10 @@ func (c *proxyProtocolConn) Read(b []byte) (n int, err error) {
 func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Conn, realIP string) {
 	logger.Info("[SSHProxy] Handling connection from %s", clientConn.RemoteAddr())
 
-	if s.gatewayClient == nil {
-		logger.Error("[SSHProxy] Gateway not available, cannot proxy SSH connection")
-		
-		// Display error message to user
-		errorMsg := createErrorBox("Gateway Unavailable", []string{
-			"The VPS gateway is currently unavailable.",
-			"",
-			"This usually means:",
-			"• The gateway service is starting up",
-			"• Network connectivity issues between services",
-			"• Gateway service is temporarily down",
-			"",
-			"Please try again in a few moments.",
-			"",
-			"If this problem persists, please contact support.",
-		})
-		
-		// Write error message directly to connection
-		clientConn.Write([]byte(errorMsg))
-		clientConn.Close()
-		return
-	}
+	// Note: We don't check for global gateway client here anymore
+	// Gateway clients are obtained per-node via VPSManager.GetGatewayClientForNode()
+	// The global gateway client is only used as a fallback for VPSes without a node ID
+	// (which shouldn't happen in production after migration)
 
 	username, serverConn, chans, reqs, authInfo, err := s.extractVPSIDAndEstablishConnection(ctx, clientConn)
 	if err != nil {
@@ -701,9 +683,43 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 		// Fallback to VPS ID if vpsIP is empty
 		target = vpsID
 	}
+	logger.Info("[SSHProxy] Creating TCP connection to VPS %s via gateway (target: %s, port: 22)", vpsID, target)
 	targetConn, err := gatewayClient.CreateTCPConnection(ctx, target, 22)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
+		logger.Error("[SSHProxy] Failed to create TCP connection via gateway for VPS %s (target: %s): %v", vpsID, target, err)
+		// If using VPS ID as hostname failed, try to get IP as fallback
+		if target == vpsID {
+			logger.Info("[SSHProxy] VPS ID resolution failed, attempting IP lookup as fallback for VPS %s", vpsID)
+			// Try to get IP with short timeout
+			ipCtx, ipCancel := context.WithTimeout(ctx, 3*time.Second)
+			vpsManager, ipErr := orchestrator.NewVPSManager()
+			if ipErr == nil {
+				defer vpsManager.Close()
+				ipv4, _, ipLookupErr := vpsManager.GetVPSIPAddresses(ipCtx, vpsID)
+				ipCancel()
+				if ipLookupErr == nil && len(ipv4) > 0 {
+					ipTarget := ipv4[0]
+					logger.Info("[SSHProxy] Got IP %s for VPS %s, retrying connection with IP", ipTarget, vpsID)
+					targetConn, err = gatewayClient.CreateTCPConnection(ctx, ipTarget, 22)
+					if err != nil {
+						logger.Error("[SSHProxy] Failed to create TCP connection via gateway with IP %s for VPS %s: %v", ipTarget, vpsID, err)
+						return nil, fmt.Errorf("failed to create TCP connection via gateway (tried VPS ID and IP %s): %w", ipTarget, err)
+					}
+					logger.Info("[SSHProxy] Successfully created TCP connection using IP %s for VPS %s", ipTarget, vpsID)
+				} else {
+					logger.Warn("[SSHProxy] IP lookup failed for VPS %s: %v", vpsID, ipLookupErr)
+					return nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed and IP lookup failed): %w", err)
+				}
+			} else {
+				ipCancel()
+				logger.Warn("[SSHProxy] Failed to create VPS manager for IP lookup: %v", ipErr)
+				return nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed): %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
+		}
+	} else {
+		logger.Info("[SSHProxy] Successfully created TCP connection to VPS %s via gateway (target: %s)", vpsID, target)
 	}
 
 	var authMethods []ssh.AuthMethod
@@ -804,10 +820,13 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 		Auth:            authMethods,
 	}
 
-	logger.Debug("[SSHProxy] Attempting to connect to VPS %s as user %s (using bastion key)", vpsIP, targetUser)
+	// Use the target (VPS ID or IP) as the hostname for SSH connection
+	// The hostname is used for host key verification, but we're using InsecureIgnoreHostKey()
+	sshHostname := target
+	logger.Debug("[SSHProxy] Attempting to connect to VPS %s as user %s (using bastion key, hostname: %s)", vpsID, targetUser, sshHostname)
 	logger.Debug("[SSHProxy] Using bastion key fingerprint: %s", bastionKey.Fingerprint)
 
-	clientConn, chans, reqs, err := ssh.NewClientConn(targetConn, vpsIP, sshConfig)
+	clientConn, chans, reqs, err := ssh.NewClientConn(targetConn, sshHostname, sshConfig)
 	if err != nil {
 		targetConn.Close()
 		logger.Warn("[SSHProxy] Failed to connect to VPS %s with bastion key: %v", vpsID, err)

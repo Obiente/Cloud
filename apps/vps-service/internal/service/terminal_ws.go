@@ -469,7 +469,10 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				n, err := sshConn.stdout.Read(buf)
 				if n > 0 {
 					totalBytes += n
-					log.Printf("[VPS Terminal WS] Forwarding %d bytes from SSH stdout (total: %d)", n, totalBytes)
+					// Only log every 100KB to reduce log spam
+					if totalBytes%100000 < n {
+						log.Printf("[VPS Terminal WS] Forwarded %d total bytes from SSH stdout", totalBytes)
+					}
 					// Send as binary for better performance with xterm
 					if err := writeBinary(buf[:n]); err != nil {
 						log.Printf("[VPS Terminal WS] Failed to forward output: %v", err)
@@ -507,7 +510,10 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				n, err := sshConn.stderr.Read(buf)
 				if n > 0 {
 					totalBytes += n
-					log.Printf("[VPS Terminal WS] Forwarding %d bytes from SSH stderr (total: %d)", n, totalBytes)
+					// Only log every 100KB to reduce log spam
+					if totalBytes%100000 < n {
+						log.Printf("[VPS Terminal WS] Forwarded %d total bytes from SSH stderr", totalBytes)
+					}
 					if err := writeBinary(buf[:n]); err != nil {
 						log.Printf("[VPS Terminal WS] Failed to forward stderr: %v", err)
 						return
@@ -543,7 +549,10 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				return
 			}
 
-			log.Printf("[VPS Terminal WS] Received message type: %s", msg.Type)
+			// Only log non-input messages to reduce spam
+			if msg.Type != "input" {
+				log.Printf("[VPS Terminal WS] Received message type: %s", msg.Type)
+			}
 
 			switch strings.ToLower(msg.Type) {
 			case "input":
@@ -555,7 +564,6 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				for i, v := range msg.Input {
 					inputBytes[i] = byte(v)
 				}
-				log.Printf("[VPS Terminal WS] Writing %d bytes to SSH stdin", len(inputBytes))
 				if _, err := sshConn.stdin.Write(inputBytes); err != nil {
 					log.Printf("[VPS Terminal WS] Failed to write input: %v", err)
 					return
