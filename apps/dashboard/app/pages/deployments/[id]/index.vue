@@ -112,12 +112,14 @@
                       </OuiBadge>
 
                       <OuiBadge
-                        v-if="
-                          containerStats.runningCount > 0 &&
-                          containerStats.runningCount <
-                            containerStats.totalCount
+                        v-if="containerStats.totalCount > 0"
+                        :variant="
+                          containerStats.runningCount === containerStats.totalCount
+                            ? 'success'
+                            : containerStats.runningCount > 0
+                            ? 'warning'
+                            : 'secondary' 
                         "
-                        variant="warning"
                         size="xs"
                         class="md:size-sm"
                       >
@@ -125,7 +127,13 @@
                           {{ containerStats.runningCount }}/{{
                             containerStats.totalCount
                           }}
-                          running
+                          {{
+                            containerStats.runningCount === containerStats.totalCount
+                              ? 'running'
+                              : containerStats.runningCount > 0
+                              ? 'running'
+                              : 'stopped'
+                          }}
                         </OuiText>
                       </OuiBadge>
                     </OuiFlex>

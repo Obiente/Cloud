@@ -97,11 +97,18 @@
                         }}
                       </OuiText>
                       <OuiText
-                        v-if="service.runningCount > 0"
+                        v-if="service.containerCount > 0"
                         size="xs"
                         color="secondary"
                       >
-                        {{ service.runningCount }} running
+                        {{ service.runningCount }}/{{ service.containerCount }}
+                        {{
+                          service.runningCount === service.containerCount
+                            ? 'running'
+                            : service.runningCount > 0
+                            ? 'running'
+                            : 'stopped'
+                        }}
                       </OuiText>
                     </OuiFlex>
                   </OuiStack>

@@ -32,7 +32,14 @@
           :variant="containerStatusVariant"
           size="sm"
         >
-          {{ deployment?.containersRunning ?? 0 }}/{{ deployment?.containersTotal }} running
+          {{ deployment?.containersRunning ?? 0 }}/{{ deployment?.containersTotal }}
+          {{
+            (deployment?.containersRunning ?? 0) === deployment?.containersTotal
+              ? 'running'
+              : (deployment?.containersRunning ?? 0) > 0
+              ? 'running'
+              : 'stopped'
+          }}
         </OuiBadge>
         <OuiBadge
           v-if="!loading"
@@ -623,9 +630,7 @@
     if (!props.deployment || props.loading) return false;
     return (
       props.deployment.containersTotal &&
-      props.deployment.containersTotal > 0 &&
-      (props.deployment.containersRunning ?? 0) > 0 &&
-      (props.deployment.containersRunning ?? 0) < props.deployment.containersTotal
+      props.deployment.containersTotal > 0
     );
   });
 
