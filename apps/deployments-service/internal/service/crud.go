@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 
@@ -415,6 +416,31 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if req.Msg.Environment != nil {
 		environment := int32(req.Msg.GetEnvironment())
 		dbDeployment.Environment = environment
+	}
+
+	// Per-deployment resource limits (overrides)
+	// Stored in DB as cpu_shares + memory_bytes for Docker.
+	// Clearing semantics: if client sends 0, clear the override (set NULL) to fall back to defaults.
+	if req.Msg.CpuLimit != nil {
+		cpuLimit := req.Msg.GetCpuLimit()
+		if cpuLimit <= 0 {
+			dbDeployment.CPUShares = nil
+		} else {
+			shares := int64(math.Round(cpuLimit * 1024.0))
+			if shares < 1 {
+				shares = 1
+			}
+			dbDeployment.CPUShares = &shares
+		}
+	}
+	if req.Msg.MemoryLimit != nil {
+		memMB := req.Msg.GetMemoryLimit()
+		if memMB <= 0 {
+			dbDeployment.MemoryBytes = nil
+		} else {
+			bytes := memMB * 1024 * 1024
+			dbDeployment.MemoryBytes = &bytes
+		}
 	}
 	// Handle groups (repeated string -> JSON array)
 	if len(req.Msg.GetGroups()) > 0 {

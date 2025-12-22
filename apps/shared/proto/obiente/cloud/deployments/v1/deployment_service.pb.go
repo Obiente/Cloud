@@ -732,6 +732,8 @@ type UpdateDeploymentRequest struct {
 	BuildStrategy       *BuildStrategy         `protobuf:"varint,11,opt,name=build_strategy,json=buildStrategy,proto3,enum=obiente.cloud.deployments.v1.BuildStrategy,oneof" json:"build_strategy,omitempty"` // build strategy enum
 	Environment         *Environment           `protobuf:"varint,15,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment,oneof" json:"environment,omitempty"`                            // Environment (production/staging/development)
 	Groups              []string               `protobuf:"bytes,16,rep,name=groups,proto3" json:"groups,omitempty"`                                                                                           // Optional groups/labels for organizing deployments
+	CpuLimit            *float64               `protobuf:"fixed64,22,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`                                                               // CPU limit in cores
+	MemoryLimit         *int64                 `protobuf:"varint,23,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"`                                                       // Memory limit in MB
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -911,6 +913,20 @@ func (x *UpdateDeploymentRequest) GetGroups() []string {
 		return x.Groups
 	}
 	return nil
+}
+
+func (x *UpdateDeploymentRequest) GetCpuLimit() float64 {
+	if x != nil && x.CpuLimit != nil {
+		return *x.CpuLimit
+	}
+	return 0
+}
+
+func (x *UpdateDeploymentRequest) GetMemoryLimit() int64 {
+	if x != nil && x.MemoryLimit != nil {
+		return *x.MemoryLimit
+	}
+	return 0
 }
 
 type UpdateDeploymentResponse struct {
@@ -6908,8 +6924,12 @@ type Deployment struct {
 	// Container status (for compose deployments)
 	ContainersRunning *int32 `protobuf:"varint,30,opt,name=containers_running,json=containersRunning,proto3,oneof" json:"containers_running,omitempty"` // Number of containers actually running (from Docker)
 	ContainersTotal   *int32 `protobuf:"varint,31,opt,name=containers_total,json=containersTotal,proto3,oneof" json:"containers_total,omitempty"`       // Total number of containers for this deployment
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Per-deployment resource limits (optional overrides).
+	// If unset (or set to 0), backend uses sane defaults capped by org plan.
+	CpuLimit      *float64 `protobuf:"fixed64,38,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`         // CPU limit in cores
+	MemoryLimit   *int64   `protobuf:"varint,39,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"` // Memory limit in MB
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Deployment) Reset() {
@@ -7197,6 +7217,20 @@ func (x *Deployment) GetContainersRunning() int32 {
 func (x *Deployment) GetContainersTotal() int32 {
 	if x != nil && x.ContainersTotal != nil {
 		return *x.ContainersTotal
+	}
+	return 0
+}
+
+func (x *Deployment) GetCpuLimit() float64 {
+	if x != nil && x.CpuLimit != nil {
+		return *x.CpuLimit
+	}
+	return 0
+}
+
+func (x *Deployment) GetMemoryLimit() int64 {
+	if x != nil && x.MemoryLimit != nil {
+		return *x.MemoryLimit
 	}
 	return 0
 }
@@ -8631,7 +8665,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x15GetDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"\xc0\t\n" +
+	"deployment\"\xa9\n" +
+	"\n" +
 	"\x17UpdateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
@@ -8656,7 +8691,9 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	" \x01(\x05H\x0eR\x04port\x88\x01\x01\x12W\n" +
 	"\x0ebuild_strategy\x18\v \x01(\x0e2+.obiente.cloud.deployments.v1.BuildStrategyH\x0fR\rbuildStrategy\x88\x01\x01\x12P\n" +
 	"\venvironment\x18\x0f \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentH\x10R\venvironment\x88\x01\x01\x12\x16\n" +
-	"\x06groups\x18\x10 \x03(\tR\x06groupsB\a\n" +
+	"\x06groups\x18\x10 \x03(\tR\x06groups\x12 \n" +
+	"\tcpu_limit\x18\x16 \x01(\x01H\x11R\bcpuLimit\x88\x01\x01\x12&\n" +
+	"\fmemory_limit\x18\x17 \x01(\x03H\x12R\vmemoryLimit\x88\x01\x01B\a\n" +
 	"\x05_nameB\x11\n" +
 	"\x0f_repository_urlB\x18\n" +
 	"\x16_github_integration_idB\t\n" +
@@ -8674,7 +8711,10 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\a_domainB\a\n" +
 	"\x05_portB\x11\n" +
 	"\x0f_build_strategyB\x0e\n" +
-	"\f_environment\"d\n" +
+	"\f_environmentB\f\n" +
+	"\n" +
+	"_cpu_limitB\x0f\n" +
+	"\r_memory_limit\"d\n" +
 	"\x18UpdateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
@@ -9229,7 +9269,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\xc7\x0f\n" +
+	"\x13_storage_cost_cents\"\xb0\x10\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -9273,7 +9313,9 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\benv_vars\x18\x19 \x03(\v25.obiente.cloud.deployments.v1.Deployment.EnvVarsEntryR\aenvVars\x127\n" +
 	"\x15github_integration_id\x18! \x01(\tH\x0fR\x13githubIntegrationId\x88\x01\x01\x122\n" +
 	"\x12containers_running\x18\x1e \x01(\x05H\x10R\x11containersRunning\x88\x01\x01\x12.\n" +
-	"\x10containers_total\x18\x1f \x01(\x05H\x11R\x0fcontainersTotal\x88\x01\x01\x1a:\n" +
+	"\x10containers_total\x18\x1f \x01(\x05H\x11R\x0fcontainersTotal\x88\x01\x01\x12 \n" +
+	"\tcpu_limit\x18& \x01(\x01H\x12R\bcpuLimit\x88\x01\x01\x12&\n" +
+	"\fmemory_limit\x18' \x01(\x03H\x13R\vmemoryLimit\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
@@ -9296,7 +9338,10 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0e_node_hostnameB\x18\n" +
 	"\x16_github_integration_idB\x15\n" +
 	"\x13_containers_runningB\x13\n" +
-	"\x11_containers_total\"o\n" +
+	"\x11_containers_totalB\f\n" +
+	"\n" +
+	"_cpu_limitB\x0f\n" +
+	"\r_memory_limit\"o\n" +
 	"\x1fListDeploymentContainersRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"u\n" +

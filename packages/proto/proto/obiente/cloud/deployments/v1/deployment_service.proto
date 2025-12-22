@@ -289,6 +289,8 @@ message UpdateDeploymentRequest {
   optional BuildStrategy build_strategy = 11; // build strategy enum
   optional Environment environment = 15; // Environment (production/staging/development)
   repeated string groups = 16; // Optional groups/labels for organizing deployments
+  optional double cpu_limit = 22; // CPU limit in cores
+  optional int64 memory_limit = 23; // Memory limit in MB
 }
 
 message UpdateDeploymentResponse {
@@ -978,6 +980,11 @@ message Deployment {
   // Container status (for compose deployments)
   optional int32 containers_running = 30; // Number of containers actually running (from Docker)
   optional int32 containers_total = 31; // Total number of containers for this deployment
+
+  // Per-deployment resource limits (optional overrides).
+  // If unset (or set to 0), backend uses sane defaults capped by org plan.
+  optional double cpu_limit = 38; // CPU limit in cores
+  optional int64 memory_limit = 39; // Memory limit in MB
 }
 
 message ListDeploymentContainersRequest {

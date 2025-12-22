@@ -94,6 +94,14 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 		deployment.Replicas = proto.Int32(*db.Replicas)
 	}
 
+	// Per-deployment resource limits (stored in DB as memory_bytes + cpu_shares)
+	if db.CPUShares != nil && *db.CPUShares > 0 {
+		deployment.CpuLimit = proto.Float64(float64(*db.CPUShares) / 1024.0)
+	}
+	if db.MemoryBytes != nil && *db.MemoryBytes > 0 {
+		deployment.MemoryLimit = proto.Int64(*db.MemoryBytes / (1024 * 1024))
+	}
+
 	// Parse env vars from JSON
 	if db.EnvVars != "" {
 		var envMap map[string]string

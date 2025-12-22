@@ -346,6 +346,31 @@
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
+
+          <!-- Resource Limits -->
+          <OuiText as="h4" size="sm" weight="semibold">Resource Limits</OuiText>
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
+            <OuiInput
+              v-model="config.cpuLimit"
+              label="CPU Limit (cores)"
+              placeholder="e.g. 0.5"
+              type="number"
+              min="0.01"
+              step="0.01"
+              helper-text="Maximum CPU cores this deployment can use. Leave empty for default."
+              @update:model-value="markConfigDirty"
+            />
+            <OuiInput
+              v-model="config.memoryLimit"
+              label="Memory Limit (GB)"
+              placeholder="e.g. 2 or 1.5"
+              type="number"
+              min="0.01"
+              step="0.01"
+              helper-text="Maximum memory (in GB) this deployment can use. Leave empty for default."
+              @update:model-value="markConfigDirty"
+            />
+          </OuiGrid>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>
@@ -454,6 +479,16 @@
 
   // Initialize config with values from deployment for SSR compatibility
   // This ensures server and client render the same content initially
+  const mbBigintToGbString = (memoryMb?: bigint): string => {
+    if (memoryMb === undefined || memoryMb === null) return "";
+    const mb = Number(memoryMb);
+    if (!Number.isFinite(mb) || mb <= 0) return "";
+    const gb = mb / 1024;
+    // Keep input-friendly formatting: avoid scientific notation, strip trailing zeros.
+    const fixed = gb.toFixed(3);
+    return fixed.replace(/\.0+$/, "").replace(/(\.[0-9]*?)0+$/, "$1");
+  };
+
   const getInitialValue = (key: keyof Deployment) => {
     const deployment = props.deployment;
     if (!deployment) return "";
@@ -480,6 +515,12 @@
         return deployment.buildOutputPath ?? "";
       case "nginxConfig":
         return deployment.nginxConfig ?? "";
+      case "cpuLimit":
+        return deployment.cpuLimit !== undefined && deployment.cpuLimit !== null
+          ? String(deployment.cpuLimit)
+          : "";
+      case "memoryLimit":
+        return mbBigintToGbString(deployment.memoryLimit);
       default:
         return "";
     }
@@ -496,6 +537,8 @@
     buildPath: getInitialValue("buildPath"),
     buildOutputPath: getInitialValue("buildOutputPath"),
     nginxConfig: getInitialValue("nginxConfig"),
+    cpuLimit: getInitialValue("cpuLimit"),
+    memoryLimit: getInitialValue("memoryLimit"),
   });
 
   const environmentOptions = [
@@ -657,6 +700,16 @@
         config.buildPath = props.deployment.buildPath ?? "";
         config.buildOutputPath = props.deployment.buildOutputPath ?? "";
         config.nginxConfig = props.deployment.nginxConfig ?? "";
+        config.cpuLimit =
+          props.deployment.cpuLimit !== undefined &&
+          props.deployment.cpuLimit !== null
+            ? String(props.deployment.cpuLimit)
+            : "";
+        config.memoryLimit =
+          props.deployment.memoryLimit !== undefined &&
+          props.deployment.memoryLimit !== null
+            ? mbBigintToGbString(props.deployment.memoryLimit)
+            : "";
       }
       // Only set githubIntegrationId from deployment if:
       // 1. We're not clearing the repository
@@ -733,7 +786,7 @@
             }
           }
         } else {
-          // No GitHub integration ID - use manual mode (even if URL is a GitHub URL)
+          // No GitHub integration ID - use manual mode (even for GitHub URLs)
           repositorySource.value = "manual";
           // Validate manual URL on initialization
           if (config.repositoryUrl) {
@@ -1203,6 +1256,21 @@
         buildOutputPath: config.buildOutputPath?.trim() || "",
         useNginx: true, // Always use nginx for static deployments
         nginxConfig: config.nginxConfig?.trim() || "",
+        // Per-deployment limits: send numbers; 0 clears override on backend
+        cpuLimit:
+          config.cpuLimit !== undefined && String(config.cpuLimit).trim() !== ""
+            ? Number(String(config.cpuLimit).trim())
+            : 0,
+        memoryLimit:
+          config.memoryLimit !== undefined &&
+          String(config.memoryLimit).trim() !== ""
+            ? BigInt(
+                Math.max(
+                  0,
+                  Math.round(Number(String(config.memoryLimit).trim()) * 1024)
+                )
+              )
+            : 0n,
       };
 
       // Always include repositoryUrl if we have a value OR if user explicitly cleared it

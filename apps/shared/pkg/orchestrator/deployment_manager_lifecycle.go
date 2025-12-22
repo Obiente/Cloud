@@ -360,13 +360,30 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s", port, deploymentID)
 			}
 
-			memory := int64(256 * 1024 * 1024) // Default 256MB
-			if deployment.MemoryBytes != nil {
+			// Set backend default per-deployment limits: 2GB RAM, 0.5 CPU cores (512 shares)
+			memory := int64(2 * 1024 * 1024 * 1024) // Default 2GB
+			if deployment.MemoryBytes != nil && *deployment.MemoryBytes > 0 {
 				memory = *deployment.MemoryBytes
 			}
-			cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
-			if deployment.CPUShares != nil {
+			cpuShares := int64(512) // Default 0.5 CPU cores (512 shares)
+			if deployment.CPUShares != nil && *deployment.CPUShares > 0 {
 				cpuShares = *deployment.CPUShares
+			}
+			// Enforce org plan-based max memory and CPU
+			maxMemoryBytes, maxCPUCores, err := dm.getPlanLimitsForDeployment(deploymentID)
+			if err == nil {
+				if maxMemoryBytes > 0 && memory > maxMemoryBytes {
+					logger.Info("[DeploymentManager] Capping memory for deployment %s from %d bytes to plan limit %d bytes (restart)", deploymentID, memory, maxMemoryBytes)
+					memory = maxMemoryBytes
+				}
+				if maxCPUCores > 0 {
+					maxCPUShares := int64(maxCPUCores) * 1024
+					if cpuShares > maxCPUShares {
+						logger.Info("[DeploymentManager] Capping CPU for deployment %s from %d shares (%d cores) to plan limit %d shares (%d cores) (restart)",
+							deploymentID, cpuShares, cpuShares/1024, maxCPUShares, maxCPUCores)
+						cpuShares = maxCPUShares
+					}
+				}
 			}
 			replicas := 1 // Default
 			if deployment.Replicas != nil {
@@ -477,7 +494,8 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					logger.Info("[StartDeployment] Deployment %s still has no exposed port after recreation lookup; continuing without health checks", deploymentID)
 				}
 
-				memory := int64(256 * 1024 * 1024) // Default 256MB
+				// Set a reasonable default hard memory limit (2GB)
+				memory := int64(2 * 1024 * 1024 * 1024) // Default 2GB
 				if deployment.MemoryBytes != nil {
 					memory = *deployment.MemoryBytes
 				}
@@ -801,13 +819,15 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		logger.Info("[DeploymentManager] Deployment %s restarting without an exposed port", deploymentID)
 	}
 
-	// Get resource limits
-	memory := int64(256 * 1024 * 1024) // Default 256MB
-	if deployment.MemoryBytes != nil {
+	// Defaults match StartDeployment: 2GB RAM, 0.05 CPU cores (51 shares).
+	// Per-deployment overrides (deployments.memory_bytes / deployments.cpu_shares) take precedence when set.
+	// Org plan caps are applied inside CreateDeployment() via applyPlanLimits().
+	memory := int64(2 * 1024 * 1024 * 1024) // Default 2GB
+	if deployment.MemoryBytes != nil && *deployment.MemoryBytes > 0 {
 		memory = *deployment.MemoryBytes
 	}
-	cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
-	if deployment.CPUShares != nil {
+	cpuShares := int64(51) // Default 0.05 CPU (51 shares = 0.05 cores)
+	if deployment.CPUShares != nil && *deployment.CPUShares > 0 {
 		cpuShares = *deployment.CPUShares
 	}
 	replicas := 1 // Default

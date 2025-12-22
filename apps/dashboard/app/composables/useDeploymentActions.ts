@@ -269,6 +269,8 @@ export function useDeploymentActions(organizationId: string = "default") {
              buildPath?: string;
              buildOutputPath?: string;
              nginxConfig?: string;
+             cpuLimit?: number | string | null;
+             memoryLimit?: number | string | bigint | null;
              githubIntegrationId?: string;
              environment?: number; // Environment enum
              groups?: string[];
@@ -318,6 +320,22 @@ export function useDeploymentActions(organizationId: string = "default") {
             }
             if (updates.nginxConfig !== undefined) {
               request.nginxConfig = updates.nginxConfig === null || updates.nginxConfig === "" ? "" : updates.nginxConfig;
+            }
+
+            // Per-deployment resource limits
+            // Semantics: 0 clears override (backend falls back to defaults capped by plan)
+            if (updates.cpuLimit !== undefined) {
+              const raw = updates.cpuLimit;
+              const parsed =
+                raw === null || raw === "" ? 0 : Number(String(raw).trim());
+              request.cpuLimit = Number.isFinite(parsed) ? parsed : 0;
+            }
+            if (updates.memoryLimit !== undefined) {
+              const raw = updates.memoryLimit;
+              const parsed =
+                raw === null || raw === "" ? 0 : Number(String(raw).trim());
+              const mb = Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+              request.memoryLimit = BigInt(Math.max(0, mb));
             }
              // Include githubIntegrationId if provided - send null for empty strings to clear it
              if (updates.githubIntegrationId !== undefined) {
