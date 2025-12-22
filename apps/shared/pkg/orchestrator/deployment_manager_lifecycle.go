@@ -61,6 +61,20 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		// Continue with deployment on current node
 	}
 
+	// Always reload environment variables from database for Dockerfile deployments
+	// This ensures user-specified env vars are not missed
+	var deployment database.Deployment
+	if err := database.DB.Where("id = ?", config.DeploymentID).First(&deployment).Error; err == nil {
+		envVars := make(map[string]string)
+		if deployment.EnvVars != "" {
+			if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err == nil {
+				// Merge/override config.EnvVars with database envVars
+				for k, v := range envVars {
+					config.EnvVars[k] = v
+				}
+			}
+		}
+	}
 	// Get routing rules to determine service names
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 	serviceNames := []string{"default"}
