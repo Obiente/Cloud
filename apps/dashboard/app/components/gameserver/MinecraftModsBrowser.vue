@@ -302,7 +302,8 @@
                 <OuiFlex gap="sm" class="ml-auto">
                   <OuiButton
                     size="sm"
-                    variant="outline"
+                    variant="ghost"
+                    class="gap-2"
                     @click="openOverview(project)"
                   >
                     <EyeIcon class="w-4 h-4" />
@@ -310,6 +311,8 @@
                   </OuiButton>
                   <OuiButton
                     size="sm"
+                    class="gap-2"
+                    variant="soft"
                     :loading="selectedProject?.id === project.id && installDialogOpen && isVersionsLoading"
                     @click="openInstallDialog(project)"
                   >

@@ -10,7 +10,7 @@
           <button
             v-show="canScrollLeft"
             type="button"
-            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-secondary transition-colors duration-150 hover:text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
             @click="scrollTabs('left')"
             aria-label="Scroll tabs left"
           >
@@ -33,7 +33,7 @@
                 :value="tab.id"
                 :disabled="tab.disabled"
                 :class="[
-                  'relative inline-flex items-center gap-2 py-2 px-4 text-[0.9rem] font-medium text-text-secondary/80 bg-transparent border border-transparent rounded-lg transition-all duration-150 min-h-[2.75rem] whitespace-nowrap hover:text-text-primary hover:bg-surface-muted/60 data-state-active:text-text-primary data-state-active:bg-surface-muted data-state-active:border-border-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 data-disabled:opacity-40 data-disabled:cursor-not-allowed cursor-pointer',
+                  'relative inline-flex items-center gap-2 py-2 px-4 text-[0.9rem] font-medium text-secondary/80 bg-transparent data-selected:bg-surface border border-transparent rounded-t-lg transition-all duration-150 min-h-[2.75rem] whitespace-nowrap hover:text-primary hover:bg-surface/60 data-state-active:text-primary data-state-active:bg-surface-muted data-state-active:border-border-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 data-disabled:opacity-40 data-disabled:cursor-not-allowed cursor-pointer',
                   triggerClass,
                   tab.triggerClass,
                 ]"
@@ -72,7 +72,7 @@
           <button
             v-show="canScrollRight"
             type="button"
-            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-secondary transition-colors duration-150 hover:text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
             @click="scrollTabs('right')"
             aria-label="Scroll tabs right"
           >

@@ -1,7 +1,5 @@
 <template>
-  <div class="h-full flex flex-col">
-    <OuiTabs v-model="activeSubTab" :tabs="subTabs" class="border-b border-border-default" />
-    <div class="flex-1 overflow-auto">
+    <OuiTabs v-model="activeSubTab" :tabs="subTabs" />
       <MinecraftFileEditor
         v-if="activeSubTab === 'whitelist'"
         :key="`whitelist-${gameServerId}`"
@@ -32,8 +30,6 @@
         file-path="banned-players.json"
         :editor-component="MinecraftBannedPlayersEditor"
       />
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">

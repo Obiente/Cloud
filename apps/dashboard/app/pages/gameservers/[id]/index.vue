@@ -81,9 +81,30 @@
                       />
                       <OuiText as="span" size="xs" weight="medium">Refresh</OuiText>
                     </OuiButton>
+                     <OuiButton
+                      variant="outline"
+                      color="danger"
+                      size="sm"
+                      class="gap-2"
+                      @click="showDeleteDialog = true"
+                    >
+                      <TrashIcon class="h-4 w-4" />
+                      <OuiText as="span" size="xs" weight="medium">Delete</OuiText>
+                    </OuiButton>
+                    <OuiButton
+                      variant="outline"
+                      color="secondary"
+                      size="sm"
+                      class="gap-2"
+                      :disabled="isActionDisabled(gameServer.status)"
+                      @click="restartServer"
+                    >
+                      <ArrowPathIcon class="h-4 w-4" />
+                      <OuiText as="span" size="xs" weight="medium">Restart</OuiText>
+                    </OuiButton>
                     <OuiButton
                       :color="gameServer.status === 'RUNNING' ? 'danger' : 'success'"
-                      variant="outline"
+                      variant="solid"
                       size="sm"
                       class="gap-2"
                       :loading="isStarting || isStopping || isRestarting"
@@ -115,27 +136,7 @@
                         <OuiText as="span" size="xs" weight="medium">Start</OuiText>
                       </template>
                     </OuiButton>
-                    <OuiButton
-                      variant="outline"
-                      color="secondary"
-                      size="sm"
-                      class="gap-2"
-                      :disabled="isActionDisabled(gameServer.status)"
-                      @click="restartServer"
-                    >
-                      <ArrowPathIcon class="h-4 w-4" />
-                      <OuiText as="span" size="xs" weight="medium">Restart</OuiText>
-                    </OuiButton>
-                    <OuiButton
-                      variant="outline"
-                      color="danger"
-                      size="sm"
-                      class="gap-2"
-                      @click="showDeleteDialog = true"
-                    >
-                      <TrashIcon class="h-4 w-4" />
-                      <OuiText as="span" size="xs" weight="medium">Delete</OuiText>
-                    </OuiButton>
+
                   </OuiFlex>
                 </OuiFlex>
               </OuiStack>
