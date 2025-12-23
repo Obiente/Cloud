@@ -2,6 +2,41 @@
 
 The VPS service includes an integrated SSH proxy server that allows users to connect to their VPS instances via SSH. This proxy runs on port 2222 (configurable via `SSH_PROXY_PORT`) and routes connections to the appropriate VPS instances.
 
+## Supported Features
+
+The SSH proxy supports most standard SSH features:
+
+- **Interactive shell sessions** - Standard terminal access ✅
+- **Port forwarding (local)** - Forward local ports to VPS with `ssh -L` ✅
+- **Port forwarding (remote)** - Forward VPS ports to your machine with `ssh -R` ✅
+- **SSH agent forwarding** - Use your local SSH keys on the VPS with `ssh -A` ✅
+- **X11 forwarding** - Run graphical applications with `ssh -X` or `ssh -Y` ✅
+
+### Examples
+
+```bash
+# Standard connection
+ssh -p 2222 root@vps-xxx@your-domain.com
+
+# Local port forwarding (access VPS port 80 on localhost:8080)
+ssh -p 2222 -L 8080:localhost:80 root@vps-xxx@your-domain.com
+
+# Remote port forwarding (expose your localhost:3000 on VPS port 8080)
+ssh -p 2222 -R 8080:localhost:3000 root@vps-xxx@your-domain.com
+
+# Agent forwarding (use your local SSH keys on the VPS)
+ssh -p 2222 -A root@vps-xxx@your-domain.com
+
+# X11 forwarding (run graphical applications)
+ssh -p 2222 -X root@vps-xxx@your-domain.com xeyes
+
+# Trusted X11 forwarding (less secure, but faster)
+ssh -p 2222 -Y root@vps-xxx@your-domain.com firefox
+
+# Combined features
+ssh -p 2222 -A -X -L 8080:localhost:80 root@vps-xxx@your-domain.com
+```
+
 ## Host Key Management
 
 When running multiple replicas of vps-service in Docker Swarm, they must share the same SSH host key to prevent host key verification warnings and enable SSH port forwarding.
@@ -213,6 +248,88 @@ ssh-keygen -lf temp_key.pub
 # Clean up
 rm temp_key temp_key.pub
 ```
+
+### X11 Forwarding Not Working
+
+X11 forwarding is fully supported through the SSH proxy with bidirectional channel forwarding. If X11 applications show "Can't open display" errors:
+
+1. **Ensure X11 forwarding is enabled on the VPS:**
+   ```bash
+   # Check sshd_config on the VPS
+   ssh -p 2222 root@vps-xxx@your-domain.com
+   grep X11Forwarding /etc/ssh/sshd_config
+   ```
+
+   Should show:
+   ```
+   X11Forwarding yes
+   X11DisplayOffset 10
+   X11UseLocalhost yes
+   ```
+
+2. **Install xauth on the VPS:**
+   ```bash
+   # Ubuntu/Debian
+   apt-get install xauth
+
+   # RHEL/Rocky/Alma
+   yum install xorg-x11-xauth
+   ```
+
+3. **Ensure your local X server is running:**
+   - **Linux/macOS**: X11 should be installed (XQuartz on macOS)
+   - **Windows**: Install VcXsrv or Xming
+
+4. **Use the `-X` or `-Y` flag when connecting:**
+   ```bash
+   ssh -p 2222 -X root@vps-xxx@your-domain.com xeyes
+   # or for trusted X11 forwarding (less secure, but faster):
+   ssh -p 2222 -Y root@vps-xxx@your-domain.com firefox
+   ```
+
+5. **Verify DISPLAY is set on the VPS:**
+   ```bash
+   echo $DISPLAY
+   # Should show something like: localhost:10.0
+   ```
+
+6. **Test with a simple X11 application:**
+   ```bash
+   # Install xeyes if not present
+   apt-get install x11-apps
+   
+   # Test X11 forwarding
+   ssh -p 2222 -X root@vps-xxx@your-domain.com xeyes
+   ```
+
+### Port Forwarding Not Working
+
+If port forwarding isn't working:
+
+1. **Verify the command syntax:**
+   ```bash
+   # Local forwarding
+   ssh -p 2222 -L local_port:destination:destination_port user@vps
+   
+   # Remote forwarding
+   ssh -p 2222 -R remote_port:localhost:local_port user@vps
+   ```
+
+2. **Check if the port is already in use:**
+   ```bash
+   # On your local machine
+   netstat -tuln | grep <port>
+   ```
+
+3. **For remote forwarding, check GatewayPorts on VPS:**
+   ```bash
+   grep GatewayPorts /etc/ssh/sshd_config
+   ```
+
+   To allow remote hosts to connect to forwarded ports:
+   ```
+   GatewayPorts yes
+   ```
 
 ## Security Considerations
 

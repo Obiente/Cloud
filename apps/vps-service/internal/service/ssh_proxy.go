@@ -585,11 +585,9 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 	// Create audit log for SSH connection
 	go createSSHAuditLog(vpsID, targetUser, authInfo, clientIP)
 
-	// Handle global requests in background
-	go s.handleGlobalRequests(ctx, reqs, vpsID, vpsIP, authInfo)
-
 	// Forward channels - this blocks until all channels are closed
-	s.forwardChannelsToVPS(ctx, serverConn, chans, vpsID, vpsIP, targetUser, authInfo, clientIP, vps.Name)
+	// Note: Global requests will be forwarded from within forwardChannelsToVPS
+	s.forwardChannelsToVPS(ctx, serverConn, chans, reqs, vpsID, vpsIP, targetUser, authInfo, clientIP, vps.Name)
 
 	logger.Info("[SSHProxy] All channels closed, connection ending for VPS %s", vpsID)
 }
@@ -644,12 +642,12 @@ func resolveVPSID(identifier string) (string, error) {
 
 // connectSSHToVPSForChannelForwarding creates an SSH client connection to the target VPS via gateway.
 // Uses the bastion SSH key for authentication.
-// If serverConn is provided, it can be used to send status messages to the client.
-func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context, serverConn *ssh.ServerConn, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo) (*ssh.Client, error) {
+// Returns the client connection, channels, and requests for manual forwarding.
+func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context, serverConn *ssh.ServerConn, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
 	// Get VPS to find node name for gateway selection
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		return nil, fmt.Errorf("failed to get VPS %s: %w", vpsID, err)
+		return nil, nil, nil, fmt.Errorf("failed to get VPS %s: %w", vpsID, err)
 	}
 
 	// Get gateway client for the node where VPS is running
@@ -657,19 +655,19 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 	if vps.NodeID != nil && *vps.NodeID != "" {
 		vpsManager, err := orchestrator.NewVPSManager()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create VPS manager: %w", err)
+			return nil, nil, nil, fmt.Errorf("failed to create VPS manager: %w", err)
 		}
 		defer vpsManager.Close()
 
 		client, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get gateway client for node %s: %w", *vps.NodeID, err)
+			return nil, nil, nil, fmt.Errorf("failed to get gateway client for node %s: %w", *vps.NodeID, err)
 		}
 		gatewayClient = client
 	} else {
 		// Fallback to global gateway client if node not set (for backwards compatibility during migration)
 		if s.gatewayClient == nil {
-			return nil, fmt.Errorf("VPS %s has no node name and no global gateway client available", vpsID)
+			return nil, nil, nil, fmt.Errorf("VPS %s has no node name and no global gateway client available", vpsID)
 		}
 		gatewayClient = s.gatewayClient
 		logger.Warn("[SSHProxy] VPS %s has no node name, using global gateway client (should be migrated)", vpsID)
@@ -703,20 +701,20 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 					targetConn, err = gatewayClient.CreateTCPConnection(ctx, ipTarget, 22)
 					if err != nil {
 						logger.Error("[SSHProxy] Failed to create TCP connection via gateway with IP %s for VPS %s: %v", ipTarget, vpsID, err)
-						return nil, fmt.Errorf("failed to create TCP connection via gateway (tried VPS ID and IP %s): %w", ipTarget, err)
+						return nil, nil, nil, fmt.Errorf("failed to create TCP connection via gateway (tried VPS ID and IP %s): %w", ipTarget, err)
 					}
 					logger.Info("[SSHProxy] Successfully created TCP connection using IP %s for VPS %s", ipTarget, vpsID)
 				} else {
 					logger.Warn("[SSHProxy] IP lookup failed for VPS %s: %v", vpsID, ipLookupErr)
-					return nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed and IP lookup failed): %w", err)
+					return nil, nil, nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed and IP lookup failed): %w", err)
 				}
 			} else {
 				ipCancel()
 				logger.Warn("[SSHProxy] Failed to create VPS manager for IP lookup: %v", ipErr)
-				return nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed): %w", err)
+				return nil, nil, nil, fmt.Errorf("failed to create TCP connection via gateway (VPS ID resolution failed): %w", err)
 			}
 		} else {
-			return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
+			return nil, nil, nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
 		}
 	} else {
 		logger.Info("[SSHProxy] Successfully created TCP connection to VPS %s via gateway (target: %s)", vpsID, target)
@@ -735,7 +733,7 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 		// Create bastion key
 		bastionKey, err = database.CreateVPSBastionKey(vpsID, vps.OrganizationID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create bastion SSH key for VPS %s: %w", vpsID, err)
+			return nil, nil, nil, fmt.Errorf("failed to create bastion SSH key for VPS %s: %w", vpsID, err)
 		}
 		logger.Info("[SSHProxy] Auto-created bastion key for VPS %s (fingerprint: %s)", vpsID, bastionKey.Fingerprint)
 
@@ -800,7 +798,7 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 
 	signer, err := ssh.ParsePrivateKey([]byte(bastionKey.PrivateKey))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse bastion SSH private key: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to parse bastion SSH private key: %w", err)
 	}
 
 	authMethods = append(authMethods, ssh.PublicKeys(signer))
@@ -831,14 +829,95 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 		targetConn.Close()
 		logger.Warn("[SSHProxy] Failed to connect to VPS %s with bastion key: %v", vpsID, err)
 		logger.Warn("[SSHProxy] Bastion key fingerprint: %s", bastionKey.Fingerprint)
+		return nil, nil, nil, fmt.Errorf("failed to create SSH client connection to VPS: %w", err)
+	}
+
+	logger.Info("[SSHProxy] Successfully connected to VPS %s as user %s (authenticated with bastion key)", vpsIP, targetUser)
+	return clientConn, chans, reqs, nil
+}
+
+// vpsConnection holds the raw VPS SSH connection components for manual channel forwarding
+type vpsConnection struct {
+	conn ssh.Conn
+	chans <-chan ssh.NewChannel
+	reqs <-chan *ssh.Request
+}
+
+// connectToVPSRaw creates a raw SSH connection to the VPS without wrapping in ssh.Client
+// This allows us to manually forward channels in both directions for X11 support
+func (s *SSHProxyServer) connectToVPSRaw(ctx context.Context, vpsID, vpsIP, targetUser string) (*vpsConnection, error) {
+	// Get VPS to find node name for gateway selection
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, fmt.Errorf("VPS not found: %w", err)
+	}
+
+	// Get gateway client for the node where VPS is running
+	var gatewayClient *orchestrator.VPSGatewayClient
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		// Get gateway client for specific node
+		vpsManager, err := orchestrator.NewVPSManager()
+		if err == nil {
+			defer vpsManager.Close()
+			nodeGatewayClient, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
+			if err != nil {
+				logger.Warn("[SSHProxy] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
+				gatewayClient = s.gatewayClient
+			} else {
+				gatewayClient = nodeGatewayClient
+			}
+		} else {
+			gatewayClient = s.gatewayClient
+		}
+	} else {
+		// Fallback to global gateway client
+		gatewayClient = s.gatewayClient
+	}
+
+	// Create TCP connection to VPS via gateway
+	target := vpsIP
+	if target == "" {
+		target = vpsID
+	}
+	logger.Info("[SSHProxy] Creating TCP connection to VPS %s via gateway (target: %s, port: 22)", vpsID, target)
+	targetConn, err := gatewayClient.CreateTCPConnection(ctx, target, 22)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TCP connection to VPS: %w", err)
+	}
+
+	// Get bastion SSH key
+	bastionKey, err := database.GetVPSBastionKey(vpsID)
+	if err != nil {
+		targetConn.Close()
+		return nil, fmt.Errorf("failed to get bastion key: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey([]byte(bastionKey.PrivateKey))
+	if err != nil {
+		targetConn.Close()
+		return nil, fmt.Errorf("failed to parse bastion key: %w", err)
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:            targetUser,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+	}
+
+	clientConn, chans, reqs, err := ssh.NewClientConn(targetConn, target, sshConfig)
+	if err != nil {
+		targetConn.Close()
 		return nil, fmt.Errorf("failed to create SSH client connection to VPS: %w", err)
 	}
 
-	go ssh.DiscardRequests(reqs)
-	client := ssh.NewClient(clientConn, chans, nil)
-
 	logger.Info("[SSHProxy] Successfully connected to VPS %s as user %s (authenticated with bastion key)", vpsIP, targetUser)
-	return client, nil
+	
+	return &vpsConnection{
+		conn:  clientConn,
+		chans: chans,
+		reqs:  reqs,
+	}, nil
 }
 
 // extractVPSIDAndEstablishConnection establishes an SSH connection with the client and extracts the username.
@@ -919,22 +998,23 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 			return createBox("Welcome to Obiente Cloud SSH Bastion", []string{})
 		},
 		NoClientAuthCallback: func(conn ssh.ConnMetadata) (*ssh.Permissions, error) {
-			// This callback is called early in the handshake
-			// We use it to validate VPS exists and reject immediately if it doesn't
+			// This callback is called when client attempts to authenticate without credentials
+			// We must reject this and require proper authentication
 			username := conn.User()
-			logger.Debug("[SSHProxy] NoClientAuthCallback for user: %s", username)
+			logger.Debug("[SSHProxy] NoClientAuthCallback for user: %s - rejecting, authentication required", username)
 
+			// Validate VPS exists to provide early feedback
 			vpsID, err := validateVPS(username)
 			if err != nil {
-				// Reject immediately to prevent password prompts
+				// VPS doesn't exist, reject with that error
 				return nil, err
 			}
 
 			// Store resolved VPS ID for later use
 			authInfo.vpsID = vpsID
 
-			// Allow authentication to proceed
-			return nil, nil
+			// Reject no-auth attempts - require public key or password
+			return nil, fmt.Errorf("authentication required")
 		},
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			extractedUsername = conn.User()
@@ -1151,8 +1231,9 @@ type clientAuthInfo struct {
 	hasAgentForwarding bool // Track if client has agent forwarding enabled
 }
 
-// handleGlobalRequests handles global SSH requests from the client.
-func (s *SSHProxyServer) handleGlobalRequests(ctx context.Context, reqs <-chan *ssh.Request, vpsID, vpsIP string, authInfo *clientAuthInfo) {
+// forwardGlobalRequests forwards global SSH requests from the client to the VPS.
+// This enables features like remote port forwarding (ssh -R) and other global requests.
+func (s *SSHProxyServer) forwardGlobalRequests(ctx context.Context, reqs <-chan *ssh.Request, vpsConn ssh.Conn, serverConn *ssh.ServerConn) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -1164,17 +1245,118 @@ func (s *SSHProxyServer) handleGlobalRequests(ctx context.Context, reqs <-chan *
 
 			logger.Debug("[SSHProxy] Received global request: %s", req.Type)
 
+			// Special handling for agent forwarding request
 			if req.Type == "auth-agent-req@openssh.com" {
 				logger.Info("[SSHProxy] Client requested agent forwarding")
-				authInfo.hasAgentForwarding = true
 				if req.WantReply {
 					req.Reply(true, nil)
 				}
-			} else if req.WantReply {
-				req.Reply(false, nil)
+				continue
+			}
+
+			// Forward all other global requests to the VPS
+			// This includes:
+			// - tcpip-forward (for ssh -R remote port forwarding)
+			// - cancel-tcpip-forward (to cancel remote port forwarding)
+			// - streamlocal-forward@openssh.com (Unix socket forwarding)
+			// - cancel-streamlocal-forward@openssh.com
+			// And any other global requests
+			logger.Debug("[SSHProxy] Forwarding global request '%s' to VPS", req.Type)
+			ok, payload, err := vpsConn.SendRequest(req.Type, req.WantReply, req.Payload)
+			if req.WantReply {
+				req.Reply(ok, payload)
+			}
+			if err != nil {
+				logger.Debug("[SSHProxy] Error forwarding global request: %v", err)
 			}
 		}
 	}
+}
+
+// forwardVPSChannelsToClient forwards channels initiated by the VPS back to the client.
+// This is needed for X11 forwarding, agent forwarding responses, and other reverse channels.
+func (s *SSHProxyServer) forwardVPSChannelsToClient(ctx context.Context, vpsChans <-chan ssh.NewChannel, vpsReqs <-chan *ssh.Request, serverConn *ssh.ServerConn, vpsConn ssh.Conn, clientIP, vpsIP string) {
+	logger.Debug("[SSHProxy] Starting VPS-initiated channel and request forwarder")
+	
+	// Forward global requests from VPS to client
+	go func() {
+		for req := range vpsReqs {
+			logger.Debug("[SSHProxy] Forwarding VPS global request to client: %s", req.Type)
+			ok, payload, err := serverConn.SendRequest(req.Type, req.WantReply, req.Payload)
+			if req.WantReply {
+				if err != nil {
+					req.Reply(false, nil)
+				} else {
+					req.Reply(ok, payload)
+				}
+			}
+			if err != nil {
+				logger.Debug("[SSHProxy] Error forwarding VPS global request: %v", err)
+			}
+		}
+	}()
+	
+	// Forward channels from VPS to client
+	for vpsChannel := range vpsChans {
+		channelType := vpsChannel.ChannelType()
+		logger.Debug("[SSHProxy] VPS initiated new channel: %s", channelType)
+		
+		// Accept channel from VPS
+		vpsClientChannel, vpsChannelReqs, err := vpsChannel.Accept()
+		if err != nil {
+			logger.Error("[SSHProxy] Failed to accept VPS-initiated channel: %v", err)
+			continue
+		}
+		
+		// Open corresponding channel on client
+		clientChannel, clientChannelReqs, err := serverConn.OpenChannel(channelType, vpsChannel.ExtraData())
+		if err != nil {
+			logger.Error("[SSHProxy] Failed to open channel on client for VPS channel %s: %v", channelType, err)
+			vpsClientChannel.Close()
+			continue
+		}
+		
+		logger.Info("[SSHProxy] Forwarding VPS->Client channel: %s", channelType)
+		
+		// Bidirectional data copy
+		go func(vps, client ssh.Channel) {
+			io.Copy(client, vps)
+			client.CloseWrite()
+		}(vpsClientChannel, clientChannel)
+		
+		go func(vps, client ssh.Channel) {
+			io.Copy(vps, client)
+			vps.CloseWrite()
+		}(vpsClientChannel, clientChannel)
+		
+		// Forward channel requests VPS->Client
+		go func(vpsReqs <-chan *ssh.Request, clientChan ssh.Channel) {
+			for req := range vpsReqs {
+				ok, err := clientChan.SendRequest(req.Type, req.WantReply, req.Payload)
+				if req.WantReply {
+					req.Reply(ok, nil)
+				}
+				if err != nil {
+					logger.Debug("[SSHProxy] Error forwarding VPS channel request: %v", err)
+				}
+			}
+		}(vpsChannelReqs, clientChannel)
+		
+		// Forward channel requests Client->VPS
+		go func(clientReqs <-chan *ssh.Request, vpsChan ssh.Channel) {
+			for req := range clientReqs {
+				ok, err := vpsChan.SendRequest(req.Type, req.WantReply, req.Payload)
+				if req.WantReply {
+					req.Reply(ok, nil)
+				}
+				if err != nil {
+					logger.Debug("[SSHProxy] Error forwarding client channel request: %v", err)
+				}
+			}
+		}(clientChannelReqs, vpsClientChannel)
+	}
+	
+	logger.Debug("[SSHProxy] VPS-initiated channel forwarder stopped")
 }
 
 // sendMessageToChannel sends a message to the client via a session channel.
@@ -1204,8 +1386,10 @@ func (s *SSHProxyServer) sendConnectionStatus(channel ssh.Channel, vpsID, target
 }
 
 // forwardChannelsToVPS forwards SSH channels from the client to the VPS.
-func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *ssh.ServerConn, chans <-chan ssh.NewChannel, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo, clientIP string, vpsName string) {
-	var vpsClient *ssh.Client
+func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *ssh.ServerConn, chans <-chan ssh.NewChannel, reqs <-chan *ssh.Request, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo, clientIP string, vpsName string) {
+	var vpsConn ssh.Conn
+	var vpsChans <-chan ssh.NewChannel
+	var vpsReqs <-chan *ssh.Request
 	var connectionErr error
 	var connectionEstablished sync.Once
 	var firstSessionChannel sync.Once
@@ -1213,8 +1397,27 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 	// Try to establish VPS connection in background
 	connectionReady := make(chan struct{})
 	go func() {
-		vpsClient, connectionErr = s.connectSSHToVPSForChannelForwarding(ctx, serverConn, vpsID, vpsIP, targetUser, authInfo)
+		vpsConn, vpsChans, vpsReqs, connectionErr = s.connectSSHToVPSForChannelForwarding(ctx, serverConn, vpsID, vpsIP, targetUser, authInfo)
 		close(connectionReady)
+	}()
+
+	// Wait for connection to be established before forwarding global requests and VPS channels
+	go func() {
+		<-connectionReady
+		if connectionErr == nil && vpsConn != nil {
+			// Forward global requests to VPS
+			go s.forwardGlobalRequests(ctx, reqs, vpsConn, serverConn)
+			
+			// Forward VPS-initiated channels to client (for X11, etc.)
+			go s.forwardVPSChannelsToClient(ctx, vpsChans, vpsReqs, serverConn, vpsConn, clientIP, vpsIP)
+		} else {
+			// Drain requests if connection failed
+			for req := range reqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}
 	}()
 
 	for {
@@ -1225,10 +1428,7 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 			// Connection attempt completed, continue to handle channels
 		case newChannel, ok := <-chans:
 			if !ok {
-				// Channels closed, send goodbye if we had a connection
-				if vpsClient != nil {
-					// Goodbye message will be sent when channel closes
-				}
+				// Channels closed, connection ending
 				return
 			}
 
@@ -1277,7 +1477,7 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 					})
 
 					// Forward this channel with goodbye message
-					go s.forwardChannelWithGoodbye(ctx, clientChannel, clientReqs, vpsClient, serverConn, clientIP, vpsIP)
+					go s.forwardChannelWithGoodbye(ctx, clientChannel, clientReqs, vpsConn, serverConn, clientIP, vpsIP)
 				})
 				// If this is not the first session channel, handle it normally
 				if !handled {
@@ -1288,7 +1488,7 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 							newChannel.Reject(ssh.ConnectionFailed, connectionErr.Error())
 							return
 						}
-						s.forwardChannel(ctx, newChannel, vpsClient, serverConn, clientIP, vpsIP)
+						s.forwardChannel(ctx, newChannel, vpsConn, serverConn, clientIP, vpsIP)
 					}()
 				}
 			} else {
@@ -1299,7 +1499,7 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 						newChannel.Reject(ssh.ConnectionFailed, connectionErr.Error())
 						return
 					}
-					s.forwardChannel(ctx, newChannel, vpsClient, serverConn, clientIP, vpsIP)
+					s.forwardChannel(ctx, newChannel, vpsConn, serverConn, clientIP, vpsIP)
 				}()
 			}
 		}
@@ -1307,7 +1507,7 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 }
 
 // forwardChannelWithGoodbye forwards a session channel and sends goodbye message on close
-func (s *SSHProxyServer) forwardChannelWithGoodbye(ctx context.Context, clientChannel ssh.Channel, clientReqs <-chan *ssh.Request, vpsClient *ssh.Client, serverConn *ssh.ServerConn, clientIP, vpsIP string) {
+func (s *SSHProxyServer) forwardChannelWithGoodbye(ctx context.Context, clientChannel ssh.Channel, clientReqs <-chan *ssh.Request, vpsConn ssh.Conn, serverConn *ssh.ServerConn, clientIP, vpsIP string) {
 	defer func() {
 		// Send goodbye message before closing
 		goodbyeMsg := createBox("Thank you for using Obiente Cloud!", []string{
@@ -1319,7 +1519,7 @@ func (s *SSHProxyServer) forwardChannelWithGoodbye(ctx context.Context, clientCh
 	}()
 
 	// Open session channel on VPS
-	vpsChannel, vpsReqs, err := vpsClient.OpenChannel("session", nil)
+	vpsChannel, vpsReqs, err := vpsConn.OpenChannel("session", nil)
 	if err != nil {
 		logger.Error("[SSHProxy] Failed to open session channel on VPS: %v", err)
 		return
@@ -1547,7 +1747,7 @@ func (s *SSHProxyServer) formatConnectionError(err error, vpsID string) string {
 }
 
 // forwardChannel forwards a single SSH channel from client to VPS.
-func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewChannel, vpsClient *ssh.Client, serverConn *ssh.ServerConn, clientIP, vpsIP string) {
+func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewChannel, vpsConn ssh.Conn, serverConn *ssh.ServerConn, clientIP, vpsIP string) {
 	channelType := newChannel.ChannelType()
 	logger.Debug("[SSHProxy] Forwarding channel type: %s", channelType)
 
@@ -1560,7 +1760,7 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 
 	if channelType == "auth-agent@openssh.com" {
 		logger.Info("[SSHProxy] Forwarding agent forwarding channel to VPS")
-		vpsChannel, vpsReqs, err := vpsClient.OpenChannel("auth-agent@openssh.com", nil)
+		vpsChannel, vpsReqs, err := vpsConn.OpenChannel("auth-agent@openssh.com", nil)
 		if err != nil {
 			logger.Error("[SSHProxy] Failed to open agent forwarding channel on VPS: %v", err)
 			return
@@ -1600,7 +1800,7 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 
 	if channelType == "session" {
 		logger.Debug("[SSHProxy] Forwarding session channel to VPS")
-		vpsChannel, vpsReqs, err := vpsClient.OpenChannel("session", nil)
+		vpsChannel, vpsReqs, err := vpsConn.OpenChannel("session", nil)
 		if err != nil {
 			logger.Error("[SSHProxy] Failed to open session channel on VPS: %v", err)
 			return
@@ -1651,6 +1851,129 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 		return
 	}
 
+	// Handle direct-tcpip (local port forwarding: ssh -L)
+	if channelType == "direct-tcpip" {
+		logger.Debug("[SSHProxy] Forwarding direct-tcpip (local port forward) channel to VPS")
+		vpsChannel, vpsReqs, err := vpsConn.OpenChannel("direct-tcpip", newChannel.ExtraData())
+		if err != nil {
+			logger.Error("[SSHProxy] Failed to open direct-tcpip channel on VPS: %v", err)
+			return
+		}
+		defer vpsChannel.Close()
+
+		done := make(chan struct{})
+		go func() {
+			io.Copy(vpsChannel, clientChannel)
+			vpsChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+		go func() {
+			io.Copy(clientChannel, vpsChannel)
+			clientChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+
+		go func() {
+			for req := range clientReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+		go func() {
+			for req := range vpsReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+
+		<-done
+		return
+	}
+
+	// Handle forwarded-tcpip (remote port forwarding: ssh -R)
+	if channelType == "forwarded-tcpip" {
+		logger.Debug("[SSHProxy] Forwarding forwarded-tcpip (remote port forward) channel to VPS")
+		vpsChannel, vpsReqs, err := vpsConn.OpenChannel("forwarded-tcpip", newChannel.ExtraData())
+		if err != nil {
+			logger.Error("[SSHProxy] Failed to open forwarded-tcpip channel on VPS: %v", err)
+			return
+		}
+		defer vpsChannel.Close()
+
+		done := make(chan struct{})
+		go func() {
+			io.Copy(vpsChannel, clientChannel)
+			vpsChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+		go func() {
+			io.Copy(clientChannel, vpsChannel)
+			clientChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+
+		go func() {
+			for req := range clientReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+		go func() {
+			for req := range vpsReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+
+		<-done
+		return
+	}
+
+	// Handle X11 forwarding
+	if channelType == "x11" {
+		logger.Debug("[SSHProxy] Forwarding X11 channel to VPS")
+		vpsChannel, vpsReqs, err := vpsConn.OpenChannel("x11", newChannel.ExtraData())
+		if err != nil {
+			logger.Error("[SSHProxy] Failed to open X11 channel on VPS: %v", err)
+			return
+		}
+		defer vpsChannel.Close()
+
+		done := make(chan struct{})
+		go func() {
+			io.Copy(vpsChannel, clientChannel)
+			vpsChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+		go func() {
+			io.Copy(clientChannel, vpsChannel)
+			clientChannel.CloseWrite()
+			done <- struct{}{}
+		}()
+
+		go func() {
+			for req := range clientReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+		go func() {
+			for req := range vpsReqs {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+			}
+		}()
+
+		<-done
+		return
+	}
+
 	logger.Debug("[SSHProxy] Rejecting unsupported channel type: %s", channelType)
 	newChannel.Reject(ssh.UnknownChannelType, "unsupported channel type")
 }
@@ -1678,15 +2001,20 @@ func getOrGenerateHostKey() (ssh.Signer, error) {
 		logger.Info("[SSHProxy] Loading SSH host key from SSH_PROXY_HOST_KEY_FILE: %s", secretPath)
 		keyData, err := os.ReadFile(secretPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read SSH_PROXY_HOST_KEY_FILE at %s: %w", secretPath, err)
+			// If file doesn't exist, fall back to next method instead of failing
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read SSH_PROXY_HOST_KEY_FILE at %s: %w", secretPath, err)
+			}
+			logger.Warn("[SSHProxy] SSH_PROXY_HOST_KEY_FILE not found, falling back to other methods")
+		} else {
+			signer, err := ssh.ParsePrivateKey(keyData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse SSH_PROXY_HOST_KEY_FILE: %w", err)
+			}
+			logger.Info("[SSHProxy] Successfully loaded SSH host key from Docker secret")
+			logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
+			return signer, nil
 		}
-		signer, err := ssh.ParsePrivateKey(keyData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse SSH_PROXY_HOST_KEY_FILE: %w", err)
-		}
-		logger.Info("[SSHProxy] Successfully loaded SSH host key from Docker secret")
-		logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
-		return signer, nil
 	}
 
 	// Second priority: Environment variable (for direct key injection)

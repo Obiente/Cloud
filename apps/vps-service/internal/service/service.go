@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -96,6 +98,30 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vp
 			Success: false,
 			Message: err.Error(),
 		}), nil
+	}
+
+	// Register the public IP DHCP lease in the database
+	publicLease := database.DHCPLease{
+		ID:             uuid.New().String(),
+		VPSID:          vpsID,
+		OrganizationID: orgID,
+		MACAddress:     lease.MACAddress,
+		IPAddress:      publicIP,
+		IsPublic:       true,
+		ExpiresAt:      time.Now().Add(365 * 24 * time.Hour), // Public IPs don't expire
+		GatewayNode:    *vps.NodeID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+	
+	// Use FirstOrCreate to avoid duplicates
+	var existingPublicLease database.DHCPLease
+	result := database.DB.WithContext(ctx).
+		Where("vps_id = ? AND is_public = ?", vpsID, true).
+		FirstOrCreate(&existingPublicLease, publicLease)
+	
+	if result.Error != nil {
+		logger.Warn("[VPS Service] Failed to register public IP DHCP lease for %s: %v", vpsID, result.Error)
 	}
 
 	// Ensure a record exists in vps_public_ips so billing can pick up the assigned IP
