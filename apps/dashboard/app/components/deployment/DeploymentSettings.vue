@@ -1385,6 +1385,7 @@
         healthcheckPath: config.healthcheckPath?.trim() || "",
         healthcheckPort: config.healthcheckPort ? Number(config.healthcheckPort) : 0,
         healthcheckExpectedStatus: config.healthcheckExpectedStatus ? Number(config.healthcheckExpectedStatus) : 0,
+        healthcheckCustomCommand: config.healthcheckCustomCommand?.trim() || "",
 
         // Per-deployment limits: send numbers; 0 clears override on backend
         cpuLimit:
