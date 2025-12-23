@@ -371,6 +371,68 @@
               @update:model-value="markConfigDirty"
             />
           </OuiGrid>
+          
+          <!-- Health Check -->
+          <OuiText as="h4" size="sm" weight="semibold" class="mt-4">Health Check</OuiText>
+          
+          <!-- Health Check Type -->
+          <OuiSelect
+            v-model="config.healthcheckType"
+            label="Health Check Type"
+            :items="healthcheckTypeOptions"
+            helper-text="Choose how to verify your deployment is healthy"
+            @update:model-value="markConfigDirty"
+          />
+          
+          <!-- TCP Health Check Fields -->
+          <div v-if="config.healthcheckType === 2" class="space-y-3">
+            <OuiInput
+              v-model="config.healthcheckPort"
+              type="number"
+              label="Port to Check"
+              placeholder="Leave empty to use deployment port"
+              helper-text="TCP port to check. Leave empty to use the deployment's main port."
+              @update:model-value="markConfigDirty"
+            />
+          </div>
+          
+          <!-- HTTP Health Check Fields -->
+          <div v-if="config.healthcheckType === 3" class="space-y-3">
+            <OuiInput
+              v-model="config.healthcheckPort"
+              type="number"
+              label="Port to Check"
+              placeholder="Leave empty to use deployment port"
+              helper-text="HTTP port to check. Leave empty to use the deployment's main port."
+              @update:model-value="markConfigDirty"
+            />
+            <OuiInput
+              v-model="config.healthcheckPath"
+              label="Health Check Path"
+              placeholder="/"
+              helper-text="HTTP endpoint path to check (e.g., /health, /api/health)"
+              @update:model-value="markConfigDirty"
+            />
+            <OuiInput
+              v-model="config.healthcheckExpectedStatus"
+              type="number"
+              label="Expected HTTP Status Code"
+              placeholder="200"
+              helper-text="The HTTP status code that indicates healthy (default: 200)"
+              @update:model-value="markConfigDirty"
+            />
+          </div>
+          
+          <!-- Custom Health Check Fields -->
+          <div v-if="config.healthcheckType === 4" class="space-y-3">
+            <OuiInput
+              v-model="config.healthcheckCustomCommand"
+              label="Custom Health Check Command"
+              placeholder="e.g. curl -f http://localhost:3000/health || exit 1"
+              helper-text="Shell command that exits 0 when healthy and non-zero when unhealthy"
+              @update:model-value="markConfigDirty"
+            />
+          </div>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>
@@ -521,6 +583,16 @@
           : "";
       case "memoryLimit":
         return mbBigintToGbString(deployment.memoryLimit);
+      case "healthcheckType":
+        return deployment.healthcheckType ?? 0; // HEALTHCHECK_TYPE_UNSPECIFIED
+      case "healthcheckPort":
+        return deployment.healthcheckPort ? String(deployment.healthcheckPort) : "";
+      case "healthcheckPath":
+        return deployment.healthcheckPath ?? "/";
+      case "healthcheckExpectedStatus":
+        return deployment.healthcheckExpectedStatus ? String(deployment.healthcheckExpectedStatus) : "";
+      case "healthcheckCustomCommand":
+        return deployment.healthcheckCustomCommand ?? "";
       default:
         return "";
     }
@@ -539,7 +611,20 @@
     nginxConfig: getInitialValue("nginxConfig"),
     cpuLimit: getInitialValue("cpuLimit"),
     memoryLimit: getInitialValue("memoryLimit"),
+    healthcheckType: getInitialValue("healthcheckType") as number,
+    healthcheckPort: getInitialValue("healthcheckPort") as string,
+    healthcheckPath: getInitialValue("healthcheckPath") as string,
+    healthcheckExpectedStatus: getInitialValue("healthcheckExpectedStatus") as string,
+    healthcheckCustomCommand: getInitialValue("healthcheckCustomCommand") as string,
   });
+
+  const healthcheckTypeOptions = [
+    { label: "Auto (TCP if routing exists)", value: 0 }, // HEALTHCHECK_TYPE_UNSPECIFIED
+    { label: "Disabled", value: 1 }, // HEALTHCHECK_DISABLED
+    { label: "TCP Port Check", value: 2 }, // HEALTHCHECK_TCP
+    { label: "HTTP Endpoint Check", value: 3 }, // HEALTHCHECK_HTTP
+    { label: "Custom Command", value: 4 }, // HEALTHCHECK_CUSTOM
+  ];
 
   const environmentOptions = [
     { label: "Production", value: String(EnvEnum.PRODUCTION) },
@@ -700,6 +785,11 @@
         config.buildPath = props.deployment.buildPath ?? "";
         config.buildOutputPath = props.deployment.buildOutputPath ?? "";
         config.nginxConfig = props.deployment.nginxConfig ?? "";
+        config.healthcheckType = props.deployment.healthcheckType ?? 0;
+        config.healthcheckPort = props.deployment.healthcheckPort ? String(props.deployment.healthcheckPort) : "";
+        config.healthcheckPath = props.deployment.healthcheckPath ?? "/";
+        config.healthcheckExpectedStatus = props.deployment.healthcheckExpectedStatus ? String(props.deployment.healthcheckExpectedStatus) : "";
+        config.healthcheckCustomCommand = props.deployment.healthcheckCustomCommand ?? "";
         config.cpuLimit =
           props.deployment.cpuLimit !== undefined &&
           props.deployment.cpuLimit !== null
@@ -747,6 +837,13 @@
           config.buildPath === (props.deployment.buildPath ?? "") &&
           config.buildOutputPath === (props.deployment.buildOutputPath ?? "") &&
           config.nginxConfig === (props.deployment.nginxConfig ?? "") &&
+          config.healthcheckType === (props.deployment.healthcheckType ?? 0) &&
+          config.healthcheckPort === (props.deployment.healthcheckPort ? String(props.deployment.healthcheckPort) : "") &&
+          config.healthcheckPath === (props.deployment.healthcheckPath ?? "/") &&
+          config.healthcheckExpectedStatus === (props.deployment.healthcheckExpectedStatus ? String(props.deployment.healthcheckExpectedStatus) : "") &&
+          config.healthcheckCustomCommand === (props.deployment.healthcheckCustomCommand ?? "") &&
+          config.cpuLimit === (props.deployment.cpuLimit !== undefined && props.deployment.cpuLimit !== null ? String(props.deployment.cpuLimit) : "") &&
+          config.memoryLimit === (props.deployment.memoryLimit !== undefined && props.deployment.memoryLimit !== null ? mbBigintToGbString(props.deployment.memoryLimit) : "") &&
           buildStrategy.value === (props.deployment.buildStrategy ?? BuildStrategy.BUILD_STRATEGY_UNSPECIFIED);
 
         // Only reset dirty flag if config matches (meaning no user changes)
@@ -1026,6 +1123,32 @@
     configError.value = "";
   };
 
+  // Watch healthcheck type changes to set sensible defaults
+  watch(() => config.healthcheckType, (newType, oldType) => {
+    // Skip during initialization
+    if (oldType === undefined) return;
+
+    // Set default values based on type
+    if (newType === 3) { // HTTP
+      if (!config.healthcheckPath) {
+        config.healthcheckPath = "/";
+      }
+      if (!config.healthcheckExpectedStatus) {
+        config.healthcheckExpectedStatus = "200";
+      }
+    } else if (newType === 2) { // TCP
+      // TCP doesn't need a path
+      config.healthcheckPath = "";
+    } else if (newType === 0) { // UNSPECIFIED
+      // Clear all healthcheck fields
+      config.healthcheckPath = "";
+      config.healthcheckPort = "";
+      config.healthcheckExpectedStatus = "";
+    }
+    
+    markConfigDirty();
+  });
+
   watch(buildStrategy, async (newValue, oldValue) => {
     // Skip during initialization (when oldValue is undefined)
     if (oldValue === undefined) {
@@ -1256,6 +1379,13 @@
         buildOutputPath: config.buildOutputPath?.trim() || "",
         useNginx: true, // Always use nginx for static deployments
         nginxConfig: config.nginxConfig?.trim() || "",
+
+        // Healthcheck configuration
+        healthcheckType: config.healthcheckType || 0,
+        healthcheckPath: config.healthcheckPath?.trim() || "",
+        healthcheckPort: config.healthcheckPort ? Number(config.healthcheckPort) : 0,
+        healthcheckExpectedStatus: config.healthcheckExpectedStatus ? Number(config.healthcheckExpectedStatus) : 0,
+
         // Per-deployment limits: send numbers; 0 clears override on backend
         cpuLimit:
           config.cpuLimit !== undefined && String(config.cpuLimit).trim() !== ""
