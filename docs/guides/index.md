@@ -26,6 +26,7 @@ Step-by-step guides for common tasks with Obiente Cloud.
 - [Proxmox SSH User Setup](proxmox-ssh-user-setup.md) - Configure SSH access for cloud-init snippet writing
 - [VPS Gateway Setup](vps-gateway-setup.md) - Set up the vps-gateway service for DHCP and SSH proxying
 - [VPS Configuration](vps-configuration.md) - Advanced VPS configuration options (storage, networking, security)
+- [SSH Proxy Configuration](ssh-proxy.md) - Configure shared SSH host key for HA deployments
 
 ## Additional Guides
 

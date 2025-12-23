@@ -1,8 +1,45 @@
-# Proxmox Setup Scripts
+# Obiente Cloud Scripts
 
-This directory contains setup scripts for configuring Proxmox infrastructure for Obiente Cloud.
+This directory contains utility scripts for managing and deploying Obiente Cloud.
 
-## Available Scripts
+## Deployment Scripts
+
+### `setup-ssh-proxy-key.sh`
+
+Generates and creates a Docker secret for the SSH proxy host key in Docker Swarm deployments.
+
+**Purpose:**
+- Ensures all vps-service replicas use the same SSH host key
+- Prevents "REMOTE HOST IDENTIFICATION HAS CHANGED" warnings for users
+- Enables SSH port forwarding (TCP forwarding) to work correctly
+
+**Usage:**
+
+```bash
+./scripts/setup-ssh-proxy-key.sh
+```
+
+**What it does:**
+1. Checks if Docker is in Swarm mode
+2. Checks if the secret already exists (offers to rotate if it does)
+3. Generates a new 2048-bit RSA host key
+4. Creates a Docker secret named `ssh_proxy_host_key`
+5. Cleans up temporary files
+
+**After running:**
+```bash
+# Deploy your stack
+docker stack deploy -c docker-compose.swarm.ha.yml obiente
+
+# Verify the key is loaded
+docker service logs obiente_vps-service | grep 'SSH host key'
+```
+
+**See also:** [SSH Proxy Configuration](../docs/guides/ssh-proxy.md)
+
+---
+
+## Proxmox Setup Scripts
 
 ### `setup-proxmox-templates.sh`
 

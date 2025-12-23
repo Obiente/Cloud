@@ -352,6 +352,9 @@ services:
     environment:
       PORT: 3008
       <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications, *common-redis]
+    volumes:
+      # Persist SSH host key to prevent fingerprint changes on restart
+      - vps_ssh_host_key:/var/lib/obiente
     depends_on:
       postgres:
         condition: service_healthy
@@ -587,6 +590,8 @@ volumes:
   postgres_data:
   redis_data:
   timescaledb_data:
+  vps_ssh_host_key:
+    # Persists the SSH proxy host key to prevent fingerprint changes
 
 networks:
   obiente-network:

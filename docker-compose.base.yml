@@ -104,6 +104,7 @@ x-common-vps: &common-vps
   VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-}
   VPS_GATEWAY_BRIDGE: ${VPS_GATEWAY_BRIDGE:-OCvpsnet}
   SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
+  SSH_PROXY_HOST_KEY_FILE: ${SSH_PROXY_HOST_KEY_FILE:-/run/secrets/ssh_proxy_host_key}
 
 x-common-dns-delegation: &common-dns-delegation
   DNS_DELEGATION_PRODUCTION_API_URL: ${DNS_DELEGATION_PRODUCTION_API_URL:-}

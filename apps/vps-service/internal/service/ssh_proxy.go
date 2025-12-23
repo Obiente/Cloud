@@ -1667,7 +1667,41 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 }
 
 // getOrGenerateHostKey gets or generates an SSH host key
+// Priority order:
+// 1. SSH_PROXY_HOST_KEY_FILE path (Docker secret, typically /run/secrets/ssh_proxy_host_key)
+// 2. SSH_PROXY_HOST_KEY environment variable (PEM-encoded private key)
+// 3. SSH_PROXY_HOST_KEY_PATH file path (if exists)
+// 4. Generate new key and save to SSH_PROXY_HOST_KEY_PATH
 func getOrGenerateHostKey() (ssh.Signer, error) {
+	// First priority: Docker secret file path (for Swarm deployments)
+	if secretPath := os.Getenv("SSH_PROXY_HOST_KEY_FILE"); secretPath != "" {
+		logger.Info("[SSHProxy] Loading SSH host key from SSH_PROXY_HOST_KEY_FILE: %s", secretPath)
+		keyData, err := os.ReadFile(secretPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read SSH_PROXY_HOST_KEY_FILE at %s: %w", secretPath, err)
+		}
+		signer, err := ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse SSH_PROXY_HOST_KEY_FILE: %w", err)
+		}
+		logger.Info("[SSHProxy] Successfully loaded SSH host key from Docker secret")
+		logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
+		return signer, nil
+	}
+
+	// Second priority: Environment variable (for direct key injection)
+	if keyEnv := os.Getenv("SSH_PROXY_HOST_KEY"); keyEnv != "" {
+		logger.Info("[SSHProxy] Loading SSH host key from SSH_PROXY_HOST_KEY environment variable")
+		signer, err := ssh.ParsePrivateKey([]byte(keyEnv))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse SSH_PROXY_HOST_KEY: %w", err)
+		}
+		logger.Info("[SSHProxy] Successfully loaded SSH host key from environment variable")
+		logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
+		return signer, nil
+	}
+
+	// Fallback to file-based key
 	keyPath := os.Getenv("SSH_PROXY_HOST_KEY_PATH")
 	if keyPath == "" {
 		keyPath = "/var/lib/obiente/ssh_proxy_host_key"
@@ -1677,12 +1711,18 @@ func getOrGenerateHostKey() (ssh.Signer, error) {
 	if keyData, err := os.ReadFile(keyPath); err == nil {
 		signer, err := ssh.ParsePrivateKey(keyData)
 		if err == nil {
+			logger.Info("[SSHProxy] Loaded existing SSH host key from %s", keyPath)
+			logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
 			return signer, nil
 		}
+		logger.Warn("[SSHProxy] Failed to parse existing key file: %v", err)
 	}
 
 	// Generate new key
-	logger.Info("[SSHProxy] Generating new SSH host key...")
+	logger.Warn("[SSHProxy] No SSH_PROXY_HOST_KEY_FILE, SSH_PROXY_HOST_KEY, or existing key file found")
+	logger.Warn("[SSHProxy] Generating new SSH host key - this will cause host key verification warnings for clients")
+	logger.Warn("[SSHProxy] For production/HA deployments, set SSH_PROXY_HOST_KEY_FILE or SSH_PROXY_HOST_KEY with a shared key")
+	
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate private key: %w", err)
@@ -1700,7 +1740,8 @@ func getOrGenerateHostKey() (ssh.Signer, error) {
 	}
 
 	// Write key file
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(privateKeyPEM), 0600); err != nil {
+	keyBytes := pem.EncodeToMemory(privateKeyPEM)
+	if err := os.WriteFile(keyPath, keyBytes, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write key file: %w", err)
 	}
 
@@ -1711,6 +1752,10 @@ func getOrGenerateHostKey() (ssh.Signer, error) {
 	}
 
 	logger.Info("[SSHProxy] Generated and saved SSH host key to %s", keyPath)
+	logger.Info("[SSHProxy] Key fingerprint: %s", ssh.FingerprintSHA256(signer.PublicKey()))
+	logger.Info("[SSHProxy] To use this key across replicas, save it as a Docker secret:")
+	logger.Info("[SSHProxy]   docker secret create ssh_proxy_host_key %s", keyPath)
+	
 	return signer, nil
 }
 

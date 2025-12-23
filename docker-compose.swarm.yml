@@ -564,6 +564,8 @@ services:
     environment:
       PORT: 3008
       <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps, *common-notifications, *common-redis]
+    secrets:
+      - ssh_proxy_host_key
     deploy:
       mode: replicated
       replicas: 2
@@ -1149,3 +1151,14 @@ configs:
   # Init script to copy pg_hba.conf to PGDATA
   postgres_hba_init:
     file: ./scripts/internal/init-pg-hba.sh
+
+secrets:
+  ssh_proxy_host_key:
+    external: true
+    # This secret must be created before deploying the stack:
+    # 1. Generate a key: ssh-keygen -t rsa -b 2048 -f ssh_proxy_host_key -N ""
+    # 2. Create the secret: docker secret create ssh_proxy_host_key ssh_proxy_host_key
+    # 3. Remove the local file: rm ssh_proxy_host_key ssh_proxy_host_key.pub
+    #
+    # This ensures all vps-service replicas use the same SSH host key,
+    # preventing "REMOTE HOST IDENTIFICATION HAS CHANGED" warnings for clients.

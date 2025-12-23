@@ -1039,6 +1039,8 @@ services:
       PORT: 3008
       <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications]
       DB_HOST: pgpool
+    secrets:
+      - ssh_proxy_host_key
     deploy:
       mode: replicated
       replicas: 3
@@ -1442,3 +1444,18 @@ networks:
         - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
+
+# ============================================================================
+# SECRETS
+# ============================================================================
+
+secrets:
+  ssh_proxy_host_key:
+    external: true
+    # This secret must be created before deploying the stack:
+    # 1. Generate a key: ssh-keygen -t rsa -b 2048 -f ssh_proxy_host_key -N ""
+    # 2. Create the secret: docker secret create ssh_proxy_host_key ssh_proxy_host_key
+    # 3. Remove the local file: rm ssh_proxy_host_key ssh_proxy_host_key.pub
+    #
+    # This ensures all vps-service replicas use the same SSH host key,
+    # preventing "REMOTE HOST IDENTIFICATION HAS CHANGED" warnings for clients.
