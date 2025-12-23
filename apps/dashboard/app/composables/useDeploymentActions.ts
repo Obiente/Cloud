@@ -274,6 +274,11 @@ export function useDeploymentActions(organizationId: string = "default") {
              githubIntegrationId?: string;
              environment?: number; // Environment enum
              groups?: string[];
+             healthcheckType?: number;
+             healthcheckPort?: number;
+             healthcheckPath?: string;
+             healthcheckExpectedStatus?: number;
+             healthcheckCustomCommand?: string;
            }
          ) => {
            if (isProcessing.value) return;
@@ -320,6 +325,23 @@ export function useDeploymentActions(organizationId: string = "default") {
             }
             if (updates.nginxConfig !== undefined) {
               request.nginxConfig = updates.nginxConfig === null || updates.nginxConfig === "" ? "" : updates.nginxConfig;
+            }
+
+            // Healthcheck configuration
+            if (updates.healthcheckType !== undefined) {
+              request.healthcheckType = updates.healthcheckType;
+            }
+            if (updates.healthcheckPort !== undefined) {
+              request.healthcheckPort = updates.healthcheckPort;
+            }
+            if (updates.healthcheckPath !== undefined) {
+              request.healthcheckPath = updates.healthcheckPath === null || updates.healthcheckPath === "" ? "" : updates.healthcheckPath;
+            }
+            if (updates.healthcheckExpectedStatus !== undefined) {
+              request.healthcheckExpectedStatus = updates.healthcheckExpectedStatus;
+            }
+            if (updates.healthcheckCustomCommand !== undefined) {
+              request.healthcheckCustomCommand = updates.healthcheckCustomCommand === null || updates.healthcheckCustomCommand === "" ? "" : updates.healthcheckCustomCommand;
             }
 
             // Per-deployment resource limits
