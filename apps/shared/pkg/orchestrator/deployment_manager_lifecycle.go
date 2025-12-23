@@ -282,6 +282,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			return fmt.Errorf("failed to get deployment from database: %w", err)
 		}
 
+		// Log healthcheck values from database
+		logger.Info("[StartDeployment] Deployment %s loaded from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+			deploymentID, deployment.HealthcheckType, deployment.HealthcheckPort, deployment.HealthcheckPath, deployment.HealthcheckExpectedStatus, deployment.HealthcheckCustomCommand)
+
 		// Only create containers if this is not a compose-based deployment
 		// Compose deployments should be handled by DeployComposeFile
 		if deployment.ComposeYaml == "" {
@@ -381,6 +385,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 			}
 
+			// Log the config healthcheck values
+			logger.Info("[StartDeployment] DeploymentConfig created - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+				config.HealthcheckType, config.HealthcheckPort, config.HealthcheckPath, config.HealthcheckExpectedStatus, config.HealthcheckCustomCommand)
+
 			// Create the containers
 			if err := dm.CreateDeployment(ctx, config); err != nil {
 				return fmt.Errorf("failed to create deployment containers: %w", err)
@@ -418,6 +426,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				logger.Warn("[DeploymentManager] Failed to get deployment from database for recreation: %v", err)
 				continue
 			}
+
+			// Log healthcheck values from database
+			logger.Info("[StartDeployment-Recreate] Deployment %s loaded from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+				deploymentID, deployment.HealthcheckType, deployment.HealthcheckPort, deployment.HealthcheckPath, deployment.HealthcheckExpectedStatus, deployment.HealthcheckCustomCommand)
 
 			// Only recreate if this is not a compose-based deployment
 			if deployment.ComposeYaml == "" {
@@ -499,6 +511,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 					HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 				}
+
+				// Log the config healthcheck values
+				logger.Info("[StartDeployment-Recreate] DeploymentConfig created - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+					config.HealthcheckType, config.HealthcheckPort, config.HealthcheckPath, config.HealthcheckExpectedStatus, config.HealthcheckCustomCommand)
 
 				// Recreate the containers
 				if err := dm.CreateDeployment(ctx, config); err != nil {
@@ -703,6 +719,10 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		return fmt.Errorf("failed to get deployment from database: %w", err)
 	}
 
+	// Log healthcheck values from database
+	logger.Info("[RestartDeployment] Deployment %s loaded from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+		deploymentID, deployment.HealthcheckType, deployment.HealthcheckPort, deployment.HealthcheckPath, deployment.HealthcheckExpectedStatus, deployment.HealthcheckCustomCommand)
+
 	// For compose deployments, stop and redeploy (which already updates configs)
 	if deployment.ComposeYaml != "" {
 		logger.Info("[DeploymentManager] Compose-based deployment - stopping and redeploying to update configs")
@@ -832,6 +852,10 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 		HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 	}
+
+	// Log the config healthcheck values
+	logger.Info("[RestartDeployment] DeploymentConfig created - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+		config.HealthcheckType, config.HealthcheckPort, config.HealthcheckPath, config.HealthcheckExpectedStatus, config.HealthcheckCustomCommand)
 
 	// Recreate containers with updated config
 	if err := dm.CreateDeployment(ctx, config); err != nil {

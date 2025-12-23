@@ -704,16 +704,23 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 
 				// Recreate containers using deployment config
 				cfg := &orchestrator.DeploymentConfig{
-					DeploymentID: deploymentID,
-					Image:        image,
-					Domain:       dbDep.Domain,
-					Port:         port,
-					EnvVars:      parseEnvVars(dbDep.EnvVars),
-					Labels:       map[string]string{},
-					Memory:       memory,
-					CPUShares:    cpuShares,
-					Replicas:     replicas,
+					DeploymentID:              deploymentID,
+					Image:                     image,
+					Domain:                    dbDep.Domain,
+					Port:                      port,
+					EnvVars:                   parseEnvVars(dbDep.EnvVars),
+					Labels:                    map[string]string{},
+					Memory:                    memory,
+					CPUShares:                 cpuShares,
+					Replicas:                  replicas,
+					HealthcheckType:           dbDep.HealthcheckType,
+					HealthcheckPort:           dbDep.HealthcheckPort,
+					HealthcheckPath:           dbDep.HealthcheckPath,
+					HealthcheckExpectedStatus: dbDep.HealthcheckExpectedStatus,
+					HealthcheckCustomCommand:  dbDep.HealthcheckCustomCommand,
 				}
+				logger.Info("[StartDeployment-lifecycle.go] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+					cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)
 				if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
 					logger.Error("[StartDeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
 					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create containers: %w", err))

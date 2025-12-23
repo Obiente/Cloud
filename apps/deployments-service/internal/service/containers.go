@@ -105,16 +105,23 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 
 			// Recreate containers using deployment config
 			cfg := &orchestrator.DeploymentConfig{
-				DeploymentID: deploymentID,
-				Image:        image,
-				Domain:       dbDep.Domain,
-				Port:         port,
-				EnvVars:      parseEnvVars(dbDep.EnvVars),
-				Labels:       map[string]string{},
-				Memory:       memory,
-				CPUShares:    cpuShares,
-				Replicas:     replicas,
+				DeploymentID:              deploymentID,
+				Image:                     image,
+				Domain:                    dbDep.Domain,
+				Port:                      port,
+				EnvVars:                   parseEnvVars(dbDep.EnvVars),
+				Labels:                    map[string]string{},
+				Memory:                    memory,
+				CPUShares:                 cpuShares,
+				Replicas:                  replicas,
+				HealthcheckType:           dbDep.HealthcheckType,
+				HealthcheckPort:           dbDep.HealthcheckPort,
+				HealthcheckPath:           dbDep.HealthcheckPath,
+				HealthcheckExpectedStatus: dbDep.HealthcheckExpectedStatus,
+				HealthcheckCustomCommand:  dbDep.HealthcheckCustomCommand,
 			}
+			log.Printf("[attemptAutomaticRedeployment] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+				cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)
 			if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
 				log.Printf("[attemptAutomaticRedeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
 				// Check if error is about missing image

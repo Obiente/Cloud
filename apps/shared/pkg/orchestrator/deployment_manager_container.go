@@ -184,13 +184,18 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
 	if config.HealthcheckType != nil {
 		healthcheckType = *config.HealthcheckType
+		logger.Info("[DeploymentManager] Healthcheck type explicitly set to %d for container %s", healthcheckType, name)
+	} else {
+		logger.Info("[DeploymentManager] Healthcheck type not set (nil), defaulting to %d (UNSPECIFIED) for container %s", healthcheckType, name)
 	}
 
 	switch healthcheckType {
 	case 1: // HEALTHCHECK_DISABLED
-		// Explicitly disabled - no healthcheck
+		// Explicitly disabled - disable healthcheck even if image has one
 		logger.Info("[DeploymentManager] Health check explicitly disabled for container %s", name)
-		healthcheck = nil
+		healthcheck = &container.HealthConfig{
+			Test: []string{"NONE"},
+		}
 
 	case 2: // HEALTHCHECK_TCP
 		if effectiveHealthCheckPort > 0 {
@@ -491,6 +496,9 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
 	if config.HealthcheckType != nil {
 		healthcheckType = *config.HealthcheckType
+		logger.Info("[createSwarmService] Healthcheck type set to %d for service %s", healthcheckType, swarmServiceName)
+	} else {
+		logger.Info("[createSwarmService] Healthcheck type is nil, defaulting to 0 for service %s", swarmServiceName)
 	}
 
 	// Only add healthcheck if not explicitly disabled
@@ -1153,7 +1161,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	if config.HealthcheckType != nil {
 		healthcheckType = *config.HealthcheckType
 	}
-	
+
 	// Only add healthcheck if not explicitly disabled
 	if healthcheckType != 1 { // 1 = HEALTHCHECK_DISABLED
 		// Determine effective health check port
@@ -1161,7 +1169,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		if config.HealthcheckPort != nil && *config.HealthcheckPort > 0 {
 			effectiveHealthCheckPort = int(*config.HealthcheckPort)
 		}
-		
+
 		switch healthcheckType {
 		case 2: // HEALTHCHECK_TCP
 			if effectiveHealthCheckPort > 0 {
@@ -1175,7 +1183,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 				)
 				logger.Info("[DeploymentManager] Updated TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
 			}
-			
+
 		case 3: // HEALTHCHECK_HTTP
 			if effectiveHealthCheckPort > 0 {
 				path := "/"
@@ -1196,7 +1204,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 				)
 				logger.Info("[DeploymentManager] Updated HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
 			}
-			
+
 		case 4: // HEALTHCHECK_CUSTOM
 			if config.HealthcheckCustomCommand != nil && *config.HealthcheckCustomCommand != "" {
 				args = append(args,
@@ -1208,7 +1216,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 				)
 				logger.Info("[DeploymentManager] Updated custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
 			}
-			
+
 		default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) - auto-detect
 			if effectiveHealthCheckPort > 0 && len(routings) > 0 {
 				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)

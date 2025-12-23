@@ -163,6 +163,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 
 	// Create deployment with minimal configuration
 	// Type and build strategy will be auto-detected when repository is configured
+	healthcheckTypeUnspecified := deploymentsv1.HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED
 	deployment := &deploymentsv1.Deployment{
 		Id:             id,
 		Name:           req.Msg.GetName(),
@@ -175,6 +176,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		Environment:    environment,
 		Groups:         groups, // Set groups from request
 		Branch:         "main", // Default branch
+		HealthcheckType: &healthcheckTypeUnspecified, // Default to auto-detection
 		LastDeployedAt: timestamppb.Now(),
 		BandwidthUsage: 0,
 		StorageUsage:   0,

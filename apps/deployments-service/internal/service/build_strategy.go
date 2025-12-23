@@ -631,21 +631,29 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 		}
 		
 		cfg := &orchestrator.DeploymentConfig{
-			DeploymentID: deployment.ID,
-			Image:        imageName,
-			Domain:       deployment.Domain,
-			Port:         port,
-			EnvVars:      envVars,
-			Labels:       map[string]string{},
-			Memory:       memory,
-			CPUShares:    cpuShares,
-			Replicas:     1,
-			StartCommand: startCmd, // Pass start command to override container CMD
+			DeploymentID:              deployment.ID,
+			Image:                     imageName,
+			Domain:                    deployment.Domain,
+			Port:                      port,
+			EnvVars:                   envVars,
+			Labels:                    map[string]string{},
+			Memory:                    memory,
+			CPUShares:                 cpuShares,
+			Replicas:                  1,
+			StartCommand:              startCmd, // Pass start command to override container CMD
+			HealthcheckType:           deployment.HealthcheckType,
+			HealthcheckPort:           deployment.HealthcheckPort,
+			HealthcheckPath:           deployment.HealthcheckPath,
+			HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
+			HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 		}
 
 		if deployment.Replicas != nil {
 			cfg.Replicas = int(*deployment.Replicas)
 		}
+
+		log.Printf("[deployResultToOrchestrator] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
+			cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)
 
 		return manager.CreateDeployment(ctx, cfg)
 	}
