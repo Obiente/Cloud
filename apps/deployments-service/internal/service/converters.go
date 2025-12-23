@@ -86,7 +86,8 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 
 	// Health check configuration
 	if db.HealthcheckType != nil {
-		deployment.HealthcheckType = (*deploymentsv1.HealthCheckType)(db.HealthcheckType)
+		hcType := deploymentsv1.HealthCheckType(*db.HealthcheckType)
+		deployment.HealthcheckType = &hcType
 	}
 	if db.HealthcheckPort != nil {
 		deployment.HealthcheckPort = proto.Int32(*db.HealthcheckPort)
