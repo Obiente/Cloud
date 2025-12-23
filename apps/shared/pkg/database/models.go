@@ -28,6 +28,13 @@ type Deployment struct {
 	UseNginx          *bool     `gorm:"column:use_nginx;default:false" json:"use_nginx"` // Use nginx for static deployments
 	NginxConfig       *string   `gorm:"column:nginx_config;type:text" json:"nginx_config"` // Custom nginx configuration (optional, uses default if empty)
 	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
+	
+	// Health check configuration
+	HealthcheckType           *int32  `gorm:"column:healthcheck_type" json:"healthcheck_type"` // Type of health check (HealthCheckType enum)
+	HealthcheckPort           *int32  `gorm:"column:healthcheck_port" json:"healthcheck_port"` // Port to check (if different from main port)
+	HealthcheckPath           *string `gorm:"column:healthcheck_path" json:"healthcheck_path"` // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+	HealthcheckExpectedStatus *int32  `gorm:"column:healthcheck_expected_status" json:"healthcheck_expected_status"` // Expected HTTP status code (default: 200)
+	HealthcheckCustomCommand  *string `gorm:"column:healthcheck_custom_command;type:text" json:"healthcheck_custom_command"` // Custom command (sanitized)
 	Status         int32     `gorm:"column:status;default:0" json:"status"` // DeploymentStatus enum
 	HealthStatus   string    `gorm:"column:health_status" json:"health_status"`
 	Environment    int32     `gorm:"column:environment" json:"environment"` // Environment enum

@@ -90,12 +90,12 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 				log.Printf("[attemptAutomaticRedeployment] Deployment %s has no exposed port configured; continuing without health checks", deploymentID)
 			}
 
-			memory := int64(256 * 1024 * 1024) // Default 256MB
-			if dbDep.MemoryBytes != nil {
+			memory := int64(2 * 1024 * 1024 * 1024) // Default 2GB
+			if dbDep.MemoryBytes != nil && *dbDep.MemoryBytes > 0 {
 				memory = *dbDep.MemoryBytes
 			}
-			cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
-			if dbDep.CPUShares != nil {
+			cpuShares := int64(512) // Default 0.5 CPU cores (512 shares)
+			if dbDep.CPUShares != nil && *dbDep.CPUShares > 0 {
 				cpuShares = *dbDep.CPUShares
 			}
 			replicas := 1 // Default
@@ -351,6 +351,13 @@ func (s *Service) ListDeploymentContainers(ctx context.Context, req *connect.Req
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get locations: %w", err))
 		}
 	}
+	// If we have no DB-tracked locations, attempt discovery by label.
+	if len(locations) == 0 {
+		refreshed, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
+		if refreshErr == nil {
+			locations = refreshed
+		}
+	}
 
 	containers := make([]*deploymentsv1.DeploymentContainer, 0, len(locations))
 
@@ -420,6 +427,13 @@ func (s *Service) getDeploymentContainerStatus(ctx context.Context, deploymentID
 			return 0, 0, fmt.Errorf("failed to get locations: %w", err)
 		}
 	}
+	// If we have no DB-tracked locations, attempt discovery by label.
+	if len(locations) == 0 {
+		refreshed, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
+		if refreshErr == nil {
+			locations = refreshed
+		}
+	}
 
 	totalCount = int32(len(locations))
 	if totalCount == 0 {
@@ -459,6 +473,13 @@ func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID st
 		locations, err = database.ValidateAndRefreshLocations(deploymentID)
 		if err != nil {
 			return "", fmt.Errorf("failed to get locations: %w", err)
+		}
+	}
+	// If we have no DB-tracked locations, attempt discovery by label.
+	if len(locations) == 0 {
+		refreshed, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
+		if refreshErr == nil {
+			locations = refreshed
 		}
 	}
 

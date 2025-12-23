@@ -338,9 +338,10 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		validLocations = append(validLocations, loc)
 	}
 
-	// If we removed stale entries, try to find actual running containers for this deployment
-	if len(validLocations) == 0 && len(locations) > 0 {
-		logger.Info("[ValidateAndRefreshLocations] All containers were stale, attempting to discover actual containers for deployment %s", deploymentID)
+	// If we couldn't verify any running containers locally, try to discover actual containers
+	// using the deployment label. This also covers the case where there are NO DB records yet.
+	if len(validLocations) == 0 {
+		logger.Info("[ValidateAndRefreshLocations] No locally verifiable containers found, attempting to discover actual containers for deployment %s", deploymentID)
 
 		// Look for containers with deployment label using moby filters
 		filterArgs := make(client.Filters)

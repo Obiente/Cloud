@@ -250,45 +250,14 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		}
 	}
 
-	// Create default deployment routing (for backward compatibility)
-	// Only create if no routing rules exist - preserve user-configured routing
+	// No longer create default routing rules automatically.
+	// Users must explicitly configure routing rules if they need them.
+	// This prevents unnecessary healthcheck injection for worker/process deployments.
 	existingRoutings, _ := database.GetDeploymentRoutings(config.DeploymentID)
-	if len(existingRoutings) == 0 {
-		// Check if a default routing already exists (might have been created previously)
-		// This handles the case where GetDeploymentRoutings returns empty but a routing exists in DB
-		defaultRoutingID := fmt.Sprintf("route-%s", config.DeploymentID)
-		var existingDefaultRouting database.DeploymentRouting
-		dbErr := database.DB.Where("id = ?", defaultRoutingID).First(&existingDefaultRouting).Error
-
-		// If a default routing exists, preserve all user settings (especially port)
-		if dbErr == nil {
-			// User has set routing rules - preserve them completely, don't overwrite
-			logger.Info("[DeploymentManager] Found existing default routing for deployment %s, preserving all user settings (port: %d)", config.DeploymentID, existingDefaultRouting.TargetPort)
-		} else {
-			// No existing routing found, create default routing
-			routing := &database.DeploymentRouting{
-				ID:              defaultRoutingID,
-				DeploymentID:    config.DeploymentID,
-				Domain:          config.Domain,
-				ServiceName:     "default",
-				TargetPort:      config.Port,
-				Protocol:        "http",
-				SSLEnabled:      false, // Default to no SSL for HTTP protocol
-				SSLCertResolver: "letsencrypt",
-				Middleware:      "{}", // Empty JSON object for jsonb field
-				CreatedAt:       time.Now(),
-				UpdatedAt:       time.Now(),
-			}
-
-			if err := database.UpsertDeploymentRouting(routing); err != nil {
-				logger.Warn("[DeploymentManager] Failed to create routing: %v", err)
-			} else {
-				logger.Info("[DeploymentManager] Created default routing for deployment %s (port: %d)", config.DeploymentID, config.Port)
-			}
-		}
+	if len(existingRoutings) > 0 {
+		logger.Info("[DeploymentManager] Deployment %s has %d routing rule(s)", config.DeploymentID, len(existingRoutings))
 	} else {
-		// Routing rules already exist - preserve them, don't overwrite
-		logger.Info("[DeploymentManager] Deployment %s already has %d routing rule(s), preserving existing configuration", config.DeploymentID, len(existingRoutings))
+		logger.Info("[DeploymentManager] Deployment %s has no routing rules (process/worker deployment)", config.DeploymentID)
 	}
 
 	logger.Info("[DeploymentManager] Deployment %s created successfully", config.DeploymentID)
@@ -395,16 +364,21 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			}
 
 			config := &DeploymentConfig{
-				DeploymentID: deploymentID,
-				Image:        image,
-				Domain:       deployment.Domain,
-				Port:         port,
-				EnvVars:      envVars,
-				Labels:       map[string]string{},
-				Memory:       memory,
-				CPUShares:    cpuShares,
-				Replicas:     replicas,
-				StartCommand: deployment.StartCommand,
+				DeploymentID:              deploymentID,
+				Image:                     image,
+				Domain:                    deployment.Domain,
+				Port:                      port,
+				EnvVars:                   envVars,
+				Labels:                    map[string]string{},
+				Memory:                    memory,
+				CPUShares:                 cpuShares,
+				Replicas:                  replicas,
+				StartCommand:              deployment.StartCommand,
+				HealthcheckType:           deployment.HealthcheckType,
+				HealthcheckPort:           deployment.HealthcheckPort,
+				HealthcheckPath:           deployment.HealthcheckPath,
+				HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
+				HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 			}
 
 			// Create the containers
@@ -509,16 +483,21 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 
 				config := &DeploymentConfig{
-					DeploymentID: deploymentID,
-					Image:        image,
-					Domain:       deployment.Domain,
-					Port:         port,
-					EnvVars:      envVars,
-					Labels:       map[string]string{},
-					Memory:       memory,
-					CPUShares:    cpuShares,
-					Replicas:     replicas,
-					StartCommand: deployment.StartCommand,
+					DeploymentID:              deploymentID,
+					Image:                     image,
+					Domain:                    deployment.Domain,
+					Port:                      port,
+					EnvVars:                   envVars,
+					Labels:                    map[string]string{},
+					Memory:                    memory,
+					CPUShares:                 cpuShares,
+					Replicas:                  replicas,
+					StartCommand:              deployment.StartCommand,
+					HealthcheckType:           deployment.HealthcheckType,
+					HealthcheckPort:           deployment.HealthcheckPort,
+					HealthcheckPath:           deployment.HealthcheckPath,
+					HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
+					HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 				}
 
 				// Recreate the containers
@@ -819,14 +798,14 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		logger.Info("[DeploymentManager] Deployment %s restarting without an exposed port", deploymentID)
 	}
 
-	// Defaults match StartDeployment: 2GB RAM, 0.05 CPU cores (51 shares).
+	// Defaults match StartDeployment: 2GB RAM, 0.5 CPU cores (512 shares).
 	// Per-deployment overrides (deployments.memory_bytes / deployments.cpu_shares) take precedence when set.
 	// Org plan caps are applied inside CreateDeployment() via applyPlanLimits().
 	memory := int64(2 * 1024 * 1024 * 1024) // Default 2GB
 	if deployment.MemoryBytes != nil && *deployment.MemoryBytes > 0 {
 		memory = *deployment.MemoryBytes
 	}
-	cpuShares := int64(51) // Default 0.05 CPU (51 shares = 0.05 cores)
+	cpuShares := int64(512) // Default 0.5 CPU cores (512 shares)
 	if deployment.CPUShares != nil && *deployment.CPUShares > 0 {
 		cpuShares = *deployment.CPUShares
 	}
@@ -837,16 +816,21 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 
 	// Create deployment config
 	config := &DeploymentConfig{
-		DeploymentID: deploymentID,
-		Image:        image,
-		Domain:       deployment.Domain,
-		Port:         port,
-		EnvVars:      envVars,
-		Labels:       map[string]string{},
-		Memory:       memory,
-		CPUShares:    cpuShares,
-		Replicas:     replicas,
-		StartCommand: deployment.StartCommand,
+		DeploymentID:              deploymentID,
+		Image:                     image,
+		Domain:                    deployment.Domain,
+		Port:                      port,
+		EnvVars:                   envVars,
+		Labels:                    map[string]string{},
+		Memory:                    memory,
+		CPUShares:                 cpuShares,
+		Replicas:                  replicas,
+		StartCommand:              deployment.StartCommand,
+		HealthcheckType:           deployment.HealthcheckType,
+		HealthcheckPort:           deployment.HealthcheckPort,
+		HealthcheckPath:           deployment.HealthcheckPath,
+		HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
+		HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 	}
 
 	// Recreate containers with updated config

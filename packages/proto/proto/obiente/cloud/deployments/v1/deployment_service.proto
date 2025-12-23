@@ -61,6 +61,15 @@ enum BuildStatus {
   BUILD_FAILED = 4;
 }
 
+// Health check type for deployments
+enum HealthCheckType {
+  HEALTHCHECK_TYPE_UNSPECIFIED = 0; // No health check
+  HEALTHCHECK_DISABLED = 1;          // Explicitly disabled
+  HEALTHCHECK_TCP = 2;               // TCP port check (nc)
+  HEALTHCHECK_HTTP = 3;              // HTTP endpoint check
+  HEALTHCHECK_CUSTOM = 4;            // Custom command
+}
+
 service DeploymentService {
   // List organization deployments
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
@@ -291,6 +300,13 @@ message UpdateDeploymentRequest {
   repeated string groups = 16; // Optional groups/labels for organizing deployments
   optional double cpu_limit = 22; // CPU limit in cores
   optional int64 memory_limit = 23; // Memory limit in MB
+  
+  // Health check configuration
+  optional HealthCheckType healthcheck_type = 24; // Type of health check
+  optional int32 healthcheck_port = 25; // Port to check (if different from main port)
+  optional string healthcheck_path = 26; // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+  optional int32 healthcheck_expected_status = 27; // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
+  optional string healthcheck_custom_command = 28; // Custom command (used with HEALTHCHECK_CUSTOM)
 }
 
 message UpdateDeploymentResponse {
@@ -985,6 +1001,13 @@ message Deployment {
   // If unset (or set to 0), backend uses sane defaults capped by org plan.
   optional double cpu_limit = 38; // CPU limit in cores
   optional int64 memory_limit = 39; // Memory limit in MB
+  
+  // Health check configuration
+  optional HealthCheckType healthcheck_type = 40; // Type of health check
+  optional int32 healthcheck_port = 41; // Port to check (if different from main port)
+  optional string healthcheck_path = 42; // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+  optional int32 healthcheck_expected_status = 43; // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
+  optional string healthcheck_custom_command = 44; // Custom command (used with HEALTHCHECK_CUSTOM)
 }
 
 message ListDeploymentContainersRequest {

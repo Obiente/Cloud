@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
@@ -81,6 +82,23 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	}
 	if db.NginxConfig != nil {
 		deployment.NginxConfig = proto.String(*db.NginxConfig)
+	}
+
+	// Health check configuration
+	if db.HealthcheckType != nil {
+		deployment.HealthcheckType = (*deploymentsv1.HealthCheckType)(db.HealthcheckType)
+	}
+	if db.HealthcheckPort != nil {
+		deployment.HealthcheckPort = proto.Int32(*db.HealthcheckPort)
+	}
+	if db.HealthcheckPath != nil {
+		deployment.HealthcheckPath = proto.String(*db.HealthcheckPath)
+	}
+	if db.HealthcheckExpectedStatus != nil {
+		deployment.HealthcheckExpectedStatus = proto.Int32(*db.HealthcheckExpectedStatus)
+	}
+	if db.HealthcheckCustomCommand != nil {
+		deployment.HealthcheckCustomCommand = proto.String(*db.HealthcheckCustomCommand)
 	}
 
 	// Runtime fields
@@ -194,6 +212,33 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		nginxConfig := protoDep.GetNginxConfig()
 		db.NginxConfig = &nginxConfig
 	}
+
+	// Health check configuration
+	if protoDep.HealthcheckType != nil {
+		hcType := int32(protoDep.GetHealthcheckType())
+		db.HealthcheckType = &hcType
+	}
+	if protoDep.HealthcheckPort != nil {
+		hcPort := protoDep.GetHealthcheckPort()
+		db.HealthcheckPort = &hcPort
+	}
+	if protoDep.HealthcheckPath != nil {
+		hcPath := strings.TrimSpace(protoDep.GetHealthcheckPath())
+		if hcPath != "" {
+			db.HealthcheckPath = &hcPath
+		}
+	}
+	if protoDep.HealthcheckExpectedStatus != nil {
+		hcStatus := protoDep.GetHealthcheckExpectedStatus()
+		db.HealthcheckExpectedStatus = &hcStatus
+	}
+	if protoDep.HealthcheckCustomCommand != nil {
+		hcCmd := strings.TrimSpace(protoDep.GetHealthcheckCustomCommand())
+		if hcCmd != "" {
+			db.HealthcheckCustomCommand = &hcCmd
+		}
+	}
+
 	if protoDep.Image != nil {
 		img := protoDep.GetImage()
 		db.Image = &img

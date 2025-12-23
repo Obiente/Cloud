@@ -329,6 +329,62 @@ func (BuildStatus) EnumDescriptor() ([]byte, []int) {
 	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{4}
 }
 
+// Health check type for deployments
+type HealthCheckType int32
+
+const (
+	HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED HealthCheckType = 0 // No health check
+	HealthCheckType_HEALTHCHECK_DISABLED         HealthCheckType = 1 // Explicitly disabled
+	HealthCheckType_HEALTHCHECK_TCP              HealthCheckType = 2 // TCP port check (nc)
+	HealthCheckType_HEALTHCHECK_HTTP             HealthCheckType = 3 // HTTP endpoint check
+	HealthCheckType_HEALTHCHECK_CUSTOM           HealthCheckType = 4 // Custom command
+)
+
+// Enum value maps for HealthCheckType.
+var (
+	HealthCheckType_name = map[int32]string{
+		0: "HEALTHCHECK_TYPE_UNSPECIFIED",
+		1: "HEALTHCHECK_DISABLED",
+		2: "HEALTHCHECK_TCP",
+		3: "HEALTHCHECK_HTTP",
+		4: "HEALTHCHECK_CUSTOM",
+	}
+	HealthCheckType_value = map[string]int32{
+		"HEALTHCHECK_TYPE_UNSPECIFIED": 0,
+		"HEALTHCHECK_DISABLED":         1,
+		"HEALTHCHECK_TCP":              2,
+		"HEALTHCHECK_HTTP":             3,
+		"HEALTHCHECK_CUSTOM":           4,
+	}
+)
+
+func (x HealthCheckType) Enum() *HealthCheckType {
+	p := new(HealthCheckType)
+	*p = x
+	return p
+}
+
+func (x HealthCheckType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HealthCheckType) Descriptor() protoreflect.EnumDescriptor {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[5].Descriptor()
+}
+
+func (HealthCheckType) Type() protoreflect.EnumType {
+	return &file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[5]
+}
+
+func (x HealthCheckType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HealthCheckType.Descriptor instead.
+func (HealthCheckType) EnumDescriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{5}
+}
+
 type ContainerEntryType int32
 
 const (
@@ -365,11 +421,11 @@ func (x ContainerEntryType) String() string {
 }
 
 func (ContainerEntryType) Descriptor() protoreflect.EnumDescriptor {
-	return file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[5].Descriptor()
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[6].Descriptor()
 }
 
 func (ContainerEntryType) Type() protoreflect.EnumType {
-	return &file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[5]
+	return &file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes[6]
 }
 
 func (x ContainerEntryType) Number() protoreflect.EnumNumber {
@@ -378,7 +434,7 @@ func (x ContainerEntryType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ContainerEntryType.Descriptor instead.
 func (ContainerEntryType) EnumDescriptor() ([]byte, []int) {
-	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{5}
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{6}
 }
 
 type ListDeploymentsRequest struct {
@@ -734,8 +790,14 @@ type UpdateDeploymentRequest struct {
 	Groups              []string               `protobuf:"bytes,16,rep,name=groups,proto3" json:"groups,omitempty"`                                                                                           // Optional groups/labels for organizing deployments
 	CpuLimit            *float64               `protobuf:"fixed64,22,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`                                                               // CPU limit in cores
 	MemoryLimit         *int64                 `protobuf:"varint,23,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"`                                                       // Memory limit in MB
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Health check configuration
+	HealthcheckType           *HealthCheckType `protobuf:"varint,24,opt,name=healthcheck_type,json=healthcheckType,proto3,enum=obiente.cloud.deployments.v1.HealthCheckType,oneof" json:"healthcheck_type,omitempty"` // Type of health check
+	HealthcheckPort           *int32           `protobuf:"varint,25,opt,name=healthcheck_port,json=healthcheckPort,proto3,oneof" json:"healthcheck_port,omitempty"`                                                   // Port to check (if different from main port)
+	HealthcheckPath           *string          `protobuf:"bytes,26,opt,name=healthcheck_path,json=healthcheckPath,proto3,oneof" json:"healthcheck_path,omitempty"`                                                    // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+	HealthcheckExpectedStatus *int32           `protobuf:"varint,27,opt,name=healthcheck_expected_status,json=healthcheckExpectedStatus,proto3,oneof" json:"healthcheck_expected_status,omitempty"`                   // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
+	HealthcheckCustomCommand  *string          `protobuf:"bytes,28,opt,name=healthcheck_custom_command,json=healthcheckCustomCommand,proto3,oneof" json:"healthcheck_custom_command,omitempty"`                       // Custom command (used with HEALTHCHECK_CUSTOM)
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *UpdateDeploymentRequest) Reset() {
@@ -927,6 +989,41 @@ func (x *UpdateDeploymentRequest) GetMemoryLimit() int64 {
 		return *x.MemoryLimit
 	}
 	return 0
+}
+
+func (x *UpdateDeploymentRequest) GetHealthcheckType() HealthCheckType {
+	if x != nil && x.HealthcheckType != nil {
+		return *x.HealthcheckType
+	}
+	return HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED
+}
+
+func (x *UpdateDeploymentRequest) GetHealthcheckPort() int32 {
+	if x != nil && x.HealthcheckPort != nil {
+		return *x.HealthcheckPort
+	}
+	return 0
+}
+
+func (x *UpdateDeploymentRequest) GetHealthcheckPath() string {
+	if x != nil && x.HealthcheckPath != nil {
+		return *x.HealthcheckPath
+	}
+	return ""
+}
+
+func (x *UpdateDeploymentRequest) GetHealthcheckExpectedStatus() int32 {
+	if x != nil && x.HealthcheckExpectedStatus != nil {
+		return *x.HealthcheckExpectedStatus
+	}
+	return 0
+}
+
+func (x *UpdateDeploymentRequest) GetHealthcheckCustomCommand() string {
+	if x != nil && x.HealthcheckCustomCommand != nil {
+		return *x.HealthcheckCustomCommand
+	}
+	return ""
 }
 
 type UpdateDeploymentResponse struct {
@@ -6926,10 +7023,16 @@ type Deployment struct {
 	ContainersTotal   *int32 `protobuf:"varint,31,opt,name=containers_total,json=containersTotal,proto3,oneof" json:"containers_total,omitempty"`       // Total number of containers for this deployment
 	// Per-deployment resource limits (optional overrides).
 	// If unset (or set to 0), backend uses sane defaults capped by org plan.
-	CpuLimit      *float64 `protobuf:"fixed64,38,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`         // CPU limit in cores
-	MemoryLimit   *int64   `protobuf:"varint,39,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"` // Memory limit in MB
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CpuLimit    *float64 `protobuf:"fixed64,38,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`         // CPU limit in cores
+	MemoryLimit *int64   `protobuf:"varint,39,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"` // Memory limit in MB
+	// Health check configuration
+	HealthcheckType           *HealthCheckType `protobuf:"varint,40,opt,name=healthcheck_type,json=healthcheckType,proto3,enum=obiente.cloud.deployments.v1.HealthCheckType,oneof" json:"healthcheck_type,omitempty"` // Type of health check
+	HealthcheckPort           *int32           `protobuf:"varint,41,opt,name=healthcheck_port,json=healthcheckPort,proto3,oneof" json:"healthcheck_port,omitempty"`                                                   // Port to check (if different from main port)
+	HealthcheckPath           *string          `protobuf:"bytes,42,opt,name=healthcheck_path,json=healthcheckPath,proto3,oneof" json:"healthcheck_path,omitempty"`                                                    // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+	HealthcheckExpectedStatus *int32           `protobuf:"varint,43,opt,name=healthcheck_expected_status,json=healthcheckExpectedStatus,proto3,oneof" json:"healthcheck_expected_status,omitempty"`                   // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
+	HealthcheckCustomCommand  *string          `protobuf:"bytes,44,opt,name=healthcheck_custom_command,json=healthcheckCustomCommand,proto3,oneof" json:"healthcheck_custom_command,omitempty"`                       // Custom command (used with HEALTHCHECK_CUSTOM)
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *Deployment) Reset() {
@@ -7233,6 +7336,41 @@ func (x *Deployment) GetMemoryLimit() int64 {
 		return *x.MemoryLimit
 	}
 	return 0
+}
+
+func (x *Deployment) GetHealthcheckType() HealthCheckType {
+	if x != nil && x.HealthcheckType != nil {
+		return *x.HealthcheckType
+	}
+	return HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED
+}
+
+func (x *Deployment) GetHealthcheckPort() int32 {
+	if x != nil && x.HealthcheckPort != nil {
+		return *x.HealthcheckPort
+	}
+	return 0
+}
+
+func (x *Deployment) GetHealthcheckPath() string {
+	if x != nil && x.HealthcheckPath != nil {
+		return *x.HealthcheckPath
+	}
+	return ""
+}
+
+func (x *Deployment) GetHealthcheckExpectedStatus() int32 {
+	if x != nil && x.HealthcheckExpectedStatus != nil {
+		return *x.HealthcheckExpectedStatus
+	}
+	return 0
+}
+
+func (x *Deployment) GetHealthcheckCustomCommand() string {
+	if x != nil && x.HealthcheckCustomCommand != nil {
+		return *x.HealthcheckCustomCommand
+	}
+	return ""
 }
 
 type ListDeploymentContainersRequest struct {
@@ -8665,8 +8803,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x15GetDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"\xa9\n" +
-	"\n" +
+	"deployment\"\xee\r\n" +
 	"\x17UpdateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
@@ -8693,7 +8830,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\venvironment\x18\x0f \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentH\x10R\venvironment\x88\x01\x01\x12\x16\n" +
 	"\x06groups\x18\x10 \x03(\tR\x06groups\x12 \n" +
 	"\tcpu_limit\x18\x16 \x01(\x01H\x11R\bcpuLimit\x88\x01\x01\x12&\n" +
-	"\fmemory_limit\x18\x17 \x01(\x03H\x12R\vmemoryLimit\x88\x01\x01B\a\n" +
+	"\fmemory_limit\x18\x17 \x01(\x03H\x12R\vmemoryLimit\x88\x01\x01\x12]\n" +
+	"\x10healthcheck_type\x18\x18 \x01(\x0e2-.obiente.cloud.deployments.v1.HealthCheckTypeH\x13R\x0fhealthcheckType\x88\x01\x01\x12.\n" +
+	"\x10healthcheck_port\x18\x19 \x01(\x05H\x14R\x0fhealthcheckPort\x88\x01\x01\x12.\n" +
+	"\x10healthcheck_path\x18\x1a \x01(\tH\x15R\x0fhealthcheckPath\x88\x01\x01\x12C\n" +
+	"\x1bhealthcheck_expected_status\x18\x1b \x01(\x05H\x16R\x19healthcheckExpectedStatus\x88\x01\x01\x12A\n" +
+	"\x1ahealthcheck_custom_command\x18\x1c \x01(\tH\x17R\x18healthcheckCustomCommand\x88\x01\x01B\a\n" +
 	"\x05_nameB\x11\n" +
 	"\x0f_repository_urlB\x18\n" +
 	"\x16_github_integration_idB\t\n" +
@@ -8714,7 +8856,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\f_environmentB\f\n" +
 	"\n" +
 	"_cpu_limitB\x0f\n" +
-	"\r_memory_limit\"d\n" +
+	"\r_memory_limitB\x13\n" +
+	"\x11_healthcheck_typeB\x13\n" +
+	"\x11_healthcheck_portB\x13\n" +
+	"\x11_healthcheck_pathB\x1e\n" +
+	"\x1c_healthcheck_expected_statusB\x1d\n" +
+	"\x1b_healthcheck_custom_command\"d\n" +
 	"\x18UpdateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
@@ -9269,7 +9416,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\xb0\x10\n" +
+	"\x13_storage_cost_cents\"\xf5\x13\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -9315,7 +9462,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x12containers_running\x18\x1e \x01(\x05H\x10R\x11containersRunning\x88\x01\x01\x12.\n" +
 	"\x10containers_total\x18\x1f \x01(\x05H\x11R\x0fcontainersTotal\x88\x01\x01\x12 \n" +
 	"\tcpu_limit\x18& \x01(\x01H\x12R\bcpuLimit\x88\x01\x01\x12&\n" +
-	"\fmemory_limit\x18' \x01(\x03H\x13R\vmemoryLimit\x88\x01\x01\x1a:\n" +
+	"\fmemory_limit\x18' \x01(\x03H\x13R\vmemoryLimit\x88\x01\x01\x12]\n" +
+	"\x10healthcheck_type\x18( \x01(\x0e2-.obiente.cloud.deployments.v1.HealthCheckTypeH\x14R\x0fhealthcheckType\x88\x01\x01\x12.\n" +
+	"\x10healthcheck_port\x18) \x01(\x05H\x15R\x0fhealthcheckPort\x88\x01\x01\x12.\n" +
+	"\x10healthcheck_path\x18* \x01(\tH\x16R\x0fhealthcheckPath\x88\x01\x01\x12C\n" +
+	"\x1bhealthcheck_expected_status\x18+ \x01(\x05H\x17R\x19healthcheckExpectedStatus\x88\x01\x01\x12A\n" +
+	"\x1ahealthcheck_custom_command\x18, \x01(\tH\x18R\x18healthcheckCustomCommand\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
@@ -9341,7 +9493,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x11_containers_totalB\f\n" +
 	"\n" +
 	"_cpu_limitB\x0f\n" +
-	"\r_memory_limit\"o\n" +
+	"\r_memory_limitB\x13\n" +
+	"\x11_healthcheck_typeB\x13\n" +
+	"\x11_healthcheck_portB\x13\n" +
+	"\x11_healthcheck_pathB\x1e\n" +
+	"\x1c_healthcheck_expected_statusB\x1d\n" +
+	"\x1b_healthcheck_custom_command\"o\n" +
 	"\x1fListDeploymentContainersRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"u\n" +
@@ -9527,7 +9684,13 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\rBUILD_PENDING\x10\x01\x12\x12\n" +
 	"\x0eBUILD_BUILDING\x10\x02\x12\x11\n" +
 	"\rBUILD_SUCCESS\x10\x03\x12\x10\n" +
-	"\fBUILD_FAILED\x10\x04*\x9f\x01\n" +
+	"\fBUILD_FAILED\x10\x04*\x90\x01\n" +
+	"\x0fHealthCheckType\x12 \n" +
+	"\x1cHEALTHCHECK_TYPE_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14HEALTHCHECK_DISABLED\x10\x01\x12\x13\n" +
+	"\x0fHEALTHCHECK_TCP\x10\x02\x12\x14\n" +
+	"\x10HEALTHCHECK_HTTP\x10\x03\x12\x16\n" +
+	"\x12HEALTHCHECK_CUSTOM\x10\x04*\x9f\x01\n" +
 	"\x12ContainerEntryType\x12$\n" +
 	" CONTAINER_ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19CONTAINER_ENTRY_TYPE_FILE\x10\x01\x12\"\n" +
@@ -9602,7 +9765,7 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP() []
 	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescData
 }
 
-var file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
 var file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes = make([]protoimpl.MessageInfo, 120)
 var file_obiente_cloud_deployments_v1_deployment_service_proto_goTypes = []any{
 	(DeploymentType)(0),                             // 0: obiente.cloud.deployments.v1.DeploymentType
@@ -9610,318 +9773,321 @@ var file_obiente_cloud_deployments_v1_deployment_service_proto_goTypes = []any{
 	(Environment)(0),                                // 2: obiente.cloud.deployments.v1.Environment
 	(DeploymentStatus)(0),                           // 3: obiente.cloud.deployments.v1.DeploymentStatus
 	(BuildStatus)(0),                                // 4: obiente.cloud.deployments.v1.BuildStatus
-	(ContainerEntryType)(0),                         // 5: obiente.cloud.deployments.v1.ContainerEntryType
-	(*ListDeploymentsRequest)(nil),                  // 6: obiente.cloud.deployments.v1.ListDeploymentsRequest
-	(*ListDeploymentsResponse)(nil),                 // 7: obiente.cloud.deployments.v1.ListDeploymentsResponse
-	(*CreateDeploymentRequest)(nil),                 // 8: obiente.cloud.deployments.v1.CreateDeploymentRequest
-	(*CreateDeploymentResponse)(nil),                // 9: obiente.cloud.deployments.v1.CreateDeploymentResponse
-	(*GetDeploymentRequest)(nil),                    // 10: obiente.cloud.deployments.v1.GetDeploymentRequest
-	(*GetDeploymentResponse)(nil),                   // 11: obiente.cloud.deployments.v1.GetDeploymentResponse
-	(*UpdateDeploymentRequest)(nil),                 // 12: obiente.cloud.deployments.v1.UpdateDeploymentRequest
-	(*UpdateDeploymentResponse)(nil),                // 13: obiente.cloud.deployments.v1.UpdateDeploymentResponse
-	(*TriggerDeploymentRequest)(nil),                // 14: obiente.cloud.deployments.v1.TriggerDeploymentRequest
-	(*TriggerDeploymentResponse)(nil),               // 15: obiente.cloud.deployments.v1.TriggerDeploymentResponse
-	(*StreamDeploymentStatusRequest)(nil),           // 16: obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
-	(*DeploymentStatusUpdate)(nil),                  // 17: obiente.cloud.deployments.v1.DeploymentStatusUpdate
-	(*GetDeploymentLogsRequest)(nil),                // 18: obiente.cloud.deployments.v1.GetDeploymentLogsRequest
-	(*GetDeploymentLogsResponse)(nil),               // 19: obiente.cloud.deployments.v1.GetDeploymentLogsResponse
-	(*StreamDeploymentLogsRequest)(nil),             // 20: obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
-	(*StreamBuildLogsRequest)(nil),                  // 21: obiente.cloud.deployments.v1.StreamBuildLogsRequest
-	(*DeploymentLogLine)(nil),                       // 22: obiente.cloud.deployments.v1.DeploymentLogLine
-	(*StartDeploymentRequest)(nil),                  // 23: obiente.cloud.deployments.v1.StartDeploymentRequest
-	(*StartDeploymentResponse)(nil),                 // 24: obiente.cloud.deployments.v1.StartDeploymentResponse
-	(*StopDeploymentRequest)(nil),                   // 25: obiente.cloud.deployments.v1.StopDeploymentRequest
-	(*StopDeploymentResponse)(nil),                  // 26: obiente.cloud.deployments.v1.StopDeploymentResponse
-	(*DeleteDeploymentRequest)(nil),                 // 27: obiente.cloud.deployments.v1.DeleteDeploymentRequest
-	(*DeleteDeploymentResponse)(nil),                // 28: obiente.cloud.deployments.v1.DeleteDeploymentResponse
-	(*RestartDeploymentRequest)(nil),                // 29: obiente.cloud.deployments.v1.RestartDeploymentRequest
-	(*RestartDeploymentResponse)(nil),               // 30: obiente.cloud.deployments.v1.RestartDeploymentResponse
-	(*ScaleDeploymentRequest)(nil),                  // 31: obiente.cloud.deployments.v1.ScaleDeploymentRequest
-	(*ScaleDeploymentResponse)(nil),                 // 32: obiente.cloud.deployments.v1.ScaleDeploymentResponse
-	(*GetDeploymentEnvVarsRequest)(nil),             // 33: obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
-	(*GetDeploymentEnvVarsResponse)(nil),            // 34: obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
-	(*UpdateDeploymentEnvVarsRequest)(nil),          // 35: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
-	(*UpdateDeploymentEnvVarsResponse)(nil),         // 36: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
-	(*GetDeploymentComposeRequest)(nil),             // 37: obiente.cloud.deployments.v1.GetDeploymentComposeRequest
-	(*GetDeploymentComposeResponse)(nil),            // 38: obiente.cloud.deployments.v1.GetDeploymentComposeResponse
-	(*ValidateDeploymentComposeRequest)(nil),        // 39: obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
-	(*ValidateDeploymentComposeResponse)(nil),       // 40: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
-	(*UpdateDeploymentComposeRequest)(nil),          // 41: obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
-	(*UpdateDeploymentComposeResponse)(nil),         // 42: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
-	(*ComposeValidationError)(nil),                  // 43: obiente.cloud.deployments.v1.ComposeValidationError
-	(*ListGitHubReposRequest)(nil),                  // 44: obiente.cloud.deployments.v1.ListGitHubReposRequest
-	(*GitHubRepo)(nil),                              // 45: obiente.cloud.deployments.v1.GitHubRepo
-	(*ListGitHubReposResponse)(nil),                 // 46: obiente.cloud.deployments.v1.ListGitHubReposResponse
-	(*GetGitHubBranchesRequest)(nil),                // 47: obiente.cloud.deployments.v1.GetGitHubBranchesRequest
-	(*GitHubBranch)(nil),                            // 48: obiente.cloud.deployments.v1.GitHubBranch
-	(*GetGitHubBranchesResponse)(nil),               // 49: obiente.cloud.deployments.v1.GetGitHubBranchesResponse
-	(*GetGitHubFileRequest)(nil),                    // 50: obiente.cloud.deployments.v1.GetGitHubFileRequest
-	(*GetGitHubFileResponse)(nil),                   // 51: obiente.cloud.deployments.v1.GetGitHubFileResponse
-	(*ListAvailableGitHubIntegrationsRequest)(nil),  // 52: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
-	(*GitHubIntegrationOption)(nil),                 // 53: obiente.cloud.deployments.v1.GitHubIntegrationOption
-	(*ListAvailableGitHubIntegrationsResponse)(nil), // 54: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
-	(*StreamTerminalOutputRequest)(nil),             // 55: obiente.cloud.deployments.v1.StreamTerminalOutputRequest
-	(*SendTerminalInputRequest)(nil),                // 56: obiente.cloud.deployments.v1.SendTerminalInputRequest
-	(*SendTerminalInputResponse)(nil),               // 57: obiente.cloud.deployments.v1.SendTerminalInputResponse
-	(*TerminalInput)(nil),                           // 58: obiente.cloud.deployments.v1.TerminalInput
-	(*TerminalOutput)(nil),                          // 59: obiente.cloud.deployments.v1.TerminalOutput
-	(*VolumeInfo)(nil),                              // 60: obiente.cloud.deployments.v1.VolumeInfo
-	(*ListContainerFilesRequest)(nil),               // 61: obiente.cloud.deployments.v1.ListContainerFilesRequest
-	(*ContainerFile)(nil),                           // 62: obiente.cloud.deployments.v1.ContainerFile
-	(*ListContainerFilesResponse)(nil),              // 63: obiente.cloud.deployments.v1.ListContainerFilesResponse
-	(*GetContainerFileRequest)(nil),                 // 64: obiente.cloud.deployments.v1.GetContainerFileRequest
-	(*GetContainerFileResponse)(nil),                // 65: obiente.cloud.deployments.v1.GetContainerFileResponse
-	(*UploadContainerFilesRequest)(nil),             // 66: obiente.cloud.deployments.v1.UploadContainerFilesRequest
-	(*UploadContainerFilesMetadata)(nil),            // 67: obiente.cloud.deployments.v1.UploadContainerFilesMetadata
-	(*FileMetadata)(nil),                            // 68: obiente.cloud.deployments.v1.FileMetadata
-	(*UploadContainerFilesResponse)(nil),            // 69: obiente.cloud.deployments.v1.UploadContainerFilesResponse
-	(*ChunkUploadContainerFilesRequest)(nil),        // 70: obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest
-	(*ChunkUploadContainerFilesResponse)(nil),       // 71: obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse
-	(*DeleteContainerEntriesRequest)(nil),           // 72: obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
-	(*DeleteContainerEntriesError)(nil),             // 73: obiente.cloud.deployments.v1.DeleteContainerEntriesError
-	(*DeleteContainerEntriesResponse)(nil),          // 74: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
-	(*RenameContainerEntryRequest)(nil),             // 75: obiente.cloud.deployments.v1.RenameContainerEntryRequest
-	(*RenameContainerEntryResponse)(nil),            // 76: obiente.cloud.deployments.v1.RenameContainerEntryResponse
-	(*CreateContainerEntryRequest)(nil),             // 77: obiente.cloud.deployments.v1.CreateContainerEntryRequest
-	(*CreateContainerEntryResponse)(nil),            // 78: obiente.cloud.deployments.v1.CreateContainerEntryResponse
-	(*WriteContainerFileRequest)(nil),               // 79: obiente.cloud.deployments.v1.WriteContainerFileRequest
-	(*WriteContainerFileResponse)(nil),              // 80: obiente.cloud.deployments.v1.WriteContainerFileResponse
-	(*ExtractDeploymentFileRequest)(nil),            // 81: obiente.cloud.deployments.v1.ExtractDeploymentFileRequest
-	(*ExtractDeploymentFileResponse)(nil),           // 82: obiente.cloud.deployments.v1.ExtractDeploymentFileResponse
-	(*CreateDeploymentFileArchiveRequest)(nil),      // 83: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest
-	(*CreateDeploymentFileArchiveResponse)(nil),     // 84: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse
-	(*RoutingRule)(nil),                             // 85: obiente.cloud.deployments.v1.RoutingRule
-	(*GetDeploymentRoutingsRequest)(nil),            // 86: obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
-	(*GetDeploymentRoutingsResponse)(nil),           // 87: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
-	(*UpdateDeploymentRoutingsRequest)(nil),         // 88: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
-	(*UpdateDeploymentRoutingsResponse)(nil),        // 89: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
-	(*GetDeploymentServiceNamesRequest)(nil),        // 90: obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
-	(*GetDeploymentServiceNamesResponse)(nil),       // 91: obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
-	(*GetDomainVerificationTokenRequest)(nil),       // 92: obiente.cloud.deployments.v1.GetDomainVerificationTokenRequest
-	(*GetDomainVerificationTokenResponse)(nil),      // 93: obiente.cloud.deployments.v1.GetDomainVerificationTokenResponse
-	(*VerifyDomainOwnershipRequest)(nil),            // 94: obiente.cloud.deployments.v1.VerifyDomainOwnershipRequest
-	(*VerifyDomainOwnershipResponse)(nil),           // 95: obiente.cloud.deployments.v1.VerifyDomainOwnershipResponse
-	(*GetDeploymentMetricsRequest)(nil),             // 96: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
-	(*GetDeploymentMetricsResponse)(nil),            // 97: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
-	(*StreamDeploymentMetricsRequest)(nil),          // 98: obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
-	(*DeploymentMetric)(nil),                        // 99: obiente.cloud.deployments.v1.DeploymentMetric
-	(*GetDeploymentUsageRequest)(nil),               // 100: obiente.cloud.deployments.v1.GetDeploymentUsageRequest
-	(*GetDeploymentUsageResponse)(nil),              // 101: obiente.cloud.deployments.v1.GetDeploymentUsageResponse
-	(*DeploymentUsageMetrics)(nil),                  // 102: obiente.cloud.deployments.v1.DeploymentUsageMetrics
-	(*Deployment)(nil),                              // 103: obiente.cloud.deployments.v1.Deployment
-	(*ListDeploymentContainersRequest)(nil),         // 104: obiente.cloud.deployments.v1.ListDeploymentContainersRequest
-	(*ListDeploymentContainersResponse)(nil),        // 105: obiente.cloud.deployments.v1.ListDeploymentContainersResponse
-	(*DeploymentContainer)(nil),                     // 106: obiente.cloud.deployments.v1.DeploymentContainer
-	(*StreamContainerLogsRequest)(nil),              // 107: obiente.cloud.deployments.v1.StreamContainerLogsRequest
-	(*StartContainerRequest)(nil),                   // 108: obiente.cloud.deployments.v1.StartContainerRequest
-	(*StartContainerResponse)(nil),                  // 109: obiente.cloud.deployments.v1.StartContainerResponse
-	(*StopContainerRequest)(nil),                    // 110: obiente.cloud.deployments.v1.StopContainerRequest
-	(*StopContainerResponse)(nil),                   // 111: obiente.cloud.deployments.v1.StopContainerResponse
-	(*RestartContainerRequest)(nil),                 // 112: obiente.cloud.deployments.v1.RestartContainerRequest
-	(*RestartContainerResponse)(nil),                // 113: obiente.cloud.deployments.v1.RestartContainerResponse
-	(*ListBuildsRequest)(nil),                       // 114: obiente.cloud.deployments.v1.ListBuildsRequest
-	(*ListBuildsResponse)(nil),                      // 115: obiente.cloud.deployments.v1.ListBuildsResponse
-	(*GetBuildRequest)(nil),                         // 116: obiente.cloud.deployments.v1.GetBuildRequest
-	(*GetBuildResponse)(nil),                        // 117: obiente.cloud.deployments.v1.GetBuildResponse
-	(*GetBuildLogsRequest)(nil),                     // 118: obiente.cloud.deployments.v1.GetBuildLogsRequest
-	(*GetBuildLogsResponse)(nil),                    // 119: obiente.cloud.deployments.v1.GetBuildLogsResponse
-	(*RevertToBuildRequest)(nil),                    // 120: obiente.cloud.deployments.v1.RevertToBuildRequest
-	(*RevertToBuildResponse)(nil),                   // 121: obiente.cloud.deployments.v1.RevertToBuildResponse
-	(*DeleteBuildRequest)(nil),                      // 122: obiente.cloud.deployments.v1.DeleteBuildRequest
-	(*DeleteBuildResponse)(nil),                     // 123: obiente.cloud.deployments.v1.DeleteBuildResponse
-	(*Build)(nil),                                   // 124: obiente.cloud.deployments.v1.Build
-	nil,                                             // 125: obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
-	(*v1.Pagination)(nil),                           // 126: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),                   // 127: google.protobuf.Timestamp
-	(v1.LogLevel)(0),                                // 128: obiente.cloud.common.v1.LogLevel
-	(*v1.ChunkedUploadPayload)(nil),                 // 129: obiente.cloud.common.v1.ChunkedUploadPayload
-	(*v1.ChunkedUploadResponsePayload)(nil),         // 130: obiente.cloud.common.v1.ChunkedUploadResponsePayload
-	(*v1.CreateServerFileArchiveRequest)(nil),       // 131: obiente.cloud.common.v1.CreateServerFileArchiveRequest
-	(*v1.CreateServerFileArchiveResponse)(nil),      // 132: obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	(HealthCheckType)(0),                            // 5: obiente.cloud.deployments.v1.HealthCheckType
+	(ContainerEntryType)(0),                         // 6: obiente.cloud.deployments.v1.ContainerEntryType
+	(*ListDeploymentsRequest)(nil),                  // 7: obiente.cloud.deployments.v1.ListDeploymentsRequest
+	(*ListDeploymentsResponse)(nil),                 // 8: obiente.cloud.deployments.v1.ListDeploymentsResponse
+	(*CreateDeploymentRequest)(nil),                 // 9: obiente.cloud.deployments.v1.CreateDeploymentRequest
+	(*CreateDeploymentResponse)(nil),                // 10: obiente.cloud.deployments.v1.CreateDeploymentResponse
+	(*GetDeploymentRequest)(nil),                    // 11: obiente.cloud.deployments.v1.GetDeploymentRequest
+	(*GetDeploymentResponse)(nil),                   // 12: obiente.cloud.deployments.v1.GetDeploymentResponse
+	(*UpdateDeploymentRequest)(nil),                 // 13: obiente.cloud.deployments.v1.UpdateDeploymentRequest
+	(*UpdateDeploymentResponse)(nil),                // 14: obiente.cloud.deployments.v1.UpdateDeploymentResponse
+	(*TriggerDeploymentRequest)(nil),                // 15: obiente.cloud.deployments.v1.TriggerDeploymentRequest
+	(*TriggerDeploymentResponse)(nil),               // 16: obiente.cloud.deployments.v1.TriggerDeploymentResponse
+	(*StreamDeploymentStatusRequest)(nil),           // 17: obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
+	(*DeploymentStatusUpdate)(nil),                  // 18: obiente.cloud.deployments.v1.DeploymentStatusUpdate
+	(*GetDeploymentLogsRequest)(nil),                // 19: obiente.cloud.deployments.v1.GetDeploymentLogsRequest
+	(*GetDeploymentLogsResponse)(nil),               // 20: obiente.cloud.deployments.v1.GetDeploymentLogsResponse
+	(*StreamDeploymentLogsRequest)(nil),             // 21: obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
+	(*StreamBuildLogsRequest)(nil),                  // 22: obiente.cloud.deployments.v1.StreamBuildLogsRequest
+	(*DeploymentLogLine)(nil),                       // 23: obiente.cloud.deployments.v1.DeploymentLogLine
+	(*StartDeploymentRequest)(nil),                  // 24: obiente.cloud.deployments.v1.StartDeploymentRequest
+	(*StartDeploymentResponse)(nil),                 // 25: obiente.cloud.deployments.v1.StartDeploymentResponse
+	(*StopDeploymentRequest)(nil),                   // 26: obiente.cloud.deployments.v1.StopDeploymentRequest
+	(*StopDeploymentResponse)(nil),                  // 27: obiente.cloud.deployments.v1.StopDeploymentResponse
+	(*DeleteDeploymentRequest)(nil),                 // 28: obiente.cloud.deployments.v1.DeleteDeploymentRequest
+	(*DeleteDeploymentResponse)(nil),                // 29: obiente.cloud.deployments.v1.DeleteDeploymentResponse
+	(*RestartDeploymentRequest)(nil),                // 30: obiente.cloud.deployments.v1.RestartDeploymentRequest
+	(*RestartDeploymentResponse)(nil),               // 31: obiente.cloud.deployments.v1.RestartDeploymentResponse
+	(*ScaleDeploymentRequest)(nil),                  // 32: obiente.cloud.deployments.v1.ScaleDeploymentRequest
+	(*ScaleDeploymentResponse)(nil),                 // 33: obiente.cloud.deployments.v1.ScaleDeploymentResponse
+	(*GetDeploymentEnvVarsRequest)(nil),             // 34: obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
+	(*GetDeploymentEnvVarsResponse)(nil),            // 35: obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
+	(*UpdateDeploymentEnvVarsRequest)(nil),          // 36: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
+	(*UpdateDeploymentEnvVarsResponse)(nil),         // 37: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
+	(*GetDeploymentComposeRequest)(nil),             // 38: obiente.cloud.deployments.v1.GetDeploymentComposeRequest
+	(*GetDeploymentComposeResponse)(nil),            // 39: obiente.cloud.deployments.v1.GetDeploymentComposeResponse
+	(*ValidateDeploymentComposeRequest)(nil),        // 40: obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
+	(*ValidateDeploymentComposeResponse)(nil),       // 41: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
+	(*UpdateDeploymentComposeRequest)(nil),          // 42: obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
+	(*UpdateDeploymentComposeResponse)(nil),         // 43: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
+	(*ComposeValidationError)(nil),                  // 44: obiente.cloud.deployments.v1.ComposeValidationError
+	(*ListGitHubReposRequest)(nil),                  // 45: obiente.cloud.deployments.v1.ListGitHubReposRequest
+	(*GitHubRepo)(nil),                              // 46: obiente.cloud.deployments.v1.GitHubRepo
+	(*ListGitHubReposResponse)(nil),                 // 47: obiente.cloud.deployments.v1.ListGitHubReposResponse
+	(*GetGitHubBranchesRequest)(nil),                // 48: obiente.cloud.deployments.v1.GetGitHubBranchesRequest
+	(*GitHubBranch)(nil),                            // 49: obiente.cloud.deployments.v1.GitHubBranch
+	(*GetGitHubBranchesResponse)(nil),               // 50: obiente.cloud.deployments.v1.GetGitHubBranchesResponse
+	(*GetGitHubFileRequest)(nil),                    // 51: obiente.cloud.deployments.v1.GetGitHubFileRequest
+	(*GetGitHubFileResponse)(nil),                   // 52: obiente.cloud.deployments.v1.GetGitHubFileResponse
+	(*ListAvailableGitHubIntegrationsRequest)(nil),  // 53: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
+	(*GitHubIntegrationOption)(nil),                 // 54: obiente.cloud.deployments.v1.GitHubIntegrationOption
+	(*ListAvailableGitHubIntegrationsResponse)(nil), // 55: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
+	(*StreamTerminalOutputRequest)(nil),             // 56: obiente.cloud.deployments.v1.StreamTerminalOutputRequest
+	(*SendTerminalInputRequest)(nil),                // 57: obiente.cloud.deployments.v1.SendTerminalInputRequest
+	(*SendTerminalInputResponse)(nil),               // 58: obiente.cloud.deployments.v1.SendTerminalInputResponse
+	(*TerminalInput)(nil),                           // 59: obiente.cloud.deployments.v1.TerminalInput
+	(*TerminalOutput)(nil),                          // 60: obiente.cloud.deployments.v1.TerminalOutput
+	(*VolumeInfo)(nil),                              // 61: obiente.cloud.deployments.v1.VolumeInfo
+	(*ListContainerFilesRequest)(nil),               // 62: obiente.cloud.deployments.v1.ListContainerFilesRequest
+	(*ContainerFile)(nil),                           // 63: obiente.cloud.deployments.v1.ContainerFile
+	(*ListContainerFilesResponse)(nil),              // 64: obiente.cloud.deployments.v1.ListContainerFilesResponse
+	(*GetContainerFileRequest)(nil),                 // 65: obiente.cloud.deployments.v1.GetContainerFileRequest
+	(*GetContainerFileResponse)(nil),                // 66: obiente.cloud.deployments.v1.GetContainerFileResponse
+	(*UploadContainerFilesRequest)(nil),             // 67: obiente.cloud.deployments.v1.UploadContainerFilesRequest
+	(*UploadContainerFilesMetadata)(nil),            // 68: obiente.cloud.deployments.v1.UploadContainerFilesMetadata
+	(*FileMetadata)(nil),                            // 69: obiente.cloud.deployments.v1.FileMetadata
+	(*UploadContainerFilesResponse)(nil),            // 70: obiente.cloud.deployments.v1.UploadContainerFilesResponse
+	(*ChunkUploadContainerFilesRequest)(nil),        // 71: obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest
+	(*ChunkUploadContainerFilesResponse)(nil),       // 72: obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse
+	(*DeleteContainerEntriesRequest)(nil),           // 73: obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
+	(*DeleteContainerEntriesError)(nil),             // 74: obiente.cloud.deployments.v1.DeleteContainerEntriesError
+	(*DeleteContainerEntriesResponse)(nil),          // 75: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
+	(*RenameContainerEntryRequest)(nil),             // 76: obiente.cloud.deployments.v1.RenameContainerEntryRequest
+	(*RenameContainerEntryResponse)(nil),            // 77: obiente.cloud.deployments.v1.RenameContainerEntryResponse
+	(*CreateContainerEntryRequest)(nil),             // 78: obiente.cloud.deployments.v1.CreateContainerEntryRequest
+	(*CreateContainerEntryResponse)(nil),            // 79: obiente.cloud.deployments.v1.CreateContainerEntryResponse
+	(*WriteContainerFileRequest)(nil),               // 80: obiente.cloud.deployments.v1.WriteContainerFileRequest
+	(*WriteContainerFileResponse)(nil),              // 81: obiente.cloud.deployments.v1.WriteContainerFileResponse
+	(*ExtractDeploymentFileRequest)(nil),            // 82: obiente.cloud.deployments.v1.ExtractDeploymentFileRequest
+	(*ExtractDeploymentFileResponse)(nil),           // 83: obiente.cloud.deployments.v1.ExtractDeploymentFileResponse
+	(*CreateDeploymentFileArchiveRequest)(nil),      // 84: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest
+	(*CreateDeploymentFileArchiveResponse)(nil),     // 85: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse
+	(*RoutingRule)(nil),                             // 86: obiente.cloud.deployments.v1.RoutingRule
+	(*GetDeploymentRoutingsRequest)(nil),            // 87: obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
+	(*GetDeploymentRoutingsResponse)(nil),           // 88: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
+	(*UpdateDeploymentRoutingsRequest)(nil),         // 89: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
+	(*UpdateDeploymentRoutingsResponse)(nil),        // 90: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
+	(*GetDeploymentServiceNamesRequest)(nil),        // 91: obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
+	(*GetDeploymentServiceNamesResponse)(nil),       // 92: obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
+	(*GetDomainVerificationTokenRequest)(nil),       // 93: obiente.cloud.deployments.v1.GetDomainVerificationTokenRequest
+	(*GetDomainVerificationTokenResponse)(nil),      // 94: obiente.cloud.deployments.v1.GetDomainVerificationTokenResponse
+	(*VerifyDomainOwnershipRequest)(nil),            // 95: obiente.cloud.deployments.v1.VerifyDomainOwnershipRequest
+	(*VerifyDomainOwnershipResponse)(nil),           // 96: obiente.cloud.deployments.v1.VerifyDomainOwnershipResponse
+	(*GetDeploymentMetricsRequest)(nil),             // 97: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
+	(*GetDeploymentMetricsResponse)(nil),            // 98: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
+	(*StreamDeploymentMetricsRequest)(nil),          // 99: obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
+	(*DeploymentMetric)(nil),                        // 100: obiente.cloud.deployments.v1.DeploymentMetric
+	(*GetDeploymentUsageRequest)(nil),               // 101: obiente.cloud.deployments.v1.GetDeploymentUsageRequest
+	(*GetDeploymentUsageResponse)(nil),              // 102: obiente.cloud.deployments.v1.GetDeploymentUsageResponse
+	(*DeploymentUsageMetrics)(nil),                  // 103: obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	(*Deployment)(nil),                              // 104: obiente.cloud.deployments.v1.Deployment
+	(*ListDeploymentContainersRequest)(nil),         // 105: obiente.cloud.deployments.v1.ListDeploymentContainersRequest
+	(*ListDeploymentContainersResponse)(nil),        // 106: obiente.cloud.deployments.v1.ListDeploymentContainersResponse
+	(*DeploymentContainer)(nil),                     // 107: obiente.cloud.deployments.v1.DeploymentContainer
+	(*StreamContainerLogsRequest)(nil),              // 108: obiente.cloud.deployments.v1.StreamContainerLogsRequest
+	(*StartContainerRequest)(nil),                   // 109: obiente.cloud.deployments.v1.StartContainerRequest
+	(*StartContainerResponse)(nil),                  // 110: obiente.cloud.deployments.v1.StartContainerResponse
+	(*StopContainerRequest)(nil),                    // 111: obiente.cloud.deployments.v1.StopContainerRequest
+	(*StopContainerResponse)(nil),                   // 112: obiente.cloud.deployments.v1.StopContainerResponse
+	(*RestartContainerRequest)(nil),                 // 113: obiente.cloud.deployments.v1.RestartContainerRequest
+	(*RestartContainerResponse)(nil),                // 114: obiente.cloud.deployments.v1.RestartContainerResponse
+	(*ListBuildsRequest)(nil),                       // 115: obiente.cloud.deployments.v1.ListBuildsRequest
+	(*ListBuildsResponse)(nil),                      // 116: obiente.cloud.deployments.v1.ListBuildsResponse
+	(*GetBuildRequest)(nil),                         // 117: obiente.cloud.deployments.v1.GetBuildRequest
+	(*GetBuildResponse)(nil),                        // 118: obiente.cloud.deployments.v1.GetBuildResponse
+	(*GetBuildLogsRequest)(nil),                     // 119: obiente.cloud.deployments.v1.GetBuildLogsRequest
+	(*GetBuildLogsResponse)(nil),                    // 120: obiente.cloud.deployments.v1.GetBuildLogsResponse
+	(*RevertToBuildRequest)(nil),                    // 121: obiente.cloud.deployments.v1.RevertToBuildRequest
+	(*RevertToBuildResponse)(nil),                   // 122: obiente.cloud.deployments.v1.RevertToBuildResponse
+	(*DeleteBuildRequest)(nil),                      // 123: obiente.cloud.deployments.v1.DeleteBuildRequest
+	(*DeleteBuildResponse)(nil),                     // 124: obiente.cloud.deployments.v1.DeleteBuildResponse
+	(*Build)(nil),                                   // 125: obiente.cloud.deployments.v1.Build
+	nil,                                             // 126: obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
+	(*v1.Pagination)(nil),                           // 127: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),                   // 128: google.protobuf.Timestamp
+	(v1.LogLevel)(0),                                // 129: obiente.cloud.common.v1.LogLevel
+	(*v1.ChunkedUploadPayload)(nil),                 // 130: obiente.cloud.common.v1.ChunkedUploadPayload
+	(*v1.ChunkedUploadResponsePayload)(nil),         // 131: obiente.cloud.common.v1.ChunkedUploadResponsePayload
+	(*v1.CreateServerFileArchiveRequest)(nil),       // 132: obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	(*v1.CreateServerFileArchiveResponse)(nil),      // 133: obiente.cloud.common.v1.CreateServerFileArchiveResponse
 }
 var file_obiente_cloud_deployments_v1_deployment_service_proto_depIdxs = []int32{
 	3,   // 0: obiente.cloud.deployments.v1.ListDeploymentsRequest.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	103, // 1: obiente.cloud.deployments.v1.ListDeploymentsResponse.deployments:type_name -> obiente.cloud.deployments.v1.Deployment
-	126, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	104, // 1: obiente.cloud.deployments.v1.ListDeploymentsResponse.deployments:type_name -> obiente.cloud.deployments.v1.Deployment
+	127, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	2,   // 3: obiente.cloud.deployments.v1.CreateDeploymentRequest.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	103, // 4: obiente.cloud.deployments.v1.CreateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	103, // 5: obiente.cloud.deployments.v1.GetDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 4: obiente.cloud.deployments.v1.CreateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 5: obiente.cloud.deployments.v1.GetDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
 	1,   // 6: obiente.cloud.deployments.v1.UpdateDeploymentRequest.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
 	2,   // 7: obiente.cloud.deployments.v1.UpdateDeploymentRequest.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	103, // 8: obiente.cloud.deployments.v1.UpdateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	3,   // 9: obiente.cloud.deployments.v1.DeploymentStatusUpdate.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	127, // 10: obiente.cloud.deployments.v1.DeploymentStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	127, // 11: obiente.cloud.deployments.v1.DeploymentLogLine.timestamp:type_name -> google.protobuf.Timestamp
-	128, // 12: obiente.cloud.deployments.v1.DeploymentLogLine.log_level:type_name -> obiente.cloud.common.v1.LogLevel
-	103, // 13: obiente.cloud.deployments.v1.StartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	103, // 14: obiente.cloud.deployments.v1.StopDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	103, // 15: obiente.cloud.deployments.v1.RestartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	103, // 16: obiente.cloud.deployments.v1.ScaleDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	103, // 17: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	43,  // 18: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
-	103, // 19: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	43,  // 20: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
-	45,  // 21: obiente.cloud.deployments.v1.ListGitHubReposResponse.repos:type_name -> obiente.cloud.deployments.v1.GitHubRepo
-	48,  // 22: obiente.cloud.deployments.v1.GetGitHubBranchesResponse.branches:type_name -> obiente.cloud.deployments.v1.GitHubBranch
-	53,  // 23: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.deployments.v1.GitHubIntegrationOption
-	127, // 24: obiente.cloud.deployments.v1.ContainerFile.modified_time:type_name -> google.protobuf.Timestamp
-	127, // 25: obiente.cloud.deployments.v1.ContainerFile.created_time:type_name -> google.protobuf.Timestamp
-	62,  // 26: obiente.cloud.deployments.v1.ListContainerFilesResponse.files:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	60,  // 27: obiente.cloud.deployments.v1.ListContainerFilesResponse.volumes:type_name -> obiente.cloud.deployments.v1.VolumeInfo
-	62,  // 28: obiente.cloud.deployments.v1.GetContainerFileResponse.metadata:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	67,  // 29: obiente.cloud.deployments.v1.UploadContainerFilesRequest.metadata:type_name -> obiente.cloud.deployments.v1.UploadContainerFilesMetadata
-	68,  // 30: obiente.cloud.deployments.v1.UploadContainerFilesMetadata.files:type_name -> obiente.cloud.deployments.v1.FileMetadata
-	129, // 31: obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest.upload:type_name -> obiente.cloud.common.v1.ChunkedUploadPayload
-	130, // 32: obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse.result:type_name -> obiente.cloud.common.v1.ChunkedUploadResponsePayload
-	73,  // 33: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse.errors:type_name -> obiente.cloud.deployments.v1.DeleteContainerEntriesError
-	62,  // 34: obiente.cloud.deployments.v1.RenameContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	5,   // 35: obiente.cloud.deployments.v1.CreateContainerEntryRequest.type:type_name -> obiente.cloud.deployments.v1.ContainerEntryType
-	62,  // 36: obiente.cloud.deployments.v1.CreateContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	62,  // 37: obiente.cloud.deployments.v1.WriteContainerFileResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	131, // 38: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
-	132, // 39: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
-	85,  // 40: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	85,  // 41: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	85,  // 42: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	127, // 43: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	127, // 44: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
-	99,  // 45: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse.metrics:type_name -> obiente.cloud.deployments.v1.DeploymentMetric
-	127, // 46: obiente.cloud.deployments.v1.DeploymentMetric.timestamp:type_name -> google.protobuf.Timestamp
-	102, // 47: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.current:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
-	102, // 48: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.estimated_monthly:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
-	0,   // 49: obiente.cloud.deployments.v1.Deployment.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
-	1,   // 50: obiente.cloud.deployments.v1.Deployment.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
-	3,   // 51: obiente.cloud.deployments.v1.Deployment.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	127, // 52: obiente.cloud.deployments.v1.Deployment.last_deployed_at:type_name -> google.protobuf.Timestamp
-	127, // 53: obiente.cloud.deployments.v1.Deployment.created_at:type_name -> google.protobuf.Timestamp
-	2,   // 54: obiente.cloud.deployments.v1.Deployment.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	125, // 55: obiente.cloud.deployments.v1.Deployment.env_vars:type_name -> obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
-	106, // 56: obiente.cloud.deployments.v1.ListDeploymentContainersResponse.containers:type_name -> obiente.cloud.deployments.v1.DeploymentContainer
-	127, // 57: obiente.cloud.deployments.v1.DeploymentContainer.created_at:type_name -> google.protobuf.Timestamp
-	127, // 58: obiente.cloud.deployments.v1.DeploymentContainer.updated_at:type_name -> google.protobuf.Timestamp
-	124, // 59: obiente.cloud.deployments.v1.ListBuildsResponse.builds:type_name -> obiente.cloud.deployments.v1.Build
-	124, // 60: obiente.cloud.deployments.v1.GetBuildResponse.build:type_name -> obiente.cloud.deployments.v1.Build
-	22,  // 61: obiente.cloud.deployments.v1.GetBuildLogsResponse.logs:type_name -> obiente.cloud.deployments.v1.DeploymentLogLine
-	103, // 62: obiente.cloud.deployments.v1.RevertToBuildResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	4,   // 63: obiente.cloud.deployments.v1.Build.status:type_name -> obiente.cloud.deployments.v1.BuildStatus
-	127, // 64: obiente.cloud.deployments.v1.Build.started_at:type_name -> google.protobuf.Timestamp
-	127, // 65: obiente.cloud.deployments.v1.Build.completed_at:type_name -> google.protobuf.Timestamp
-	1,   // 66: obiente.cloud.deployments.v1.Build.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
-	127, // 67: obiente.cloud.deployments.v1.Build.created_at:type_name -> google.protobuf.Timestamp
-	127, // 68: obiente.cloud.deployments.v1.Build.updated_at:type_name -> google.protobuf.Timestamp
-	6,   // 69: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:input_type -> obiente.cloud.deployments.v1.ListDeploymentsRequest
-	8,   // 70: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:input_type -> obiente.cloud.deployments.v1.CreateDeploymentRequest
-	10,  // 71: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:input_type -> obiente.cloud.deployments.v1.GetDeploymentRequest
-	12,  // 72: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRequest
-	14,  // 73: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:input_type -> obiente.cloud.deployments.v1.TriggerDeploymentRequest
-	16,  // 74: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:input_type -> obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
-	18,  // 75: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:input_type -> obiente.cloud.deployments.v1.GetDeploymentLogsRequest
-	20,  // 76: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:input_type -> obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
-	21,  // 77: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:input_type -> obiente.cloud.deployments.v1.StreamBuildLogsRequest
-	96,  // 78: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
-	98,  // 79: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
-	100, // 80: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:input_type -> obiente.cloud.deployments.v1.GetDeploymentUsageRequest
-	23,  // 81: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:input_type -> obiente.cloud.deployments.v1.StartDeploymentRequest
-	25,  // 82: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:input_type -> obiente.cloud.deployments.v1.StopDeploymentRequest
-	27,  // 83: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:input_type -> obiente.cloud.deployments.v1.DeleteDeploymentRequest
-	29,  // 84: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:input_type -> obiente.cloud.deployments.v1.RestartDeploymentRequest
-	31,  // 85: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:input_type -> obiente.cloud.deployments.v1.ScaleDeploymentRequest
-	33,  // 86: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
-	35,  // 87: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
-	37,  // 88: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:input_type -> obiente.cloud.deployments.v1.GetDeploymentComposeRequest
-	39,  // 89: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
-	41,  // 90: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
-	44,  // 91: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:input_type -> obiente.cloud.deployments.v1.ListGitHubReposRequest
-	47,  // 92: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:input_type -> obiente.cloud.deployments.v1.GetGitHubBranchesRequest
-	50,  // 93: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:input_type -> obiente.cloud.deployments.v1.GetGitHubFileRequest
-	114, // 94: obiente.cloud.deployments.v1.DeploymentService.ListBuilds:input_type -> obiente.cloud.deployments.v1.ListBuildsRequest
-	116, // 95: obiente.cloud.deployments.v1.DeploymentService.GetBuild:input_type -> obiente.cloud.deployments.v1.GetBuildRequest
-	118, // 96: obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs:input_type -> obiente.cloud.deployments.v1.GetBuildLogsRequest
-	120, // 97: obiente.cloud.deployments.v1.DeploymentService.RevertToBuild:input_type -> obiente.cloud.deployments.v1.RevertToBuildRequest
-	122, // 98: obiente.cloud.deployments.v1.DeploymentService.DeleteBuild:input_type -> obiente.cloud.deployments.v1.DeleteBuildRequest
-	52,  // 99: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:input_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
-	58,  // 100: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:input_type -> obiente.cloud.deployments.v1.TerminalInput
-	55,  // 101: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:input_type -> obiente.cloud.deployments.v1.StreamTerminalOutputRequest
-	56,  // 102: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:input_type -> obiente.cloud.deployments.v1.SendTerminalInputRequest
-	61,  // 103: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:input_type -> obiente.cloud.deployments.v1.ListContainerFilesRequest
-	64,  // 104: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:input_type -> obiente.cloud.deployments.v1.GetContainerFileRequest
-	66,  // 105: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:input_type -> obiente.cloud.deployments.v1.UploadContainerFilesRequest
-	70,  // 106: obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles:input_type -> obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest
-	72,  // 107: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:input_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
-	75,  // 108: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:input_type -> obiente.cloud.deployments.v1.RenameContainerEntryRequest
-	77,  // 109: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:input_type -> obiente.cloud.deployments.v1.CreateContainerEntryRequest
-	79,  // 110: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:input_type -> obiente.cloud.deployments.v1.WriteContainerFileRequest
-	81,  // 111: obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile:input_type -> obiente.cloud.deployments.v1.ExtractDeploymentFileRequest
-	83,  // 112: obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive:input_type -> obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest
-	86,  // 113: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
-	88,  // 114: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
-	90,  // 115: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:input_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
-	92,  // 116: obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken:input_type -> obiente.cloud.deployments.v1.GetDomainVerificationTokenRequest
-	94,  // 117: obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership:input_type -> obiente.cloud.deployments.v1.VerifyDomainOwnershipRequest
-	104, // 118: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:input_type -> obiente.cloud.deployments.v1.ListDeploymentContainersRequest
-	107, // 119: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:input_type -> obiente.cloud.deployments.v1.StreamContainerLogsRequest
-	108, // 120: obiente.cloud.deployments.v1.DeploymentService.StartContainer:input_type -> obiente.cloud.deployments.v1.StartContainerRequest
-	110, // 121: obiente.cloud.deployments.v1.DeploymentService.StopContainer:input_type -> obiente.cloud.deployments.v1.StopContainerRequest
-	112, // 122: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:input_type -> obiente.cloud.deployments.v1.RestartContainerRequest
-	7,   // 123: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:output_type -> obiente.cloud.deployments.v1.ListDeploymentsResponse
-	9,   // 124: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:output_type -> obiente.cloud.deployments.v1.CreateDeploymentResponse
-	11,  // 125: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:output_type -> obiente.cloud.deployments.v1.GetDeploymentResponse
-	13,  // 126: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentResponse
-	15,  // 127: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:output_type -> obiente.cloud.deployments.v1.TriggerDeploymentResponse
-	17,  // 128: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:output_type -> obiente.cloud.deployments.v1.DeploymentStatusUpdate
-	19,  // 129: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:output_type -> obiente.cloud.deployments.v1.GetDeploymentLogsResponse
-	22,  // 130: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
-	22,  // 131: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
-	97,  // 132: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
-	99,  // 133: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.DeploymentMetric
-	101, // 134: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:output_type -> obiente.cloud.deployments.v1.GetDeploymentUsageResponse
-	24,  // 135: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:output_type -> obiente.cloud.deployments.v1.StartDeploymentResponse
-	26,  // 136: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:output_type -> obiente.cloud.deployments.v1.StopDeploymentResponse
-	28,  // 137: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:output_type -> obiente.cloud.deployments.v1.DeleteDeploymentResponse
-	30,  // 138: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:output_type -> obiente.cloud.deployments.v1.RestartDeploymentResponse
-	32,  // 139: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:output_type -> obiente.cloud.deployments.v1.ScaleDeploymentResponse
-	34,  // 140: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
-	36,  // 141: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
-	38,  // 142: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:output_type -> obiente.cloud.deployments.v1.GetDeploymentComposeResponse
-	40,  // 143: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
-	42,  // 144: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
-	46,  // 145: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:output_type -> obiente.cloud.deployments.v1.ListGitHubReposResponse
-	49,  // 146: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:output_type -> obiente.cloud.deployments.v1.GetGitHubBranchesResponse
-	51,  // 147: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:output_type -> obiente.cloud.deployments.v1.GetGitHubFileResponse
-	115, // 148: obiente.cloud.deployments.v1.DeploymentService.ListBuilds:output_type -> obiente.cloud.deployments.v1.ListBuildsResponse
-	117, // 149: obiente.cloud.deployments.v1.DeploymentService.GetBuild:output_type -> obiente.cloud.deployments.v1.GetBuildResponse
-	119, // 150: obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs:output_type -> obiente.cloud.deployments.v1.GetBuildLogsResponse
-	121, // 151: obiente.cloud.deployments.v1.DeploymentService.RevertToBuild:output_type -> obiente.cloud.deployments.v1.RevertToBuildResponse
-	123, // 152: obiente.cloud.deployments.v1.DeploymentService.DeleteBuild:output_type -> obiente.cloud.deployments.v1.DeleteBuildResponse
-	54,  // 153: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:output_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
-	59,  // 154: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:output_type -> obiente.cloud.deployments.v1.TerminalOutput
-	59,  // 155: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:output_type -> obiente.cloud.deployments.v1.TerminalOutput
-	57,  // 156: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:output_type -> obiente.cloud.deployments.v1.SendTerminalInputResponse
-	63,  // 157: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:output_type -> obiente.cloud.deployments.v1.ListContainerFilesResponse
-	65,  // 158: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:output_type -> obiente.cloud.deployments.v1.GetContainerFileResponse
-	69,  // 159: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:output_type -> obiente.cloud.deployments.v1.UploadContainerFilesResponse
-	71,  // 160: obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles:output_type -> obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse
-	74,  // 161: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:output_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
-	76,  // 162: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:output_type -> obiente.cloud.deployments.v1.RenameContainerEntryResponse
-	78,  // 163: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:output_type -> obiente.cloud.deployments.v1.CreateContainerEntryResponse
-	80,  // 164: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:output_type -> obiente.cloud.deployments.v1.WriteContainerFileResponse
-	82,  // 165: obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile:output_type -> obiente.cloud.deployments.v1.ExtractDeploymentFileResponse
-	84,  // 166: obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive:output_type -> obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse
-	87,  // 167: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
-	89,  // 168: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
-	91,  // 169: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:output_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
-	93,  // 170: obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken:output_type -> obiente.cloud.deployments.v1.GetDomainVerificationTokenResponse
-	95,  // 171: obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership:output_type -> obiente.cloud.deployments.v1.VerifyDomainOwnershipResponse
-	105, // 172: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:output_type -> obiente.cloud.deployments.v1.ListDeploymentContainersResponse
-	22,  // 173: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
-	109, // 174: obiente.cloud.deployments.v1.DeploymentService.StartContainer:output_type -> obiente.cloud.deployments.v1.StartContainerResponse
-	111, // 175: obiente.cloud.deployments.v1.DeploymentService.StopContainer:output_type -> obiente.cloud.deployments.v1.StopContainerResponse
-	113, // 176: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:output_type -> obiente.cloud.deployments.v1.RestartContainerResponse
-	123, // [123:177] is the sub-list for method output_type
-	69,  // [69:123] is the sub-list for method input_type
-	69,  // [69:69] is the sub-list for extension type_name
-	69,  // [69:69] is the sub-list for extension extendee
-	0,   // [0:69] is the sub-list for field type_name
+	5,   // 8: obiente.cloud.deployments.v1.UpdateDeploymentRequest.healthcheck_type:type_name -> obiente.cloud.deployments.v1.HealthCheckType
+	104, // 9: obiente.cloud.deployments.v1.UpdateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	3,   // 10: obiente.cloud.deployments.v1.DeploymentStatusUpdate.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	128, // 11: obiente.cloud.deployments.v1.DeploymentStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	128, // 12: obiente.cloud.deployments.v1.DeploymentLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	129, // 13: obiente.cloud.deployments.v1.DeploymentLogLine.log_level:type_name -> obiente.cloud.common.v1.LogLevel
+	104, // 14: obiente.cloud.deployments.v1.StartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 15: obiente.cloud.deployments.v1.StopDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 16: obiente.cloud.deployments.v1.RestartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 17: obiente.cloud.deployments.v1.ScaleDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	104, // 18: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	44,  // 19: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
+	104, // 20: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	44,  // 21: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
+	46,  // 22: obiente.cloud.deployments.v1.ListGitHubReposResponse.repos:type_name -> obiente.cloud.deployments.v1.GitHubRepo
+	49,  // 23: obiente.cloud.deployments.v1.GetGitHubBranchesResponse.branches:type_name -> obiente.cloud.deployments.v1.GitHubBranch
+	54,  // 24: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.deployments.v1.GitHubIntegrationOption
+	128, // 25: obiente.cloud.deployments.v1.ContainerFile.modified_time:type_name -> google.protobuf.Timestamp
+	128, // 26: obiente.cloud.deployments.v1.ContainerFile.created_time:type_name -> google.protobuf.Timestamp
+	63,  // 27: obiente.cloud.deployments.v1.ListContainerFilesResponse.files:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	61,  // 28: obiente.cloud.deployments.v1.ListContainerFilesResponse.volumes:type_name -> obiente.cloud.deployments.v1.VolumeInfo
+	63,  // 29: obiente.cloud.deployments.v1.GetContainerFileResponse.metadata:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	68,  // 30: obiente.cloud.deployments.v1.UploadContainerFilesRequest.metadata:type_name -> obiente.cloud.deployments.v1.UploadContainerFilesMetadata
+	69,  // 31: obiente.cloud.deployments.v1.UploadContainerFilesMetadata.files:type_name -> obiente.cloud.deployments.v1.FileMetadata
+	130, // 32: obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest.upload:type_name -> obiente.cloud.common.v1.ChunkedUploadPayload
+	131, // 33: obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse.result:type_name -> obiente.cloud.common.v1.ChunkedUploadResponsePayload
+	74,  // 34: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse.errors:type_name -> obiente.cloud.deployments.v1.DeleteContainerEntriesError
+	63,  // 35: obiente.cloud.deployments.v1.RenameContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	6,   // 36: obiente.cloud.deployments.v1.CreateContainerEntryRequest.type:type_name -> obiente.cloud.deployments.v1.ContainerEntryType
+	63,  // 37: obiente.cloud.deployments.v1.CreateContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	63,  // 38: obiente.cloud.deployments.v1.WriteContainerFileResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	132, // 39: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	133, // 40: obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	86,  // 41: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	86,  // 42: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	86,  // 43: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	128, // 44: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	128, // 45: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	100, // 46: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse.metrics:type_name -> obiente.cloud.deployments.v1.DeploymentMetric
+	128, // 47: obiente.cloud.deployments.v1.DeploymentMetric.timestamp:type_name -> google.protobuf.Timestamp
+	103, // 48: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.current:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	103, // 49: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.estimated_monthly:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	0,   // 50: obiente.cloud.deployments.v1.Deployment.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
+	1,   // 51: obiente.cloud.deployments.v1.Deployment.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
+	3,   // 52: obiente.cloud.deployments.v1.Deployment.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	128, // 53: obiente.cloud.deployments.v1.Deployment.last_deployed_at:type_name -> google.protobuf.Timestamp
+	128, // 54: obiente.cloud.deployments.v1.Deployment.created_at:type_name -> google.protobuf.Timestamp
+	2,   // 55: obiente.cloud.deployments.v1.Deployment.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	126, // 56: obiente.cloud.deployments.v1.Deployment.env_vars:type_name -> obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
+	5,   // 57: obiente.cloud.deployments.v1.Deployment.healthcheck_type:type_name -> obiente.cloud.deployments.v1.HealthCheckType
+	107, // 58: obiente.cloud.deployments.v1.ListDeploymentContainersResponse.containers:type_name -> obiente.cloud.deployments.v1.DeploymentContainer
+	128, // 59: obiente.cloud.deployments.v1.DeploymentContainer.created_at:type_name -> google.protobuf.Timestamp
+	128, // 60: obiente.cloud.deployments.v1.DeploymentContainer.updated_at:type_name -> google.protobuf.Timestamp
+	125, // 61: obiente.cloud.deployments.v1.ListBuildsResponse.builds:type_name -> obiente.cloud.deployments.v1.Build
+	125, // 62: obiente.cloud.deployments.v1.GetBuildResponse.build:type_name -> obiente.cloud.deployments.v1.Build
+	23,  // 63: obiente.cloud.deployments.v1.GetBuildLogsResponse.logs:type_name -> obiente.cloud.deployments.v1.DeploymentLogLine
+	104, // 64: obiente.cloud.deployments.v1.RevertToBuildResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	4,   // 65: obiente.cloud.deployments.v1.Build.status:type_name -> obiente.cloud.deployments.v1.BuildStatus
+	128, // 66: obiente.cloud.deployments.v1.Build.started_at:type_name -> google.protobuf.Timestamp
+	128, // 67: obiente.cloud.deployments.v1.Build.completed_at:type_name -> google.protobuf.Timestamp
+	1,   // 68: obiente.cloud.deployments.v1.Build.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
+	128, // 69: obiente.cloud.deployments.v1.Build.created_at:type_name -> google.protobuf.Timestamp
+	128, // 70: obiente.cloud.deployments.v1.Build.updated_at:type_name -> google.protobuf.Timestamp
+	7,   // 71: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:input_type -> obiente.cloud.deployments.v1.ListDeploymentsRequest
+	9,   // 72: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:input_type -> obiente.cloud.deployments.v1.CreateDeploymentRequest
+	11,  // 73: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:input_type -> obiente.cloud.deployments.v1.GetDeploymentRequest
+	13,  // 74: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRequest
+	15,  // 75: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:input_type -> obiente.cloud.deployments.v1.TriggerDeploymentRequest
+	17,  // 76: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:input_type -> obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
+	19,  // 77: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:input_type -> obiente.cloud.deployments.v1.GetDeploymentLogsRequest
+	21,  // 78: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:input_type -> obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
+	22,  // 79: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:input_type -> obiente.cloud.deployments.v1.StreamBuildLogsRequest
+	97,  // 80: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
+	99,  // 81: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
+	101, // 82: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:input_type -> obiente.cloud.deployments.v1.GetDeploymentUsageRequest
+	24,  // 83: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:input_type -> obiente.cloud.deployments.v1.StartDeploymentRequest
+	26,  // 84: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:input_type -> obiente.cloud.deployments.v1.StopDeploymentRequest
+	28,  // 85: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:input_type -> obiente.cloud.deployments.v1.DeleteDeploymentRequest
+	30,  // 86: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:input_type -> obiente.cloud.deployments.v1.RestartDeploymentRequest
+	32,  // 87: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:input_type -> obiente.cloud.deployments.v1.ScaleDeploymentRequest
+	34,  // 88: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
+	36,  // 89: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
+	38,  // 90: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:input_type -> obiente.cloud.deployments.v1.GetDeploymentComposeRequest
+	40,  // 91: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
+	42,  // 92: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
+	45,  // 93: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:input_type -> obiente.cloud.deployments.v1.ListGitHubReposRequest
+	48,  // 94: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:input_type -> obiente.cloud.deployments.v1.GetGitHubBranchesRequest
+	51,  // 95: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:input_type -> obiente.cloud.deployments.v1.GetGitHubFileRequest
+	115, // 96: obiente.cloud.deployments.v1.DeploymentService.ListBuilds:input_type -> obiente.cloud.deployments.v1.ListBuildsRequest
+	117, // 97: obiente.cloud.deployments.v1.DeploymentService.GetBuild:input_type -> obiente.cloud.deployments.v1.GetBuildRequest
+	119, // 98: obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs:input_type -> obiente.cloud.deployments.v1.GetBuildLogsRequest
+	121, // 99: obiente.cloud.deployments.v1.DeploymentService.RevertToBuild:input_type -> obiente.cloud.deployments.v1.RevertToBuildRequest
+	123, // 100: obiente.cloud.deployments.v1.DeploymentService.DeleteBuild:input_type -> obiente.cloud.deployments.v1.DeleteBuildRequest
+	53,  // 101: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:input_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
+	59,  // 102: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:input_type -> obiente.cloud.deployments.v1.TerminalInput
+	56,  // 103: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:input_type -> obiente.cloud.deployments.v1.StreamTerminalOutputRequest
+	57,  // 104: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:input_type -> obiente.cloud.deployments.v1.SendTerminalInputRequest
+	62,  // 105: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:input_type -> obiente.cloud.deployments.v1.ListContainerFilesRequest
+	65,  // 106: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:input_type -> obiente.cloud.deployments.v1.GetContainerFileRequest
+	67,  // 107: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:input_type -> obiente.cloud.deployments.v1.UploadContainerFilesRequest
+	71,  // 108: obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles:input_type -> obiente.cloud.deployments.v1.ChunkUploadContainerFilesRequest
+	73,  // 109: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:input_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
+	76,  // 110: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:input_type -> obiente.cloud.deployments.v1.RenameContainerEntryRequest
+	78,  // 111: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:input_type -> obiente.cloud.deployments.v1.CreateContainerEntryRequest
+	80,  // 112: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:input_type -> obiente.cloud.deployments.v1.WriteContainerFileRequest
+	82,  // 113: obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile:input_type -> obiente.cloud.deployments.v1.ExtractDeploymentFileRequest
+	84,  // 114: obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive:input_type -> obiente.cloud.deployments.v1.CreateDeploymentFileArchiveRequest
+	87,  // 115: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
+	89,  // 116: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
+	91,  // 117: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:input_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
+	93,  // 118: obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken:input_type -> obiente.cloud.deployments.v1.GetDomainVerificationTokenRequest
+	95,  // 119: obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership:input_type -> obiente.cloud.deployments.v1.VerifyDomainOwnershipRequest
+	105, // 120: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:input_type -> obiente.cloud.deployments.v1.ListDeploymentContainersRequest
+	108, // 121: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:input_type -> obiente.cloud.deployments.v1.StreamContainerLogsRequest
+	109, // 122: obiente.cloud.deployments.v1.DeploymentService.StartContainer:input_type -> obiente.cloud.deployments.v1.StartContainerRequest
+	111, // 123: obiente.cloud.deployments.v1.DeploymentService.StopContainer:input_type -> obiente.cloud.deployments.v1.StopContainerRequest
+	113, // 124: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:input_type -> obiente.cloud.deployments.v1.RestartContainerRequest
+	8,   // 125: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:output_type -> obiente.cloud.deployments.v1.ListDeploymentsResponse
+	10,  // 126: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:output_type -> obiente.cloud.deployments.v1.CreateDeploymentResponse
+	12,  // 127: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:output_type -> obiente.cloud.deployments.v1.GetDeploymentResponse
+	14,  // 128: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentResponse
+	16,  // 129: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:output_type -> obiente.cloud.deployments.v1.TriggerDeploymentResponse
+	18,  // 130: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:output_type -> obiente.cloud.deployments.v1.DeploymentStatusUpdate
+	20,  // 131: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:output_type -> obiente.cloud.deployments.v1.GetDeploymentLogsResponse
+	23,  // 132: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	23,  // 133: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	98,  // 134: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
+	100, // 135: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.DeploymentMetric
+	102, // 136: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:output_type -> obiente.cloud.deployments.v1.GetDeploymentUsageResponse
+	25,  // 137: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:output_type -> obiente.cloud.deployments.v1.StartDeploymentResponse
+	27,  // 138: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:output_type -> obiente.cloud.deployments.v1.StopDeploymentResponse
+	29,  // 139: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:output_type -> obiente.cloud.deployments.v1.DeleteDeploymentResponse
+	31,  // 140: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:output_type -> obiente.cloud.deployments.v1.RestartDeploymentResponse
+	33,  // 141: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:output_type -> obiente.cloud.deployments.v1.ScaleDeploymentResponse
+	35,  // 142: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
+	37,  // 143: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
+	39,  // 144: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:output_type -> obiente.cloud.deployments.v1.GetDeploymentComposeResponse
+	41,  // 145: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
+	43,  // 146: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
+	47,  // 147: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:output_type -> obiente.cloud.deployments.v1.ListGitHubReposResponse
+	50,  // 148: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:output_type -> obiente.cloud.deployments.v1.GetGitHubBranchesResponse
+	52,  // 149: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:output_type -> obiente.cloud.deployments.v1.GetGitHubFileResponse
+	116, // 150: obiente.cloud.deployments.v1.DeploymentService.ListBuilds:output_type -> obiente.cloud.deployments.v1.ListBuildsResponse
+	118, // 151: obiente.cloud.deployments.v1.DeploymentService.GetBuild:output_type -> obiente.cloud.deployments.v1.GetBuildResponse
+	120, // 152: obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs:output_type -> obiente.cloud.deployments.v1.GetBuildLogsResponse
+	122, // 153: obiente.cloud.deployments.v1.DeploymentService.RevertToBuild:output_type -> obiente.cloud.deployments.v1.RevertToBuildResponse
+	124, // 154: obiente.cloud.deployments.v1.DeploymentService.DeleteBuild:output_type -> obiente.cloud.deployments.v1.DeleteBuildResponse
+	55,  // 155: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:output_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
+	60,  // 156: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:output_type -> obiente.cloud.deployments.v1.TerminalOutput
+	60,  // 157: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:output_type -> obiente.cloud.deployments.v1.TerminalOutput
+	58,  // 158: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:output_type -> obiente.cloud.deployments.v1.SendTerminalInputResponse
+	64,  // 159: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:output_type -> obiente.cloud.deployments.v1.ListContainerFilesResponse
+	66,  // 160: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:output_type -> obiente.cloud.deployments.v1.GetContainerFileResponse
+	70,  // 161: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:output_type -> obiente.cloud.deployments.v1.UploadContainerFilesResponse
+	72,  // 162: obiente.cloud.deployments.v1.DeploymentService.ChunkUploadContainerFiles:output_type -> obiente.cloud.deployments.v1.ChunkUploadContainerFilesResponse
+	75,  // 163: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:output_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
+	77,  // 164: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:output_type -> obiente.cloud.deployments.v1.RenameContainerEntryResponse
+	79,  // 165: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:output_type -> obiente.cloud.deployments.v1.CreateContainerEntryResponse
+	81,  // 166: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:output_type -> obiente.cloud.deployments.v1.WriteContainerFileResponse
+	83,  // 167: obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile:output_type -> obiente.cloud.deployments.v1.ExtractDeploymentFileResponse
+	85,  // 168: obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive:output_type -> obiente.cloud.deployments.v1.CreateDeploymentFileArchiveResponse
+	88,  // 169: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
+	90,  // 170: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
+	92,  // 171: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:output_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
+	94,  // 172: obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken:output_type -> obiente.cloud.deployments.v1.GetDomainVerificationTokenResponse
+	96,  // 173: obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership:output_type -> obiente.cloud.deployments.v1.VerifyDomainOwnershipResponse
+	106, // 174: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:output_type -> obiente.cloud.deployments.v1.ListDeploymentContainersResponse
+	23,  // 175: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	110, // 176: obiente.cloud.deployments.v1.DeploymentService.StartContainer:output_type -> obiente.cloud.deployments.v1.StartContainerResponse
+	112, // 177: obiente.cloud.deployments.v1.DeploymentService.StopContainer:output_type -> obiente.cloud.deployments.v1.StopContainerResponse
+	114, // 178: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:output_type -> obiente.cloud.deployments.v1.RestartContainerResponse
+	125, // [125:179] is the sub-list for method output_type
+	71,  // [71:125] is the sub-list for method input_type
+	71,  // [71:71] is the sub-list for extension type_name
+	71,  // [71:71] is the sub-list for extension extendee
+	0,   // [0:71] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_deployments_v1_deployment_service_proto_init() }
@@ -9972,7 +10138,7 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc), len(file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc)),
-			NumEnums:      6,
+			NumEnums:      7,
 			NumMessages:   120,
 			NumExtensions: 0,
 			NumServices:   1,

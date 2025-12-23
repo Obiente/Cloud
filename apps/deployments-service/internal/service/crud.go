@@ -405,6 +405,51 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			dbDeployment.NginxConfig = nil
 		}
 	}
+
+	// Health check configuration
+	if req.Msg.HealthcheckType != nil {
+		hcType := int32(req.Msg.GetHealthcheckType())
+		dbDeployment.HealthcheckType = &hcType
+	}
+	if req.Msg.HealthcheckPort != nil {
+		hcPort := req.Msg.GetHealthcheckPort()
+		if hcPort > 0 {
+			dbDeployment.HealthcheckPort = &hcPort
+		} else {
+			dbDeployment.HealthcheckPort = nil
+		}
+	}
+	if req.Msg.HealthcheckPath != nil {
+		hcPath := req.Msg.GetHealthcheckPath()
+		if hcPath != "" {
+			dbDeployment.HealthcheckPath = &hcPath
+		} else {
+			dbDeployment.HealthcheckPath = nil
+		}
+	}
+	if req.Msg.HealthcheckExpectedStatus != nil {
+		hcStatus := req.Msg.GetHealthcheckExpectedStatus()
+		if hcStatus > 0 {
+			dbDeployment.HealthcheckExpectedStatus = &hcStatus
+		} else {
+			dbDeployment.HealthcheckExpectedStatus = nil
+		}
+	}
+	if req.Msg.HealthcheckCustomCommand != nil {
+		hcCmd := req.Msg.GetHealthcheckCustomCommand()
+		if hcCmd != "" {
+			// Sanitize custom healthcheck command to prevent injection
+			sanitized := sanitizeHealthcheckCommand(hcCmd)
+			if sanitized != "" {
+				dbDeployment.HealthcheckCustomCommand = &sanitized
+			} else {
+				dbDeployment.HealthcheckCustomCommand = nil
+			}
+		} else {
+			dbDeployment.HealthcheckCustomCommand = nil
+		}
+	}
+
 	if req.Msg.Port != nil {
 		port := req.Msg.GetPort()
 		dbDeployment.Port = &port
@@ -421,25 +466,42 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// Per-deployment resource limits (overrides)
 	// Stored in DB as cpu_shares + memory_bytes for Docker.
 	// Clearing semantics: if client sends 0, clear the override (set NULL) to fall back to defaults.
-	if req.Msg.CpuLimit != nil {
-		cpuLimit := req.Msg.GetCpuLimit()
-		if cpuLimit <= 0 {
-			dbDeployment.CPUShares = nil
-		} else {
-			shares := int64(math.Round(cpuLimit * 1024.0))
-			if shares < 1 {
-				shares = 1
+	// Cap values to organization plan limits before storing.
+	if req.Msg.CpuLimit != nil || req.Msg.MemoryLimit != nil {
+		// Get organization plan limits
+		maxMemoryBytes, maxCPUCores, planErr := quota.GetEffectiveLimits(dbDeployment.OrganizationID)
+		
+		if req.Msg.CpuLimit != nil {
+			cpuLimit := req.Msg.GetCpuLimit()
+			if cpuLimit <= 0 {
+				dbDeployment.CPUShares = nil
+			} else {
+				// Cap to plan limit if set
+				if planErr == nil && maxCPUCores > 0 && cpuLimit > float64(maxCPUCores) {
+					cpuLimit = float64(maxCPUCores)
+					log.Printf("[UpdateDeployment] Capping CPU limit for deployment %s from %.2f to plan limit %d cores", deploymentID, req.Msg.GetCpuLimit(), maxCPUCores)
+				}
+				shares := int64(math.Round(cpuLimit * 1024.0))
+				if shares < 1 {
+					shares = 1
+				}
+				dbDeployment.CPUShares = &shares
 			}
-			dbDeployment.CPUShares = &shares
 		}
-	}
-	if req.Msg.MemoryLimit != nil {
-		memMB := req.Msg.GetMemoryLimit()
-		if memMB <= 0 {
-			dbDeployment.MemoryBytes = nil
-		} else {
-			bytes := memMB * 1024 * 1024
-			dbDeployment.MemoryBytes = &bytes
+		if req.Msg.MemoryLimit != nil {
+			memMB := req.Msg.GetMemoryLimit()
+			if memMB <= 0 {
+				dbDeployment.MemoryBytes = nil
+			} else {
+				bytes := memMB * 1024 * 1024
+				// Cap to plan limit if set
+				if planErr == nil && maxMemoryBytes > 0 && bytes > maxMemoryBytes {
+					bytes = maxMemoryBytes
+					log.Printf("[UpdateDeployment] Capping memory limit for deployment %s from %d MB to plan limit %d bytes (%d MB)", 
+						deploymentID, memMB, maxMemoryBytes, maxMemoryBytes/(1024*1024))
+				}
+				dbDeployment.MemoryBytes = &bytes
+			}
 		}
 	}
 	// Handle groups (repeated string -> JSON array)

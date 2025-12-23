@@ -53,8 +53,8 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
 	}
 
-	// Determine health check port - ALWAYS use routing target port if available
-	// Priority: 1) Matching service routing, 2) First routing (if routings exist), 3) config.Port (only if no routings)
+	// Determine health check port from routing rules only.
+	// Priority: 1) Matching service routing, 2) First routing (if routings exist)
 	healthCheckPort := 0
 	if len(routings) > 0 {
 		// First, try to find a routing that matches the service name
@@ -82,22 +82,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			}
 		}
 	}
-	
-	// Only fall back to config.Port if NO routings exist at all
-	// This prevents using a default port (like 8080) when routing is configured
-	if healthCheckPort == 0 {
-		if config.Port > 0 {
-			healthCheckPort = config.Port
-			logger.Warn("[DeploymentManager] No routing found, using config port %d for health check (service: %s) - this may be incorrect if routing should exist", healthCheckPort, serviceName)
-		} else {
-			logger.Warn("[DeploymentManager] Cannot determine health check port for service %s - no routing target port or config port available", serviceName)
-		}
-	}
 
-	// If still no port, we can't add health check
-	if healthCheckPort == 0 {
-		logger.Warn("[DeploymentManager] Cannot determine health check port for service %s - no routing target port or config port available", serviceName)
-	}
+	// If no routing-based port, we will not add the default nc-based healthcheck.
+	// (Custom healthcheck command does not require a port.)
 
 	// Add custom labels
 	for k, v := range config.Labels {
@@ -110,11 +97,11 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Ensure netcat is available by adding environment variables for nixpacks/railpacks
-	// These env vars tell the build system to install netcat (only if we need a health check)
-	// Note: These only work if the image is built with Nixpacks/Railpacks
-	// For pre-built images, the health check will install netcat at runtime
-	if healthCheckPort > 0 {
+	// Ensure netcat is available by adding environment variables for nixpacks/railpacks.
+	// Only required for the default nc-based healthcheck (routing-based).
+	shouldAddNetcatEnv := (config.HealthcheckType != nil && *config.HealthcheckType == 2) && // TCP check
+		healthCheckPort > 0 && len(routings) > 0
+	if shouldAddNetcatEnv {
 		// Check if env vars are already set (don't override user's custom values)
 		addedVars := []string{}
 		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
@@ -184,26 +171,98 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		}
 	}
 
-	// Only add health check if we have a valid port from routing
-	// Health check port must be from routing target port, not a default
+	// Generate health check based on type
 	var healthcheck *container.HealthConfig
-	if healthCheckPort > 0 {
-		// Health check command using netcat (nc) - smallest tool for TCP port checks
-		// Netcat is much lighter than curl/wget since we only need to check if port is listening
-		// Try netcat first, if not found install it (supports Alpine, Debian/Ubuntu, and CentOS/RHEL)
-		// Uses TCP connection test: nc -z localhost PORT (returns 0 if port is open)
-		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
-
-		healthcheck = &container.HealthConfig{
-			Test:        []string{"CMD-SHELL", healthCheckCmd},
-			Interval:    30 * time.Second,
-			Timeout:     10 * time.Second,
-			Retries:     3,
-			StartPeriod: 40 * time.Second, // Give container time to start before health checks begin
+	
+	// Determine healthcheck port: use override if set, otherwise use detected port
+	effectiveHealthCheckPort := healthCheckPort
+	if config.HealthcheckPort != nil && *config.HealthcheckPort > 0 {
+		effectiveHealthCheckPort = int(*config.HealthcheckPort)
+	}
+	
+	// Check healthcheck type (default to DISABLED/UNSPECIFIED if not set)
+	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
+	if config.HealthcheckType != nil {
+		healthcheckType = *config.HealthcheckType
+	}
+	
+	switch healthcheckType {
+	case 1: // HEALTHCHECK_DISABLED
+		// Explicitly disabled - no healthcheck
+		logger.Info("[DeploymentManager] Health check explicitly disabled for container %s", name)
+		healthcheck = nil
+		
+	case 2: // HEALTHCHECK_TCP
+		if effectiveHealthCheckPort > 0 {
+			// TCP port check using netcat
+			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+			healthcheck = &container.HealthConfig{
+				Test:        []string{"CMD-SHELL", healthCheckCmd},
+				Interval:    30 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     3,
+				StartPeriod: 40 * time.Second,
+			}
+			logger.Info("[DeploymentManager] Added TCP health check for container %s on port %d", name, effectiveHealthCheckPort)
+		} else {
+			logger.Warn("[DeploymentManager] TCP health check requested but no port available for container %s", name)
 		}
-		logger.Info("[DeploymentManager] Added health check for container %s on port %d (from routing) - using netcat for TCP port check", name, healthCheckPort)
-	} else {
-		logger.Warn("[DeploymentManager] Skipping health check for container %s - no valid port found from routing", name)
+		
+	case 3: // HEALTHCHECK_HTTP
+		if effectiveHealthCheckPort > 0 {
+			// HTTP endpoint check using curl
+			path := "/"
+			if config.HealthcheckPath != nil && *config.HealthcheckPath != "" {
+				path = *config.HealthcheckPath
+			}
+			expectedStatus := 200
+			if config.HealthcheckExpectedStatus != nil && *config.HealthcheckExpectedStatus > 0 {
+				expectedStatus = int(*config.HealthcheckExpectedStatus)
+			}
+			// HTTP check: curl the endpoint and check status code
+			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+			healthcheck = &container.HealthConfig{
+				Test:        []string{"CMD-SHELL", healthCheckCmd},
+				Interval:    30 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     3,
+				StartPeriod: 40 * time.Second,
+			}
+			logger.Info("[DeploymentManager] Added HTTP health check for container %s on port %d%s (expecting %d)", name, effectiveHealthCheckPort, path, expectedStatus)
+		} else {
+			logger.Warn("[DeploymentManager] HTTP health check requested but no port available for container %s", name)
+		}
+		
+	case 4: // HEALTHCHECK_CUSTOM
+		if config.HealthcheckCustomCommand != nil && *config.HealthcheckCustomCommand != "" {
+			// Use custom command (already sanitized in CRUD layer)
+			healthcheck = &container.HealthConfig{
+				Test:        []string{"CMD-SHELL", *config.HealthcheckCustomCommand},
+				Interval:    30 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     3,
+				StartPeriod: 40 * time.Second,
+			}
+			logger.Info("[DeploymentManager] Added custom health check for container %s: %s", name, *config.HealthcheckCustomCommand)
+		} else {
+			logger.Warn("[DeploymentManager] Custom health check requested but no command provided for container %s", name)
+		}
+		
+	default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) or unknown
+		// Auto-detect: Use TCP check if routing exists
+		if effectiveHealthCheckPort > 0 && len(routings) > 0 {
+			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+			healthcheck = &container.HealthConfig{
+				Test:        []string{"CMD-SHELL", healthCheckCmd},
+				Interval:    30 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     3,
+				StartPeriod: 40 * time.Second,
+			}
+			logger.Info("[DeploymentManager] Added auto TCP health check for container %s on port %d (routing exists)", name, effectiveHealthCheckPort)
+		} else {
+			logger.Info("[DeploymentManager] No health check for container %s - type unspecified and no routing rules", name)
+		}
 	}
 
 	// Container configuration

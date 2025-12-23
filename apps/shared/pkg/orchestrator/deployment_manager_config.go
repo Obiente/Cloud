@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,19 @@ import (
 )
 
 // Config operations for deployments
+
+func envFlagEnabled(name string) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return false
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "y", "on", "enabled":
+		return true
+	default:
+		return false
+	}
+}
 
 func (dm *DeploymentManager) getPlanLimitsForDeployment(deploymentID string) (maxMemoryBytes int64, maxCPUCores int, err error) {
 	// Get deployment to find organization ID
@@ -386,94 +400,31 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					}
 				}
 
-				// Only fall back to compose file port if no routing found at all
-				if healthCheckPort == nil && servicePort != nil && *servicePort > 0 {
-					healthCheckPort = servicePort
-					logger.Debug("[DeploymentManager] Health check will use compose file port: %d (no routing found)", *servicePort)
-				}
-
-				// If we still don't have a port, try to extract from expose (after ports conversion)
-				if healthCheckPort == nil {
-					if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
-						// Check exposed ports
-						if portStr, ok := expose[0].(string); ok {
-							// Remove protocol if present (e.g., "4321/tcp" -> "4321")
-							portStr = strings.Split(portStr, "/")[0]
-							if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
-								healthCheckPort = &p
-								logger.Debug("[DeploymentManager] Health check will use exposed port: %d (no routing found)", p)
-							}
-						}
-					}
-				}
-
-				// Inject health check if we have a port and no existing health check
-				// Health checks are important for Traefik to know when services are ready
-				// Without health checks, containers may stay in "starting" status even when running
-				if healthCheckPort != nil {
-					// Check if health check already exists
+				// Optional default healthcheck injection.
+				// IMPORTANT: In Swarm, failing healthchecks can trigger task restarts (SIGTERM/143).
+				// We therefore default this behavior OFF and only allow it when explicitly enabled.
+				// Healthchecks are ONLY injected when:
+				// 1. OBIENTE_ENABLE_AUTO_HEALTHCHECK env var is set to true
+				// 2. Actual routing rules exist in the database (routingPortUsed = true)
+				// 3. No user-defined healthcheck already exists in the compose file
+				autoHealthchecksEnabled := envFlagEnabled("OBIENTE_ENABLE_AUTO_HEALTHCHECK")
+				if autoHealthchecksEnabled && routingPortUsed && healthCheckPort != nil {
 					_, hasHealthcheck := service["healthcheck"]
 					if !hasHealthcheck {
-						// Add health check configuration using netcat (nc) - smallest tool for TCP port checks
-						// Netcat is much lighter than curl/wget since we only need to check if port is listening
-						// Try netcat first, if not found install it (supports Alpine, Debian/Ubuntu, and CentOS/RHEL)
-						// Uses TCP connection test: nc -z localhost PORT (returns 0 if port is open)
-						healthcheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, *healthCheckPort, *healthCheckPort)
+						// Best-effort check: only runs if `nc` already exists in the image.
+						// If it's missing, we exit 0 to avoid restart loops.
+						healthcheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d; else exit 0; fi'`, *healthCheckPort)
 						healthcheck := map[string]interface{}{
 							"test":         []interface{}{"CMD-SHELL", healthcheckCmd},
 							"interval":     "30s",
 							"timeout":      "10s",
 							"retries":      3,
-							"start_period": "40s", // Give container time to start before health checks begin
+							"start_period": "40s",
 						}
 						service["healthcheck"] = healthcheck
-						logger.Info("[DeploymentManager] Added health check for service %s on port %d - using netcat for TCP port check", serviceName, *healthCheckPort)
-					} else {
-						logger.Debug("[DeploymentManager] Service %s already has a health check, skipping", serviceName)
+						logger.Info("[DeploymentManager] Added optional health check for service %s on routing port %d (routing rules exist)", serviceName, *healthCheckPort)
 					}
-				} else {
-					logger.Warn("[DeploymentManager] Cannot add health check for service %s - no port found (servicePort=%v, routings=%d)", serviceName, servicePort, len(routings))
 				}
-
-				// Ensure netcat is available by adding environment variables for nixpacks/railpacks
-				// These env vars tell the build system to install netcat (only if we added a health check)
-				if healthCheckPort != nil {
-					var env map[string]interface{}
-					if existingEnv, ok := service["environment"].(map[string]interface{}); ok {
-						env = existingEnv
-					} else if existingEnvList, ok := service["environment"].([]interface{}); ok {
-						// Convert list format to map format
-						env = make(map[string]interface{})
-						for _, envItem := range existingEnvList {
-							if envStr, ok := envItem.(string); ok {
-								if strings.Contains(envStr, "=") {
-									parts := strings.SplitN(envStr, "=", 2)
-									if len(parts) == 2 {
-										env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-									}
-								}
-							}
-						}
-					} else {
-						env = make(map[string]interface{})
-					}
-
-					// Add nixpacks/railpacks environment variables to ensure netcat is installed
-					// Only add if not already set (don't override user's custom values)
-					// NIXPACKS_APT_PKGS is for Apt packages (netcat-openbsd is an apt package)
-					if _, exists := env["NIXPACKS_APT_PKGS"]; !exists {
-						env["NIXPACKS_APT_PKGS"] = "netcat-openbsd"
-					}
-					// RAILPACK_DEPLOY_APT_PACKAGES installs packages in the final image (what we need for health checks)
-					if _, exists := env["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
-						env["RAILPACK_DEPLOY_APT_PACKAGES"] = "netcat-openbsd"
-					}
-
-					// Update environment in service
-					service["environment"] = env
-					logger.Debug("[DeploymentManager] Added netcat installation env vars for service %s (NIXPACKS_APT_PKGS, RAILPACK_DEPLOY_APT_PACKAGES)", serviceName)
-				}
-
 				// Helper function to get or create labels map from various formats
 				getLabelsMap := func(labelsValue interface{}) map[string]interface{} {
 					labels := make(map[string]interface{})

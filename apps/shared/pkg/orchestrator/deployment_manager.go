@@ -37,16 +37,23 @@ type dockerHelper interface {
 }
 
 type DeploymentConfig struct {
-	DeploymentID string
-	Image        string
-	Domain       string
-	Port         int
-	EnvVars      map[string]string
-	Labels       map[string]string
-	Memory       int64 // in bytes
-	CPUShares    int64
-	Replicas     int
-	StartCommand *string // Optional start command to override container CMD
+	DeploymentID       string
+	Image              string
+	Domain             string
+	Port               int
+	EnvVars            map[string]string
+	Labels             map[string]string
+	Memory             int64   // in bytes
+	CPUShares          int64
+	Replicas           int
+	StartCommand       *string // Optional start command to override container CMD
+	
+	// Health check configuration
+	HealthcheckType           *int32  // Type of health check (HealthCheckType enum: DISABLED, TCP, HTTP, CUSTOM)
+	HealthcheckPort           *int32  // Port to check (if different from main port)
+	HealthcheckPath           *string // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
+	HealthcheckExpectedStatus *int32  // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
+	HealthcheckCustomCommand  *string // Custom command (sanitized, used with HEALTHCHECK_CUSTOM)
 }
 
 func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*DeploymentManager, error) {
