@@ -62,14 +62,14 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			serviceMatches := routing.ServiceName == serviceName ||
 				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
 				(routing.ServiceName == "default" && serviceName == "")
-			
+
 			if serviceMatches && routing.TargetPort > 0 {
 				healthCheckPort = routing.TargetPort
 				logger.Info("[DeploymentManager] Using routing target port %d for health check (service: %s, routing service: %s)", healthCheckPort, serviceName, routing.ServiceName)
 				break
 			}
 		}
-		
+
 		// If no exact match found but routings exist, use the first routing's target port
 		// This ensures we always use routing port over config.Port when routings are available
 		if healthCheckPort == 0 {
@@ -173,25 +173,25 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 	// Generate health check based on type
 	var healthcheck *container.HealthConfig
-	
+
 	// Determine healthcheck port: use override if set, otherwise use detected port
 	effectiveHealthCheckPort := healthCheckPort
 	if config.HealthcheckPort != nil && *config.HealthcheckPort > 0 {
 		effectiveHealthCheckPort = int(*config.HealthcheckPort)
 	}
-	
+
 	// Check healthcheck type (default to DISABLED/UNSPECIFIED if not set)
 	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
 	if config.HealthcheckType != nil {
 		healthcheckType = *config.HealthcheckType
 	}
-	
+
 	switch healthcheckType {
 	case 1: // HEALTHCHECK_DISABLED
 		// Explicitly disabled - no healthcheck
 		logger.Info("[DeploymentManager] Health check explicitly disabled for container %s", name)
 		healthcheck = nil
-		
+
 	case 2: // HEALTHCHECK_TCP
 		if effectiveHealthCheckPort > 0 {
 			// TCP port check using netcat
@@ -207,7 +207,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		} else {
 			logger.Warn("[DeploymentManager] TCP health check requested but no port available for container %s", name)
 		}
-		
+
 	case 3: // HEALTHCHECK_HTTP
 		if effectiveHealthCheckPort > 0 {
 			// HTTP endpoint check using curl
@@ -232,7 +232,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		} else {
 			logger.Warn("[DeploymentManager] HTTP health check requested but no port available for container %s", name)
 		}
-		
+
 	case 4: // HEALTHCHECK_CUSTOM
 		if config.HealthcheckCustomCommand != nil && *config.HealthcheckCustomCommand != "" {
 			// Use custom command (already sanitized in CRUD layer)
@@ -247,7 +247,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		} else {
 			logger.Warn("[DeploymentManager] Custom health check requested but no command provided for container %s", name)
 		}
-		
+
 	default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) or unknown
 		// Auto-detect: Use TCP check if routing exists
 		if effectiveHealthCheckPort > 0 && len(routings) > 0 {
@@ -332,9 +332,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	// Create container
 	createResp, err := dm.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Config:           containerConfig,
-		HostConfig:      hostConfig,
+		HostConfig:       hostConfig,
 		NetworkingConfig: networkConfig,
-		Name:            name,
+		Name:             name,
 	})
 	if err != nil {
 		// Check for name conflict error - if container was created by another process
@@ -351,9 +351,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			logger.Info("[DeploymentManager] Retrying container creation for %s after removing conflicting container", name)
 			createResp, err = dm.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
 				Config:           containerConfig,
-				HostConfig:      hostConfig,
+				HostConfig:       hostConfig,
 				NetworkingConfig: networkConfig,
-				Name:            name,
+				Name:             name,
 			})
 			if err != nil {
 				return "", fmt.Errorf("failed to create container after removing conflicting container: %w", err)
@@ -406,14 +406,14 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 			serviceMatches := routing.ServiceName == serviceName ||
 				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
 				(routing.ServiceName == "default" && serviceName == "")
-			
+
 			if serviceMatches && routing.TargetPort > 0 {
 				healthCheckPort = routing.TargetPort
 				logger.Info("[DeploymentManager] Using routing target port %d for health check (service: %s, routing service: %s)", healthCheckPort, serviceName, routing.ServiceName)
 				break
 			}
 		}
-		
+
 		// If no exact match found but routings exist, use the first routing's target port
 		// This ensures we always use routing port over config.Port when routings are available
 		if healthCheckPort == 0 {
@@ -426,7 +426,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 			}
 		}
 	}
-	
+
 	// Only fall back to config.Port if NO routings exist at all
 	// This prevents using a default port (like 8080) when routing is configured
 	if healthCheckPort == 0 {
@@ -486,16 +486,85 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	// Add health check if we have a port
-	if healthCheckPort > 0 {
-		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
-		args = append(args,
-			"--health-cmd", healthCheckCmd,
-			"--health-interval", "30s",
-			"--health-timeout", "10s",
-			"--health-retries", "3",
-			"--health-start-period", "40s",
-		)
+	// Add health check based on configuration
+	// Check healthcheck type (default to UNSPECIFIED if not set)
+	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
+	if config.HealthcheckType != nil {
+		healthcheckType = *config.HealthcheckType
+	}
+
+	// Only add healthcheck if not explicitly disabled
+	if healthcheckType != 1 { // 1 = HEALTHCHECK_DISABLED
+		// Determine effective health check port
+		effectiveHealthCheckPort := healthCheckPort
+		if config.HealthcheckPort != nil && *config.HealthcheckPort > 0 {
+			effectiveHealthCheckPort = int(*config.HealthcheckPort)
+		}
+
+		switch healthcheckType {
+		case 2: // HEALTHCHECK_TCP
+			if effectiveHealthCheckPort > 0 {
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Added TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
+			}
+
+		case 3: // HEALTHCHECK_HTTP
+			if effectiveHealthCheckPort > 0 {
+				path := "/"
+				if config.HealthcheckPath != nil && *config.HealthcheckPath != "" {
+					path = *config.HealthcheckPath
+				}
+				expectedStatus := 200
+				if config.HealthcheckExpectedStatus != nil && *config.HealthcheckExpectedStatus > 0 {
+					expectedStatus = int(*config.HealthcheckExpectedStatus)
+				}
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Added HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
+			}
+
+		case 4: // HEALTHCHECK_CUSTOM
+			if config.HealthcheckCustomCommand != nil && *config.HealthcheckCustomCommand != "" {
+				args = append(args,
+					"--health-cmd", *config.HealthcheckCustomCommand,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Added custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
+			}
+
+		default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) - auto-detect
+			if effectiveHealthCheckPort > 0 && len(routings) > 0 {
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Added auto TCP health check for Swarm service %s on port %d (routing exists)", swarmServiceName, effectiveHealthCheckPort)
+			} else {
+				logger.Info("[DeploymentManager] No health check for Swarm service %s - type unspecified and no routing rules", swarmServiceName)
+			}
+		}
+	} else {
+		logger.Info("[DeploymentManager] Health check explicitly disabled for Swarm service %s", swarmServiceName)
 	}
 
 	// Add resource limits
@@ -636,7 +705,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Docker service create can take time, especially when pulling images on worker nodes
 	dockerCtx, dockerCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer dockerCancel()
-	
+
 	cmd := exec.CommandContext(dockerCtx, "docker", args...)
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
@@ -1019,7 +1088,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 			serviceMatches := routing.ServiceName == serviceName ||
 				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
 				(routing.ServiceName == "default" && serviceName == "")
-			
+
 			if serviceMatches && routing.TargetPort > 0 {
 				healthCheckPort = routing.TargetPort
 				break
@@ -1078,16 +1147,87 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env-add", e)
 	}
 
-	// Update health check if we have a port
-	if healthCheckPort > 0 {
-		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
-		args = append(args,
-			"--health-cmd", healthCheckCmd,
-			"--health-interval", "30s",
-			"--health-timeout", "10s",
-			"--health-retries", "3",
-			"--health-start-period", "40s",
-		)
+	// Update health check based on configuration
+	// Check healthcheck type (default to UNSPECIFIED if not set)
+	healthcheckType := int32(0) // HEALTHCHECK_TYPE_UNSPECIFIED
+	if config.HealthcheckType != nil {
+		healthcheckType = *config.HealthcheckType
+	}
+	
+	// Only add healthcheck if not explicitly disabled
+	if healthcheckType != 1 { // 1 = HEALTHCHECK_DISABLED
+		// Determine effective health check port
+		effectiveHealthCheckPort := healthCheckPort
+		if config.HealthcheckPort != nil && *config.HealthcheckPort > 0 {
+			effectiveHealthCheckPort = int(*config.HealthcheckPort)
+		}
+		
+		switch healthcheckType {
+		case 2: // HEALTHCHECK_TCP
+			if effectiveHealthCheckPort > 0 {
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Updated TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
+			}
+			
+		case 3: // HEALTHCHECK_HTTP
+			if effectiveHealthCheckPort > 0 {
+				path := "/"
+				if config.HealthcheckPath != nil && *config.HealthcheckPath != "" {
+					path = *config.HealthcheckPath
+				}
+				expectedStatus := 200
+				if config.HealthcheckExpectedStatus != nil && *config.HealthcheckExpectedStatus > 0 {
+					expectedStatus = int(*config.HealthcheckExpectedStatus)
+				}
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Updated HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
+			}
+			
+		case 4: // HEALTHCHECK_CUSTOM
+			if config.HealthcheckCustomCommand != nil && *config.HealthcheckCustomCommand != "" {
+				args = append(args,
+					"--health-cmd", *config.HealthcheckCustomCommand,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Updated custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
+			}
+			
+		default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) - auto-detect
+			if effectiveHealthCheckPort > 0 && len(routings) > 0 {
+				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				args = append(args,
+					"--health-cmd", healthCheckCmd,
+					"--health-interval", "30s",
+					"--health-timeout", "10s",
+					"--health-retries", "3",
+					"--health-start-period", "40s",
+				)
+				logger.Info("[DeploymentManager] Updated auto TCP health check for Swarm service %s on port %d (routing exists)", swarmServiceName, effectiveHealthCheckPort)
+			} else {
+				logger.Info("[DeploymentManager] No health check for Swarm service %s - type unspecified and no routing rules", swarmServiceName)
+			}
+		}
+	} else {
+		logger.Info("[DeploymentManager] Health check explicitly disabled for Swarm service %s", swarmServiceName)
+		// Remove healthcheck by setting it to NONE
+		args = append(args, "--health-cmd", "NONE")
 	}
 
 	// Update resource limits
@@ -1143,7 +1283,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Use a longer timeout context for Docker operations
 	dockerCtx, dockerCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer dockerCancel()
-	
+
 	cmd := exec.CommandContext(dockerCtx, "docker", args...)
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
