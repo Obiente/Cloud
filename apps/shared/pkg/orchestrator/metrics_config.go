@@ -40,6 +40,8 @@ type MetricsConfig struct {
 	SubscriberChannelBufferSize int
 	SubscriberSlowThreshold     time.Duration
 	SubscriberCleanupInterval   time.Duration
+	// Minimum system delta used when computing CPU percentage (nanoseconds)
+	MinSystemDelta              time.Duration
 }
 
 // LoadMetricsConfig loads metrics configuration from environment variables
@@ -68,6 +70,7 @@ func LoadMetricsConfig() *MetricsConfig {
 		SubscriberChannelBufferSize:    100,
 		SubscriberSlowThreshold:        5 * time.Second,
 		SubscriberCleanupInterval:      1 * time.Minute,
+		MinSystemDelta:                  1 * time.Millisecond,
 	}
 
 	// Parse environment variables with fallback to defaults
@@ -200,6 +203,12 @@ func LoadMetricsConfig() *MetricsConfig {
 	if val := os.Getenv("METRICS_SUBSCRIBER_CLEANUP_INTERVAL"); val != "" {
 		if d, err := time.ParseDuration(val); err == nil {
 			cfg.SubscriberCleanupInterval = d
+		}
+	}
+
+	if val := os.Getenv("METRICS_MIN_SYSTEM_DELTA"); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			cfg.MinSystemDelta = d
 		}
 	}
 

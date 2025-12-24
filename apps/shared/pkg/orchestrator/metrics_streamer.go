@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sort"
 	"sync"
 	"time"
 
@@ -732,42 +733,60 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 	// Calculate CPU usage percentage
 	// Docker CPU stats are in nanoseconds. We need to validate the deltas to prevent division by tiny numbers
 	cpuUsage := 0.0
-	if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
-		cpuDelta := int64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
-		systemDelta := int64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
-		
-		// Validate deltas to prevent invalid calculations
-		// Minimum systemDelta: 1 millisecond (1,000,000 nanoseconds) to prevent division by tiny numbers
-		// This ensures we have at least 1ms of time between measurements
-		const minSystemDelta = 1_000_000 // 1ms in nanoseconds
-		
-		if systemDelta >= minSystemDelta && statsJSON.CPUStats.OnlineCPUs > 0 {
-			// Handle counter wraparound (uint64 overflow) - if cpuDelta is negative, counters wrapped
-			if cpuDelta < 0 {
-				// Counter wraparound detected - skip this calculation
-				log.Printf("[getContainerStats] CPU counter wraparound detected for container %s (cpuDelta: %d, systemDelta: %d), skipping", containerID[:12], cpuDelta, systemDelta)
-				cpuUsage = 0.0
-			} else {
-				// Calculate CPU usage: (cpuDelta / systemDelta) * numCPUs * 100
-				// cpuDelta and systemDelta are both in nanoseconds, so the ratio is dimensionless
-				// Multiplying by OnlineCPUs gives us the effective CPU usage across all cores
-				cpuUsage = (float64(cpuDelta) / float64(systemDelta)) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
-				
-				// Validate the result is physically reasonable
-				// Maximum possible CPU usage: OnlineCPUs * 100% (all cores at 100%)
-				maxReasonableCPU := float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
-				if cpuUsage < 0 {
-					cpuUsage = 0.0
-				} else if cpuUsage > maxReasonableCPU {
-					// Log detailed error for debugging
-					log.Printf("[getContainerStats] Invalid CPU usage %.2f%% (max reasonable: %.2f%%) for container %s - cpuDelta: %d, systemDelta: %d, OnlineCPUs: %d. Skipping this measurement.",
-						cpuUsage, maxReasonableCPU, containerID[:12], cpuDelta, systemDelta, statsJSON.CPUStats.OnlineCPUs)
-					cpuUsage = 0.0 // Set to 0 instead of clamping to prevent cost calculation errors
-				}
+
+	// Raw values from the current stats
+	rawTotal := statsJSON.CPUStats.CPUUsage.TotalUsage
+	rawSystem := statsJSON.CPUStats.SystemUsage
+	onlineCPUs := statsJSON.CPUStats.OnlineCPUs
+
+	// Helper to compute CPU usage from previous raw totals
+	computeFromPrev := func(prevTotal uint64, prevSystem uint64) float64 {
+		// Detect wraparound using unsigned comparisons
+		if rawTotal < prevTotal {
+			log.Printf("[getContainerStats] CPU total_usage wrapped for container %s (prev: %d, current: %d), skipping", containerID[:12], prevTotal, rawTotal)
+			return 0.0
+		}
+		if rawSystem < prevSystem {
+			log.Printf("[getContainerStats] system_cpu_usage wrapped for container %s (prev: %d, current: %d), skipping", containerID[:12], prevSystem, rawSystem)
+			return 0.0
+		}
+
+		cpuDeltaU := rawTotal - prevTotal
+		systemDeltaU := rawSystem - prevSystem
+
+		minSystemDeltaU := uint64(ms.config.MinSystemDelta.Nanoseconds())
+		if systemDeltaU < minSystemDeltaU || onlineCPUs == 0 {
+			if systemDeltaU > 0 && systemDeltaU < minSystemDeltaU {
+				log.Printf("[getContainerStats] systemDelta too small (%d ns < %d ns) for container %s, skipping CPU calculation", systemDeltaU, minSystemDeltaU, containerID[:12])
 			}
-		} else if systemDelta > 0 && systemDelta < minSystemDelta {
-			// systemDelta too small - likely measurement error or very short time window
-			log.Printf("[getContainerStats] systemDelta too small (%d ns < %d ns) for container %s, skipping CPU calculation", systemDelta, minSystemDelta, containerID[:12])
+			return 0.0
+		}
+
+		cpu := (float64(cpuDeltaU) / float64(systemDeltaU)) * float64(onlineCPUs) * 100.0
+		maxReasonableCPU := float64(onlineCPUs) * 100.0
+		if cpu < 0 {
+			return 0.0
+		}
+		if cpu > maxReasonableCPU {
+			log.Printf("[getContainerStats] Invalid CPU usage %.2f%% (max reasonable: %.2f%%) for container %s - cpuDelta: %d, systemDelta: %d, OnlineCPUs: %d. Skipping this measurement.", cpu, maxReasonableCPU, containerID[:12], cpuDeltaU, systemDeltaU, onlineCPUs)
+			return 0.0
+		}
+		return cpu
+	}
+
+	// Primary: use precpu_stats if provided by Docker (streaming). This is most accurate.
+	if statsJSON.PreCPUStats.SystemUsage > 0 && rawSystem > statsJSON.PreCPUStats.SystemUsage {
+		cpuUsage = computeFromPrev(statsJSON.PreCPUStats.CPUUsage.TotalUsage, statsJSON.PreCPUStats.SystemUsage)
+	} else {
+		// Fallback: use stored previous raw totals from ms.previousStats (works with non-stream ContainerStats)
+		ms.statsMutex.RLock()
+		prev, hasPrev := ms.previousStats[containerID]
+		ms.statsMutex.RUnlock()
+
+		if hasPrev && prev.RawSystemUsage > 0 && rawSystem > prev.RawSystemUsage {
+			cpuUsage = computeFromPrev(prev.RawCPUUsageTotal, prev.RawSystemUsage)
+		} else {
+			// Unable to compute CPU usage this cycle (no previous raw values)
 			cpuUsage = 0.0
 		}
 	}
@@ -792,12 +811,17 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 	}
 
 	return &ContainerStats{
-		CPUUsage:       cpuUsage,
-		MemoryUsage:    int64(statsJSON.MemoryStats.Usage),
-		NetworkRxBytes: networkRx,
-		NetworkTxBytes: networkTx,
-		DiskReadBytes:  diskRead,
-		DiskWriteBytes: diskWrite,
+		CPUUsage:         cpuUsage,
+		MemoryUsage:      int64(statsJSON.MemoryStats.Usage),
+		NetworkRxBytes:   networkRx,
+		NetworkTxBytes:   networkTx,
+		DiskReadBytes:    diskRead,
+		DiskWriteBytes:   diskWrite,
+
+		RawCPUUsageTotal: rawTotal,
+		RawSystemUsage:   rawSystem,
+		OnlineCPUs:       onlineCPUs,
+		LastSeen:         time.Now(),
 	}, nil
 }
 
@@ -1135,16 +1159,27 @@ func (ms *MetricsStreamer) cleanupStaleStats() {
 				}
 			}
 			
-			// Enforce max size limit
+			// Enforce max size limit using LRU eviction based on LastSeen
 			if len(ms.previousStats) > ms.config.MaxPreviousStats {
-				// Remove oldest entries (simple approach: remove randomly until under limit)
-				// In a production system, you might want to track last used time
-				for len(ms.previousStats) > ms.config.MaxPreviousStats {
-					for containerID := range ms.previousStats {
-						delete(ms.previousStats, containerID)
-						removedCount++
-						break // Remove one at a time
-					}
+				type entry struct {
+					id      string
+					lastSeen time.Time
+				}
+				entries := make([]entry, 0, len(ms.previousStats))
+				for id, st := range ms.previousStats {
+					entries = append(entries, entry{id: id, lastSeen: st.LastSeen})
+				}
+
+				// Sort by oldest lastSeen first
+				sort.Slice(entries, func(i, j int) bool {
+					return entries[i].lastSeen.Before(entries[j].lastSeen)
+				})
+
+				// Remove oldest until under limit
+				toRemove := len(ms.previousStats) - ms.config.MaxPreviousStats
+				for i := 0; i < toRemove && i < len(entries); i++ {
+					delete(ms.previousStats, entries[i].id)
+					removedCount++
 				}
 			}
 			ms.statsMutex.Unlock()

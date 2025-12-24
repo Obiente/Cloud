@@ -63,7 +63,7 @@ enum BuildStatus {
 
 // Health check type for deployments
 enum HealthCheckType {
-  HEALTHCHECK_TYPE_UNSPECIFIED = 0; // No health check
+  HEALTHCHECK_TYPE_UNSPECIFIED = 0; // Auto-detect (TCP if routing exists, otherwise no healthcheck)
   HEALTHCHECK_DISABLED = 1;          // Explicitly disabled
   HEALTHCHECK_TCP = 2;               // TCP port check (nc)
   HEALTHCHECK_HTTP = 3;              // HTTP endpoint check
