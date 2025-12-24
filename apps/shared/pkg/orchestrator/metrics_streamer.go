@@ -738,6 +738,11 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 	rawTotal := statsJSON.CPUStats.CPUUsage.TotalUsage
 	rawSystem := statsJSON.CPUStats.SystemUsage
 	onlineCPUs := statsJSON.CPUStats.OnlineCPUs
+	// If Docker does not provide `online_cpus` (common on cgroup v2),
+	// fall back to the length of `percpu_usage` as recommended by Docker API.
+	if onlineCPUs == 0 {
+		onlineCPUs = uint(len(statsJSON.CPUStats.CPUUsage.PercpuUsage))
+	}
 
 	// Helper to compute CPU usage from previous raw totals
 	computeFromPrev := func(prevTotal uint64, prevSystem uint64) float64 {
