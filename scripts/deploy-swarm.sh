@@ -438,13 +438,19 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   
+  # Process environment variables in the dashboard compose file
+  # This is critical for Swarm deployments to properly substitute ${VAR} placeholders
+  # We need to use envsubst to replace variables before docker stack deploy
+  TEMP_DASHBOARD_COMPOSE_FINAL=$(mktemp)
+  envsubst < "$TEMP_DASHBOARD_COMPOSE" > "$TEMP_DASHBOARD_COMPOSE_FINAL"
+  
   # Deploy dashboard service in the same stack (not a separate stack)
   if [ "$PULL_IMAGES" = "true" ]; then
-    docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
+    docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
   else
-    docker stack deploy --resolve-image never -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
+    docker stack deploy --resolve-image never -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
   fi
-  rm -f "$TEMP_DASHBOARD_COMPOSE"
+  rm -f "$TEMP_DASHBOARD_COMPOSE" "$TEMP_DASHBOARD_COMPOSE_FINAL"
   
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
   echo ""
