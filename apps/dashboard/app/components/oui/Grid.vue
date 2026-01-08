@@ -128,6 +128,30 @@
     py?: Responsive<OUISpacing>;
 
     /**
+     * Padding top
+     * Supports responsive values.
+     */
+    pt?: Responsive<OUISpacing>;
+
+    /**
+     * Padding bottom
+     * Supports responsive values.
+     */
+    pb?: Responsive<OUISpacing>;
+
+    /**
+     * Padding left
+     * Supports responsive values.
+     */
+    pl?: Responsive<OUISpacing>;
+
+    /**
+     * Padding right
+     * Supports responsive values.
+     */
+    pr?: Responsive<OUISpacing>;
+
+    /**
      * Margin variant using OUI spacing scale
      * Supports responsive values.
      */
@@ -144,6 +168,30 @@
      * Supports responsive values.
      */
     my?: Responsive<MarginVariant>;
+
+    /**
+     * Margin top
+     * Supports responsive values.
+     */
+    mt?: Responsive<MarginVariant>;
+
+    /**
+     * Margin bottom
+     * Supports responsive values.
+     */
+    mb?: Responsive<MarginVariant>;
+
+    /**
+     * Margin left
+     * Supports responsive values.
+     */
+    ml?: Responsive<MarginVariant>;
+
+    /**
+     * Margin right
+     * Supports responsive values.
+     */
+    mr?: Responsive<MarginVariant>;
 
     /**
      * Background color using OUI color system
@@ -248,9 +296,17 @@
     classes.push(...responsiveClass(props.p, spacingMap("p")));
     classes.push(...responsiveClass(props.px, spacingMap("px")));
     classes.push(...responsiveClass(props.py, spacingMap("py")));
+    classes.push(...responsiveClass(props.pt, spacingMap("pt")));
+    classes.push(...responsiveClass(props.pb, spacingMap("pb")));
+    classes.push(...responsiveClass(props.pl, spacingMap("pl")));
+    classes.push(...responsiveClass(props.pr, spacingMap("pr")));
     classes.push(...responsiveClass(props.m, marginMap("m")));
     classes.push(...responsiveClass(props.mx, marginMap("mx")));
     classes.push(...responsiveClass(props.my, marginMap("my")));
+    classes.push(...responsiveClass(props.mt, marginMap("mt")));
+    classes.push(...responsiveClass(props.mb, marginMap("mb")));
+    classes.push(...responsiveClass(props.ml, marginMap("ml")));
+    classes.push(...responsiveClass(props.mr, marginMap("mr")));
 
     // Background / radius / width / height
     const bg = backgroundClass(props.bg);

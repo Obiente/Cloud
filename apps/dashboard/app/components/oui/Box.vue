@@ -60,6 +60,26 @@
     py?: Responsive<OUISpacing>;
 
     /**
+     * Padding top
+     */
+    pt?: Responsive<OUISpacing>;
+
+    /**
+     * Padding bottom
+     */
+    pb?: Responsive<OUISpacing>;
+
+    /**
+     * Padding left
+     */
+    pl?: Responsive<OUISpacing>;
+
+    /**
+     * Padding right
+     */
+    pr?: Responsive<OUISpacing>;
+
+    /**
      * Margin variant using OUI spacing scale
      */
     m?: Responsive<MarginVariant>;
@@ -73,6 +93,26 @@
      * Margin Y (vertical) variant
      */
     my?: Responsive<MarginVariant>;
+
+    /**
+     * Margin top
+     */
+    mt?: Responsive<MarginVariant>;
+
+    /**
+     * Margin bottom
+     */
+    mb?: Responsive<MarginVariant>;
+
+    /**
+     * Margin left
+     */
+    ml?: Responsive<MarginVariant>;
+
+    /**
+     * Margin right
+     */
+    mr?: Responsive<MarginVariant>;
 
     /**
      * Background color using OUI color system
@@ -165,30 +205,16 @@
      * Prevent shrinking in flex layouts
      */
     shrink?: boolean;
-
-    /**
-     * Add min-h-0 utility for nested flex layouts
-     */
-    minH0?: boolean;
-
-    /**
-     * Add min-w-0 utility (defaults to true)
-     */
-    minW0?: boolean;
   }
 
   const props = withDefaults(defineProps<BoxProps>(), {
     as: "div",
     grow: false,
     shrink: true,
-    minW0: true,
   });
 
   const boxClasses = computed(() => {
     const classes = ["oui-box"];
-
-    if (props.minW0) classes.push("min-w-0");
-    if (props.minH0) classes.push("min-h-0");
 
     if (props.grow) classes.push("flex-1");
     if (!props.shrink) classes.push("flex-shrink-0");
@@ -197,11 +223,19 @@
     classes.push(...responsiveClass(props.p, spacingMap("p")));
     classes.push(...responsiveClass(props.px, spacingMap("px")));
     classes.push(...responsiveClass(props.py, spacingMap("py")));
+    classes.push(...responsiveClass(props.pt, spacingMap("pt")));
+    classes.push(...responsiveClass(props.pb, spacingMap("pb")));
+    classes.push(...responsiveClass(props.pl, spacingMap("pl")));
+    classes.push(...responsiveClass(props.pr, spacingMap("pr")));
 
     // Margin classes
     classes.push(...responsiveClass(props.m, marginMap("m")));
     classes.push(...responsiveClass(props.mx, marginMap("mx")));
     classes.push(...responsiveClass(props.my, marginMap("my")));
+    classes.push(...responsiveClass(props.mt, marginMap("mt")));
+    classes.push(...responsiveClass(props.mb, marginMap("mb")));
+    classes.push(...responsiveClass(props.ml, marginMap("ml")));
+    classes.push(...responsiveClass(props.mr, marginMap("mr")));
 
     // Background classes
     const bg = backgroundClass(props.bg);

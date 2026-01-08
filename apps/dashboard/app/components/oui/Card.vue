@@ -65,9 +65,17 @@
     p?: Responsive<OUISpacing>;
     px?: Responsive<OUISpacing>;
     py?: Responsive<OUISpacing>;
+    pt?: Responsive<OUISpacing>;
+    pb?: Responsive<OUISpacing>;
+    pl?: Responsive<OUISpacing>;
+    pr?: Responsive<OUISpacing>;
     m?: Responsive<MarginVariant>;
     mx?: Responsive<MarginVariant>;
     my?: Responsive<MarginVariant>;
+    mt?: Responsive<MarginVariant>;
+    mb?: Responsive<MarginVariant>;
+    ml?: Responsive<MarginVariant>;
+    mr?: Responsive<MarginVariant>;
 
     // Visuals
     bg?: OUIColor;
@@ -108,9 +116,17 @@
     classes.push(...responsiveClass(props.p, spacingMap("p")));
     classes.push(...responsiveClass(props.px, spacingMap("px")));
     classes.push(...responsiveClass(props.py, spacingMap("py")));
+    classes.push(...responsiveClass(props.pt, spacingMap("pt")));
+    classes.push(...responsiveClass(props.pb, spacingMap("pb")));
+    classes.push(...responsiveClass(props.pl, spacingMap("pl")));
+    classes.push(...responsiveClass(props.pr, spacingMap("pr")));
     classes.push(...responsiveClass(props.m, marginMap("m")));
     classes.push(...responsiveClass(props.mx, marginMap("mx")));
     classes.push(...responsiveClass(props.my, marginMap("my")));
+    classes.push(...responsiveClass(props.mt, marginMap("mt")));
+    classes.push(...responsiveClass(props.mb, marginMap("mb")));
+    classes.push(...responsiveClass(props.ml, marginMap("ml")));
+    classes.push(...responsiveClass(props.mr, marginMap("mr")));
 
     // Visuals
     const bg = backgroundClass(props.bg);
