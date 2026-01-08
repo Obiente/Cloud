@@ -46,15 +46,6 @@
         :organization-id="organizationId"
         :model-value="selectedContainerId"
         label="Container"
-        @update:model-value="(value) => {
-          // Find container from value
-          const container = containerQuery.containers.value.find(
-            c => (c.serviceName || c.containerId) === value
-          );
-          if (container) {
-            onContainerChange(container);
-          }
-        }"
         @change="onContainerChange"
       />
 

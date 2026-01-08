@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
@@ -219,6 +219,20 @@ const loadContainers = async () => {
         return nameA.localeCompare(nameB);
       });
     }
+    
+    // Emit initial selection after containers load
+    // Use nextTick to ensure parent components are ready
+    nextTick(() => {
+      // If no explicit modelValue was provided (or it's empty string), emit the first container
+      if (!props.modelValue || props.modelValue === "") {
+        const firstContainer = containers.value[0] || null;
+        emit("change", firstContainer);
+      } else {
+        // If a specific modelValue was provided, emit the corresponding container
+        const container = selectedContainer.value;
+        emit("change", container ?? null);
+      }
+    });
   } catch (err) {
     console.error("Failed to load containers:", err);
     containers.value = [];

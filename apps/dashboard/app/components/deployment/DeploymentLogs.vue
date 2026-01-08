@@ -4,7 +4,7 @@
       <ContainerSelector
         :deployment-id="props.deploymentId"
         :organization-id="effectiveOrgId"
-        v-model="selectedService"
+        :model-value="selectedService"
         :show-selected-info="true"
         selected-info-text="Viewing logs for"
         @change="onServiceChange"
@@ -316,6 +316,12 @@ const restartStream = () => {
 // Handle service change
 const onServiceChange = (container: { containerId: string; serviceName?: string } | null) => {
   selectedContainer.value = container;
+  // Update selectedService to match the container selection
+  if (container) {
+    selectedService.value = container.serviceName || container.containerId;
+  } else {
+    selectedService.value = "";
+  }
   
   // Stop current stream (this will set isAborting = true)
   stopStream();
