@@ -32,9 +32,7 @@
               <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
                 CPU Usage
               </OuiText>
-              <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                Live
-              </OuiBadge>
+
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
               {{ currentCpuUsage.toFixed(1) }}%
@@ -65,9 +63,7 @@
               <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
                 Memory Usage
               </OuiText>
-              <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                Live
-              </OuiBadge>
+
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
               <OuiByte :value="currentMemoryUsage" unit-display="short" />
@@ -89,9 +85,7 @@
               <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
                 Network Rx
               </OuiText>
-              <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                Live
-              </OuiBadge>
+
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
               <OuiByte :value="currentNetworkRx" unit-display="short" base="decimal" />
@@ -113,9 +107,7 @@
               <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
                 Network Tx
               </OuiText>
-              <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                Live
-              </OuiBadge>
+
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
               <OuiByte :value="currentNetworkTx" unit-display="short" base="decimal" />
