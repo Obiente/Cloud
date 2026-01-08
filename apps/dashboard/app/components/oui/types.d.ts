@@ -152,7 +152,11 @@ export type DimensionVariant =
   | "screen"
   | SizeRange<"3xs", "full">
   | NumericWithString<Range<1, 256>>;
-export type MarginVariant = OUISpacing | "auto";
+export type MarginVariant = 
+  | OUISpacing 
+  | "auto" 
+  | "0"
+  | NumericWithString<Range<1, 96>>;
 
 export type Breakpoint = "sm" | "md" | "lg" | "xl" | "2xl";
 

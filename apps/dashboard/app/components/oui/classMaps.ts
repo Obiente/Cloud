@@ -84,10 +84,6 @@ const dimensionUtility = (
     return `${prefix}-screen`;
   }
 
-  if (prefix === "w") {
-    return `max-w-${value}`;
-  }
-
   return `${prefix}-${value}`;
 };
 
@@ -107,7 +103,11 @@ export const marginClass = (
   if (value === "auto") {
     return `${prefix}-auto`;
   }
-  return `${prefix}-${mapSpacingToken(value)}`;
+  // Check if it's a numeric value (number or numeric string)
+  if (typeof value === "number" || /^\d+$/.test(String(value))) {
+    return `${prefix}-${value}`;
+  }
+  return `${prefix}-${mapSpacingToken(value as OUISpacing)}`;
 };
 
 export const backgroundClass = (value: OUIColor | undefined) =>
