@@ -12,13 +12,15 @@ import type {
   OUIColor,
   OUIBorderRadius,
   OUISpacing,
+  Responsive,
 } from "./types";
 import {
   backgroundClass,
   borderRadiusClass,
-  marginClass,
+  marginMap,
+  responsiveClass,
   shadowClass,
-  spacingClass,
+  spacingMap,
 } from "./classMaps";
 
 interface ContainerProps {
@@ -44,32 +46,72 @@ interface ContainerProps {
    * Padding variant using OUI spacing scale
    * @default 'md'
    */
-  p?: OUISpacing;
+  p?: Responsive<OUISpacing>;
 
   /**
    * Padding X (horizontal) variant
    */
-  px?: OUISpacing;
+  px?: Responsive<OUISpacing>;
 
   /**
    * Padding Y (vertical) variant
    */
-  py?: OUISpacing;
+  py?: Responsive<OUISpacing>;
+
+  /**
+   * Padding top
+   */
+  pt?: Responsive<OUISpacing>;
+
+  /**
+   * Padding bottom
+   */
+  pb?: Responsive<OUISpacing>;
+
+  /**
+   * Padding left
+   */
+  pl?: Responsive<OUISpacing>;
+
+  /**
+   * Padding right
+   */
+  pr?: Responsive<OUISpacing>;
 
   /**
    * Margin variant using OUI spacing scale
    */
-  m?: MarginVariant;
+  m?: Responsive<MarginVariant>;
 
   /**
    * Margin X (horizontal) variant
    */
-  mx?: MarginVariant;
+  mx?: Responsive<MarginVariant>;
 
   /**
    * Margin Y (vertical) variant
    */
-  my?: MarginVariant;
+  my?: Responsive<MarginVariant>;
+
+  /**
+   * Margin top
+   */
+  mt?: Responsive<MarginVariant>;
+
+  /**
+   * Margin bottom
+   */
+  mb?: Responsive<MarginVariant>;
+
+  /**
+   * Margin left
+   */
+  ml?: Responsive<MarginVariant>;
+
+  /**
+   * Margin right
+   */
+  mr?: Responsive<MarginVariant>;
 
   /**
    * Background color using OUI color system
@@ -150,26 +192,25 @@ const containerClasses = computed(() => {
   }
 
   // Padding classes
-  const padding = spacingClass(props.p, "p");
-  if (padding) classes.push(padding);
-
-  const paddingX = spacingClass(props.px, "px");
-  if (paddingX) classes.push(paddingX);
-
-  const paddingY = spacingClass(props.py, "py");
-  if (paddingY) classes.push(paddingY);
+  classes.push(...responsiveClass(props.p, spacingMap("p")));
+  classes.push(...responsiveClass(props.px, spacingMap("px")));
+  classes.push(...responsiveClass(props.py, spacingMap("py")));
+  classes.push(...responsiveClass(props.pt, spacingMap("pt")));
+  classes.push(...responsiveClass(props.pb, spacingMap("pb")));
+  classes.push(...responsiveClass(props.pl, spacingMap("pl")));
+  classes.push(...responsiveClass(props.pr, spacingMap("pr")));
 
   // Margin classes (only if not using auto centering)
   if (!props.centered) {
-    const margin = marginClass(props.m, "m");
-    if (margin) classes.push(margin);
-
-    const marginX = marginClass(props.mx, "mx");
-    if (marginX) classes.push(marginX);
+    classes.push(...responsiveClass(props.m, marginMap("m")));
+    classes.push(...responsiveClass(props.mx, marginMap("mx")));
   }
 
-  const marginY = marginClass(props.my, "my");
-  if (marginY) classes.push(marginY);
+  classes.push(...responsiveClass(props.my, marginMap("my")));
+  classes.push(...responsiveClass(props.mt, marginMap("mt")));
+  classes.push(...responsiveClass(props.mb, marginMap("mb")));
+  classes.push(...responsiveClass(props.ml, marginMap("ml")));
+  classes.push(...responsiveClass(props.mr, marginMap("mr")));
 
   // Background classes
   const bg = backgroundClass(props.bg);
