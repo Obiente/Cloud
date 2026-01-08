@@ -9,10 +9,10 @@
     :strategy="strategy"
   >
     <Teleport to="body">
-      <FloatingPanel.Positioner class="z-[9999]">
+      <FloatingPanel.Positioner class="z-40">
         <FloatingPanel.Content
           :class="[
-            'z-[9999] rounded-xl bg-surface-overlay border border-border-muted shadow-2xl',
+            'z-40 rounded-xl bg-surface-overlay border border-border-muted shadow-2xl',
             'min-w-[320px] max-w-[90vw] max-h-[90vh]',
             'flex flex-col',
             'fixed',
