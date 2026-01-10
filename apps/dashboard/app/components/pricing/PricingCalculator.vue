@@ -479,7 +479,7 @@
       </OuiCard>
 
       <!-- FAQ Accordion -->
-      <OuiCard variant="default" class="w-full max-w-4xl">
+      <OuiCard variant="default" style="max-width: 72rem; width: 100%;">
         <OuiCardBody>
           <OuiStack gap="lg">
             <OuiText size="lg" weight="semibold" color="primary">
@@ -493,7 +493,9 @@
       <!-- Reduced Pricing Collapsible -->
       <OuiCard
         variant="outline"
-        class="w-full max-w-4xl border-border-muted/50"
+        class="border-border-muted/50"
+        w="full"
+        max-w="3xl"
       >
         <OuiCardBody>
           <OuiCollapsible
