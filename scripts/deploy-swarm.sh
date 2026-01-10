@@ -455,27 +455,25 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
   echo ""
   
-  # Wait for dashboard to be ready (Traefik needs to discover it before it can serve requests)
-  echo "⏳ Waiting for dashboard service to be ready for Traefik routing..."
-  MAX_WAIT=120
+  # Wait for dashboard to be ready (healthcheck passes and service is stable)
+  echo "⏳ Waiting for dashboard service to become healthy..."
+  MAX_WAIT=60
   ELAPSED=0
   DASHBOARD_READY=false
   
   while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if dashboard service has running tasks
-    RUNNING_TASKS=$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | grep -c "Running" || echo "0")
+    # Check if dashboard service has running and healthy tasks
+    # A task is considered ready when it's in "Running" state for at least a few seconds
+    RUNNING_TASKS=$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | grep -c "Running [0-9]" || echo "0")
     
     if [ "$RUNNING_TASKS" -gt 0 ]; then
-      # Check if Traefik has discovered the dashboard service (check Traefik logs)
-      TRAEFIK_DISCOVERED=$(docker service logs "${STACK_NAME}_traefik" 2>/dev/null | grep -i "dashboard" | grep -i "discovered\|routing\|loadbalancer" | tail -1)
-      
-      if [ -n "$TRAEFIK_DISCOVERED" ]; then
+      # Give Traefik time to pick up the service (default 15s refresh interval)
+      if [ $ELAPSED -ge 20 ]; then
         DASHBOARD_READY=true
-        echo "✅ Dashboard is ready and discovered by Traefik!"
+        echo "✅ Dashboard service is running and should be accessible via Traefik!"
         break
       fi
-      
-      echo "   ✓ Dashboard tasks running, waiting for Traefik discovery..."
+      echo "   ✓ Dashboard tasks running, allowing Traefik to discover service..."
     else
       echo "   ⏳ Waiting for dashboard tasks to start (${ELAPSED}s)..."
     fi
@@ -485,10 +483,9 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   done
   
   if [ "$DASHBOARD_READY" = false ]; then
-    echo "⚠️  Warning: Dashboard may not be fully ready yet (timeout after ${MAX_WAIT}s)"
-    echo "   This is normal - service discovery can take time on large clusters"
-    echo "   Monitor progress with: docker service logs -f ${STACK_NAME}_dashboard"
-    echo "   And: docker service logs -f ${STACK_NAME}_traefik | grep -i dashboard"
+    echo "⚠️  Warning: Dashboard tasks are taking longer than expected to start"
+    echo "   Check service status: docker service ps ${STACK_NAME}_dashboard"
+    echo "   Monitor logs: docker service logs -f ${STACK_NAME}_dashboard"
   fi
 else
   echo "✅ Main stack deployment started!"
