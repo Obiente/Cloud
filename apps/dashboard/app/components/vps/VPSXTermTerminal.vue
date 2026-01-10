@@ -38,7 +38,7 @@
       VPS.
     </OuiText>
 
-    <div class="terminal-wrapper">
+    <div class="terminal-wrapper" :style="{ height: props.height || '600px' }">
       <div class="terminal-container">
         <div ref="terminalContainer" class="terminal-content" />
         <div v-if="showSpinner" class="terminal-overlay">
@@ -66,6 +66,7 @@
   interface Props {
     vpsId: string;
     organizationId?: string;
+    height?: string;
   }
 
   const props = defineProps<Props>();
@@ -575,7 +576,6 @@
 <style scoped>
   .terminal-wrapper {
     width: 100%;
-    height: 600px;
     position: relative;
   }
 
