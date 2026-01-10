@@ -11,7 +11,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onErrorCaptured, provide, reactive, ref, watchEffect, nextTick } from "vue";
-import { routerKey, routeLocationKey, type RouteLocationNormalizedLoaded, createRouter, createMemoryHistory } from "vue-router";
+import { routerKey, routeLocationKey, type RouteLocationNormalizedLoaded, type RouteLocationRaw, createRouter, createMemoryHistory } from "vue-router";
 import { useNuxtApp } from "#app";
 import { useOrganizationsStore } from "~/stores/organizations";
 import type { 
@@ -137,15 +137,38 @@ const router = createRouter({
   ],
 });
 
+const allowNextNavigation = ref(false);
+
+// Create a proxy router that blocks navigation
+const blockedRouter = new Proxy(router, {
+  get(target, prop, receiver) {
+    // Intercept push and replace methods
+    if (prop === 'push' || prop === 'replace') {
+      return (to: RouteLocationRaw) => {
+        if (allowNextNavigation.value) {
+          allowNextNavigation.value = false;
+          const method = prop === 'push' ? target.push.bind(target) : target.replace.bind(target);
+          return method(to);
+        }
+        console.log('[PreviewProviders] Navigation blocked via', prop, ':', to);
+        return Promise.resolve(undefined as any);
+      };
+    }
+    // Return original property/method for everything else
+    return Reflect.get(target, prop, receiver);
+  }
+});
+
 try {
-  router.push(pathForMode);
+  allowNextNavigation.value = true; // allow initial navigation
+  blockedRouter.push(pathForMode);
   console.log('[PreviewProviders] Router pushed to:', pathForMode);
 } catch (error) {
   console.error('[PreviewProviders] Error pushing router:', error);
 }
 
 provide(routeLocationKey, route);
-provide(routerKey, router);
+provide(routerKey, blockedRouter);
 console.log('[PreviewProviders] Provided route and router contexts');
 
 // Watch for prop changes and update route accordingly
@@ -185,7 +208,8 @@ watchEffect(() => {
       route.path = newPath;
       route.fullPath = newPath;
       route.params.id = newId;
-      router.push(newPath);
+      allowNextNavigation.value = true;
+      blockedRouter.push(newPath);
       
       // Show component again after brief delay
       nextTick(() => {
@@ -200,7 +224,8 @@ watchEffect(() => {
       route.path = newPath;
       route.fullPath = newPath;
       route.params.id = newId;
-      router.push(newPath);
+      allowNextNavigation.value = true;
+      blockedRouter.push(newPath);
     }
   } catch (error) {
     console.error('[PreviewProviders] Error in watchEffect:', error);
@@ -218,6 +243,42 @@ if (!orgStore.currentOrgId) {
 // Provide a mocked Connect transport so pages resolve data without network calls.
 const nuxtApp = useNuxtApp();
 console.log('[PreviewProviders] Got Nuxt app instance');
+
+// Patch the global Nuxt router to block navigation during preview
+const globalRouter = nuxtApp.$router;
+const originalGlobalPush = globalRouter.push.bind(globalRouter);
+const originalGlobalReplace = globalRouter.replace.bind(globalRouter);
+
+// Track if we're in preview mode to block global router navigation
+const inPreviewMode = ref(true);
+
+// Define paths that should be blocked (mock resource detail pages)
+const blockedPaths = [
+  '/deployments/mock-',
+  '/gameservers/mock-',
+  '/vps/mock-',
+];
+
+const shouldBlockNavigation = (to: RouteLocationRaw): boolean => {
+  const path = typeof to === 'string' ? to : (to as { path?: string })?.path || '';
+  return blockedPaths.some(blocked => path.startsWith(blocked));
+};
+
+globalRouter.push = (to: RouteLocationRaw) => {
+  if (inPreviewMode.value && shouldBlockNavigation(to)) {
+    console.log('[PreviewProviders] Global router.push blocked:', to);
+    return Promise.resolve(undefined as any);
+  }
+  return originalGlobalPush(to);
+};
+
+globalRouter.replace = (to: RouteLocationRaw) => {
+  if (inPreviewMode.value && shouldBlockNavigation(to)) {
+    console.log('[PreviewProviders] Global router.replace blocked:', to);
+    return Promise.resolve(undefined as any);
+  }
+  return originalGlobalReplace(to);
+};
 
 const emptyHeaders = () => new Headers();
 
@@ -2542,6 +2603,16 @@ try {
 onBeforeUnmount(() => {
   try {
     console.log('[PreviewProviders] Cleanup starting for instance:', instanceId, 'mode:', props.mode);
+    
+    // Disable preview mode to restore global router
+    inPreviewMode.value = false;
+    
+    // Restore original global router methods
+    if (globalRouter) {
+      globalRouter.push = originalGlobalPush;
+      globalRouter.replace = originalGlobalReplace;
+      console.log('[PreviewProviders] Restored global router methods');
+    }
     
     // First, mark as not ready to hide component
     isReady.value = false;
