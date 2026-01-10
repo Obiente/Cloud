@@ -33,10 +33,10 @@ services:
     healthcheck:
       # Use node to make HTTP request (wget/curl not available in minimal alpine)
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: 5s
+      timeout: 3s
+      retries: 2
+      start_period: 30s
     # Swarm deployment configuration for high availability
     deploy:
       # Configure replicas based on cluster size
@@ -46,10 +46,10 @@ services:
       replicas: ${DASHBOARD_REPLICAS:-3}
       update_config:
         parallelism: 1  # Update one replica at a time to prevent mixed versions
-        delay: 60s  # Wait longer between updates to ensure complete transition
-        order: stop-first  # Stop old container before starting new (prevents load balancing to old versions)
+        delay: 30s  # Wait between updates to ensure complete transition
+        order: start-first  # Start new replica first (prevents service unavailability during rolling update)
         failure_action: rollback
-        monitor: 90s  # Monitor for 90s to ensure new replica is fully healthy before continuing
+        monitor: 60s  # Monitor for 60s to ensure new replica is fully healthy before continuing
       rollback_config:
         parallelism: 1
         delay: 10s
@@ -98,9 +98,10 @@ services:
         # Service configuration with health checks to prevent routing to old replicas
         - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
         - "traefik.http.services.dashboard.loadbalancer.healthcheck.path=/"
-        - "traefik.http.services.dashboard.loadbalancer.healthcheck.interval=10s"
-        - "traefik.http.services.dashboard.loadbalancer.healthcheck.timeout=5s"
+        - "traefik.http.services.dashboard.loadbalancer.healthcheck.interval=5s"
+        - "traefik.http.services.dashboard.loadbalancer.healthcheck.timeout=3s"
         - "traefik.http.services.dashboard.loadbalancer.passhostheader=true"
+        - "traefik.docker.network=obiente_obiente-network"
         # Sticky sessions to ensure users stay on same replica
         - "traefik.http.services.dashboard.loadbalancer.sticky.cookie=true"
         - "traefik.http.services.dashboard.loadbalancer.sticky.cookie.name=dashboard_session"

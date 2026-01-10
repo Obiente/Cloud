@@ -869,7 +869,6 @@ services:
       - --providers.swarm=true  # Use Swarm provider for Docker Swarm mode (v3.0)
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.watch=true  # Watch for service changes
-      - --providers.swarm.refreshSeconds=45  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
