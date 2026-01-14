@@ -11,10 +11,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -1260,11 +1258,8 @@ func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
 		owner := ""
 		group := ""
 		mode := permissionsToMode(info.Mode().String())
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			owner = strconv.FormatUint(uint64(stat.Uid), 10)
-			group = strconv.FormatUint(uint64(stat.Gid), 10)
-			mode = uint32(stat.Mode & 0o777)
-		}
+		// Get Unix-specific file info (owner, group, mode)
+		owner, group, mode = getUnixFileInfo(info, mode)
 
 		isSymlink := info.Mode()&os.ModeSymlink != 0
 		symlinkTarget := ""
@@ -1355,11 +1350,8 @@ func (c *Client) SearchVolumeFiles(volumePath, rootPath, query string, maxResult
 		owner := ""
 		group := ""
 		mode := permissionsToMode(info.Mode().String())
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			owner = strconv.FormatUint(uint64(stat.Uid), 10)
-			group = strconv.FormatUint(uint64(stat.Gid), 10)
-			mode = uint32(stat.Mode & 0o777)
-		}
+		// Get Unix-specific file info (owner, group, mode)
+		owner, group, mode = getUnixFileInfo(info, mode)
 
 		isSymlink := info.Mode()&os.ModeSymlink != 0
 		symlinkTarget := ""
@@ -1570,11 +1562,8 @@ func (c *Client) StatVolumeFile(volumePath, path string) (FileInfo, error) {
 	owner := ""
 	group := ""
 	mode := permissionsToMode(info.Mode().String())
-	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-		owner = strconv.FormatUint(uint64(stat.Uid), 10)
-		group = strconv.FormatUint(uint64(stat.Gid), 10)
-		mode = uint32(stat.Mode & 0o777)
-	}
+	// Get Unix-specific file info (owner, group, mode)
+	owner, group, mode = getUnixFileInfo(info, mode)
 
 	isSymlink := info.Mode()&os.ModeSymlink != 0
 	symlinkTarget := ""
