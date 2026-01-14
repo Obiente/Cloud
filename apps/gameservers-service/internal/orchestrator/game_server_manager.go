@@ -100,8 +100,18 @@ func (gsm *GameServerManager) GetNodeID() string {
 	return gsm.nodeID
 }
 
-// getNodeIP retrieves the IP address for the current node from NodeMetadata
+// getNodeIP retrieves the IP address for the current node from Swarm or NodeMetadata
+// This matches deployment behavior - for Swarm nodes, use the Swarm node's IP address
 func (gsm *GameServerManager) getNodeIP(ctx context.Context) string {
+	// If in Swarm mode, try to get IP from Swarm node info first (same as deployments)
+	if utils.IsSwarmModeEnabled() && !strings.HasPrefix(gsm.nodeID, "local-") {
+		nodeInfo, err := gsm.dockerClient.NodeInspect(ctx, gsm.nodeID, client.NodeInspectOptions{})
+		if err == nil && nodeInfo.Node.Status.Addr != "" {
+			return nodeInfo.Node.Status.Addr
+		}
+	}
+
+	// Fallback to NodeMetadata (for non-Swarm or if Swarm lookup fails)
 	var node database.NodeMetadata
 	if err := database.DB.First(&node, "id = ?", gsm.nodeID).Error; err != nil {
 		logger.Warn("[GameServerManager] Failed to get node metadata for node %s: %v", gsm.nodeID, err)
@@ -113,7 +123,7 @@ func (gsm *GameServerManager) getNodeIP(ctx context.Context) string {
 	}
 
 	// If IP is not set in NodeMetadata, log a warning
-	logger.Warn("[GameServerManager] Node %s (%s) has no IP address configured in NodeMetadata", gsm.nodeID, gsm.nodeHostname)
+	logger.Warn("[GameServerManager] Node %s (%s) has no IP address configured", gsm.nodeID, gsm.nodeHostname)
 	return ""
 }
 
@@ -168,7 +178,7 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 	}
 
 	// Register game server location
-	// Get node IP for the location from node metadata
+	// Get node IP from Swarm (if in Swarm mode) or NodeMetadata, same as deployments
 	nodeIP := gsm.getNodeIP(ctx)
 
 	location := &database.GameServerLocation{
@@ -528,7 +538,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		logger.Info("[GameServerManager] Container %s is already running", (*gameServer.ContainerID)[:12])
 	}
 
-	// Update location status and ensure nodeIP is set
+	// Update location status and NodeIP (same behavior as deployments)
 	nodeIP := gsm.getNodeIP(ctx)
 	updateData := map[string]interface{}{
 		"status": "running",
