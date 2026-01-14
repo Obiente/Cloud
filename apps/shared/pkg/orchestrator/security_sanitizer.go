@@ -88,6 +88,9 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 
 // sanitizeService sanitizes a single service in the compose file
 func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) {
+	// Sanitize environment variables to ensure proper formatting
+	cs.sanitizeEnvironment(service)
+
 	// Sanitize volumes
 	if volumes, ok := service["volumes"].([]interface{}); ok {
 		sanitizedVolumes := []interface{}{}
@@ -158,6 +161,87 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	}
 }
 
+// sanitizeEnvironment ensures environment variables are properly formatted for Docker Compose
+// This fixes issues with:
+// 1. Boolean values that need to be strings
+// 2. Special characters like $ that need escaping
+// 3. Type coercion issues when YAML is unmarshaled/marshaled
+func (cs *ComposeSanitizer) sanitizeEnvironment(service map[string]interface{}) {
+	env, ok := service["environment"]
+	if !ok {
+		return
+	}
+
+	// Handle both map and array formats for environment variables
+	switch e := env.(type) {
+	case map[string]interface{}:
+		// Map format: { KEY: value }
+		sanitizedEnv := make(map[string]interface{})
+		for key, value := range e {
+			sanitizedEnv[key] = cs.sanitizeEnvValue(value)
+		}
+		service["environment"] = sanitizedEnv
+
+	case []interface{}:
+		// Array format: [ "KEY=value", "KEY2=value2" ]
+		sanitizedEnv := make([]interface{}, len(e))
+		for i, item := range e {
+			if str, ok := item.(string); ok {
+				// Parse KEY=value format
+				if idx := strings.Index(str, "="); idx > 0 {
+					key := str[:idx]
+					value := str[idx+1:]
+					// Reconstruct with sanitized value
+					sanitizedEnv[i] = fmt.Sprintf("%s=%s", key, cs.sanitizeEnvStringValue(value))
+				} else {
+					sanitizedEnv[i] = item
+				}
+			} else {
+				sanitizedEnv[i] = item
+			}
+		}
+		service["environment"] = sanitizedEnv
+	}
+}
+
+// sanitizeEnvValue converts environment variable values to proper string format
+// and escapes special characters for Docker Compose
+func (cs *ComposeSanitizer) sanitizeEnvValue(value interface{}) string {
+	var strValue string
+
+	switch v := value.(type) {
+	case bool:
+		// Convert boolean to string
+		if v {
+			strValue = "true"
+		} else {
+			strValue = "false"
+		}
+	case int, int64, float64:
+		// Convert numbers to strings
+		strValue = fmt.Sprintf("%v", v)
+	case string:
+		strValue = v
+	case nil:
+		// Null values should remain as empty strings
+		return ""
+	default:
+		// For any other type, convert to string
+		strValue = fmt.Sprintf("%v", v)
+	}
+
+	return cs.sanitizeEnvStringValue(strValue)
+}
+
+// sanitizeEnvStringValue escapes special characters in environment variable values
+func (cs *ComposeSanitizer) sanitizeEnvStringValue(value string) string {
+	// Escape $ characters for Docker Compose variable interpolation
+	// In Docker Compose, $$ is used to represent a literal $
+	value = strings.ReplaceAll(value, "$", "$$")
+
+	return value
+}
+
 // sanitizeVolumeBinding sanitizes a volume binding
 // Transforms host paths to safe user directories
 func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName string) interface{} {
@@ -178,7 +262,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 		// Check volume type
 		volType, _ := v["type"].(string)
-		
+
 		// If it has a source, check if it's a bind mount (absolute path) or named volume
 		if source, ok := v["source"].(string); ok {
 			if strings.HasPrefix(source, "/") {
@@ -200,7 +284,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 				}
 			}
 		}
-		
+
 		// Check if it's explicitly a named volume type (without source, just name reference)
 		if volType == "volume" {
 			// This is a named volume reference - we need to check if there's a name
@@ -209,7 +293,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			// This case is handled in sanitizeVolumeDefinition
 			return vol
 		}
-		
+
 		// No source, no explicit type - could be a simple named volume reference
 		// This case should be handled in string parsing below
 		return vol
@@ -255,7 +339,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		// Return as bind mount with default container path
 		return fmt.Sprintf("%s:/data", obienteVolumePath)
 	}
-	
+
 	return vol
 }
 
@@ -307,7 +391,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 			// This is a named volume - convert to bind mount specification
 			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
 			os.MkdirAll(obienteVolumePath, 0755)
-			
+
 			// Replace with bind mount configuration
 			// Note: We can't fully represent bind mounts in top-level volumes,
 			// but we'll ensure the directory exists and remove the volume definition
