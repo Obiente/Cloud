@@ -187,16 +187,10 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 				for _, node := range nodesResult.Items {
 					// Get node info
 					nodeInfoResult, err := ns.dockerClient.NodeInspect(ctx, node.ID, client.NodeInspectOptions{})
-				if err != nil {
-					continue
-				}
-				nodeInfo := nodeInfoResult.Node
 					if err != nil {
-				if err != nil {
-					continue
-				}
 						continue
 					}
+					nodeInfo := nodeInfoResult.Node
 
 					hostname := nodeInfo.Description.Hostname
 					nodeID := node.ID
@@ -544,14 +538,10 @@ func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID s
 			Filters: func() client.Filters { f := make(client.Filters); f.Add("status", "running"); return f }(),
 		})
 		if err != nil {
-			log.Printf("[NodeSelector] Failed to list all running containers: %v", err)
-			return 0.0, 0
-		}
-		containers = containersResult.Items
-		if err != nil {
 			log.Printf("[NodeSelector] Failed to list containers for local node: %v", err)
 			return 0.0, 0
 		}
+		containers = containersResult.Items
 	}
 
 	if len(containers) == 0 {

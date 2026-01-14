@@ -163,9 +163,24 @@ func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploy
 
 	// Network doesn't exist, create it
 	logger.Info("[DeploymentManager] Creating deployment network %s", deploymentNetworkName)
-	// Use bridge driver for compose or overlay for Swarm (docker automatically picks the right one)
-	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--label", "cloud.obiente.managed=true", "--label", fmt.Sprintf("cloud.obiente.deployment=%s", strings.TrimPrefix(deploymentNetworkName, "deployment-")), deploymentNetworkName)
 	
+	// Detect if Docker Swarm is active and use overlay driver if so
+	args := []string{"network", "create"}
+	swarmCheckCmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.Swarm.LocalNodeState}}")
+	if swarmOutput, swarmErr := swarmCheckCmd.Output(); swarmErr == nil {
+		if strings.TrimSpace(string(swarmOutput)) == "active" {
+			logger.Info("[DeploymentManager] Swarm detected, creating overlay network for %s", deploymentNetworkName)
+			args = append(args, "--driver", "overlay", "--attachable")
+		}
+	}
+	
+	args = append(args,
+		"--label", "cloud.obiente.managed=true",
+		"--label", fmt.Sprintf("cloud.obiente.deployment=%s", strings.TrimPrefix(deploymentNetworkName, "deployment-")),
+		deploymentNetworkName,
+	)
+	
+	createCmd := exec.CommandContext(ctx, "docker", args...)
 	var stderr bytes.Buffer
 	createCmd.Stderr = &stderr
 	if err := createCmd.Run(); err != nil {
@@ -202,78 +217,5 @@ func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploy
 	}
 
 	logger.Info("[DeploymentManager] Successfully created deployment network %s", deploymentNetworkName)
-	return nil
-}
-// ensureTraefikNetwork creates a shared network for Traefik service discovery
-// This network is created once and used by all deployments so Traefik can discover services
-// Users cannot access services on this network directly - it's only for Traefik routing
-func (dm *DeploymentManager) ensureTraefikNetwork(ctx context.Context) error {
-	traefikNetworkName := "traefik-network"
-
-	// Check if network exists
-	checkCmd := exec.CommandContext(ctx, "docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", traefikNetworkName), "--format", "{{.Name}}")
-	output, err := checkCmd.Output()
-	if err != nil {
-		// Check if Docker is available
-		if exitError, ok := err.(*exec.ExitError); ok {
-			stderr := string(exitError.Stderr)
-			logger.Info("[DeploymentManager] Failed to check for Traefik network (exit code %d): %s", exitError.ExitCode(), stderr)
-			if strings.Contains(stderr, "Cannot connect to the Docker daemon") ||
-				strings.Contains(stderr, "Is the docker daemon running") {
-				return fmt.Errorf("docker daemon is not accessible: %s", stderr)
-			}
-		}
-		logger.Warn("[DeploymentManager] Failed to check for Traefik network: %v", err)
-	}
-
-	if strings.TrimSpace(string(output)) == traefikNetworkName {
-		logger.Info("[DeploymentManager] Traefik network %s already exists", traefikNetworkName)
-		return nil
-	}
-
-	// Network doesn't exist, create it
-	logger.Info("[DeploymentManager] Creating Traefik network %s", traefikNetworkName)
-	// Use bridge driver for compose, overlay for Swarm (docker auto-picks based on mode)
-	createCmd := exec.CommandContext(ctx, "docker", "network", "create",
-		"--label", "cloud.obiente.managed=true",
-		"--label", "cloud.obiente.purpose=traefik-routing",
-		traefikNetworkName)
-
-	var stderr bytes.Buffer
-	createCmd.Stderr = &stderr
-	if err := createCmd.Run(); err != nil {
-		// Check if network was created by another process (race condition)
-		output, checkErr := checkCmd.Output()
-		if checkErr == nil && strings.TrimSpace(string(output)) == traefikNetworkName {
-			logger.Info("[DeploymentManager] Traefik network %s was created by another process", traefikNetworkName)
-			return nil
-		}
-
-		// Capture stderr for better error messages
-		errorOutput := stderr.String()
-		if errorOutput == "" {
-			if exitError, ok := err.(*exec.ExitError); ok {
-				errorOutput = string(exitError.Stderr)
-			}
-		}
-
-		// Provide more specific error messages
-		if strings.Contains(errorOutput, "already exists") {
-			logger.Info("[DeploymentManager] Traefik network %s already exists (race condition)", traefikNetworkName)
-			return nil
-		}
-		if strings.Contains(errorOutput, "Cannot connect to the Docker daemon") ||
-			strings.Contains(errorOutput, "Is the docker daemon running") {
-			return fmt.Errorf("docker daemon is not accessible: %s", errorOutput)
-		}
-		if strings.Contains(errorOutput, "permission denied") {
-			return fmt.Errorf("permission denied: unable to create Docker network (check Docker permissions): %s", errorOutput)
-		}
-
-		logger.Info("[DeploymentManager] Failed to create Traefik network: %v, stderr: %s", err, errorOutput)
-		return fmt.Errorf("failed to create Traefik network: %w (stderr: %s)", err, errorOutput)
-	}
-
-	logger.Info("[DeploymentManager] Successfully created Traefik network %s", traefikNetworkName)
 	return nil
 }
