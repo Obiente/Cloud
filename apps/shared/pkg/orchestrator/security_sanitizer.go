@@ -180,13 +180,27 @@ func (cs *ComposeSanitizer) convertDependsOnToList(service map[string]interface{
 	if dependsOn, ok := service["depends_on"]; ok {
 		// If it's a map (service conditions format), convert to list
 		if depMap, ok := dependsOn.(map[string]interface{}); ok {
-			// Extract service names from map keys
-			serviceList := make([]interface{}, 0, len(depMap))
+			// Extract service names from map keys and sort for deterministic output
+			serviceList := make([]string, 0, len(depMap))
 			for serviceName := range depMap {
 				serviceList = append(serviceList, serviceName)
 			}
+			// Sort to ensure deterministic order (maps have random iteration order in Go)
+			// This prevents flapping in generated YAML
+			for i := 0; i < len(serviceList)-1; i++ {
+				for j := i + 1; j < len(serviceList); j++ {
+					if serviceList[i] > serviceList[j] {
+						serviceList[i], serviceList[j] = serviceList[j], serviceList[i]
+					}
+				}
+			}
+			// Convert to []interface{} for YAML marshaling
+			interfaceList := make([]interface{}, len(serviceList))
+			for i, s := range serviceList {
+				interfaceList[i] = s
+			}
 			// Replace with list format
-			service["depends_on"] = serviceList
+			service["depends_on"] = interfaceList
 		}
 		// If it's already a list, leave it as-is
 	}
@@ -516,12 +530,37 @@ func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) interface{} {
 // Services are ONLY added to their private deployment network here
 // The obiente-network is added LATER by addTraefikNetworkToRoutedServices() only for services with routing
 func (cs *ComposeSanitizer) addServiceToNetwork(service map[string]interface{}) {
-	// Create networks section if it doesn't exist
-	if _, ok := service["networks"]; !ok {
-		// Connect ONLY to deployment-{id} - Private network for inter-service communication
-		// This ensures complete isolation from other deployments by default
-		// Traefik network access is granted separately based on routing configuration
-		deploymentNetworkName := fmt.Sprintf("deployment-%s", cs.deploymentID)
+	// Always ensure the service is connected to its deployment-specific network
+	deploymentNetworkName := fmt.Sprintf("deployment-%s", cs.deploymentID)
+	
+	networksVal, ok := service["networks"]
+	if !ok || networksVal == nil {
+		// No networks defined: connect ONLY to deployment network for isolation
+		service["networks"] = []string{deploymentNetworkName}
+		return
+	}
+	
+	// Service already has networks - merge deployment network in
+	switch networks := networksVal.(type) {
+	case []interface{}:
+		// List-style networks: ensure deployment network is present
+		for _, n := range networks {
+			if s, ok := n.(string); ok && s == deploymentNetworkName {
+				// Already connected to deployment network
+				return
+			}
+		}
+		service["networks"] = append(networks, deploymentNetworkName)
+		
+	case map[string]interface{}:
+		// Map-style networks: add deployment network key if missing
+		if _, exists := networks[deploymentNetworkName]; !exists {
+			// Empty config uses defaults for this network
+			networks[deploymentNetworkName] = map[string]interface{}{}
+		}
+		
+	default:
+		// Unexpected type: enforce isolation by resetting to deployment network only
 		service["networks"] = []string{deploymentNetworkName}
 	}
 }
