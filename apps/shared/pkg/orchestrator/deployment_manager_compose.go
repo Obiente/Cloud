@@ -24,9 +24,11 @@ import (
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 
-	// Ensure network exists before deploying (retry if it failed during initialization)
-	if err := dm.ensureNetwork(ctx); err != nil {
-		return fmt.Errorf("network is required but could not be created: %w", err)
+	// Ensure per-deployment network exists before deploying
+	// This provides isolation from other deployments (while services stay on obiente-network for Traefik discovery)
+	deploymentNetworkName := fmt.Sprintf("deployment-%s", deploymentID)
+	if err := dm.ensureDeploymentNetwork(ctx, deploymentNetworkName); err != nil {
+		return fmt.Errorf("deployment network is required but could not be created: %w", err)
 	}
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
@@ -152,6 +154,19 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			logger.Debug("[DeploymentManager] Sample Traefik labels for deployment %s: traefik.enable=true, cloud.obiente.traefik=true", deploymentID)
 		}
 		sanitizedYaml = labeledYaml
+	}
+
+	// If there are routing rules, add obiente-network to routed services for Traefik discovery
+	// This allows services with configured routes to be discovered by Traefik on the shared obiente-network
+	// while maintaining deployment isolation through the deployment-specific network
+	if len(routings) > 0 {
+		routedYaml, err := dm.addTraefikNetworkToRoutedServices(sanitizedYaml, routings)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to add Traefik network to routed services: %v. Continuing with current YAML.", err)
+		} else {
+			sanitizedYaml = routedYaml
+			logger.Info("[DeploymentManager] Added obiente-network to %d routed services for Traefik discovery", len(routings))
+		}
 	}
 
 	// Create persistent directory for compose file

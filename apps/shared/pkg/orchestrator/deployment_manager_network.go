@@ -137,3 +137,85 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	return nil
 }
 
+// ensureDeploymentNetwork creates a per-deployment network for service-to-service communication
+// Each deployment gets its own isolated network so services can discover each other via DNS
+func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploymentNetworkName string) error {
+	// Check if network exists
+	checkCmd := exec.CommandContext(ctx, "docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", deploymentNetworkName), "--format", "{{.Name}}")
+	output, err := checkCmd.Output()
+	if err != nil {
+		// Check if Docker is available
+		if exitError, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitError.Stderr)
+			logger.Info("[DeploymentManager] Failed to check for deployment network (exit code %d): %s", exitError.ExitCode(), stderr)
+			if strings.Contains(stderr, "Cannot connect to the Docker daemon") ||
+				strings.Contains(stderr, "Is the docker daemon running") {
+				return fmt.Errorf("docker daemon is not accessible: %s", stderr)
+			}
+		}
+		logger.Warn("[DeploymentManager] Failed to check for deployment network: %v", err)
+	}
+
+	if strings.TrimSpace(string(output)) == deploymentNetworkName {
+		logger.Info("[DeploymentManager] Deployment network %s already exists", deploymentNetworkName)
+		return nil
+	}
+
+	// Network doesn't exist, create it
+	logger.Info("[DeploymentManager] Creating deployment network %s", deploymentNetworkName)
+	
+	// Detect if Docker Swarm is active and use overlay driver if so
+	args := []string{"network", "create"}
+	swarmCheckCmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.Swarm.LocalNodeState}}")
+	if swarmOutput, swarmErr := swarmCheckCmd.Output(); swarmErr == nil {
+		if strings.TrimSpace(string(swarmOutput)) == "active" {
+			logger.Info("[DeploymentManager] Swarm detected, creating overlay network for %s", deploymentNetworkName)
+			args = append(args, "--driver", "overlay", "--attachable")
+		}
+	}
+	
+	args = append(args,
+		"--label", "cloud.obiente.managed=true",
+		"--label", fmt.Sprintf("cloud.obiente.deployment=%s", strings.TrimPrefix(deploymentNetworkName, "deployment-")),
+		deploymentNetworkName,
+	)
+	
+	createCmd := exec.CommandContext(ctx, "docker", args...)
+	var stderr bytes.Buffer
+	createCmd.Stderr = &stderr
+	if err := createCmd.Run(); err != nil {
+		// Check if network was created by another process (race condition)
+		output, checkErr := checkCmd.Output()
+		if checkErr == nil && strings.TrimSpace(string(output)) == deploymentNetworkName {
+			logger.Info("[DeploymentManager] Deployment network %s was created by another process", deploymentNetworkName)
+			return nil
+		}
+
+		// Capture stderr for better error messages
+		errorOutput := stderr.String()
+		if errorOutput == "" {
+			if exitError, ok := err.(*exec.ExitError); ok {
+				errorOutput = string(exitError.Stderr)
+			}
+		}
+
+		// Provide more specific error messages
+		if strings.Contains(errorOutput, "already exists") {
+			logger.Info("[DeploymentManager] Deployment network %s already exists (race condition)", deploymentNetworkName)
+			return nil
+		}
+		if strings.Contains(errorOutput, "Cannot connect to the Docker daemon") ||
+			strings.Contains(errorOutput, "Is the docker daemon running") {
+			return fmt.Errorf("docker daemon is not accessible: %s", errorOutput)
+		}
+		if strings.Contains(errorOutput, "permission denied") {
+			return fmt.Errorf("permission denied: unable to create Docker network (check Docker permissions): %s", errorOutput)
+		}
+
+		logger.Info("[DeploymentManager] Failed to create deployment network: %v, stderr: %s", err, errorOutput)
+		return fmt.Errorf("failed to create deployment network: %w (stderr: %s)", err, errorOutput)
+	}
+
+	logger.Info("[DeploymentManager] Successfully created deployment network %s", deploymentNetworkName)
+	return nil
+}

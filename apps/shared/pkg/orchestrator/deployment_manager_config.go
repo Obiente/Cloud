@@ -739,3 +739,88 @@ func parseCPUString(cpuStr string) float64 {
 
 	return cores
 }
+// addTraefikNetworkToRoutedServices adds obiente-network to services that have routing configured
+// This allows Traefik to discover and route to these services on the shared obiente-network
+// while maintaining deployment isolation through the deployment-specific network
+func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml string, routings []database.DeploymentRouting) (string, error) {
+	// Parse the compose file
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
+	}
+
+	// Build a set of service names that have routing configured
+	servicesToRoute := make(map[string]bool)
+	for _, routing := range routings {
+		// ServiceName identifies which service this routing rule applies to
+		// If empty, it means the "default" service or all services
+		serviceName := strings.TrimSpace(routing.ServiceName)
+		if serviceName == "" || serviceName == "default" {
+			// For default, apply to first service (common pattern)
+			if services, ok := compose["services"].(map[string]interface{}); ok {
+				for svc := range services {
+					servicesToRoute[svc] = true
+					break // Only first service
+				}
+			}
+		} else {
+			servicesToRoute[serviceName] = true
+		}
+	}
+
+	// Add obiente-network to routed services
+	if services, ok := compose["services"].(map[string]interface{}); ok {
+		for serviceName, serviceData := range services {
+			if servicesToRoute[serviceName] {
+				if service, ok := serviceData.(map[string]interface{}); ok {
+					// Get existing networks if any
+					var networks []interface{}
+					if existingNets, ok := service["networks"].([]interface{}); ok {
+						networks = existingNets
+					}
+
+					// Add obiente-network if not already present
+					hasObienteNetwork := false
+					for _, net := range networks {
+						if netStr, ok := net.(string); ok && netStr == "obiente-network" {
+							hasObienteNetwork = true
+							break
+						}
+					}
+
+					if !hasObienteNetwork {
+						networks = append(networks, "obiente-network")
+						service["networks"] = networks
+						logger.Debug("[DeploymentManager] Added obiente-network to routed service %s for Traefik discovery", serviceName)
+					}
+				}
+			}
+		}
+	}
+
+	// Ensure obiente-network is defined in networks section
+	if _, ok := compose["networks"]; !ok {
+		compose["networks"] = make(map[string]interface{})
+	}
+
+	networks, ok := compose["networks"].(map[string]interface{})
+	if !ok {
+		networks = make(map[string]interface{})
+		compose["networks"] = networks
+	}
+
+	// Mark obiente-network as external (it already exists in the system)
+	if _, exists := networks["obiente-network"]; !exists {
+		networks["obiente-network"] = map[string]interface{}{
+			"external": true,
+		}
+	}
+
+	// Marshal back to YAML
+	result, err := yaml.Marshal(compose)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal compose YAML: %w", err)
+	}
+
+	return string(result), nil
+}

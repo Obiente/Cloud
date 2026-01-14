@@ -66,6 +66,10 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 		for serviceName, serviceData := range services {
 			if service, ok := serviceData.(map[string]interface{}); ok {
 				cs.sanitizeService(service, serviceName)
+				// Add network connection for service discovery
+				cs.addServiceToNetwork(service)
+				// Add service name labels for container identification
+				cs.addServiceNameLabel(service, serviceName)
 			}
 		}
 	}
@@ -77,6 +81,9 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 		}
 	}
 
+	// Inject network definition for service-to-service communication
+	cs.injectNetworkDefinition(compose)
+
 	// Marshal back to YAML
 	sanitizedYaml, err := yaml.Marshal(compose)
 	if err != nil {
@@ -86,11 +93,16 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	return string(sanitizedYaml), nil
 }
 
+
+
 // sanitizeService sanitizes a single service in the compose file
 func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) {
 	// Sanitize environment variables to ensure proper formatting
 	cs.sanitizeEnvironment(service)
 
+	// Convert depends_on from map format to list format for Docker Swarm compatibility
+	// Swarm's `docker stack deploy` only accepts list format, not map with conditions
+	cs.convertDependsOnToList(service)
 	// Sanitize volumes
 	if volumes, ok := service["volumes"].([]interface{}); ok {
 		sanitizedVolumes := []interface{}{}
@@ -158,6 +170,39 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 		} else {
 			delete(service, "cap_add")
 		}
+	}
+}
+
+// convertDependsOnToList converts depends_on from map format to list format
+// Docker Swarm's `docker stack deploy` only accepts list format, not map with conditions
+// This ensures compatibility when deploying to Swarm clusters
+func (cs *ComposeSanitizer) convertDependsOnToList(service map[string]interface{}) {
+	if dependsOn, ok := service["depends_on"]; ok {
+		// If it's a map (service conditions format), convert to list
+		if depMap, ok := dependsOn.(map[string]interface{}); ok {
+			// Extract service names from map keys and sort for deterministic output
+			serviceList := make([]string, 0, len(depMap))
+			for serviceName := range depMap {
+				serviceList = append(serviceList, serviceName)
+			}
+			// Sort to ensure deterministic order (maps have random iteration order in Go)
+			// This prevents flapping in generated YAML
+			for i := 0; i < len(serviceList)-1; i++ {
+				for j := i + 1; j < len(serviceList); j++ {
+					if serviceList[i] > serviceList[j] {
+						serviceList[i], serviceList[j] = serviceList[j], serviceList[i]
+					}
+				}
+			}
+			// Convert to []interface{} for YAML marshaling
+			interfaceList := make([]interface{}, len(serviceList))
+			for i, s := range serviceList {
+				interfaceList[i] = s
+			}
+			// Replace with list format
+			service["depends_on"] = interfaceList
+		}
+		// If it's already a list, leave it as-is
 	}
 }
 
@@ -479,6 +524,96 @@ func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) interface{} {
 
 	// Simple port number - return as is
 	return portStr
+}
+
+// addServiceToNetwork adds a service to the deployment-specific network for isolation
+// Services are ONLY added to their private deployment network here
+// The obiente-network is added LATER by addTraefikNetworkToRoutedServices() only for services with routing
+func (cs *ComposeSanitizer) addServiceToNetwork(service map[string]interface{}) {
+	// Always ensure the service is connected to its deployment-specific network
+	deploymentNetworkName := fmt.Sprintf("deployment-%s", cs.deploymentID)
+	
+	networksVal, ok := service["networks"]
+	if !ok || networksVal == nil {
+		// No networks defined: connect ONLY to deployment network for isolation
+		service["networks"] = []string{deploymentNetworkName}
+		return
+	}
+	
+	// Service already has networks - merge deployment network in
+	switch networks := networksVal.(type) {
+	case []interface{}:
+		// List-style networks: ensure deployment network is present
+		for _, n := range networks {
+			if s, ok := n.(string); ok && s == deploymentNetworkName {
+				// Already connected to deployment network
+				return
+			}
+		}
+		service["networks"] = append(networks, deploymentNetworkName)
+		
+	case map[string]interface{}:
+		// Map-style networks: add deployment network key if missing
+		if _, exists := networks[deploymentNetworkName]; !exists {
+			// Empty config uses defaults for this network
+			networks[deploymentNetworkName] = map[string]interface{}{}
+		}
+		
+	default:
+		// Unexpected type: enforce isolation by resetting to deployment network only
+		service["networks"] = []string{deploymentNetworkName}
+	}
+}
+
+// injectNetworkDefinition adds a top-level networks section for the deployment
+// Creates the deployment-specific network (for isolation) while referencing existing obiente-network
+func (cs *ComposeSanitizer) injectNetworkDefinition(compose map[string]interface{}) {
+	// Deployment network: isolated network for this deployment's services
+	deploymentNetworkName := fmt.Sprintf("deployment-%s", cs.deploymentID)
+
+	// Create networks section if it doesn't exist
+	if _, ok := compose["networks"]; !ok {
+		compose["networks"] = make(map[string]interface{})
+	}
+
+	networks, ok := compose["networks"].(map[string]interface{})
+	if !ok {
+		// If networks exists but is not a map, recreate it
+		networks = make(map[string]interface{})
+		compose["networks"] = networks
+	}
+
+	// Add the deployment network with external=true (created by ensureDeploymentNetwork)
+	// This is the PRIVATE network for inter-service communication within this deployment
+	// Note: Network has internet access (not internal) so containers can pull images, install packages, etc.
+	networks[deploymentNetworkName] = map[string]interface{}{
+		"external": true,
+	}
+
+	// NOTE: obiente-network is NOT added here by default for security
+	// It is added selectively by addTraefikNetworkToRoutedServices() in deployment_manager_config.go
+	// only for services that have routing rules configured
+	// This ensures complete isolation - user containers cannot reach other deployments
+}
+
+// addServiceNameLabel adds a label to the service identifying its name
+// This allows containers to be matched with their service names for display and querying
+func (cs *ComposeSanitizer) addServiceNameLabel(service map[string]interface{}, serviceName string) {
+	// Create labels section if it doesn't exist
+	if _, ok := service["labels"]; !ok {
+		service["labels"] = make(map[string]interface{})
+	}
+
+	labels, ok := service["labels"].(map[string]interface{})
+	if !ok {
+		// If labels exists but is not a map, recreate it
+		labels = make(map[string]interface{})
+		service["labels"] = labels
+	}
+
+	// Add service name label for container identification
+	// This label is used by the frontend to group containers by service
+	labels["cloud.obiente.service_name"] = serviceName
 }
 
 // GetSafeBaseDir returns the safe base directory for this deployment's volumes
