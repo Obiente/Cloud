@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -106,10 +108,9 @@ func (l *SFTPAuditLogger) LogOperation(ctx context.Context, entry sftp.AuditEntr
 // Helper functions
 
 func hashAPIKey(apiKey string) string {
-	// In production, use proper hashing (SHA-256)
-	// For now, we'll use the key as-is for simplicity
-	// TODO: Implement proper API key hashing
-	return apiKey
+	// Use SHA-256 to hash the API key
+	hash := sha256.Sum256([]byte(apiKey))
+	return hex.EncodeToString(hash[:])
 }
 
 func parseScopes(scopesStr string) []string {
@@ -135,12 +136,22 @@ func scopesToPermissions(scopes []string) []sftp.Permission {
 	
 	for _, scope := range scopes {
 		switch scope {
-		case "sftp:read", "sftp", "sftp:*":
+		case "sftp:read":
 			if !hasRead {
 				permissions = append(permissions, sftp.PermissionRead)
 				hasRead = true
 			}
 		case "sftp:write":
+			if !hasWrite {
+				permissions = append(permissions, sftp.PermissionWrite)
+				hasWrite = true
+			}
+		case "sftp:*", "sftp":
+			// Wildcard scopes grant both read and write
+			if !hasRead {
+				permissions = append(permissions, sftp.PermissionRead)
+				hasRead = true
+			}
 			if !hasWrite {
 				permissions = append(permissions, sftp.PermissionWrite)
 				hasWrite = true

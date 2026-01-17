@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/pkg/sftp"
@@ -321,32 +322,10 @@ func deserializePermissions(s string) []Permission {
 	if s == "" {
 		return nil
 	}
-	parts := splitString(s, ",")
+	parts := strings.Split(s, ",")
 	perms := make([]Permission, len(parts))
 	for i, p := range parts {
 		perms[i] = Permission(p)
 	}
 	return perms
-}
-
-func splitString(s, sep string) []string {
-	if s == "" {
-		return nil
-	}
-	result := []string{}
-	current := ""
-	for _, c := range s {
-		if string(c) == sep {
-			if current != "" {
-				result = append(result, current)
-				current = ""
-			}
-		} else {
-			current += string(c)
-		}
-	}
-	if current != "" {
-		result = append(result, current)
-	}
-	return result
 }
