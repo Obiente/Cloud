@@ -112,6 +112,54 @@ services:
       retries: 3
       start_period: 40s
 
+  # SFTP Service - Data plane for SFTP file transfers with API key authentication
+  sftp-service:
+    image: ghcr.io/obiente/cloud-sftp-service:latest
+    build:
+      context: .
+      dockerfile: apps/sftp-service/Dockerfile
+    container_name: obiente-sftp-service
+    environment:
+      PORT: 3020
+      SFTP_PORT: 2222
+      SFTP_BASE_PATH: /var/lib/sftp
+      SFTP_HOST_KEY_PATH: /var/lib/sftp/host_key
+      <<: [*common-database, *common-metrics-db, *common-auth]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    ports:
+      - "2222:2222"  # SFTP port
+    volumes:
+      - sftp-data:/var/lib/sftp
+    labels:
+      - "cloud.obiente.service=sftp-service"
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      # HTTP health check endpoint
+      - "traefik.http.routers.sftp-service.rule=Host(`sftp-service.${DOMAIN:-localhost}`) || Host(`sftp-service.localhost`)"
+      - "traefik.http.routers.sftp-service.entrypoints=web"
+      - "traefik.http.services.sftp-service.loadbalancer.server.port=3020"
+      - "traefik.http.routers.sftp-service-secure.rule=Host(`sftp-service.${DOMAIN:-localhost}`) || Host(`sftp-service.localhost`)"
+      - "traefik.http.routers.sftp-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.sftp-service-secure.service=sftp-service"
+      - "traefik.http.routers.sftp-service-secure.tls=true"
+      # TCP routing for SFTP (port 2222)
+      - "traefik.tcp.routers.sftp.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.sftp.entrypoints=sftp"
+      - "traefik.tcp.services.sftp.loadbalancer.server.port=2222"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3020/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Auth Service - Microservice for authentication
   auth-service:
     image: ghcr.io/obiente/cloud-auth-service:latest
@@ -592,6 +640,8 @@ volumes:
   timescaledb_data:
   vps_ssh_host_key:
     # Persists the SSH proxy host key to prevent fingerprint changes
+  sftp-data:
+    # Persists SFTP files and host key for sftp-service
 
 networks:
   obiente-network:
