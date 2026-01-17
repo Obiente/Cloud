@@ -17,16 +17,20 @@ import (
 type userHandler struct {
 	basePath    string
 	orgID       string
+	resourceType string
+	resourceID   string
 	userID      string
 	permissions []Permission
 	auditLogger AuditLogger
 }
 
 // newUserHandler creates a new user-specific SFTP handler
-func newUserHandler(basePath, orgID, userID string, permissions []Permission, auditLogger AuditLogger) *userHandler {
+func newUserHandler(basePath, orgID, resourceType, resourceID, userID string, permissions []Permission, auditLogger AuditLogger) *userHandler {
 	return &userHandler{
 		basePath:    basePath,
 		orgID:       orgID,
+		resourceType: resourceType,
+		resourceID:   resourceID,
 		userID:      userID,
 		permissions: permissions,
 		auditLogger: auditLogger,
@@ -45,8 +49,13 @@ func (h *userHandler) hasPermission(perm Permission) bool {
 
 // resolvePath converts a relative path to absolute path within user's directory
 func (h *userHandler) resolvePath(reqPath string) (string, error) {
-	// Create organization-specific directory
-	userDir := filepath.Join(h.basePath, h.orgID, h.userID)
+	// Build scoped directory: org / resource / user
+	resourceDir := filepath.Join(h.basePath, h.orgID)
+	if h.resourceType != "" && h.resourceID != "" {
+		resourceDir = filepath.Join(resourceDir, h.resourceType, h.resourceID)
+	}
+
+	userDir := filepath.Join(resourceDir, h.userID)
 	
 	// Clean the requested path
 	cleanPath := filepath.Clean(reqPath)

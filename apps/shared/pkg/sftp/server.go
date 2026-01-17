@@ -1,3 +1,4 @@
+// Package sftp exposes the SFTP server using the shared permissions scope system.
 package sftp
 
 import (
@@ -28,9 +29,9 @@ const (
 	PermissionWrite Permission = "write"
 )
 
-// AuthValidator validates API keys and returns user info and permissions
+// AuthValidator validates API keys and returns user info, resource scope, and permissions
 type AuthValidator interface {
-	ValidateAPIKey(ctx context.Context, apiKey string) (userID string, orgID string, permissions []Permission, err error)
+	ValidateAPIKey(ctx context.Context, apiKey string) (userID string, orgID string, resourceType string, resourceID string, permissions []Permission, err error)
 }
 
 // AuditLogger logs SFTP operations for audit trail
@@ -163,20 +164,22 @@ func (s *Server) passwordCallback(conn ssh.ConnMetadata, password []byte) (*ssh.
 	apiKey := string(password)
 	
 	// Validate API key
-	userID, orgID, permissions, err := s.authValidator.ValidateAPIKey(s.ctx, apiKey)
+	userID, orgID, resourceType, resourceID, permissions, err := s.authValidator.ValidateAPIKey(s.ctx, apiKey)
 	if err != nil {
 		logger.Warn("[SFTP] Authentication failed for user %s: %v", conn.User(), err)
 		return nil, fmt.Errorf("authentication failed")
 	}
 
-	logger.Info("[SFTP] User authenticated: %s (org: %s, permissions: %v)", userID, orgID, permissions)
+	logger.Info("[SFTP] User authenticated: %s (org: %s, resource: %s:%s, permissions: %v)", userID, orgID, resourceType, resourceID, permissions)
 
 	// Store user info and permissions in SSH permissions
 	perms := &ssh.Permissions{
 		Extensions: map[string]string{
-			"user_id":     userID,
-			"org_id":      orgID,
-			"permissions": serializePermissions(permissions),
+			"user_id":       userID,
+			"org_id":        orgID,
+			"resource_type": resourceType,
+			"resource_id":   resourceID,
+			"permissions":   serializePermissions(permissions),
 		},
 	}
 
@@ -202,6 +205,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Extract user info from permissions
 	userID := sshConn.Permissions.Extensions["user_id"]
 	orgID := sshConn.Permissions.Extensions["org_id"]
+	resourceType := sshConn.Permissions.Extensions["resource_type"]
+	resourceID := sshConn.Permissions.Extensions["resource_id"]
 	permissions := deserializePermissions(sshConn.Permissions.Extensions["permissions"])
 
 	logger.Info("[SFTP] Connection established for user %s", userID)
@@ -219,12 +224,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		go s.handleChannel(channel, requests, userID, orgID, permissions)
+		go s.handleChannel(channel, requests, userID, orgID, resourceType, resourceID, permissions)
 	}
 }
 
 // handleChannel handles SFTP requests on a channel
-func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request, userID, orgID string, permissions []Permission) {
+func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request, userID, orgID, resourceType, resourceID string, permissions []Permission) {
 	defer channel.Close()
 
 	for req := range requests {
@@ -234,7 +239,7 @@ func (s *Server) handleChannel(channel ssh.Channel, requests <-chan *ssh.Request
 				req.Reply(true, nil)
 				
 				// Create user-specific handler
-				handler := newUserHandler(s.basePath, orgID, userID, permissions, s.auditLogger)
+				handler := newUserHandler(s.basePath, orgID, resourceType, resourceID, userID, permissions, s.auditLogger)
 				
 				// Create handlers struct
 				handlers := sftp.Handlers{

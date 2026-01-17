@@ -39,6 +39,8 @@ func main() {
 	logger.Info("=== SFTP Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
 
+	database.RegisterModels(&database.APIKey{})
+
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
 		logger.Fatalf("failed to initialize database: %v", err)
