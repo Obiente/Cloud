@@ -657,6 +657,70 @@ services:
     networks:
       - obiente-network
 
+  # SFTP Service - Data plane for SFTP file transfers with API key authentication
+  sftp-service:
+    image: ghcr.io/obiente/cloud-sftp-service:latest
+    environment:
+      PORT: 3020
+      SFTP_PORT: 2222
+      SFTP_BASE_PATH: /var/lib/sftp
+      SFTP_HOST_KEY_PATH: /var/lib/sftp/host_key
+      <<: [*common-database, *common-metrics-db, *common-auth]
+    deploy:
+      mode: replicated
+      replicas: 1  # Single replica to avoid SFTP connection conflicts
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1024M
+        reservations:
+          cpus: "0.2"
+          memory: 256M
+      labels:
+        - "cloud.obiente.service=sftp-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        # HTTP health check endpoint
+        - "traefik.http.routers.sftp-service.rule=Host(`sftp-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.sftp-service.entrypoints=web"
+        - "traefik.http.services.sftp-service.loadbalancer.server.port=3020"
+        - "traefik.http.routers.sftp-service-secure.rule=Host(`sftp-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.sftp-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.sftp-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.sftp-service-secure.service=sftp-service"
+        # TCP routing for SFTP (port 2222)
+        - "traefik.tcp.routers.sftp.rule=HostSNI(`*`)"
+        - "traefik.tcp.routers.sftp.entrypoints=sftp"
+        - "traefik.tcp.services.sftp.loadbalancer.server.port=2222"
+      placement:
+        constraints:
+          - node.role == manager  # Deploy only on manager nodes for volume access
+    volumes:
+      - sftp-data:/var/lib/sftp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3020/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    dns_search: []
+    networks:
+      - obiente-network
+    ports:
+      - target: 2222
+        published: 2222
+        protocol: tcp
+        mode: host  # Use host mode for direct SFTP access
+
   # Audit Service - Microservice for audit log management
   audit-service:
     image: ghcr.io/obiente/cloud-audit-service:latest
@@ -1129,6 +1193,8 @@ volumes:
   grafana_data:
     driver: local
   registry_data:
+    driver: local
+  sftp-data:
     driver: local
 
 networks:

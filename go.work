@@ -11,6 +11,7 @@ use (
 	./apps/notifications-service
 	./apps/orchestrator-service
 	./apps/organizations-service
+	./apps/sftp-service
 	./apps/shared
 	./apps/superadmin-service
 	./apps/support-service
