@@ -84,8 +84,13 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 	if effMem > 0 && curMemBytes+req.MemoryBytes*int64(req.Replicas) > effMem {
 		return fmt.Errorf("quota exceeded: memory %d bytes > max %d bytes", curMemBytes+req.MemoryBytes*int64(req.Replicas), effMem)
 	}
-	if effCPU > 0 && curCPUcores+int(req.CPUshares) > effCPU {
-		return fmt.Errorf("quota exceeded: cpu %d cores > max %d cores", curCPUcores+int(req.CPUshares), effCPU)
+	// Convert Docker CPUshares to cores (Docker uses 1024 shares per core)
+	reqCores := int(req.CPUshares) / 1024
+	if req.CPUshares%1024 != 0 {
+		reqCores++ // round up partial cores
+	}
+	if effCPU > 0 && curCPUcores+reqCores > effCPU {
+		return fmt.Errorf("quota exceeded: cpu %d cores > max %d cores", curCPUcores+reqCores, effCPU)
 	}
 	return nil
 }
