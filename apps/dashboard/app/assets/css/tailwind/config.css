@@ -113,6 +113,28 @@
   --radius-4xl: calc(2rem * var(--oui-radius-base, 1));
 
   --spacing: calc(0.25rem * var(--oui-spacing-base, 1));
+
+  /* Named spacing for padding/margin/gap utilities.
+     Uses per-utility namespaces to avoid colliding with --container-*
+     (Tailwind v4 resolves max-w-xl via --spacing-xl before --container-xl). */
+  --padding-xs: calc(0.25rem * var(--oui-spacing-base, 1));
+  --padding-sm: calc(0.5rem * var(--oui-spacing-base, 1));
+  --padding-md: calc(1rem * var(--oui-spacing-base, 1));
+  --padding-lg: calc(1.5rem * var(--oui-spacing-base, 1));
+  --padding-xl: calc(2rem * var(--oui-spacing-base, 1));
+  --padding-2xl: calc(3rem * var(--oui-spacing-base, 1));
+  --margin-xs: calc(0.25rem * var(--oui-spacing-base, 1));
+  --margin-sm: calc(0.5rem * var(--oui-spacing-base, 1));
+  --margin-md: calc(1rem * var(--oui-spacing-base, 1));
+  --margin-lg: calc(1.5rem * var(--oui-spacing-base, 1));
+  --margin-xl: calc(2rem * var(--oui-spacing-base, 1));
+  --margin-2xl: calc(3rem * var(--oui-spacing-base, 1));
+  --gap-xs: calc(0.25rem * var(--oui-spacing-base, 1));
+  --gap-sm: calc(0.5rem * var(--oui-spacing-base, 1));
+  --gap-md: calc(1rem * var(--oui-spacing-base, 1));
+  --gap-lg: calc(1.5rem * var(--oui-spacing-base, 1));
+  --gap-xl: calc(2rem * var(--oui-spacing-base, 1));
+  --gap-2xl: calc(3rem * var(--oui-spacing-base, 1));
   --breakpoint-sm: 40rem;
   --breakpoint-md: 48rem;
   --breakpoint-lg: 64rem;

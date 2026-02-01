@@ -6,7 +6,7 @@
     <OuiCard>
       <OuiCardBody>
         <form @submit.prevent="save">
-          <OuiGrid cols="1" colsMd="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect
               label="Organization"
               v-model="selectedOrg"

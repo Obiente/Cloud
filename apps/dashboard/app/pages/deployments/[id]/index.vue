@@ -74,7 +74,7 @@
                       p="xs"
                       rounded="lg"
                       bg="accent-primary"
-                      class="bg-primary/10 ring-1 ring-primary/20 shrink-0 md:p-sm md:rounded-xl"
+                      class="bg-primary/10 ring-1 ring-primary/20 shrink-0  md:p-sm md:rounded-xl"
                     >
                       <RocketLaunchIcon
                         class="w-6 h-6 md:w-8 md:h-8 text-primary"

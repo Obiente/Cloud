@@ -16,7 +16,7 @@
     </OuiFlex>
 
     <!-- Metrics Overview -->
-    <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="5" cols2xl="6">
+    <OuiGrid :cols="{ sm: 1, md: 2, xl: 5, '2xl': 6 }" gap="md">
       <OuiCard
         v-for="metric in metrics"
         :key="metric.label"

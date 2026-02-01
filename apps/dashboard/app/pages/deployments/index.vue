@@ -863,7 +863,6 @@
   };
 
   const viewDeployment = (id: string) => {
-    const router = useRouter();
     router.push(`/deployments/${id}`);
   };
 
@@ -911,7 +910,6 @@
 
       // Navigate to the detail page to finish configuration
       if (deployment) {
-        const router = useRouter();
         router.push(`/deployments/${deployment.id}`);
       }
     } catch (error) {

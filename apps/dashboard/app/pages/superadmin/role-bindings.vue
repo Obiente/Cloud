@@ -9,7 +9,7 @@
       </OuiCardHeader>
       <OuiCardBody>
         <form @submit.prevent="createBinding">
-          <OuiGrid cols="1" colsMd="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">User</OuiText>
               <OuiCombobox

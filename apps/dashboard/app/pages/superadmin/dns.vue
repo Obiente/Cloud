@@ -261,7 +261,7 @@
             <!-- DNS Server Info -->
             <OuiStack gap="md">
               <OuiText size="lg" weight="semibold">DNS Server Info</OuiText>
-              <OuiGrid cols="1" colsMd="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
                 <div>
                   <OuiText
                     size="xs"

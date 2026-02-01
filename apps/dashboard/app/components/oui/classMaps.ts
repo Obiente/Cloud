@@ -225,9 +225,10 @@ export function responsiveClass<T extends string | number>(
     return mapped ? [mapped] : [];
   }
 
-  // Now TypeScript knows value is Partial<Record<Breakpoint, T>>
+  // Object form: { default?: T; sm?: T; md?: T; lg?: T; xl?: T; "2xl"?: T }
   const classes: string[] = [];
-  const breakpointPrefix: Record<Breakpoint, string> = {
+  const breakpointPrefix: Record<string, string> = {
+    default: "",
     sm: "sm:",
     md: "md:",
     lg: "lg:",
@@ -237,9 +238,10 @@ export function responsiveClass<T extends string | number>(
 
   Object.entries(value).forEach(([k, candidate]) => {
     if (candidate === undefined) return;
-    const bp = k as Breakpoint;
+    const prefix = breakpointPrefix[k];
+    if (prefix === undefined) return;
     const mapped = map[String(candidate)];
-    if (mapped) classes.push(`${breakpointPrefix[bp]}${mapped}`);
+    if (mapped) classes.push(`${prefix}${mapped}`);
   });
 
   return classes;
