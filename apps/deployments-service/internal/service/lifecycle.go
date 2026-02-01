@@ -652,6 +652,27 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
+	// Quota check: verify memory/CPU won't exceed limits when starting
+	startMemory := int64(512 * 1024 * 1024) // Default 512MB
+	if dbDep.MemoryBytes != nil {
+		startMemory = *dbDep.MemoryBytes
+	}
+	startCPU := int64(1024) // Default
+	if dbDep.CPUShares != nil {
+		startCPU = *dbDep.CPUShares
+	}
+	startReplicas := 1
+	if dbDep.Replicas != nil {
+		startReplicas = int(*dbDep.Replicas)
+	}
+	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
+		Replicas:    startReplicas,
+		MemoryBytes: startMemory,
+		CPUshares:   startCPU,
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
+	}
+
 	// Check if this is a compose-based deployment
 	if dbDep.ComposeYaml != "" {
 		// Deploy using Docker Compose
@@ -838,18 +859,34 @@ func (s *Service) ScaleDeployment(ctx context.Context, req *connect.Request[depl
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentScale, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	// Quota check: replicas delta
+	// Quota check: replicas + memory/CPU
 	newReplicas := int(req.Msg.GetReplicas())
 	if newReplicas <= 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("replicas must be > 0"))
 	}
-	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{Replicas: newReplicas}); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	scaleMemory := int64(512 * 1024 * 1024) // Default 512MB
+	if dbDep.MemoryBytes != nil {
+		scaleMemory = *dbDep.MemoryBytes
+	}
+	scaleCPU := int64(1024) // Default
+	if dbDep.CPUShares != nil {
+		scaleCPU = *dbDep.CPUShares
+	}
+	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
+		Replicas:    newReplicas,
+		MemoryBytes: scaleMemory,
+		CPUshares:   scaleCPU,
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 	if s.manager != nil {
 		_ = s.manager.ScaleDeployment(ctx, deploymentID, newReplicas)
 	}
-	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	dbDep, err = s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
