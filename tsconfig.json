@@ -5,9 +5,6 @@
     //   "@obiente/config/*": [
     //     "./packages/config/*"
     //   ],
-    //   "@obiente/database": [
-    //     "./packages/database/src"
-    //   ],
     //   "@obiente/proto": [
     //     "./packages/proto/src"
     //   ],
@@ -22,9 +19,6 @@
   "include": ["apps/**/*", "packages/**/*", ".**"],
   "exclude": ["node_modules", "dist"],
   "references": [
-    {
-      "path": "./packages/database"
-    },
     {
       "path": "./tools/nxsh"
     }
