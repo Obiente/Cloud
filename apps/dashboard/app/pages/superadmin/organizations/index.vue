@@ -130,6 +130,61 @@
         </OuiFlex>
       </OuiStack>
     </OuiDialog>
+
+    <!-- Set Plan Dialog -->
+    <OuiDialog v-model:open="setPlanDialogOpen" title="Set Plan">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">Organization</OuiText>
+          <OuiText size="sm" weight="medium">{{ selectedOrgName }}</OuiText>
+        </OuiStack>
+
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">Current Plan</OuiText>
+          <OuiBadge :variant="selectedOrgCurrentPlan ? 'primary' : 'secondary'" size="sm">
+            {{ prettyPlan(selectedOrgCurrentPlan) || 'None' }}
+          </OuiBadge>
+        </OuiStack>
+
+        <OuiSelect
+          v-model="selectedPlanId"
+          label="New Plan"
+          :items="planSelectItems"
+          placeholder="Choose a plan..."
+          clearable
+        />
+
+        <template v-if="selectedPlanInfo">
+          <OuiStack gap="sm" class="rounded-lg border border-border-muted p-3 bg-surface-muted/50">
+            <OuiText size="xs" weight="medium" color="muted" class="uppercase tracking-wide">Plan Resources</OuiText>
+            <div class="grid grid-cols-2 gap-x-4 gap-y-1">
+              <OuiText size="sm" color="secondary">CPU</OuiText>
+              <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.cpuCores || '∞' }} cores</OuiText>
+              <OuiText size="sm" color="secondary">Memory</OuiText>
+              <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.memoryBytes ? formatBytes(Number(selectedPlanInfo.memoryBytes)) : '∞' }}</OuiText>
+              <OuiText size="sm" color="secondary">Deployments</OuiText>
+              <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.deploymentsMax || '∞' }}</OuiText>
+              <OuiText size="sm" color="secondary">VPS Instances</OuiText>
+              <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.maxVpsInstances || '∞' }}</OuiText>
+              <OuiText size="sm" color="secondary">Monthly Credits</OuiText>
+              <OuiText size="sm" class="font-mono text-right"><OuiCurrency :value="Number(selectedPlanInfo.monthlyFreeCreditsCents || 0)" /></OuiText>
+            </div>
+          </OuiStack>
+        </template>
+      </OuiStack>
+
+      <template #footer>
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="setPlanDialogOpen = false">Cancel</OuiButton>
+          <OuiButton
+            @click="setPlan"
+            :disabled="!selectedPlanId || setPlanLoading"
+          >
+            {{ setPlanLoading ? 'Updating...' : 'Set Plan' }}
+          </OuiButton>
+        </OuiFlex>
+      </template>
+    </OuiDialog>
 </template>
 
 <script setup lang="ts">
@@ -140,7 +195,7 @@ definePageMeta({
 import { PlusIcon, MinusIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
-import { OrganizationService } from "@obiente/proto";
+import { OrganizationService, SuperadminService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
@@ -156,7 +211,36 @@ const statusFilter = ref<string>("all");
 const router = useRouter();
 const organizationsStore = useOrganizationsStore();
 const orgClient = useConnectClient(OrganizationService);
+const saClient = useConnectClient(SuperadminService);
 const isLoading = ref(false);
+const setPlanDialogOpen = ref(false);
+const selectedPlanId = ref(null);
+const setPlanLoading = ref(false);
+const selectedOrgId = ref(null);
+
+const selectedOrgName = computed(() => {
+  if (!selectedOrgId.value) return '';
+  const org = organizations.value.find(o => o.id === selectedOrgId.value);
+  return org?.name || org?.slug || selectedOrgId.value;
+});
+
+const selectedOrgCurrentPlan = computed(() => {
+  if (!selectedOrgId.value) return null;
+  const org = organizations.value.find(o => o.id === selectedOrgId.value);
+  return org?.plan || null;
+});
+
+const planSelectItems = computed(() =>
+  (availablePlans.value || []).map(plan => ({
+    label: plan.name || prettyPlan(plan.id),
+    value: plan.id,
+  }))
+);
+
+const selectedPlanInfo = computed(() => {
+  if (!selectedPlanId.value) return null;
+  return (availablePlans.value || []).find(p => p.id === selectedPlanId.value) || null;
+});
 
 const planOptions = computed(() => {
   const plans = new Set<string>();
@@ -203,8 +287,8 @@ function handleFilterChange(key: string, value: string) {
   }
 }
 
+const manageOrgId = ref<string | null>(null);
 const manageCreditsDialogOpen = ref(false);
-const manageCreditsOrgId = ref<string | null>(null);
 const manageCreditsCurrentBalance = ref<number>(0);
 const manageCreditsAmount = ref("");
 const manageCreditsAction = ref<"add" | "remove">("add");
@@ -219,6 +303,13 @@ const { data: organizationsData, refresh: refreshOrganizations } = await useClie
       onlyMine: false, // Superadmin gets all organizations
     });
     return response.organizations || [];
+  }
+);
+const { data: availablePlans, refresh: refreshPlans } = await useClientFetch(
+  "superadmin-plans-list",
+  async () => {
+    const response = await saClient.listPlans({});
+    return response.plans || [];
   }
 );
 
@@ -269,7 +360,7 @@ watch(organizations, () => {
 }, { immediate: true });
 
 const openManageCredits = (orgId: string, currentBalance: number | bigint) => {
-  manageCreditsOrgId.value = orgId;
+  manageOrgId.value = orgId;
   const balance = typeof currentBalance === 'bigint' ? currentBalance : BigInt(Number(currentBalance) || 0);
   manageCreditsCurrentBalance.value = Number(balance);
   manageCreditsAmount.value = "";
@@ -362,7 +453,7 @@ function viewOrganization(orgId: string) {
 }
 
 const numberFormatter = new Intl.NumberFormat();
-const { formatDate, formatCurrency } = useUtils();
+const { formatDate, formatCurrency, formatBytes } = useUtils();
 
 function formatNumber(value?: number | bigint | null) {
   if (value === undefined || value === null) return "0";
@@ -398,6 +489,15 @@ const getOrgActions = (row: any): Action[] => {
       onClick: () => openDeployments(row.id),
     },
     {
+      key: "setPlan",
+      label: "Set Plan",
+      onClick: () => {
+        selectedOrgId.value = row.id;
+        selectedPlanId.value = null;
+        setPlanDialogOpen.value = true;
+      },
+    },
+    {
       key: "manage",
       label: "Manage",
       onClick: () => switchToOrg(row.id),
@@ -407,7 +507,7 @@ const getOrgActions = (row: any): Action[] => {
 };
 
 async function manageCredits() {
-  if (!manageCreditsOrgId.value || !manageCreditsAmount.value) return;
+  if (!manageOrgId.value || !manageCreditsAmount.value) return;
   const amount = parseFloat(manageCreditsAmount.value);
   if (isNaN(amount) || amount <= 0) {
     return;
@@ -420,14 +520,14 @@ async function manageCredits() {
     let response;
     if (manageCreditsAction.value === "add") {
       response = await orgClient.adminAddCredits({
-        organizationId: manageCreditsOrgId.value,
+        organizationId: manageOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
       toast.success(`Successfully added ${formatCurrency(Number(amountCents))} in credits`);
     } else {
       response = await orgClient.adminRemoveCredits({
-        organizationId: manageCreditsOrgId.value,
+        organizationId: manageOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
@@ -445,5 +545,29 @@ async function manageCredits() {
     manageCreditsLoading.value = false;
   }
 }
+
+async function setPlan() {
+  if (!selectedOrgId.value || !selectedPlanId.value) return;
+
+  setPlanLoading.value = true;
+  const { toast } = useToast();
+  try {
+    await orgClient.adminSetPlan({
+      organizationId: selectedOrgId.value,
+      planId: selectedPlanId.value,
+    });
+    const planName = selectedPlanInfo.value?.name || prettyPlan(selectedPlanId.value);
+    toast.success(`Plan updated to ${planName}`);
+    setPlanDialogOpen.value = false;
+    selectedPlanId.value = null;
+    await refresh();
+  } catch (err: any) {
+    toast.error(err?.message || 'Failed to update plan');
+  } finally {
+    setPlanLoading.value = false;
+  }
+}
+
+
 </script>
 

@@ -333,7 +333,7 @@ func (BuildStatus) EnumDescriptor() ([]byte, []int) {
 type HealthCheckType int32
 
 const (
-	HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED HealthCheckType = 0 // No health check
+	HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED HealthCheckType = 0 // Auto-detect (TCP if routing exists, otherwise no healthcheck)
 	HealthCheckType_HEALTHCHECK_DISABLED         HealthCheckType = 1 // Explicitly disabled
 	HealthCheckType_HEALTHCHECK_TCP              HealthCheckType = 2 // TCP port check (nc)
 	HealthCheckType_HEALTHCHECK_HTTP             HealthCheckType = 3 // HTTP endpoint check

@@ -2111,3 +2111,69 @@ func (s *Service) GetMyPermissions(ctx context.Context, req *connect.Request[org
 		Permissions: permissions,
 	}), nil
 }
+
+// AdminSetPlan sets the active plan for an organization (superadmin only)
+func (s *Service) AdminSetPlan(ctx context.Context, req *connect.Request[organizationsv1.AdminSetPlanRequest]) (*connect.Response[organizationsv1.AdminSetPlanResponse], error) {
+	// Authenticate the user
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Ensure the user is a superadmin
+	if !auth.IsSuperadmin(ctx, user) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied"))
+	}
+
+	// Validate the organization and plan IDs
+	orgID := req.Msg.GetOrganizationId()
+	planID := req.Msg.GetPlanId()
+	if orgID == "" || planID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id and plan_id are required"))
+	}
+
+	// Update the organization's plan in the database
+	result := database.DB.Exec(`
+		UPDATE organizations
+		SET plan = ?
+		WHERE id = ?
+	`, planID, orgID)
+	if result.Error != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update organization plan: %w", result.Error))
+	}
+
+	// Fetch the updated organization using the same row pattern as ListOrganizations
+	type row struct {
+		Id, Name, Slug, Plan, Status string
+		Domain                       *string
+		Credits                      int64
+		TotalPaidCents               int64
+		CreatedAt                    time.Time
+	}
+	var r row
+	err = database.DB.Raw(`
+		SELECT id, name, slug, plan, status, domain, credits, total_paid_cents, created_at
+		FROM organizations
+		WHERE id = ?
+	`, orgID).Scan(&r).Error
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch updated organization: %w", err))
+	}
+
+	org := &database.Organization{
+		ID:             r.Id,
+		Name:           r.Name,
+		Slug:           r.Slug,
+		Plan:           r.Plan,
+		Status:         r.Status,
+		Domain:         r.Domain,
+		Credits:        r.Credits,
+		TotalPaidCents: r.TotalPaidCents,
+		CreatedAt:      r.CreatedAt,
+	}
+
+	return connect.NewResponse(&organizationsv1.AdminSetPlanResponse{
+		Organization: organizationToProto(org),
+		PlanId:       planID,
+	}), nil
+}
