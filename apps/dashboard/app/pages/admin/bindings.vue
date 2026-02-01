@@ -10,7 +10,7 @@
               <OuiText size="sm" weight="semibold" transform="uppercase" class="tracking-wide" color="secondary">
                 Basic Information
               </OuiText>
-              <OuiGrid cols="1" colsMd="3" gap="md">
+              <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium">Organization</OuiText>
                   <OuiSelect v-model="selectedOrg" :items="orgItems" />
@@ -60,7 +60,7 @@
                 </OuiButton>
               </OuiFlex>
               
-              <OuiGrid cols="1" colsMd="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium">Resource Type</OuiText>
                   <OuiSelect 

@@ -162,8 +162,11 @@ export type Breakpoint = "sm" | "md" | "lg" | "xl" | "2xl";
 
 /**
  * Responsive<T> - either a single value T or an object keyed by breakpoints.
+ * Use `default` for the base (no breakpoint prefix) value.
  * Example:
  *   T
- *   | { sm?: T; md?: T; lg?: T; ... }
+ *   | { default?: T; sm?: T; md?: T; lg?: T; ... }
  */
-export type Responsive<T extends string | number> = T | Partial<Record<Breakpoint, T>>;
+export type Responsive<T extends string | number> =
+  | T
+  | (Partial<Record<Breakpoint, T>> & { default?: T });

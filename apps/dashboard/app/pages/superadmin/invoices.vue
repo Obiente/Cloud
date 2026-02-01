@@ -55,7 +55,7 @@
     </OuiFlex>
 
     <!-- Summary Metrics -->
-    <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="4">
+    <OuiGrid :cols="{ sm: 1, md: 2, xl: 4 }" gap="md">
       <OuiCard
         v-for="metric in metrics"
         :key="metric.label"

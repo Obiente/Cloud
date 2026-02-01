@@ -27,7 +27,7 @@
         </OuiFlex>
       </OuiFlex>
 
-      <OuiGrid cols="1" colsLg="2" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
         <!-- VPS Info & Specifications Card -->
         <OuiCard class="border border-border-muted rounded-xl">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
@@ -47,7 +47,7 @@
                 </OuiText>
               </OuiStack>
 
-              <OuiGrid cols="1" colsMd="2" gap="md" class="border-t border-border-muted pt-4">
+              <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" class="border-t border-border-muted pt-4">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
                   <SuperadminStatusBadge
@@ -136,7 +136,7 @@
             <OuiText tag="h2" size="lg" weight="bold">Specifications</OuiText>
           </OuiCardHeader>
           <OuiCardBody class="p-6">
-            <OuiGrid cols="1" colsMd="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="muted">Size</OuiText>
                 <OuiText>{{ vps?.size || "—" }}</OuiText>
@@ -167,14 +167,14 @@
       </OuiGrid>
 
       <!-- Network & Actions Row -->
-      <OuiGrid cols="1" colsLg="2" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
         <!-- Network & SSH Card -->
         <OuiCard class="border border-border-muted rounded-xl">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
             <OuiText tag="h2" size="lg" weight="bold">Network & Access</OuiText>
           </OuiCardHeader>
           <OuiCardBody class="p-6">
-            <OuiGrid cols="1" colsMd="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="muted">IPv4 Addresses</OuiText>
                 <OuiStack gap="xs">
@@ -224,7 +224,7 @@
 
               <OuiStack gap="xs" v-if="hasMetadata" class="col-span-1 md:col-span-2">
                 <OuiText size="sm" weight="medium" color="muted">Metadata</OuiText>
-                <OuiGrid cols="1" colsMd="2" gap="xs">
+                <OuiGrid :cols="{ sm: 1, md: 2 }" gap="xs">
                   <OuiText
                     v-for="(value, key) in parsedMetadata"
                     :key="key"

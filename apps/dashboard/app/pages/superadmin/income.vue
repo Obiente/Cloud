@@ -36,7 +36,7 @@
     </OuiFlex>
 
     <!-- Summary Metrics -->
-    <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="4">
+    <OuiGrid :cols="{ sm: 1, md: 2, xl: 4 }" gap="md">
       <OuiCard
         v-for="metric in summaryMetrics"
         :key="metric.label"
@@ -64,7 +64,7 @@
         <OuiText tag="h2" size="xl" weight="bold">Payment Metrics</OuiText>
       </OuiCardHeader>
       <OuiCardBody class="p-6">
-        <OuiGrid cols="1" colsMd="3" gap="md">
+        <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
           <div>
             <OuiText size="sm" color="muted">Success Rate</OuiText>
             <OuiText size="2xl" weight="semibold">

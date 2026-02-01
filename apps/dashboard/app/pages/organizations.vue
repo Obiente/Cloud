@@ -1129,7 +1129,7 @@
 
 <template>
   <OuiStack gap="lg">
-    <OuiGrid cols="1" colsLg="3" gap="lg">
+    <OuiGrid :cols="{ sm: 1, lg: 3 }" gap="lg">
       <OuiCard class="col-span-2">
         <OuiCardHeader>
           <OuiFlex align="center" justify="between">
@@ -1142,7 +1142,7 @@
         </OuiCardHeader>
         <OuiCardBody>
           <OuiStack gap="lg">
-            <OuiGrid cols="1" colsLg="2" gap="md">
+            <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Select Organization</OuiText>
                 <OuiSelect
@@ -1242,7 +1242,7 @@
             
             <OuiStack gap="md" as="form" @submit.prevent="createOrg">
               <OuiText size="sm" weight="medium">Create Organization</OuiText>
-              <OuiGrid cols="1" colsLg="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
                 <OuiInput
                   v-model="name"
                   label="Name"
@@ -1440,7 +1440,7 @@
 
             <OuiStack gap="md" class="mt-6">
               <OuiText size="md" weight="semibold">Invite Member</OuiText>
-              <OuiGrid cols="1" colsLg="3" gap="md">
+              <OuiGrid :cols="{ sm: 1, lg: 3 }" gap="md">
                 <OuiInput
                   label="Email"
                   v-model="inviteEmail"
@@ -1536,7 +1536,7 @@
                 System roles appear first. Any custom roles you create follow
                 below.
               </OuiText>
-              <OuiGrid cols="1" colsLg="2" gap="md">
+              <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
                 <OuiCard v-for="item in roleItems" :key="item.value">
                   <OuiCardBody>
                     <OuiStack gap="xs">

@@ -18,7 +18,7 @@
         </OuiStack>
       </OuiFlex>
 
-      <OuiGrid cols="1" colsLg="3" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 3 }" gap="lg">
         <!-- User Info Card -->
         <OuiCard class="border border-border-muted rounded-xl">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">

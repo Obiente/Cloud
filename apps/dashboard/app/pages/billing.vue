@@ -1198,7 +1198,7 @@
       <OuiCardBody>
         <OuiStack gap="lg">
           <!-- Organization Selector -->
-          <OuiGrid cols="1" colsLg="2" gap="md">
+          <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Select Organization</OuiText>
               <OuiSelect

@@ -11,7 +11,7 @@
         >
       </OuiStack>
 
-      <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="4">
+      <OuiGrid :cols="{ sm: 1, md: 2, xl: 4 }" gap="md">
         <OuiCard
           v-for="metric in metrics"
           :key="metric.label"
@@ -132,7 +132,7 @@
           </OuiCardBody>
         </OuiCard>
 
-        <OuiGrid class="gap-6" cols="1" colsXl="2">
+        <OuiGrid :cols="{ sm: 1, xl: 2 }" gap="lg">
           <OuiCard
             class="border border-border-muted rounded-xl overflow-hidden"
           >
