@@ -137,7 +137,12 @@ func (c *Checker) currentAllocations(orgID string) (replicas int, memBytes int64
 	if err = database.DB.Model(&database.Deployment{}).
 		Select("COALESCE(SUM(COALESCE(memory_bytes,0)),0) as mem, COALESCE(SUM(COALESCE(cpu_shares,0)),0) as cpu").
 		Where("organization_id = ?", orgID).Scan(&a).Error; err != nil { return }
-	return int(count), a.Mem, int(a.CPU), nil
+	// Convert Docker CPU shares to cores (1024 shares = 1 core)
+	cpuCores = int(a.CPU) / 1024
+	if a.CPU%1024 != 0 {
+		cpuCores++ // round up partial cores
+	}
+	return int(count), a.Mem, cpuCores, nil
 }
 
 // GetEffectiveLimits returns the effective memory and CPU limits for an organization
