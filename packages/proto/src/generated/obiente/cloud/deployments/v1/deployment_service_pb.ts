@@ -4622,7 +4622,7 @@ export const BuildStatusSchema: GenEnum<BuildStatus> = /*@__PURE__*/
  */
 export enum HealthCheckType {
   /**
-   * No health check
+   * Auto-detect (TCP if routing exists, otherwise no healthcheck)
    *
    * @generated from enum value: HEALTHCHECK_TYPE_UNSPECIFIED = 0;
    */

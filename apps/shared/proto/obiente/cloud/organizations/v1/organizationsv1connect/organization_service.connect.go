@@ -33,6 +33,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// OrganizationServiceAdminSetPlanProcedure is the fully-qualified name of the OrganizationService's
+	// AdminSetPlan RPC.
+	OrganizationServiceAdminSetPlanProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AdminSetPlan"
 	// OrganizationServiceListOrganizationsProcedure is the fully-qualified name of the
 	// OrganizationService's ListOrganizations RPC.
 	OrganizationServiceListOrganizationsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/ListOrganizations"
@@ -95,6 +98,8 @@ const (
 // OrganizationServiceClient is a client for the obiente.cloud.organizations.v1.OrganizationService
 // service.
 type OrganizationServiceClient interface {
+	// Admin: Set the active plan for an organization (superadmin only)
+	AdminSetPlan(context.Context, *connect.Request[v1.AdminSetPlanRequest]) (*connect.Response[v1.AdminSetPlanResponse], error)
 	// List user's organizations
 	ListOrganizations(context.Context, *connect.Request[v1.ListOrganizationsRequest]) (*connect.Response[v1.ListOrganizationsResponse], error)
 	// Create new organization
@@ -147,6 +152,12 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 	baseURL = strings.TrimRight(baseURL, "/")
 	organizationServiceMethods := v1.File_obiente_cloud_organizations_v1_organization_service_proto.Services().ByName("OrganizationService").Methods()
 	return &organizationServiceClient{
+		adminSetPlan: connect.NewClient[v1.AdminSetPlanRequest, v1.AdminSetPlanResponse](
+			httpClient,
+			baseURL+OrganizationServiceAdminSetPlanProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("AdminSetPlan")),
+			connect.WithClientOptions(opts...),
+		),
 		listOrganizations: connect.NewClient[v1.ListOrganizationsRequest, v1.ListOrganizationsResponse](
 			httpClient,
 			baseURL+OrganizationServiceListOrganizationsProcedure,
@@ -266,6 +277,7 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 
 // organizationServiceClient implements OrganizationServiceClient.
 type organizationServiceClient struct {
+	adminSetPlan       *connect.Client[v1.AdminSetPlanRequest, v1.AdminSetPlanResponse]
 	listOrganizations  *connect.Client[v1.ListOrganizationsRequest, v1.ListOrganizationsResponse]
 	createOrganization *connect.Client[v1.CreateOrganizationRequest, v1.CreateOrganizationResponse]
 	getOrganization    *connect.Client[v1.GetOrganizationRequest, v1.GetOrganizationResponse]
@@ -285,6 +297,11 @@ type organizationServiceClient struct {
 	adminRemoveCredits *connect.Client[v1.AdminRemoveCreditsRequest, v1.AdminRemoveCreditsResponse]
 	getCreditLog       *connect.Client[v1.GetCreditLogRequest, v1.GetCreditLogResponse]
 	getMyPermissions   *connect.Client[v1.GetMyPermissionsRequest, v1.GetMyPermissionsResponse]
+}
+
+// AdminSetPlan calls obiente.cloud.organizations.v1.OrganizationService.AdminSetPlan.
+func (c *organizationServiceClient) AdminSetPlan(ctx context.Context, req *connect.Request[v1.AdminSetPlanRequest]) (*connect.Response[v1.AdminSetPlanResponse], error) {
+	return c.adminSetPlan.CallUnary(ctx, req)
 }
 
 // ListOrganizations calls obiente.cloud.organizations.v1.OrganizationService.ListOrganizations.
@@ -385,6 +402,8 @@ func (c *organizationServiceClient) GetMyPermissions(ctx context.Context, req *c
 // OrganizationServiceHandler is an implementation of the
 // obiente.cloud.organizations.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
+	// Admin: Set the active plan for an organization (superadmin only)
+	AdminSetPlan(context.Context, *connect.Request[v1.AdminSetPlanRequest]) (*connect.Response[v1.AdminSetPlanResponse], error)
 	// List user's organizations
 	ListOrganizations(context.Context, *connect.Request[v1.ListOrganizationsRequest]) (*connect.Response[v1.ListOrganizationsResponse], error)
 	// Create new organization
@@ -432,6 +451,12 @@ type OrganizationServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	organizationServiceMethods := v1.File_obiente_cloud_organizations_v1_organization_service_proto.Services().ByName("OrganizationService").Methods()
+	organizationServiceAdminSetPlanHandler := connect.NewUnaryHandler(
+		OrganizationServiceAdminSetPlanProcedure,
+		svc.AdminSetPlan,
+		connect.WithSchema(organizationServiceMethods.ByName("AdminSetPlan")),
+		connect.WithHandlerOptions(opts...),
+	)
 	organizationServiceListOrganizationsHandler := connect.NewUnaryHandler(
 		OrganizationServiceListOrganizationsProcedure,
 		svc.ListOrganizations,
@@ -548,6 +573,8 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 	)
 	return "/obiente.cloud.organizations.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case OrganizationServiceAdminSetPlanProcedure:
+			organizationServiceAdminSetPlanHandler.ServeHTTP(w, r)
 		case OrganizationServiceListOrganizationsProcedure:
 			organizationServiceListOrganizationsHandler.ServeHTTP(w, r)
 		case OrganizationServiceCreateOrganizationProcedure:
@@ -594,6 +621,10 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 
 // UnimplementedOrganizationServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedOrganizationServiceHandler struct{}
+
+func (UnimplementedOrganizationServiceHandler) AdminSetPlan(context.Context, *connect.Request[v1.AdminSetPlanRequest]) (*connect.Response[v1.AdminSetPlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AdminSetPlan is not implemented"))
+}
 
 func (UnimplementedOrganizationServiceHandler) ListOrganizations(context.Context, *connect.Request[v1.ListOrganizationsRequest]) (*connect.Response[v1.ListOrganizationsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.ListOrganizations is not implemented"))

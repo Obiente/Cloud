@@ -2,46 +2,49 @@ syntax = "proto3";
 
 package obiente.cloud.organizations.v1;
 
-option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1;organizationsv1";
-
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/auth/v1/auth_service.proto";
 import "obiente/cloud/common/v1/common.proto";
 
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1;organizationsv1";
+
 service OrganizationService {
+  // Admin: Set the active plan for an organization (superadmin only)
+  rpc AdminSetPlan(AdminSetPlanRequest) returns (AdminSetPlanResponse);
+
   // List user's organizations
   rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse);
-  
+
   // Create new organization
   rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse);
-  
+
   // Get organization details
   rpc GetOrganization(GetOrganizationRequest) returns (GetOrganizationResponse);
-  
+
   // Update organization
   rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse);
-  
+
   // List organization members
   rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
-  
+
   // Invite user to organization
   rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
-  
+
   // Resend invitation email to a pending member
   rpc ResendInvite(ResendInviteRequest) returns (ResendInviteResponse);
-  
+
   // List invites sent to the current user
   rpc ListMyInvites(ListMyInvitesRequest) returns (ListMyInvitesResponse);
-  
+
   // Accept an invitation to join an organization
   rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
-  
+
   // Decline an invitation to join an organization
   rpc DeclineInvite(DeclineInviteRequest) returns (DeclineInviteResponse);
-  
+
   // Update member role/permissions
   rpc UpdateMember(UpdateMemberRequest) returns (UpdateMemberResponse);
-  
+
   // Remove member from organization
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
 
@@ -297,7 +300,6 @@ message OrganizationMember {
   google.protobuf.Timestamp joined_at = 5;
 }
 
-
 message AddCreditsRequest {
   string organization_id = 1;
   // Amount in cents ($0.01 units). Must be positive.
@@ -382,4 +384,16 @@ message GetMyPermissionsRequest {
 
 message GetMyPermissionsResponse {
   repeated string permissions = 1;
+}
+
+// Request to set the active plan for an organization (superadmin only)
+message AdminSetPlanRequest {
+  string organization_id = 1;
+  string plan_id = 2; // The plan to assign (must match OrganizationPlan.ID)
+}
+
+// Response for AdminSetPlan
+message AdminSetPlanResponse {
+  Organization organization = 1;
+  string plan_id = 2;
 }
