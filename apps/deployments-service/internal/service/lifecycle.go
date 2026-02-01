@@ -868,20 +868,29 @@ func (s *Service) ScaleDeployment(ctx context.Context, req *connect.Request[depl
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-	scaleMemory := int64(512 * 1024 * 1024) // Default 512MB
-	if dbDep.MemoryBytes != nil {
-		scaleMemory = *dbDep.MemoryBytes
+	// Only check quota for the delta (additional replicas beyond current).
+	// currentAllocations already includes this deployment's existing usage.
+	currentReplicas := 1
+	if dbDep.Replicas != nil {
+		currentReplicas = int(*dbDep.Replicas)
 	}
-	scaleCPU := int64(1024) // Default
-	if dbDep.CPUShares != nil {
-		scaleCPU = *dbDep.CPUShares
-	}
-	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
-		Replicas:    newReplicas,
-		MemoryBytes: scaleMemory,
-		CPUshares:   scaleCPU,
-	}); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
+	deltaReplicas := newReplicas - currentReplicas
+	if deltaReplicas > 0 {
+		scaleMemory := int64(512 * 1024 * 1024) // Default 512MB
+		if dbDep.MemoryBytes != nil {
+			scaleMemory = *dbDep.MemoryBytes
+		}
+		scaleCPU := int64(1024) // Default
+		if dbDep.CPUShares != nil {
+			scaleCPU = *dbDep.CPUShares
+		}
+		if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
+			Replicas:    deltaReplicas,
+			MemoryBytes: scaleMemory,
+			CPUshares:   scaleCPU,
+		}); err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
+		}
 	}
 	if s.manager != nil {
 		_ = s.manager.ScaleDeployment(ctx, deploymentID, newReplicas)
