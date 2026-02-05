@@ -17,54 +17,157 @@
 
           <!-- Connection Info -->
           <OuiStack v-else-if="connectionInfo" gap="lg">
-            <OuiStack gap="sm">
-              <OuiText weight="semibold">Host</OuiText>
-              <OuiCode :code="connectionInfo.host" />
-            </OuiStack>
+            <!-- Quick Connection Info -->
+            <OuiGrid cols="1" cols-md="2" gap="md">
+              <OuiStack gap="sm">
+                <OuiFlex justify="between" align="center">
+                  <OuiText weight="semibold" size="sm">Host</OuiText>
+                  <OuiButton
+                    variant="ghost"
+                    size="xs"
+                    @click="copyToClipboard(connectionInfo.host, 'Host')"
+                  >
+                    Copy
+                  </OuiButton>
+                </OuiFlex>
+                <OuiCode :code="connectionInfo.host" />
+              </OuiStack>
 
-            <OuiStack gap="sm">
-              <OuiText weight="semibold">Port</OuiText>
-              <OuiCode :code="String(connectionInfo.port)" />
-            </OuiStack>
+              <OuiStack gap="sm">
+                <OuiFlex justify="between" align="center">
+                  <OuiText weight="semibold" size="sm">Port</OuiText>
+                  <OuiButton
+                    variant="ghost"
+                    size="xs"
+                    @click="copyToClipboard(String(connectionInfo.port), 'Port')"
+                  >
+                    Copy
+                  </OuiButton>
+                </OuiFlex>
+                <OuiCode :code="String(connectionInfo.port)" />
+              </OuiStack>
 
-            <OuiStack gap="sm">
-              <OuiText weight="semibold">Database Name</OuiText>
-              <OuiCode :code="connectionInfo.databaseName" />
-            </OuiStack>
+              <OuiStack gap="sm">
+                <OuiFlex justify="between" align="center">
+                  <OuiText weight="semibold" size="sm">Database Name</OuiText>
+                  <OuiButton
+                    variant="ghost"
+                    size="xs"
+                    @click="copyToClipboard(connectionInfo.databaseName, 'Database name')"
+                  >
+                    Copy
+                  </OuiButton>
+                </OuiFlex>
+                <OuiCode :code="connectionInfo.databaseName" />
+              </OuiStack>
 
-            <OuiStack gap="sm">
-              <OuiText weight="semibold">Username</OuiText>
-              <OuiCode :code="connectionInfo.username" />
-            </OuiStack>
+              <OuiStack gap="sm">
+                <OuiFlex justify="between" align="center">
+                  <OuiText weight="semibold" size="sm">Username</OuiText>
+                  <OuiButton
+                    variant="ghost"
+                    size="xs"
+                    @click="copyToClipboard(connectionInfo.username, 'Username')"
+                  >
+                    Copy
+                  </OuiButton>
+                </OuiFlex>
+                <OuiCode :code="connectionInfo.username" />
+              </OuiStack>
+            </OuiGrid>
 
+            <!-- Password Section -->
             <OuiStack gap="sm">
               <OuiFlex justify="between" align="center">
                 <OuiText weight="semibold">Password</OuiText>
-                <OuiButton variant="ghost" size="sm" @click="handleResetPassword">
+                <OuiButton variant="outline" size="sm" @click="handleResetPassword">
                   Reset Password
                 </OuiButton>
               </OuiFlex>
-              <OuiText color="secondary" size="sm">
-                Password is only shown once during database creation or password reset.
-              </OuiText>
+              <OuiAlert color="warning">
+                <OuiText size="sm">
+                  Password is only shown once during database creation or after a password reset.
+                  If you've lost your password, use the "Reset Password" button above.
+                </OuiText>
+              </OuiAlert>
             </OuiStack>
 
+            <!-- Connection Strings -->
             <OuiStack gap="sm">
               <OuiText weight="semibold">Connection Strings</OuiText>
-              <OuiStack gap="xs">
-                <OuiStack gap="xs">
-                  <OuiText size="sm" color="secondary">PostgreSQL</OuiText>
-                  <OuiCode :code="connectionInfo.postgresqlUrl" class="text-xs break-all" />
+              <OuiStack gap="md">
+                <OuiStack gap="xs" v-if="connectionInfo.postgresqlUrl">
+                  <OuiFlex justify="between" align="center">
+                    <OuiText size="sm" color="secondary">PostgreSQL</OuiText>
+                    <OuiButton
+                      variant="ghost"
+                      size="xs"
+                      @click="copyToClipboard(connectionInfo.postgresqlUrl, 'PostgreSQL connection string')"
+                    >
+                      Copy
+                    </OuiButton>
+                  </OuiFlex>
+                  <OuiCode :code="connectionInfo.postgresqlUrl" class="text-xs break-all font-mono" />
                 </OuiStack>
-                <OuiStack gap="xs">
-                  <OuiText size="sm" color="secondary">MySQL</OuiText>
-                  <OuiCode :code="connectionInfo.mysqlUrl" class="text-xs break-all" />
+
+                <OuiStack gap="xs" v-if="connectionInfo.mysqlUrl">
+                  <OuiFlex justify="between" align="center">
+                    <OuiText size="sm" color="secondary">MySQL</OuiText>
+                    <OuiButton
+                      variant="ghost"
+                      size="xs"
+                      @click="copyToClipboard(connectionInfo.mysqlUrl, 'MySQL connection string')"
+                    >
+                      Copy
+                    </OuiButton>
+                  </OuiFlex>
+                  <OuiCode :code="connectionInfo.mysqlUrl" class="text-xs break-all font-mono" />
+                </OuiStack>
+
+                <OuiStack gap="xs" v-if="connectionInfo.mongodbUrl">
+                  <OuiFlex justify="between" align="center">
+                    <OuiText size="sm" color="secondary">MongoDB</OuiText>
+                    <OuiButton
+                      variant="ghost"
+                      size="xs"
+                      @click="copyToClipboard(connectionInfo.mongodbUrl, 'MongoDB connection string')"
+                    >
+                      Copy
+                    </OuiButton>
+                  </OuiFlex>
+                  <OuiCode :code="connectionInfo.mongodbUrl" class="text-xs break-all font-mono" />
+                </OuiStack>
+
+                <OuiStack gap="xs" v-if="connectionInfo.redisUrl">
+                  <OuiFlex justify="between" align="center">
+                    <OuiText size="sm" color="secondary">Redis</OuiText>
+                    <OuiButton
+                      variant="ghost"
+                      size="xs"
+                      @click="copyToClipboard(connectionInfo.redisUrl, 'Redis connection string')"
+                    >
+                      Copy
+                    </OuiButton>
+                  </OuiFlex>
+                  <OuiCode :code="connectionInfo.redisUrl" class="text-xs break-all font-mono" />
                 </OuiStack>
               </OuiStack>
             </OuiStack>
 
+            <!-- Connection Instructions -->
             <OuiAlert color="info">
-              <OuiText size="sm">{{ connectionInfo.connectionInstructions }}</OuiText>
+              <OuiStack gap="sm">
+                <OuiText size="sm" weight="semibold">Connection Instructions</OuiText>
+                <OuiText size="sm" class="whitespace-pre-line">{{ connectionInfo.connectionInstructions }}</OuiText>
+              </OuiStack>
+            </OuiAlert>
+
+            <!-- SSL Info -->
+            <OuiAlert v-if="connectionInfo.sslRequired" color="default">
+              <OuiStack gap="xs">
+                <OuiText size="sm" weight="semibold">SSL/TLS Required</OuiText>
+                <OuiText size="sm">This database requires encrypted connections for security.</OuiText>
+              </OuiStack>
             </OuiAlert>
           </OuiStack>
 
@@ -95,6 +198,15 @@ const dbClient = useConnectClient(DatabaseService);
 const loading = ref(false);
 const connectionInfo = ref<any>(null);
 const error = ref<any>(null);
+
+async function copyToClipboard(text: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  } catch (err) {
+    toast.error("Failed to copy to clipboard");
+  }
+}
 
 async function loadConnectionInfo() {
   loading.value = true;
@@ -141,4 +253,3 @@ onMounted(() => {
   loadConnectionInfo();
 });
 </script>
-

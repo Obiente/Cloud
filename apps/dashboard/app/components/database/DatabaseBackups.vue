@@ -76,7 +76,7 @@
     </OuiCard>
 
     <!-- Create Backup Dialog -->
-    <OuiDialog v-model="showCreateDialog" title="Create Backup">
+    <OuiDialog v-model:open="showCreateDialog" title="Create Backup">
       <OuiDialogContent>
         <OuiDialogHeader>
           <OuiDialogTitle>Create Backup</OuiDialogTitle>

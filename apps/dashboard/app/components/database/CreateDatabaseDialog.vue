@@ -51,12 +51,6 @@
         />
 
         <OuiInput
-          v-model="form.initialDatabaseName"
-          label="Initial Database Name"
-          placeholder="default"
-        />
-
-        <OuiInput
           v-model="form.initialUsername"
           label="Initial Username"
           placeholder="admin"
@@ -127,7 +121,6 @@ const form = reactive({
   type: "POSTGRESQL",
   size: "small",
   version: "",
-  initialDatabaseName: "default",
   initialUsername: "admin",
   initialPassword: "",
 });
@@ -181,7 +174,6 @@ async function handleCreate() {
       type: getDatabaseType(form.type),
       size: form.size,
       version: form.version || undefined,
-      initialDatabaseName: form.initialDatabaseName || undefined,
       initialUsername: form.initialUsername || undefined,
       initialPassword: form.initialPassword || undefined,
     });
@@ -202,7 +194,6 @@ async function handleCreate() {
     form.type = "POSTGRESQL";
     form.size = "small";
     form.version = "";
-    form.initialDatabaseName = "default";
     form.initialUsername = "admin";
     form.initialPassword = "";
 
