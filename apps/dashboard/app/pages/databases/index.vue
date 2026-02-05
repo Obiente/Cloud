@@ -18,6 +18,12 @@
             Deploy and manage your databases with automated backups, scaling, and monitoring.
             PostgreSQL, MySQL, MongoDB, and more.
           </OuiText>
+          <OuiBox class="mt-4 bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-center gap-2">
+            <ExclamationTriangleIcon class="h-5 w-5 text-warning shrink-0" />
+            <OuiText size="sm">
+              <strong>Preview Notice:</strong> The Databases feature is currently in <b>Alpha</b>. Functionality, APIs, and data structures may change without notice, and stability is not guaranteed. Please use with caution and avoid storing critical data.
+            </OuiText>
+          </OuiBox>
         </OuiStack>
 
         <OuiButton
@@ -43,7 +49,7 @@
         class="backdrop-blur-sm border border-border-muted/60"
       >
         <OuiCardBody>
-          <OuiGrid cols="1" cols-md="3" gap="md">
+          <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
             <OuiInput
               v-model="searchQuery"
               placeholder="Search by name or type..."
@@ -70,7 +76,7 @@
       </OuiCard>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="pending && !databasesData" cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-if="pending && !databasesData" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <DatabaseCard
           v-for="i in 6"
           :key="i"
@@ -115,7 +121,7 @@
       </OuiStack>
 
       <!-- Database Grid -->
-      <OuiGrid v-else cols="1" cols-md="2" cols-lg="3" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
         <DatabaseCard
           v-for="database in filteredDatabases"
           :key="database.id"
@@ -134,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { CircleStackIcon, PlusIcon, MagnifyingGlassIcon } from "@heroicons/vue/24/outline";
+import { CircleStackIcon, PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon } from "@heroicons/vue/24/outline";
 import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { DatabaseService, DatabaseStatus, DatabaseType } from "@obiente/proto";
