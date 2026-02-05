@@ -3,6 +3,7 @@ package databases
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 
@@ -42,30 +43,69 @@ func (s *Service) GetDatabaseConnectionInfo(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get connection info: %w", err))
 	}
 
+	// Determine proxy host and port for connection info
+	proxyHost := os.Getenv("DATABASE_PROXY_HOST")
+	if proxyHost == "" {
+		proxyHost = conn.Host
+	}
+
+	// Determine the external port based on database type
+	var externalPort int32
+	switch databasesv1.DatabaseType(dbInstance.Type) {
+	case databasesv1.DatabaseType_POSTGRESQL:
+		externalPort = 5432
+	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
+		externalPort = 3306
+	case databasesv1.DatabaseType_MONGODB:
+		externalPort = 27017
+	case databasesv1.DatabaseType_REDIS:
+		// Use allocated port from registry
+		if s.routeRegistry != nil {
+			if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok && route.RedisPort > 0 {
+				externalPort = int32(route.RedisPort)
+			} else {
+				externalPort = conn.Port
+			}
+		} else {
+			externalPort = conn.Port
+		}
+	default:
+		externalPort = conn.Port
+	}
+
+	// The routing key is the database ID (db-{id})
+	routingDBName := req.Msg.GetDatabaseId()
+
 	// Create connection info without password (for security)
 	connInfo := &databasesv1.DatabaseConnectionInfo{
 		DatabaseId:     req.Msg.GetDatabaseId(),
-		Host:           conn.Host,
-		Port:           conn.Port,
-		DatabaseName:   conn.DatabaseName,
+		Host:           proxyHost,
+		Port:           externalPort,
+		DatabaseName:   routingDBName,
 		Username:       conn.Username,
-		SslRequired:    conn.SSLRequired,
+		SslRequired:    false,
 		SslCertificate: conn.SSLCertificate,
 	}
 
-	// Generate connection strings (without password)
-	connInfo.PostgresqlUrl = fmt.Sprintf("postgresql://%s:***@%s:%d/%s?sslmode=require",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
-	connInfo.MysqlUrl = fmt.Sprintf("mysql://%s:***@%s:%d/%s?ssl-mode=REQUIRED",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
-	connInfo.MongodbUrl = fmt.Sprintf("mongodb://%s:***@%s:%d/%s?ssl=true",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
-	connInfo.RedisUrl = fmt.Sprintf("redis://:***@%s:%d",
-		conn.Host, conn.Port)
+	// Generate connection strings (without password) using proxy host/port
+	switch databasesv1.DatabaseType(dbInstance.Type) {
+	case databasesv1.DatabaseType_POSTGRESQL:
+		connInfo.PostgresqlUrl = fmt.Sprintf("postgresql://%s:***@%s:%d/%s?sslmode=prefer",
+			conn.Username, proxyHost, externalPort, routingDBName)
+	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
+		connInfo.MysqlUrl = fmt.Sprintf("mysql://%s:***@%s:%d/%s",
+			conn.Username, proxyHost, externalPort, routingDBName)
+	case databasesv1.DatabaseType_MONGODB:
+		connInfo.MongodbUrl = fmt.Sprintf("mongodb://%s:***@%s:%d/%s",
+			conn.Username, proxyHost, externalPort, routingDBName)
+	case databasesv1.DatabaseType_REDIS:
+		connInfo.RedisUrl = fmt.Sprintf("redis://:***@%s:%d",
+			proxyHost, externalPort)
+	}
 
 	connInfo.ConnectionInstructions = fmt.Sprintf(
 		"Connect to your database using:\nHost: %s\nPort: %d\nDatabase: %s\nUsername: %s\n\nNote: Password is only shown once during database creation or password reset.",
-		conn.Host, conn.Port, conn.DatabaseName, conn.Username,
+		proxyHost, externalPort, routingDBName, conn.Username,
 	)
 
 	res := connect.NewResponse(&databasesv1.GetDatabaseConnectionInfoResponse{
@@ -128,4 +168,3 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 	})
 	return res, nil
 }
-

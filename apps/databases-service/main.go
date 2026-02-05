@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -66,7 +67,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3007"
+		port = "3014"
 	}
 
 	// Create HTTP mux
@@ -92,6 +93,26 @@ func main() {
 	)
 	mux.Handle(databasesPath, databasesHandler)
 
+	// Load existing routes and start proxy
+	proxyServer := databaseService.GetProxy()
+	routeRegistry := databaseService.GetRouteRegistry()
+
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := routeRegistry.LoadFromDatabase(loadCtx); err != nil {
+		logger.Warn("Failed to load routes from database: %v", err)
+	} else {
+		logger.Info("✓ Routes loaded from database (%d routes)", routeRegistry.RouteCount())
+	}
+	loadCancel()
+
+	// Start proxy in background
+	go func() {
+		if err := proxyServer.Start(context.Background()); err != nil {
+			logger.Error("Failed to start proxy: %v", err)
+		}
+	}()
+	logger.Info("✓ Database proxy starting")
+
 	// Health check endpoint
 	mux.HandleFunc("/health", health.HandleHealth("databases-service", func() (bool, string, map[string]interface{}) {
 		// Check database connection
@@ -101,6 +122,17 @@ func main() {
 		}
 		return true, "healthy", nil
 	}))
+
+	// Proxy health endpoint
+	mux.HandleFunc("/health/proxy", func(w http.ResponseWriter, r *http.Request) {
+		if proxyServer.Healthy() {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"healthy","routes":` + fmt.Sprintf("%d", routeRegistry.RouteCount()) + `}`))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"unhealthy"}`))
+		}
+	})
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -152,6 +184,10 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
+		// Stop proxy first
+		proxyServer.Stop()
+		logger.Info("✓ Proxy stopped")
+
 		if err := httpServer.Shutdown(ctx); err != nil {
 			logger.Warn("Error during server shutdown: %v", err)
 		} else {
@@ -159,4 +195,3 @@ func main() {
 		}
 	}
 }
-

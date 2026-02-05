@@ -3,8 +3,11 @@ package databases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	orchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
 
@@ -41,18 +44,36 @@ func (s *Service) StreamDatabaseStatus(ctx context.Context, req *connect.Request
 	return stream.Send(update)
 }
 
-// GetDatabaseMetrics gets database metrics (placeholder)
+// GetDatabaseMetrics retrieves historical database metrics
 func (s *Service) GetDatabaseMetrics(ctx context.Context, req *connect.Request[databasesv1.GetDatabaseMetricsRequest]) (*connect.Response[databasesv1.GetDatabaseMetricsResponse], error) {
-	// Check resource-level permission
 	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseRead); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Placeholder implementation
-	res := connect.NewResponse(&databasesv1.GetDatabaseMetricsResponse{
-		Metrics: []*databasesv1.DatabaseMetric{},
-	})
-	return res, nil
+	// Use StartTime from request, default to last hour
+	since := time.Now().Add(-1 * time.Hour)
+	if req.Msg.GetStartTime() != nil {
+		since = req.Msg.GetStartTime().AsTime()
+	}
+
+	rawMetrics, err := database.GetRecentDatabaseMetrics(ctx, req.Msg.GetDatabaseId(), since)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch metrics: %w", err))
+	}
+
+	protoMetrics := make([]*databasesv1.DatabaseMetric, 0, len(rawMetrics))
+	for _, m := range rawMetrics {
+		protoMetrics = append(protoMetrics, &databasesv1.DatabaseMetric{
+			DatabaseId:      req.Msg.GetDatabaseId(),
+			CpuUsagePercent: m.CPUUsage,
+			MemoryUsedBytes: m.MemoryUsage,
+			Timestamp:       timestamppb.New(m.Timestamp),
+		})
+	}
+
+	return connect.NewResponse(&databasesv1.GetDatabaseMetricsResponse{
+		Metrics: protoMetrics,
+	}), nil
 }
 
 // StreamDatabaseMetrics streams real-time database metrics (placeholder)
@@ -68,8 +89,40 @@ func (s *Service) StreamDatabaseMetrics(ctx context.Context, req *connect.Reques
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Placeholder implementation
-	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("streaming metrics not yet implemented"))
+	databaseID := req.Msg.GetDatabaseId()
+
+	// Try to get the global metrics streamer for live data
+	metricsStreamer := orchestrator.GetGlobalMetricsStreamer()
+	if metricsStreamer == nil {
+		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("metrics streaming not available"))
+	}
+
+	// Subscribe to live metrics
+	metricsCh := metricsStreamer.Subscribe(databaseID)
+	defer metricsStreamer.Unsubscribe(databaseID, metricsCh)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case liveMetric, ok := <-metricsCh:
+			if !ok {
+				return nil
+			}
+			if liveMetric.ResourceID != databaseID || liveMetric.ResourceType != "database" {
+				continue
+			}
+			metric := &databasesv1.DatabaseMetric{
+				DatabaseId:      databaseID,
+				CpuUsagePercent: liveMetric.CPUUsage,
+				MemoryUsedBytes: liveMetric.MemoryUsage,
+				Timestamp:       timestamppb.New(liveMetric.Timestamp),
+			}
+			if err := stream.Send(metric); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // ListDatabaseSizes lists available database sizes/pricing (placeholder)

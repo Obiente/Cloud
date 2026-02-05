@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
@@ -47,18 +48,58 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get connection info: %w", err))
 	}
 
-	// Connect to database
+	// Connect to database directly on overlay network
 	dbName := req.Msg.GetDatabaseName()
 	if dbName == "" {
 		dbName = conn.DatabaseName
 	}
 
+	// Check if database is sleeping/stopped and handle accordingly
+	directHost := fmt.Sprintf("obiente-%s", req.Msg.GetDatabaseId())
+	directPort := conn.Port
+	if s.routeRegistry != nil {
+		if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok {
+			directPort = int32(route.InternalPort)
+			if route.Stopped {
+				if route.DBStatus == 5 { // STOPPED
+					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("database is stopped"))
+				}
+				// SLEEPING - wake it
+				if s.routeRegistry.OnWake != nil {
+					wakeCtx, wakeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					ip, err := s.routeRegistry.OnWake(wakeCtx, route)
+					wakeCancel()
+					if err != nil {
+						return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to wake database: %w", err))
+					}
+					directHost = ip
+				}
+			}
+		}
+	}
+
+	// Decrypt password for direct connection
+	password := conn.Password
+	if s.secretManager != nil {
+		if decrypted, err := s.secretManager.DecryptPassword(conn.Password); err == nil {
+			password = decrypted
+		}
+	}
+
+	// Set timeout early so it applies to the connection attempt too
+	timeout := 10 * time.Second
+	if req.Msg.TimeoutSeconds != nil && *req.Msg.TimeoutSeconds > 0 {
+		timeout = time.Duration(*req.Msg.TimeoutSeconds) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	var db *sql.DB
 	startTime := time.Now()
 	switch databasesv1.DatabaseType(dbInstance.Type) {
 	case databasesv1.DatabaseType_POSTGRESQL:
-		connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=require",
-			conn.Username, conn.Password, conn.Host, conn.Port, dbName)
+		connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&connect_timeout=5",
+			url.QueryEscape(conn.Username), url.QueryEscape(password), url.QueryEscape(directHost), directPort, url.QueryEscape(dbName))
 		var err error
 		db, err = sql.Open("postgres", connStr)
 		if err != nil {
@@ -66,8 +107,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		}
 		defer db.Close()
 	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
-		connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-			conn.Username, conn.Password, conn.Host, conn.Port, dbName)
+		connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=5s",
+			url.QueryEscape(conn.Username), url.QueryEscape(password), url.QueryEscape(directHost), directPort, url.QueryEscape(dbName))
 		var err error
 		db, err = sql.Open("mysql", connStr)
 		if err != nil {
@@ -78,13 +119,10 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("query execution not yet supported for database type %d", dbInstance.Type))
 	}
 
-	// Set timeout
-	timeout := 30 * time.Second
-	if req.Msg.TimeoutSeconds != nil && *req.Msg.TimeoutSeconds > 0 {
-		timeout = time.Duration(*req.Msg.TimeoutSeconds) * time.Second
+	// Verify connectivity before running query
+	if err := db.PingContext(ctx); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("database unreachable at %s:%d: %w", directHost, directPort, err))
 	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	// Execute query
 	rows, err := db.QueryContext(ctx, req.Msg.GetQuery())

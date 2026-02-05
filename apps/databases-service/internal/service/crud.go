@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"databases-service/internal/provisioner"
+	"databases-service/internal/proxy"
+	"databases-service/internal/secrets"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -153,45 +157,51 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		size = "small"
 	}
 
-	// Create database instance
+	// Auto-sleep configuration
+	var autoSleepSeconds int32
+	if req.Msg.AutoSleepSeconds != nil {
+		autoSleepSeconds = *req.Msg.AutoSleepSeconds
+	}
+
+	// Create database instance record first
 	dbInstance := &database.DatabaseInstance{
-		ID:             id,
-		Name:           req.Msg.GetName(),
-		Description:    req.Msg.Description,
-		Status:         1, // CREATING
-		Type:           int32(req.Msg.GetType()),
-		Version:        req.Msg.Version,
-		Size:           size,
-		CPUCores:       cpuCores,
-		MemoryBytes:    memoryBytes,
-		DiskBytes:      diskBytes,
-		MaxConnections: maxConnections,
-		Metadata:       metadataJSON,
-		OrganizationID: orgID,
-		CreatedBy:      userInfo.Id,
+		ID:               id,
+		Name:             req.Msg.GetName(),
+		Description:      req.Msg.Description,
+		Status:           1, // CREATING
+		Type:             int32(req.Msg.GetType()),
+		Version:          req.Msg.Version,
+		Size:             size,
+		CPUCores:         cpuCores,
+		MemoryBytes:      memoryBytes,
+		DiskBytes:        diskBytes,
+		MaxConnections:   maxConnections,
+		AutoSleepSeconds: autoSleepSeconds,
+		Metadata:         metadataJSON,
+		OrganizationID:   orgID,
+		CreatedBy:        userInfo.Id,
 	}
 
 	if err := s.repo.Create(ctx, dbInstance); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create database: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create database record: %w", err))
 	}
 
-	// Generate connection credentials
-	initialDBName := req.Msg.GetInitialDatabaseName()
-	if initialDBName == "" {
-		initialDBName = "default"
-	}
 	initialUsername := req.Msg.GetInitialUsername()
 	if initialUsername == "" {
 		initialUsername = "admin"
 	}
 	initialPassword := req.Msg.GetInitialPassword()
 	if initialPassword == "" {
-		initialPassword = generateRandomPassword(32)
+		// Use secure password generation
+		var err error
+		initialPassword, err = secrets.GenerateSecurePassword(32)
+		if err != nil {
+			logger.Warn("Failed to generate secure password: %v, using fallback", err)
+			initialPassword = generateRandomPassword(32)
+		}
 	}
 
-	// TODO: Actually provision the database container/service
-	// For now, we'll just create the connection record
-	host := fmt.Sprintf("db-%s.internal", id)
+	// Determine port based on database type
 	port := int32(5432) // Default PostgreSQL port
 	if req.Msg.GetType() == databasesv1.DatabaseType_MYSQL || req.Msg.GetType() == databasesv1.DatabaseType_MARIADB {
 		port = 3306
@@ -201,35 +211,133 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		port = 6379
 	}
 
-	connID := fmt.Sprintf("conn-%d", time.Now().UnixNano())
-	dbConn := &database.DatabaseConnection{
-		ID:           connID,
-		DatabaseID:   id,
-		DatabaseName: initialDBName,
-		Username:     initialUsername,
-		Password:     initialPassword, // TODO: Encrypt this
-		Host:         host,
-		Port:         port,
-		SSLRequired:  true,
-	}
+	// Provision the actual database container asynchronously
+	go func() {
+		provisionCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-	if err := s.connRepo.Create(ctx, dbConn); err != nil {
-		logger.Warn("Failed to create connection record: %v", err)
-		// Continue anyway
-	}
+		// Use Obiente DNS naming pattern like deployments/vps/gameservers
+		host := fmt.Sprintf("db-%s.my.obiente.cloud", id)
 
-	// Update database instance with connection info
-	dbInstance.Host = &host
-	dbInstance.Port = &port
-	s.repo.Update(ctx, dbInstance)
+		// Provision Docker container if provisioner is available
+		if s.provisioner != nil {
+			version := ""
+			if req.Msg.Version != nil {
+				version = *req.Msg.Version
+			}
+			provCfg := &provisioner.DatabaseConfig{
+				DatabaseID:   id,
+				Type:         provisioner.DatabaseType(req.Msg.GetType()),
+				Version:      version,
+				Username:     initialUsername,
+				Password:     initialPassword,
+				Port:         int(port),
+				CPUCores:     float64(cpuCores),
+				MemoryBytes:  memoryBytes,
+				DiskBytes:    diskBytes,
+			}
 
-	// Convert to proto
+			result, err := s.provisioner.ProvisionDatabase(provisionCtx, provCfg)
+			if err != nil {
+				logger.Error("Failed to provision database container: %v", err)
+				// Mark as failed
+				dbInstance.Status = 8 // FAILED
+				s.repo.Update(provisionCtx, dbInstance)
+				return
+			}
+
+			// Update database instance with container info
+			dbInstance.InstanceID = &result.ContainerID
+			dbInstance.Host = &result.Host
+			dbInstance.Port = &port
+			dbInstance.Status = 3 // RUNNING
+		} else {
+			logger.Warn("Docker provisioner not available, skipping container provisioning")
+			dbInstance.Host = &host
+			dbInstance.Port = &port
+			dbInstance.Status = 3 // RUNNING (simulated)
+		}
+
+		// Create connection record
+		connID := fmt.Sprintf("conn-%d", time.Now().UnixNano())
+
+		// Encrypt password before storing
+		encryptedPassword := initialPassword
+		if s.secretManager != nil {
+			if encrypted, err := s.secretManager.EncryptPassword(initialPassword); err == nil {
+				encryptedPassword = encrypted
+			} else {
+				logger.Warn("Failed to encrypt password: %v, storing plaintext", err)
+			}
+		}
+
+		dbConn := &database.DatabaseConnection{
+			ID:           connID,
+			DatabaseID:   id,
+			DatabaseName: id,
+			Username:     initialUsername,
+			Password:     encryptedPassword,
+			Host:         *dbInstance.Host,
+			Port:         port,
+			SSLRequired:  true,
+		}
+
+		if err := s.connRepo.Create(provisionCtx, dbConn); err != nil {
+			logger.Warn("Failed to create connection record: %v", err)
+		}
+
+		// Update database with final status
+		if err := s.repo.Update(provisionCtx, dbInstance); err != nil {
+			logger.Error("Failed to update database instance: %v", err)
+		}
+
+		// Register route in proxy
+		if s.routeRegistry != nil && dbInstance.Status == 3 {
+			dbType := provisioner.DatabaseType(req.Msg.GetType()).String()
+			route := &proxy.Route{
+				DatabaseID:       id,
+				DatabaseType:     dbType,
+				InternalPort:     int(port),
+				Username:         initialUsername,
+				Password:         encryptedPassword,
+				OrganizationID:   orgID,
+				AutoSleepSeconds: autoSleepSeconds,
+				LastConnectionAt: time.Now(),
+			}
+			if dbInstance.InstanceID != nil {
+				route.ContainerID = *dbInstance.InstanceID
+			}
+			if dbInstance.Host != nil {
+				route.ContainerIP = *dbInstance.Host
+			}
+
+			// Allocate Redis port if needed
+			if dbType == "redis" {
+				if redisPort, err := s.routeRegistry.AllocateRedisPort(id); err == nil {
+					route.RedisPort = redisPort
+				} else {
+					logger.Error("Failed to allocate Redis port: %v", err)
+				}
+			}
+
+			s.routeRegistry.Register(route)
+
+			// Start Redis listener if needed
+			if route.RedisPort > 0 && s.proxy != nil {
+				if err := s.proxy.StartRedisListener(route); err != nil {
+					logger.Error("Failed to start Redis listener: %v", err)
+				}
+			}
+		}
+
+		logger.Info("Database provisioning complete: %s (host: %s)", id, *dbInstance.Host)
+	}()
+
+	// Return immediately with CREATING status
 	protoDB := dbDatabaseToProto(dbInstance)
-	connInfo := dbConnectionToProto(dbConn, id)
 
 	res := connect.NewResponse(&databasesv1.CreateDatabaseResponse{
-		Database:       protoDB,
-		ConnectionInfo: connInfo,
+		Database: protoDB,
 	})
 	return res, nil
 }
@@ -313,6 +421,17 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *connect.Request[datab
 		}
 	}
 
+	// Update auto-sleep seconds
+	if req.Msg.AutoSleepSeconds != nil {
+		dbInstance.AutoSleepSeconds = *req.Msg.AutoSleepSeconds
+		// Update route registry too
+		if s.routeRegistry != nil {
+			if route, ok := s.routeRegistry.LookupByID(dbInstance.ID); ok {
+				route.AutoSleepSeconds = *req.Msg.AutoSleepSeconds
+			}
+		}
+	}
+
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update database: %w", err))
 	}
@@ -350,11 +469,40 @@ func (s *Service) DeleteDatabase(ctx context.Context, req *connect.Request[datab
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
-	// TODO: Stop and delete the actual database container/service
-	// For now, just soft delete the record
-	if err := s.repo.Delete(ctx, req.Msg.GetDatabaseId()); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete database: %w", err))
-	}
+	// Delete the actual database container asynchronously
+	go func() {
+		deleteCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		// Update status to DELETING
+		dbInstance.Status = 9 // DELETING
+		s.repo.Update(deleteCtx, dbInstance)
+
+		// Unregister route from proxy
+		if s.routeRegistry != nil {
+			if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok {
+				if route.RedisPort > 0 && s.proxy != nil {
+					s.proxy.StopRedisListener(route.RedisPort)
+				}
+			}
+			s.routeRegistry.Unregister(req.Msg.GetDatabaseId())
+		}
+
+		// Deprovision Docker container if it exists
+		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
+			if err := s.provisioner.DeprovisionDatabase(deleteCtx, *dbInstance.InstanceID); err != nil {
+				logger.Error("Failed to deprovision database container: %v", err)
+				// Continue with soft delete anyway
+			}
+		}
+
+		// Soft delete the database record
+		if err := s.repo.Delete(deleteCtx, req.Msg.GetDatabaseId()); err != nil {
+			logger.Error("Failed to soft delete database: %v", err)
+		} else {
+			logger.Info("Database deleted: %s", req.Msg.GetDatabaseId())
+		}
+	}()
 
 	res := connect.NewResponse(&databasesv1.DeleteDatabaseResponse{
 		Success: true,
@@ -375,4 +523,3 @@ func generateRandomPassword(length int) string {
 	}
 	return string(b)
 }
-

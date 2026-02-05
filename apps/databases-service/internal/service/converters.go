@@ -42,6 +42,10 @@ func dbDatabaseToProto(db *database.DatabaseInstance) *databasesv1.DatabaseInsta
 		proto.DeletedAt = timestamppb.New(*db.DeletedAt)
 	}
 
+	if db.AutoSleepSeconds > 0 {
+		proto.AutoSleepSeconds = &db.AutoSleepSeconds
+	}
+
 	// Parse metadata
 	if db.Metadata != "" {
 		var metadata map[string]string
