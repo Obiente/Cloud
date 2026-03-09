@@ -121,20 +121,20 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 	env := []string{}
 
 	switch cfg.Type {
-	case "postgres", "postgresql":
+	case DatabaseType_POSTGRESQL:
 		env = append(env,
 			fmt.Sprintf("POSTGRES_USER=%s", cfg.Username),
 			fmt.Sprintf("POSTGRES_PASSWORD=%s", cfg.Password),
 			fmt.Sprintf("POSTGRES_DB=%s", cfg.DatabaseID),
 		)
-	case "mysql":
+	case DatabaseType_MYSQL, DatabaseType_MARIADB:
 		env = append(env,
 			fmt.Sprintf("MYSQL_USER=%s", cfg.Username),
 			fmt.Sprintf("MYSQL_PASSWORD=%s", cfg.Password),
 			fmt.Sprintf("MYSQL_DATABASE=%s", cfg.DatabaseID),
 			fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", cfg.Password),
 		)
-	case "mongo", "mongodb":
+	case DatabaseType_MONGODB:
 		env = append(env,
 			fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", cfg.Username),
 			fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", cfg.Password),
