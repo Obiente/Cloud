@@ -1059,6 +1059,51 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 		}
 	}
 
+	// Get all provisioned databases and push their DNS records
+	type databaseDNSRow struct {
+		DatabaseID   string
+		DatabaseType string
+	}
+	var databaseRows []databaseDNSRow
+	if err := database.DB.Table("databases").
+		Select("id as database_id, database_type").
+		Where("deleted_at IS NULL").
+		Scan(&databaseRows).Error; err != nil {
+		log.Printf("[DNS Pusher] Failed to query databases: %v", err)
+	} else {
+		// Process each database
+		for _, row := range databaseRows {
+			// Get node IPs for databases (use default region)
+			// Databases are accessed via Traefik on standard ports, so use Traefik IPs
+			var ips []string
+			if defaultIPs, ok := nodeIPMap["default"]; ok && len(defaultIPs) > 0 {
+				ips = defaultIPs
+			} else {
+				// Fallback: get first available IPs from any region
+				for _, regionIPs := range nodeIPMap {
+					if len(regionIPs) > 0 {
+						ips = regionIPs
+						break
+					}
+				}
+			}
+
+			if len(ips) > 0 {
+				// Create DNS record for database with standard my.obiente.cloud domain
+				dbDomain := fmt.Sprintf("db-%s.my.obiente.cloud", row.DatabaseID)
+				records = append(records, map[string]interface{}{
+					"domain":      dbDomain,
+					"record_type": "A",
+					"records":     ips,
+					"ttl":         ttl,
+				})
+				log.Printf("[DNS Pusher] Added DNS record for database %s (domain: %s)", row.DatabaseID, dbDomain)
+			} else {
+				log.Printf("[DNS Pusher] No node IPs available for database %s", row.DatabaseID)
+			}
+		}
+	}
+
 	// Get all running game servers
 	var gameServerLocations []database.GameServerLocation
 	if err := database.DB.Where("status = ?", "running").Find(&gameServerLocations).Error; err != nil {
