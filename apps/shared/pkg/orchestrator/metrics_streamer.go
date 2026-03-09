@@ -264,6 +264,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			// Collect database metrics
 			databaseLocations, err := ms.serviceRegistry.GetNodeDatabases(nodeID)
 			if err != nil {
+				log.Printf("metrics_streamer: failed to get databases for node %s: %v", nodeID, err)
 				// Silently continue - will retry next cycle
 			}
 
