@@ -7,8 +7,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/obiente/cloud/apps/shared v0.0.0
-	golang.org/x/net v0.43.0
-	google.golang.org/protobuf v1.36.9
+	golang.org/x/net v0.47.0
+	google.golang.org/protobuf v1.36.10
 	gorm.io/gorm v1.31.0
 )
 
@@ -46,9 +46,9 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/crypto v0.44.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
 )
