@@ -95,6 +95,8 @@ func InitDeploymentTracking() error {
 		&NodeMetadata{},
 		&DeploymentRouting{},
 		&GameServerLocation{},
+		&DatabaseLocation{},
+
 	); err != nil {
 		return err
 	}

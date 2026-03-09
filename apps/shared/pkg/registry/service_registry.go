@@ -178,6 +178,13 @@ func (sr *ServiceRegistry) GetNodeGameServers(nodeID string) ([]database.GameSer
 	return locations, err
 }
 
+// GetNodeDatabases returns all databases on a specific node
+func (sr *ServiceRegistry) GetNodeDatabases(nodeID string) ([]database.DatabaseLocation, error) {
+	var locations []database.DatabaseLocation
+	err := database.DB.Where("node_id = ? AND status = ?", nodeID, "running").Find(&locations).Error
+	return locations, err
+}
+
 // GetAllDeployments returns all active deployments in the cluster
 func (sr *ServiceRegistry) GetAllDeployments() ([]database.DeploymentLocation, error) {
 	var locations []database.DeploymentLocation

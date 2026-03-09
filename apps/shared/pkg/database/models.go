@@ -653,6 +653,42 @@ type GameServerMetrics struct {
 
 func (GameServerMetrics) TableName() string { return "game_server_metrics" }
 
+// DatabaseMetrics stores historical metrics for managed database instances
+type DatabaseMetrics struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	DatabaseID     string    `gorm:"index;not null" json:"database_id"`
+	ContainerID    string    `gorm:"index" json:"container_id"`
+	NodeID         string    `gorm:"index" json:"node_id"`
+	CPUUsage       float64   `json:"cpu_usage"`
+	MemoryUsage    int64     `json:"memory_usage"`
+	NetworkRxBytes int64     `json:"network_rx_bytes"`
+	NetworkTxBytes int64     `json:"network_tx_bytes"`
+	DiskReadBytes  int64     `json:"disk_read_bytes"`
+	DiskWriteBytes int64     `json:"disk_write_bytes"`
+	Timestamp      time.Time `gorm:"index" json:"timestamp"`
+}
+
+func (DatabaseMetrics) TableName() string { return "database_metrics" }
+
+// DatabaseUsageHourly stores hourly aggregated usage for managed database instances
+type DatabaseUsageHourly struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	DatabaseID       string    `gorm:"index;not null" json:"database_id"`
+	OrganizationID   string    `gorm:"index;not null" json:"organization_id"`
+	Hour             time.Time `gorm:"index" json:"hour"`
+	AvgCPUUsage      float64   `json:"avg_cpu_usage"`
+	AvgMemoryUsage   float64   `json:"avg_memory_usage"`
+	BandwidthRxBytes int64     `json:"bandwidth_rx_bytes"`
+	BandwidthTxBytes int64     `json:"bandwidth_tx_bytes"`
+	DiskReadBytes    int64     `json:"disk_read_bytes"`
+	DiskWriteBytes   int64     `json:"disk_write_bytes"`
+	SampleCount      int64     `json:"sample_count"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func (DatabaseUsageHourly) TableName() string { return "database_usage_hourly" }
+
 // SupportTicket represents a support ticket in the database
 type SupportTicket struct {
 	ID           string     `gorm:"primaryKey;column:id" json:"id"`
@@ -903,6 +939,7 @@ type DatabaseInstance struct {
 	Port           *int32     `gorm:"column:port" json:"port"`
 	InstanceID     *string    `gorm:"column:instance_id" json:"instance_id"` // Internal instance ID
 	NodeID         *string    `gorm:"column:node_id" json:"node_id"`          // Docker Swarm node ID
+	AutoSleepSeconds int32    `gorm:"column:auto_sleep_seconds;default:0" json:"auto_sleep_seconds"`
 	Metadata       string     `gorm:"column:metadata;type:jsonb" json:"metadata"` // Stored as JSON object
 	CreatedAt      time.Time  `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt      time.Time  `gorm:"column:updated_at" json:"updated_at"`

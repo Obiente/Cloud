@@ -54,6 +54,9 @@ const (
 	// DatabaseServiceStopDatabaseProcedure is the fully-qualified name of the DatabaseService's
 	// StopDatabase RPC.
 	DatabaseServiceStopDatabaseProcedure = "/obiente.cloud.databases.v1.DatabaseService/StopDatabase"
+	// DatabaseServiceSleepDatabaseProcedure is the fully-qualified name of the DatabaseService's
+	// SleepDatabase RPC.
+	DatabaseServiceSleepDatabaseProcedure = "/obiente.cloud.databases.v1.DatabaseService/SleepDatabase"
 	// DatabaseServiceRestartDatabaseProcedure is the fully-qualified name of the DatabaseService's
 	// RestartDatabase RPC.
 	DatabaseServiceRestartDatabaseProcedure = "/obiente.cloud.databases.v1.DatabaseService/RestartDatabase"
@@ -81,6 +84,18 @@ const (
 	// DatabaseServiceStreamQueryProcedure is the fully-qualified name of the DatabaseService's
 	// StreamQuery RPC.
 	DatabaseServiceStreamQueryProcedure = "/obiente.cloud.databases.v1.DatabaseService/StreamQuery"
+	// DatabaseServiceGetTableDataProcedure is the fully-qualified name of the DatabaseService's
+	// GetTableData RPC.
+	DatabaseServiceGetTableDataProcedure = "/obiente.cloud.databases.v1.DatabaseService/GetTableData"
+	// DatabaseServiceUpdateTableRowProcedure is the fully-qualified name of the DatabaseService's
+	// UpdateTableRow RPC.
+	DatabaseServiceUpdateTableRowProcedure = "/obiente.cloud.databases.v1.DatabaseService/UpdateTableRow"
+	// DatabaseServiceInsertTableRowProcedure is the fully-qualified name of the DatabaseService's
+	// InsertTableRow RPC.
+	DatabaseServiceInsertTableRowProcedure = "/obiente.cloud.databases.v1.DatabaseService/InsertTableRow"
+	// DatabaseServiceDeleteTableRowsProcedure is the fully-qualified name of the DatabaseService's
+	// DeleteTableRows RPC.
+	DatabaseServiceDeleteTableRowsProcedure = "/obiente.cloud.databases.v1.DatabaseService/DeleteTableRows"
 	// DatabaseServiceListBackupsProcedure is the fully-qualified name of the DatabaseService's
 	// ListBackups RPC.
 	DatabaseServiceListBackupsProcedure = "/obiente.cloud.databases.v1.DatabaseService/ListBackups"
@@ -105,6 +120,33 @@ const (
 	// DatabaseServiceListDatabaseSizesProcedure is the fully-qualified name of the DatabaseService's
 	// ListDatabaseSizes RPC.
 	DatabaseServiceListDatabaseSizesProcedure = "/obiente.cloud.databases.v1.DatabaseService/ListDatabaseSizes"
+	// DatabaseServiceGetDatabaseUsageProcedure is the fully-qualified name of the DatabaseService's
+	// GetDatabaseUsage RPC.
+	DatabaseServiceGetDatabaseUsageProcedure = "/obiente.cloud.databases.v1.DatabaseService/GetDatabaseUsage"
+	// DatabaseServiceCreateTableProcedure is the fully-qualified name of the DatabaseService's
+	// CreateTable RPC.
+	DatabaseServiceCreateTableProcedure = "/obiente.cloud.databases.v1.DatabaseService/CreateTable"
+	// DatabaseServiceAlterTableProcedure is the fully-qualified name of the DatabaseService's
+	// AlterTable RPC.
+	DatabaseServiceAlterTableProcedure = "/obiente.cloud.databases.v1.DatabaseService/AlterTable"
+	// DatabaseServiceDropTableProcedure is the fully-qualified name of the DatabaseService's DropTable
+	// RPC.
+	DatabaseServiceDropTableProcedure = "/obiente.cloud.databases.v1.DatabaseService/DropTable"
+	// DatabaseServiceRenameTableProcedure is the fully-qualified name of the DatabaseService's
+	// RenameTable RPC.
+	DatabaseServiceRenameTableProcedure = "/obiente.cloud.databases.v1.DatabaseService/RenameTable"
+	// DatabaseServiceTruncateTableProcedure is the fully-qualified name of the DatabaseService's
+	// TruncateTable RPC.
+	DatabaseServiceTruncateTableProcedure = "/obiente.cloud.databases.v1.DatabaseService/TruncateTable"
+	// DatabaseServiceCreateIndexProcedure is the fully-qualified name of the DatabaseService's
+	// CreateIndex RPC.
+	DatabaseServiceCreateIndexProcedure = "/obiente.cloud.databases.v1.DatabaseService/CreateIndex"
+	// DatabaseServiceDropIndexProcedure is the fully-qualified name of the DatabaseService's DropIndex
+	// RPC.
+	DatabaseServiceDropIndexProcedure = "/obiente.cloud.databases.v1.DatabaseService/DropIndex"
+	// DatabaseServiceGetTableDDLProcedure is the fully-qualified name of the DatabaseService's
+	// GetTableDDL RPC.
+	DatabaseServiceGetTableDDLProcedure = "/obiente.cloud.databases.v1.DatabaseService/GetTableDDL"
 )
 
 // DatabaseServiceClient is a client for the obiente.cloud.databases.v1.DatabaseService service.
@@ -123,6 +165,8 @@ type DatabaseServiceClient interface {
 	StartDatabase(context.Context, *connect.Request[v1.StartDatabaseRequest]) (*connect.Response[v1.StartDatabaseResponse], error)
 	// Stop a running database instance
 	StopDatabase(context.Context, *connect.Request[v1.StopDatabaseRequest]) (*connect.Response[v1.StopDatabaseResponse], error)
+	// Put a database to sleep (auto-wakes on connection)
+	SleepDatabase(context.Context, *connect.Request[v1.SleepDatabaseRequest]) (*connect.Response[v1.SleepDatabaseResponse], error)
 	// Restart a database instance
 	RestartDatabase(context.Context, *connect.Request[v1.RestartDatabaseRequest]) (*connect.Response[v1.RestartDatabaseResponse], error)
 	// Stream database status updates
@@ -141,6 +185,11 @@ type DatabaseServiceClient interface {
 	ExecuteQuery(context.Context, *connect.Request[v1.ExecuteQueryRequest]) (*connect.Response[v1.ExecuteQueryResponse], error)
 	// Stream query results (for large result sets)
 	StreamQuery(context.Context, *connect.Request[v1.StreamQueryRequest]) (*connect.ServerStreamForClient[v1.QueryResultRow], error)
+	// Table data browsing and editing
+	GetTableData(context.Context, *connect.Request[v1.GetTableDataRequest]) (*connect.Response[v1.GetTableDataResponse], error)
+	UpdateTableRow(context.Context, *connect.Request[v1.UpdateTableRowRequest]) (*connect.Response[v1.UpdateTableRowResponse], error)
+	InsertTableRow(context.Context, *connect.Request[v1.InsertTableRowRequest]) (*connect.Response[v1.InsertTableRowResponse], error)
+	DeleteTableRows(context.Context, *connect.Request[v1.DeleteTableRowsRequest]) (*connect.Response[v1.DeleteTableRowsResponse], error)
 	// Backup management
 	ListBackups(context.Context, *connect.Request[v1.ListBackupsRequest]) (*connect.Response[v1.ListBackupsResponse], error)
 	CreateBackup(context.Context, *connect.Request[v1.CreateBackupRequest]) (*connect.Response[v1.CreateBackupResponse], error)
@@ -153,6 +202,19 @@ type DatabaseServiceClient interface {
 	StreamDatabaseMetrics(context.Context, *connect.Request[v1.StreamDatabaseMetricsRequest]) (*connect.ServerStreamForClient[v1.DatabaseMetric], error)
 	// Get available database sizes/pricing
 	ListDatabaseSizes(context.Context, *connect.Request[v1.ListDatabaseSizesRequest]) (*connect.Response[v1.ListDatabaseSizesResponse], error)
+	// Get database usage and billing information
+	GetDatabaseUsage(context.Context, *connect.Request[v1.GetDatabaseUsageRequest]) (*connect.Response[v1.GetDatabaseUsageResponse], error)
+	// Schema DDL operations
+	CreateTable(context.Context, *connect.Request[v1.CreateTableRequest]) (*connect.Response[v1.CreateTableResponse], error)
+	AlterTable(context.Context, *connect.Request[v1.AlterTableRequest]) (*connect.Response[v1.AlterTableResponse], error)
+	DropTable(context.Context, *connect.Request[v1.DropTableRequest]) (*connect.Response[v1.DropTableResponse], error)
+	RenameTable(context.Context, *connect.Request[v1.RenameTableRequest]) (*connect.Response[v1.RenameTableResponse], error)
+	TruncateTable(context.Context, *connect.Request[v1.TruncateTableRequest]) (*connect.Response[v1.TruncateTableResponse], error)
+	// Index management
+	CreateIndex(context.Context, *connect.Request[v1.CreateIndexRequest]) (*connect.Response[v1.CreateIndexResponse], error)
+	DropIndex(context.Context, *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error)
+	// Get DDL statement for a table
+	GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error)
 }
 
 // NewDatabaseServiceClient constructs a client for the obiente.cloud.databases.v1.DatabaseService
@@ -206,6 +268,12 @@ func NewDatabaseServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+DatabaseServiceStopDatabaseProcedure,
 			connect.WithSchema(databaseServiceMethods.ByName("StopDatabase")),
+			connect.WithClientOptions(opts...),
+		),
+		sleepDatabase: connect.NewClient[v1.SleepDatabaseRequest, v1.SleepDatabaseResponse](
+			httpClient,
+			baseURL+DatabaseServiceSleepDatabaseProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("SleepDatabase")),
 			connect.WithClientOptions(opts...),
 		),
 		restartDatabase: connect.NewClient[v1.RestartDatabaseRequest, v1.RestartDatabaseResponse](
@@ -262,6 +330,30 @@ func NewDatabaseServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(databaseServiceMethods.ByName("StreamQuery")),
 			connect.WithClientOptions(opts...),
 		),
+		getTableData: connect.NewClient[v1.GetTableDataRequest, v1.GetTableDataResponse](
+			httpClient,
+			baseURL+DatabaseServiceGetTableDataProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("GetTableData")),
+			connect.WithClientOptions(opts...),
+		),
+		updateTableRow: connect.NewClient[v1.UpdateTableRowRequest, v1.UpdateTableRowResponse](
+			httpClient,
+			baseURL+DatabaseServiceUpdateTableRowProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("UpdateTableRow")),
+			connect.WithClientOptions(opts...),
+		),
+		insertTableRow: connect.NewClient[v1.InsertTableRowRequest, v1.InsertTableRowResponse](
+			httpClient,
+			baseURL+DatabaseServiceInsertTableRowProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("InsertTableRow")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteTableRows: connect.NewClient[v1.DeleteTableRowsRequest, v1.DeleteTableRowsResponse](
+			httpClient,
+			baseURL+DatabaseServiceDeleteTableRowsProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("DeleteTableRows")),
+			connect.WithClientOptions(opts...),
+		),
 		listBackups: connect.NewClient[v1.ListBackupsRequest, v1.ListBackupsResponse](
 			httpClient,
 			baseURL+DatabaseServiceListBackupsProcedure,
@@ -310,6 +402,60 @@ func NewDatabaseServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(databaseServiceMethods.ByName("ListDatabaseSizes")),
 			connect.WithClientOptions(opts...),
 		),
+		getDatabaseUsage: connect.NewClient[v1.GetDatabaseUsageRequest, v1.GetDatabaseUsageResponse](
+			httpClient,
+			baseURL+DatabaseServiceGetDatabaseUsageProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("GetDatabaseUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		createTable: connect.NewClient[v1.CreateTableRequest, v1.CreateTableResponse](
+			httpClient,
+			baseURL+DatabaseServiceCreateTableProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("CreateTable")),
+			connect.WithClientOptions(opts...),
+		),
+		alterTable: connect.NewClient[v1.AlterTableRequest, v1.AlterTableResponse](
+			httpClient,
+			baseURL+DatabaseServiceAlterTableProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("AlterTable")),
+			connect.WithClientOptions(opts...),
+		),
+		dropTable: connect.NewClient[v1.DropTableRequest, v1.DropTableResponse](
+			httpClient,
+			baseURL+DatabaseServiceDropTableProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("DropTable")),
+			connect.WithClientOptions(opts...),
+		),
+		renameTable: connect.NewClient[v1.RenameTableRequest, v1.RenameTableResponse](
+			httpClient,
+			baseURL+DatabaseServiceRenameTableProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("RenameTable")),
+			connect.WithClientOptions(opts...),
+		),
+		truncateTable: connect.NewClient[v1.TruncateTableRequest, v1.TruncateTableResponse](
+			httpClient,
+			baseURL+DatabaseServiceTruncateTableProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("TruncateTable")),
+			connect.WithClientOptions(opts...),
+		),
+		createIndex: connect.NewClient[v1.CreateIndexRequest, v1.CreateIndexResponse](
+			httpClient,
+			baseURL+DatabaseServiceCreateIndexProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("CreateIndex")),
+			connect.WithClientOptions(opts...),
+		),
+		dropIndex: connect.NewClient[v1.DropIndexRequest, v1.DropIndexResponse](
+			httpClient,
+			baseURL+DatabaseServiceDropIndexProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("DropIndex")),
+			connect.WithClientOptions(opts...),
+		),
+		getTableDDL: connect.NewClient[v1.GetTableDDLRequest, v1.GetTableDDLResponse](
+			httpClient,
+			baseURL+DatabaseServiceGetTableDDLProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("GetTableDDL")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -322,6 +468,7 @@ type databaseServiceClient struct {
 	deleteDatabase            *connect.Client[v1.DeleteDatabaseRequest, v1.DeleteDatabaseResponse]
 	startDatabase             *connect.Client[v1.StartDatabaseRequest, v1.StartDatabaseResponse]
 	stopDatabase              *connect.Client[v1.StopDatabaseRequest, v1.StopDatabaseResponse]
+	sleepDatabase             *connect.Client[v1.SleepDatabaseRequest, v1.SleepDatabaseResponse]
 	restartDatabase           *connect.Client[v1.RestartDatabaseRequest, v1.RestartDatabaseResponse]
 	streamDatabaseStatus      *connect.Client[v1.StreamDatabaseStatusRequest, v1.DatabaseStatusUpdate]
 	getDatabaseConnectionInfo *connect.Client[v1.GetDatabaseConnectionInfoRequest, v1.GetDatabaseConnectionInfoResponse]
@@ -331,6 +478,10 @@ type databaseServiceClient struct {
 	getTableStructure         *connect.Client[v1.GetTableStructureRequest, v1.GetTableStructureResponse]
 	executeQuery              *connect.Client[v1.ExecuteQueryRequest, v1.ExecuteQueryResponse]
 	streamQuery               *connect.Client[v1.StreamQueryRequest, v1.QueryResultRow]
+	getTableData              *connect.Client[v1.GetTableDataRequest, v1.GetTableDataResponse]
+	updateTableRow            *connect.Client[v1.UpdateTableRowRequest, v1.UpdateTableRowResponse]
+	insertTableRow            *connect.Client[v1.InsertTableRowRequest, v1.InsertTableRowResponse]
+	deleteTableRows           *connect.Client[v1.DeleteTableRowsRequest, v1.DeleteTableRowsResponse]
 	listBackups               *connect.Client[v1.ListBackupsRequest, v1.ListBackupsResponse]
 	createBackup              *connect.Client[v1.CreateBackupRequest, v1.CreateBackupResponse]
 	getBackup                 *connect.Client[v1.GetBackupRequest, v1.GetBackupResponse]
@@ -339,6 +490,15 @@ type databaseServiceClient struct {
 	getDatabaseMetrics        *connect.Client[v1.GetDatabaseMetricsRequest, v1.GetDatabaseMetricsResponse]
 	streamDatabaseMetrics     *connect.Client[v1.StreamDatabaseMetricsRequest, v1.DatabaseMetric]
 	listDatabaseSizes         *connect.Client[v1.ListDatabaseSizesRequest, v1.ListDatabaseSizesResponse]
+	getDatabaseUsage          *connect.Client[v1.GetDatabaseUsageRequest, v1.GetDatabaseUsageResponse]
+	createTable               *connect.Client[v1.CreateTableRequest, v1.CreateTableResponse]
+	alterTable                *connect.Client[v1.AlterTableRequest, v1.AlterTableResponse]
+	dropTable                 *connect.Client[v1.DropTableRequest, v1.DropTableResponse]
+	renameTable               *connect.Client[v1.RenameTableRequest, v1.RenameTableResponse]
+	truncateTable             *connect.Client[v1.TruncateTableRequest, v1.TruncateTableResponse]
+	createIndex               *connect.Client[v1.CreateIndexRequest, v1.CreateIndexResponse]
+	dropIndex                 *connect.Client[v1.DropIndexRequest, v1.DropIndexResponse]
+	getTableDDL               *connect.Client[v1.GetTableDDLRequest, v1.GetTableDDLResponse]
 }
 
 // ListDatabases calls obiente.cloud.databases.v1.DatabaseService.ListDatabases.
@@ -374,6 +534,11 @@ func (c *databaseServiceClient) StartDatabase(ctx context.Context, req *connect.
 // StopDatabase calls obiente.cloud.databases.v1.DatabaseService.StopDatabase.
 func (c *databaseServiceClient) StopDatabase(ctx context.Context, req *connect.Request[v1.StopDatabaseRequest]) (*connect.Response[v1.StopDatabaseResponse], error) {
 	return c.stopDatabase.CallUnary(ctx, req)
+}
+
+// SleepDatabase calls obiente.cloud.databases.v1.DatabaseService.SleepDatabase.
+func (c *databaseServiceClient) SleepDatabase(ctx context.Context, req *connect.Request[v1.SleepDatabaseRequest]) (*connect.Response[v1.SleepDatabaseResponse], error) {
+	return c.sleepDatabase.CallUnary(ctx, req)
 }
 
 // RestartDatabase calls obiente.cloud.databases.v1.DatabaseService.RestartDatabase.
@@ -422,6 +587,26 @@ func (c *databaseServiceClient) StreamQuery(ctx context.Context, req *connect.Re
 	return c.streamQuery.CallServerStream(ctx, req)
 }
 
+// GetTableData calls obiente.cloud.databases.v1.DatabaseService.GetTableData.
+func (c *databaseServiceClient) GetTableData(ctx context.Context, req *connect.Request[v1.GetTableDataRequest]) (*connect.Response[v1.GetTableDataResponse], error) {
+	return c.getTableData.CallUnary(ctx, req)
+}
+
+// UpdateTableRow calls obiente.cloud.databases.v1.DatabaseService.UpdateTableRow.
+func (c *databaseServiceClient) UpdateTableRow(ctx context.Context, req *connect.Request[v1.UpdateTableRowRequest]) (*connect.Response[v1.UpdateTableRowResponse], error) {
+	return c.updateTableRow.CallUnary(ctx, req)
+}
+
+// InsertTableRow calls obiente.cloud.databases.v1.DatabaseService.InsertTableRow.
+func (c *databaseServiceClient) InsertTableRow(ctx context.Context, req *connect.Request[v1.InsertTableRowRequest]) (*connect.Response[v1.InsertTableRowResponse], error) {
+	return c.insertTableRow.CallUnary(ctx, req)
+}
+
+// DeleteTableRows calls obiente.cloud.databases.v1.DatabaseService.DeleteTableRows.
+func (c *databaseServiceClient) DeleteTableRows(ctx context.Context, req *connect.Request[v1.DeleteTableRowsRequest]) (*connect.Response[v1.DeleteTableRowsResponse], error) {
+	return c.deleteTableRows.CallUnary(ctx, req)
+}
+
 // ListBackups calls obiente.cloud.databases.v1.DatabaseService.ListBackups.
 func (c *databaseServiceClient) ListBackups(ctx context.Context, req *connect.Request[v1.ListBackupsRequest]) (*connect.Response[v1.ListBackupsResponse], error) {
 	return c.listBackups.CallUnary(ctx, req)
@@ -462,6 +647,51 @@ func (c *databaseServiceClient) ListDatabaseSizes(ctx context.Context, req *conn
 	return c.listDatabaseSizes.CallUnary(ctx, req)
 }
 
+// GetDatabaseUsage calls obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage.
+func (c *databaseServiceClient) GetDatabaseUsage(ctx context.Context, req *connect.Request[v1.GetDatabaseUsageRequest]) (*connect.Response[v1.GetDatabaseUsageResponse], error) {
+	return c.getDatabaseUsage.CallUnary(ctx, req)
+}
+
+// CreateTable calls obiente.cloud.databases.v1.DatabaseService.CreateTable.
+func (c *databaseServiceClient) CreateTable(ctx context.Context, req *connect.Request[v1.CreateTableRequest]) (*connect.Response[v1.CreateTableResponse], error) {
+	return c.createTable.CallUnary(ctx, req)
+}
+
+// AlterTable calls obiente.cloud.databases.v1.DatabaseService.AlterTable.
+func (c *databaseServiceClient) AlterTable(ctx context.Context, req *connect.Request[v1.AlterTableRequest]) (*connect.Response[v1.AlterTableResponse], error) {
+	return c.alterTable.CallUnary(ctx, req)
+}
+
+// DropTable calls obiente.cloud.databases.v1.DatabaseService.DropTable.
+func (c *databaseServiceClient) DropTable(ctx context.Context, req *connect.Request[v1.DropTableRequest]) (*connect.Response[v1.DropTableResponse], error) {
+	return c.dropTable.CallUnary(ctx, req)
+}
+
+// RenameTable calls obiente.cloud.databases.v1.DatabaseService.RenameTable.
+func (c *databaseServiceClient) RenameTable(ctx context.Context, req *connect.Request[v1.RenameTableRequest]) (*connect.Response[v1.RenameTableResponse], error) {
+	return c.renameTable.CallUnary(ctx, req)
+}
+
+// TruncateTable calls obiente.cloud.databases.v1.DatabaseService.TruncateTable.
+func (c *databaseServiceClient) TruncateTable(ctx context.Context, req *connect.Request[v1.TruncateTableRequest]) (*connect.Response[v1.TruncateTableResponse], error) {
+	return c.truncateTable.CallUnary(ctx, req)
+}
+
+// CreateIndex calls obiente.cloud.databases.v1.DatabaseService.CreateIndex.
+func (c *databaseServiceClient) CreateIndex(ctx context.Context, req *connect.Request[v1.CreateIndexRequest]) (*connect.Response[v1.CreateIndexResponse], error) {
+	return c.createIndex.CallUnary(ctx, req)
+}
+
+// DropIndex calls obiente.cloud.databases.v1.DatabaseService.DropIndex.
+func (c *databaseServiceClient) DropIndex(ctx context.Context, req *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error) {
+	return c.dropIndex.CallUnary(ctx, req)
+}
+
+// GetTableDDL calls obiente.cloud.databases.v1.DatabaseService.GetTableDDL.
+func (c *databaseServiceClient) GetTableDDL(ctx context.Context, req *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error) {
+	return c.getTableDDL.CallUnary(ctx, req)
+}
+
 // DatabaseServiceHandler is an implementation of the obiente.cloud.databases.v1.DatabaseService
 // service.
 type DatabaseServiceHandler interface {
@@ -479,6 +709,8 @@ type DatabaseServiceHandler interface {
 	StartDatabase(context.Context, *connect.Request[v1.StartDatabaseRequest]) (*connect.Response[v1.StartDatabaseResponse], error)
 	// Stop a running database instance
 	StopDatabase(context.Context, *connect.Request[v1.StopDatabaseRequest]) (*connect.Response[v1.StopDatabaseResponse], error)
+	// Put a database to sleep (auto-wakes on connection)
+	SleepDatabase(context.Context, *connect.Request[v1.SleepDatabaseRequest]) (*connect.Response[v1.SleepDatabaseResponse], error)
 	// Restart a database instance
 	RestartDatabase(context.Context, *connect.Request[v1.RestartDatabaseRequest]) (*connect.Response[v1.RestartDatabaseResponse], error)
 	// Stream database status updates
@@ -497,6 +729,11 @@ type DatabaseServiceHandler interface {
 	ExecuteQuery(context.Context, *connect.Request[v1.ExecuteQueryRequest]) (*connect.Response[v1.ExecuteQueryResponse], error)
 	// Stream query results (for large result sets)
 	StreamQuery(context.Context, *connect.Request[v1.StreamQueryRequest], *connect.ServerStream[v1.QueryResultRow]) error
+	// Table data browsing and editing
+	GetTableData(context.Context, *connect.Request[v1.GetTableDataRequest]) (*connect.Response[v1.GetTableDataResponse], error)
+	UpdateTableRow(context.Context, *connect.Request[v1.UpdateTableRowRequest]) (*connect.Response[v1.UpdateTableRowResponse], error)
+	InsertTableRow(context.Context, *connect.Request[v1.InsertTableRowRequest]) (*connect.Response[v1.InsertTableRowResponse], error)
+	DeleteTableRows(context.Context, *connect.Request[v1.DeleteTableRowsRequest]) (*connect.Response[v1.DeleteTableRowsResponse], error)
 	// Backup management
 	ListBackups(context.Context, *connect.Request[v1.ListBackupsRequest]) (*connect.Response[v1.ListBackupsResponse], error)
 	CreateBackup(context.Context, *connect.Request[v1.CreateBackupRequest]) (*connect.Response[v1.CreateBackupResponse], error)
@@ -509,6 +746,19 @@ type DatabaseServiceHandler interface {
 	StreamDatabaseMetrics(context.Context, *connect.Request[v1.StreamDatabaseMetricsRequest], *connect.ServerStream[v1.DatabaseMetric]) error
 	// Get available database sizes/pricing
 	ListDatabaseSizes(context.Context, *connect.Request[v1.ListDatabaseSizesRequest]) (*connect.Response[v1.ListDatabaseSizesResponse], error)
+	// Get database usage and billing information
+	GetDatabaseUsage(context.Context, *connect.Request[v1.GetDatabaseUsageRequest]) (*connect.Response[v1.GetDatabaseUsageResponse], error)
+	// Schema DDL operations
+	CreateTable(context.Context, *connect.Request[v1.CreateTableRequest]) (*connect.Response[v1.CreateTableResponse], error)
+	AlterTable(context.Context, *connect.Request[v1.AlterTableRequest]) (*connect.Response[v1.AlterTableResponse], error)
+	DropTable(context.Context, *connect.Request[v1.DropTableRequest]) (*connect.Response[v1.DropTableResponse], error)
+	RenameTable(context.Context, *connect.Request[v1.RenameTableRequest]) (*connect.Response[v1.RenameTableResponse], error)
+	TruncateTable(context.Context, *connect.Request[v1.TruncateTableRequest]) (*connect.Response[v1.TruncateTableResponse], error)
+	// Index management
+	CreateIndex(context.Context, *connect.Request[v1.CreateIndexRequest]) (*connect.Response[v1.CreateIndexResponse], error)
+	DropIndex(context.Context, *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error)
+	// Get DDL statement for a table
+	GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error)
 }
 
 // NewDatabaseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -558,6 +808,12 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 		DatabaseServiceStopDatabaseProcedure,
 		svc.StopDatabase,
 		connect.WithSchema(databaseServiceMethods.ByName("StopDatabase")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceSleepDatabaseHandler := connect.NewUnaryHandler(
+		DatabaseServiceSleepDatabaseProcedure,
+		svc.SleepDatabase,
+		connect.WithSchema(databaseServiceMethods.ByName("SleepDatabase")),
 		connect.WithHandlerOptions(opts...),
 	)
 	databaseServiceRestartDatabaseHandler := connect.NewUnaryHandler(
@@ -614,6 +870,30 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 		connect.WithSchema(databaseServiceMethods.ByName("StreamQuery")),
 		connect.WithHandlerOptions(opts...),
 	)
+	databaseServiceGetTableDataHandler := connect.NewUnaryHandler(
+		DatabaseServiceGetTableDataProcedure,
+		svc.GetTableData,
+		connect.WithSchema(databaseServiceMethods.ByName("GetTableData")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceUpdateTableRowHandler := connect.NewUnaryHandler(
+		DatabaseServiceUpdateTableRowProcedure,
+		svc.UpdateTableRow,
+		connect.WithSchema(databaseServiceMethods.ByName("UpdateTableRow")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceInsertTableRowHandler := connect.NewUnaryHandler(
+		DatabaseServiceInsertTableRowProcedure,
+		svc.InsertTableRow,
+		connect.WithSchema(databaseServiceMethods.ByName("InsertTableRow")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceDeleteTableRowsHandler := connect.NewUnaryHandler(
+		DatabaseServiceDeleteTableRowsProcedure,
+		svc.DeleteTableRows,
+		connect.WithSchema(databaseServiceMethods.ByName("DeleteTableRows")),
+		connect.WithHandlerOptions(opts...),
+	)
 	databaseServiceListBackupsHandler := connect.NewUnaryHandler(
 		DatabaseServiceListBackupsProcedure,
 		svc.ListBackups,
@@ -662,6 +942,60 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 		connect.WithSchema(databaseServiceMethods.ByName("ListDatabaseSizes")),
 		connect.WithHandlerOptions(opts...),
 	)
+	databaseServiceGetDatabaseUsageHandler := connect.NewUnaryHandler(
+		DatabaseServiceGetDatabaseUsageProcedure,
+		svc.GetDatabaseUsage,
+		connect.WithSchema(databaseServiceMethods.ByName("GetDatabaseUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceCreateTableHandler := connect.NewUnaryHandler(
+		DatabaseServiceCreateTableProcedure,
+		svc.CreateTable,
+		connect.WithSchema(databaseServiceMethods.ByName("CreateTable")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceAlterTableHandler := connect.NewUnaryHandler(
+		DatabaseServiceAlterTableProcedure,
+		svc.AlterTable,
+		connect.WithSchema(databaseServiceMethods.ByName("AlterTable")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceDropTableHandler := connect.NewUnaryHandler(
+		DatabaseServiceDropTableProcedure,
+		svc.DropTable,
+		connect.WithSchema(databaseServiceMethods.ByName("DropTable")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceRenameTableHandler := connect.NewUnaryHandler(
+		DatabaseServiceRenameTableProcedure,
+		svc.RenameTable,
+		connect.WithSchema(databaseServiceMethods.ByName("RenameTable")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceTruncateTableHandler := connect.NewUnaryHandler(
+		DatabaseServiceTruncateTableProcedure,
+		svc.TruncateTable,
+		connect.WithSchema(databaseServiceMethods.ByName("TruncateTable")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceCreateIndexHandler := connect.NewUnaryHandler(
+		DatabaseServiceCreateIndexProcedure,
+		svc.CreateIndex,
+		connect.WithSchema(databaseServiceMethods.ByName("CreateIndex")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceDropIndexHandler := connect.NewUnaryHandler(
+		DatabaseServiceDropIndexProcedure,
+		svc.DropIndex,
+		connect.WithSchema(databaseServiceMethods.ByName("DropIndex")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceGetTableDDLHandler := connect.NewUnaryHandler(
+		DatabaseServiceGetTableDDLProcedure,
+		svc.GetTableDDL,
+		connect.WithSchema(databaseServiceMethods.ByName("GetTableDDL")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.databases.v1.DatabaseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DatabaseServiceListDatabasesProcedure:
@@ -678,6 +1012,8 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 			databaseServiceStartDatabaseHandler.ServeHTTP(w, r)
 		case DatabaseServiceStopDatabaseProcedure:
 			databaseServiceStopDatabaseHandler.ServeHTTP(w, r)
+		case DatabaseServiceSleepDatabaseProcedure:
+			databaseServiceSleepDatabaseHandler.ServeHTTP(w, r)
 		case DatabaseServiceRestartDatabaseProcedure:
 			databaseServiceRestartDatabaseHandler.ServeHTTP(w, r)
 		case DatabaseServiceStreamDatabaseStatusProcedure:
@@ -696,6 +1032,14 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 			databaseServiceExecuteQueryHandler.ServeHTTP(w, r)
 		case DatabaseServiceStreamQueryProcedure:
 			databaseServiceStreamQueryHandler.ServeHTTP(w, r)
+		case DatabaseServiceGetTableDataProcedure:
+			databaseServiceGetTableDataHandler.ServeHTTP(w, r)
+		case DatabaseServiceUpdateTableRowProcedure:
+			databaseServiceUpdateTableRowHandler.ServeHTTP(w, r)
+		case DatabaseServiceInsertTableRowProcedure:
+			databaseServiceInsertTableRowHandler.ServeHTTP(w, r)
+		case DatabaseServiceDeleteTableRowsProcedure:
+			databaseServiceDeleteTableRowsHandler.ServeHTTP(w, r)
 		case DatabaseServiceListBackupsProcedure:
 			databaseServiceListBackupsHandler.ServeHTTP(w, r)
 		case DatabaseServiceCreateBackupProcedure:
@@ -712,6 +1056,24 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 			databaseServiceStreamDatabaseMetricsHandler.ServeHTTP(w, r)
 		case DatabaseServiceListDatabaseSizesProcedure:
 			databaseServiceListDatabaseSizesHandler.ServeHTTP(w, r)
+		case DatabaseServiceGetDatabaseUsageProcedure:
+			databaseServiceGetDatabaseUsageHandler.ServeHTTP(w, r)
+		case DatabaseServiceCreateTableProcedure:
+			databaseServiceCreateTableHandler.ServeHTTP(w, r)
+		case DatabaseServiceAlterTableProcedure:
+			databaseServiceAlterTableHandler.ServeHTTP(w, r)
+		case DatabaseServiceDropTableProcedure:
+			databaseServiceDropTableHandler.ServeHTTP(w, r)
+		case DatabaseServiceRenameTableProcedure:
+			databaseServiceRenameTableHandler.ServeHTTP(w, r)
+		case DatabaseServiceTruncateTableProcedure:
+			databaseServiceTruncateTableHandler.ServeHTTP(w, r)
+		case DatabaseServiceCreateIndexProcedure:
+			databaseServiceCreateIndexHandler.ServeHTTP(w, r)
+		case DatabaseServiceDropIndexProcedure:
+			databaseServiceDropIndexHandler.ServeHTTP(w, r)
+		case DatabaseServiceGetTableDDLProcedure:
+			databaseServiceGetTableDDLHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -747,6 +1109,10 @@ func (UnimplementedDatabaseServiceHandler) StartDatabase(context.Context, *conne
 
 func (UnimplementedDatabaseServiceHandler) StopDatabase(context.Context, *connect.Request[v1.StopDatabaseRequest]) (*connect.Response[v1.StopDatabaseResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.StopDatabase is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) SleepDatabase(context.Context, *connect.Request[v1.SleepDatabaseRequest]) (*connect.Response[v1.SleepDatabaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.SleepDatabase is not implemented"))
 }
 
 func (UnimplementedDatabaseServiceHandler) RestartDatabase(context.Context, *connect.Request[v1.RestartDatabaseRequest]) (*connect.Response[v1.RestartDatabaseResponse], error) {
@@ -785,6 +1151,22 @@ func (UnimplementedDatabaseServiceHandler) StreamQuery(context.Context, *connect
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.StreamQuery is not implemented"))
 }
 
+func (UnimplementedDatabaseServiceHandler) GetTableData(context.Context, *connect.Request[v1.GetTableDataRequest]) (*connect.Response[v1.GetTableDataResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.GetTableData is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) UpdateTableRow(context.Context, *connect.Request[v1.UpdateTableRowRequest]) (*connect.Response[v1.UpdateTableRowResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.UpdateTableRow is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) InsertTableRow(context.Context, *connect.Request[v1.InsertTableRowRequest]) (*connect.Response[v1.InsertTableRowResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.InsertTableRow is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) DeleteTableRows(context.Context, *connect.Request[v1.DeleteTableRowsRequest]) (*connect.Response[v1.DeleteTableRowsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.DeleteTableRows is not implemented"))
+}
+
 func (UnimplementedDatabaseServiceHandler) ListBackups(context.Context, *connect.Request[v1.ListBackupsRequest]) (*connect.Response[v1.ListBackupsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.ListBackups is not implemented"))
 }
@@ -815,4 +1197,40 @@ func (UnimplementedDatabaseServiceHandler) StreamDatabaseMetrics(context.Context
 
 func (UnimplementedDatabaseServiceHandler) ListDatabaseSizes(context.Context, *connect.Request[v1.ListDatabaseSizesRequest]) (*connect.Response[v1.ListDatabaseSizesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) GetDatabaseUsage(context.Context, *connect.Request[v1.GetDatabaseUsageRequest]) (*connect.Response[v1.GetDatabaseUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) CreateTable(context.Context, *connect.Request[v1.CreateTableRequest]) (*connect.Response[v1.CreateTableResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.CreateTable is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) AlterTable(context.Context, *connect.Request[v1.AlterTableRequest]) (*connect.Response[v1.AlterTableResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.AlterTable is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) DropTable(context.Context, *connect.Request[v1.DropTableRequest]) (*connect.Response[v1.DropTableResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.DropTable is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) RenameTable(context.Context, *connect.Request[v1.RenameTableRequest]) (*connect.Response[v1.RenameTableResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.RenameTable is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) TruncateTable(context.Context, *connect.Request[v1.TruncateTableRequest]) (*connect.Response[v1.TruncateTableResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.TruncateTable is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) CreateIndex(context.Context, *connect.Request[v1.CreateIndexRequest]) (*connect.Response[v1.CreateIndexResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.CreateIndex is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) DropIndex(context.Context, *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.DropIndex is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.GetTableDDL is not implemented"))
 }

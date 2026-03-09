@@ -549,6 +549,8 @@ func InitDatabase() error {
 		&VPSTerminalKey{},
 		&VPSBastionKey{},
 		&Notification{},
+		&DatabaseInstance{},
+		&DatabaseBackup{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
 
@@ -50,6 +51,117 @@ func (c *Client) Close() error {
 		return nil
 	}
 	return c.api.Close()
+}
+
+// ContainerConfig represents configuration for creating a container
+type ContainerConfig struct {
+	Name          string
+	Image         string
+	Env           []string
+	Labels        map[string]string
+	PortBindings  map[string]string // "80/tcp" -> "8080"
+	Networks      []string
+	RestartPolicy string // "no", "always", "unless-stopped", "on-failure"
+	Cmd           []string
+	Volumes       map[string]string // host:container
+}
+
+// CreateContainer creates a new Docker container with the specified configuration
+func (c *Client) CreateContainer(ctx context.Context, cfg *ContainerConfig) (string, error) {
+	if c == nil || c.api == nil {
+		return "", ErrUninitialized
+	}
+
+	// Pull image if needed
+	_, err := c.api.ImageInspect(ctx, cfg.Image)
+	if err != nil {
+		// Image not found locally, pull it
+		reader, err := c.api.ImagePull(ctx, cfg.Image, client.ImagePullOptions{})
+		if err != nil {
+			return "", fmt.Errorf("docker: pull image %s: %w", cfg.Image, err)
+		}
+		defer reader.Close()
+		// Consume the pull output
+		io.Copy(io.Discard, reader)
+	}
+
+	// Build port bindings
+	exposedPorts := network.PortSet{}
+	portBindings := network.PortMap{}
+	if cfg.PortBindings != nil {
+		for containerPort, hostPort := range cfg.PortBindings {
+			port, err := network.ParsePort(containerPort + "/tcp")
+			if err != nil {
+				return "", fmt.Errorf("docker: invalid port %s: %w", containerPort, err)
+			}
+			exposedPorts[port] = struct{}{}
+			portBindings[port] = []network.PortBinding{
+				{HostPort: hostPort},
+			}
+		}
+	}
+
+	// Build restart policy
+	restartPolicy := container.RestartPolicy{}
+	switch cfg.RestartPolicy {
+	case "always":
+		restartPolicy.Name = container.RestartPolicyAlways
+	case "unless-stopped":
+		restartPolicy.Name = container.RestartPolicyUnlessStopped
+	case "on-failure":
+		restartPolicy.Name = container.RestartPolicyOnFailure
+	default:
+		restartPolicy.Name = container.RestartPolicyDisabled
+	}
+
+	// Create container using new API
+	resp, err := c.api.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: &container.Config{
+			Image:        cfg.Image,
+			Env:          cfg.Env,
+			Labels:       cfg.Labels,
+			ExposedPorts: exposedPorts,
+			Cmd:          cfg.Cmd,
+		},
+		HostConfig: &container.HostConfig{
+			PortBindings:  portBindings,
+			RestartPolicy: restartPolicy,
+			Binds:         buildBindMounts(cfg.Volumes),
+		},
+		NetworkingConfig: &network.NetworkingConfig{
+			EndpointsConfig: buildNetworkConfig(cfg.Networks),
+		},
+		Name: cfg.Name,
+	})
+	if err != nil {
+		return "", fmt.Errorf("docker: create container: %w", err)
+	}
+
+	return resp.ID, nil
+}
+
+// buildBindMounts converts volume map to bind mount strings
+func buildBindMounts(volumes map[string]string) []string {
+	if volumes == nil {
+		return nil
+	}
+	binds := make([]string, 0, len(volumes))
+	for host, container := range volumes {
+		binds = append(binds, fmt.Sprintf("%s:%s", host, container))
+	}
+	return binds
+}
+
+// buildNetworkConfig converts network names to endpoint configuration
+func buildNetworkConfig(networks []string) map[string]*network.EndpointSettings {
+	if len(networks) == 0 {
+		return nil
+	}
+	config := make(map[string]*network.EndpointSettings)
+	for _, net := range networks {
+		config[net] = &network.EndpointSettings{}
+	}
+	return config
 }
 
 // (List/Inspect helpers removed; not needed by orchestrator)
@@ -583,6 +695,18 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 		return container.InspectResponse{}, err
 	}
 	return result.Container, nil
+}
+
+// NetworkConnect connects a container to a network
+func (c *Client) NetworkConnect(ctx context.Context, networkName, containerID string) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+
+	_, err := c.api.NetworkConnect(ctx, networkName, client.NetworkConnectOptions{
+		Container: containerID,
+	})
+	return err
 }
 
 // ContainerResize resizes the TTY for a container
