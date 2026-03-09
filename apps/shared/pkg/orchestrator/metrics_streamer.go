@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strings"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -1195,7 +1195,10 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 			}
 
 			if len(databaseMetricsToStore) > 0 {
-				targetDB := database.GetInstance().DB
+				targetDB := database.MetricsDB
+				if targetDB == nil {
+					targetDB = database.DB
+				}
 				if err := targetDB.CreateInBatches(databaseMetricsToStore, ms.config.BatchSize).Error; err != nil {
 					log.Printf("[MetricsStreamer] Failed to store final database metrics batch (%d metrics): %v", len(databaseMetricsToStore), err)
 					ms.stats.RecordStorage(false, len(databaseMetricsToStore))
