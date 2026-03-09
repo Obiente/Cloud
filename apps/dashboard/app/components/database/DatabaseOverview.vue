@@ -148,10 +148,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import {
-  DocumentDuplicateIcon,
-  CheckIcon,
-} from "@heroicons/vue/24/outline";
 import { DatabaseType, DatabaseStatus, DatabaseService, type DatabaseInstance } from "@obiente/proto";
 import { formatBytes, formatDate } from "~/utils/common";
 import { useToast } from "~/composables/useToast";
