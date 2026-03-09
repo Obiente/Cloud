@@ -468,7 +468,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1  # Single replica: proxy holds in-memory route state
       update_config:
         parallelism: 1
         delay: 10s
@@ -505,6 +505,23 @@ services:
     dns_search: []
     networks:
       - obiente-network
+      - obiente-databases
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - target: 5432
+        published: 5432
+        protocol: tcp
+        mode: host
+      - target: 3306
+        published: 3306
+        protocol: tcp
+        mode: host
+      - target: 27017
+        published: 27017
+        protocol: tcp
+        mode: host
+      # Redis uses port-per-instance in range 16379-16478 (host mode)
 
   # Game Servers Service - Microservice for game server management
   gameservers-service:
@@ -529,8 +546,8 @@ services:
         window: 60s
       resources:
         limits:
-          cpus: "1"
-          memory: 2G
+          cpus: "2"
+          memory: 10G
         reservations:
           cpus: "0.1"
           memory: 128M
@@ -931,6 +948,7 @@ services:
       - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
       - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      # Database TCP ports are handled by databases-service proxy (not Traefik)
       # Port 8080 is used by Traefik API (--api.insecure=true)
       # Grafana is accessible via port 80/443 at /grafana
       # Let's Encrypt
@@ -967,6 +985,7 @@ services:
         published: ${TRAEFIK_SSH_PORT:-2222}
         protocol: tcp
         mode: ingress
+      # Database ports are handled by databases-service proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
@@ -1188,6 +1207,13 @@ networks:
         - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
+  obiente-databases:
+    # Fixed name so API-created database containers can join this network
+    name: obiente-databases
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
 
 configs:
   # Custom pg_hba.conf file

@@ -444,6 +444,11 @@ services:
       - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
       - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      # Database TCP entrypoints
+      - --entryPoints.postgres.address=:5432
+      - --entryPoints.mysql.address=:3306
+      - --entryPoints.mongodb.address=:27017
+      - --entryPoints.redis.address=:6379
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
@@ -475,6 +480,23 @@ services:
         published: ${SSH_PROXY_PORT:-2222}
         protocol: tcp
         mode: ingress  # SSH proxy port (routed through Traefik)
+      # Database ports
+      - target: 5432
+        published: 5432
+        protocol: tcp
+        mode: ingress
+      - target: 3306
+        published: 3306
+        protocol: tcp
+        mode: ingress
+      - target: 27017
+        published: 27017
+        protocol: tcp
+        mode: ingress
+      - target: 6379
+        published: 6379
+        protocol: tcp
+        mode: ingress
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
