@@ -149,8 +149,12 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 	newPassword := generateRandomPassword(32)
 
 	// TODO: Actually reset the password in the database
-	// For now, just update the connection record
-	conn.Password = newPassword
+	// For now, just update the connection record with the encrypted password
+	encryptedPassword, err := s.secretManager.EncryptPassword(newPassword)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt password: %w", err))
+	}
+	conn.Password = encryptedPassword
 	if err := s.connRepo.Update(ctx, conn); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update password: %w", err))
 	}
