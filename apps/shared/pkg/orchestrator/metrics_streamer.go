@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strings"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -258,6 +258,19 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 				// Collect stats using the same Docker container logic as deployments
 				gameServerMetrics, failed := ms.collectGameServerStatsParallel(gameServerLocations, false)
 				allMetrics = append(allMetrics, gameServerMetrics...)
+				containersFailed += failed
+			}
+
+			// Collect database metrics
+			databaseLocations, err := ms.serviceRegistry.GetNodeDatabases(nodeID)
+			if err != nil {
+				log.Printf("metrics_streamer: failed to get databases for node %s: %v", nodeID, err)
+				// Silently continue - will retry next cycle
+			}
+
+			if len(databaseLocations) > 0 {
+				databaseMetrics, failed := ms.collectDatabaseStatsParallel(databaseLocations, false)
+				allMetrics = append(allMetrics, databaseMetrics...)
 				containersFailed += failed
 			}
 
@@ -562,6 +575,87 @@ func (ms *MetricsStreamer) collectGameServerStatsParallel(locations []database.G
 	return gameServerMetrics, failed
 }
 
+// collectDatabaseStatsParallel collects database container stats in parallel using worker pool
+func (ms *MetricsStreamer) collectDatabaseStatsParallel(locations []database.DatabaseLocation, shouldLog bool) ([]LiveMetric, int) {
+	_ = shouldLog
+	// Convert database locations to deployment-like format to reuse collection logic
+	deploymentLikeLocations := make([]database.DeploymentLocation, len(locations))
+	for i, dbLoc := range locations {
+		deploymentLikeLocations[i] = database.DeploymentLocation{
+			ID:           dbLoc.ID,
+			DeploymentID: dbLoc.DatabaseID,
+			NodeID:       dbLoc.NodeID,
+			NodeHostname: dbLoc.NodeHostname,
+			ContainerID:  dbLoc.ContainerID,
+			Status:       dbLoc.Status,
+			Port:         int(dbLoc.Port),
+			CreatedAt:    dbLoc.CreatedAt,
+			UpdatedAt:    dbLoc.UpdatedAt,
+		}
+	}
+
+	deploymentMetrics, failed := ms.collectDeploymentStatsParallel(deploymentLikeLocations, false)
+
+	databaseMetrics := make([]LiveMetric, 0, len(deploymentMetrics))
+
+	// Prepare data for a batched UPDATE using CASE expressions
+	if len(deploymentMetrics) == 0 {
+		return databaseMetrics, failed
+	}
+
+	var (
+		containerIDs []interface{}
+		args         []interface{}
+	)
+
+	var cpuCaseBuilder strings.Builder
+	var memCaseBuilder strings.Builder
+
+	cpuCaseBuilder.WriteString("cpu_usage = CASE container_id")
+	memCaseBuilder.WriteString("memory_usage = CASE container_id")
+
+	for _, metric := range deploymentMetrics {
+		metric.ResourceType = "database"
+		databaseMetrics = append(databaseMetrics, metric)
+
+		// Build CASE branches keyed by container_id
+		cpuCaseBuilder.WriteString(" WHEN ? THEN ?")
+		args = append(args, metric.ContainerID, metric.CPUUsage)
+
+		memCaseBuilder.WriteString(" WHEN ? THEN ?")
+		args = append(args, metric.ContainerID, metric.MemoryUsage)
+
+		containerIDs = append(containerIDs, metric.ContainerID)
+	}
+
+	cpuCaseBuilder.WriteString(" ELSE cpu_usage END")
+	memCaseBuilder.WriteString(" ELSE memory_usage END")
+
+	// Build the IN clause placeholders for container_id list
+	var inPlaceholdersBuilder strings.Builder
+	for i := range containerIDs {
+		if i > 0 {
+			inPlaceholdersBuilder.WriteString(", ")
+		}
+		inPlaceholdersBuilder.WriteString("?")
+	}
+
+	updateSQL := fmt.Sprintf(
+		"UPDATE database_locations SET %s, %s, updated_at = ? WHERE container_id IN (%s)",
+		cpuCaseBuilder.String(),
+		memCaseBuilder.String(),
+		inPlaceholdersBuilder.String(),
+	)
+
+	// Single timestamp for this batch
+	args = append(args, time.Now())
+	args = append(args, containerIDs...)
+
+	// Execute batched UPDATE; ignore error as in the original code
+	_ = database.DB.Exec(updateSQL, args...).Error
+	return databaseMetrics, failed
+}
+
 // collectVPSMetricsOnce collects VPS metrics from Proxmox
 // Returns nil if VPS orchestrator is not available (graceful degradation)
 func (ms *MetricsStreamer) collectVPSMetricsOnce() ([]LiveMetric, int) {
@@ -849,9 +943,10 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 				continue
 			}
 
-			// Aggregate metrics per resource (deployment or game server)
+			// Aggregate metrics per resource (deployment, game server, or database)
 			var deploymentMetricsToStore []database.DeploymentMetrics
 			var gameServerMetricsToStore []database.GameServerMetrics
+			var databaseMetricsToStore []database.DatabaseMetrics
 
 			for _, resourceID := range resourceIDs {
 				ms.liveMetricsMutex.RLock()
@@ -999,7 +1094,7 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							if targetDB == nil {
 								targetDB = database.DB
 							}
-							
+
 							if err := targetDB.CreateInBatches(gameServerMetricsToStore, ms.config.BatchSize).Error; err != nil {
 								log.Printf("[MetricsStreamer] Failed to store game server metrics batch (%d metrics): %v", len(gameServerMetricsToStore), err)
 								ms.stats.RecordStorage(false, len(gameServerMetricsToStore))
@@ -1007,6 +1102,42 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 								ms.stats.RecordStorage(true, len(gameServerMetricsToStore))
 							}
 							gameServerMetricsToStore = gameServerMetricsToStore[:0]
+						}
+					} else if resourceType == "database" {
+						validatedCPU := avgCPU
+						if validatedCPU < 0 {
+							validatedCPU = 0.0
+						} else if validatedCPU > 10000.0 {
+							log.Printf("[MetricsStreamer] Clamping invalid CPU usage %.2f%% to 10000%% for database %s", avgCPU, resourceID)
+							validatedCPU = 10000.0
+						}
+
+						databaseMetricsToStore = append(databaseMetricsToStore, database.DatabaseMetrics{
+							DatabaseID:     resourceID,
+							ContainerID:    containerID,
+							NodeID:         containerMetricsSlice[0].NodeID,
+							CPUUsage:       validatedCPU,
+							MemoryUsage:    avgMemory,
+							NetworkRxBytes: sumNetworkRx,
+							NetworkTxBytes: sumNetworkTx,
+							DiskReadBytes:  sumDiskRead,
+							DiskWriteBytes: sumDiskWrite,
+							Timestamp:      latestTimestamp,
+						})
+
+						if len(databaseMetricsToStore) >= ms.config.BatchSize {
+							targetDB := database.MetricsDB
+							if targetDB == nil {
+								targetDB = database.DB
+							}
+
+							if err := targetDB.CreateInBatches(databaseMetricsToStore, ms.config.BatchSize).Error; err != nil {
+								log.Printf("[MetricsStreamer] Failed to store database metrics batch (%d metrics): %v", len(databaseMetricsToStore), err)
+								ms.stats.RecordStorage(false, len(databaseMetricsToStore))
+							} else {
+								ms.stats.RecordStorage(true, len(databaseMetricsToStore))
+							}
+							databaseMetricsToStore = databaseMetricsToStore[:0]
 						}
 					}
 				}
@@ -1043,7 +1174,6 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 			}
 
 			if len(gameServerMetricsToStore) > 0 {
-				// Record Prometheus metrics for remaining game server metrics
 				for _, gsMetric := range gameServerMetricsToStore {
 					metrics.RecordGameServerMetrics(
 						gsMetric.GameServerID,
@@ -1061,6 +1191,19 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					ms.stats.RecordStorage(false, len(gameServerMetricsToStore))
 				} else {
 					ms.stats.RecordStorage(true, len(gameServerMetricsToStore))
+				}
+			}
+
+			if len(databaseMetricsToStore) > 0 {
+				targetDB := database.MetricsDB
+				if targetDB == nil {
+					targetDB = database.DB
+				}
+				if err := targetDB.CreateInBatches(databaseMetricsToStore, ms.config.BatchSize).Error; err != nil {
+					log.Printf("[MetricsStreamer] Failed to store final database metrics batch (%d metrics): %v", len(databaseMetricsToStore), err)
+					ms.stats.RecordStorage(false, len(databaseMetricsToStore))
+				} else {
+					ms.stats.RecordStorage(true, len(databaseMetricsToStore))
 				}
 			}
 

@@ -1,6 +1,6 @@
 import { useNuxtApp } from "#app";
 import { inject } from "vue";
-import { createClient, type Client } from "@connectrpc/connect";
+import { createClient, type Client, type Transport } from "@connectrpc/connect";
 import type { DescService } from "@bufbuild/protobuf";
 
 // Injection key for scoping preview transport to PreviewProviders subtree
@@ -16,7 +16,7 @@ export const PREVIEW_CONNECT_KEY: unique symbol = Symbol("OBIENTE_PREVIEW_CONNEC
  */
 export function useConnectClient<T extends DescService>(service: T): Client<T> {
   const nuxtApp = useNuxtApp();
-  const injectedTransport = inject<any | null>(PREVIEW_CONNECT_KEY, null);
+  const injectedTransport = inject<Transport | null>(PREVIEW_CONNECT_KEY, null);
   const transport = injectedTransport || nuxtApp.$connect;
   return createClient(service, transport);
 }

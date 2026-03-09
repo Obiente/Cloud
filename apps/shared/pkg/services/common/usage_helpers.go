@@ -54,6 +54,9 @@ func CalculateUsageFromHourlyAndRaw(
 		} else if resourceType == "vps" {
 			tableName = "vps_usage_hourly"
 			idColumn = "vps_instance_id"
+		} else if resourceType == "database" {
+			tableName = "database_usage_hourly"
+			idColumn = "database_id"
 		}
 
 		query := metricsDB.Table(tableName + " duh").
@@ -75,6 +78,8 @@ func CalculateUsageFromHourlyAndRaw(
 			rawTableName = "game_server_metrics"
 		} else if resourceType == "vps" {
 			rawTableName = "vps_metrics"
+		} else if resourceType == "database" {
+			rawTableName = "database_metrics"
 		}
 
 		// Determine upper bound for raw metrics: should not exceed current time or month end
@@ -187,6 +192,9 @@ func CalculateUsageFromHourlyAndRaw(
 		} else if resourceType == "vps" {
 			tableName = "vps_usage_hourly"
 			idColumn = "vps_instance_id"
+		} else if resourceType == "database" {
+			tableName = "database_usage_hourly"
+			idColumn = "database_id"
 		}
 
 		var hourlyUsage struct {

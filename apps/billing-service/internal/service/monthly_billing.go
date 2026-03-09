@@ -167,11 +167,28 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		Where("vuh.organization_id = ? AND vuh.hour >= ? AND vuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
 		Scan(&vpsHourlyUsage)
 
-	// Combine deployment, game server, and VPS hourly usage
-	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds
-	hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds + vpsHourlyUsage.MemoryByteSeconds
-	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes
-	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes
+	// Get database hourly usage
+	var databaseHourlyUsage struct {
+		CPUCoreSeconds    int64
+		MemoryByteSeconds int64
+		BandwidthRxBytes  int64
+		BandwidthTxBytes  int64
+	}
+	metricsDB.Table("database_usage_hourly duh").
+		Select(`
+			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
+			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+		`).
+		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
+		Scan(&databaseHourlyUsage)
+
+	// Combine deployment, game server, VPS, and database hourly usage
+	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds + databaseHourlyUsage.CPUCoreSeconds
+	hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds + vpsHourlyUsage.MemoryByteSeconds + databaseHourlyUsage.MemoryByteSeconds
+	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
+	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
 	// Get storage bytes (snapshot from deployments, game servers, and VPS tables)
 	var deploymentStorage struct {
@@ -198,10 +215,19 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		Where("vps.organization_id = ? AND vps.deleted_at IS NULL", orgID).
 		Scan(&vpsStorage)
 
+	var databaseStorage struct {
+		StorageBytes int64
+	}
+	database.DB.Table("database_instances db").
+		Select("COALESCE(SUM(db.disk_bytes), 0) as storage_bytes").
+		Where("db.organization_id = ? AND db.deleted_at IS NULL", orgID).
+		Scan(&databaseStorage)
+	databaseStorageVal := databaseStorage.StorageBytes
+
 	storageSum := struct {
 		StorageBytes int64
 	}{
-		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes,
+		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes + databaseStorageVal,
 	}
 
 	// Calculate costs using pricing model
@@ -494,11 +520,28 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		Where("vuh.organization_id = ? AND vuh.hour >= ? AND vuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
 		Scan(&vpsHourlyUsage)
 
-	// Combine deployment, game server, and VPS hourly usage
-	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds
-	hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds + vpsHourlyUsage.MemoryByteSeconds
-	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes
-	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes
+	// Get database hourly usage
+	var databaseHourlyUsage struct {
+		CPUCoreSeconds    int64
+		MemoryByteSeconds int64
+		BandwidthRxBytes  int64
+		BandwidthTxBytes  int64
+	}
+	metricsDB.Table("database_usage_hourly duh").
+		Select(`
+			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
+			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+		`).
+		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
+		Scan(&databaseHourlyUsage)
+
+	// Combine deployment, game server, VPS, and database hourly usage
+	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds + databaseHourlyUsage.CPUCoreSeconds
+	hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds + vpsHourlyUsage.MemoryByteSeconds + databaseHourlyUsage.MemoryByteSeconds
+	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
+	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
 	// Get storage bytes (snapshot from deployments, game servers, and VPS tables)
 	var deploymentStorage struct {
@@ -525,10 +568,19 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		Where("vps.organization_id = ? AND vps.deleted_at IS NULL", orgID).
 		Scan(&vpsStorage)
 
+	var databaseStorage struct {
+		StorageBytes int64
+	}
+	database.DB.Table("database_instances db").
+		Select("COALESCE(SUM(db.disk_bytes), 0) as storage_bytes").
+		Where("db.organization_id = ? AND db.deleted_at IS NULL", orgID).
+		Scan(&databaseStorage)
+	databaseStorageVal := databaseStorage.StorageBytes
+
 	storageSum := struct {
 		StorageBytes int64
 	}{
-		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes,
+		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes + databaseStorageVal,
 	}
 
 	// Calculate costs using pricing model

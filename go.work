@@ -5,6 +5,7 @@ use (
 	./apps/audit-service
 	./apps/auth-service
 	./apps/billing-service
+	./apps/databases-service
 	./apps/deployments-service
 	./apps/dns-service
 	./apps/gameservers-service

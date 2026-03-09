@@ -260,6 +260,52 @@ services:
       retries: 3
       start_period: 40s
 
+  # Databases Service - Microservice for managed database management
+  databases-service:
+    image: ghcr.io/obiente/cloud-databases-service:latest
+    build:
+      context: .
+      dockerfile: apps/databases-service/Dockerfile
+    container_name: obiente-databases-service
+    environment:
+      PORT: 3014
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+      - obiente-databases
+    ports:
+      - "5432:5432"     # PostgreSQL proxy
+      - "3306:3306"     # MySQL/MariaDB proxy
+      - "27017:27017"   # MongoDB proxy
+      - "16379-16478:16379-16478"  # Redis port-per-instance
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "cloud.obiente.service=databases-service"
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`) || Host(`databases-service.localhost`)"
+      - "traefik.http.routers.databases-service.entrypoints=web"
+      - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
+      - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`) || Host(`databases-service.localhost`)"
+      - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.databases-service-secure.service=databases-service"
+      - "traefik.http.routers.databases-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3014/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Game Servers Service - Microservice for game server management
   gameservers-service:
     image: ghcr.io/obiente/cloud-gameservers-service:latest
@@ -561,6 +607,7 @@ services:
       - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
       - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      # Database TCP ports are handled by databases-service proxy (not Traefik)
     labels:
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
@@ -573,6 +620,7 @@ services:
       - "${PUBLIC_HTTPS_PORT:-443}:443"
       - "${PUBLIC_TRAEFIK_DASHBOARD_PORT:-8080}:8080"
       - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (routed through Traefik)
+      # Database ports are handled by databases-service proxy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
@@ -598,6 +646,13 @@ networks:
     driver: bridge
     # Configure network to prevent DNS search domain issues
     # This ensures service names like "postgres" resolve correctly without appending .my.obiente.cloud
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.driver.mtu: "1500"
+  obiente-databases:
+    # Fixed name so API-created database containers can join this network
+    name: obiente-databases
+    driver: bridge
     driver_opts:
       com.docker.network.bridge.enable_icc: "true"
       com.docker.network.driver.mtu: "1500"

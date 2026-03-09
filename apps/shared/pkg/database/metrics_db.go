@@ -176,6 +176,12 @@ func InitMetricsTables() error {
 	if !hypertableMap["vps_usage_hourly"] {
 		tablesToMigrate = append(tablesToMigrate, &VPSUsageHourly{})
 	}
+	if !hypertableMap["database_metrics"] {
+		tablesToMigrate = append(tablesToMigrate, &DatabaseMetrics{})
+	}
+	if !hypertableMap["database_usage_hourly"] {
+		tablesToMigrate = append(tablesToMigrate, &DatabaseUsageHourly{})
+	}
 
 	if len(tablesToMigrate) > 0 {
 		if err := MetricsDB.AutoMigrate(tablesToMigrate...); err != nil {

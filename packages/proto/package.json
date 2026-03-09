@@ -14,16 +14,14 @@
     "./utils": "./src/utils.ts",
     "./*": "./src/generated/*"
   },
-  "types": "./src/generated",
+  "types": "./src/generated/*",
   "scripts": {
-    "build": "rm -r src/generated ; buf generate",
-    "clean": "rm -r src/generated"
+    "build": "buf generate"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.1",
     "@connectrpc/connect": "^2.1.1",
-    "@connectrpc/connect-node": "^2.1.1",
-    "@connectrpc/protoc-gen-connect-es": "^1.7.0"
+    "@connectrpc/connect-node": "^2.1.1"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.60.0",
