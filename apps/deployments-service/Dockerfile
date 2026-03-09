@@ -64,7 +64,7 @@ RUN apk update && apk --no-cache --no-scripts add \
 ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins \
     BUILDX_VERSION=0.29.1 \
     MISE_VERSION=2025.10.13 \
-    RAILPACK_VERSION=0.9.2
+    RAILPACK_VERSION=0.18.0
 
 # Install docker-buildx plugin from Docker's official releases
 # BuildKit requires buildx for advanced build features (faster builds, better caching)
