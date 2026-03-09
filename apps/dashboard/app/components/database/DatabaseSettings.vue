@@ -2,7 +2,7 @@
   <OuiStack gap="lg" p="lg" md:p="xl">
     <form @submit.prevent="handleSave">
       <OuiStack gap="lg">
-        <!-- Basic Settings -->`
+        <!-- Basic Settings -->
         <OuiStack gap="md">
           <OuiText as="h3" size="lg" weight="bold">Basic Settings</OuiText>
           
