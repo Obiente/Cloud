@@ -31,6 +31,7 @@ enum DatabaseStatus {
   DELETING = 9;       // Database is being deleted
   DELETED = 10;       // Database has been deleted (soft delete)
   SUSPENDED = 11;     // Database is suspended
+  SLEEPING = 12;      // Database is sleeping (auto-wakes on connection)
 }
 
 service DatabaseService {
@@ -54,7 +55,10 @@ service DatabaseService {
   
   // Stop a running database instance
   rpc StopDatabase(StopDatabaseRequest) returns (StopDatabaseResponse);
-  
+
+  // Put a database to sleep (auto-wakes on connection)
+  rpc SleepDatabase(SleepDatabaseRequest) returns (SleepDatabaseResponse);
+
   // Restart a database instance
   rpc RestartDatabase(RestartDatabaseRequest) returns (RestartDatabaseResponse);
   
@@ -81,7 +85,13 @@ service DatabaseService {
   
   // Stream query results (for large result sets)
   rpc StreamQuery(StreamQueryRequest) returns (stream QueryResultRow);
-  
+
+  // Table data browsing and editing
+  rpc GetTableData(GetTableDataRequest) returns (GetTableDataResponse);
+  rpc UpdateTableRow(UpdateTableRowRequest) returns (UpdateTableRowResponse);
+  rpc InsertTableRow(InsertTableRowRequest) returns (InsertTableRowResponse);
+  rpc DeleteTableRows(DeleteTableRowsRequest) returns (DeleteTableRowsResponse);
+
   // Backup management
   rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse);
   rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse);
@@ -97,6 +107,23 @@ service DatabaseService {
   
   // Get available database sizes/pricing
   rpc ListDatabaseSizes(ListDatabaseSizesRequest) returns (ListDatabaseSizesResponse);
+
+  // Get database usage and billing information
+  rpc GetDatabaseUsage(GetDatabaseUsageRequest) returns (GetDatabaseUsageResponse);
+
+  // Schema DDL operations
+  rpc CreateTable(CreateTableRequest) returns (CreateTableResponse);
+  rpc AlterTable(AlterTableRequest) returns (AlterTableResponse);
+  rpc DropTable(DropTableRequest) returns (DropTableResponse);
+  rpc RenameTable(RenameTableRequest) returns (RenameTableResponse);
+  rpc TruncateTable(TruncateTableRequest) returns (TruncateTableResponse);
+
+  // Index management
+  rpc CreateIndex(CreateIndexRequest) returns (CreateIndexResponse);
+  rpc DropIndex(DropIndexRequest) returns (DropIndexResponse);
+
+  // Get DDL statement for a table
+  rpc GetTableDDL(GetTableDDLRequest) returns (GetTableDDLResponse);
 }
 
 message ListDatabasesRequest {
@@ -122,9 +149,9 @@ message CreateDatabaseRequest {
   string size = 5; // Database size/spec (e.g., "small", "medium", "large")
   optional string version = 6; // Database version (e.g., "15", "8.0", "7.0")
   map<string, string> metadata = 7; // Additional metadata/tags
-  optional string initial_database_name = 8; // Initial database name to create
   optional string initial_username = 9; // Initial username (if not provided, auto-generated)
   optional string initial_password = 10; // Initial password (if not provided, auto-generated)
+  optional int32 auto_sleep_seconds = 11; // Auto-sleep after inactivity (0 = disabled)
 }
 
 message CreateDatabaseResponse {
@@ -148,6 +175,7 @@ message UpdateDatabaseRequest {
   optional string name = 3;
   optional string description = 4;
   map<string, string> metadata = 5; // Update metadata/tags
+  optional int32 auto_sleep_seconds = 6; // Auto-sleep after inactivity (0 = disabled)
 }
 
 message UpdateDatabaseResponse {
@@ -179,6 +207,15 @@ message StopDatabaseRequest {
 }
 
 message StopDatabaseResponse {
+  DatabaseInstance database = 1;
+}
+
+message SleepDatabaseRequest {
+  string organization_id = 1;
+  string database_id = 2;
+}
+
+message SleepDatabaseResponse {
   DatabaseInstance database = 1;
 }
 
@@ -395,6 +432,69 @@ message StreamQueryRequest {
   optional int32 timeout_seconds = 5;
 }
 
+// Table data browsing messages
+message GetTableDataRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string table_name = 3;
+  optional string database_name = 4;
+  int32 page = 5;
+  int32 per_page = 6; // default 50
+  optional string sort_column = 7;
+  optional string sort_direction = 8; // "ASC" or "DESC"
+  repeated ColumnFilter filters = 9;
+}
+
+message ColumnFilter {
+  string column_name = 1;
+  string operator = 2; // "=", "!=", "LIKE", "IS NULL", "IS NOT NULL", ">", "<", etc.
+  optional string value = 3;
+}
+
+message GetTableDataResponse {
+  repeated QueryResultColumn columns = 1;
+  repeated QueryResultRow rows = 2;
+  int32 total_rows = 3;
+  obiente.cloud.common.v1.Pagination pagination = 4;
+}
+
+message UpdateTableRowRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string table_name = 3;
+  optional string database_name = 4;
+  repeated QueryResultCell where_cells = 5; // PK columns to identify the row
+  repeated QueryResultCell set_cells = 6; // Columns to update
+}
+
+message UpdateTableRowResponse {
+  int32 affected_rows = 1;
+}
+
+message InsertTableRowRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string table_name = 3;
+  optional string database_name = 4;
+  repeated QueryResultCell cells = 5;
+}
+
+message InsertTableRowResponse {
+  int32 affected_rows = 1;
+}
+
+message DeleteTableRowsRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  string table_name = 3;
+  optional string database_name = 4;
+  repeated QueryResultCell where_cells = 5; // PK columns to identify the row
+}
+
+message DeleteTableRowsResponse {
+  int32 affected_rows = 1;
+}
+
 // Backup management messages
 message ListBackupsRequest {
   string organization_id = 1;
@@ -564,5 +664,229 @@ message DatabaseInstance {
   
   // Current metrics (if available)
   optional DatabaseMetric current_metrics = 24;
+
+  // Auto-sleep configuration (0 = disabled)
+  optional int32 auto_sleep_seconds = 25;
+}
+
+// Usage/billing messages
+message GetDatabaseUsageRequest {
+  string database_id = 1;
+  string organization_id = 2;
+  optional string month = 3; // YYYY-MM format, defaults to current month
+}
+
+message GetDatabaseUsageResponse {
+  string database_id = 1;
+  string organization_id = 2;
+  string month = 3;
+  DatabaseUsageMetrics current = 4;
+  DatabaseUsageMetrics estimated_monthly = 5;
+}
+
+message DatabaseUsageMetrics {
+  int64 cpu_core_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 bandwidth_rx_bytes = 3;
+  int64 bandwidth_tx_bytes = 4;
+  int64 storage_bytes = 5;
+  int64 uptime_seconds = 6;
+  int64 estimated_cost_cents = 7;
+  optional int64 cpu_cost_cents = 8;
+  optional int64 memory_cost_cents = 9;
+  optional int64 bandwidth_cost_cents = 10;
+  optional int64 storage_cost_cents = 11;
+}
+
+// DDL operation messages
+message CreateTableRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+  repeated ColumnDefinition columns = 5;
+  optional PrimaryKeyDefinition primary_key = 6;
+  repeated ForeignKeyDefinition foreign_keys = 7;
+  repeated IndexDefinition indexes = 8;
+  optional string comment = 9;
+}
+
+message ColumnDefinition {
+  string name = 1;
+  string data_type = 2; // e.g., "varchar(255)", "integer", "timestamp"
+  bool is_nullable = 3;
+  optional string default_value = 4;
+  bool is_unique = 5;
+  optional string comment = 6;
+  bool auto_increment = 7; // PostgreSQL: SERIAL, MySQL: AUTO_INCREMENT
+}
+
+message PrimaryKeyDefinition {
+  repeated string column_names = 1;
+  optional string name = 2;
+}
+
+message IndexDefinition {
+  string name = 1;
+  repeated string column_names = 2;
+  bool is_unique = 3;
+  optional string type = 4; // btree, hash, gin, gist
+}
+
+message ForeignKeyDefinition {
+  string name = 1;
+  repeated string from_columns = 2;
+  string to_table = 3;
+  repeated string to_columns = 4;
+  string on_delete = 5; // CASCADE, RESTRICT, SET NULL, NO ACTION
+  string on_update = 6;
+}
+
+message CreateTableResponse {
+  bool success = 1;
+  TableInfo table = 2;
+}
+
+message AlterTableRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+  repeated AlterTableOperation operations = 5;
+}
+
+message AlterTableOperation {
+  oneof operation {
+    AddColumnOperation add_column = 1;
+    DropColumnOperation drop_column = 2;
+    ModifyColumnOperation modify_column = 3;
+    RenameColumnOperation rename_column = 4;
+    AddForeignKeyOperation add_foreign_key = 5;
+    DropForeignKeyOperation drop_foreign_key = 6;
+    AddUniqueConstraintOperation add_unique = 7;
+    DropConstraintOperation drop_constraint = 8;
+  }
+}
+
+message AddColumnOperation {
+  ColumnDefinition column = 1;
+  optional string after_column = 2; // MySQL only
+}
+
+message DropColumnOperation {
+  string column_name = 1;
+  bool cascade = 2;
+}
+
+message ModifyColumnOperation {
+  string column_name = 1;
+  optional string new_data_type = 2;
+  optional bool is_nullable = 3;
+  optional string default_value = 4;
+  bool drop_default = 5;
+}
+
+message RenameColumnOperation {
+  string old_name = 1;
+  string new_name = 2;
+}
+
+message AddForeignKeyOperation {
+  ForeignKeyDefinition foreign_key = 1;
+}
+
+message DropForeignKeyOperation {
+  string constraint_name = 1;
+}
+
+message AddUniqueConstraintOperation {
+  string name = 1;
+  repeated string column_names = 2;
+}
+
+message DropConstraintOperation {
+  string constraint_name = 1;
+}
+
+message AlterTableResponse {
+  bool success = 1;
+  TableInfo table = 2;
+}
+
+message DropTableRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+  bool cascade = 5;
+  bool if_exists = 6;
+}
+
+message DropTableResponse {
+  bool success = 1;
+}
+
+message RenameTableRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string old_name = 4;
+  string new_name = 5;
+}
+
+message RenameTableResponse {
+  bool success = 1;
+}
+
+message TruncateTableRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+  bool cascade = 5;
+}
+
+message TruncateTableResponse {
+  bool success = 1;
+  int64 rows_deleted = 2;
+}
+
+message CreateIndexRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+  IndexDefinition index = 5;
+  bool if_not_exists = 6;
+  bool concurrently = 7; // PostgreSQL only
+}
+
+message CreateIndexResponse {
+  bool success = 1;
+}
+
+message DropIndexRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string index_name = 4;
+  bool cascade = 5;
+  bool if_exists = 6;
+  bool concurrently = 7; // PostgreSQL only
+}
+
+message DropIndexResponse {
+  bool success = 1;
+}
+
+message GetTableDDLRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  string table_name = 4;
+}
+
+message GetTableDDLResponse {
+  string ddl = 1;
 }
 
