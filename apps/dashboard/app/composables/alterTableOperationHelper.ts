@@ -2,10 +2,12 @@
 import { AlterTableOperationSchema } from "@obiente/proto";
 import { create } from "@bufbuild/protobuf";
 
+type OperationCase = "addColumn" | "dropColumn" | "modifyColumn" | "renameColumn" | "addForeignKey" | "dropForeignKey" | "addUnique" | "dropConstraint";
+
 export function makeAlterTableOperation(op: any) {
   // op: { addColumn: { ... } } or { dropColumn: { ... } } etc.
   // Find the operation key
-  const keys = [
+  const keys: OperationCase[] = [
     "addColumn",
     "dropColumn",
     "modifyColumn",

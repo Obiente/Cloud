@@ -1,7 +1,7 @@
 <template>
   <OuiStack gap="none">
     <!-- Loading State -->
-    <OuiStack v-if="schemaLoading" align="center" gap="md" class="py-10">
+    <OuiStack v-if="schemaLoading" align="center" gap="md" style="padding: 2.5rem 0">
       <OuiSpinner size="lg" />
       <OuiText color="secondary">Loading schema...</OuiText>
     </OuiStack>
@@ -14,23 +14,23 @@
     />
 
     <!-- Main browser -->
-    <div v-else class="flex" style="min-height: 500px">
+    <div v-else style="display: flex; min-height: 500px">
       <!-- Left pane: Schema tree -->
       <div
-        class="border-r border-border-default shrink-0 overflow-y-auto bg-surface-base"
+        style="border-right: 1px solid var(--oui-border-default); flex-shrink: 0; overflow-y: auto; background: var(--oui-surface-base)"
         :style="{ width: treePaneWidth + 'px' }"
       >
-        <div class="p-3">
-          <OuiFlex justify="between" align="center" class="mb-3">
+        <div style="padding: 0.75rem">
+          <OuiFlex justify="between" align="center" style="margin-bottom: 0.75rem">
             <OuiText size="xs" weight="semibold" transform="uppercase" color="secondary">
               Schema
             </OuiText>
             <OuiFlex gap="xs">
               <OuiButton variant="ghost" color="primary" size="sm" @click="openCreateTableDialog" title="Create Table">
-                <PlusIcon class="h-3.5 w-3.5" />
+                <PlusIcon style="width: 0.875rem; height: 0.875rem" />
               </OuiButton>
               <OuiButton variant="ghost" color="secondary" size="sm" @click="refreshSchema" title="Refresh Schema">
-                <ArrowPathIcon class="h-3.5 w-3.5" />
+                <ArrowPathIcon style="width: 0.875rem; height: 0.875rem" />
               </OuiButton>
             </OuiFlex>
           </OuiFlex>
@@ -40,631 +40,474 @@
             placeholder="Filter..."
             clearable
             size="sm"
-            class="mb-3"
+            style="margin-bottom: 0.75rem"
           >
             <template #prefix>
-              <MagnifyingGlassIcon class="h-3.5 w-3.5 text-secondary" />
+              <MagnifyingGlassIcon style="width: 0.875rem; height: 0.875rem; color: var(--oui-text-secondary)" />
             </template>
           </OuiInput>
 
           <!-- Tables section -->
-          <div class="mb-3">
-            <button
-              class="flex items-center gap-1 w-full text-left text-xs font-semibold text-secondary hover:text-primary py-1"
-              @click="showTables = !showTables"
-            >
-              <ChevronRightIcon
-                class="h-3 w-3 transition-transform"
-                :class="{ 'rotate-90': showTables }"
-              />
-              Tables ({{ filteredTables.length }})
-            </button>
-            <div v-if="showTables" class="ml-2">
+          <OuiCollapsible v-model:open="showTables" style="margin-bottom: 0.75rem">
+            <template #trigger>
+              <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
+                <OuiText size="xs" weight="semibold" color="secondary">
+                  Tables ({{ filteredTables.length }})
+                </OuiText>
+              </OuiFlex>
+            </template>
+            <div class="ml-2">
               <div v-for="table in filteredTables" :key="table.name" class="mb-0.5">
                 <button
-                  class="flex items-center gap-1.5 w-full text-left px-2 py-1 text-xs rounded hover:bg-interactive-hover transition-colors group"
-                  :class="{
-                    'bg-primary/10 text-primary': selectedTableName === table.name,
-                  }"
+                  class="flex items-center gap-1.5 w-full text-left py-1 px-2 text-xs rounded transition-colors border-none cursor-pointer"
+                  :class="selectedTableName === table.name ? 'bg-primary/10 text-primary' : 'bg-transparent hover:bg-surface-hover'"
                   @click="selectTable(table)"
-                  @contextmenu.prevent="showTableContextMenu($event, table)"
+                  @contextmenu.prevent="openContextMenu($event, table)"
                 >
                   <ChevronRightIcon
-                    class="h-3 w-3 shrink-0 transition-transform"
+                    class="w-3 h-3 shrink-0 transition-transform"
                     :class="{ 'rotate-90': expandedTables.has(table.name) }"
                     @click.stop="toggleTableExpand(table.name)"
                   />
-                  <TableCellsIcon class="h-3.5 w-3.5 shrink-0 text-secondary" />
-                  <span class="truncate flex-1">{{ table.name }}</span>
-                  <span class="text-secondary text-[10px] opacity-0 group-hover:opacity-100">
-                    {{ Number(table.rowCount) }}
-                  </span>
+                  <TableCellsIcon class="w-3.5 h-3.5 shrink-0 text-secondary" />
+                  <span class="flex-1 truncate">{{ table.name }}</span>
+                  <OuiText size="xs" color="secondary">{{ Number(table.rowCount) }}</OuiText>
                 </button>
+
                 <!-- Expanded columns -->
-                <div
-                  v-if="expandedTables.has(table.name)"
-                  class="ml-6 border-l border-border-default/50 pl-2"
-                >
-                  <div
-                    v-for="col in table.columns"
-                    :key="col.name"
-                    class="flex items-center gap-1.5 py-0.5 text-[11px]"
-                  >
-                    <span
-                      v-if="col.isPrimaryKey"
-                      class="text-warning font-bold"
-                      title="Primary Key"
-                    >PK</span>
-                    <span
-                      v-else-if="isForeignKey(table, col.name)"
-                      class="text-info font-bold"
-                      title="Foreign Key"
-                    >FK</span>
+                <div v-if="expandedTables.has(table.name)" class="ml-6 border-l border-border-default pl-2">
+                  <OuiFlex v-for="col in table.columns" :key="col.name" align="center" gap="xs" class="py-0.5 text-[11px]">
+                    <span v-if="col.isPrimaryKey" class="text-warning font-bold" title="Primary Key">PK</span>
+                    <span v-else-if="isForeignKey(table, col.name)" class="text-info font-bold" title="Foreign Key">FK</span>
                     <span v-else class="w-4" />
                     <span class="truncate">{{ col.name }}</span>
-                    <span class="text-secondary ml-auto text-[10px]">{{ col.dataType }}</span>
-                    <span
-                      v-if="col.isNullable"
-                      class="text-secondary text-[9px]"
-                      title="Nullable"
-                    >?</span>
-                  </div>
+                    <OuiText size="xs" color="secondary" class="ml-auto">{{ col.dataType }}</OuiText>
+                    <span v-if="col.isNullable" class="text-[9px] text-secondary" title="Nullable">?</span>
+                  </OuiFlex>
                 </div>
               </div>
             </div>
-          </div>
+
+          </OuiCollapsible>
+
+          <!-- Single context menu for all tables (outside collapsible) -->
+          <OuiMenu v-model:open="contextMenuOpen">
+            <template #trigger>
+              <button
+                ref="contextMenuTriggerRef"
+                type="button"
+                style="position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px; z-index: -1;"
+                @click.stop
+              />
+            </template>
+            <div>
+              <OuiMenuItem value="data" @select="handleTableAction('data')">
+                <TableCellsIcon class="w-3.5 h-3.5 text-secondary" />
+                View Data
+              </OuiMenuItem>
+              <OuiMenuItem value="structure" @select="handleTableAction('structure')">
+                <WrenchIcon class="w-3.5 h-3.5 text-secondary" />
+                Edit Structure
+              </OuiMenuItem>
+              <OuiMenuItem value="ddl" @select="handleTableAction('ddl')">
+                <CodeBracketIcon class="w-3.5 h-3.5 text-secondary" />
+                View DDL
+              </OuiMenuItem>
+              <OuiMenuSeparator />
+              <OuiMenuItem value="rename" @select="handleTableAction('rename')">
+                <PencilIcon class="w-3.5 h-3.5 text-secondary" />
+                Rename Table
+              </OuiMenuItem>
+              <OuiMenuItem value="truncate" @select="handleTableAction('truncate')">
+                <ExclamationTriangleIcon class="w-3.5 h-3.5 text-warning" />
+                <span class="text-warning">Truncate Table</span>
+              </OuiMenuItem>
+              <OuiMenuItem value="drop" @select="handleTableAction('drop')">
+                <TrashIcon class="w-3.5 h-3.5 text-danger" />
+                <span class="text-danger">Drop Table</span>
+              </OuiMenuItem>
+            </div>
+          </OuiMenu>
 
           <!-- Views section -->
-          <div v-if="schemaViews.length > 0" class="mb-3">
-            <button
-              class="flex items-center gap-1 w-full text-left text-xs font-semibold text-secondary hover:text-primary py-1"
-              @click="showViews = !showViews"
-            >
-              <ChevronRightIcon
-                class="h-3 w-3 transition-transform"
-                :class="{ 'rotate-90': showViews }"
-              />
-              Views ({{ schemaViews.length }})
-            </button>
-            <div v-if="showViews" class="ml-2">
+          <OuiCollapsible v-if="schemaViews.length > 0" v-model:open="showViews" style="margin-bottom: 0.75rem">
+            <template #trigger>
+              <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
+                <OuiText size="xs" weight="semibold" color="secondary">
+                  Views ({{ schemaViews.length }})
+                </OuiText>
+              </OuiFlex>
+            </template>
+            <div style="margin-left: 0.5rem">
               <div
                 v-for="view in schemaViews"
                 :key="view.name"
-                class="flex items-center gap-1.5 px-2 py-1 text-xs text-secondary"
+                style="display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--oui-text-secondary)"
               >
-                <EyeIcon class="h-3.5 w-3.5 shrink-0" />
-                <span class="truncate">{{ view.name }}</span>
+                <EyeIcon style="width: 0.875rem; height: 0.875rem; flex-shrink: 0" />
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ view.name }}</span>
               </div>
             </div>
-          </div>
+          </OuiCollapsible>
 
           <!-- Functions section -->
-          <div v-if="schemaFunctions.length > 0">
-            <button
-              class="flex items-center gap-1 w-full text-left text-xs font-semibold text-secondary hover:text-primary py-1"
-              @click="showFunctions = !showFunctions"
-            >
-              <ChevronRightIcon
-                class="h-3 w-3 transition-transform"
-                :class="{ 'rotate-90': showFunctions }"
-              />
-              Functions ({{ schemaFunctions.length }})
-            </button>
-            <div v-if="showFunctions" class="ml-2">
+          <OuiCollapsible v-if="schemaFunctions.length > 0" v-model:open="showFunctions">
+            <template #trigger>
+              <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
+                <OuiText size="xs" weight="semibold" color="secondary">
+                  Functions ({{ schemaFunctions.length }})
+                </OuiText>
+              </OuiFlex>
+            </template>
+            <div style="margin-left: 0.5rem">
               <div
                 v-for="fn in schemaFunctions"
                 :key="fn.name"
-                class="flex items-center gap-1.5 px-2 py-1 text-xs text-secondary"
+                style="display: flex; align-items: center; gap: 0.375rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--oui-text-secondary)"
               >
-                <CodeBracketIcon class="h-3.5 w-3.5 shrink-0" />
-                <span class="truncate">{{ fn.name }}</span>
-                <span class="ml-auto text-[10px]">{{ fn.returnType }}</span>
+                <CodeBracketIcon style="width: 0.875rem; height: 0.875rem; flex-shrink: 0" />
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ fn.name }}</span>
+                <span style="margin-left: auto; font-size: 0.625rem">{{ fn.returnType }}</span>
               </div>
             </div>
-          </div>
+          </OuiCollapsible>
         </div>
       </div>
 
       <!-- Resize handle -->
       <div
-        class="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 transition-colors shrink-0"
+        style="width: 4px; cursor: col-resize; background: transparent; flex-shrink: 0; transition: background 0.15s"
         @mousedown="startTreeResize"
+        @mouseenter="($event.target as HTMLElement).style.background = 'var(--oui-primary-alpha-20)'"
+        @mouseleave="($event.target as HTMLElement).style.background = 'transparent'"
       />
 
       <!-- Right pane: Data / Structure -->
-      <div class="flex-1 overflow-hidden flex flex-col min-w-0">
+      <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0">
         <template v-if="selectedTableName">
-          <!-- Tab bar -->
-          <div class="flex items-center border-b border-border-default bg-surface-base px-3">
-            <button
-              v-for="tab in dataTabs"
-              :key="tab.id"
-              class="px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px"
-              :class="
-                activeDataTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-secondary hover:text-primary'
-              "
-              @click="activeDataTab = tab.id"
-            >
-              {{ tab.label }}
-            </button>
-            <div class="ml-auto flex items-center gap-2">
-              <OuiText size="xs" color="secondary">
-                {{ selectedTableName }}
-              </OuiText>
-            </div>
-          </div>
-
-          <!-- Data tab -->
-          <div v-if="activeDataTab === 'data'" class="flex-1 flex flex-col overflow-hidden">
-            <!-- Data toolbar -->
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-border-default bg-surface-base">
-              <OuiButton
-                variant="ghost"
-                color="secondary"
-                size="sm"
-                @click="loadTableData"
-                :loading="dataLoading"
-              >
-                <ArrowPathIcon class="h-3.5 w-3.5" />
-                Refresh
-              </OuiButton>
-              <OuiButton
-                v-if="pendingEdits.size > 0"
-                color="primary"
-                size="sm"
-                @click="saveEdits"
-                :loading="savingEdits"
-              >
-                Save {{ pendingEdits.size }} change(s)
-              </OuiButton>
-              <OuiButton
-                v-if="pendingEdits.size > 0"
-                variant="ghost"
-                color="secondary"
-                size="sm"
-                @click="discardEdits"
-              >
-                Discard
-              </OuiButton>
-              <div class="ml-auto flex items-center gap-2">
-                <OuiButton
-                  variant="ghost"
-                  color="success"
-                  size="sm"
-                  @click="startInsertRow"
-                >
-                  <PlusIcon class="h-3.5 w-3.5" />
-                  Add Row
-                </OuiButton>
-                <OuiText size="xs" color="secondary">
-                  {{ dataResponse?.totalRows ?? 0 }} total rows
-                </OuiText>
-              </div>
-            </div>
-
-            <!-- Data grid -->
-            <div class="flex-1 overflow-auto">
-              <table v-if="dataResponse" class="w-full text-xs">
-                <thead class="sticky top-0 z-10">
-                  <tr class="bg-surface-base border-b border-border-default">
-                    <th class="px-2 py-1.5 text-left w-8">#</th>
-                    <th
-                      v-for="col in dataResponse.columns"
-                      :key="col.name"
-                      class="px-2 py-1.5 text-left font-medium cursor-pointer hover:bg-interactive-hover select-none whitespace-nowrap"
-                      @click="toggleDataSort(col.name)"
-                    >
-                      <span>{{ col.name }}</span>
-                      <span class="text-secondary font-normal ml-1">{{ col.dataType }}</span>
-                      <span v-if="dataSortColumn === col.name" class="text-primary ml-0.5">
-                        {{ dataSortDirection === 'ASC' ? '↑' : '↓' }}
-                      </span>
-                    </th>
-                    <th class="px-2 py-1.5 w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- Insert row -->
-                  <tr v-if="insertingRow" class="bg-success/5 border-b border-border-default">
-                    <td class="px-2 py-1 text-secondary">+</td>
-                    <td
-                      v-for="col in dataResponse.columns"
-                      :key="col.name"
-                      class="px-2 py-0"
-                    >
-                      <input
-                        v-model="newRowValues[col.name]"
-                        class="w-full bg-transparent border-b border-border-default text-xs py-1 px-0 focus:outline-none focus:border-primary"
-                        :placeholder="col.name"
-                      />
-                    </td>
-                    <td class="px-2 py-1">
-                      <OuiFlex gap="xs">
-                        <button
-                          class="text-success hover:text-success/80 text-xs"
-                          @click="confirmInsertRow"
-                        >Save</button>
-                        <button
-                          class="text-secondary hover:text-danger text-xs"
-                          @click="insertingRow = false"
-                        >Cancel</button>
-                      </OuiFlex>
-                    </td>
-                  </tr>
-
-                  <!-- Data rows -->
-                  <tr
-                    v-for="(row, rowIdx) in dataRows"
-                    :key="rowIdx"
-                    class="border-b border-border-default/30 hover:bg-interactive-hover/30"
+          <OuiTabs v-model="activeDataTab" :tabs="dataTabs" content-class="p-0" style="flex: 1; display: flex; flex-direction: column">
+            <!-- Data tab -->
+            <template #data>
+              <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden">
+                <!-- Data toolbar -->
+                <OuiFlex align="center" gap="sm" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--oui-border-default); background: var(--oui-surface-base)">
+                  <OuiButton variant="ghost" color="secondary" size="sm" @click="loadTableData" :loading="dataLoading">
+                    <ArrowPathIcon style="width: 0.875rem; height: 0.875rem" />
+                    Refresh
+                  </OuiButton>
+                  <OuiButton
+                    v-if="pendingEdits.size > 0"
+                    color="primary"
+                    size="sm"
+                    @click="saveEdits"
+                    :loading="savingEdits"
                   >
-                    <td class="px-2 py-1 text-secondary font-mono">
-                      {{ (dataPage - 1) * dataPerPage + rowIdx + 1 }}
-                    </td>
-                    <td
-                      v-for="col in dataResponse.columns"
-                      :key="col.name"
-                      class="px-2 py-0 font-mono whitespace-nowrap max-w-xs"
-                      :class="{
-                        'bg-warning/10': hasEdit(rowIdx, col.name),
-                      }"
-                      @dblclick="startCellEdit(rowIdx, col.name, row[col.name])"
-                    >
+                    Save {{ pendingEdits.size }} change(s)
+                  </OuiButton>
+                  <OuiButton
+                    v-if="pendingEdits.size > 0"
+                    variant="ghost"
+                    color="secondary"
+                    size="sm"
+                    @click="discardEdits"
+                  >
+                    Discard
+                  </OuiButton>
+                  <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem">
+                    <OuiButton variant="ghost" color="success" size="sm" @click="startInsertRow">
+                      <PlusIcon style="width: 0.875rem; height: 0.875rem" />
+                      Add Row
+                    </OuiButton>
+                    <OuiText size="xs" color="secondary">
+                      {{ dataResponse?.totalRows ?? 0 }} total rows
+                    </OuiText>
+                  </div>
+                </OuiFlex>
+
+                <!-- Data grid -->
+                <div style="flex: 1; overflow: auto">
+                  <OuiTable
+                    v-if="dataResponse"
+                    :columns="tableColumns"
+                    :rows="dataRows"
+                    :sortable="true"
+                    :resizable="true"
+                    row-key="__rowIdx"
+                    empty-text="No data"
+                    @sort="handleTableSort"
+                  >
+                    <template #cell-__rowNum="{ index }">
+                      {{ (dataPage - 1) * dataPerPage + index + 1 }}
+                    </template>
+                    <template v-for="col in dataResponse.columns" :key="col.name" #[`cell-${col.name}`]="{ row, index }">
                       <!-- Editing -->
                       <input
-                        v-if="editingCell?.row === rowIdx && editingCell?.col === col.name"
-                        ref="editInput"
+                        v-if="editingCell && editingCell.row === index && editingCell.col === col.name"
                         v-model="editingCell.value"
-                        class="w-full bg-transparent border-b border-primary text-xs py-1 px-0 focus:outline-none"
+                        style="width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--oui-primary); font-size: 0.75rem; padding: 0.25rem 0; outline: none; font-family: monospace"
                         @keydown.enter="confirmCellEdit"
                         @keydown.escape="cancelCellEdit"
                         @blur="confirmCellEdit"
+                        autofocus
                       />
                       <!-- Display -->
                       <template v-else>
                         <span
                           v-if="row[col.name] === null"
-                          class="text-secondary italic"
+                          style="color: var(--oui-text-secondary); font-style: italic"
+                          @dblclick="startCellEdit(index, col.name, row[col.name])"
                         >NULL</span>
-                        <span v-else class="truncate block">{{ row[col.name] }}</span>
+                        <span
+                          v-else
+                          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; font-family: monospace"
+                          :style="{ background: hasEdit(index, col.name) ? 'var(--oui-warning-alpha-10)' : 'transparent' }"
+                          @dblclick="startCellEdit(index, col.name, row[col.name])"
+                        >{{ row[col.name] }}</span>
                       </template>
-                    </td>
-                    <td class="px-2 py-1">
-                      <button
-                        class="text-secondary hover:text-danger text-xs opacity-0 group-hover:opacity-100"
-                        title="Delete row"
-                        @click="deleteRow(rowIdx)"
-                      >
-                        <TrashIcon class="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </template>
+                    <template #cell-__actions="{ index }">
+                      <OuiButton variant="ghost" size="sm" color="danger" @click="deleteRow(index)" title="Delete row">
+                        <TrashIcon style="width: 0.875rem; height: 0.875rem" />
+                      </OuiButton>
+                    </template>
+                  </OuiTable>
 
-              <!-- Loading -->
-              <OuiStack v-if="dataLoading" align="center" gap="sm" class="py-8">
-                <OuiSpinner />
-                <OuiText color="secondary" size="xs">Loading data...</OuiText>
-              </OuiStack>
+                  <!-- Insert row form -->
+                  <div v-if="insertingRow && dataResponse" style="padding: 0.75rem; background: var(--oui-success-alpha-5); border-bottom: 1px solid var(--oui-border-default)">
+                    <OuiFlex align="center" gap="sm" wrap="wrap">
+                      <div v-for="col in dataResponse.columns" :key="col.name" style="min-width: 120px">
+                        <OuiInput
+                          v-model="newRowValues[col.name]"
+                          :placeholder="col.name"
+                          size="sm"
+                        />
+                      </div>
+                      <OuiButton color="success" size="sm" @click="confirmInsertRow">Save</OuiButton>
+                      <OuiButton variant="ghost" size="sm" @click="insertingRow = false">Cancel</OuiButton>
+                    </OuiFlex>
+                  </div>
 
-              <!-- No data -->
-              <OuiStack
-                v-else-if="!dataResponse || dataRows.length === 0"
-                align="center"
-                gap="sm"
-                class="py-8"
-              >
-                <OuiText color="secondary" size="sm">No data</OuiText>
-              </OuiStack>
-            </div>
+                  <!-- Loading -->
+                  <OuiStack v-if="dataLoading" align="center" gap="sm" style="padding: 2rem">
+                    <OuiSpinner />
+                    <OuiText color="secondary" size="xs">Loading data...</OuiText>
+                  </OuiStack>
+                </div>
 
-            <!-- Pagination -->
-            <div
-              v-if="dataResponse && dataResponse.totalRows > dataPerPage"
-              class="flex items-center justify-between px-3 py-2 border-t border-border-default bg-surface-base"
-            >
-              <OuiFlex gap="sm" align="center">
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  :disabled="dataPage <= 1"
-                  @click="dataPage--; loadTableData()"
+                <!-- Pagination -->
+                <OuiFlex
+                  v-if="dataResponse && dataResponse.totalRows > dataPerPage"
+                  justify="between"
+                  align="center"
+                  style="padding: 0.5rem 0.75rem; border-top: 1px solid var(--oui-border-default); background: var(--oui-surface-base)"
                 >
-                  Previous
-                </OuiButton>
-                <OuiText size="xs" color="secondary">
-                  Page {{ dataPage }} of {{ Math.ceil(dataResponse.totalRows / dataPerPage) }}
-                </OuiText>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  :disabled="dataPage >= Math.ceil(dataResponse.totalRows / dataPerPage)"
-                  @click="dataPage++; loadTableData()"
-                >
-                  Next
-                </OuiButton>
-              </OuiFlex>
-              <OuiFlex gap="sm" align="center">
-                <OuiText size="xs" color="secondary">Per page:</OuiText>
-                <select
-                  v-model.number="dataPerPage"
-                  class="text-xs bg-transparent border border-border-default rounded px-1 py-0.5"
-                  @change="dataPage = 1; loadTableData()"
-                >
-                  <option :value="25">25</option>
-                  <option :value="50">50</option>
-                  <option :value="100">100</option>
-                  <option :value="200">200</option>
-                </select>
-              </OuiFlex>
-            </div>
-          </div>
+                  <OuiFlex gap="sm" align="center">
+                    <OuiButton variant="ghost" size="sm" :disabled="dataPage <= 1" @click="dataPage--; loadTableData()">
+                      Previous
+                    </OuiButton>
+                    <OuiText size="xs" color="secondary">
+                      Page {{ dataPage }} of {{ Math.ceil(dataResponse.totalRows / dataPerPage) }}
+                    </OuiText>
+                    <OuiButton variant="ghost" size="sm" :disabled="dataPage >= Math.ceil(dataResponse.totalRows / dataPerPage)" @click="dataPage++; loadTableData()">
+                      Next
+                    </OuiButton>
+                  </OuiFlex>
+                  <OuiFlex gap="sm" align="center">
+                    <OuiText size="xs" color="secondary">Per page:</OuiText>
+                    <OuiSelect
+                      v-model="dataPerPage"
+                      :items="perPageOptions"
+                      size="sm"
+                      style="width: 80px"
+                      @update:model-value="dataPage = 1; loadTableData()"
+                    />
+                  </OuiFlex>
+                </OuiFlex>
+              </div>
+            </template>
 
-          <!-- Structure tab -->
-          <div v-else-if="activeDataTab === 'structure'" class="flex-1 overflow-hidden flex flex-col">
-            <!-- Structure toolbar -->
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-border-default bg-surface-base">
-              <OuiButton
-                variant="ghost"
-                color="primary"
-                size="sm"
-                @click="showAddColumn = true"
-              >
-                <PlusIcon class="h-3.5 w-3.5" />
-                Add Column
-              </OuiButton>
-            </div>
-            <div class="flex-1 overflow-auto p-4">
-              <table v-if="selectedTable" class="w-full text-xs">
-                <thead>
-                  <tr class="border-b border-border-default">
-                    <th class="px-3 py-2 text-left font-medium">Column</th>
-                    <th class="px-3 py-2 text-left font-medium">Type</th>
-                    <th class="px-3 py-2 text-left font-medium">Nullable</th>
-                    <th class="px-3 py-2 text-left font-medium">Default</th>
-                    <th class="px-3 py-2 text-left font-medium">PK</th>
-                    <th class="px-3 py-2 text-left font-medium">Unique</th>
-                    <th class="px-3 py-2 text-left font-medium w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="col in selectedTable.columns"
-                    :key="col.name"
-                    class="border-b border-border-default/30 hover:bg-interactive-hover/30 group"
+            <!-- Structure tab -->
+            <template #structure>
+              <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column">
+                <OuiFlex align="center" gap="sm" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--oui-border-default); background: var(--oui-surface-base)">
+                  <OuiButton variant="ghost" color="primary" size="sm" @click="showAddColumn = true">
+                    <PlusIcon style="width: 0.875rem; height: 0.875rem" />
+                    Add Column
+                  </OuiButton>
+                </OuiFlex>
+                <div style="flex: 1; overflow: auto; padding: 1rem">
+                  <OuiTable
+                    v-if="selectedTable"
+                    :columns="structureColumns"
+                    :rows="selectedTable.columns"
+                    row-key="name"
+                    empty-text="No columns"
                   >
-                    <td class="px-3 py-1.5 font-medium">{{ col.name }}</td>
-                    <td class="px-3 py-1.5 font-mono text-secondary">{{ col.dataType }}</td>
-                    <td class="px-3 py-1.5">
-                      <OuiBadge :color="col.isNullable ? 'secondary' : 'warning'" size="xs">
-                        {{ col.isNullable ? 'Yes' : 'No' }}
+                    <template #cell-name="{ value }">
+                      <OuiText weight="medium">{{ value }}</OuiText>
+                    </template>
+                    <template #cell-dataType="{ value }">
+                      <OuiText color="secondary" style="font-family: monospace">{{ value }}</OuiText>
+                    </template>
+                    <template #cell-isNullable="{ value }">
+                      <OuiBadge :color="value ? 'secondary' : 'warning'" size="xs">
+                        {{ value ? 'Yes' : 'No' }}
                       </OuiBadge>
-                    </td>
-                    <td class="px-3 py-1.5 text-secondary">{{ col.defaultValue || '—' }}</td>
-                    <td class="px-3 py-1.5">
-                      <OuiBadge v-if="col.isPrimaryKey" color="primary" size="xs">PK</OuiBadge>
-                      <span v-else class="text-secondary">—</span>
-                    </td>
-                    <td class="px-3 py-1.5">
-                      <OuiBadge v-if="col.isUnique" color="info" size="xs">Unique</OuiBadge>
-                      <span v-else class="text-secondary">—</span>
-                    </td>
-                    <td class="px-3 py-1.5">
-                      <button
-                        v-if="!col.isPrimaryKey"
-                        class="text-secondary hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                    </template>
+                    <template #cell-defaultValue="{ value }">
+                      <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                    </template>
+                    <template #cell-isPrimaryKey="{ value }">
+                      <OuiBadge v-if="value" color="primary" size="xs">PK</OuiBadge>
+                      <span v-else style="color: var(--oui-text-secondary)">—</span>
+                    </template>
+                    <template #cell-isUnique="{ value }">
+                      <OuiBadge v-if="value" color="info" size="xs">Unique</OuiBadge>
+                      <span v-else style="color: var(--oui-text-secondary)">—</span>
+                    </template>
+                    <template #cell-actions="{ row }">
+                      <OuiButton
+                        v-if="!row.isPrimaryKey"
+                        variant="ghost"
+                        size="sm"
+                        color="danger"
+                        @click="dropColumn(row.name)"
                         title="Drop column"
-                        @click="dropColumn(col.name)"
                       >
-                        <TrashIcon class="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+                        <TrashIcon style="width: 0.875rem; height: 0.875rem" />
+                      </OuiButton>
+                    </template>
+                  </OuiTable>
+                </div>
+              </div>
+            </template>
 
-          <!-- Indexes tab -->
-          <div v-else-if="activeDataTab === 'indexes'" class="flex-1 overflow-hidden flex flex-col">
-            <!-- Indexes toolbar -->
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-border-default bg-surface-base">
-              <OuiButton
-                variant="ghost"
-                color="primary"
-                size="sm"
-                @click="showCreateIndex = true"
-              >
-                <PlusIcon class="h-3.5 w-3.5" />
-                Create Index
-              </OuiButton>
-            </div>
-            <div class="flex-1 overflow-auto p-4">
-              <table v-if="selectedTable && selectedTable.indexes.length > 0" class="w-full text-xs">
-                <thead>
-                  <tr class="border-b border-border-default">
-                    <th class="px-3 py-2 text-left font-medium">Name</th>
-                    <th class="px-3 py-2 text-left font-medium">Columns</th>
-                    <th class="px-3 py-2 text-left font-medium">Type</th>
-                    <th class="px-3 py-2 text-left font-medium">Unique</th>
-                    <th class="px-3 py-2 text-left font-medium">Primary</th>
-                    <th class="px-3 py-2 text-left font-medium w-16">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="idx in selectedTable.indexes"
-                    :key="idx.name"
-                    class="border-b border-border-default/30 hover:bg-interactive-hover/30 group"
+            <!-- Indexes tab -->
+            <template #indexes>
+              <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column">
+                <OuiFlex align="center" gap="sm" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--oui-border-default); background: var(--oui-surface-base)">
+                  <OuiButton variant="ghost" color="primary" size="sm" @click="showCreateIndex = true">
+                    <PlusIcon style="width: 0.875rem; height: 0.875rem" />
+                    Create Index
+                  </OuiButton>
+                </OuiFlex>
+                <div style="flex: 1; overflow: auto; padding: 1rem">
+                  <OuiTable
+                    v-if="selectedTable && selectedTable.indexes.length > 0"
+                    :columns="indexColumns"
+                    :rows="selectedTable.indexes"
+                    row-key="name"
+                    empty-text="No indexes"
                   >
-                    <td class="px-3 py-1.5 font-medium">{{ idx.name }}</td>
-                    <td class="px-3 py-1.5 font-mono text-secondary">{{ idx.columnNames.join(', ') }}</td>
-                    <td class="px-3 py-1.5 text-secondary">{{ idx.type || '—' }}</td>
-                    <td class="px-3 py-1.5">
-                      <OuiBadge v-if="idx.isUnique" color="info" size="xs">Yes</OuiBadge>
-                      <span v-else class="text-secondary">No</span>
-                    </td>
-                    <td class="px-3 py-1.5">
-                      <OuiBadge v-if="idx.isPrimary" color="primary" size="xs">Yes</OuiBadge>
-                      <span v-else class="text-secondary">No</span>
-                    </td>
-                    <td class="px-3 py-1.5">
-                      <button
-                        v-if="!idx.isPrimary"
-                        class="text-secondary hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                    <template #cell-name="{ value }">
+                      <OuiText weight="medium">{{ value }}</OuiText>
+                    </template>
+                    <template #cell-columnNames="{ value }">
+                      <OuiText color="secondary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
+                    </template>
+                    <template #cell-type="{ value }">
+                      <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                    </template>
+                    <template #cell-isUnique="{ value }">
+                      <OuiBadge v-if="value" color="info" size="xs">Yes</OuiBadge>
+                      <span v-else style="color: var(--oui-text-secondary)">No</span>
+                    </template>
+                    <template #cell-isPrimary="{ value }">
+                      <OuiBadge v-if="value" color="primary" size="xs">Yes</OuiBadge>
+                      <span v-else style="color: var(--oui-text-secondary)">No</span>
+                    </template>
+                    <template #cell-actions="{ row }">
+                      <OuiButton
+                        v-if="!row.isPrimary"
+                        variant="ghost"
+                        size="sm"
+                        color="danger"
+                        @click="dropIndex(row.name)"
                         title="Drop index"
-                        @click="dropIndex(idx.name)"
                       >
-                        <TrashIcon class="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <OuiText v-else color="secondary" size="sm" class="py-4 text-center">
-                No indexes found
-              </OuiText>
-            </div>
-          </div>
+                        <TrashIcon style="width: 0.875rem; height: 0.875rem" />
+                      </OuiButton>
+                    </template>
+                  </OuiTable>
+                  <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                    No indexes found
+                  </OuiText>
+                </div>
+              </div>
+            </template>
 
-          <!-- Foreign Keys tab -->
-          <div v-else-if="activeDataTab === 'foreignKeys'" class="flex-1 overflow-auto p-4">
-            <table v-if="selectedTable && selectedTable.foreignKeys.length > 0" class="w-full text-xs">
-              <thead>
-                <tr class="border-b border-border-default">
-                  <th class="px-3 py-2 text-left font-medium">Name</th>
-                  <th class="px-3 py-2 text-left font-medium">From</th>
-                  <th class="px-3 py-2 text-left font-medium">To</th>
-                  <th class="px-3 py-2 text-left font-medium">On Delete</th>
-                  <th class="px-3 py-2 text-left font-medium">On Update</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="fk in selectedTable.foreignKeys"
-                  :key="fk.name"
-                  class="border-b border-border-default/30 hover:bg-interactive-hover/30"
+            <!-- Foreign Keys tab -->
+            <template #foreignKeys>
+              <div style="flex: 1; overflow: auto; padding: 1rem">
+                <OuiTable
+                  v-if="selectedTable && selectedTable.foreignKeys.length > 0"
+                  :columns="fkColumns"
+                  :rows="selectedTable.foreignKeys"
+                  row-key="name"
+                  empty-text="No foreign keys"
                 >
-                  <td class="px-3 py-1.5 font-medium">{{ fk.name }}</td>
-                  <td class="px-3 py-1.5 font-mono text-secondary">{{ fk.fromColumns.join(', ') }}</td>
-                  <td class="px-3 py-1.5 font-mono">
-                    <span class="text-primary">{{ fk.toTable }}</span>.{{ fk.toColumns.join(', ') }}
-                  </td>
-                  <td class="px-3 py-1.5 text-secondary">{{ fk.onDelete || '—' }}</td>
-                  <td class="px-3 py-1.5 text-secondary">{{ fk.onUpdate || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <OuiText v-else color="secondary" size="sm" class="py-4 text-center">
-              No foreign keys found
-            </OuiText>
-          </div>
+                  <template #cell-name="{ value }">
+                    <OuiText weight="medium">{{ value }}</OuiText>
+                  </template>
+                  <template #cell-fromColumns="{ value }">
+                    <OuiText color="secondary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
+                  </template>
+                  <template #cell-toTable="{ row }">
+                    <OuiText style="font-family: monospace">
+                      <span style="color: var(--oui-primary)">{{ row.toTable }}</span>.{{ row.toColumns.join(', ') }}
+                    </OuiText>
+                  </template>
+                  <template #cell-onDelete="{ value }">
+                    <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                  </template>
+                  <template #cell-onUpdate="{ value }">
+                    <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                  </template>
+                </OuiTable>
+                <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                  No foreign keys found
+                </OuiText>
+              </div>
+            </template>
 
-          <!-- DDL tab -->
-          <div v-else-if="activeDataTab === 'ddl'" class="flex-1 overflow-hidden flex flex-col">
-            <!-- DDL toolbar -->
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-border-default bg-surface-base">
-              <OuiButton
-                variant="ghost"
-                color="secondary"
-                size="sm"
-                @click="loadTableDDL"
-                :loading="loadingDDL"
-              >
-                <ArrowPathIcon class="h-3.5 w-3.5" />
-                Refresh
-              </OuiButton>
-              <OuiButton
-                variant="ghost"
-                color="secondary"
-                size="sm"
-                @click="copyDDL"
-                :disabled="!tableDDL"
-              >
-                <ClipboardDocumentIcon class="h-3.5 w-3.5" />
-                Copy
-              </OuiButton>
-            </div>
-            <div class="flex-1 overflow-auto p-4">
-              <OuiStack v-if="loadingDDL" align="center" gap="sm" class="py-8">
-                <OuiSpinner />
-                <OuiText color="secondary" size="xs">Loading DDL...</OuiText>
-              </OuiStack>
-              <pre
-                v-else-if="tableDDL"
-                class="text-xs font-mono bg-surface-base border border-border-default rounded-lg p-4 overflow-x-auto whitespace-pre-wrap"
-              >{{ tableDDL }}</pre>
-              <OuiText v-else color="secondary" size="sm" class="py-4 text-center">
-                No DDL available
-              </OuiText>
-            </div>
-          </div>
+            <!-- DDL tab -->
+            <template #ddl>
+              <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column">
+                <OuiFlex align="center" gap="sm" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--oui-border-default); background: var(--oui-surface-base)">
+                  <OuiButton variant="ghost" color="secondary" size="sm" @click="loadTableDDL" :loading="loadingDDL">
+                    <ArrowPathIcon style="width: 0.875rem; height: 0.875rem" />
+                    Refresh
+                  </OuiButton>
+                  <OuiButton variant="ghost" color="secondary" size="sm" @click="copyDDL" :disabled="!tableDDL">
+                    <ClipboardDocumentIcon style="width: 0.875rem; height: 0.875rem" />
+                    Copy
+                  </OuiButton>
+                </OuiFlex>
+                <div style="flex: 1; overflow: auto; padding: 1rem">
+                  <OuiStack v-if="loadingDDL" align="center" gap="sm" style="padding: 2rem">
+                    <OuiSpinner />
+                    <OuiText color="secondary" size="xs">Loading DDL...</OuiText>
+                  </OuiStack>
+                  <pre
+                    v-else-if="tableDDL"
+                    style="font-size: 0.75rem; font-family: monospace; background: var(--oui-surface-base); border: 1px solid var(--oui-border-default); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; white-space: pre-wrap"
+                  >{{ tableDDL }}</pre>
+                  <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                    No DDL available
+                  </OuiText>
+                </div>
+              </div>
+            </template>
+          </OuiTabs>
         </template>
 
         <!-- No table selected -->
-        <OuiStack v-else align="center" justify="center" class="flex-1 py-16">
-          <TableCellsIcon class="h-12 w-12 text-secondary/30" />
+        <OuiStack v-else align="center" justify="center" style="flex: 1; padding: 4rem 0">
+          <TableCellsIcon style="width: 3rem; height: 3rem; color: var(--oui-text-muted)" />
           <OuiText color="secondary" size="sm">Select a table to browse</OuiText>
         </OuiStack>
       </div>
     </div>
-
-    <!-- Context Menu -->
-    <Teleport to="body">
-      <div
-        v-if="contextMenu"
-        class="fixed z-50 bg-surface-overlay border border-border-default rounded-lg shadow-lg py-1 min-w-40"
-        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-        @click.stop
-      >
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover flex items-center gap-2"
-          @click="contextMenuAction('viewData')"
-        >
-          <TableCellsIcon class="h-3.5 w-3.5 text-secondary" />
-          View Data
-        </button>
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover flex items-center gap-2"
-          @click="contextMenuAction('editStructure')"
-        >
-          <WrenchIcon class="h-3.5 w-3.5 text-secondary" />
-          Edit Structure
-        </button>
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover flex items-center gap-2"
-          @click="contextMenuAction('viewDDL')"
-        >
-          <CodeBracketIcon class="h-3.5 w-3.5 text-secondary" />
-          View DDL
-        </button>
-        <div class="border-t border-border-default my-1" />
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover flex items-center gap-2"
-          @click="contextMenuAction('rename')"
-        >
-          <PencilIcon class="h-3.5 w-3.5 text-secondary" />
-          Rename Table
-        </button>
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover text-warning flex items-center gap-2"
-          @click="contextMenuAction('truncate')"
-        >
-          <ExclamationTriangleIcon class="h-3.5 w-3.5" />
-          Truncate Table
-        </button>
-        <button
-          class="w-full text-left px-3 py-1.5 text-xs hover:bg-interactive-hover text-danger flex items-center gap-2"
-          @click="contextMenuAction('drop')"
-        >
-          <TrashIcon class="h-3.5 w-3.5" />
-          Drop Table
-        </button>
-      </div>
-    </Teleport>
 
     <!-- Add Column Dialog -->
     <OuiDialog v-model:open="showAddColumn" title="Add Column" size="sm">
@@ -673,48 +516,15 @@
           <OuiInput v-model="newColumn.name" placeholder="column_name" />
         </OuiFormField>
         <OuiFormField label="Data Type" required>
-          <select
+          <OuiSelect
             v-model="newColumn.dataType"
-            class="w-full bg-surface-base border border-border-default rounded-md px-3 py-2 text-sm"
-          >
-            <optgroup label="String">
-              <option value="varchar(255)">varchar(255)</option>
-              <option value="text">text</option>
-              <option value="char(1)">char(1)</option>
-              <option value="uuid">uuid</option>
-            </optgroup>
-            <optgroup label="Numeric">
-              <option value="integer">integer</option>
-              <option value="bigint">bigint</option>
-              <option value="smallint">smallint</option>
-              <option value="decimal">decimal</option>
-              <option value="numeric">numeric</option>
-              <option value="real">real</option>
-              <option value="double precision">double precision</option>
-            </optgroup>
-            <optgroup label="Date/Time">
-              <option value="timestamp">timestamp</option>
-              <option value="timestamptz">timestamptz</option>
-              <option value="date">date</option>
-              <option value="time">time</option>
-            </optgroup>
-            <optgroup label="Other">
-              <option value="boolean">boolean</option>
-              <option value="jsonb">jsonb</option>
-              <option value="json">json</option>
-              <option value="bytea">bytea</option>
-            </optgroup>
-          </select>
+            :items="columnTypeOptions"
+            placeholder="Select type"
+          />
         </OuiFormField>
         <OuiFlex gap="md">
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" v-model="newColumn.isNullable" class="rounded" />
-            Nullable
-          </label>
-          <label class="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" v-model="newColumn.isUnique" class="rounded" />
-            Unique
-          </label>
+          <OuiCheckbox v-model="newColumn.isNullable">Nullable</OuiCheckbox>
+          <OuiCheckbox v-model="newColumn.isUnique">Unique</OuiCheckbox>
         </OuiFlex>
         <OuiFormField label="Default Value">
           <OuiInput v-model="newColumn.defaultValue" placeholder="NULL" />
@@ -733,35 +543,25 @@
           <OuiInput v-model="newIndex.name" :placeholder="`idx_${selectedTableName}_`" />
         </OuiFormField>
         <OuiFormField label="Columns" required>
-          <div class="space-y-1 max-h-40 overflow-y-auto border border-border-default rounded-md p-2">
-            <label
+          <div style="max-height: 160px; overflow-y: auto; border: 1px solid var(--oui-border-default); border-radius: 0.375rem; padding: 0.5rem">
+            <OuiCheckbox
               v-for="col in selectedTable?.columns || []"
               :key="col.name"
-              class="flex items-center gap-2 text-sm cursor-pointer py-0.5 hover:bg-interactive-hover px-1 rounded"
+              :model-value="newIndex.columnNames.includes(col.name)"
+              @update:model-value="toggleIndexColumn(col.name)"
+              style="display: block; padding: 0.25rem 0"
             >
-              <input
-                type="checkbox"
-                :checked="newIndex.columnNames.includes(col.name)"
-                @change="toggleIndexColumn(col.name)"
-                class="rounded"
-              />
-              <span>{{ col.name }}</span>
-              <span class="text-secondary text-xs ml-auto">{{ col.dataType }}</span>
-            </label>
+              {{ col.name }} <span style="color: var(--oui-text-secondary); font-size: 0.75rem; margin-left: 0.5rem">{{ col.dataType }}</span>
+            </OuiCheckbox>
           </div>
         </OuiFormField>
-        <label class="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" v-model="newIndex.isUnique" class="rounded" />
-          Unique Index
-        </label>
+        <OuiCheckbox v-model="newIndex.isUnique">Unique Index</OuiCheckbox>
       </OuiStack>
       <template #footer>
         <OuiButton variant="ghost" @click="showCreateIndex = false">Cancel</OuiButton>
-        <OuiButton
-          color="primary"
-          @click="createIndex"
-          :disabled="!newIndex.name || newIndex.columnNames.length === 0"
-        >Create Index</OuiButton>
+        <OuiButton color="primary" @click="createIndex" :disabled="!newIndex.name || newIndex.columnNames.length === 0">
+          Create Index
+        </OuiButton>
       </template>
     </OuiDialog>
 
@@ -804,14 +604,15 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentIcon,
 } from "@heroicons/vue/24/outline";
-import { ref, computed, onMounted, onUnmounted, nextTick, toRef, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, toRef, watch, nextTick } from "vue";
 import { DatabaseService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
 import { useDialog } from "~/composables/useDialog";
-import { useDatabaseSchema, type SchemaTable } from "~/composables/useDatabaseSchema";
+import { useDatabaseSchema, type SchemaTable, type SchemaColumn, type SchemaForeignKey } from "~/composables/useDatabaseSchema";
 import ErrorAlert from "~/components/ErrorAlert.vue";
+import type { TableColumn } from "~/components/oui/Table.vue";
 
 const props = defineProps<{
   databaseId: string;
@@ -841,6 +642,9 @@ const showViews = ref(false);
 const showFunctions = ref(false);
 const expandedTables = ref(new Set<string>());
 const selectedTableName = ref<string | null>(null);
+const contextMenuTable = ref<SchemaTable | null>(null);
+const contextMenuOpen = ref(false);
+const contextMenuTriggerRef = ref<HTMLElement | null>(null);
 
 // Tree pane resize
 const treePaneWidth = ref(260);
@@ -869,7 +673,64 @@ function stopTreeResize() {
   document.removeEventListener("mouseup", stopTreeResize);
 }
 
-// Data tab state
+// Context menu
+function openContextMenu(e: MouseEvent, table: SchemaTable) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  contextMenuTable.value = table;
+
+  // Position the hidden trigger at the click location (matching TreeNode pattern)
+  if (contextMenuTriggerRef.value) {
+    contextMenuTriggerRef.value.style.position = 'fixed';
+    contextMenuTriggerRef.value.style.left = `${e.clientX}px`;
+    contextMenuTriggerRef.value.style.top = `${e.clientY}px`;
+    contextMenuTriggerRef.value.style.width = '1px';
+    contextMenuTriggerRef.value.style.height = '1px';
+    contextMenuTriggerRef.value.style.opacity = '0';
+    contextMenuTriggerRef.value.style.pointerEvents = 'none';
+    contextMenuTriggerRef.value.style.zIndex = '-1';
+  }
+
+  // Open menu on next tick to ensure DOM is updated
+  nextTick(() => {
+    contextMenuOpen.value = true;
+  });
+}
+
+function handleTableAction(action: string) {
+  const table = contextMenuTable.value;
+  if (!table) return;
+
+  // Close the menu
+  contextMenuOpen.value = false;
+
+  switch (action) {
+    case "data":
+      selectTable(table);
+      activeDataTab.value = "data";
+      break;
+    case "structure":
+      selectTable(table);
+      activeDataTab.value = "structure";
+      break;
+    case "ddl":
+      selectTable(table);
+      activeDataTab.value = "ddl";
+      break;
+    case "rename":
+      openRenameDialog(table);
+      break;
+    case "truncate":
+      truncateSelectedTable(table);
+      break;
+    case "drop":
+      dropSelectedTable(table);
+      break;
+  }
+}
+
+// Tabs
 const dataTabs = [
   { id: "data", label: "Data" },
   { id: "structure", label: "Structure" },
@@ -878,9 +739,6 @@ const dataTabs = [
   { id: "ddl", label: "DDL" },
 ];
 const activeDataTab = ref("data");
-
-// Context menu
-const contextMenu = ref<{ x: number; y: number; table: SchemaTable } | null>(null);
 
 // DDL state
 const tableDDL = ref<string>("");
@@ -898,6 +756,29 @@ const newColumn = ref({
   defaultValue: "",
   isUnique: false,
 });
+
+// Column type options for OuiSelect
+const columnTypeOptions = [
+  { label: "varchar(255)", value: "varchar(255)" },
+  { label: "text", value: "text" },
+  { label: "char(1)", value: "char(1)" },
+  { label: "uuid", value: "uuid" },
+  { label: "integer", value: "integer" },
+  { label: "bigint", value: "bigint" },
+  { label: "smallint", value: "smallint" },
+  { label: "decimal", value: "decimal" },
+  { label: "numeric", value: "numeric" },
+  { label: "real", value: "real" },
+  { label: "double precision", value: "double precision" },
+  { label: "timestamp", value: "timestamp" },
+  { label: "timestamptz", value: "timestamptz" },
+  { label: "date", value: "date" },
+  { label: "time", value: "time" },
+  { label: "boolean", value: "boolean" },
+  { label: "jsonb", value: "jsonb" },
+  { label: "json", value: "json" },
+  { label: "bytea", value: "bytea" },
+];
 
 // Create index dialog
 const showCreateIndex = ref(false);
@@ -920,6 +801,14 @@ const dataPerPage = ref(50);
 const dataSortColumn = ref<string | null>(null);
 const dataSortDirection = ref<"ASC" | "DESC">("ASC");
 
+// Per page options for OuiSelect
+const perPageOptions = [
+  { label: "25", value: 25 },
+  { label: "50", value: 50 },
+  { label: "100", value: 100 },
+  { label: "200", value: 200 },
+];
+
 // Inline editing
 const editingCell = ref<{ row: number; col: string; value: string } | null>(null);
 const pendingEdits = ref(new Map<string, { rowIdx: number; col: string; oldValue: any; newValue: string }>());
@@ -932,13 +821,61 @@ const newRowValues = ref<Record<string, string>>({});
 const filteredTables = computed(() => {
   if (!searchQuery.value) return schemaTables.value;
   const q = searchQuery.value.toLowerCase();
-  return schemaTables.value.filter((t) => t.name.toLowerCase().includes(q));
+  return schemaTables.value.filter((t: SchemaTable) => t.name.toLowerCase().includes(q));
 });
 
 const selectedTable = computed(() => {
   if (!selectedTableName.value) return null;
-  return schemaTables.value.find((t) => t.name === selectedTableName.value) || null;
+  return schemaTables.value.find((t: SchemaTable) => t.name === selectedTableName.value) || null;
 });
+
+// Table columns for OuiTable
+const tableColumns = computed<TableColumn[]>(() => {
+  if (!dataResponse.value) return [];
+  const cols: TableColumn[] = [
+    { key: "__rowNum", label: "#", width: 50, sortable: false, resizable: false },
+  ];
+  for (const col of dataResponse.value.columns || []) {
+    cols.push({
+      key: col.name,
+      label: col.name,
+      minWidth: 80,
+      sortable: true,
+    });
+  }
+  cols.push({ key: "__actions", label: "", width: 50, sortable: false, resizable: false });
+  return cols;
+});
+
+// Structure table columns
+const structureColumns: TableColumn[] = [
+  { key: "name", label: "Column", minWidth: 120 },
+  { key: "dataType", label: "Type", minWidth: 100 },
+  { key: "isNullable", label: "Nullable", width: 80 },
+  { key: "defaultValue", label: "Default", minWidth: 100 },
+  { key: "isPrimaryKey", label: "PK", width: 60 },
+  { key: "isUnique", label: "Unique", width: 80 },
+  { key: "actions", label: "", width: 60 },
+];
+
+// Index table columns
+const indexColumns: TableColumn[] = [
+  { key: "name", label: "Name", minWidth: 150 },
+  { key: "columnNames", label: "Columns", minWidth: 150 },
+  { key: "type", label: "Type", width: 100 },
+  { key: "isUnique", label: "Unique", width: 80 },
+  { key: "isPrimary", label: "Primary", width: 80 },
+  { key: "actions", label: "", width: 60 },
+];
+
+// FK table columns
+const fkColumns: TableColumn[] = [
+  { key: "name", label: "Name", minWidth: 150 },
+  { key: "fromColumns", label: "From", minWidth: 120 },
+  { key: "toTable", label: "To", minWidth: 180 },
+  { key: "onDelete", label: "On Delete", width: 100 },
+  { key: "onUpdate", label: "On Update", width: 100 },
+];
 
 function toggleTableExpand(name: string) {
   if (expandedTables.value.has(name)) {
@@ -949,7 +886,7 @@ function toggleTableExpand(name: string) {
 }
 
 function isForeignKey(table: SchemaTable, colName: string): boolean {
-  return table.foreignKeys.some((fk) => fk.fromColumns.includes(colName));
+  return table.foreignKeys.some((fk: SchemaForeignKey) => fk.fromColumns.includes(colName));
 }
 
 function selectTable(table: SchemaTable) {
@@ -963,13 +900,13 @@ function selectTable(table: SchemaTable) {
   loadTableData();
 }
 
-// Data sort
-function toggleDataSort(colName: string) {
-  if (dataSortColumn.value === colName) {
-    dataSortDirection.value = dataSortDirection.value === "ASC" ? "DESC" : "ASC";
+// Handle OuiTable sort
+function handleTableSort(column: TableColumn, direction: "asc" | "desc" | null) {
+  if (direction === null) {
+    dataSortColumn.value = null;
   } else {
-    dataSortColumn.value = colName;
-    dataSortDirection.value = "ASC";
+    dataSortColumn.value = column.key;
+    dataSortDirection.value = direction.toUpperCase() as "ASC" | "DESC";
   }
   dataPage.value = 1;
   loadTableData();
@@ -992,8 +929,8 @@ async function loadTableData() {
     });
 
     dataResponse.value = res;
-    dataRows.value = (res.rows || []).map((row: any) => {
-      const obj: Record<string, any> = {};
+    dataRows.value = (res.rows || []).map((row: any, idx: number) => {
+      const obj: Record<string, any> = { __rowIdx: idx };
       for (const cell of row.cells || []) {
         obj[cell.columnName] = cell.isNull ? null : cell.value;
       }
@@ -1013,10 +950,6 @@ function startCellEdit(rowIdx: number, colName: string, currentValue: any) {
     col: colName,
     value: currentValue === null ? "" : String(currentValue),
   };
-  nextTick(() => {
-    const inputs = document.querySelectorAll<HTMLInputElement>('[ref="editInput"]');
-    inputs.forEach((el) => el.focus());
-  });
 }
 
 function confirmCellEdit() {
@@ -1028,11 +961,9 @@ function confirmCellEdit() {
   const oldValue = rowData[col];
   const newValue = value;
 
-  // Only record if changed
   if (String(oldValue ?? "") !== newValue) {
     const key = `${row}:${col}`;
     pendingEdits.value.set(key, { rowIdx: row, col, oldValue, newValue });
-    // Update display
     rowData[col] = newValue === "" ? null : newValue;
   }
 
@@ -1048,7 +979,6 @@ function hasEdit(rowIdx: number, colName: string): boolean {
 }
 
 function discardEdits() {
-  // Reload data to reset
   pendingEdits.value.clear();
   editingCell.value = null;
   loadTableData();
@@ -1059,21 +989,19 @@ async function saveEdits() {
   if (!selectedTableName.value || !organizationId.value || !selectedTable.value) return;
 
   savingEdits.value = true;
-  const pkColumns = selectedTable.value.columns.filter((c) => c.isPrimaryKey);
+  const pkColumns = selectedTable.value.columns.filter((c: SchemaColumn) => c.isPrimaryKey);
 
   try {
     for (const edit of pendingEdits.value.values()) {
       const row = dataRows.value[edit.rowIdx];
       if (!row) continue;
 
-      // Build where cells from PK
-      const whereCells = pkColumns.map((pk) => ({
+      const whereCells = pkColumns.map((pk: SchemaColumn) => ({
         columnName: pk.name,
         value: row[pk.name] !== null ? String(row[pk.name]) : undefined,
         isNull: row[pk.name] === null,
       }));
 
-      // If no PK, use all original column values (less safe but works)
       if (whereCells.length === 0) {
         toast.error("Cannot save edits: table has no primary key");
         return;
@@ -1155,7 +1083,7 @@ async function deleteRow(rowIdx: number) {
   });
   if (!confirmed) return;
 
-  const pkColumns = selectedTable.value.columns.filter((c) => c.isPrimaryKey);
+  const pkColumns = selectedTable.value.columns.filter((c: SchemaColumn) => c.isPrimaryKey);
   if (pkColumns.length === 0) {
     toast.error("Cannot delete: table has no primary key");
     return;
@@ -1163,7 +1091,7 @@ async function deleteRow(rowIdx: number) {
 
   const row = dataRows.value[rowIdx];
   if (!row) return;
-  const whereCells = pkColumns.map((pk) => ({
+  const whereCells = pkColumns.map((pk: SchemaColumn) => ({
     columnName: pk.name,
     value: row[pk.name] !== null ? String(row[pk.name]) : undefined,
     isNull: row[pk.name] === null,
@@ -1180,47 +1108,6 @@ async function deleteRow(rowIdx: number) {
     loadTableData();
   } catch (err: any) {
     toast.error("Failed to delete row", err.message);
-  }
-}
-
-// Context menu
-function showTableContextMenu(e: MouseEvent, table: SchemaTable) {
-  contextMenu.value = { x: e.clientX, y: e.clientY, table };
-}
-
-function closeContextMenu() {
-  contextMenu.value = null;
-}
-
-function contextMenuAction(action: string) {
-  const table = contextMenu.value?.table;
-  if (!table) return;
-  closeContextMenu();
-
-  switch (action) {
-    case "viewData":
-      selectTable(table);
-      activeDataTab.value = "data";
-      break;
-    case "editStructure":
-      selectTable(table);
-      activeDataTab.value = "structure";
-      break;
-    case "viewDDL":
-      selectTable(table);
-      activeDataTab.value = "ddl";
-      break;
-    case "rename":
-      selectedTableName.value = table.name;
-      renameTableName.value = table.name;
-      showRenameTable.value = true;
-      break;
-    case "truncate":
-      truncateSelectedTable(table);
-      break;
-    case "drop":
-      dropSelectedTable(table);
-      break;
   }
 }
 
@@ -1244,14 +1131,12 @@ async function loadTableDDL() {
   }
 }
 
-// Load DDL when switching to DDL tab
 watch(activeDataTab, (tab) => {
   if (tab === "ddl" && selectedTableName.value) {
     loadTableDDL();
   }
 });
 
-// Copy DDL to clipboard
 async function copyDDL() {
   if (!tableDDL.value) return;
   try {
@@ -1262,9 +1147,14 @@ async function copyDDL() {
   }
 }
 
-// Create table dialog
 function openCreateTableDialog() {
   showCreateTable.value = true;
+}
+
+function openRenameDialog(table: SchemaTable) {
+  selectedTableName.value = table.name;
+  renameTableName.value = table.name;
+  showRenameTable.value = true;
 }
 
 // Add column
@@ -1467,7 +1357,6 @@ async function dropSelectedTable(table: SchemaTable) {
   }
 }
 
-// Toggle column in index selection
 function toggleIndexColumn(colName: string) {
   const idx = newIndex.value.columnNames.indexOf(colName);
   if (idx > -1) {
@@ -1479,13 +1368,11 @@ function toggleIndexColumn(colName: string) {
 
 onMounted(() => {
   fetchSchema();
-  document.addEventListener("click", closeContextMenu);
 });
 
-// Cleanup resize listeners on unmount
 onUnmounted(() => {
   document.removeEventListener("mousemove", onTreeResize);
   document.removeEventListener("mouseup", stopTreeResize);
-  document.removeEventListener("click", closeContextMenu);
 });
 </script>
+

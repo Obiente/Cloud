@@ -2,6 +2,7 @@ import { ref, type Ref } from "vue";
 import { DatabaseService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
+import { makeAlterTableOperation } from "~/composables/alterTableOperationHelper";
 
 export interface SchemaTable {
   name: string;
@@ -246,16 +247,13 @@ export function useDatabaseSchema(databaseId: Ref<string>) {
   ) {
     if (!organizationId.value || !databaseId.value) return;
 
-    // Ensure each operation has $typeName for protobuf compatibility
-    const typedOperations = operations.map(op => ({
-      $typeName: "obiente.cloud.databases.v1.AlterTableOperation" as const,
-      ...op
-    }));
+    // Transform operations using the helper to ensure proper protobuf types
+    const typedOperations = operations.map(op => makeAlterTableOperation(op));
     await dbClient.alterTable({
       organizationId: organizationId.value,
       databaseId: databaseId.value,
       tableName,
-      operations,
+      operations: typedOperations,
     });
     await refresh();
   }
