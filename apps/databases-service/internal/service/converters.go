@@ -64,26 +64,25 @@ func dbConnectionToProto(conn *database.DatabaseConnection, databaseID string) *
 		Port:           conn.Port,
 		DatabaseName:   conn.DatabaseName,
 		Username:       conn.Username,
-		Password:       conn.Password, // Only returned on creation/reset
 		SslRequired:    conn.SSLRequired,
 		SslCertificate: conn.SSLCertificate,
 	}
 
 	// Generate connection strings based on database type
 	// This would need to be determined from the database instance type
-	// For now, we'll generate a generic PostgreSQL URL
-	proto.PostgresqlUrl = fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=require",
-		conn.Username, conn.Password, conn.Host, conn.Port, conn.DatabaseName)
-	proto.MysqlUrl = fmt.Sprintf("mysql://%s:%s@%s:%d/%s?ssl-mode=REQUIRED",
-		conn.Username, conn.Password, conn.Host, conn.Port, conn.DatabaseName)
-	proto.MongodbUrl = fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?ssl=true",
-		conn.Username, conn.Password, conn.Host, conn.Port, conn.DatabaseName)
-	proto.RedisUrl = fmt.Sprintf("redis://:%s@%s:%d",
-		conn.Password, conn.Host, conn.Port)
+	// For now, we'll generate a generic PostgreSQL URL without embedding the password
+	proto.PostgresqlUrl = fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=require",
+		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+	proto.MysqlUrl = fmt.Sprintf("mysql://%s@%s:%d/%s?ssl-mode=REQUIRED",
+		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+	proto.MongodbUrl = fmt.Sprintf("mongodb://%s@%s:%d/%s?ssl=true",
+		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+	proto.RedisUrl = fmt.Sprintf("redis://%s:%d",
+		conn.Host, conn.Port)
 
 	proto.ConnectionInstructions = fmt.Sprintf(
-		"Connect to your database using:\nHost: %s\nPort: %d\nDatabase: %s\nUsername: %s\nPassword: %s\n\nSSL is required for secure connections.",
-		conn.Host, conn.Port, conn.DatabaseName, conn.Username, conn.Password,
+		"Connect to your database using:\nHost: %s\nPort: %d\nDatabase: %s\nUsername: %s\n\nSSL is required for secure connections.",
+		conn.Host, conn.Port, conn.DatabaseName, conn.Username,
 	)
 
 	return proto
