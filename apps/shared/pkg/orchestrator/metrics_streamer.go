@@ -597,20 +597,62 @@ func (ms *MetricsStreamer) collectDatabaseStatsParallel(locations []database.Dat
 	deploymentMetrics, failed := ms.collectDeploymentStatsParallel(deploymentLikeLocations, false)
 
 	databaseMetrics := make([]LiveMetric, 0, len(deploymentMetrics))
-	for _, metric := range deploymentMetrics {
-		metric.ResourceType = "database"
 
-		_ = database.DB.Model(&database.DatabaseLocation{}).
-			Where("container_id = ?", metric.ContainerID).
-			Updates(map[string]interface{}{
-				"cpu_usage":    metric.CPUUsage,
-				"memory_usage": metric.MemoryUsage,
-				"updated_at":   time.Now(),
-			})
-
-		databaseMetrics = append(databaseMetrics, metric)
+	// Prepare data for a batched UPDATE using CASE expressions
+	if len(deploymentMetrics) == 0 {
+		return databaseMetrics, failed
 	}
 
+	var (
+		containerIDs []interface{}
+		args         []interface{}
+	)
+
+	var cpuCaseBuilder strings.Builder
+	var memCaseBuilder strings.Builder
+
+	cpuCaseBuilder.WriteString("cpu_usage = CASE container_id")
+	memCaseBuilder.WriteString("memory_usage = CASE container_id")
+
+	for _, metric := range deploymentMetrics {
+		metric.ResourceType = "database"
+		databaseMetrics = append(databaseMetrics, metric)
+
+		// Build CASE branches keyed by container_id
+		cpuCaseBuilder.WriteString(" WHEN ? THEN ?")
+		args = append(args, metric.ContainerID, metric.CPUUsage)
+
+		memCaseBuilder.WriteString(" WHEN ? THEN ?")
+		args = append(args, metric.ContainerID, metric.MemoryUsage)
+
+		containerIDs = append(containerIDs, metric.ContainerID)
+	}
+
+	cpuCaseBuilder.WriteString(" ELSE cpu_usage END")
+	memCaseBuilder.WriteString(" ELSE memory_usage END")
+
+	// Build the IN clause placeholders for container_id list
+	var inPlaceholdersBuilder strings.Builder
+	for i := range containerIDs {
+		if i > 0 {
+			inPlaceholdersBuilder.WriteString(", ")
+		}
+		inPlaceholdersBuilder.WriteString("?")
+	}
+
+	updateSQL := fmt.Sprintf(
+		"UPDATE database_locations SET %s, %s, updated_at = ? WHERE container_id IN (%s)",
+		cpuCaseBuilder.String(),
+		memCaseBuilder.String(),
+		inPlaceholdersBuilder.String(),
+	)
+
+	// Single timestamp for this batch
+	args = append(args, time.Now())
+	args = append(args, containerIDs...)
+
+	// Execute batched UPDATE; ignore error as in the original code
+	_ = database.DB.Exec(updateSQL, args...).Error
 	return databaseMetrics, failed
 }
 
