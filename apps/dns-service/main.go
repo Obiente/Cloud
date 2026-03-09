@@ -1065,8 +1065,8 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 		DatabaseType string
 	}
 	var databaseRows []databaseDNSRow
-	if err := database.DB.Table("databases").
-		Select("id as database_id, database_type").
+	if err := database.DB.Table("database_instances").
+		Select("id as database_id, type as database_type").
 		Where("deleted_at IS NULL").
 		Scan(&databaseRows).Error; err != nil {
 		log.Printf("[DNS Pusher] Failed to query databases: %v", err)
