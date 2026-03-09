@@ -118,17 +118,28 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 	_ = entrypoint // No longer used for Traefik routing
 
 	// Build environment variables for database initialization
-	env := []string{
-		fmt.Sprintf("POSTGRES_USER=%s", cfg.Username),
-		fmt.Sprintf("POSTGRES_PASSWORD=%s", cfg.Password),
-		fmt.Sprintf("POSTGRES_DB=%s", cfg.DatabaseID),
-		fmt.Sprintf("MYSQL_USER=%s", cfg.Username),
-		fmt.Sprintf("MYSQL_PASSWORD=%s", cfg.Password),
-		fmt.Sprintf("MYSQL_DATABASE=%s", cfg.DatabaseID),
-		fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", cfg.Password),
-		fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", cfg.Username),
-		fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", cfg.Password),
-		fmt.Sprintf("MONGO_INITDB_DATABASE=%s", cfg.DatabaseID),
+	env := []string{}
+
+	switch cfg.Type {
+	case "postgres", "postgresql":
+		env = append(env,
+			fmt.Sprintf("POSTGRES_USER=%s", cfg.Username),
+			fmt.Sprintf("POSTGRES_PASSWORD=%s", cfg.Password),
+			fmt.Sprintf("POSTGRES_DB=%s", cfg.DatabaseID),
+		)
+	case "mysql":
+		env = append(env,
+			fmt.Sprintf("MYSQL_USER=%s", cfg.Username),
+			fmt.Sprintf("MYSQL_PASSWORD=%s", cfg.Password),
+			fmt.Sprintf("MYSQL_DATABASE=%s", cfg.DatabaseID),
+			fmt.Sprintf("MYSQL_ROOT_PASSWORD=%s", cfg.Password),
+		)
+	case "mongo", "mongodb":
+		env = append(env,
+			fmt.Sprintf("MONGO_INITDB_ROOT_USERNAME=%s", cfg.Username),
+			fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", cfg.Password),
+			fmt.Sprintf("MONGO_INITDB_DATABASE=%s", cfg.DatabaseID),
+		)
 	}
 
 	// Create container using docker client
