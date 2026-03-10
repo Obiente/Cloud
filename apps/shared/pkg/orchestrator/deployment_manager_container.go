@@ -56,6 +56,26 @@ func unwrapShellC(cmd string) (string, bool) {
 	return "", false
 }
 
+func hasShellMetacharacters(cmd string) bool {
+	return strings.ContainsAny(cmd, "|&;<>()$`\n")
+}
+
+func buildStartCommandParts(raw string) (entrypoint []string, args []string) {
+	startCommand := normalizeStartCommand(raw)
+	if startCommand == "" {
+		return nil, nil
+	}
+
+	if !hasShellMetacharacters(startCommand) {
+		fields := strings.Fields(startCommand)
+		if len(fields) > 0 {
+			return nil, fields
+		}
+	}
+
+	return []string{"sh"}, []string{"-c", startCommand}
+}
+
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
@@ -331,9 +351,8 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 	// Override container CMD if start command is provided
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		startCommand := normalizeStartCommand(*config.StartCommand)
-		// Use sh -c to preserve working directory and handle relative paths
-		containerConfig.Cmd = []string{"sh", "-c", startCommand}
+		_, startArgs := buildStartCommandParts(*config.StartCommand)
+		containerConfig.Cmd = append([]string{}, startArgs...)
 	}
 
 	// Convert CPU shares to NanoCPUs for hard CPU limit
@@ -736,9 +755,12 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Override entrypoint if start command is provided (must come BEFORE image)
 	// docker service create format: [OPTIONS] IMAGE [COMMAND] [ARG...]
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		// Override image entrypoint to avoid inheriting shell wrappers like
-		// /bin/bash -c from build images, then run exactly one shell layer.
-		args = append(args, "--entrypoint", "sh")
+		entrypoint, _ := buildStartCommandParts(*config.StartCommand)
+		if len(entrypoint) > 0 {
+			// Override image entrypoint to avoid inheriting shell wrappers like
+			// /bin/bash -c from build images, then run exactly one shell layer.
+			args = append(args, "--entrypoint", entrypoint[0])
+		}
 	}
 
 	// Add image
@@ -746,8 +768,8 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 	// Add start command if provided (must come after image as COMMAND args)
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		startCommand := normalizeStartCommand(*config.StartCommand)
-		args = append(args, "-c", startCommand)
+		_, startArgs := buildStartCommandParts(*config.StartCommand)
+		args = append(args, startArgs...)
 	}
 
 	// Execute docker service create
@@ -1325,14 +1347,17 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Update start command when provided.
 	// Use an explicit sh entrypoint so image-level entrypoint wrappers do not nest.
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		startCommand := normalizeStartCommand(*config.StartCommand)
-		args = append(args, "--entrypoint", "sh")
-		// Mirror the working `docker service create ... IMAGE -c <cmd>` shape by
-		// providing shell arguments as distinct `--args` entries. Passing a single
-		// comma-joined value like `-c,<cmd>` makes BusyBox/Dash parse `-,...` as an
-		// invalid shell option during rollout tasks.
-		args = append(args, "--args", "-c")
-		args = append(args, "--args", startCommand)
+		entrypoint, startArgs := buildStartCommandParts(*config.StartCommand)
+		if len(entrypoint) > 0 {
+			args = append(args, "--entrypoint", entrypoint[0])
+		} else {
+			// Clear any previously forced shell entrypoint so direct executable
+			// commands like "./out" run using the image's normal process model.
+			args = append(args, "--entrypoint", "")
+		}
+		for _, arg := range startArgs {
+			args = append(args, "--args", arg)
+		}
 	}
 
 	// Add service name
