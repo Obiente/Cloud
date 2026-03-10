@@ -174,8 +174,9 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			// If SRV handling didn't find a match, continue to check other types
 		}
 
-		// Handle A record queries for deployments and game servers
+		// Handle A record queries for deployments, databases, and game servers
 		// Format: deploy-123.my.obiente.cloud (deployments)
+		// Format: db-123.my.obiente.cloud (databases)
 		// Format: gs-123.my.obiente.cloud (game servers)
 		if q.Qtype == dns.TypeA {
 			if s.handleAQuery(ctx, msg, domain, q) {
@@ -417,8 +418,9 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 	return false
 }
 
-// handleAQuery handles A record queries for deployments and game servers
+// handleAQuery handles A record queries for deployments, databases, and game servers
 // Format: deploy-123.my.obiente.cloud -> deploy-123 (deployments)
+// Format: db-123.my.obiente.cloud -> db-123 (databases)
 // Format: gs-123.my.obiente.cloud -> gs-123 (game servers)
 func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question) bool {
 	// Normalize domain - remove trailing dot if present
@@ -442,8 +444,74 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 		return s.handleGameServerAQuery(msg, domain, q, resourceID)
 	}
 
+	// Check if this is a managed database (db-123)
+	if strings.HasPrefix(resourceID, "db-") {
+		return s.handleDatabaseAQuery(msg, domain, q, resourceID)
+	}
+
 	// Otherwise, treat as deployment (deploy-123)
 	return s.handleDeploymentAQuery(ctx, msg, domain, q, resourceID)
+}
+
+// handleDatabaseAQuery handles A record queries for managed databases.
+// Format: db-123.my.obiente.cloud -> db-123
+func (s *DNSServer) handleDatabaseAQuery(msg *dns.Msg, domain string, q dns.Question, databaseID string) bool {
+	ips, err := database.GetDatabaseNodeIP(databaseID, s.nodeIPMap)
+	if err == nil && len(ips) > 0 {
+		for _, ip := range ips {
+			rr := &dns.A{
+				Hdr: dns.RR_Header{
+					Name:   q.Name,
+					Rrtype: dns.TypeA,
+					Class:  dns.ClassINET,
+					Ttl:    uint32(cacheTTL.Seconds()),
+				},
+				A: net.ParseIP(ip),
+			}
+			if rr.A == nil {
+				log.Printf("[DNS] Failed to parse IP for database %s: %s", databaseID, ip)
+				continue
+			}
+			msg.Answer = append(msg.Answer, rr)
+		}
+		if len(msg.Answer) > 0 {
+			log.Printf("[DNS] Resolved database %s via local database: %v", databaseID, ips)
+			return true
+		}
+	} else if err != nil {
+		log.Printf("[DNS] Failed to resolve database %s locally: %v", databaseID, err)
+	}
+
+	// Fallback to delegated records when local lookup fails.
+	domainNormalized := strings.TrimSuffix(domain, ".")
+	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "A")
+	if delegationErr == nil && delegatedRecord != nil {
+		var recordIPs []string
+		if err := json.Unmarshal([]byte(delegatedRecord.Records), &recordIPs); err == nil && len(recordIPs) > 0 {
+			for _, ip := range recordIPs {
+				rr := &dns.A{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+						Ttl:    uint32(delegatedRecord.TTL),
+					},
+					A: net.ParseIP(ip),
+				}
+				if rr.A == nil {
+					log.Printf("[DNS] Failed to parse delegated IP for database %s: %s", databaseID, ip)
+					continue
+				}
+				msg.Answer = append(msg.Answer, rr)
+			}
+			if len(msg.Answer) > 0 {
+				log.Printf("[DNS] Resolved database %s via delegated record", databaseID)
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // handleDeploymentAQuery handles A record queries for deployments
@@ -708,7 +776,7 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 	domainLower := strings.ToLower(domain)
 	isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
 	isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
-	
+
 	if !isMyObienteCloud && !isVerifiedCustomDomain {
 		http.Error(w, "Domain must be a *.my.obiente.cloud domain or a verified custom domain", http.StatusBadRequest)
 		return
@@ -858,7 +926,7 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 		domainLower := strings.ToLower(domain)
 		isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
 		isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
-		
+
 		if !isMyObienteCloud && !isVerifiedCustomDomain {
 			errors = append(errors, fmt.Sprintf("Invalid domain format: %s (must be *.my.obiente.cloud or a verified custom domain)", domain))
 			continue
@@ -912,7 +980,7 @@ func extractDomainFromCustomDomainEntry(entry string) string {
 // isVerifiedCustomDomain checks if a domain is a verified custom domain in any deployment
 func isVerifiedCustomDomain(domain string) bool {
 	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
-	
+
 	// Query all deployments to check for verified custom domains
 	var deployments []database.Deployment
 	if err := database.DB.Find(&deployments).Error; err != nil {
@@ -927,7 +995,7 @@ func isVerifiedCustomDomain(domain string) bool {
 				for _, customDomainEntry := range customDomains {
 					// Extract domain name from entry
 					entryDomain := extractDomainFromCustomDomainEntry(customDomainEntry)
-					
+
 					// Check if this is the domain we're looking for and if it's verified
 					if strings.ToLower(strings.TrimSuffix(entryDomain, ".")) == domain {
 						// Check if domain is verified
@@ -939,7 +1007,7 @@ func isVerifiedCustomDomain(domain string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -987,11 +1055,11 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	// Trust deployment_locations.status = 'running' as the source of truth
 	// Only filter out soft-deleted deployments
 	type deploymentDNSRow struct {
-		DeploymentID string
+		DeploymentID  string
 		CustomDomains string
 	}
 	var deploymentRows []deploymentDNSRow
-	
+
 	// Try case-insensitive status check first
 	if err := database.DB.Table("deployment_locations dl").
 		Select("DISTINCT dl.deployment_id, d.custom_domains").
@@ -1037,7 +1105,7 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 						for _, customDomainEntry := range customDomains {
 							// Extract domain name from entry (format: "domain.com" or "domain.com:verified" or "domain.com:token:abc123:verified")
 							domainName := extractDomainFromCustomDomainEntry(customDomainEntry)
-							
+
 							// Only create DNS records for verified domains
 							if strings.Contains(customDomainEntry, ":verified") {
 								records = append(records, map[string]interface{}{
@@ -1089,8 +1157,8 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 			}
 
 			if len(ips) > 0 {
-				// Create DNS record for database with standard my.obiente.cloud domain
-				dbDomain := fmt.Sprintf("db-%s.my.obiente.cloud", row.DatabaseID)
+				// Database IDs are already "db-*"; use the canonical domain directly.
+				dbDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DatabaseID)
 				records = append(records, map[string]interface{}{
 					"domain":      dbDomain,
 					"record_type": "A",
@@ -1243,10 +1311,10 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 			successCount = total
 		}
 	}
-	
+
 	totalCount, _ := response["total"].(float64)
 	errors, _ := response["errors"].([]interface{})
-	
+
 	if successCount > 0 {
 		// Store records locally so they appear in the dashboard
 		// Use the production API URL as the source_api to indicate these were pushed to production
@@ -1258,7 +1326,7 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 			if recordType == "" {
 				recordType = "A"
 			}
-			
+
 			// Handle records array - could be []string or []interface{} from JSON
 			var recordsArray []string
 			if recs, ok := record["records"].([]string); ok {
@@ -1271,29 +1339,29 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 					}
 				}
 			}
-			
+
 			recordTTL, _ := record["ttl"].(int64)
 			if recordTTL == 0 {
 				recordTTL = ttl
 			}
-			
+
 			if domain == "" || len(recordsArray) == 0 {
 				continue
 			}
-			
+
 			// Convert records to JSON
 			recordsJSON, err := json.Marshal(recordsArray)
 			if err != nil {
 				log.Printf("[DNS Pusher] Failed to marshal records for local storage %s: %v", domain, err)
 				continue
 			}
-			
+
 			// Store locally with empty organization_id and api_key_id (these are local records we pushed)
 			if err := database.UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, string(recordsJSON), localSourceAPI, "", "", recordTTL); err != nil {
 				log.Printf("[DNS Pusher] Failed to store record locally %s: %v", domain, err)
 			}
 		}
-		
+
 		if len(errors) > 0 {
 			log.Printf("[DNS Pusher] Note: Some errors occurred: %v", errors)
 		}

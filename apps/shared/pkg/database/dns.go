@@ -183,6 +183,43 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 	return ips, nil
 }
 
+// GetDatabaseNodeIP returns the node IPs for a managed database domain.
+// Database domains point to proxy/ingress node IPs and should resolve for any
+// provisioned (non-deleted) database.
+func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]string, error) {
+	var dbInstance DatabaseInstance
+	if err := DB.Where("id = ? AND deleted_at IS NULL", databaseID).First(&dbInstance).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("database %s not found", databaseID)
+		}
+		return nil, fmt.Errorf("failed to query database %s: %w", databaseID, err)
+	}
+
+	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
+		var node NodeMetadata
+		if err := DB.First(&node, "id = ?", *dbInstance.NodeID).Error; err == nil {
+			nodeRegion := node.Region
+			if nodeRegion != "" {
+				if ips, ok := nodeIPMap[nodeRegion]; ok && len(ips) > 0 {
+					return ips, nil
+				}
+			}
+		}
+	}
+
+	if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
+		return ips, nil
+	}
+
+	for _, ips := range nodeIPMap {
+		if len(ips) > 0 {
+			return ips, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no node IPs configured for database %s", databaseID)
+}
+
 // GetDeploymentRegion returns the region where a deployment is running
 func GetDeploymentRegion(deploymentID string) (string, error) {
 	// Get deployment locations

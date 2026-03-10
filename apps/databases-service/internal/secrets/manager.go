@@ -48,6 +48,12 @@ func NewSecretManager() (*SecretManager, error) {
 // EncryptPassword encrypts a password using AES-256-GCM for storage
 // Use this for database connection passwords that need to be retrieved
 func (sm *SecretManager) EncryptPassword(password string) (string, error) {
+	if sm == nil {
+		return "", fmt.Errorf("secret manager not initialized")
+	}
+	if len(sm.encryptionKey) == 0 {
+		return "", fmt.Errorf("encryption key is not configured")
+	}
 	if password == "" {
 		return "", fmt.Errorf("password cannot be empty")
 	}
@@ -73,6 +79,12 @@ func (sm *SecretManager) EncryptPassword(password string) (string, error) {
 
 // DecryptPassword decrypts a password encrypted with EncryptPassword
 func (sm *SecretManager) DecryptPassword(encrypted string) (string, error) {
+	if sm == nil {
+		return "", fmt.Errorf("secret manager not initialized")
+	}
+	if len(sm.encryptionKey) == 0 {
+		return "", fmt.Errorf("encryption key is not configured")
+	}
 	if encrypted == "" {
 		return "", fmt.Errorf("encrypted password cannot be empty")
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
 
@@ -148,11 +149,17 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 	// Generate new password
 	newPassword := generateRandomPassword(32)
 
-	// TODO: Actually reset the password in the database
-	// For now, just update the connection record with the encrypted password
-	encryptedPassword, err := s.secretManager.EncryptPassword(newPassword)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt password: %w", err))
+	// TODO: Actually reset the password in the database.
+	// For now, update the connection record and encrypt when available.
+	encryptedPassword := newPassword
+	if s.secretManager != nil {
+		if encrypted, encErr := s.secretManager.EncryptPassword(newPassword); encErr == nil {
+			encryptedPassword = encrypted
+		} else {
+			logger.Warn("Failed to encrypt reset password for %s: %v. Storing plaintext fallback.", req.Msg.GetDatabaseId(), encErr)
+		}
+	} else {
+		logger.Warn("Secret manager not configured for reset password on %s. Storing plaintext fallback.", req.Msg.GetDatabaseId())
 	}
 	conn.Password = encryptedPassword
 	if err := s.connRepo.Update(ctx, conn); err != nil {
