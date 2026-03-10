@@ -734,9 +734,10 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// docker service create format: [OPTIONS] IMAGE [COMMAND] [ARG...]
 	if config.StartCommand != nil && *config.StartCommand != "" {
 		startCommand := normalizeStartCommand(*config.StartCommand)
-		// Split the command into parts for proper argument handling
-		// Use sh -c to preserve working directory and handle relative paths
-		args = append(args, "sh", "-c", startCommand)
+		// Override image entrypoint to avoid inheriting shell wrappers like
+		// /bin/bash -c from build images, then run exactly one shell layer.
+		args = append(args, "--entrypoint", "sh")
+		args = append(args, "-c", startCommand)
 	}
 
 	// Execute docker service create
@@ -1311,9 +1312,13 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Update image
 	args = append(args, "--image", config.Image)
 
-	// Note: Docker service update doesn't support changing the command directly.
-	// If the start command needs to change, the service would need to be recreated.
-	// For zero-downtime deployments, image and config updates are the primary concern.
+	// Update start command when provided.
+	// Use an explicit sh entrypoint so image-level entrypoint wrappers do not nest.
+	if config.StartCommand != nil && *config.StartCommand != "" {
+		startCommand := normalizeStartCommand(*config.StartCommand)
+		args = append(args, "--entrypoint", "sh")
+		args = append(args, "--args", fmt.Sprintf("-c %q", startCommand))
+	}
 
 	// Add service name
 	args = append(args, swarmServiceName)
