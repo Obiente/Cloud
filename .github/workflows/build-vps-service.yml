@@ -21,6 +21,10 @@ on:
       - 'apps/shared/proto/obiente/cloud/common/**'
       - 'packages/proto/proto/obiente/cloud/vps/**'
       - 'packages/proto/proto/obiente/cloud/common/**'
+      - 'apps/shared/go.mod'
+      - 'apps/shared/go.sum'
+      - '.github/scripts/go-service-affected.sh'
+      - '.github/workflows/build-vps-service.yml'
   pull_request:
     branches:
       - main
@@ -39,6 +43,10 @@ on:
       - 'apps/shared/proto/obiente/cloud/common/**'
       - 'packages/proto/proto/obiente/cloud/vps/**'
       - 'packages/proto/proto/obiente/cloud/common/**'
+      - 'apps/shared/go.mod'
+      - 'apps/shared/go.sum'
+      - '.github/scripts/go-service-affected.sh'
+      - '.github/workflows/build-vps-service.yml'
   workflow_dispatch:
 
 permissions:
@@ -53,7 +61,7 @@ jobs:
       reason: ${{ steps.detect.outputs.reason }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0

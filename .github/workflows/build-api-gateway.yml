@@ -15,6 +15,10 @@ on:
       - 'apps/shared/pkg/middleware/**'
       - 'apps/shared/proto/**'
       - 'packages/proto/proto/obiente/cloud/**'
+      - 'apps/shared/go.mod'
+      - 'apps/shared/go.sum'
+      - '.github/scripts/go-service-affected.sh'
+      - '.github/workflows/build-api-gateway.yml'
   pull_request:
     branches:
       - main
@@ -27,6 +31,10 @@ on:
       - 'apps/shared/pkg/middleware/**'
       - 'apps/shared/proto/**'
       - 'packages/proto/proto/obiente/cloud/**'
+      - 'apps/shared/go.mod'
+      - 'apps/shared/go.sum'
+      - '.github/scripts/go-service-affected.sh'
+      - '.github/workflows/build-api-gateway.yml'
   workflow_dispatch:
 
 permissions:
@@ -41,7 +49,7 @@ jobs:
       reason: ${{ steps.detect.outputs.reason }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
