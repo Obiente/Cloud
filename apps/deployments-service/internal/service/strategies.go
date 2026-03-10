@@ -179,14 +179,13 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 		config.LogWriter.Write([]byte("   🔧 Analyzing project...\n"))
 	}
 
-	// Let Railpack infer the correct start command from the repository/image unless the
-	// deployment has an explicit non-stale override. Persisted wrapper commands from
-	// previous static-site builds (for example caddy/nginx) must not leak back in here.
-	startCommand := strings.TrimSpace(config.StartCommand)
-	if isStaleRailpackStartCommand(startCommand) {
-		writeBuildLog("   ♻️ Ignoring stale persisted start command for Railpack: %s", startCommand)
-		startCommand = ""
+	// Always let Railpack derive the start command from the current repository/image.
+	// Persisted deployment start commands are historical state and should never override
+	// the startup that the latest build actually embeds.
+	if strings.TrimSpace(config.StartCommand) != "" {
+		writeBuildLog("   ♻️ Ignoring stored deployment start command for Railpack in favor of the current build output")
 	}
+	startCommand := ""
 
 	// COMMENTED OUT: Astro detection logic - temporarily disabled for testing
 	// For Astro projects using preview, ensure build happens first
@@ -351,30 +350,6 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 		Port:           port,
 		Success:        true,
 	}, nil
-}
-
-func isStaleRailpackStartCommand(command string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(command))
-	if normalized == "" {
-		return false
-	}
-
-	stalePatterns := []string{
-		"caddy run --config /caddyfile --adapter caddyfile",
-		"caddy run --config /caddyfile",
-		"nginx -g daemon off;",
-		"/usr/sbin/nginx -g daemon off;",
-		"serve -s dist",
-		"npx serve dist",
-	}
-
-	for _, pattern := range stalePatterns {
-		if normalized == pattern {
-			return true
-		}
-	}
-
-	return false
 }
 
 // detectPortFromRepo attempts to detect the port from repository files
