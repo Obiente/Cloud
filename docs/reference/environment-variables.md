@@ -35,7 +35,7 @@ Complete reference for all Obiente Cloud environment variables.
 | `POSTGRES_DB`            | string | `obiente`  | ❌           |
 | `DB_HOST`                | string | `postgres` | ❌           |
 | `DB_PORT`                | number | `5432`     | ❌           |
-| `POSTGRES_EXPOSE_PORT`   | number | `5432`     | ❌           | Port to expose PostgreSQL on host (default: 5432, localhost only) |
+| `POSTGRES_EXPOSE_PORT`   | number | `5433`     | ❌           | Port to expose PostgreSQL on host (default: 5433, localhost only; 5432 is used by databases-service proxy) |
 | `POSTGRES_PORT_MODE`     | string | `host`     | ❌           | Port mode: `host` (default, for localhost binding) or `ingress` |
 | `POSTGRES_ALLOWED_HOSTS` | string | -          | ❌           | Comma-separated IPs/subnets to allow in pg_hba.conf (e.g., "10.10.10.1,10.0.0.0/8") |
 | `REPLICATION_PASSWORD`   | string | -          | ❌ (HA only) |
@@ -71,37 +71,37 @@ DB_HOST=postgres.example.netbird
 
 **Database Port Exposure (`POSTGRES_EXPOSE_PORT`):**
 
-PostgreSQL port is **exposed by default on localhost only** (127.0.0.1:5432) for security. This allows local access while preventing external connections.
+PostgreSQL port is **exposed by default on localhost only** (127.0.0.1:5433) for security. This allows local access while preventing external connections.
 
 **Default Configuration:**
-- Port exposed: `5432` (configurable via `POSTGRES_EXPOSE_PORT`)
+- Port exposed: `5433` (configurable via `POSTGRES_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
 **To restrict to localhost only**, configure firewall rules on the host:
 ```bash
 # Using iptables (restrict PostgreSQL to localhost only)
-sudo iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
+sudo iptables -A INPUT -p tcp --dport 5433 ! -s 127.0.0.1 -j DROP
 
 # Or using ufw (if installed)
-sudo ufw deny 5432
-sudo ufw allow from 127.0.0.1 to any port 5432
+sudo ufw deny 5433
+sudo ufw allow from 127.0.0.1 to any port 5433
 ```
 
 **Examples:**
 
 ```bash
 # Default: Exposed on localhost only (requires firewall rules for true localhost-only)
-POSTGRES_EXPOSE_PORT=5432
+POSTGRES_EXPOSE_PORT=5433
 POSTGRES_PORT_MODE=host
 
 # Expose on all interfaces (for Netbird VPN access)
-POSTGRES_EXPOSE_PORT=5432
+POSTGRES_EXPOSE_PORT=5433
 POSTGRES_PORT_MODE=host
 # Then configure pg_hba.conf to allow Netbird VPN subnet
 
 # Use ingress mode (Docker Swarm load balancing)
-POSTGRES_EXPOSE_PORT=5432
+POSTGRES_EXPOSE_PORT=5433
 POSTGRES_PORT_MODE=ingress
 ```
 
@@ -561,7 +561,7 @@ SERVICE_DOMAIN_PATTERN=service-node
 | --------------------- | ------ | --------------------------------- | -------- |
 | `METRICS_DB_HOST`         | string | `timescaledb`                     | ❌       |
 | `METRICS_DB_PORT`         | number | `5432`                            | ❌       |
-| `METRICS_DB_EXPOSE_PORT`  | number | `5433`                            | ❌       | Port to expose TimescaleDB on host (default: 5433, localhost only) |
+| `METRICS_DB_EXPOSE_PORT`  | number | `5434`                            | ❌       | Port to expose TimescaleDB on host (default: 5434, localhost only) |
 | `METRICS_DB_PORT_MODE`    | string | `host`                             | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
 | `METRICS_DB_ALLOWED_HOSTS` | string | -                                 | ❌       | Comma-separated IPs/subnets to allow in pg_hba.conf (falls back to POSTGRES_ALLOWED_HOSTS) |
 | `METRICS_DB_USER`         | string | `POSTGRES_USER` or `postgres`     | ❌       |
@@ -591,28 +591,28 @@ METRICS_DB_HOST=metrics-db.example.com
 
 **Metrics Database Port Exposure (`METRICS_DB_EXPOSE_PORT`):**
 
-TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5433) for security, similar to PostgreSQL.
+TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5434) for security, similar to PostgreSQL.
 
 **Default Configuration:**
-- Port exposed: `5433` (configurable via `METRICS_DB_EXPOSE_PORT`)
+- Port exposed: `5434` (configurable via `METRICS_DB_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
 **To restrict to localhost only**, configure firewall rules (same as PostgreSQL):
 ```bash
 # Using iptables (restrict TimescaleDB to localhost only)
-sudo iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
+sudo iptables -A INPUT -p tcp --dport 5434 ! -s 127.0.0.1 -j DROP
 ```
 
 **Examples:**
 
 ```bash
 # Default: Exposed on localhost only
-METRICS_DB_EXPOSE_PORT=5433
+METRICS_DB_EXPOSE_PORT=5434
 METRICS_DB_PORT_MODE=host
 
 # Expose on all interfaces (for Netbird VPN access)
-METRICS_DB_EXPOSE_PORT=5433
+METRICS_DB_EXPOSE_PORT=5434
 METRICS_DB_PORT_MODE=host
 ```
 

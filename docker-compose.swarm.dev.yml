@@ -31,12 +31,13 @@ services:
     # To change binding, set POSTGRES_EXPOSE_PORT and POSTGRES_PORT_MODE environment variables
     # Note: In Docker Swarm, services on overlay networks must use ingress mode for ports
     # Examples:
-    #   - POSTGRES_EXPOSE_PORT=5432  # Default port
+    #   - POSTGRES_EXPOSE_PORT=5433  # Default port
     #   - POSTGRES_PORT_MODE=ingress  # Use ingress mode (required for overlay networks)
+    # Note: Port 5432 is reserved for databases-service proxy ingress.
     # Note: If you need host mode, the service must use network_mode: host (not compatible with overlay networks)
     ports:
       - target: 5432
-        published: ${POSTGRES_EXPOSE_PORT:-5432}
+        published: ${POSTGRES_EXPOSE_PORT:-5433}
         protocol: tcp
         mode: ${POSTGRES_PORT_MODE:-ingress}
     volumes:
@@ -95,12 +96,13 @@ services:
     # To change binding, set METRICS_DB_EXPOSE_PORT and METRICS_DB_PORT_MODE environment variables
     # Note: In Docker Swarm, services on overlay networks must use ingress mode for ports
     # Examples:
-    #   - METRICS_DB_EXPOSE_PORT=5433  # Default port
+    #   - METRICS_DB_EXPOSE_PORT=5434  # Default port
     #   - METRICS_DB_PORT_MODE=ingress  # Use ingress mode (required for overlay networks)
+    # Note: Keep distinct from POSTGRES_EXPOSE_PORT and databases-service proxy ports.
     # Note: If you need host mode, the service must use network_mode: host (not compatible with overlay networks)
     ports:
       - target: 5432
-        published: ${METRICS_DB_EXPOSE_PORT:-5433}
+        published: ${METRICS_DB_EXPOSE_PORT:-5434}
         protocol: tcp
         mode: ${METRICS_DB_PORT_MODE:-ingress}
     volumes:
