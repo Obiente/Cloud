@@ -532,11 +532,40 @@ func extractImageCmd(ctx context.Context, imageName string) (string, string) {
 
 	// If it's ["/bin/bash", "-c", "command"], extract just the command
 	if len(cmdParts) >= 3 && (cmdParts[0] == "/bin/bash" || cmdParts[0] == "/bin/sh" || cmdParts[0] == "sh" || cmdParts[0] == "bash") && cmdParts[1] == "-c" {
-		return strings.Join(cmdParts[2:], " "), workingDir
+		return normalizeExtractedStartCommand(strings.Join(cmdParts[2:], " ")), workingDir
 	}
 
 	// Otherwise, join all parts with spaces
-	return strings.Join(cmdParts, " "), workingDir
+	return normalizeExtractedStartCommand(strings.Join(cmdParts, " ")), workingDir
+}
+
+func normalizeExtractedStartCommand(raw string) string {
+	cmd := strings.TrimSpace(raw)
+	for range 4 {
+		inner, ok := unwrapExtractedShellC(cmd)
+		if !ok {
+			break
+		}
+		cmd = inner
+	}
+	return cmd
+}
+
+func unwrapExtractedShellC(cmd string) (string, bool) {
+	trimmed := strings.TrimSpace(cmd)
+	prefixes := []string{"sh -c ", "bash -c ", "/bin/sh -c ", "/bin/bash -c "}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			inner := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+			if len(inner) >= 2 {
+				if (inner[0] == '\'' && inner[len(inner)-1] == '\'') || (inner[0] == '"' && inner[len(inner)-1] == '"') {
+					inner = strings.TrimSpace(inner[1 : len(inner)-1])
+				}
+			}
+			return inner, true
+		}
+	}
+	return "", false
 }
 
 // deployResultToOrchestrator converts a BuildResult to orchestrator configuration
@@ -574,7 +603,8 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 
 		var startCmd *string
 		if deployment.StartCommand != nil && *deployment.StartCommand != "" {
-			startCmd = deployment.StartCommand
+			normalized := normalizeExtractedStartCommand(*deployment.StartCommand)
+			startCmd = &normalized
 		}
 		
 		// Ensure image name includes registry prefix for Swarm mode

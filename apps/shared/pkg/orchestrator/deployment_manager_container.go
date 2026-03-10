@@ -21,6 +21,35 @@ import (
 
 // Container operations for deployments
 
+func normalizeStartCommand(raw string) string {
+	cmd := strings.TrimSpace(raw)
+	for range 4 {
+		inner, ok := unwrapShellC(cmd)
+		if !ok {
+			break
+		}
+		cmd = inner
+	}
+	return cmd
+}
+
+func unwrapShellC(cmd string) (string, bool) {
+	trimmed := strings.TrimSpace(cmd)
+	prefixes := []string{"sh -c ", "bash -c ", "/bin/sh -c ", "/bin/bash -c "}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			inner := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+			if len(inner) >= 2 {
+				if (inner[0] == '\'' && inner[len(inner)-1] == '\'') || (inner[0] == '"' && inner[len(inner)-1] == '"') {
+					inner = strings.TrimSpace(inner[1 : len(inner)-1])
+				}
+			}
+			return inner, true
+		}
+	}
+	return "", false
+}
+
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
@@ -296,8 +325,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 	// Override container CMD if start command is provided
 	if config.StartCommand != nil && *config.StartCommand != "" {
+		startCommand := normalizeStartCommand(*config.StartCommand)
 		// Use sh -c to preserve working directory and handle relative paths
-		containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
+		containerConfig.Cmd = []string{"sh", "-c", startCommand}
 	}
 
 	// Convert CPU shares to NanoCPUs for hard CPU limit
@@ -703,9 +733,10 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Add start command if provided (must come after image)
 	// docker service create format: [OPTIONS] IMAGE [COMMAND] [ARG...]
 	if config.StartCommand != nil && *config.StartCommand != "" {
+		startCommand := normalizeStartCommand(*config.StartCommand)
 		// Split the command into parts for proper argument handling
 		// Use sh -c to preserve working directory and handle relative paths
-		args = append(args, "sh", "-c", *config.StartCommand)
+		args = append(args, "sh", "-c", startCommand)
 	}
 
 	// Execute docker service create

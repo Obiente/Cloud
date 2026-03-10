@@ -366,9 +366,10 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// (e.g., for Astro projects that need "pnpm build && pnpm preview --host")
 			// Also update if start command was extracted from image (e.g., railpack images)
 			if buildConfig.StartCommand != "" {
-				if startCmd == "" || buildConfig.StartCommand != startCmd {
-					dbDeployment.StartCommand = &buildConfig.StartCommand
-					logger.Info("[TriggerDeployment] Updated start command to: %s", buildConfig.StartCommand)
+				normalizedStart := normalizeExtractedStartCommand(buildConfig.StartCommand)
+				if startCmd == "" || normalizedStart != startCmd {
+					dbDeployment.StartCommand = &normalizedStart
+					logger.Info("[TriggerDeployment] Updated start command to: %s", normalizedStart)
 				}
 			}
 
