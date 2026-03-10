@@ -265,9 +265,26 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 }
 
 // RecordDeploymentLocation records a new deployment location
-// Uses upsert logic: if location with same container_id exists, update it; otherwise create new
+// Uses upsert logic:
+//   - for Swarm-backed services, prefer a stable logical row keyed by deployment_id + service_id
+//   - otherwise, fall back to container_id
 func RecordDeploymentLocation(location *DeploymentLocation) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
+		if location.ServiceID != "" {
+			var existingByService DeploymentLocation
+			serviceResult := tx.Where("deployment_id = ? AND service_id = ?", location.DeploymentID, location.ServiceID).First(&existingByService)
+			if serviceResult.Error == nil {
+				location.ID = existingByService.ID
+				if err := tx.Model(&existingByService).Updates(location).Error; err != nil {
+					return err
+				}
+				return nil
+			}
+			if serviceResult.Error != nil && serviceResult.Error != gorm.ErrRecordNotFound {
+				return serviceResult.Error
+			}
+		}
+
 		// Check if location with this container ID already exists
 		var existing DeploymentLocation
 		result := tx.Where("container_id = ?", location.ContainerID).First(&existing)

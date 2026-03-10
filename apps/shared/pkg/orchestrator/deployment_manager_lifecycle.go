@@ -103,6 +103,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			containerName := fmt.Sprintf("%s-%s-replica-%d", config.DeploymentID, serviceName, i)
 
 			var containerID string
+			var serviceID string
 			var err error
 
 			if isSwarmMode {
@@ -122,14 +123,14 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				if serviceExists {
 					// Service exists - update it for zero-downtime deployment
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
-					_, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
+					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
 					if err != nil {
 						return fmt.Errorf("failed to update Swarm service: %w", err)
 					}
 				} else {
 					// Service doesn't exist - create it
 					logger.Info("[DeploymentManager] Creating new Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
-					_, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
+					serviceID, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
 					if err != nil {
 						return fmt.Errorf("failed to create Swarm service: %w", err)
 					}
@@ -224,6 +225,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				NodeID:       dm.nodeID,
 				NodeHostname: dm.nodeHostname,
 				ContainerID:  containerID,
+				ServiceID:    serviceID,
 				Status:       "running",
 				Port:         publicPort,
 				Domain:       config.Domain,

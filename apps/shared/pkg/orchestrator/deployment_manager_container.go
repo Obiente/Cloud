@@ -19,6 +19,12 @@ import (
 	"github.com/moby/moby/client"
 )
 
+type swarmConvergedTask struct {
+	ServiceID   string
+	TaskID      string
+	ContainerID string
+}
+
 // Container operations for deployments
 
 func normalizeStartCommand(raw string) string {
@@ -1357,49 +1363,126 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	serviceID := strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
 
-	// Wait a moment for the update to propagate
-	time.Sleep(2 * time.Second)
+	task, err := dm.waitForSwarmServiceConverged(ctx, swarmServiceName)
+	if err != nil {
+		return serviceID, "", err
+	}
+	if task.ServiceID != "" {
+		serviceID = task.ServiceID
+	}
+	return serviceID, task.ContainerID, nil
+}
 
-	// Get container ID from service tasks (will be the new task once it starts)
-	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc", "--filter", "desired-state=running"}
-	taskCmd := exec.CommandContext(ctx, "docker", taskArgs...)
-	var taskStdout bytes.Buffer
-	taskCmd.Stdout = &taskStdout
-	var containerID string
-	if err := taskCmd.Run(); err == nil {
-		taskIDs := strings.TrimSpace(taskStdout.String())
-		if taskIDs != "" {
-			taskIDList := strings.Split(taskIDs, "\n")
-			// Get the first running task (should be the new one with start-first)
-			if len(taskIDList) > 0 {
-				taskID := strings.TrimSpace(taskIDList[0])
-				if taskID != "" {
-					taskInspectArgs := []string{"inspect", taskID, "--format", "{{.Status.ContainerStatus.ContainerID}}"}
-					taskInspectCmd := exec.CommandContext(ctx, "docker", taskInspectArgs...)
-					var taskInspectStdout bytes.Buffer
-					if err := taskInspectCmd.Run(); err == nil {
-						containerID = strings.TrimSpace(taskInspectStdout.String())
-					}
+func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, swarmServiceName string) (*swarmConvergedTask, error) {
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
+		if err != nil {
+			return nil, err
+		}
+
+		switch updateState {
+		case "", "completed":
+			task, taskErr := dm.currentRunningSwarmTask(ctx, swarmServiceName)
+			if taskErr == nil && task != nil && task.ContainerID != "" {
+				if task.ServiceID == "" {
+					task.ServiceID = serviceID
 				}
+				return task, nil
 			}
+		case "rollback_started", "rollback_paused", "rollback_completed", "paused":
+			if updateMessage == "" {
+				updateMessage = updateState
+			}
+			return nil, fmt.Errorf("swarm rollout for %s did not converge: %s", swarmServiceName, updateMessage)
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+
+	return nil, fmt.Errorf("timed out waiting for swarm service %s to converge", swarmServiceName)
+}
+
+func (dm *DeploymentManager) inspectSwarmServiceUpdate(ctx context.Context, swarmServiceName string) (serviceID string, state string, message string, err error) {
+	inspectArgs := []string{"service", "inspect", swarmServiceName, "--format", "{{.ID}}\t{{if .UpdateStatus}}{{.UpdateStatus.State}}\t{{.UpdateStatus.Message}}{{end}}"}
+	cmd := exec.CommandContext(ctx, "docker", inspectArgs...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", "", "", fmt.Errorf("failed to inspect swarm service %s: %w (stderr: %s)", swarmServiceName, err, stderr.String())
+	}
+
+	parts := strings.SplitN(strings.TrimSpace(stdout.String()), "\t", 3)
+	if len(parts) > 0 {
+		serviceID = strings.TrimSpace(parts[0])
+	}
+	if len(parts) > 1 {
+		state = strings.TrimSpace(parts[1])
+	}
+	if len(parts) > 2 {
+		message = strings.TrimSpace(parts[2])
+	}
+	return serviceID, state, message, nil
+}
+
+func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmServiceName string) (*swarmConvergedTask, error) {
+	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}", "--no-trunc"}
+	cmd := exec.CommandContext(ctx, "docker", taskArgs...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to inspect swarm tasks for %s: %w (stderr: %s)", swarmServiceName, err, stderr.String())
+	}
+
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 4)
+		if len(parts) < 3 {
+			continue
+		}
+		taskID := strings.TrimSpace(parts[0])
+		currentState := strings.ToLower(strings.TrimSpace(parts[1]))
+		desiredState := strings.ToLower(strings.TrimSpace(parts[2]))
+		taskError := ""
+		if len(parts) >= 4 {
+			taskError = strings.TrimSpace(parts[3])
+		}
+		if desiredState != "running" || !strings.Contains(currentState, "running") || taskError != "" {
+			continue
+		}
+
+		inspectArgs := []string{"inspect", taskID, "--format", "{{.ServiceID}}\t{{.Status.ContainerStatus.ContainerID}}"}
+		inspectCmd := exec.CommandContext(ctx, "docker", inspectArgs...)
+		var inspectStdout bytes.Buffer
+		var inspectStderr bytes.Buffer
+		inspectCmd.Stdout = &inspectStdout
+		inspectCmd.Stderr = &inspectStderr
+		if err := inspectCmd.Run(); err != nil {
+			return nil, fmt.Errorf("failed to inspect swarm task %s: %w (stderr: %s)", taskID, err, inspectStderr.String())
+		}
+
+		taskParts := strings.SplitN(strings.TrimSpace(inspectStdout.String()), "\t", 2)
+		task := &swarmConvergedTask{TaskID: taskID}
+		if len(taskParts) > 0 {
+			task.ServiceID = strings.TrimSpace(taskParts[0])
+		}
+		if len(taskParts) > 1 {
+			task.ContainerID = strings.TrimSpace(taskParts[1])
+		}
+		if task.ContainerID != "" {
+			return task, nil
 		}
 	}
 
-	// If we couldn't get container ID from task, try to find by service label
-	if containerID == "" {
-		filterArgs := make(client.Filters)
-		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
-		containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
-			All:     true,
-			Filters: filterArgs,
-		})
-		if len(containersResult.Items) > 0 {
-			// Get the most recently created container (should be the new one)
-			containerID = containersResult.Items[0].ID
-		}
-	}
-
-	return serviceID, containerID, nil
+	return nil, fmt.Errorf("no converged running task found for swarm service %s", swarmServiceName)
 }
 
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)
