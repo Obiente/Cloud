@@ -306,7 +306,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 		cmd.Stderr = os.Stderr
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := runRailpackCommandWithBuildkitRetry(ctx, cmd, envVars, writeBuildLog); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
 	}
 
@@ -1074,6 +1074,56 @@ func startBuildkitContainer(ctx context.Context) {
 	} else {
 		logger.Info("[Railpack] Successfully started BuildKit container: %s", containerName)
 	}
+}
+
+// restartBuildkitContainer force-recreates the BuildKit daemon container.
+// This is used as a self-heal step when Railpack fails due to transient BuildKit state issues.
+func restartBuildkitContainer(ctx context.Context) {
+	containerName := "obiente-cloud-buildkit"
+
+	removeCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
+	removeCmd.Stdout = nil
+	removeCmd.Stderr = nil
+	if err := removeCmd.Run(); err != nil {
+		logger.Warn("[Railpack] Failed to remove BuildKit container %s: %v", containerName, err)
+	}
+
+	startBuildkitContainer(ctx)
+}
+
+func hasExternalBuildkitHost(envVars []string) bool {
+	for _, envVar := range envVars {
+		if strings.HasPrefix(envVar, "BUILDKIT_HOST=docker-container://") {
+			return true
+		}
+	}
+	return false
+}
+
+// runRailpackCommandWithBuildkitRetry runs the Railpack command and retries once
+// after restarting BuildKit if external BuildKit is enabled.
+func runRailpackCommandWithBuildkitRetry(ctx context.Context, cmd *exec.Cmd, envVars []string, writeBuildLog func(string, ...interface{})) error {
+	if err := cmd.Run(); err != nil {
+		if !hasExternalBuildkitHost(envVars) {
+			return err
+		}
+
+		writeBuildLog("⚠️  Railpack build failed; restarting BuildKit and retrying once...")
+		restartBuildkitContainer(ctx)
+
+		retryCmd := exec.CommandContext(ctx, cmd.Path, cmd.Args[1:]...)
+		retryCmd.Env = cmd.Env
+		retryCmd.Stdout = cmd.Stdout
+		retryCmd.Stderr = cmd.Stderr
+
+		if retryErr := retryCmd.Run(); retryErr != nil {
+			return retryErr
+		}
+
+		writeBuildLog("✅ Railpack build succeeded after BuildKit restart retry")
+	}
+
+	return nil
 }
 
 // createNixpacksConfig creates a nixpacks.toml file with install, build, and start commands
@@ -2028,8 +2078,8 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 			cmd.Stderr = os.Stderr
 		}
 
-		// Run railpack and wait for completion (cmd.Run() blocks until done)
-		if err := cmd.Run(); err != nil {
+		// Run railpack and wait for completion
+		if err := runRailpackCommandWithBuildkitRetry(ctx, cmd, envVars, writeBuildLog); err != nil {
 			writeBuildLog("❌ Railpack build failed: %v", err)
 			return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
 		}
