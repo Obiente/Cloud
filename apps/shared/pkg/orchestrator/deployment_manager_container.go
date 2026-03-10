@@ -1326,9 +1326,13 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Use an explicit sh entrypoint so image-level entrypoint wrappers do not nest.
 	if config.StartCommand != nil && *config.StartCommand != "" {
 		startCommand := normalizeStartCommand(*config.StartCommand)
-		// Docker service update --args expects comma-separated values for array elements
 		args = append(args, "--entrypoint", "sh")
-		args = append(args, "--args", fmt.Sprintf("-c,%s", startCommand))
+		// Mirror the working `docker service create ... IMAGE -c <cmd>` shape by
+		// providing shell arguments as distinct `--args` entries. Passing a single
+		// comma-joined value like `-c,<cmd>` makes BusyBox/Dash parse `-,...` as an
+		// invalid shell option during rollout tasks.
+		args = append(args, "--args", "-c")
+		args = append(args, "--args", startCommand)
 	}
 
 	// Add service name
