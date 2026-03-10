@@ -362,14 +362,22 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 			streamer.Write([]byte("✅ Build completed successfully\n"))
 
-			// Update deployment start command if it was modified by the build strategy
-			// (e.g., for Astro projects that need "pnpm build && pnpm preview --host")
-			// Also update if start command was extracted from image (e.g., railpack images)
-			if buildConfig.StartCommand != "" {
-				normalizedStart := normalizeExtractedStartCommand(buildConfig.StartCommand)
-				if startCmd == "" || normalizedStart != startCmd {
-					dbDeployment.StartCommand = &normalizedStart
-					logger.Info("[TriggerDeployment] Updated start command to: %s", normalizedStart)
+			// Persist strategy-derived start commands only for build systems that actually
+			// need Obiente to drive the process start. Dockerfile/static builds should use
+			// the image's own ENTRYPOINT/CMD and must not keep stale extracted commands.
+			switch buildStrategy {
+			case deploymentsv1.BuildStrategy_RAILPACK, deploymentsv1.BuildStrategy_NIXPACKS:
+				if buildConfig.StartCommand != "" {
+					normalizedStart := normalizeExtractedStartCommand(buildConfig.StartCommand)
+					if startCmd == "" || normalizedStart != startCmd {
+						dbDeployment.StartCommand = &normalizedStart
+						logger.Info("[TriggerDeployment] Updated start command to: %s", normalizedStart)
+					}
+				}
+			case deploymentsv1.BuildStrategy_DOCKERFILE, deploymentsv1.BuildStrategy_STATIC_SITE:
+				if dbDeployment.StartCommand != nil && *dbDeployment.StartCommand != "" {
+					logger.Info("[TriggerDeployment] Clearing stored start command for %v deployment so the image startup is used", buildStrategy)
+					dbDeployment.StartCommand = nil
 				}
 			}
 

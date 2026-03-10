@@ -602,9 +602,15 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 		}
 
 		var startCmd *string
-		if deployment.StartCommand != nil && *deployment.StartCommand != "" {
-			normalized := normalizeExtractedStartCommand(*deployment.StartCommand)
-			startCmd = &normalized
+		switch deploymentsv1.BuildStrategy(deployment.BuildStrategy) {
+		case deploymentsv1.BuildStrategy_DOCKERFILE, deploymentsv1.BuildStrategy_STATIC_SITE:
+			// Dockerfile/static deployments should trust the image's own startup and not
+			// reuse any persisted platform start command from older builds.
+		default:
+			if deployment.StartCommand != nil && *deployment.StartCommand != "" {
+				normalized := normalizeExtractedStartCommand(*deployment.StartCommand)
+				startCmd = &normalized
+			}
 		}
 		
 		// Ensure image name includes registry prefix for Swarm mode
