@@ -63,7 +63,7 @@ RUN apk update && apk --no-cache --no-scripts add \
 # Set environment variables early for better layer caching
 ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins \
     BUILDX_VERSION=0.29.1 \
-    MISE_VERSION=2025.10.13 \
+    MISE_VERSION=2026.2.22 \
     RAILPACK_VERSION=0.18.0
 
 # Install docker-buildx plugin from Docker's official releases
