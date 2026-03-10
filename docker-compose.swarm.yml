@@ -494,6 +494,7 @@ services:
         - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.databases-service.entrypoints=web"
         - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
+        - "traefik.docker.network=obiente_obiente-network"  # Ensure Traefik targets the shared overlay network
         - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
         - "traefik.http.routers.databases-service-secure.tls.certresolver=letsencrypt"
