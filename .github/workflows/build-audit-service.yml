@@ -60,7 +60,7 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
-        run: ./.github/scripts/go-service-affected.sh "audit-service" "${{ github.event.pull_request.base.sha }}" "${{ github.event.before }}" "${{ github.sha }}"
+        run: bash ./.github/scripts/go-service-affected.sh "audit-service" "${{ github.event.pull_request.base.sha }}" "${{ github.event.before }}" "${{ github.sha }}"
 
   build-and-push-audit-service:
     needs: detect-changes
