@@ -115,12 +115,32 @@ func main() {
 
 	// Health check endpoint
 	mux.HandleFunc("/health", health.HandleHealth("databases-service", func() (bool, string, map[string]interface{}) {
-		// Check database connection
-		sqlDB, err := database.DB.DB()
-		if err != nil || sqlDB.Ping() != nil {
-			return false, "database unavailable", nil
+		extra := map[string]interface{}{
+			"proxy_running": proxyServer.Healthy(),
+			"routes":        routeRegistry.RouteCount(),
 		}
-		return true, "healthy", nil
+
+		databaseReachable := false
+		if database.DB != nil {
+			sqlDB, err := database.DB.DB()
+			if err == nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				databaseReachable = sqlDB.PingContext(ctx) == nil
+				cancel()
+			}
+		}
+		extra["database_reachable"] = databaseReachable
+
+		if !proxyServer.Healthy() {
+			return false, "proxy unavailable", extra
+		}
+
+		// Keep liveness healthy while the proxy is running, even if metadata DB is transiently unavailable.
+		if !databaseReachable {
+			return true, "proxy healthy (database degraded)", extra
+		}
+
+		return true, "healthy", extra
 	}))
 
 	// Proxy health endpoint
