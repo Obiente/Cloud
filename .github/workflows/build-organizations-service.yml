@@ -38,7 +38,27 @@ permissions:
   packages: write
 
 jobs:
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      affected: ${{ steps.detect.outputs.affected }}
+      reason: ${{ steps.detect.outputs.reason }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Detect whether organizations-service is actually affected
+        id: detect
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: ./.github/scripts/go-service-affected.sh "organizations-service" "${{ github.event.pull_request.base.sha }}" "${{ github.event.before }}" "${{ github.sha }}"
+
   build-and-push-organizations-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.affected == 'true'
     name: Build and Push Organizations Service
     runs-on: self-hosted
     env:

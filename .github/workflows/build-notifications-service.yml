@@ -36,7 +36,27 @@ permissions:
   packages: write
 
 jobs:
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      affected: ${{ steps.detect.outputs.affected }}
+      reason: ${{ steps.detect.outputs.reason }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Detect whether notifications-service is actually affected
+        id: detect
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: ./.github/scripts/go-service-affected.sh "notifications-service" "${{ github.event.pull_request.base.sha }}" "${{ github.event.before }}" "${{ github.sha }}"
+
   build-and-push-notifications-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.affected == 'true'
     name: Build and Push Notifications Service (${{ matrix.platform }})
     runs-on: self-hosted
     strategy:

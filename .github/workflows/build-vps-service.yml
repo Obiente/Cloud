@@ -46,7 +46,27 @@ permissions:
   packages: write
 
 jobs:
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      affected: ${{ steps.detect.outputs.affected }}
+      reason: ${{ steps.detect.outputs.reason }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Detect whether vps-service is actually affected
+        id: detect
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+        run: ./.github/scripts/go-service-affected.sh "vps-service" "${{ github.event.pull_request.base.sha }}" "${{ github.event.before }}" "${{ github.sha }}"
+
   build-and-push-vps-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.affected == 'true'
     name: Build and Push VPS Service (${{ matrix.platform }})
     runs-on: self-hosted
     strategy:
@@ -176,7 +196,7 @@ jobs:
       # Create/update manifest immediately after this platform build completes
       # This allows pulls to work even before the other platform is built
       - name: Create/update manifest for ${{ matrix.platform }}
-        if: github.event_name != 'pull_request' && (steps.build-attempt-1.outcome == 'success' || steps.build-attempt-2.outcome == 'success' || steps.build-attempt-3.outcome == 'success')
+        if: github.event_name != 'pull_request' && needs.detect-changes.outputs.affected == 'true' && (steps.build-attempt-1.outcome == 'success' || steps.build-attempt-2.outcome == 'success' || steps.build-attempt-3.outcome == 'success')
         run: |
           PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}"
           OTHER_PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-arm64' || 'linux-amd64' }}"
@@ -201,8 +221,8 @@ jobs:
   merge-manifest:
     name: Merge Multi-Platform Manifest - VPS Service
     runs-on: self-hosted
-    needs: build-and-push-vps-service
-    if: github.event_name != 'pull_request'
+    needs: [detect-changes, build-and-push-vps-service]
+    if: github.event_name != 'pull_request' && needs.detect-changes.outputs.affected == 'true'
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ghcr.io/obiente/cloud-vps-service
