@@ -727,16 +727,20 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// 3. The manager node doesn't need the image locally unless it's also running tasks
 	logger.Debug("[DeploymentManager] Service will use image %s. Swarm will pull on worker nodes automatically.", config.Image)
 
-	// Add image
-	args = append(args, config.Image)
-
-	// Add start command if provided (must come after image)
+	// Override entrypoint if start command is provided (must come BEFORE image)
 	// docker service create format: [OPTIONS] IMAGE [COMMAND] [ARG...]
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		startCommand := normalizeStartCommand(*config.StartCommand)
 		// Override image entrypoint to avoid inheriting shell wrappers like
 		// /bin/bash -c from build images, then run exactly one shell layer.
 		args = append(args, "--entrypoint", "sh")
+	}
+
+	// Add image
+	args = append(args, config.Image)
+
+	// Add start command if provided (must come after image as COMMAND args)
+	if config.StartCommand != nil && *config.StartCommand != "" {
+		startCommand := normalizeStartCommand(*config.StartCommand)
 		args = append(args, "-c", startCommand)
 	}
 
@@ -1316,8 +1320,9 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Use an explicit sh entrypoint so image-level entrypoint wrappers do not nest.
 	if config.StartCommand != nil && *config.StartCommand != "" {
 		startCommand := normalizeStartCommand(*config.StartCommand)
+		// Docker service update --args expects comma-separated values for array elements
 		args = append(args, "--entrypoint", "sh")
-		args = append(args, "--args", fmt.Sprintf("-c %q", startCommand))
+		args = append(args, "--args", fmt.Sprintf("-c,%s", startCommand))
 	}
 
 	// Add service name
