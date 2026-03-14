@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	cacheTTL                   = 60 * time.Second // Cache DNS responses for 60 seconds
+	cacheTTL                  = 60 * time.Second // Cache DNS responses for 60 seconds
 	defaultGameServerDNSGrace = 2 * time.Minute  // Keep stale game server DNS briefly after stop
 )
 
@@ -314,7 +314,7 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 				Name:   q.Name,
 				Rrtype: dns.TypeSRV,
 				Class:  dns.ClassINET,
-					Ttl:    ttl,
+				Ttl:    ttl,
 			},
 			Priority: 0,
 			Weight:   0,
@@ -347,16 +347,16 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 					Name:   targetHostname + ".",
 					Rrtype: dns.TypeA,
 					Class:  dns.ClassINET,
-						Ttl:    ttl,
+					Ttl:    ttl,
 				},
 				A: ip,
 			}
 			msg.Extra = append(msg.Extra, a)
-				if isStale {
-					log.Printf("[DNS] Resolved SRV for game server %s via stale local location (remaining grace: %s)", gameServerID, staleRemaining)
-				} else {
-					log.Printf("[DNS] Resolved SRV for game server %s via local database", gameServerID)
-				}
+			if isStale {
+				log.Printf("[DNS] Resolved SRV for game server %s via stale local location (remaining grace: %s)", gameServerID, staleRemaining)
+			} else {
+				log.Printf("[DNS] Resolved SRV for game server %s via local database", gameServerID)
+			}
 			return true
 		}
 	}
