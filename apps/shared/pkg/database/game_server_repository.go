@@ -15,11 +15,30 @@ type GameServerRepository struct {
 	cache *RedisCache
 }
 
+const gameServerPortAllocationLockKey int64 = 6773616
+
 func NewGameServerRepository(db *gorm.DB, cache *RedisCache) *GameServerRepository {
 	return &GameServerRepository{
 		db:    db,
 		cache: cache,
 	}
+}
+
+func (r *GameServerRepository) WithPortAllocationLock(ctx context.Context, fn func(repo *GameServerRepository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if tx.Dialector != nil && tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", gameServerPortAllocationLockKey).Error; err != nil {
+				return fmt.Errorf("failed to acquire game server port allocation lock: %w", err)
+			}
+		}
+
+		txRepo := &GameServerRepository{
+			db:    tx,
+			cache: r.cache,
+		}
+
+		return fn(txRepo)
+	})
 }
 
 func (r *GameServerRepository) Create(ctx context.Context, gameServer *GameServer) error {

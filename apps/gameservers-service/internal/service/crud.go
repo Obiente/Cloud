@@ -153,22 +153,6 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	if port < 0 || port > 65535 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid port %d (must be between 1 and 65535)", port))
 	}
-	if port != 0 {
-		available, err := s.repo.IsPortAvailable(ctx, port, "")
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate requested port: %w", err))
-		}
-		if !available {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("requested port %d is already in use", port))
-		}
-	}
-	if port == 0 {
-		availablePort, err := s.repo.GetAvailablePort(ctx, 25565) // Start from Minecraft default port
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get available port: %w", err))
-		}
-		port = availablePort
-	}
 
 	extraPortsCount := req.Msg.GetExtraPortsCount()
 	if extraPortsCount < 0 || extraPortsCount > 2 {
@@ -176,18 +160,6 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 
 	extraPorts := make([]int32, 0)
-	if extraPortsCount > 0 {
-		allocatedPorts, err := s.repo.GetAvailablePorts(ctx, 25565, int(extraPortsCount), []int32{port}, "")
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
-		}
-		extraPorts = allocatedPorts
-	}
-
-	extraPortsJSONBytes, err := json.Marshal(extraPorts)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
-	}
 
 	// Serialize environment variables
 	envVarsJSON := "{}"
@@ -207,8 +179,8 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		Status:         int32(gameserversv1.GameServerStatus_CREATED),
 		MemoryBytes:    memoryBytes,
 		CPUCores:       cpuCores,
-		Port:           port,
-		ExtraPorts:     string(extraPortsJSONBytes),
+		Port:           0,
+		ExtraPorts:     "[]",
 		DockerImage:    dockerImage,
 		StartCommand:   req.Msg.StartCommand,
 		EnvVars:        envVarsJSON,
@@ -219,8 +191,49 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		CreatedBy:      userInfo.Id,
 	}
 
-	if err := s.repo.Create(ctx, dbGameServer); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create game server: %w", err))
+	if err := s.repo.WithPortAllocationLock(ctx, func(txRepo *database.GameServerRepository) error {
+		if port != 0 {
+			available, err := txRepo.IsPortAvailable(ctx, port, "")
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate requested port: %w", err))
+			}
+			if !available {
+				return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("requested port %d is already in use", port))
+			}
+		}
+
+		if port == 0 {
+			availablePort, err := txRepo.GetAvailablePort(ctx, 25565) // Start from Minecraft default port
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get available port: %w", err))
+			}
+			port = availablePort
+		}
+
+		extraPorts = make([]int32, 0)
+		if extraPortsCount > 0 {
+			allocatedPorts, err := txRepo.GetAvailablePorts(ctx, 25565, int(extraPortsCount), []int32{port}, "")
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
+			}
+			extraPorts = allocatedPorts
+		}
+
+		extraPortsJSONBytes, err := json.Marshal(extraPorts)
+		if err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
+		}
+
+		dbGameServer.Port = port
+		dbGameServer.ExtraPorts = string(extraPortsJSONBytes)
+
+		if err := txRepo.Create(ctx, dbGameServer); err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create game server: %w", err))
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	// Parse environment variables for container creation
@@ -401,30 +414,6 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		if desiredCount < 0 || desiredCount > 2 {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("extra_ports_count must be between 0 and 2"))
 		}
-
-		currentExtraPorts := database.ParseGameServerExtraPorts(dbGameServer.ExtraPorts)
-		desiredExtraPorts := append([]int32{}, currentExtraPorts...)
-
-		if desiredCount < len(desiredExtraPorts) {
-			desiredExtraPorts = desiredExtraPorts[:desiredCount]
-		} else if desiredCount > len(desiredExtraPorts) {
-			reserved := append([]int32{dbGameServer.Port}, desiredExtraPorts...)
-			newPorts, err := s.repo.GetAvailablePorts(ctx, 25565, desiredCount-len(desiredExtraPorts), reserved, dbGameServer.ID)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
-			}
-			desiredExtraPorts = append(desiredExtraPorts, newPorts...)
-		}
-
-		extraPortsBytes, err := json.Marshal(desiredExtraPorts)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
-		}
-
-		if dbGameServer.ExtraPorts != string(extraPortsBytes) {
-			dbGameServer.ExtraPorts = string(extraPortsBytes)
-			portsChanged = true
-		}
 	}
 
 	if len(req.Msg.EnvVars) > 0 {
@@ -486,8 +475,47 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		}
 	}
 
-	if err := s.repo.Update(ctx, dbGameServer); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update game server: %w", err))
+	if req.Msg.ExtraPortsCount != nil {
+		err := s.repo.WithPortAllocationLock(ctx, func(txRepo *database.GameServerRepository) error {
+			desiredCount := int(*req.Msg.ExtraPortsCount)
+
+			currentExtraPorts := database.ParseGameServerExtraPorts(dbGameServer.ExtraPorts)
+			desiredExtraPorts := append([]int32{}, currentExtraPorts...)
+
+			if desiredCount < len(desiredExtraPorts) {
+				desiredExtraPorts = desiredExtraPorts[:desiredCount]
+			} else if desiredCount > len(desiredExtraPorts) {
+				reserved := append([]int32{dbGameServer.Port}, desiredExtraPorts...)
+				newPorts, err := txRepo.GetAvailablePorts(ctx, 25565, desiredCount-len(desiredExtraPorts), reserved, dbGameServer.ID)
+				if err != nil {
+					return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
+				}
+				desiredExtraPorts = append(desiredExtraPorts, newPorts...)
+			}
+
+			extraPortsBytes, err := json.Marshal(desiredExtraPorts)
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
+			}
+
+			if dbGameServer.ExtraPorts != string(extraPortsBytes) {
+				dbGameServer.ExtraPorts = string(extraPortsBytes)
+				portsChanged = true
+			}
+
+			if err := txRepo.Update(ctx, dbGameServer); err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update game server: %w", err))
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.repo.Update(ctx, dbGameServer); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update game server: %w", err))
+		}
 	}
 
 	if portsChanged {
