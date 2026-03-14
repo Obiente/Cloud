@@ -37,6 +37,7 @@ type GameServerConfig struct {
 	GameServerID string
 	Image        string
 	Port         int32
+	ExtraPorts   []int32
 	EnvVars      map[string]string
 	MemoryBytes  int64 // in bytes
 	CPUCores     int32
@@ -243,6 +244,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			GameServerID: gameServerID,
 			Image:        gameServer.DockerImage,
 			Port:         gameServer.Port,
+			ExtraPorts:   database.ParseGameServerExtraPorts(gameServer.ExtraPorts),
 			EnvVars:      envVars,
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
@@ -301,6 +303,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			GameServerID: gameServerID,
 			Image:        gameServer.DockerImage,
 			Port:         gameServer.Port,
+			ExtraPorts:   database.ParseGameServerExtraPorts(gameServer.ExtraPorts),
 			EnvVars:      envVars,
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
@@ -372,6 +375,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 				GameServerID: gameServerID,
 				Image:        gameServer.DockerImage,
 				Port:         gameServer.Port,
+				ExtraPorts:   database.ParseGameServerExtraPorts(gameServer.ExtraPorts),
 				EnvVars:      envVars,
 				MemoryBytes:  gameServer.MemoryBytes,
 				CPUCores:     gameServer.CPUCores,
@@ -441,6 +445,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 					GameServerID: gameServerID,
 					Image:        gameServer.DockerImage,
 					Port:         gameServer.Port,
+					ExtraPorts:   database.ParseGameServerExtraPorts(gameServer.ExtraPorts),
 					EnvVars:      envVars,
 					MemoryBytes:  gameServer.MemoryBytes,
 					CPUCores:     gameServer.CPUCores,
@@ -945,28 +950,43 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	// Port configuration
 	exposedPorts := network.PortSet{}
 	portBindings := network.PortMap{}
-	tcpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", config.Port))
-	if err != nil {
-		return "", fmt.Errorf("invalid tcp port: %w", err)
-	}
-	udpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/udp", config.Port))
-	if err != nil {
-		return "", fmt.Errorf("invalid udp port: %w", err)
-	}
-	exposedPorts[tcpContainerPort] = struct{}{}
-	exposedPorts[udpContainerPort] = struct{}{}
+	portsToBind := append([]int32{config.Port}, config.ExtraPorts...)
+	seenPorts := make(map[int32]struct{}, len(portsToBind))
 	hostIP, _ := netip.ParseAddr("0.0.0.0")
-	portBindings[tcpContainerPort] = []network.PortBinding{
-		{
-			HostIP:   hostIP,
-			HostPort: strconv.Itoa(int(config.Port)),
-		},
-	}
-	portBindings[udpContainerPort] = []network.PortBinding{
-		{
-			HostIP:   hostIP,
-			HostPort: strconv.Itoa(int(config.Port)),
-		},
+
+	for _, gamePort := range portsToBind {
+		if gamePort <= 0 || gamePort > 65535 {
+			return "", fmt.Errorf("invalid port %d (must be between 1 and 65535)", gamePort)
+		}
+		if _, exists := seenPorts[gamePort]; exists {
+			continue
+		}
+		seenPorts[gamePort] = struct{}{}
+
+		tcpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", gamePort))
+		if err != nil {
+			return "", fmt.Errorf("invalid tcp port %d: %w", gamePort, err)
+		}
+		udpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/udp", gamePort))
+		if err != nil {
+			return "", fmt.Errorf("invalid udp port %d: %w", gamePort, err)
+		}
+
+		exposedPorts[tcpContainerPort] = struct{}{}
+		exposedPorts[udpContainerPort] = struct{}{}
+
+		portBindings[tcpContainerPort] = []network.PortBinding{
+			{
+				HostIP:   hostIP,
+				HostPort: strconv.Itoa(int(gamePort)),
+			},
+		}
+		portBindings[udpContainerPort] = []network.PortBinding{
+			{
+				HostIP:   hostIP,
+				HostPort: strconv.Itoa(int(gamePort)),
+			},
+		}
 	}
 
 	// Container configuration

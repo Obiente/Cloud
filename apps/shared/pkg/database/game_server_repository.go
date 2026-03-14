@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -134,7 +135,7 @@ func (r *GameServerRepository) Update(ctx context.Context, gameServer *GameServe
 		Model(gameServer).
 		Select(
 			"name", "description", "game_type", "status",
-			"memory_bytes", "cpu_cores", "port",
+			"memory_bytes", "cpu_cores", "port", "extra_ports",
 			"docker_image", "start_command", "env_vars",
 			"server_version", "container_id", "container_name",
 			"storage_bytes", "bandwidth_usage",
@@ -246,29 +247,129 @@ func (r *GameServerRepository) HardDelete(ctx context.Context, id string) error 
 	return nil
 }
 
+// ParseGameServerExtraPorts parses stored extra_ports JSON and returns sanitized ports.
+func ParseGameServerExtraPorts(raw string) []int32 {
+	if strings.TrimSpace(raw) == "" {
+		return []int32{}
+	}
+
+	var ports []int32
+	if err := json.Unmarshal([]byte(raw), &ports); err != nil {
+		return []int32{}
+	}
+
+	seen := make(map[int32]struct{}, len(ports))
+	normalized := make([]int32, 0, len(ports))
+	for _, port := range ports {
+		if port <= 0 || port > 65535 {
+			continue
+		}
+		if _, exists := seen[port]; exists {
+			continue
+		}
+		seen[port] = struct{}{}
+		normalized = append(normalized, port)
+	}
+
+	return normalized
+}
+
+func (r *GameServerRepository) getUsedPortsSet(ctx context.Context, excludeGameServerID string) (map[int32]struct{}, error) {
+	type gameServerPortRow struct {
+		ID         string
+		Port       int32
+		ExtraPorts string
+	}
+
+	var rows []gameServerPortRow
+	if err := r.db.WithContext(ctx).
+		Table("game_servers").
+		Select("id, port, extra_ports").
+		Where("deleted_at IS NULL").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	used := make(map[int32]struct{}, len(rows)*2)
+	for _, row := range rows {
+		if excludeGameServerID != "" && row.ID == excludeGameServerID {
+			continue
+		}
+
+		if row.Port > 0 && row.Port <= 65535 {
+			used[row.Port] = struct{}{}
+		}
+
+		for _, extraPort := range ParseGameServerExtraPorts(row.ExtraPorts) {
+			used[extraPort] = struct{}{}
+		}
+	}
+
+	return used, nil
+}
+
+// IsPortAvailable checks whether a port is unused by any non-deleted game server.
+func (r *GameServerRepository) IsPortAvailable(ctx context.Context, port int32, excludeGameServerID string) (bool, error) {
+	if port <= 0 || port > 65535 {
+		return false, fmt.Errorf("port %d out of valid range (1-65535)", port)
+	}
+
+	used, err := r.getUsedPortsSet(ctx, excludeGameServerID)
+	if err != nil {
+		return false, err
+	}
+
+	_, inUse := used[port]
+	return !inUse, nil
+}
+
+// GetAvailablePorts finds N available ports starting from basePort.
+func (r *GameServerRepository) GetAvailablePorts(ctx context.Context, basePort int32, count int, reserved []int32, excludeGameServerID string) ([]int32, error) {
+	if count <= 0 {
+		return []int32{}, nil
+	}
+	if count > 65535 {
+		return nil, fmt.Errorf("invalid requested port count: %d", count)
+	}
+
+	if basePort < 1 {
+		basePort = 1
+	}
+
+	used, err := r.getUsedPortsSet(ctx, excludeGameServerID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, reservedPort := range reserved {
+		if reservedPort > 0 && reservedPort <= 65535 {
+			used[reservedPort] = struct{}{}
+		}
+	}
+
+	ports := make([]int32, 0, count)
+	for candidate := basePort; candidate <= 65535 && len(ports) < count; candidate++ {
+		if _, inUse := used[candidate]; inUse {
+			continue
+		}
+		ports = append(ports, candidate)
+		used[candidate] = struct{}{}
+	}
+
+	if len(ports) != count {
+		return nil, fmt.Errorf("unable to allocate %d ports (allocated %d)", count, len(ports))
+	}
+
+	return ports, nil
+}
+
 // GetAvailablePort finds an available port starting from a base port
 func (r *GameServerRepository) GetAvailablePort(ctx context.Context, basePort int32) (int32, error) {
-	// Find the highest port in use
-	var maxPort int32
-	var gameServer GameServer
-	err := r.db.WithContext(ctx).
-		Where("deleted_at IS NULL").
-		Order("port DESC").
-		First(&gameServer).Error
-	
-	if err == gorm.ErrRecordNotFound {
-		// No game servers exist, return base port
-		return basePort, nil
-	} else if err != nil {
+	ports, err := r.GetAvailablePorts(ctx, basePort, 1, nil, "")
+	if err != nil {
 		return 0, err
 	}
 
-	maxPort = gameServer.Port
-	if maxPort < basePort {
-		return basePort, nil
-	}
-
-	// Return next available port
-	return maxPort + 1, nil
+	return ports[0], nil
 }
 

@@ -397,10 +397,11 @@ type CreateGameServerRequest struct {
 	// Environment variables
 	EnvVars map[string]string `protobuf:"bytes,9,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Additional configuration
-	ServerVersion *string `protobuf:"bytes,10,opt,name=server_version,json=serverVersion,proto3,oneof" json:"server_version,omitempty"` // Game server version (e.g., "1.20.1" for Minecraft)
-	Description   *string `protobuf:"bytes,11,opt,name=description,proto3,oneof" json:"description,omitempty"`                          // Optional description
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ServerVersion   *string `protobuf:"bytes,10,opt,name=server_version,json=serverVersion,proto3,oneof" json:"server_version,omitempty"`          // Game server version (e.g., "1.20.1" for Minecraft)
+	Description     *string `protobuf:"bytes,11,opt,name=description,proto3,oneof" json:"description,omitempty"`                                   // Optional description
+	ExtraPortsCount *int32  `protobuf:"varint,12,opt,name=extra_ports_count,json=extraPortsCount,proto3,oneof" json:"extra_ports_count,omitempty"` // Number of additional ports to allocate (0-2)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateGameServerRequest) Reset() {
@@ -508,6 +509,13 @@ func (x *CreateGameServerRequest) GetDescription() string {
 		return *x.Description
 	}
 	return ""
+}
+
+func (x *CreateGameServerRequest) GetExtraPortsCount() int32 {
+	if x != nil && x.ExtraPortsCount != nil {
+		return *x.ExtraPortsCount
+	}
+	return 0
 }
 
 type CreateGameServerResponse struct {
@@ -643,17 +651,18 @@ func (x *GetGameServerResponse) GetGameServer() *GameServer {
 }
 
 type UpdateGameServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
-	Name          *string                `protobuf:"bytes,2,opt,name=name,proto3,oneof" json:"name,omitempty"`
-	MemoryBytes   *int64                 `protobuf:"varint,3,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
-	CpuCores      *int32                 `protobuf:"varint,4,opt,name=cpu_cores,json=cpuCores,proto3,oneof" json:"cpu_cores,omitempty"`
-	EnvVars       map[string]string      `protobuf:"bytes,5,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Maps are optional by default in proto3
-	StartCommand  *string                `protobuf:"bytes,6,opt,name=start_command,json=startCommand,proto3,oneof" json:"start_command,omitempty"`
-	Description   *string                `protobuf:"bytes,7,opt,name=description,proto3,oneof" json:"description,omitempty"`
-	ServerVersion *string                `protobuf:"bytes,8,opt,name=server_version,json=serverVersion,proto3,oneof" json:"server_version,omitempty"` // Game server version (e.g., "1.20.1" for Minecraft)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId    string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	Name            *string                `protobuf:"bytes,2,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	MemoryBytes     *int64                 `protobuf:"varint,3,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
+	CpuCores        *int32                 `protobuf:"varint,4,opt,name=cpu_cores,json=cpuCores,proto3,oneof" json:"cpu_cores,omitempty"`
+	EnvVars         map[string]string      `protobuf:"bytes,5,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Maps are optional by default in proto3
+	StartCommand    *string                `protobuf:"bytes,6,opt,name=start_command,json=startCommand,proto3,oneof" json:"start_command,omitempty"`
+	Description     *string                `protobuf:"bytes,7,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	ServerVersion   *string                `protobuf:"bytes,8,opt,name=server_version,json=serverVersion,proto3,oneof" json:"server_version,omitempty"`          // Game server version (e.g., "1.20.1" for Minecraft)
+	ExtraPortsCount *int32                 `protobuf:"varint,9,opt,name=extra_ports_count,json=extraPortsCount,proto3,oneof" json:"extra_ports_count,omitempty"` // Number of additional ports to allocate (0-2)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *UpdateGameServerRequest) Reset() {
@@ -740,6 +749,13 @@ func (x *UpdateGameServerRequest) GetServerVersion() string {
 		return *x.ServerVersion
 	}
 	return ""
+}
+
+func (x *UpdateGameServerRequest) GetExtraPortsCount() int32 {
+	if x != nil && x.ExtraPortsCount != nil {
+		return *x.ExtraPortsCount
+	}
+	return 0
 }
 
 type UpdateGameServerResponse struct {
@@ -2075,9 +2091,10 @@ type GameServer struct {
 	GameType       GameType               `protobuf:"varint,5,opt,name=game_type,json=gameType,proto3,enum=obiente.cloud.gameservers.v1.GameType" json:"game_type,omitempty"`
 	Status         GameServerStatus       `protobuf:"varint,6,opt,name=status,proto3,enum=obiente.cloud.gameservers.v1.GameServerStatus" json:"status,omitempty"`
 	// Resource configuration
-	MemoryBytes int64 `protobuf:"varint,7,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
-	CpuCores    int32 `protobuf:"varint,8,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
-	Port        int32 `protobuf:"varint,9,opt,name=port,proto3" json:"port,omitempty"`
+	MemoryBytes int64   `protobuf:"varint,7,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	CpuCores    int32   `protobuf:"varint,8,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	Port        int32   `protobuf:"varint,9,opt,name=port,proto3" json:"port,omitempty"`
+	ExtraPorts  []int32 `protobuf:"varint,23,rep,packed,name=extra_ports,json=extraPorts,proto3" json:"extra_ports,omitempty"`
 	// Docker configuration
 	DockerImage  string  `protobuf:"bytes,10,opt,name=docker_image,json=dockerImage,proto3" json:"docker_image,omitempty"`
 	StartCommand *string `protobuf:"bytes,11,opt,name=start_command,json=startCommand,proto3,oneof" json:"start_command,omitempty"`
@@ -2194,6 +2211,13 @@ func (x *GameServer) GetPort() int32 {
 		return x.Port
 	}
 	return 0
+}
+
+func (x *GameServer) GetExtraPorts() []int32 {
+	if x != nil {
+		return x.ExtraPorts
+	}
+	return nil
 }
 
 func (x *GameServer) GetDockerImage() string {
@@ -5271,7 +5295,7 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"_game_typeB\t\n" +
 	"\a_status\"f\n" +
 	"\x17ListGameServersResponse\x12K\n" +
-	"\fgame_servers\x18\x01 \x03(\v2(.obiente.cloud.gameservers.v1.GameServerR\vgameServers\"\xac\x05\n" +
+	"\fgame_servers\x18\x01 \x03(\v2(.obiente.cloud.gameservers.v1.GameServerR\vgameServers\"\xf3\x05\n" +
 	"\x17CreateGameServerRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12C\n" +
@@ -5284,7 +5308,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\benv_vars\x18\t \x03(\v2B.obiente.cloud.gameservers.v1.CreateGameServerRequest.EnvVarsEntryR\aenvVars\x12*\n" +
 	"\x0eserver_version\x18\n" +
 	" \x01(\tH\x05R\rserverVersion\x88\x01\x01\x12%\n" +
-	"\vdescription\x18\v \x01(\tH\x06R\vdescription\x88\x01\x01\x1a:\n" +
+	"\vdescription\x18\v \x01(\tH\x06R\vdescription\x88\x01\x01\x12/\n" +
+	"\x11extra_ports_count\x18\f \x01(\x05H\aR\x0fextraPortsCount\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x0f\n" +
@@ -5295,7 +5320,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\r_docker_imageB\x10\n" +
 	"\x0e_start_commandB\x11\n" +
 	"\x0f_server_versionB\x0e\n" +
-	"\f_description\"e\n" +
+	"\f_descriptionB\x14\n" +
+	"\x12_extra_ports_count\"e\n" +
 	"\x18CreateGameServerResponse\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
 	"gameServer\"<\n" +
@@ -5303,7 +5329,7 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\"b\n" +
 	"\x15GetGameServerResponse\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
-	"gameServer\"\x97\x04\n" +
+	"gameServer\"\xde\x04\n" +
 	"\x17UpdateGameServerRequest\x12$\n" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x17\n" +
 	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12&\n" +
@@ -5312,7 +5338,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\benv_vars\x18\x05 \x03(\v2B.obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntryR\aenvVars\x12(\n" +
 	"\rstart_command\x18\x06 \x01(\tH\x03R\fstartCommand\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\a \x01(\tH\x04R\vdescription\x88\x01\x01\x12*\n" +
-	"\x0eserver_version\x18\b \x01(\tH\x05R\rserverVersion\x88\x01\x01\x1a:\n" +
+	"\x0eserver_version\x18\b \x01(\tH\x05R\rserverVersion\x88\x01\x01\x12/\n" +
+	"\x11extra_ports_count\x18\t \x01(\x05H\x06R\x0fextraPortsCount\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
@@ -5322,7 +5349,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"_cpu_coresB\x10\n" +
 	"\x0e_start_commandB\x0e\n" +
 	"\f_descriptionB\x11\n" +
-	"\x0f_server_version\"e\n" +
+	"\x0f_server_versionB\x14\n" +
+	"\x12_extra_ports_count\"e\n" +
 	"\x18UpdateGameServerResponse\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
 	"gameServer\"?\n" +
@@ -5447,7 +5475,7 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\x9b\t\n" +
+	"\x13_storage_cost_cents\"\xbc\t\n" +
 	"\n" +
 	"GameServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
@@ -5458,7 +5486,9 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x06status\x18\x06 \x01(\x0e2..obiente.cloud.gameservers.v1.GameServerStatusR\x06status\x12!\n" +
 	"\fmemory_bytes\x18\a \x01(\x03R\vmemoryBytes\x12\x1b\n" +
 	"\tcpu_cores\x18\b \x01(\x05R\bcpuCores\x12\x12\n" +
-	"\x04port\x18\t \x01(\x05R\x04port\x12!\n" +
+	"\x04port\x18\t \x01(\x05R\x04port\x12\x1f\n" +
+	"\vextra_ports\x18\x17 \x03(\x05R\n" +
+	"extraPorts\x12!\n" +
 	"\fdocker_image\x18\n" +
 	" \x01(\tR\vdockerImage\x12(\n" +
 	"\rstart_command\x18\v \x01(\tH\x01R\fstartCommand\x88\x01\x01\x12P\n" +

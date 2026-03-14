@@ -150,12 +150,43 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 
 	// Get available port
 	port := req.Msg.GetPort()
+	if port < 0 || port > 65535 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid port %d (must be between 1 and 65535)", port))
+	}
+	if port != 0 {
+		available, err := s.repo.IsPortAvailable(ctx, port, "")
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate requested port: %w", err))
+		}
+		if !available {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("requested port %d is already in use", port))
+		}
+	}
 	if port == 0 {
 		availablePort, err := s.repo.GetAvailablePort(ctx, 25565) // Start from Minecraft default port
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get available port: %w", err))
 		}
 		port = availablePort
+	}
+
+	extraPortsCount := req.Msg.GetExtraPortsCount()
+	if extraPortsCount < 0 || extraPortsCount > 2 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("extra_ports_count must be between 0 and 2"))
+	}
+
+	extraPorts := make([]int32, 0)
+	if extraPortsCount > 0 {
+		allocatedPorts, err := s.repo.GetAvailablePorts(ctx, 25565, int(extraPortsCount), []int32{port}, "")
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
+		}
+		extraPorts = allocatedPorts
+	}
+
+	extraPortsJSONBytes, err := json.Marshal(extraPorts)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
 	}
 
 	// Serialize environment variables
@@ -177,6 +208,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		MemoryBytes:    memoryBytes,
 		CPUCores:       cpuCores,
 		Port:           port,
+		ExtraPorts:     string(extraPortsJSONBytes),
 		DockerImage:    dockerImage,
 		StartCommand:   req.Msg.StartCommand,
 		EnvVars:        envVarsJSON,
@@ -227,6 +259,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 			GameServerID: id,
 			Image:        dockerImage,
 			Port:         port,
+			ExtraPorts:   extraPorts,
 			EnvVars:      envVars,
 			MemoryBytes:  memoryBytes,
 			CPUCores:     cpuCores,
@@ -299,7 +332,7 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 
 	// Track if CPU or memory changed (for updating running container)
-	var cpuChanged, memoryChanged, envVarsChanged bool
+	var cpuChanged, memoryChanged, envVarsChanged, portsChanged bool
 	var oldMemoryBytes int64
 	var oldCPUCores int32
 	var oldEnvVars map[string]string
@@ -360,6 +393,37 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 			} else {
 				logger.Warn("[UpdateGameServer] Failed to marshal updated env_vars for game server %s: %v", gameServerID, err)
 			}
+		}
+	}
+
+	if req.Msg.ExtraPortsCount != nil {
+		desiredCount := int(*req.Msg.ExtraPortsCount)
+		if desiredCount < 0 || desiredCount > 2 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("extra_ports_count must be between 0 and 2"))
+		}
+
+		currentExtraPorts := database.ParseGameServerExtraPorts(dbGameServer.ExtraPorts)
+		desiredExtraPorts := append([]int32{}, currentExtraPorts...)
+
+		if desiredCount < len(desiredExtraPorts) {
+			desiredExtraPorts = desiredExtraPorts[:desiredCount]
+		} else if desiredCount > len(desiredExtraPorts) {
+			reserved := append([]int32{dbGameServer.Port}, desiredExtraPorts...)
+			newPorts, err := s.repo.GetAvailablePorts(ctx, 25565, desiredCount-len(desiredExtraPorts), reserved, dbGameServer.ID)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate extra ports: %w", err))
+			}
+			desiredExtraPorts = append(desiredExtraPorts, newPorts...)
+		}
+
+		extraPortsBytes, err := json.Marshal(desiredExtraPorts)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to serialize extra ports: %w", err))
+		}
+
+		if dbGameServer.ExtraPorts != string(extraPortsBytes) {
+			dbGameServer.ExtraPorts = string(extraPortsBytes)
+			portsChanged = true
 		}
 	}
 
@@ -424,6 +488,10 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 
 	if err := s.repo.Update(ctx, dbGameServer); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update game server: %w", err))
+	}
+
+	if portsChanged {
+		logger.Info("[UpdateGameServer] Updated extra ports for game server %s. Changes apply after container recreation/restart.", gameServerID)
 	}
 
 	// If CPU or memory changed and container is running, update container resource limits
@@ -632,6 +700,7 @@ func dbGameServerToProto(dbGS *database.GameServer) *gameserversv1.GameServer {
 		MemoryBytes:    dbGS.MemoryBytes,
 		CpuCores:       dbGS.CPUCores,
 		Port:           dbGS.Port,
+		ExtraPorts:     database.ParseGameServerExtraPorts(dbGS.ExtraPorts),
 		DockerImage:    dbGS.DockerImage,
 		StartCommand:   dbGS.StartCommand,
 		EnvVars:        envVars,

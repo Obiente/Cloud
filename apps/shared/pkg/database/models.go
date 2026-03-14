@@ -381,6 +381,7 @@ type GameServer struct {
 	MemoryBytes    int64     `gorm:"column:memory_bytes" json:"memory_bytes"`
 	CPUCores       int32     `gorm:"column:cpu_cores" json:"cpu_cores"`
 	Port           int32     `gorm:"column:port" json:"port"`
+	ExtraPorts     string    `gorm:"column:extra_ports;type:jsonb" json:"extra_ports"`
 	
 	// Docker configuration
 	DockerImage    string    `gorm:"column:docker_image" json:"docker_image"`

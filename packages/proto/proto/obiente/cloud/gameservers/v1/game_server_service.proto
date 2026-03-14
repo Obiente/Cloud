@@ -167,6 +167,7 @@ message CreateGameServerRequest {
   // Additional configuration
   optional string server_version = 10; // Game server version (e.g., "1.20.1" for Minecraft)
   optional string description = 11;    // Optional description
+  optional int32 extra_ports_count = 12; // Number of additional ports to allocate (0-2)
 }
 
 message CreateGameServerResponse {
@@ -191,6 +192,7 @@ message UpdateGameServerRequest {
   optional string start_command = 6;
   optional string description = 7;
   optional string server_version = 8; // Game server version (e.g., "1.20.1" for Minecraft)
+  optional int32 extra_ports_count = 9; // Number of additional ports to allocate (0-2)
 }
 
 message UpdateGameServerResponse {
@@ -341,6 +343,7 @@ message GameServer {
   int64 memory_bytes = 7;
   int32 cpu_cores = 8;
   int32 port = 9;
+  repeated int32 extra_ports = 23;
   
   // Docker configuration
   string docker_image = 10;
