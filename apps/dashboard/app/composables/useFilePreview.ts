@@ -208,6 +208,7 @@ export function detectFilePreviewType(
     "conf",
     "config",
     "ini",
+    "properties",
     "env",
     "dockerfile",
     "makefile",

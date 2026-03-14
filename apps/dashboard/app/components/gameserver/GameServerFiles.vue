@@ -2585,15 +2585,31 @@
     }
   }
 
+  function decodeFileQueryValue(value: string): string {
+    // Support legacy links where file query values were double-encoded.
+    let decoded = value;
+    for (let i = 0; i < 2; i++) {
+      try {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) break;
+        decoded = next;
+      } catch {
+        break;
+      }
+    }
+    return decoded;
+  }
+
   // Helper function to update file query parameter
   function updateFileQueryParam(filePath: string | null) {
     if (filePath) {
-      // Update query param with the file path (URL-encoded)
+      // Update query param with raw file path.
+      // Vue Router will encode query values automatically.
       router.replace({
         query: {
           ...route.query,
           tab: "files", // Ensure we're on the files tab
-          file: encodeURIComponent(filePath),
+          file: filePath,
         },
       });
     } else {
@@ -2667,7 +2683,7 @@
     if (typeof fileParam === "string") {
       try {
         isInitializingFromQuery.value = true; // Prevent query param updates during init
-        const filePath = decodeURIComponent(fileParam);
+        const filePath = decodeFileQueryValue(fileParam);
         await openFileFromPath(filePath);
       } catch (err) {
         console.error("Failed to open file from query param:", err);
@@ -2693,7 +2709,7 @@
 
       // Only react to query param changes if it's different from current file
       const currentFileFromQuery =
-        typeof fileParam === "string" ? decodeURIComponent(fileParam) : null;
+        typeof fileParam === "string" ? decodeFileQueryValue(fileParam) : null;
 
       if (
         currentFileFromQuery &&
@@ -2719,7 +2735,7 @@
     // Only update if the query param doesn't match (to avoid circular updates from query watcher)
     const currentFileFromQuery =
       typeof route.query.file === "string"
-        ? decodeURIComponent(route.query.file)
+        ? decodeFileQueryValue(route.query.file)
         : null;
 
     if (newPath !== currentFileFromQuery) {
