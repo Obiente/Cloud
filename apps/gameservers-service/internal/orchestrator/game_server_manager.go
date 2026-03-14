@@ -945,13 +945,24 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	// Port configuration
 	exposedPorts := network.PortSet{}
 	portBindings := network.PortMap{}
-	containerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", config.Port))
+	tcpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", config.Port))
 	if err != nil {
-		return "", fmt.Errorf("invalid port: %w", err)
+		return "", fmt.Errorf("invalid tcp port: %w", err)
 	}
-	exposedPorts[containerPort] = struct{}{}
+	udpContainerPort, err := network.ParsePort(fmt.Sprintf("%d/udp", config.Port))
+	if err != nil {
+		return "", fmt.Errorf("invalid udp port: %w", err)
+	}
+	exposedPorts[tcpContainerPort] = struct{}{}
+	exposedPorts[udpContainerPort] = struct{}{}
 	hostIP, _ := netip.ParseAddr("0.0.0.0")
-	portBindings[containerPort] = []network.PortBinding{
+	portBindings[tcpContainerPort] = []network.PortBinding{
+		{
+			HostIP:   hostIP,
+			HostPort: strconv.Itoa(int(config.Port)),
+		},
+	}
+	portBindings[udpContainerPort] = []network.PortBinding{
 		{
 			HostIP:   hostIP,
 			HostPort: strconv.Itoa(int(config.Port)),
