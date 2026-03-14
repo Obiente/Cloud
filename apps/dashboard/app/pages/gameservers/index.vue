@@ -178,6 +178,36 @@
             required
           />
 
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold" color="primary">
+              Network Configuration
+            </OuiText>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <OuiInput
+                v-model="newGameServer.portStr"
+                label="Primary Port (Optional)"
+                type="number"
+                min="1"
+                max="65535"
+                step="1"
+                placeholder="25565"
+                hint="Leave empty to auto-assign an available port"
+              />
+
+              <OuiInput
+                v-model="newGameServer.extraPortsCountStr"
+                label="Additional Ports"
+                type="number"
+                min="0"
+                max="2"
+                step="1"
+                placeholder="0"
+                hint="Allocate 0 to 2 extra ports (TCP + UDP)"
+              />
+            </div>
+          </OuiStack>
+
           <OuiInput
             v-model="newGameServer.serverVersion"
             label="Server Version (Optional)"
@@ -336,6 +366,7 @@ const gameServers = computed(() => {
       gameType: gs.gameType?.toString(),
       status: status,
       port: gs.port,
+      extraPorts: gs.extraPorts || [],
       cpuCores: gs.cpuCores,
       memoryBytes: gs.memoryBytes ? Number(gs.memoryBytes) : undefined,
       updatedAt: updatedAt,
@@ -357,6 +388,8 @@ const newGameServer = ref({
   gameType: GameType.MINECRAFT,
   memoryGBStr: "2",
   cpuCoresStr: "1",
+  portStr: "",
+  extraPortsCountStr: "0",
   serverVersion: "",
   description: "",
 });
@@ -524,6 +557,24 @@ const createGameServer = async () => {
     return;
   }
 
+  const portValue = newGameServer.value.portStr.trim();
+  const extraPortsCountValue = newGameServer.value.extraPortsCountStr.trim();
+
+  const requestedPort = portValue ? Number.parseInt(portValue, 10) : undefined;
+  if (
+    requestedPort !== undefined &&
+    (!Number.isInteger(requestedPort) || requestedPort < 1 || requestedPort > 65535)
+  ) {
+    toast.error("Primary port must be a whole number between 1 and 65535");
+    return;
+  }
+
+  const extraPortsCount = extraPortsCountValue === "" ? 0 : Number.parseInt(extraPortsCountValue, 10);
+  if (!Number.isInteger(extraPortsCount) || extraPortsCount < 0 || extraPortsCount > 2) {
+    toast.error("Additional ports must be between 0 and 2");
+    return;
+  }
+
   isCreating.value = true;
   createError.value = null;
 
@@ -539,6 +590,14 @@ const createGameServer = async () => {
       cpuCores: cpuCores,
       envVars: {},
     };
+
+    if (requestedPort !== undefined) {
+      request.port = requestedPort;
+    }
+
+    if (extraPortsCount > 0) {
+      request.extraPortsCount = extraPortsCount;
+    }
 
     if (newGameServer.value.serverVersion) {
       request.serverVersion = newGameServer.value.serverVersion;
@@ -563,6 +622,8 @@ const createGameServer = async () => {
           gameType: GameType.MINECRAFT,
           memoryGBStr: "2",
           cpuCoresStr: "1",
+          portStr: "",
+          extraPortsCountStr: "0",
           serverVersion: "",
           description: "",
         };

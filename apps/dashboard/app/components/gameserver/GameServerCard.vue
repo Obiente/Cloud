@@ -20,6 +20,13 @@
             >Port: {{ gameServer?.port }}</OuiText
           >
         </OuiFlex>
+        <OuiText
+          v-if="!loading && (gameServer?.extraPorts?.length || 0) > 0"
+          size="xs"
+          color="secondary"
+        >
+          Extra ports: {{ gameServer?.extraPorts?.join(", ") }}
+        </OuiText>
       </OuiStack>
     </template>
 
@@ -148,6 +155,7 @@
     gameType?: string;
     status: string;
     port?: number;
+    extraPorts?: number[];
     cpuCores?: number;
     memoryBytes?: number | bigint;
     updatedAt?: string;

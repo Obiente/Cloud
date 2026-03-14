@@ -61,7 +61,28 @@
                     :disabled="isSaving"
                     hint="Maximum CPU cores allocation"
                   />
+
+                  <!-- Extra Ports -->
+                  <OuiInput
+                    v-model="formData.extraPortsCount"
+                    label="Additional Ports"
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="1"
+                    placeholder="0"
+                    required
+                    :disabled="isSaving"
+                    hint="Allocate 0 to 2 extra ports (TCP + UDP)"
+                  />
                 </div>
+
+                <OuiText v-if="allocatedExtraPortsLabel" size="xs" color="secondary">
+                  Current extra ports: {{ allocatedExtraPortsLabel }}
+                </OuiText>
+                <OuiText size="xs" color="secondary">
+                  Changing port allocation may require a server restart to fully apply.
+                </OuiText>
               </OuiStack>
 
               <!-- Game-Specific Settings -->
@@ -264,6 +285,7 @@ const formData = ref({
   description: "",
   memoryGB: "",
   cpuCores: "",
+  extraPortsCount: "0",
   startCommand: "",
 });
 
@@ -285,6 +307,11 @@ interface GameSetting {
 
 // Game-specific settings reactive array
 const gameSpecificSettings = ref<GameSetting[]>([]);
+
+const allocatedExtraPortsLabel = computed(() => {
+  const extraPorts = props.gameServer?.extraPorts || [];
+  return extraPorts.length > 0 ? extraPorts.join(", ") : "";
+});
 
 // Get game-specific settings based on game type
 const initializeGameSpecificSettings = () => {
@@ -717,6 +744,7 @@ const initializeForm = () => {
           : Number(props.gameServer.memoryBytes)) / (1024 * 1024 * 1024)).toFixed(2)
       : "",
     cpuCores: props.gameServer.cpuCores?.toString() || "",
+    extraPortsCount: (props.gameServer.extraPorts?.length || 0).toString(),
     startCommand: props.gameServer.startCommand || "",
   };
 
@@ -761,6 +789,11 @@ const hasChanges = computed(() => {
 
   // Check CPU cores
   if (cpuCores !== props.gameServer.cpuCores) return true;
+
+  // Check extra ports count
+  const currentExtraPortsCount = props.gameServer.extraPorts?.length || 0;
+  const requestedExtraPortsCount = Number.parseInt(formData.value.extraPortsCount || "0", 10);
+  if ((Number.isInteger(requestedExtraPortsCount) ? requestedExtraPortsCount : 0) !== currentExtraPortsCount) return true;
 
   // Check start command
   if (formData.value.startCommand !== (props.gameServer.startCommand || "")) return true;
@@ -825,6 +858,12 @@ const handleSave = async () => {
   try {
     const memoryBytes = BigInt(Math.round(parseFloat(formData.value.memoryGB) * 1024 * 1024 * 1024));
     const cpuCores = parseFloat(formData.value.cpuCores);
+    const extraPortsCount = Number.parseInt(formData.value.extraPortsCount || "0", 10);
+
+    if (!Number.isInteger(extraPortsCount) || extraPortsCount < 0 || extraPortsCount > 2) {
+      toast.error("Additional ports must be between 0 and 2");
+      return;
+    }
 
     // Convert env vars array to map
     const envVarsMap: Record<string, string> = {};
@@ -856,6 +895,7 @@ const handleSave = async () => {
       description: formData.value.description || undefined,
       memoryBytes,
       cpuCores,
+      extraPortsCount,
       startCommand: formData.value.startCommand || undefined,
       envVars: envVarsMap,
       serverVersion,

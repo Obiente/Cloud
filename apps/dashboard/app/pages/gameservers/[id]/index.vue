@@ -181,9 +181,18 @@
                   <ServerIcon class="h-5 w-5 text-secondary" />
                   <OuiText size="sm" color="secondary">Port</OuiText>
                 </OuiFlex>
-                <OuiText size="2xl" weight="bold" color="primary">
-                  {{ gameServer.port || "N/A" }}
-                </OuiText>
+                <OuiStack gap="xs">
+                  <OuiText size="2xl" weight="bold" color="primary">
+                    {{ gameServer.port || "N/A" }}
+                  </OuiText>
+                  <OuiText
+                    v-if="(gameServer.extraPorts?.length || 0) > 0"
+                    size="xs"
+                    color="secondary"
+                  >
+                    Extra: {{ gameServer.extraPorts.join(", ") }}
+                  </OuiText>
+                </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>

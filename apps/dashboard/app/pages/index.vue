@@ -1127,6 +1127,7 @@ const exampleGameServer: GameServer = {
   name: "Minecraft Server",
   status: GameServerStatus.RUNNING,
   port: 25565,
+  extraPorts: [],
   gameType: GameType.MINECRAFT,
   cpuCores: 2,
   memoryBytes: BigInt(4 * 1024 * 1024 * 1024), // 4 GB
