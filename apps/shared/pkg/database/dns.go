@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -450,6 +451,88 @@ func GetGameServerType(gameServerID string) (int32, error) {
 func GetGameServerIP(gameServerID string) (string, error) {
 	nodeIP, _, err := GetGameServerLocation(gameServerID)
 	return nodeIP, err
+}
+
+// GetGameServerLocationForDNS returns the best game server location for DNS resolution.
+// It first prefers active locations, then optionally falls back to a recently updated
+// stale location for a short grace period after stop/restart transitions.
+// Returns:
+//   - nodeIP: resolved node IP/hostname
+//   - port: game server port
+//   - isStale: true when serving a stale (non-active) location
+//   - staleRemaining: remaining grace period when isStale=true
+func GetGameServerLocationForDNS(gameServerID string, staleGracePeriod time.Duration) (nodeIP string, port int32, isStale bool, staleRemaining time.Duration, err error) {
+	preferredStatuses := []string{"running", "restarting", "starting", "created"}
+
+	// 1) Prefer active/recovering locations first.
+	var activeLocation GameServerLocation
+	activeResult := DB.Where("game_server_id = ? AND status IN ?", gameServerID, preferredStatuses).
+		Order("updated_at DESC").
+		First(&activeLocation)
+	if activeResult.Error == nil {
+		nodeIP, err = resolveGameServerLocationNodeIP(activeLocation, gameServerID)
+		if err != nil {
+			return "", 0, false, 0, err
+		}
+		return nodeIP, activeLocation.Port, false, 0, nil
+	}
+	if activeResult.Error != nil && !errors.Is(activeResult.Error, gorm.ErrRecordNotFound) {
+		return "", 0, false, 0, fmt.Errorf("failed to query active game server location: %w", activeResult.Error)
+	}
+
+	// 2) Optional stale fallback (for short DNS continuity after stop).
+	if staleGracePeriod <= 0 {
+		return "", 0, false, 0, fmt.Errorf("no active game server found for game_server_id: %s", gameServerID)
+	}
+
+	cutoff := time.Now().Add(-staleGracePeriod)
+	var recentLocation GameServerLocation
+	recentResult := DB.Where("game_server_id = ? AND updated_at >= ?", gameServerID, cutoff).
+		Order("updated_at DESC").
+		First(&recentLocation)
+	if recentResult.Error != nil {
+		if errors.Is(recentResult.Error, gorm.ErrRecordNotFound) {
+			return "", 0, false, 0, fmt.Errorf("no recent game server location found for game_server_id: %s", gameServerID)
+		}
+		return "", 0, false, 0, fmt.Errorf("failed to query recent game server location: %w", recentResult.Error)
+	}
+
+	nodeIP, err = resolveGameServerLocationNodeIP(recentLocation, gameServerID)
+	if err != nil {
+		return "", 0, false, 0, err
+	}
+
+	remaining := recentLocation.UpdatedAt.Add(staleGracePeriod).Sub(time.Now())
+	if remaining < time.Second {
+		remaining = time.Second
+	}
+
+	return nodeIP, recentLocation.Port, true, remaining, nil
+}
+
+func resolveGameServerLocationNodeIP(location GameServerLocation, gameServerID string) (string, error) {
+	// If NodeIP is not set, try to get it from NodeMetadata
+	if location.NodeIP == "" {
+		var node NodeMetadata
+		if err := DB.First(&node, "id = ?", location.NodeID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return "", fmt.Errorf("node %s not found for game server %s", location.NodeID, gameServerID)
+			}
+			return "", fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
+		}
+
+		if node.IP != "" {
+			return node.IP, nil
+		}
+
+		if location.NodeHostname != "" {
+			return location.NodeHostname, nil
+		}
+
+		return "", fmt.Errorf("node %s has no IP address configured for game server %s", location.NodeID, gameServerID)
+	}
+
+	return location.NodeIP, nil
 }
 
 func isStoppedStatus(status string) bool {

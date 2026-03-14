@@ -22,13 +22,15 @@ import (
 )
 
 const (
-	cacheTTL = 60 * time.Second // Cache DNS responses for 60 seconds
+	cacheTTL                   = 60 * time.Second // Cache DNS responses for 60 seconds
+	defaultGameServerDNSGrace = 2 * time.Minute  // Keep stale game server DNS briefly after stop
 )
 
 type DNSServer struct {
-	db         *gorm.DB
-	nodeIPMap  map[string][]string
-	redisCache *database.RedisCache
+	db                       *gorm.DB
+	nodeIPMap                map[string][]string
+	redisCache               *database.RedisCache
+	gameServerStaleGraceTime time.Duration
 }
 
 func NewDNSServer() (*DNSServer, error) {
@@ -112,6 +114,24 @@ func NewDNSServer() (*DNSServer, error) {
 	}
 	s.redisCache = database.RedisClient
 
+	// Configure grace period for stale game server DNS answers.
+	// This prevents immediate NXDOMAIN after stop/restart, reducing client disruption.
+	s.gameServerStaleGraceTime = defaultGameServerDNSGrace
+	graceEnv := strings.TrimSpace(os.Getenv("GAMESERVER_DNS_STALE_GRACE"))
+	if graceEnv == "" {
+		graceEnv = strings.TrimSpace(os.Getenv("GAME_SERVER_DNS_STALE_GRACE"))
+	}
+	if graceEnv != "" {
+		if parsed, parseErr := time.ParseDuration(graceEnv); parseErr != nil {
+			log.Printf("[DNS] WARNING: Invalid GAMESERVER_DNS_STALE_GRACE=%q: %v (using default %s)", graceEnv, parseErr, defaultGameServerDNSGrace)
+		} else if parsed < 0 {
+			log.Printf("[DNS] WARNING: Negative GAMESERVER_DNS_STALE_GRACE=%q is invalid (using default %s)", graceEnv, defaultGameServerDNSGrace)
+		} else {
+			s.gameServerStaleGraceTime = parsed
+		}
+	}
+	log.Printf("[DNS] Game server DNS stale grace configured to %s", s.gameServerStaleGraceTime)
+
 	return s, nil
 }
 
@@ -141,6 +161,22 @@ func (s *DNSServer) setCache(ctx context.Context, deploymentID string, ips []str
 
 	cacheKey := fmt.Sprintf("dns:deployment:%s", deploymentID)
 	s.redisCache.Set(ctx, cacheKey, ips, cacheTTL)
+}
+
+func (s *DNSServer) getGameServerAnswerTTL(isStale bool, staleRemaining time.Duration) uint32 {
+	if !isStale {
+		return uint32(cacheTTL.Seconds())
+	}
+
+	ttl := staleRemaining
+	if ttl > cacheTTL {
+		ttl = cacheTTL
+	}
+	if ttl < time.Second {
+		ttl = time.Second
+	}
+
+	return uint32(ttl.Seconds())
 }
 
 func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
@@ -263,10 +299,11 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 		return false
 	}
 
-	// Check local database FIRST - our own records always get priority
-	// Get game server location (IP and port) from local database
-	nodeIP, port, err := database.GetGameServerLocation(gameServerID)
+	// Check local database FIRST - our own records always get priority.
+	// Includes short stale fallback after stop/restart to reduce DNS disruption.
+	nodeIP, port, isStale, staleRemaining, err := database.GetGameServerLocationForDNS(gameServerID, s.gameServerStaleGraceTime)
 	if err == nil && nodeIP != "" {
+		ttl := s.getGameServerAnswerTTL(isStale, staleRemaining)
 		// Successfully got from local database - use it
 		// For SRV records, use the A record hostname as target
 		// Format: gs-123.my.obiente.cloud
@@ -277,7 +314,7 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 				Name:   q.Name,
 				Rrtype: dns.TypeSRV,
 				Class:  dns.ClassINET,
-				Ttl:    uint32(cacheTTL.Seconds()),
+					Ttl:    ttl,
 			},
 			Priority: 0,
 			Weight:   0,
@@ -310,12 +347,16 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 					Name:   targetHostname + ".",
 					Rrtype: dns.TypeA,
 					Class:  dns.ClassINET,
-					Ttl:    uint32(cacheTTL.Seconds()),
+						Ttl:    ttl,
 				},
 				A: ip,
 			}
 			msg.Extra = append(msg.Extra, a)
-			log.Printf("[DNS] Resolved SRV for game server %s via local database", gameServerID)
+				if isStale {
+					log.Printf("[DNS] Resolved SRV for game server %s via stale local location (remaining grace: %s)", gameServerID, staleRemaining)
+				} else {
+					log.Printf("[DNS] Resolved SRV for game server %s via local database", gameServerID)
+				}
 			return true
 		}
 	}
@@ -348,10 +389,10 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 					}
 					// If delegated A record not found, try local database
 					if nodeIP == "" {
-						localIP, localErr := database.GetGameServerIP(gameServerID)
+						localIP, _, localIsStale, localStaleRemaining, localErr := database.GetGameServerLocationForDNS(gameServerID, s.gameServerStaleGraceTime)
 						if localErr == nil && localIP != "" {
 							nodeIP = localIP
-							ttl = uint32(cacheTTL.Seconds()) // Use cache TTL for local records
+							ttl = s.getGameServerAnswerTTL(localIsStale, localStaleRemaining)
 						}
 					}
 
@@ -618,9 +659,10 @@ func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, do
 func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Question, gameServerID string) bool {
 	log.Printf("[DNS] Handling A query for game server %s (domain: %s)", gameServerID, domain)
 
-	// Check local database FIRST - our own records always get priority
-	// Get game server IP from local database
-	nodeIP, err := database.GetGameServerIP(gameServerID)
+	// Check local database FIRST - our own records always get priority.
+	// Includes short stale fallback after stop/restart to reduce DNS disruption.
+	nodeIP, _, isStale, staleRemaining, err := database.GetGameServerLocationForDNS(gameServerID, s.gameServerStaleGraceTime)
+	recordTTL := s.getGameServerAnswerTTL(isStale, staleRemaining)
 	if err != nil {
 		log.Printf("[DNS] Failed to resolve game server %s locally: %v", gameServerID, err)
 		// Check if game server exists but is not running
@@ -669,12 +711,16 @@ func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Qu
 				Name:   q.Name,
 				Rrtype: dns.TypeA,
 				Class:  dns.ClassINET,
-				Ttl:    uint32(cacheTTL.Seconds()),
+				Ttl:    recordTTL,
 			},
 			A: ip,
 		}
 		msg.Answer = append(msg.Answer, rr)
-		log.Printf("[DNS] Resolved game server %s via local database: %s", gameServerID, ip.String())
+		if isStale {
+			log.Printf("[DNS] Resolved game server %s via stale local location: %s (remaining grace: %s)", gameServerID, ip.String(), staleRemaining)
+		} else {
+			log.Printf("[DNS] Resolved game server %s via local database: %s", gameServerID, ip.String())
+		}
 		return true
 	}
 
