@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -266,31 +267,78 @@ func (r *GameServerRepository) HardDelete(ctx context.Context, id string) error 
 	return nil
 }
 
-// ParseGameServerExtraPorts parses stored extra_ports JSON and returns sanitized ports.
+// ParseGameServerExtraPorts parses stored extra_ports and returns sanitized ports.
+// Supports JSON arrays ("[25566,25567]"), quoted JSON strings, and PostgreSQL array format ("{25566,25567}").
 func ParseGameServerExtraPorts(raw string) []int32 {
-	if strings.TrimSpace(raw) == "" {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || strings.EqualFold(raw, "null") {
 		return []int32{}
+	}
+
+	sanitize := func(ports []int32) []int32 {
+		seen := make(map[int32]struct{}, len(ports))
+		normalized := make([]int32, 0, len(ports))
+		for _, port := range ports {
+			if port <= 0 || port > 65535 {
+				continue
+			}
+			if _, exists := seen[port]; exists {
+				continue
+			}
+			seen[port] = struct{}{}
+			normalized = append(normalized, port)
+		}
+		return normalized
+	}
+
+	parseDelimited := func(value string) []int32 {
+		parts := strings.Split(value, ",")
+		ports := make([]int32, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.Trim(strings.TrimSpace(part), "\"")
+			if trimmed == "" {
+				continue
+			}
+			number, err := strconv.ParseInt(trimmed, 10, 32)
+			if err != nil {
+				continue
+			}
+			ports = append(ports, int32(number))
+		}
+		return sanitize(ports)
 	}
 
 	var ports []int32
-	if err := json.Unmarshal([]byte(raw), &ports); err != nil {
+	if err := json.Unmarshal([]byte(raw), &ports); err == nil {
+		return sanitize(ports)
+	}
+
+	var encoded string
+	if err := json.Unmarshal([]byte(raw), &encoded); err == nil {
+		encoded = strings.TrimSpace(encoded)
+		if err := json.Unmarshal([]byte(encoded), &ports); err == nil {
+			return sanitize(ports)
+		}
+		raw = encoded
+	}
+
+	if strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}") {
+		inner := strings.TrimSpace(raw[1 : len(raw)-1])
+		if inner == "" {
+			return []int32{}
+		}
+		return parseDelimited(inner)
+	}
+
+	if strings.Contains(raw, ",") {
+		return parseDelimited(raw)
+	}
+
+	number, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
 		return []int32{}
 	}
-
-	seen := make(map[int32]struct{}, len(ports))
-	normalized := make([]int32, 0, len(ports))
-	for _, port := range ports {
-		if port <= 0 || port > 65535 {
-			continue
-		}
-		if _, exists := seen[port]; exists {
-			continue
-		}
-		seen[port] = struct{}{}
-		normalized = append(normalized, port)
-	}
-
-	return normalized
+	return sanitize([]int32{int32(number)})
 }
 
 func (r *GameServerRepository) getUsedPortsSet(ctx context.Context, excludeGameServerID string) (map[int32]struct{}, error) {

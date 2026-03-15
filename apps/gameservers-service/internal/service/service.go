@@ -3,6 +3,8 @@ package gameservers
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"gameservers-service/internal/catalog/modrinth"
 	"gameservers-service/internal/orchestrator"
@@ -22,6 +24,15 @@ type Service struct {
 	permissionChecker *auth.PermissionChecker
 	manager           *orchestrator.GameServerManager // Manager created directly in gameservers-service
 	modClient         *modrinth.Client
+	resourcePressureMu    sync.Mutex
+	resourcePressureState map[string]*resourcePressureState
+}
+
+type resourcePressureState struct {
+	memoryFirstExceededAt   time.Time
+	restartInProgress       bool
+	cooldownUntil           time.Time
+	lastObservedMemoryUsage int64
 }
 
 func NewService(repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
@@ -30,6 +41,7 @@ func NewService(repo *database.GameServerRepository, manager *orchestrator.GameS
 		permissionChecker: auth.NewPermissionChecker(),
 		manager:           manager,
 		modClient:         modrinth.NewClient(nil),
+		resourcePressureState: make(map[string]*resourcePressureState),
 	}
 }
 

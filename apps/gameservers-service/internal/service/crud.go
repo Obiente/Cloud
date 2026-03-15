@@ -844,7 +844,7 @@ func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.Ga
 // updateContainerResourceLimits updates the resource limits of a running container
 func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID string, memoryBytes int64, cpuCores int32) error {
 	// Create Docker client
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	dockerClient, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return fmt.Errorf("failed to create Docker client: %w", err)
 	}
@@ -856,13 +856,26 @@ func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID
 	// Convert CPU cores to CPU shares (1024 shares = 1 core)
 	cpuShares := int64(cpuCores) * 1024
 
+	// Keep memory behavior consistent with container creation:
+	// - Soft limit at requested memory
+	// - Hard limit with 20% headroom for temporary spikes
+	// - OOM killer disabled to reduce abrupt server terminations
+	// - No swap for low-latency game workloads
+	memoryReservation := memoryBytes
+	memoryHardLimit := int64(float64(memoryBytes) * 1.2)
+	oomKillDisable := true
+	memorySwap := int64(0)
+
 	// Update container resources
 
 	_, err = dockerClient.ContainerUpdate(ctx, containerID, client.ContainerUpdateOptions{
 		Resources: &container.Resources{
-			Memory:    memoryBytes,
-			CPUShares: cpuShares, // Relative priority
-			NanoCPUs:  nanoCPUs,  // Hard CPU limit
+			Memory:            memoryHardLimit,
+			MemoryReservation: memoryReservation,
+			MemorySwap:        memorySwap,
+			OomKillDisable:    &oomKillDisable,
+			CPUShares:         cpuShares, // Relative priority
+			NanoCPUs:          nanoCPUs,  // Hard CPU limit
 		},
 	})
 	if err != nil {

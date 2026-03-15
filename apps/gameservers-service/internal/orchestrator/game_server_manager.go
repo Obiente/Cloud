@@ -46,7 +46,7 @@ type GameServerConfig struct {
 
 // NewGameServerManager creates a new game server manager
 func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServerManager, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}

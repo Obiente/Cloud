@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	cacheTTL                  = 60 * time.Second // Cache DNS responses for 60 seconds
-	defaultGameServerDNSGrace = 2 * time.Minute  // Keep stale game server DNS briefly after stop
+	cacheTTL                  = 5 * time.Minute // Cache DNS responses for 5 minutes
+	defaultGameServerDNSGrace = 2 * time.Minute // Keep stale game server DNS briefly after stop
 )
 
 type DNSServer struct {

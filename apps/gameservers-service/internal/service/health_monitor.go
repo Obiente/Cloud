@@ -2,6 +2,7 @@ package gameservers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"github.com/moby/moby/client"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
+)
+
+const (
+	resourcePressureGracePeriod     = 5 * time.Minute
+	resourcePressureRestartCooldown = 10 * time.Minute
+	resourcePressureStatsTimeout    = 5 * time.Second
 )
 
 // checkAndSyncGameServerStatus checks all game servers that should be running
@@ -42,7 +49,7 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 	errorCount := 0
 
 	// Get Docker client for container inspection
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	dockerClient, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Warn("[HealthMonitor] Failed to create Docker client: %v", err)
 		return
@@ -61,6 +68,7 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 		containerInfo, err := dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			// Container doesn't exist - update status to STOPPED
+			s.clearResourcePressureState(gameServer.ID)
 			containerIDShort := *gameServer.ContainerID
 			if len(containerIDShort) > 12 {
 				containerIDShort = containerIDShort[:12]
@@ -89,6 +97,8 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 
 		// Sync status based on actual container state
 		if isRunning {
+			s.evaluateResourcePressure(ctx, dockerClient, &gameServer)
+
 			// Container is running - update to RUNNING if not already
 			if currentStatus != statusRunning {
 				logger.Info("[HealthMonitor] Game server %s container is running but DB status is %d, updating to RUNNING", gameServer.ID, currentStatus)
@@ -108,6 +118,8 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 				skippedCount++
 			}
 		} else {
+			s.clearResourcePressureState(gameServer.ID)
+
 			// Container is not running - check exit code to determine status
 			exitCode := containerInfo.Container.State.ExitCode
 			if exitCode == 0 {
@@ -163,6 +175,203 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 	}
 
 	logger.Debug("[HealthMonitor] Check complete: %d synced, %d skipped (already correct), %d errors", syncedCount, skippedCount, errorCount)
+}
+
+func (s *Service) clearResourcePressureState(gameServerID string) {
+	s.resourcePressureMu.Lock()
+	delete(s.resourcePressureState, gameServerID)
+	s.resourcePressureMu.Unlock()
+}
+
+func (s *Service) evaluateResourcePressure(ctx context.Context, dockerClient *client.Client, gameServer *database.GameServer) {
+	if gameServer == nil || gameServer.ContainerID == nil || *gameServer.ContainerID == "" {
+		return
+	}
+
+	statsCtx, cancel := context.WithTimeout(ctx, resourcePressureStatsTimeout)
+	defer cancel()
+
+	memoryUsage, err := getContainerMemoryUsage(statsCtx, dockerClient, *gameServer.ContainerID)
+	if err != nil {
+		logger.Debug("[HealthMonitor] Failed to read memory usage for game server %s: %v", gameServer.ID, err)
+		return
+	}
+
+	now := time.Now()
+	memoryExceeded := gameServer.MemoryBytes > 0 && memoryUsage > gameServer.MemoryBytes
+
+	s.resourcePressureMu.Lock()
+	state, exists := s.resourcePressureState[gameServer.ID]
+	if !exists {
+		state = &resourcePressureState{}
+		s.resourcePressureState[gameServer.ID] = state
+	}
+	state.lastObservedMemoryUsage = memoryUsage
+
+	if !state.cooldownUntil.IsZero() && now.Before(state.cooldownUntil) {
+		if !memoryExceeded {
+			state.memoryFirstExceededAt = time.Time{}
+		}
+		s.resourcePressureMu.Unlock()
+		return
+	}
+
+	if memoryExceeded {
+		if state.memoryFirstExceededAt.IsZero() {
+			state.memoryFirstExceededAt = now
+		}
+	} else {
+		state.memoryFirstExceededAt = time.Time{}
+	}
+
+	if state.restartInProgress || !memoryExceeded || now.Sub(state.memoryFirstExceededAt) < resourcePressureGracePeriod {
+		s.resourcePressureMu.Unlock()
+		return
+	}
+
+	firstExceededAt := state.memoryFirstExceededAt
+	state.restartInProgress = true
+	state.cooldownUntil = now.Add(resourcePressureRestartCooldown)
+	state.memoryFirstExceededAt = time.Time{}
+	s.resourcePressureMu.Unlock()
+
+	go s.restartForMemoryPressure(gameServer.ID, memoryUsage, gameServer.MemoryBytes, firstExceededAt)
+}
+
+func getContainerMemoryUsage(ctx context.Context, dockerClient *client.Client, containerID string) (int64, error) {
+	statsResp, err := dockerClient.ContainerStats(ctx, containerID, client.ContainerStatsOptions{Stream: false})
+	if err != nil {
+		return 0, fmt.Errorf("failed to get container stats: %w", err)
+	}
+	defer statsResp.Body.Close()
+
+	var statsJSON struct {
+		MemoryStats struct {
+			Usage uint64 `json:"usage"`
+		} `json:"memory_stats"`
+	}
+
+	if err := json.NewDecoder(statsResp.Body).Decode(&statsJSON); err != nil {
+		return 0, fmt.Errorf("failed to decode container stats: %w", err)
+	}
+
+	return int64(statsJSON.MemoryStats.Usage), nil
+}
+
+func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int64, memoryLimit int64, firstExceededAt time.Time) {
+	defer func() {
+		s.resourcePressureMu.Lock()
+		if state, exists := s.resourcePressureState[gameServerID]; exists {
+			state.restartInProgress = false
+		}
+		s.resourcePressureMu.Unlock()
+	}()
+
+	restartCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		logger.Warn("[HealthMonitor] Cannot restart game server %s for resource pressure: %v", gameServerID, err)
+		return
+	}
+
+	if err := manager.RestartGameServer(restartCtx, gameServerID); err != nil {
+		logger.Warn("[HealthMonitor] Failed to restart game server %s after sustained memory pressure: %v", gameServerID, err)
+		s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, false, err.Error())
+		return
+	}
+
+	go func() {
+		updateCtx, updateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer updateCancel()
+		if err := s.updateGameServerStorage(updateCtx, gameServerID); err != nil {
+			logger.Warn("[HealthMonitor] Failed to update storage after memory-pressure restart for game server %s: %v", gameServerID, err)
+		}
+	}()
+
+	logger.Warn("[HealthMonitor] Restarted game server %s after sustained memory pressure for over %v (usage=%d bytes, limit=%d bytes)", gameServerID, resourcePressureGracePeriod, memoryUsage, memoryLimit)
+	s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, true, "")
+}
+
+func (s *Service) sendMemoryPressureNotification(ctx context.Context, gameServerID string, memoryUsage int64, memoryLimit int64, firstExceededAt time.Time, restarted bool, restartErr string) {
+	gameServer, err := s.repo.GetByID(ctx, gameServerID)
+	if err != nil {
+		logger.Warn("[HealthMonitor] Failed to load game server %s for resource-pressure notification: %v", gameServerID, err)
+		return
+	}
+
+	if gameServer.CreatedBy == "" {
+		logger.Warn("[HealthMonitor] Cannot send resource-pressure notification for game server %s: no CreatedBy user ID", gameServer.ID)
+		return
+	}
+
+	observedDisplay := fmt.Sprintf("%.2f GB", float64(memoryUsage)/(1024*1024*1024))
+	limitDisplay := fmt.Sprintf("%.2f GB", float64(memoryLimit)/(1024*1024*1024))
+	metadata := map[string]string{
+		"game_server_id":       gameServer.ID,
+		"game_server_name":     gameServer.Name,
+		"reason":               "memory_pressure",
+		"grace_period_seconds": fmt.Sprintf("%d", int(resourcePressureGracePeriod.Seconds())),
+		"first_exceeded_at":    firstExceededAt.UTC().Format(time.RFC3339),
+		"auto_restarted":       fmt.Sprintf("%t", restarted),
+		"observed_usage_bytes": fmt.Sprintf("%d", memoryUsage),
+		"configured_limit_bytes": fmt.Sprintf("%d", memoryLimit),
+	}
+
+	var title string
+	var message string
+	severity := notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH
+
+	if restarted {
+		title = fmt.Sprintf("Game Server \"%s\" Auto-Restarted After Sustained High Memory Usage", gameServer.Name)
+		message = fmt.Sprintf(
+			"Your game server \"%s\" exceeded its configured memory limit for more than 5 minutes and was gracefully restarted to prevent an abrupt crash. Observed usage: %s, configured limit: %s.",
+			gameServer.Name,
+			observedDisplay,
+			limitDisplay,
+		)
+	} else {
+		severity = notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_CRITICAL
+		title = fmt.Sprintf("Game Server \"%s\" Hit Sustained High Memory Usage (Restart Failed)", gameServer.Name)
+		message = fmt.Sprintf(
+			"Your game server \"%s\" exceeded its configured memory limit for more than 5 minutes. An automatic graceful restart was attempted but failed: %s. Observed usage: %s, configured limit: %s.",
+			gameServer.Name,
+			restartErr,
+			observedDisplay,
+			limitDisplay,
+		)
+	}
+
+	actionURL := fmt.Sprintf("/gameservers/%s", gameServer.ID)
+	actionLabel := "View Game Server"
+
+	var orgID *string
+	if gameServer.OrganizationID != "" {
+		orgID = &gameServer.OrganizationID
+	}
+
+	if restartErr != "" {
+		metadata["restart_error"] = restartErr
+	}
+
+	if err := notifications.CreateNotificationForUser(
+		ctx,
+		gameServer.CreatedBy,
+		orgID,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM,
+		severity,
+		title,
+		message,
+		&actionURL,
+		&actionLabel,
+		metadata,
+	); err != nil {
+		logger.Warn("[HealthMonitor] Failed to send resource-pressure notification for game server %s to user %s: %v", gameServer.ID, gameServer.CreatedBy, err)
+		return
+	}
+
+	logger.Info("[HealthMonitor] Sent resource-pressure notification for game server %s to user %s", gameServer.ID, gameServer.CreatedBy)
 }
 
 // sendOOMKillNotification sends a notification to the game server owner about an OOM kill
