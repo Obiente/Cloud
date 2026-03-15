@@ -57,6 +57,21 @@ const (
 	// GameServerServiceRestartGameServerProcedure is the fully-qualified name of the
 	// GameServerService's RestartGameServer RPC.
 	GameServerServiceRestartGameServerProcedure = "/obiente.cloud.gameservers.v1.GameServerService/RestartGameServer"
+	// GameServerServiceGetGameServerHTTPRoutesProcedure is the fully-qualified name of the
+	// GameServerService's GetGameServerHTTPRoutes RPC.
+	GameServerServiceGetGameServerHTTPRoutesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerHTTPRoutes"
+	// GameServerServiceUpsertGameServerHTTPRouteProcedure is the fully-qualified name of the
+	// GameServerService's UpsertGameServerHTTPRoute RPC.
+	GameServerServiceUpsertGameServerHTTPRouteProcedure = "/obiente.cloud.gameservers.v1.GameServerService/UpsertGameServerHTTPRoute"
+	// GameServerServiceDeleteGameServerHTTPRouteProcedure is the fully-qualified name of the
+	// GameServerService's DeleteGameServerHTTPRoute RPC.
+	GameServerServiceDeleteGameServerHTTPRouteProcedure = "/obiente.cloud.gameservers.v1.GameServerService/DeleteGameServerHTTPRoute"
+	// GameServerServiceGetGameServerDomainVerificationTokenProcedure is the fully-qualified name of the
+	// GameServerService's GetGameServerDomainVerificationToken RPC.
+	GameServerServiceGetGameServerDomainVerificationTokenProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerDomainVerificationToken"
+	// GameServerServiceVerifyGameServerDomainProcedure is the fully-qualified name of the
+	// GameServerService's VerifyGameServerDomain RPC.
+	GameServerServiceVerifyGameServerDomainProcedure = "/obiente.cloud.gameservers.v1.GameServerService/VerifyGameServerDomain"
 	// GameServerServiceStreamGameServerStatusProcedure is the fully-qualified name of the
 	// GameServerService's StreamGameServerStatus RPC.
 	GameServerServiceStreamGameServerStatusProcedure = "/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerStatus"
@@ -147,6 +162,16 @@ type GameServerServiceClient interface {
 	StopGameServer(context.Context, *connect.Request[v1.StopGameServerRequest]) (*connect.Response[v1.StopGameServerResponse], error)
 	// Restart a game server
 	RestartGameServer(context.Context, *connect.Request[v1.RestartGameServerRequest]) (*connect.Response[v1.RestartGameServerResponse], error)
+	// Get HTTP routing rules for a game server (Traefik)
+	GetGameServerHTTPRoutes(context.Context, *connect.Request[v1.GetGameServerHTTPRoutesRequest]) (*connect.Response[v1.GetGameServerHTTPRoutesResponse], error)
+	// Create or update an HTTP routing rule for a game server
+	UpsertGameServerHTTPRoute(context.Context, *connect.Request[v1.UpsertGameServerHTTPRouteRequest]) (*connect.Response[v1.UpsertGameServerHTTPRouteResponse], error)
+	// Delete an HTTP routing rule for a game server
+	DeleteGameServerHTTPRoute(context.Context, *connect.Request[v1.DeleteGameServerHTTPRouteRequest]) (*connect.Response[v1.DeleteGameServerHTTPRouteResponse], error)
+	// Get DNS TXT verification token for a custom game server domain
+	GetGameServerDomainVerificationToken(context.Context, *connect.Request[v1.GetGameServerDomainVerificationTokenRequest]) (*connect.Response[v1.GetGameServerDomainVerificationTokenResponse], error)
+	// Verify ownership of a custom game server domain
+	VerifyGameServerDomain(context.Context, *connect.Request[v1.VerifyGameServerDomainRequest]) (*connect.Response[v1.VerifyGameServerDomainResponse], error)
 	// Stream game server status updates
 	StreamGameServerStatus(context.Context, *connect.Request[v1.StreamGameServerStatusRequest]) (*connect.ServerStreamForClient[v1.GameServerStatusUpdate], error)
 	// Get game server logs
@@ -255,6 +280,36 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+GameServerServiceRestartGameServerProcedure,
 			connect.WithSchema(gameServerServiceMethods.ByName("RestartGameServer")),
+			connect.WithClientOptions(opts...),
+		),
+		getGameServerHTTPRoutes: connect.NewClient[v1.GetGameServerHTTPRoutesRequest, v1.GetGameServerHTTPRoutesResponse](
+			httpClient,
+			baseURL+GameServerServiceGetGameServerHTTPRoutesProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerHTTPRoutes")),
+			connect.WithClientOptions(opts...),
+		),
+		upsertGameServerHTTPRoute: connect.NewClient[v1.UpsertGameServerHTTPRouteRequest, v1.UpsertGameServerHTTPRouteResponse](
+			httpClient,
+			baseURL+GameServerServiceUpsertGameServerHTTPRouteProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("UpsertGameServerHTTPRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteGameServerHTTPRoute: connect.NewClient[v1.DeleteGameServerHTTPRouteRequest, v1.DeleteGameServerHTTPRouteResponse](
+			httpClient,
+			baseURL+GameServerServiceDeleteGameServerHTTPRouteProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("DeleteGameServerHTTPRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		getGameServerDomainVerificationToken: connect.NewClient[v1.GetGameServerDomainVerificationTokenRequest, v1.GetGameServerDomainVerificationTokenResponse](
+			httpClient,
+			baseURL+GameServerServiceGetGameServerDomainVerificationTokenProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerDomainVerificationToken")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyGameServerDomain: connect.NewClient[v1.VerifyGameServerDomainRequest, v1.VerifyGameServerDomainResponse](
+			httpClient,
+			baseURL+GameServerServiceVerifyGameServerDomainProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("VerifyGameServerDomain")),
 			connect.WithClientOptions(opts...),
 		),
 		streamGameServerStatus: connect.NewClient[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate](
@@ -400,37 +455,42 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // gameServerServiceClient implements GameServerServiceClient.
 type gameServerServiceClient struct {
-	listGameServers             *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
-	createGameServer            *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
-	getGameServer               *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
-	updateGameServer            *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
-	deleteGameServer            *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
-	startGameServer             *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
-	stopGameServer              *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
-	restartGameServer           *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
-	streamGameServerStatus      *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
-	getGameServerLogs           *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
-	streamGameServerLogs        *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
-	getGameServerMetrics        *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
-	streamGameServerMetrics     *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
-	getGameServerUsage          *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
-	listGameServerFiles         *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
-	searchGameServerFiles       *connect.Client[v1.SearchGameServerFilesRequest, v1.SearchGameServerFilesResponse]
-	getGameServerFile           *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
-	uploadGameServerFiles       *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
-	chunkUploadGameServerFiles  *connect.Client[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse]
-	deleteGameServerEntries     *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
-	createGameServerEntry       *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
-	writeGameServerFile         *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
-	renameGameServerEntry       *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
-	extractGameServerFile       *connect.Client[v1.ExtractGameServerFileRequest, v1.ExtractGameServerFileResponse]
-	createGameServerFileArchive *connect.Client[v1.CreateGameServerFileArchiveRequest, v1.CreateGameServerFileArchiveResponse]
-	getMinecraftPlayerUUID      *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
-	getMinecraftPlayerProfile   *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
-	listMinecraftProjects       *connect.Client[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse]
-	getMinecraftProjectVersions *connect.Client[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse]
-	getMinecraftProject         *connect.Client[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse]
-	installMinecraftProjectFile *connect.Client[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse]
+	listGameServers                      *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
+	createGameServer                     *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
+	getGameServer                        *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
+	updateGameServer                     *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
+	deleteGameServer                     *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
+	startGameServer                      *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
+	stopGameServer                       *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
+	restartGameServer                    *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
+	getGameServerHTTPRoutes              *connect.Client[v1.GetGameServerHTTPRoutesRequest, v1.GetGameServerHTTPRoutesResponse]
+	upsertGameServerHTTPRoute            *connect.Client[v1.UpsertGameServerHTTPRouteRequest, v1.UpsertGameServerHTTPRouteResponse]
+	deleteGameServerHTTPRoute            *connect.Client[v1.DeleteGameServerHTTPRouteRequest, v1.DeleteGameServerHTTPRouteResponse]
+	getGameServerDomainVerificationToken *connect.Client[v1.GetGameServerDomainVerificationTokenRequest, v1.GetGameServerDomainVerificationTokenResponse]
+	verifyGameServerDomain               *connect.Client[v1.VerifyGameServerDomainRequest, v1.VerifyGameServerDomainResponse]
+	streamGameServerStatus               *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
+	getGameServerLogs                    *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
+	streamGameServerLogs                 *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
+	getGameServerMetrics                 *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
+	streamGameServerMetrics              *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
+	getGameServerUsage                   *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
+	listGameServerFiles                  *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
+	searchGameServerFiles                *connect.Client[v1.SearchGameServerFilesRequest, v1.SearchGameServerFilesResponse]
+	getGameServerFile                    *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
+	uploadGameServerFiles                *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
+	chunkUploadGameServerFiles           *connect.Client[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse]
+	deleteGameServerEntries              *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
+	createGameServerEntry                *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
+	writeGameServerFile                  *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
+	renameGameServerEntry                *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
+	extractGameServerFile                *connect.Client[v1.ExtractGameServerFileRequest, v1.ExtractGameServerFileResponse]
+	createGameServerFileArchive          *connect.Client[v1.CreateGameServerFileArchiveRequest, v1.CreateGameServerFileArchiveResponse]
+	getMinecraftPlayerUUID               *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
+	getMinecraftPlayerProfile            *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
+	listMinecraftProjects                *connect.Client[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse]
+	getMinecraftProjectVersions          *connect.Client[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse]
+	getMinecraftProject                  *connect.Client[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse]
+	installMinecraftProjectFile          *connect.Client[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse]
 }
 
 // ListGameServers calls obiente.cloud.gameservers.v1.GameServerService.ListGameServers.
@@ -471,6 +531,36 @@ func (c *gameServerServiceClient) StopGameServer(ctx context.Context, req *conne
 // RestartGameServer calls obiente.cloud.gameservers.v1.GameServerService.RestartGameServer.
 func (c *gameServerServiceClient) RestartGameServer(ctx context.Context, req *connect.Request[v1.RestartGameServerRequest]) (*connect.Response[v1.RestartGameServerResponse], error) {
 	return c.restartGameServer.CallUnary(ctx, req)
+}
+
+// GetGameServerHTTPRoutes calls
+// obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes.
+func (c *gameServerServiceClient) GetGameServerHTTPRoutes(ctx context.Context, req *connect.Request[v1.GetGameServerHTTPRoutesRequest]) (*connect.Response[v1.GetGameServerHTTPRoutesResponse], error) {
+	return c.getGameServerHTTPRoutes.CallUnary(ctx, req)
+}
+
+// UpsertGameServerHTTPRoute calls
+// obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute.
+func (c *gameServerServiceClient) UpsertGameServerHTTPRoute(ctx context.Context, req *connect.Request[v1.UpsertGameServerHTTPRouteRequest]) (*connect.Response[v1.UpsertGameServerHTTPRouteResponse], error) {
+	return c.upsertGameServerHTTPRoute.CallUnary(ctx, req)
+}
+
+// DeleteGameServerHTTPRoute calls
+// obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute.
+func (c *gameServerServiceClient) DeleteGameServerHTTPRoute(ctx context.Context, req *connect.Request[v1.DeleteGameServerHTTPRouteRequest]) (*connect.Response[v1.DeleteGameServerHTTPRouteResponse], error) {
+	return c.deleteGameServerHTTPRoute.CallUnary(ctx, req)
+}
+
+// GetGameServerDomainVerificationToken calls
+// obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken.
+func (c *gameServerServiceClient) GetGameServerDomainVerificationToken(ctx context.Context, req *connect.Request[v1.GetGameServerDomainVerificationTokenRequest]) (*connect.Response[v1.GetGameServerDomainVerificationTokenResponse], error) {
+	return c.getGameServerDomainVerificationToken.CallUnary(ctx, req)
+}
+
+// VerifyGameServerDomain calls
+// obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain.
+func (c *gameServerServiceClient) VerifyGameServerDomain(ctx context.Context, req *connect.Request[v1.VerifyGameServerDomainRequest]) (*connect.Response[v1.VerifyGameServerDomainResponse], error) {
+	return c.verifyGameServerDomain.CallUnary(ctx, req)
 }
 
 // StreamGameServerStatus calls
@@ -616,6 +706,16 @@ type GameServerServiceHandler interface {
 	StopGameServer(context.Context, *connect.Request[v1.StopGameServerRequest]) (*connect.Response[v1.StopGameServerResponse], error)
 	// Restart a game server
 	RestartGameServer(context.Context, *connect.Request[v1.RestartGameServerRequest]) (*connect.Response[v1.RestartGameServerResponse], error)
+	// Get HTTP routing rules for a game server (Traefik)
+	GetGameServerHTTPRoutes(context.Context, *connect.Request[v1.GetGameServerHTTPRoutesRequest]) (*connect.Response[v1.GetGameServerHTTPRoutesResponse], error)
+	// Create or update an HTTP routing rule for a game server
+	UpsertGameServerHTTPRoute(context.Context, *connect.Request[v1.UpsertGameServerHTTPRouteRequest]) (*connect.Response[v1.UpsertGameServerHTTPRouteResponse], error)
+	// Delete an HTTP routing rule for a game server
+	DeleteGameServerHTTPRoute(context.Context, *connect.Request[v1.DeleteGameServerHTTPRouteRequest]) (*connect.Response[v1.DeleteGameServerHTTPRouteResponse], error)
+	// Get DNS TXT verification token for a custom game server domain
+	GetGameServerDomainVerificationToken(context.Context, *connect.Request[v1.GetGameServerDomainVerificationTokenRequest]) (*connect.Response[v1.GetGameServerDomainVerificationTokenResponse], error)
+	// Verify ownership of a custom game server domain
+	VerifyGameServerDomain(context.Context, *connect.Request[v1.VerifyGameServerDomainRequest]) (*connect.Response[v1.VerifyGameServerDomainResponse], error)
 	// Stream game server status updates
 	StreamGameServerStatus(context.Context, *connect.Request[v1.StreamGameServerStatusRequest], *connect.ServerStream[v1.GameServerStatusUpdate]) error
 	// Get game server logs
@@ -719,6 +819,36 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		GameServerServiceRestartGameServerProcedure,
 		svc.RestartGameServer,
 		connect.WithSchema(gameServerServiceMethods.ByName("RestartGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetGameServerHTTPRoutesHandler := connect.NewUnaryHandler(
+		GameServerServiceGetGameServerHTTPRoutesProcedure,
+		svc.GetGameServerHTTPRoutes,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerHTTPRoutes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceUpsertGameServerHTTPRouteHandler := connect.NewUnaryHandler(
+		GameServerServiceUpsertGameServerHTTPRouteProcedure,
+		svc.UpsertGameServerHTTPRoute,
+		connect.WithSchema(gameServerServiceMethods.ByName("UpsertGameServerHTTPRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceDeleteGameServerHTTPRouteHandler := connect.NewUnaryHandler(
+		GameServerServiceDeleteGameServerHTTPRouteProcedure,
+		svc.DeleteGameServerHTTPRoute,
+		connect.WithSchema(gameServerServiceMethods.ByName("DeleteGameServerHTTPRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetGameServerDomainVerificationTokenHandler := connect.NewUnaryHandler(
+		GameServerServiceGetGameServerDomainVerificationTokenProcedure,
+		svc.GetGameServerDomainVerificationToken,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerDomainVerificationToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceVerifyGameServerDomainHandler := connect.NewUnaryHandler(
+		GameServerServiceVerifyGameServerDomainProcedure,
+		svc.VerifyGameServerDomain,
+		connect.WithSchema(gameServerServiceMethods.ByName("VerifyGameServerDomain")),
 		connect.WithHandlerOptions(opts...),
 	)
 	gameServerServiceStreamGameServerStatusHandler := connect.NewServerStreamHandler(
@@ -877,6 +1007,16 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceStopGameServerHandler.ServeHTTP(w, r)
 		case GameServerServiceRestartGameServerProcedure:
 			gameServerServiceRestartGameServerHandler.ServeHTTP(w, r)
+		case GameServerServiceGetGameServerHTTPRoutesProcedure:
+			gameServerServiceGetGameServerHTTPRoutesHandler.ServeHTTP(w, r)
+		case GameServerServiceUpsertGameServerHTTPRouteProcedure:
+			gameServerServiceUpsertGameServerHTTPRouteHandler.ServeHTTP(w, r)
+		case GameServerServiceDeleteGameServerHTTPRouteProcedure:
+			gameServerServiceDeleteGameServerHTTPRouteHandler.ServeHTTP(w, r)
+		case GameServerServiceGetGameServerDomainVerificationTokenProcedure:
+			gameServerServiceGetGameServerDomainVerificationTokenHandler.ServeHTTP(w, r)
+		case GameServerServiceVerifyGameServerDomainProcedure:
+			gameServerServiceVerifyGameServerDomainHandler.ServeHTTP(w, r)
 		case GameServerServiceStreamGameServerStatusProcedure:
 			gameServerServiceStreamGameServerStatusHandler.ServeHTTP(w, r)
 		case GameServerServiceGetGameServerLogsProcedure:
@@ -962,6 +1102,26 @@ func (UnimplementedGameServerServiceHandler) StopGameServer(context.Context, *co
 
 func (UnimplementedGameServerServiceHandler) RestartGameServer(context.Context, *connect.Request[v1.RestartGameServerRequest]) (*connect.Response[v1.RestartGameServerResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.RestartGameServer is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetGameServerHTTPRoutes(context.Context, *connect.Request[v1.GetGameServerHTTPRoutesRequest]) (*connect.Response[v1.GetGameServerHTTPRoutesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) UpsertGameServerHTTPRoute(context.Context, *connect.Request[v1.UpsertGameServerHTTPRouteRequest]) (*connect.Response[v1.UpsertGameServerHTTPRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) DeleteGameServerHTTPRoute(context.Context, *connect.Request[v1.DeleteGameServerHTTPRouteRequest]) (*connect.Response[v1.DeleteGameServerHTTPRouteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetGameServerDomainVerificationToken(context.Context, *connect.Request[v1.GetGameServerDomainVerificationTokenRequest]) (*connect.Response[v1.GetGameServerDomainVerificationTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) VerifyGameServerDomain(context.Context, *connect.Request[v1.VerifyGameServerDomainRequest]) (*connect.Response[v1.VerifyGameServerDomainResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain is not implemented"))
 }
 
 func (UnimplementedGameServerServiceHandler) StreamGameServerStatus(context.Context, *connect.Request[v1.StreamGameServerStatusRequest], *connect.ServerStream[v1.GameServerStatusUpdate]) error {

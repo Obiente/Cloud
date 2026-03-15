@@ -679,6 +679,13 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 	return labels
 }
 
+// GenerateTraefikLabels builds Traefik router/service labels from routing rules.
+// This is exported so non-deployment orchestrators (e.g. game servers) can reuse
+// the same label generation logic and behavior.
+func GenerateTraefikLabels(resourceID string, serviceName string, routings []database.DeploymentRouting, servicePort *int, networkName string) map[string]string {
+	return generateTraefikLabels(resourceID, serviceName, routings, servicePort, networkName)
+}
+
 func parseMemoryString(memoryStr string) int64 {
 	memoryStr = strings.TrimSpace(memoryStr)
 	if memoryStr == "" {
@@ -739,6 +746,7 @@ func parseCPUString(cpuStr string) float64 {
 
 	return cores
 }
+
 // addTraefikNetworkToRoutedServices adds obiente-network to services that have routing configured
 // This allows Traefik to discover and route to these services on the shared obiente-network
 // while maintaining deployment isolation through the deployment-specific network

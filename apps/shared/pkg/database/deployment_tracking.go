@@ -71,6 +71,33 @@ type DeploymentRouting struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// GameServerHTTPRoute stores HTTP routing configuration for game servers.
+// These routes are translated into Traefik labels on the game server container.
+type GameServerHTTPRoute struct {
+	ID              string    `gorm:"primaryKey" json:"id"`
+	GameServerID    string    `gorm:"index:idx_gs_route_domain;not null" json:"game_server_id"`
+	Domain          string    `gorm:"index:idx_gs_route_domain;not null" json:"domain"`
+	PathPrefix      string    `json:"path_prefix"`
+	TargetPort      int       `gorm:"not null" json:"target_port"`
+	Protocol        string    `gorm:"default:'http'" json:"protocol"`
+	SSLEnabled      bool      `gorm:"default:false" json:"ssl_enabled"`
+	SSLCertResolver string    `json:"ssl_cert_resolver"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// GameServerDomainVerification tracks custom domain verification state for game servers.
+type GameServerDomainVerification struct {
+	ID           string     `gorm:"primaryKey" json:"id"`
+	GameServerID string     `gorm:"index:idx_gs_domain_verification;not null" json:"game_server_id"`
+	Domain       string     `gorm:"index:idx_gs_domain_verification;not null" json:"domain"`
+	Token        string     `gorm:"not null" json:"token"`
+	Status       string     `gorm:"index;default:'pending'" json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	VerifiedAt   *time.Time `json:"verified_at,omitempty"`
+}
+
 // DeploymentMetrics stores historical metrics for deployments
 type DeploymentMetrics struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
@@ -94,9 +121,10 @@ func InitDeploymentTracking() error {
 		&DeploymentLocation{},
 		&NodeMetadata{},
 		&DeploymentRouting{},
+		&GameServerHTTPRoute{},
+		&GameServerDomainVerification{},
 		&GameServerLocation{},
 		&DatabaseLocation{},
-
 	); err != nil {
 		return err
 	}
@@ -511,6 +539,102 @@ func UpsertDeploymentRouting(routing *DeploymentRouting) error {
 		// Database error
 		return err
 	}
+}
+
+// GetGameServerHTTPRoutes returns all HTTP routes for a game server.
+func GetGameServerHTTPRoutes(gameServerID string) ([]GameServerHTTPRoute, error) {
+	var routes []GameServerHTTPRoute
+	result := DB.Where("game_server_id = ?", gameServerID).Find(&routes)
+	return routes, result.Error
+}
+
+// GetGameServerHTTPRouteByDomain returns a game server HTTP route for a specific domain.
+func GetGameServerHTTPRouteByDomain(domain string) (*GameServerHTTPRoute, error) {
+	var route GameServerHTTPRoute
+	result := DB.Where("domain = ?", domain).First(&route)
+	return &route, result.Error
+}
+
+// GetGameServerHTTPRouteByID returns a specific game server HTTP route.
+func GetGameServerHTTPRouteByID(routeID string) (*GameServerHTTPRoute, error) {
+	var route GameServerHTTPRoute
+	result := DB.Where("id = ?", routeID).First(&route)
+	return &route, result.Error
+}
+
+// UpsertGameServerHTTPRoute creates or updates a game server HTTP route.
+func UpsertGameServerHTTPRoute(route *GameServerHTTPRoute) error {
+	var existing GameServerHTTPRoute
+	err := DB.Where("id = ?", route.ID).First(&existing).Error
+
+	if err == nil {
+		updateData := map[string]interface{}{
+			"game_server_id":    route.GameServerID,
+			"domain":            route.Domain,
+			"path_prefix":       route.PathPrefix,
+			"target_port":       route.TargetPort,
+			"protocol":          route.Protocol,
+			"ssl_enabled":       route.SSLEnabled,
+			"ssl_cert_resolver": route.SSLCertResolver,
+			"updated_at":        time.Now(),
+		}
+		return DB.Model(&existing).Updates(updateData).Error
+	} else if err == gorm.ErrRecordNotFound {
+		if route.CreatedAt.IsZero() {
+			route.CreatedAt = time.Now()
+		}
+		if route.UpdatedAt.IsZero() {
+			route.UpdatedAt = time.Now()
+		}
+		return DB.Create(route).Error
+	}
+
+	return err
+}
+
+// DeleteGameServerHTTPRoute removes a game server HTTP route.
+func DeleteGameServerHTTPRoute(routeID string) error {
+	return DB.Delete(&GameServerHTTPRoute{}, "id = ?", routeID).Error
+}
+
+// GetGameServerDomainVerification returns a domain verification record for a game server/domain pair.
+func GetGameServerDomainVerification(gameServerID string, domain string) (*GameServerDomainVerification, error) {
+	var verification GameServerDomainVerification
+	result := DB.Where("game_server_id = ? AND domain = ?", gameServerID, domain).First(&verification)
+	return &verification, result.Error
+}
+
+// UpsertGameServerDomainVerification creates or updates a game server domain verification record.
+func UpsertGameServerDomainVerification(verification *GameServerDomainVerification) error {
+	var existing GameServerDomainVerification
+	err := DB.Where("game_server_id = ? AND domain = ?", verification.GameServerID, verification.Domain).First(&existing).Error
+
+	if err == nil {
+		updateData := map[string]interface{}{
+			"token":       verification.Token,
+			"status":      verification.Status,
+			"updated_at":  time.Now(),
+			"verified_at": verification.VerifiedAt,
+		}
+		return DB.Model(&existing).Updates(updateData).Error
+	} else if err == gorm.ErrRecordNotFound {
+		if verification.CreatedAt.IsZero() {
+			verification.CreatedAt = time.Now()
+		}
+		if verification.UpdatedAt.IsZero() {
+			verification.UpdatedAt = time.Now()
+		}
+		return DB.Create(verification).Error
+	}
+
+	return err
+}
+
+// GetVerifiedGameServerDomains returns verified custom domains for a game server.
+func GetVerifiedGameServerDomains(gameServerID string) ([]GameServerDomainVerification, error) {
+	var records []GameServerDomainVerification
+	result := DB.Where("game_server_id = ? AND status = ?", gameServerID, "verified").Find(&records)
+	return records, result.Error
 }
 
 // RecordMetrics records deployment metrics

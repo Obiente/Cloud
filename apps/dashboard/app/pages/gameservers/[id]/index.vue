@@ -285,6 +285,12 @@
             <template #users>
               <MinecraftUsersEditor :game-server-id="gameServerId" />
             </template>
+            <template #routing>
+              <GameServerHTTPRouting
+                :game-server-id="gameServerId"
+                :default-domain="`${gameServerId}.my.obiente.cloud`"
+              />
+            </template>
             <template #settings>
               <GameServerSettings
                 :game-server="gameServerData as any"
@@ -652,6 +658,7 @@ import {
   UserMinusIcon,
   ShieldCheckIcon,
   PuzzlePieceIcon,
+  GlobeAmericasIcon,
 } from "@heroicons/vue/24/outline";
 
 import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -664,6 +671,7 @@ const GameServerLogs = defineAsyncComponent(() => import("~/components/gameserve
 const GameServerFiles = defineAsyncComponent(() => import("~/components/gameserver/GameServerFiles.vue"));
 const GameServerSettings = defineAsyncComponent(() => import("~/components/gameserver/GameServerSettings.vue"));
 const GameServerOverview = defineAsyncComponent(() => import("~/components/gameserver/GameServerOverview.vue"));
+const GameServerHTTPRouting = defineAsyncComponent(() => import("~/components/gameserver/GameServerHTTPRouting.vue"));
 const MinecraftFileEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftFileEditor.vue"));
 const MinecraftEULAEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftEULAEditor.vue"));
 const MinecraftServerPropertiesEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftServerPropertiesEditor.vue"));
@@ -913,6 +921,7 @@ const tabs = computed<TabItem[]>(() => {
   }
 
   baseTabs.push(
+    { id: "routing", label: "Routing", icon: GlobeAmericasIcon },
     { id: "settings", label: "Settings", icon: Cog6ToothIcon },
     { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon }
   );

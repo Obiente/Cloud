@@ -63,6 +63,21 @@ service GameServerService {
   
   // Restart a game server
   rpc RestartGameServer(RestartGameServerRequest) returns (RestartGameServerResponse);
+
+  // Get HTTP routing rules for a game server (Traefik)
+  rpc GetGameServerHTTPRoutes(GetGameServerHTTPRoutesRequest) returns (GetGameServerHTTPRoutesResponse);
+
+  // Create or update an HTTP routing rule for a game server
+  rpc UpsertGameServerHTTPRoute(UpsertGameServerHTTPRouteRequest) returns (UpsertGameServerHTTPRouteResponse);
+
+  // Delete an HTTP routing rule for a game server
+  rpc DeleteGameServerHTTPRoute(DeleteGameServerHTTPRouteRequest) returns (DeleteGameServerHTTPRouteResponse);
+
+  // Get DNS TXT verification token for a custom game server domain
+  rpc GetGameServerDomainVerificationToken(GetGameServerDomainVerificationTokenRequest) returns (GetGameServerDomainVerificationTokenResponse);
+
+  // Verify ownership of a custom game server domain
+  rpc VerifyGameServerDomain(VerifyGameServerDomainRequest) returns (VerifyGameServerDomainResponse);
   
   // Stream game server status updates
   rpc StreamGameServerStatus(StreamGameServerStatusRequest) returns (stream GameServerStatusUpdate);
@@ -229,6 +244,79 @@ message RestartGameServerRequest {
 
 message RestartGameServerResponse {
   GameServer game_server = 1;
+}
+
+message GameServerHTTPRoute {
+  string id = 1;
+  string game_server_id = 2;
+  string domain = 3;
+  string path_prefix = 4;
+  int32 target_port = 5;
+  string protocol = 6;
+  bool ssl_enabled = 7;
+  optional string ssl_cert_resolver = 8;
+}
+
+message GetGameServerHTTPRoutesRequest {
+  string game_server_id = 1;
+  string organization_id = 2;
+}
+
+message GetGameServerHTTPRoutesResponse {
+  repeated GameServerHTTPRoute routes = 1;
+}
+
+message UpsertGameServerHTTPRouteRequest {
+  string game_server_id = 1;
+  string organization_id = 2;
+  optional string route_id = 3;
+  string domain = 4;
+  optional string path_prefix = 5;
+  int32 target_port = 6;
+  optional string protocol = 7;
+  optional bool ssl_enabled = 8;
+  optional string ssl_cert_resolver = 9;
+}
+
+message UpsertGameServerHTTPRouteResponse {
+  GameServerHTTPRoute route = 1;
+}
+
+message DeleteGameServerHTTPRouteRequest {
+  string game_server_id = 1;
+  string organization_id = 2;
+  string route_id = 3;
+}
+
+message DeleteGameServerHTTPRouteResponse {
+  bool success = 1;
+}
+
+message GetGameServerDomainVerificationTokenRequest {
+  string game_server_id = 1;
+  string organization_id = 2;
+  string domain = 3;
+}
+
+message GetGameServerDomainVerificationTokenResponse {
+  string domain = 1;
+  string token = 2;
+  string txt_record_name = 3;
+  string txt_record_value = 4;
+  string status = 5;
+}
+
+message VerifyGameServerDomainRequest {
+  string game_server_id = 1;
+  string organization_id = 2;
+  string domain = 3;
+}
+
+message VerifyGameServerDomainResponse {
+  string domain = 1;
+  bool verified = 2;
+  string status = 3;
+  optional string message = 4;
 }
 
 message StreamGameServerStatusRequest {

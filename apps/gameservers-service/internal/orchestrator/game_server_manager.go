@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
@@ -19,7 +20,10 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
+	"gorm.io/gorm"
 )
+
+const gameServerDomainSuffix = "my.obiente.cloud"
 
 // GameServerManager manages the lifecycle of game server containers
 type GameServerManager struct {
@@ -947,6 +951,14 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		"cloud.obiente.metrics":       "true", // Enable metrics collection
 	}
 
+	traefikLabels, err := gsm.generateGameServerTraefikLabels(config.GameServerID)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate Traefik labels: %w", err)
+	}
+	for key, value := range traefikLabels {
+		labels[key] = value
+	}
+
 	// Port configuration
 	exposedPorts := network.PortSet{}
 	portBindings := network.PortMap{}
@@ -1090,6 +1102,104 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	}
 
 	return createResp.ID, nil
+}
+
+func normalizeGameServerDomainHost(gameServerID string) string {
+	normalized := strings.TrimSpace(strings.ToLower(gameServerID))
+	if strings.HasPrefix(normalized, "gs-") {
+		return normalized + "." + gameServerDomainSuffix
+	}
+	return "gs-" + normalized + "." + gameServerDomainSuffix
+}
+
+func sanitizeRouteIDPart(value string) string {
+	if value == "" {
+		return "default"
+	}
+	b := strings.Builder{}
+	for _, r := range strings.ToLower(value) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteRune('-')
+	}
+	cleaned := strings.Trim(b.String(), "-")
+	if cleaned == "" {
+		return "default"
+	}
+	return cleaned
+}
+
+func (gsm *GameServerManager) generateGameServerTraefikLabels(gameServerID string) (map[string]string, error) {
+	routes, err := database.GetGameServerHTTPRoutes(gameServerID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+
+	deploymentRoutings := make([]database.DeploymentRouting, 0, len(routes))
+	for _, route := range routes {
+		domain := strings.TrimSpace(strings.ToLower(route.Domain))
+		if domain == "" {
+			continue
+		}
+
+		routeID := route.ID
+		if routeID == "" {
+			routeID = fmt.Sprintf("gs-route-%s-%s-%d", gameServerID, sanitizeRouteIDPart(domain), route.TargetPort)
+		}
+
+		deploymentRoutings = append(deploymentRoutings, database.DeploymentRouting{
+			ID:              routeID,
+			DeploymentID:    gameServerID,
+			Domain:          domain,
+			ServiceName:     "default",
+			PathPrefix:      route.PathPrefix,
+			TargetPort:      route.TargetPort,
+			Protocol:        route.Protocol,
+			SSLEnabled:      route.SSLEnabled,
+			SSLCertResolver: route.SSLCertResolver,
+		})
+	}
+
+	return sharedorchestrator.GenerateTraefikLabels(gameServerID, "default", deploymentRoutings, nil, gsm.networkName), nil
+}
+
+// ApplyGameServerHTTPRoutes applies route changes to the game server container.
+// Docker labels are immutable on existing containers, so we recreate the container.
+// If the game server was running, it is recreated and started immediately.
+// If it was stopped, container info is cleared and routes will apply on next start.
+func (gsm *GameServerManager) ApplyGameServerHTTPRoutes(ctx context.Context, gameServerID string) error {
+	repo := database.NewGameServerRepository(database.DB, database.RedisClient)
+	gameServer, err := repo.GetByID(ctx, gameServerID)
+	if err != nil {
+		return fmt.Errorf("failed to get game server: %w", err)
+	}
+
+	if gameServer.ContainerID == nil {
+		return nil
+	}
+
+	wasRunning := false
+	containerInfoResult, inspectErr := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
+	if inspectErr == nil {
+		wasRunning = containerInfoResult.Container.State != nil && containerInfoResult.Container.State.Running
+	}
+
+	if err := repo.UpdateContainerInfo(ctx, gameServerID, nil, nil); err != nil {
+		return fmt.Errorf("failed to clear container info for route apply: %w", err)
+	}
+
+	if wasRunning {
+		if err := gsm.StartGameServer(ctx, gameServerID); err != nil {
+			return fmt.Errorf("failed to recreate running game server for route apply: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ensureVolume ensures the volume directory exists in /var/lib/obiente/volumes
