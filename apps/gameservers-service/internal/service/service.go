@@ -20,10 +20,10 @@ import (
 
 type Service struct {
 	gameserversv1connect.UnimplementedGameServerServiceHandler
-	repo              *database.GameServerRepository
-	permissionChecker *auth.PermissionChecker
-	manager           *orchestrator.GameServerManager // Manager created directly in gameservers-service
-	modClient         *modrinth.Client
+	repo                  *database.GameServerRepository
+	permissionChecker     *auth.PermissionChecker
+	manager               *orchestrator.GameServerManager // Manager created directly in gameservers-service
+	modClient             *modrinth.Client
 	resourcePressureMu    sync.Mutex
 	resourcePressureState map[string]*resourcePressureState
 }
@@ -37,10 +37,10 @@ type resourcePressureState struct {
 
 func NewService(repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
 	return &Service{
-		repo:              repo,
-		permissionChecker: auth.NewPermissionChecker(),
-		manager:           manager,
-		modClient:         modrinth.NewClient(nil),
+		repo:                  repo,
+		permissionChecker:     auth.NewPermissionChecker(),
+		manager:               manager,
+		modClient:             modrinth.NewClient(nil),
 		resourcePressureState: make(map[string]*resourcePressureState),
 	}
 }
@@ -57,6 +57,12 @@ func (s *Service) getGameServerManager() (*orchestrator.GameServerManager, error
 // This is needed because unary interceptors may not run for streaming RPCs.
 func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyRequest) (context.Context, error) {
 	return common.EnsureAuthenticated(ctx, req)
+}
+
+// createSystemContext creates a context with a system user that has admin permissions.
+// This is used for internal operations that need to bypass permission checks.
+func (s *Service) createSystemContext() context.Context {
+	return auth.WithSystemUser(context.Background())
 }
 
 // checkGameServerPermission verifies user permissions for a game server

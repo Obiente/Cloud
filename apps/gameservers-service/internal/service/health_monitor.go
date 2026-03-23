@@ -64,6 +64,8 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 			continue
 		}
 
+		currentStatus := int32(gameServer.Status)
+
 		// Inspect container to get actual status
 		containerInfo, err := dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
@@ -78,6 +80,11 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 			// Update game server status
 			if err := s.repo.UpdateStatus(ctx, gameServer.ID, int32(gameserversv1.GameServerStatus_STOPPED)); err != nil {
 				logger.Warn("[HealthMonitor] Failed to update game server %s status to STOPPED: %v", gameServer.ID, err)
+				s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_missing", gameServerAuditSourceMonitor, 500, map[string]interface{}{
+					"containerId":    *gameServer.ContainerID,
+					"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+					"currentStatus":  gameserversv1.GameServerStatus_STOPPED.String(),
+				}, err)
 				errorCount++
 			} else {
 				// Update location status
@@ -86,6 +93,11 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 					Update("status", "stopped").Error; err != nil {
 					logger.Warn("[HealthMonitor] Failed to update location status for game server %s: %v", gameServer.ID, err)
 				}
+				s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_missing", gameServerAuditSourceMonitor, 200, map[string]interface{}{
+					"containerId":    *gameServer.ContainerID,
+					"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+					"currentStatus":  gameserversv1.GameServerStatus_STOPPED.String(),
+				}, nil)
 				syncedCount++
 			}
 			continue
@@ -93,7 +105,6 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 
 		// Check if container is actually running
 		isRunning := containerInfo.Container.State.Running
-		currentStatus := int32(gameServer.Status)
 
 		// Sync status based on actual container state
 		if isRunning {
@@ -104,6 +115,11 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 				logger.Info("[HealthMonitor] Game server %s container is running but DB status is %d, updating to RUNNING", gameServer.ID, currentStatus)
 				if err := s.repo.UpdateStatus(ctx, gameServer.ID, statusRunning); err != nil {
 					logger.Warn("[HealthMonitor] Failed to update game server %s status to RUNNING: %v", gameServer.ID, err)
+					s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_running", gameServerAuditSourceMonitor, 500, map[string]interface{}{
+						"containerId":    *gameServer.ContainerID,
+						"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+						"currentStatus":  gameserversv1.GameServerStatus_RUNNING.String(),
+					}, err)
 					errorCount++
 				} else {
 					// Update location status
@@ -112,6 +128,11 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 						Update("status", "running").Error; err != nil {
 						logger.Warn("[HealthMonitor] Failed to update location status for game server %s: %v", gameServer.ID, err)
 					}
+					s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_running", gameServerAuditSourceMonitor, 200, map[string]interface{}{
+						"containerId":    *gameServer.ContainerID,
+						"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+						"currentStatus":  gameserversv1.GameServerStatus_RUNNING.String(),
+					}, nil)
 					syncedCount++
 				}
 			} else {
@@ -128,6 +149,12 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 					logger.Info("[HealthMonitor] Game server %s container stopped (exit code %d) but DB status is %d, updating to STOPPED", gameServer.ID, exitCode, currentStatus)
 					if err := s.repo.UpdateStatus(ctx, gameServer.ID, int32(gameserversv1.GameServerStatus_STOPPED)); err != nil {
 						logger.Warn("[HealthMonitor] Failed to update game server %s status to STOPPED: %v", gameServer.ID, err)
+						s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_exit", gameServerAuditSourceMonitor, 500, map[string]interface{}{
+							"containerId":    *gameServer.ContainerID,
+							"exitCode":       exitCode,
+							"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+							"currentStatus":  gameserversv1.GameServerStatus_STOPPED.String(),
+						}, err)
 						errorCount++
 					} else {
 						// Update location status
@@ -136,6 +163,12 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 							Update("status", "stopped").Error; err != nil {
 							logger.Warn("[HealthMonitor] Failed to update location status for game server %s: %v", gameServer.ID, err)
 						}
+						s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_exit", gameServerAuditSourceMonitor, 200, map[string]interface{}{
+							"containerId":    *gameServer.ContainerID,
+							"exitCode":       exitCode,
+							"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+							"currentStatus":  gameserversv1.GameServerStatus_STOPPED.String(),
+						}, nil)
 						syncedCount++
 					}
 				} else {
@@ -144,11 +177,18 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 			} else {
 				// Container crashed or failed - check if it's an OOM kill
 				isOOMKill := exitCode == 137 // Exit code 137 = OOM kill (128 + 9, where 9 is SIGKILL)
-				
+
 				if currentStatus != int32(gameserversv1.GameServerStatus_FAILED) {
 					logger.Info("[HealthMonitor] Game server %s container exited with code %d but DB status is %d, updating to FAILED", gameServer.ID, exitCode, currentStatus)
 					if err := s.repo.UpdateStatus(ctx, gameServer.ID, int32(gameserversv1.GameServerStatus_FAILED)); err != nil {
 						logger.Warn("[HealthMonitor] Failed to update game server %s status to FAILED: %v", gameServer.ID, err)
+						s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_exit", gameServerAuditSourceMonitor, 500, map[string]interface{}{
+							"containerId":    *gameServer.ContainerID,
+							"exitCode":       exitCode,
+							"isOOMKill":      isOOMKill,
+							"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+							"currentStatus":  gameserversv1.GameServerStatus_FAILED.String(),
+						}, err)
 						errorCount++
 					} else {
 						// Update location status
@@ -157,12 +197,19 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 							Update("status", "stopped").Error; err != nil {
 							logger.Warn("[HealthMonitor] Failed to update location status for game server %s: %v", gameServer.ID, err)
 						}
-						
+
 						// Send notification if it's an OOM kill
 						if isOOMKill {
 							s.sendOOMKillNotification(ctx, &gameServer)
 						}
-						
+						s.createSystemGameServerAuditLog(&gameServer, gameServer.ID, "SyncGameServerStatus", "container_exit", gameServerAuditSourceMonitor, 200, map[string]interface{}{
+							"containerId":    *gameServer.ContainerID,
+							"exitCode":       exitCode,
+							"isOOMKill":      isOOMKill,
+							"previousStatus": gameserversv1.GameServerStatus(currentStatus).String(),
+							"currentStatus":  gameserversv1.GameServerStatus_FAILED.String(),
+						}, nil)
+
 						syncedCount++
 					}
 				} else {
@@ -278,6 +325,13 @@ func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int6
 
 	if err := manager.RestartGameServer(restartCtx, gameServerID); err != nil {
 		logger.Warn("[HealthMonitor] Failed to restart game server %s after sustained memory pressure: %v", gameServerID, err)
+		s.createSystemGameServerAuditLog(nil, gameServerID, "RestartGameServer", "memory_pressure", gameServerAuditSourceMonitor, 500, map[string]interface{}{
+			"observedUsageBytes":   memoryUsage,
+			"configuredLimitBytes": memoryLimit,
+			"firstExceededAt":      firstExceededAt.UTC().Format(time.RFC3339),
+			"gracePeriodSeconds":   int(resourcePressureGracePeriod.Seconds()),
+			"cooldownSeconds":      int(resourcePressureRestartCooldown.Seconds()),
+		}, err)
 		s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, false, err.Error())
 		return
 	}
@@ -291,6 +345,13 @@ func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int6
 	}()
 
 	logger.Warn("[HealthMonitor] Restarted game server %s after sustained memory pressure for over %v (usage=%d bytes, limit=%d bytes)", gameServerID, resourcePressureGracePeriod, memoryUsage, memoryLimit)
+	s.createSystemGameServerAuditLog(nil, gameServerID, "RestartGameServer", "memory_pressure", gameServerAuditSourceMonitor, 200, map[string]interface{}{
+		"observedUsageBytes":   memoryUsage,
+		"configuredLimitBytes": memoryLimit,
+		"firstExceededAt":      firstExceededAt.UTC().Format(time.RFC3339),
+		"gracePeriodSeconds":   int(resourcePressureGracePeriod.Seconds()),
+		"cooldownSeconds":      int(resourcePressureRestartCooldown.Seconds()),
+	}, nil)
 	s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, true, "")
 }
 
@@ -309,13 +370,13 @@ func (s *Service) sendMemoryPressureNotification(ctx context.Context, gameServer
 	observedDisplay := fmt.Sprintf("%.2f GB", float64(memoryUsage)/(1024*1024*1024))
 	limitDisplay := fmt.Sprintf("%.2f GB", float64(memoryLimit)/(1024*1024*1024))
 	metadata := map[string]string{
-		"game_server_id":       gameServer.ID,
-		"game_server_name":     gameServer.Name,
-		"reason":               "memory_pressure",
-		"grace_period_seconds": fmt.Sprintf("%d", int(resourcePressureGracePeriod.Seconds())),
-		"first_exceeded_at":    firstExceededAt.UTC().Format(time.RFC3339),
-		"auto_restarted":       fmt.Sprintf("%t", restarted),
-		"observed_usage_bytes": fmt.Sprintf("%d", memoryUsage),
+		"game_server_id":         gameServer.ID,
+		"game_server_name":       gameServer.Name,
+		"reason":                 "memory_pressure",
+		"grace_period_seconds":   fmt.Sprintf("%d", int(resourcePressureGracePeriod.Seconds())),
+		"first_exceeded_at":      firstExceededAt.UTC().Format(time.RFC3339),
+		"auto_restarted":         fmt.Sprintf("%t", restarted),
+		"observed_usage_bytes":   fmt.Sprintf("%d", memoryUsage),
 		"configured_limit_bytes": fmt.Sprintf("%d", memoryLimit),
 	}
 
