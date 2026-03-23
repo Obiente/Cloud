@@ -4,15 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
-// GetDeploymentNodeIP returns the node IP for a deployment based on where it's running
-// This queries the deployment_locations table to find which node/region the deployment is in,
-// then maps that to the appropriate node IP from environment configuration
+// GetDeploymentNodeIP returns the preferred IPs for a deployment based on where it's running.
+// It prefers the actual node IP recorded on the selected location, then falls back to the
+// node metadata IP, and only uses region->NODE_IPS mapping as a compatibility fallback.
 func GetDeploymentNodeIP(deploymentID string, nodeIPMap map[string][]string) ([]string, error) {
 	// Get deployment locations (where deployment is actually running)
 	var locations []DeploymentLocation
@@ -34,73 +35,22 @@ func GetDeploymentNodeIP(deploymentID string, nodeIPMap map[string][]string) ([]
 		if len(locations) == 0 {
 			return nil, fmt.Errorf("no deployment locations found for deployment_id: %s", deploymentID)
 		}
-		// Prefer the first non-stopped location if available
-		for i, loc := range locations {
-			if !isStoppedStatus(loc.Status) {
-				if i != 0 {
-					locations[0], locations[i] = locations[i], locations[0]
-				}
-				break
-			}
-		}
 	}
 
-	// Get the first location's node to determine region
+	sortDeploymentLocations(locations)
 	location := locations[0]
-	var node NodeMetadata
-	var nodeRegion string
 
-	if err := DB.First(&node, "id = ?", location.NodeID).Error; err != nil {
-		// If node doesn't exist (e.g., was deleted), fall back to default region
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Node not found - use fallback logic
-			if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-				return ips, nil
-			}
-			// Try to find any region in the map as fallback
-			for region := range nodeIPMap {
-				if ips := nodeIPMap[region]; len(ips) > 0 {
-					return ips, nil
-				}
-			}
-			return nil, fmt.Errorf("node %s not found and no default node IP configured", location.NodeID)
-		}
-		return nil, fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
-	}
-
-	nodeRegion = node.Region
-
-	// If node has no region, try to find a default or return error
-	if nodeRegion == "" {
-		// Try to find "default" region first, then any region as fallback
-		if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-			return ips, nil
-		}
-		// Try to find any region in the map as fallback
-		for region := range nodeIPMap {
-			if ips := nodeIPMap[region]; len(ips) > 0 {
-				return ips, nil
-			}
-		}
-		return nil, fmt.Errorf("node %s has no region configured and no default region found", location.NodeID)
-	}
-
-	// Get node IPs for this region
-	ips, ok := nodeIPMap[nodeRegion]
-	if !ok || len(ips) == 0 {
-		// Fallback to "default" region if the node's region doesn't exist
-		if defaultIPs, defaultOk := nodeIPMap["default"]; defaultOk && len(defaultIPs) > 0 {
-			return defaultIPs, nil
-		}
-		return nil, fmt.Errorf("no node IP configured for region: %s", nodeRegion)
+	ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
+	if err != nil {
+		return nil, err
 	}
 
 	return ips, nil
 }
 
-// GetGameServerNodeIP returns the node IP for a game server based on where it's running
-// This queries the game_server_locations table to find which node/region the game server is in,
-// then maps that to the appropriate node IP from environment configuration
+// GetGameServerNodeIP returns the preferred IPs for a game server based on where it's running.
+// It prefers the actual node IP recorded on the selected location, then falls back to the
+// node metadata IP, and only uses region->NODE_IPS mapping as a compatibility fallback.
 func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]string, error) {
 	// Get game server locations (where game server is actually running)
 	var locations []GameServerLocation
@@ -121,22 +71,28 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 		if len(locations) == 0 {
 			return nil, fmt.Errorf("no game server locations found for game_server_id: %s", gameServerID)
 		}
-		for i, loc := range locations {
-			if !isStoppedStatus(loc.Status) {
-				if i != 0 {
-					locations[0], locations[i] = locations[i], locations[0]
-				}
-				break
-			}
-		}
 	}
 
-	// Get the first location's node to determine region
+	sortGameServerLocations(locations)
 	location := locations[0]
+
+	ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return ips, nil
+}
+
+func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); explicitNodeIP != "" {
+		return []string{explicitNodeIP}, nil
+	}
+
 	var node NodeMetadata
 	var nodeRegion string
 
-	if err := DB.First(&node, "id = ?", location.NodeID).Error; err != nil {
+	if err := DB.First(&node, "id = ?", nodeID).Error; err != nil {
 		// If node doesn't exist (e.g., was deleted), fall back to default region
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// Node not found - use fallback logic
@@ -149,9 +105,13 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 					return ips, nil
 				}
 			}
-			return nil, fmt.Errorf("node %s not found and no default node IP configured", location.NodeID)
+			return nil, fmt.Errorf("node %s not found and no default node IP configured", nodeID)
 		}
-		return nil, fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
+		return nil, fmt.Errorf("failed to find node %s: %w", nodeID, err)
+	}
+
+	if node.IP = strings.TrimSpace(node.IP); node.IP != "" {
+		return []string{node.IP}, nil
 	}
 
 	nodeRegion = node.Region
@@ -168,7 +128,7 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 				return ips, nil
 			}
 		}
-		return nil, fmt.Errorf("node %s has no region configured and no default region found", location.NodeID)
+		return nil, fmt.Errorf("node %s has no region configured and no default region found", nodeID)
 	}
 
 	// Get node IPs for this region
@@ -542,4 +502,59 @@ func isStoppedStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func locationStatusPriority(status string) int {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "running":
+		return 0
+	case "restarting":
+		return 1
+	case "starting":
+		return 2
+	case "created":
+		return 3
+	default:
+		return 4
+	}
+}
+
+func sortDeploymentLocations(locations []DeploymentLocation) {
+	sort.SliceStable(locations, func(i, j int) bool {
+		left := locations[i]
+		right := locations[j]
+
+		leftPriority := locationStatusPriority(left.Status)
+		rightPriority := locationStatusPriority(right.Status)
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		if !left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.UpdatedAt.After(right.UpdatedAt)
+		}
+		if !left.CreatedAt.Equal(right.CreatedAt) {
+			return left.CreatedAt.After(right.CreatedAt)
+		}
+		return left.ID < right.ID
+	})
+}
+
+func sortGameServerLocations(locations []GameServerLocation) {
+	sort.SliceStable(locations, func(i, j int) bool {
+		left := locations[i]
+		right := locations[j]
+
+		leftPriority := locationStatusPriority(left.Status)
+		rightPriority := locationStatusPriority(right.Status)
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		if !left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.UpdatedAt.After(right.UpdatedAt)
+		}
+		if !left.CreatedAt.Equal(right.CreatedAt) {
+			return left.CreatedAt.After(right.CreatedAt)
+		}
+		return left.ID < right.ID
+	})
 }

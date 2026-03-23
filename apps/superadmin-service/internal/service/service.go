@@ -389,35 +389,25 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		// Build domain
 		domain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
 
-		// Get IPs for this deployment
+		// Get IPs for this deployment using the shared DNS resolver so the dashboard
+		// matches the live DNS service behavior.
 		var ips []string
 		var region string
 
-		// First, try to get IPs from the region in the query result
+		if resolvedIPs, err := database.GetDeploymentNodeIP(row.DeploymentID, nodeIPMap); err == nil && len(resolvedIPs) > 0 {
+			ips = resolvedIPs
+		} else {
+			logger.Warn("[SuperAdmin] Failed to get node IPs for deployment %s: %v", row.DeploymentID, err)
+		}
+
+		// Preserve region information for display when available.
 		if row.Region != nil && *row.Region != "" {
 			region = *row.Region
-			if regionIPs, ok := nodeIPMap[region]; ok && len(regionIPs) > 0 {
-				ips = regionIPs
-			}
+		} else if deploymentRegion, err := database.GetDeploymentRegion(row.DeploymentID); err == nil {
+			region = deploymentRegion
 		}
 
-		// If no IPs from region, try to get IPs using the database function
-		// This handles cases where the region wasn't in the JOIN or the region name doesn't match
-		if len(ips) == 0 {
-			if resolvedIPs, err := database.GetDeploymentNodeIP(row.DeploymentID, nodeIPMap); err == nil && len(resolvedIPs) > 0 {
-				ips = resolvedIPs
-				// Update region if we got it from the function
-				if region == "" {
-					if deploymentRegion, err := database.GetDeploymentRegion(row.DeploymentID); err == nil {
-						region = deploymentRegion
-					}
-				}
-			} else {
-				logger.Warn("[SuperAdmin] Failed to get Traefik IPs for deployment %s: %v", row.DeploymentID, err)
-			}
-		}
-
-		// Final fallback: if still no IPs, try to use any available node IPs
+		// Final fallback: if still no IPs, try the configured NODE_IPS values.
 		// This handles cases where nodes don't have regions configured
 		if len(ips) == 0 {
 			// Try "default" region first
