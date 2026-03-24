@@ -25,6 +25,12 @@ import (
 
 const gameServerDomainSuffix = "my.obiente.cloud"
 
+const (
+	containerStartupVerificationTimeout = 15 * time.Second
+	containerStartupPollInterval        = 1 * time.Second
+	containerStartupStableDuration      = 3 * time.Second
+)
+
 // GameServerManager manages the lifecycle of game server containers
 type GameServerManager struct {
 	dockerClient client.APIClient
@@ -498,50 +504,8 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 		// Container started successfully (either original or recreated)
 		logger.Info("[GameServerManager] Successfully started container %s", (*gameServer.ContainerID)[:12])
-
-		// Wait a moment for container to initialize, then verify it's actually running
-		// Some containers may exit immediately if misconfigured
-		time.Sleep(2 * time.Second)
-
-		// Re-inspect to check if container is still running
-		containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to inspect container after start: %w", err)
-		}
-		containerInfo := containerInfoResult.Container
-
-		// If container exited, check why and update status accordingly
-		if !containerInfo.State.Running {
-			exitCode := containerInfo.State.ExitCode
-			logger.Warn("[GameServerManager] Container %s exited immediately with code %d", (*gameServer.ContainerID)[:12], exitCode)
-
-			// Try to get container logs for debugging
-			logs, logErr := gsm.dockerClient.ContainerLogs(ctx, *gameServer.ContainerID, client.ContainerLogsOptions{
-				ShowStdout: true,
-				ShowStderr: true,
-				Tail:       "50",
-			})
-			if logErr == nil {
-				defer logs.Close()
-				logContent, _ := io.ReadAll(logs)
-				if len(logContent) > 0 {
-					logger.Warn("[GameServerManager] Container %s logs (last 50 lines):\n%s", (*gameServer.ContainerID)[:12], string(logContent))
-				}
-			}
-
-			// Update status to STOPPED since container exited
-			if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 5); err != nil { // STOPPED = 5
-				logger.Warn("[GameServerManager] Failed to update game server status to STOPPED: %v", err)
-			}
-
-			// Update location status
-			if err := database.DB.Model(&database.GameServerLocation{}).
-				Where("container_id = ?", *gameServer.ContainerID).
-				Update("status", "stopped").Error; err != nil {
-				logger.Warn("[GameServerManager] Failed to update location status: %v", err)
-			}
-
-			return fmt.Errorf("container exited immediately with code %d (check container logs and configuration)", exitCode)
+		if err := gsm.verifyContainerStarted(gameServerID, *gameServer.ContainerID); err != nil {
+			return err
 		}
 	} else {
 		logger.Info("[GameServerManager] Container %s is already running", (*gameServer.ContainerID)[:12])
@@ -702,6 +666,10 @@ func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerI
 		logger.Info("[GameServerManager] Restarted container %s", (*gameServer.ContainerID)[:12])
 	}
 
+	if err := gsm.verifyContainerStarted(gameServerID, *gameServer.ContainerID); err != nil {
+		return err
+	}
+
 	// Update status
 	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 3); err != nil { // RUNNING = 3
 		logger.Warn("[GameServerManager] Failed to update game server status: %v", err)
@@ -716,6 +684,103 @@ func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerI
 	}
 
 	return nil
+}
+
+func (gsm *GameServerManager) verifyContainerStarted(gameServerID string, containerID string) error {
+	verifyCtx, cancel := context.WithTimeout(context.Background(), containerStartupVerificationTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(containerStartupPollInterval)
+	defer ticker.Stop()
+
+	shortContainerID := containerID
+	if len(shortContainerID) > 12 {
+		shortContainerID = shortContainerID[:12]
+	}
+
+	var stableSince time.Time
+	var lastState *container.State
+	var lastStatus string
+
+	for {
+		containerInfoResult, err := gsm.dockerClient.ContainerInspect(verifyCtx, containerID, client.ContainerInspectOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to inspect container after start: %w", err)
+		}
+
+		lastState = containerInfoResult.Container.State
+		if lastState != nil {
+			lastStatus = string(lastState.Status)
+		}
+
+		if lastState != nil && lastState.Running {
+			if stableSince.IsZero() {
+				stableSince = time.Now()
+				logger.Debug("[GameServerManager] Container %s reported running, waiting %v for stability", shortContainerID, containerStartupStableDuration)
+			}
+			if time.Since(stableSince) >= containerStartupStableDuration {
+				return nil
+			}
+		} else {
+			stableSince = time.Time{}
+		}
+
+		select {
+		case <-verifyCtx.Done():
+			return gsm.handleContainerStartVerificationFailure(gameServerID, containerID, lastState, lastStatus)
+		case <-ticker.C:
+		}
+	}
+}
+
+func (gsm *GameServerManager) handleContainerStartVerificationFailure(gameServerID string, containerID string, state *container.State, lastStatus string) error {
+	shortContainerID := containerID
+	if len(shortContainerID) > 12 {
+		shortContainerID = shortContainerID[:12]
+	}
+
+	exitCode := -1
+	restarting := false
+	if state != nil {
+		exitCode = state.ExitCode
+		restarting = state.Restarting
+	}
+
+	logger.Warn("[GameServerManager] Container %s failed startup verification (status=%s, exitCode=%d, restarting=%t)", shortContainerID, lastStatus, exitCode, restarting)
+
+	logs, logErr := gsm.dockerClient.ContainerLogs(context.Background(), containerID, client.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Tail:       "50",
+	})
+	if logErr == nil {
+		defer logs.Close()
+		logContent, _ := io.ReadAll(logs)
+		if len(logContent) > 0 {
+			logger.Warn("[GameServerManager] Container %s logs (last 50 lines):\n%s", shortContainerID, string(logContent))
+		}
+	}
+
+	statusToSet := int32(7) // FAILED
+	if exitCode == 0 && !restarting {
+		statusToSet = 5 // STOPPED
+	}
+
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(context.Background(), gameServerID, statusToSet); err != nil {
+		logger.Warn("[GameServerManager] Failed to update game server status after startup verification failure: %v", err)
+	}
+
+	if err := database.DB.Model(&database.GameServerLocation{}).
+		Where("container_id = ?", containerID).
+		Update("status", "stopped").Error; err != nil {
+		logger.Warn("[GameServerManager] Failed to update location status after startup verification failure: %v", err)
+	}
+
+	if exitCode >= 0 {
+		return fmt.Errorf("container failed startup verification: status=%s exitCode=%d restarting=%t (check container logs and configuration)", lastStatus, exitCode, restarting)
+	}
+
+	return fmt.Errorf("container failed startup verification: status=%s restarting=%t (check container logs and configuration)", lastStatus, restarting)
 }
 
 // DeleteGameServer removes a game server container
