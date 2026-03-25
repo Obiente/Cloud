@@ -175,8 +175,9 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 					skippedCount++
 				}
 			} else {
-				// Container crashed or failed - check if it's an OOM kill
-				isOOMKill := exitCode == 137 // Exit code 137 = OOM kill (128 + 9, where 9 is SIGKILL)
+				// Container crashed or failed - rely on Docker state for OOM attribution.
+				// Exit code 137 can also come from non-OOM SIGKILL events (manual kill, daemon stop, node pressure).
+				isOOMKill := containerInfo.Container.State.OOMKilled
 
 				if currentStatus != int32(gameserversv1.GameServerStatus_FAILED) {
 					logger.Info("[HealthMonitor] Game server %s container exited with code %d but DB status is %d, updating to FAILED", gameServer.ID, exitCode, currentStatus)

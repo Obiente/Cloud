@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	gameserverorchestrator "gameservers-service/internal/orchestrator"
@@ -247,7 +248,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	if sv := req.Msg.GetServerVersion(); sv != "" {
 		serverVersion = &sv
 	}
-	addGameSpecificEnvVars(envVars, req.Msg.GetGameType(), serverVersion)
+	addGameSpecificEnvVars(envVars, req.Msg.GetGameType(), serverVersion, memoryBytes)
 
 	// Persist the final envVars (including any defaults like VERSION) into the DB
 	if envVarsBytes, err := json.Marshal(envVars); err == nil {
@@ -442,6 +443,27 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		envVarsBytes, err := json.Marshal(merged)
 		if err == nil {
 			dbGameServer.EnvVars = string(envVarsBytes)
+		}
+	}
+
+	// Ensure game-specific defaults stay in sync after updates.
+	// This keeps Minecraft heap settings aligned with configured memory unless user explicitly overrides env vars.
+	{
+		gameType := gameserversv1.GameType(dbGameServer.GameType)
+		envVars := make(map[string]string)
+		if dbGameServer.EnvVars != "" {
+			if err := json.Unmarshal([]byte(dbGameServer.EnvVars), &envVars); err != nil {
+				logger.Warn("[UpdateGameServer] Failed to parse env_vars while applying defaults for game server %s: %v", gameServerID, err)
+				envVars = make(map[string]string)
+			}
+		}
+
+		addGameSpecificEnvVars(envVars, gameType, dbGameServer.ServerVersion, dbGameServer.MemoryBytes)
+
+		if envVarsBytes, err := json.Marshal(envVars); err == nil {
+			dbGameServer.EnvVars = string(envVarsBytes)
+		} else {
+			logger.Warn("[UpdateGameServer] Failed to marshal env_vars while applying defaults for game server %s: %v", gameServerID, err)
 		}
 	}
 
@@ -802,7 +824,7 @@ func getDefaultDockerImage(gameType gameserversv1.GameType) string {
 }
 
 // addGameSpecificEnvVars adds default environment variables for specific game types
-func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.GameType, serverVersion *string) {
+func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.GameType, serverVersion *string, memoryBytes int64) {
 	switch gameType {
 	case gameserversv1.GameType_MINECRAFT, gameserversv1.GameType_MINECRAFT_JAVA:
 		// itzg/minecraft-server requires EULA=TRUE
@@ -818,6 +840,11 @@ func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.Ga
 		// Default to VANILLA server type if not specified
 		if _, exists := envVars["TYPE"]; !exists {
 			envVars["TYPE"] = "VANILLA"
+		}
+		// Keep JVM heap aligned with configured memory unless user explicitly provided MEMORY.
+		// itzg/minecraft-server uses MEMORY (e.g. 24G, 1024M).
+		if _, exists := envVars["MEMORY"]; !exists && memoryBytes > 0 {
+			envVars["MEMORY"] = formatMinecraftMemoryEnv(memoryBytes)
 		}
 	case gameserversv1.GameType_MINECRAFT_BEDROCK:
 		// itzg/minecraft-bedrock-server requires EULA=TRUE
@@ -839,6 +866,28 @@ func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.Ga
 		// cm2network/tf2 may require SRCDS_TOKEN for Steam authentication
 		// Similar to CS2, users should configure this if needed
 	}
+}
+
+func formatMinecraftMemoryEnv(memoryBytes int64) string {
+	const (
+		mb = int64(1024 * 1024)
+		gb = int64(1024 * 1024 * 1024)
+	)
+
+	if memoryBytes <= 0 {
+		return "1G"
+	}
+
+	if memoryBytes%gb == 0 {
+		return fmt.Sprintf("%dG", memoryBytes/gb)
+	}
+
+	memoryMB := int64(math.Ceil(float64(memoryBytes) / float64(mb)))
+	if memoryMB < 256 {
+		memoryMB = 256
+	}
+
+	return fmt.Sprintf("%dM", memoryMB)
 }
 
 // updateContainerResourceLimits updates the resource limits of a running container
