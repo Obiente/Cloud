@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"os/exec"
 	"strings"
 	"sync"
@@ -10,9 +11,17 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+)
+
+const (
+	orchestratorAuditServiceName           = "OrchestratorService"
+	orchestratorAuditSourceStrayCleanup    = "stray_cleanup"
+	orchestratorAuditInternalIPAddress     = "internal"
+	orchestratorAuditUserAgentStrayCleanup = "orchestrator-service/" + orchestratorAuditSourceStrayCleanup
 )
 
 // Cleanup operations for orchestrator service
@@ -252,19 +261,34 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 		return
 	}
 
-	// Get all container IDs from deployment_locations table
-	var dbContainerIDs []string
+	// Get all tracked deployment container IDs for this node.
+	var deploymentContainerIDs []string
 	if err := database.DB.Table("deployment_locations").
 		Select("container_id").
 		Where("node_id = ?", nodeID).
-		Pluck("container_id", &dbContainerIDs).Error; err != nil {
+		Pluck("container_id", &deploymentContainerIDs).Error; err != nil {
 		logger.Warn("[Orchestrator] Failed to query deployment locations: %v", err)
+		return
+	}
+
+	// Get all tracked game server container IDs for this node.
+	// Game server containers are also labeled cloud.obiente.managed=true, so
+	// they must be included here or they will be misclassified as stray and stopped.
+	var gameServerContainerIDs []string
+	if err := database.DB.Table("game_server_locations").
+		Select("container_id").
+		Where("node_id = ?", nodeID).
+		Pluck("container_id", &gameServerContainerIDs).Error; err != nil {
+		logger.Warn("[Orchestrator] Failed to query game server locations: %v", err)
 		return
 	}
 
 	// Build a map for fast lookup
 	dbContainerMap := make(map[string]bool)
-	for _, id := range dbContainerIDs {
+	for _, id := range deploymentContainerIDs {
+		dbContainerMap[id] = true
+	}
+	for _, id := range gameServerContainerIDs {
 		dbContainerMap[id] = true
 	}
 
@@ -312,13 +336,18 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 			continue
 		}
 
+		resourceType, resourceID := inferAuditResource(container)
+
 		// Stop the container
-		logger.Info("[Orchestrator] Stopping stray container %s", container.ID[:12])
+		logger.Info("[Orchestrator] Stopping stray container %s (resourceType=%s, resourceID=%s, labels=%v)", container.ID[:12], resourceType, resourceID, container.Labels)
 		timeout := 30 * time.Second
 		if err := dcli.StopContainer(ctx, container.ID, timeout); err != nil {
+			os.createStrayContainerAuditLog(nodeID, container, resourceType, resourceID, 500, err)
 			logger.Warn("[Orchestrator] Failed to stop stray container %s: %v", container.ID[:12], err)
 			continue
 		}
+
+		os.createStrayContainerAuditLog(nodeID, container, resourceType, resourceID, 200, nil)
 
 		// Record in database
 		stray := database.StrayContainer{
@@ -411,24 +440,24 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 					if containerInfo.Config != nil && containerInfo.Config.Labels != nil {
 						if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
 							logger.Info("[Orchestrator] Removing Docker volume %s (container has cloud.obiente tags)", volume.Name)
-						// Extract volume name from mount name if needed
-						volumeName := volume.Name
-						if volumeName == "" {
-							// Try to extract from path
-							if strings.Contains(volume.Source, "/volumes/") {
-								parts := strings.Split(volume.Source, "/volumes/")
-								if len(parts) > 1 {
-									volumeName = strings.Split(parts[1], "/")[0]
+							// Extract volume name from mount name if needed
+							volumeName := volume.Name
+							if volumeName == "" {
+								// Try to extract from path
+								if strings.Contains(volume.Source, "/volumes/") {
+									parts := strings.Split(volume.Source, "/volumes/")
+									if len(parts) > 1 {
+										volumeName = strings.Split(parts[1], "/")[0]
+									}
 								}
 							}
-						}
-						if volumeName != "" {
-							if _, err := dockerClient.VolumeRemove(ctx, volumeName, client.VolumeRemoveOptions{}); err != nil {
-								logger.Warn("[Orchestrator] Failed to remove Docker volume %s: %v", volumeName, err)
-							} else {
-								logger.Info("[Orchestrator] Removed Docker volume %s", volumeName)
+							if volumeName != "" {
+								if _, err := dockerClient.VolumeRemove(ctx, volumeName, client.VolumeRemoveOptions{}); err != nil {
+									logger.Warn("[Orchestrator] Failed to remove Docker volume %s: %v", volumeName, err)
+								} else {
+									logger.Info("[Orchestrator] Removed Docker volume %s", volumeName)
+								}
 							}
-						}
 						} else {
 							logger.Debug("[Orchestrator] Skipping Docker volume %s - container missing cloud.obiente tags", volume.Name)
 						}
@@ -443,5 +472,76 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 		// Mark volumes as deleted
 		database.DB.Model(&stray).Update("volumes_deleted_at", now)
 		logger.Info("[Orchestrator] Marked volumes as deleted for container %s", stray.ContainerID[:12])
+	}
+}
+
+func inferAuditResource(container container.Summary) (resourceType string, resourceID string) {
+	resourceType = strings.TrimSpace(container.Labels["cloud.obiente.resource_type"])
+	if resourceType == "" {
+		resourceType = "container"
+	}
+
+	switch resourceType {
+	case "gameserver":
+		resourceID = strings.TrimSpace(container.Labels["cloud.obiente.gameserver_id"])
+	case "deployment":
+		resourceID = strings.TrimSpace(container.Labels["cloud.obiente.deployment_id"])
+	}
+
+	if resourceID == "" {
+		resourceID = container.ID
+	}
+
+	return resourceType, resourceID
+}
+
+func (os *OrchestratorService) createStrayContainerAuditLog(nodeID string, container container.Summary, resourceType string, resourceID string, responseStatus int32, actionErr error) {
+	containerName := container.ID
+	if len(container.Names) > 0 {
+		containerName = strings.TrimPrefix(container.Names[0], "/")
+	}
+
+	requestDataMap := map[string]interface{}{
+		"reason":        "stray_container_cleanup",
+		"source":        orchestratorAuditSourceStrayCleanup,
+		"containerId":   container.ID,
+		"containerName": containerName,
+		"nodeId":        nodeID,
+		"labels":        container.Labels,
+	}
+
+	requestData, err := json.Marshal(requestDataMap)
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to marshal stray container audit request data for %s: %v", container.ID[:12], err)
+		requestData = []byte("{}")
+	}
+
+	var errorMessage *string
+	if actionErr != nil {
+		msg := actionErr.Error()
+		errorMessage = &msg
+	}
+
+	resourceTypeCopy := resourceType
+	resourceIDCopy := resourceID
+
+	auditCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := middleware.CreateAuditLog(auditCtx, middleware.AuditEntry{
+		UserID:         "system",
+		OrganizationID: nil,
+		Action:         "StopStrayContainer",
+		Service:        orchestratorAuditServiceName,
+		ResourceType:   &resourceTypeCopy,
+		ResourceID:     &resourceIDCopy,
+		IPAddress:      orchestratorAuditInternalIPAddress,
+		UserAgent:      orchestratorAuditUserAgentStrayCleanup,
+		RequestData:    string(requestData),
+		ResponseStatus: responseStatus,
+		ErrorMessage:   errorMessage,
+		DurationMs:     0,
+	}); err != nil {
+		logger.Warn("[Orchestrator] Failed to create stray container audit log for %s: %v", container.ID[:12], err)
 	}
 }
