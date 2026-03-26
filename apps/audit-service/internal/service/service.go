@@ -22,8 +22,10 @@ import (
 )
 
 const (
-	defaultPageSize = 50
-	maxPageSize     = 1000
+	defaultPageSize  = 50
+	maxPageSize      = 1000
+	sshProxyService  = "SSHProxyService"
+	sshConnectAction = "SSHConnect"
 )
 
 type Service struct {
@@ -35,6 +37,26 @@ func NewService(db *gorm.DB) *Service {
 	return &Service{
 		db: db,
 	}
+}
+
+func applyGlobalAuditNoiseFilters(query *gorm.DB, req *auditv1.ListAuditLogsRequest) *gorm.DB {
+	if query == nil || req == nil {
+		return query
+	}
+
+	// Global audit logs are intentionally higher-signal than org/resource scoped views.
+	// Failed SSH probes generate a large amount of unactionable noise in the global feed,
+	// so hide them by default there while preserving them in organization-scoped audit logs.
+	if req.OrganizationId == nil || *req.OrganizationId == "" {
+		query = query.Where(
+			"NOT (service = ? AND action = ? AND response_status <> ?)",
+			sshProxyService,
+			sshConnectAction,
+			200,
+		)
+	}
+
+	return query
 }
 
 // ListAuditLogs lists audit logs with filtering options
@@ -90,6 +112,9 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 
 	// Build query for fetching (with pagination)
 	query := database.MetricsDB.Model(&database.AuditLog{})
+
+	countQuery = applyGlobalAuditNoiseFilters(countQuery, req.Msg)
+	query = applyGlobalAuditNoiseFilters(query, req.Msg)
 
 	// Apply filters to both queries
 	// Note: If OrganizationId is not provided, all audit logs from all organizations are returned
