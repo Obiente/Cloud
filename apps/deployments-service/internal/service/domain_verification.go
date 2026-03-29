@@ -36,10 +36,55 @@ type DomainVerification struct {
 	VerifiedAt   *time.Time               `json:"verified_at,omitempty"`
 }
 
+func normalizeCustomDomain(domain string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
+}
+
+func verificationTXTDomain(domain string) string {
+	domain = normalizeCustomDomain(domain)
+	if strings.HasPrefix(domain, "*.") {
+		return strings.TrimPrefix(domain, "*.")
+	}
+	return domain
+}
+
+func isWildcardCustomDomain(domain string) bool {
+	domain = normalizeCustomDomain(domain)
+	return strings.HasPrefix(domain, "*.") && !strings.Contains(strings.TrimPrefix(domain, "*."), "*")
+}
+
+func wildcardCoversHost(wildcardDomain, host string) bool {
+	wildcardDomain = normalizeCustomDomain(wildcardDomain)
+	host = normalizeCustomDomain(host)
+	if !isWildcardCustomDomain(wildcardDomain) || host == "" {
+		return false
+	}
+
+	suffix := strings.TrimPrefix(wildcardDomain, "*.")
+	if !strings.HasSuffix(host, "."+suffix) {
+		return false
+	}
+
+	label := strings.TrimSuffix(host, "."+suffix)
+	return label != "" && !strings.Contains(label, ".")
+}
+
+func customDomainsConflict(left, right string) bool {
+	left = normalizeCustomDomain(left)
+	right = normalizeCustomDomain(right)
+	if left == "" || right == "" {
+		return false
+	}
+	if left == right {
+		return true
+	}
+	return wildcardCoversHost(left, right) || wildcardCoversHost(right, left)
+}
+
 // verifyDomainOwnershipInternal verifies domain ownership via DNS TXT record (internal method)
 func (s *Service) verifyDomainOwnershipInternal(ctx context.Context, deploymentID string, domain string) error {
 	// Normalize domain (remove trailing dots, convert to lowercase)
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	domain = normalizeCustomDomain(domain)
 
 	// Check if domain is already claimed by another deployment
 	if err := s.checkDomainConflict(ctx, deploymentID, domain); err != nil {
@@ -64,7 +109,7 @@ func (s *Service) verifyDomainOwnershipInternal(ctx context.Context, deploymentI
 
 	// Perform DNS verification
 	verificationToken := fmt.Sprintf("obiente-verification=%s", verification.Token)
-	txtRecordName := fmt.Sprintf("_obiente-verification.%s", domain)
+	txtRecordName := fmt.Sprintf("_obiente-verification.%s", verificationTXTDomain(domain))
 
 	// Look up TXT record
 	txtRecords, err := lookupTXT(txtRecordName)
@@ -103,7 +148,7 @@ func (s *Service) verifyDomainOwnershipInternal(ctx context.Context, deploymentI
 // getDomainVerificationTokenInternal retrieves or generates a verification token for a domain (internal method)
 func (s *Service) getDomainVerificationTokenInternal(ctx context.Context, deploymentID string, domain string) (string, error) {
 	// Normalize domain
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	domain = normalizeCustomDomain(domain)
 
 	// Get or create verification record
 	verification, err := s.getOrCreateVerification(ctx, deploymentID, domain)
@@ -117,7 +162,7 @@ func (s *Service) getDomainVerificationTokenInternal(ctx context.Context, deploy
 // checkDomainConflict checks if a domain is already claimed by another deployment
 func (s *Service) checkDomainConflict(ctx context.Context, deploymentID string, domain string) error {
 	// Normalize domain for comparison
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	domain = normalizeCustomDomain(domain)
 
 	// Query all deployments to check for domain conflicts
 	var deployments []database.Deployment
@@ -132,7 +177,7 @@ func (s *Service) checkDomainConflict(ctx context.Context, deploymentID string, 
 		}
 
 		// Check default domain
-		if strings.ToLower(strings.TrimSuffix(dep.Domain, ".")) == domain {
+		if customDomainsConflict(dep.Domain, domain) {
 			return fmt.Errorf("domain %s is already in use by deployment %s", domain, dep.ID)
 		}
 
@@ -143,7 +188,7 @@ func (s *Service) checkDomainConflict(ctx context.Context, deploymentID string, 
 				for _, customDomain := range customDomains {
 					// Parse custom domain (may include verification metadata)
 					verifiedDomain := extractDomainFromCustomDomainEntry(customDomain)
-					if strings.ToLower(strings.TrimSuffix(verifiedDomain, ".")) == domain {
+					if customDomainsConflict(verifiedDomain, domain) {
 						return fmt.Errorf("domain %s is already in use by deployment %s", domain, dep.ID)
 					}
 				}
@@ -396,7 +441,7 @@ func (s *Service) storeVerifiedDomain(ctx context.Context, deploymentID string, 
 // Entry format: "domain.com" or "domain.com:verified" or "domain.com:token:abc123:pending"
 func extractDomainFromCustomDomainEntry(entry string) string {
 	parts := strings.Split(entry, ":")
-	return parts[0]
+	return normalizeCustomDomain(parts[0])
 }
 
 // DeduplicateCustomDomains removes duplicate domain entries (case-insensitive)
@@ -484,7 +529,7 @@ func (s *Service) extractVerifiedDomains(customDomains []string) []string {
 func (s *Service) ValidateCustomDomains(ctx context.Context, deploymentID string, domains []string) error {
 	for _, domain := range domains {
 		// Normalize domain
-		domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+		domain = normalizeCustomDomain(domain)
 
 		// Basic validation
 		if domain == "" {

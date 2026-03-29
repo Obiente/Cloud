@@ -30,6 +30,15 @@ func envFlagEnabled(name string) bool {
 	}
 }
 
+func traefikHostRule(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if strings.HasPrefix(domain, "*.") {
+		suffix := strings.TrimPrefix(domain, "*.")
+		return "HostRegexp(`{subdomain:[^.]+}." + suffix + "`)"
+	}
+	return "Host(`" + domain + "`)"
+}
+
 func (dm *DeploymentManager) getPlanLimitsForDeployment(deploymentID string) (maxMemoryBytes int64, maxCPUCores int, err error) {
 	// Get deployment to find organization ID
 	var deployment database.Deployment
@@ -629,8 +638,8 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			routerName = fmt.Sprintf("%s-%d", routerName, idx)
 		}
 
-		// Build rule: Host or Host + PathPrefix
-		rule := "Host(`" + routing.Domain + "`)"
+		// Build rule: Host for exact domains, HostRegexp for wildcard domains.
+		rule := traefikHostRule(routing.Domain)
 		if routing.PathPrefix != "" {
 			rule = rule + " && PathPrefix(`" + routing.PathPrefix + "`)"
 		}

@@ -46,7 +46,7 @@ func (s *Service) GetDomainVerificationToken(ctx context.Context, req *connect.R
 		if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &customDomains); err == nil {
 			for _, entry := range customDomains {
 				parts := strings.Split(entry, ":")
-				if len(parts) >= 2 && strings.ToLower(parts[0]) == strings.ToLower(domain) {
+				if len(parts) >= 2 && normalizeCustomDomain(parts[0]) == normalizeCustomDomain(domain) {
 					if len(parts) >= 4 && parts[1] == "token" {
 						status = parts[3]
 					} else if len(parts) >= 2 && parts[1] == "verified" {
@@ -58,7 +58,7 @@ func (s *Service) GetDomainVerificationToken(ctx context.Context, req *connect.R
 		}
 	}
 
-	txtRecordName := fmt.Sprintf("_obiente-verification.%s", domain)
+	txtRecordName := fmt.Sprintf("_obiente-verification.%s", verificationTXTDomain(domain))
 	txtRecordValue := fmt.Sprintf("obiente-verification=%s", token)
 
 	res := connect.NewResponse(&deploymentsv1.GetDomainVerificationTokenResponse{
@@ -111,7 +111,7 @@ func (s *Service) VerifyDomainOwnership(ctx context.Context, req *connect.Reques
 		if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &customDomains); err == nil {
 			for _, entry := range customDomains {
 				parts := strings.Split(entry, ":")
-				if len(parts) >= 2 && strings.ToLower(parts[0]) == strings.ToLower(domain) {
+				if len(parts) >= 2 && normalizeCustomDomain(parts[0]) == normalizeCustomDomain(domain) {
 					if len(parts) >= 4 && parts[1] == "token" {
 						status = parts[3]
 					} else if len(parts) >= 2 && parts[1] == "verified" {
@@ -130,4 +130,3 @@ func (s *Service) VerifyDomainOwnership(ctx context.Context, req *connect.Reques
 	})
 	return res, nil
 }
-
