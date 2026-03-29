@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	githubclient "deployments-service/internal/github"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	githubclient "deployments-service/internal/github"
+	sharedsecrets "github.com/obiente/cloud/apps/shared/pkg/secrets"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -39,16 +40,16 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err == nil {
 			// Verify user has access to this integration
 			if integration.UserID != nil && *integration.UserID == user.Id {
-				return integration.Token, nil
+				return decryptStoredGitHubToken(integration.Token)
 			}
 			if integration.OrganizationID != nil {
 				// Check if user is member of the organization
 				if isSuperAdmin {
-					return integration.Token, nil
+					return decryptStoredGitHubToken(integration.Token)
 				}
 				var member database.OrganizationMember
 				if err := database.DB.Where("organization_id = ? AND user_id = ?", *integration.OrganizationID, user.Id).First(&member).Error; err == nil {
-					return integration.Token, nil
+					return decryptStoredGitHubToken(integration.Token)
 				}
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -62,11 +63,11 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		var orgIntegration database.GitHubIntegration
 		if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
 			if isSuperAdmin {
-				return orgIntegration.Token, nil
+				return decryptStoredGitHubToken(orgIntegration.Token)
 			}
 			var member database.OrganizationMember
 			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
-				return orgIntegration.Token, nil
+				return decryptStoredGitHubToken(orgIntegration.Token)
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
@@ -77,13 +78,34 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 	// Fall back to user token
 	var userIntegration database.GitHubIntegration
 	if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
-		return userIntegration.Token, nil
+		return decryptStoredGitHubToken(userIntegration.Token)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Log unexpected errors, but ignore "record not found"
 		return "", fmt.Errorf("failed to get user integration: %w", err)
 	}
 
 	return "", fmt.Errorf("no GitHub integration found for user or organization")
+}
+
+func getGitHubIntegrationTokenByID(integrationID string) (string, error) {
+	var integration database.GitHubIntegration
+	if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err != nil {
+		return "", err
+	}
+
+	return decryptStoredGitHubToken(integration.Token)
+}
+
+func decryptStoredGitHubToken(token string) (string, error) {
+	tokenCipher, err := sharedsecrets.NewTokenCipherFromEnv()
+	if err != nil {
+		if !sharedsecrets.IsEncryptedString(token) {
+			return token, nil
+		}
+		return "", fmt.Errorf("GitHub token decryption is not configured: %w", err)
+	}
+
+	return tokenCipher.DecryptString(token)
 }
 
 // ListGitHubRepos lists GitHub repositories for the authenticated user or organization

@@ -3,15 +3,16 @@ package auth
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
-
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	sharedsecrets "github.com/obiente/cloud/apps/shared/pkg/secrets"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	"github.com/obiente/cloud/apps/shared/pkg/zitadel"
+	"os"
 	"strings"
+	"time"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
@@ -24,12 +25,19 @@ import (
 
 type Service struct {
 	authv1connect.UnimplementedAuthServiceHandler
-	db *gorm.DB
+	db          *gorm.DB
+	tokenCipher *sharedsecrets.TokenCipher
 }
 
 func NewService() authv1connect.AuthServiceHandler {
+	tokenCipher, err := sharedsecrets.NewTokenCipherFromEnv()
+	if err != nil {
+		logger.Warn("GitHub token encryption is unavailable: %v", err)
+	}
+
 	return &Service{
-		db: database.DB,
+		db:          database.DB,
+		tokenCipher: tokenCipher,
 	}
 }
 
@@ -84,7 +92,7 @@ func (s *Service) GetCurrentUser(ctx context.Context, _ *connect.Request[authv1.
 	if err != nil {
 		return connect.NewResponse(&authv1.GetCurrentUserResponse{User: nil}), nil
 	}
-    return connect.NewResponse(&authv1.GetCurrentUserResponse{User: ui}), nil
+	return connect.NewResponse(&authv1.GetCurrentUserResponse{User: ui}), nil
 }
 
 func (s *Service) UpdateUserProfile(ctx context.Context, req *connect.Request[authv1.UpdateUserProfileRequest]) (*connect.Response[authv1.UpdateUserProfileResponse], error) {
@@ -171,23 +179,27 @@ func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1
 	// Check if user already has a GitHub integration
 	var existing database.GitHubIntegration
 	err = s.db.Where("user_id = ?", user.Id).First(&existing).Error
-	
+
 	now := time.Now()
 	userID := user.Id
-	
+	encryptedToken, err := s.encryptGitHubToken(req.Msg.GetAccessToken())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt GitHub token: %w", err))
+	}
+
 	if err == gorm.ErrRecordNotFound {
 		// Create new integration
 		integration := database.GitHubIntegration{
-			ID:          uuid.New().String(),
-			UserID:      &userID,
+			ID:             uuid.New().String(),
+			UserID:         &userID,
 			OrganizationID: nil,
-			Token:       req.Msg.GetAccessToken(), // TODO: Encrypt this token before storing
-			Username:    req.Msg.GetUsername(),
-			Scope:       req.Msg.GetScope(),
-			ConnectedAt: now,
-			UpdatedAt:   now,
+			Token:          encryptedToken,
+			Username:       req.Msg.GetUsername(),
+			Scope:          req.Msg.GetScope(),
+			ConnectedAt:    now,
+			UpdatedAt:      now,
 		}
-		
+
 		if err := s.db.Create(&integration).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save GitHub integration: %w", err))
 		}
@@ -195,11 +207,11 @@ func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check existing integration: %w", err))
 	} else {
 		// Update existing integration
-		existing.Token = req.Msg.GetAccessToken() // TODO: Encrypt this token before storing
+		existing.Token = encryptedToken
 		existing.Username = req.Msg.GetUsername()
 		existing.Scope = req.Msg.GetScope()
 		existing.UpdatedAt = now
-		
+
 		if err := s.db.Save(&existing).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update GitHub integration: %w", err))
 		}
@@ -247,11 +259,11 @@ func (s *Service) GetGitHubStatus(ctx context.Context, _ *connect.Request[authv1
 	// Check if user has a GitHub integration
 	var integration database.GitHubIntegration
 	err = s.db.Where("user_id = ?", user.Id).First(&integration).Error
-	
+
 	if err == gorm.ErrRecordNotFound {
 		return connect.NewResponse(&authv1.GetGitHubStatusResponse{
 			Connected: false,
-			Username:   "",
+			Username:  "",
 		}), nil
 	} else if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check GitHub status: %w", err))
@@ -288,22 +300,26 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 	// Check if organization already has a GitHub integration
 	var existing database.GitHubIntegration
 	err = s.db.Where("organization_id = ?", orgID).First(&existing).Error
-	
+
 	now := time.Now()
-	
+	encryptedToken, err := s.encryptGitHubToken(req.Msg.GetAccessToken())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt GitHub token: %w", err))
+	}
+
 	if err == gorm.ErrRecordNotFound {
 		// Create new integration
 		integration := database.GitHubIntegration{
-			ID:            uuid.New().String(),
-			UserID:        nil,
+			ID:             uuid.New().String(),
+			UserID:         nil,
 			OrganizationID: &orgID,
-			Token:         req.Msg.GetAccessToken(), // TODO: Encrypt this token before storing
-			Username:      req.Msg.GetUsername(),
-			Scope:         req.Msg.GetScope(),
-			ConnectedAt:   now,
-			UpdatedAt:     now,
+			Token:          encryptedToken,
+			Username:       req.Msg.GetUsername(),
+			Scope:          req.Msg.GetScope(),
+			ConnectedAt:    now,
+			UpdatedAt:      now,
 		}
-		
+
 		if err := s.db.Create(&integration).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save GitHub integration: %w", err))
 		}
@@ -311,11 +327,11 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check existing integration: %w", err))
 	} else {
 		// Update existing integration
-		existing.Token = req.Msg.GetAccessToken() // TODO: Encrypt this token before storing
+		existing.Token = encryptedToken
 		existing.Username = req.Msg.GetUsername()
 		existing.Scope = req.Msg.GetScope()
 		existing.UpdatedAt = now
-		
+
 		if err := s.db.Save(&existing).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update GitHub integration: %w", err))
 		}
@@ -372,7 +388,7 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 	}
 
 	var integrations []database.GitHubIntegration
-	
+
 	// Get user's GitHub integration
 	var userIntegration database.GitHubIntegration
 	if err := s.db.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
@@ -387,7 +403,7 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 		for _, member := range orgMembers {
 			orgIDs = append(orgIDs, member.OrganizationID)
 		}
-		
+
 		if len(orgIDs) > 0 {
 			var orgIntegrations []database.GitHubIntegration
 			if err := s.db.Where("organization_id IN ?", orgIDs).Find(&orgIntegrations).Error; err == nil {
@@ -407,7 +423,7 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 			IsUser:      isUser,
 			ConnectedAt: timestamppb.New(integration.ConnectedAt),
 		}
-		
+
 		if !isUser && integration.OrganizationID != nil {
 			info.OrganizationId = *integration.OrganizationID
 			// Fetch organization name from database
@@ -416,13 +432,24 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 				info.OrganizationName = org.Name
 			}
 		}
-		
+
 		protoIntegrations = append(protoIntegrations, info)
 	}
 
 	return connect.NewResponse(&authv1.ListGitHubIntegrationsResponse{
 		Integrations: protoIntegrations,
 	}), nil
+}
+
+func (s *Service) encryptGitHubToken(token string) (string, error) {
+	if strings.TrimSpace(token) == "" {
+		return "", fmt.Errorf("GitHub access token is required")
+	}
+	if s.tokenCipher == nil {
+		return "", fmt.Errorf("GitHub token encryption is not configured")
+	}
+
+	return s.tokenCipher.EncryptString(token)
 }
 
 // verifyOrgAdminPermission verifies that the user is an admin or owner of the organization.

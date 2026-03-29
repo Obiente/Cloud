@@ -135,9 +135,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					// Get GitHub token if integration ID is set
 					githubToken := ""
 					if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
-						var integration database.GitHubIntegration
-						if err := database.DB.Where("id = ?", *dbDeployment.GitHubIntegrationID).First(&integration).Error; err == nil {
-							githubToken = integration.Token
+						if token, err := getGitHubIntegrationTokenByID(*dbDeployment.GitHubIntegrationID); err == nil {
+							githubToken = token
 						}
 					}
 					if err := cloneRepository(buildCtx, *dbDeployment.RepositoryURL, dbDeployment.Branch, buildDir, githubToken); err == nil {
@@ -208,9 +207,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		// Get GitHub token if integration ID is set
 		githubToken := ""
 		if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
-			var integration database.GitHubIntegration
-			if err := database.DB.Where("id = ?", *dbDeployment.GitHubIntegrationID).First(&integration).Error; err == nil {
-				githubToken = integration.Token
+			if token, err := getGitHubIntegrationTokenByID(*dbDeployment.GitHubIntegrationID); err == nil {
+				githubToken = token
 			}
 		}
 
