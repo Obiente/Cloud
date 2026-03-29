@@ -168,10 +168,13 @@ export default defineNuxtConfig({
     // Use API Gateway for all requests (routes to microservices)
     // When running locally (not in Docker), use localhost with Traefik port
     // When running in Docker, use api-gateway service name
-    apiHostInternal: process.env.NUXT_API_HOST_INTERNAL || process.env.NUXT_PUBLIC_API_HOST || "http://api.localhost",
+    apiHostInternal:
+      process.env.NUXT_API_HOST_INTERNAL ||
+      process.env.NUXT_PUBLIC_API_HOST ||
+      "http://api.localhost",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
-      password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      password: "changeme_dashboard_session_password_please_override", // Override with NUXT_SESSION_PASSWORD in every real environment
       cookie: {
         secure: true, // Set to true if using HTTPS
       },
@@ -197,7 +200,7 @@ export default defineNuxtConfig({
     host: "0.0.0.0",
   },
   future: {
-    compatibilityVersion: 4
+    compatibilityVersion: 4,
   },
 
   app: {

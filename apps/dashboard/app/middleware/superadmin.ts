@@ -18,6 +18,22 @@ const routePermissions: Record<string, string> = {
   "/superadmin/role-bindings": "admin.bindings.read",
 };
 
+function getRequiredPermission(path: string): string | undefined {
+  const matchedRoute = Object.keys(routePermissions)
+    .filter((route) => path === route || path.startsWith(`${route}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
+  if (matchedRoute) {
+    return routePermissions[matchedRoute];
+  }
+
+  if (path.startsWith("/superadmin")) {
+    return "superadmin.overview.read";
+  }
+
+  return undefined;
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   // Only run on client side - server side auth check happens in auth middleware
   if (import.meta.server) {
@@ -33,9 +49,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   // Check specific permission for this route
-  const route = to.path;
-  const requiredPerm = routePermissions[route];
-  
+  const requiredPerm = getRequiredPermission(to.path);
+
   if (requiredPerm && !superAdmin.hasPermission(requiredPerm)) {
     // User doesn't have permission for this specific page
     // Redirect to overview if they have that, otherwise to dashboard
