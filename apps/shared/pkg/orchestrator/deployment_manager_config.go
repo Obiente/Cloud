@@ -39,6 +39,14 @@ func traefikHostRule(domain string) string {
 	return "Host(`" + domain + "`)"
 }
 
+func traefikRouterPriority(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if strings.HasPrefix(domain, "*.") {
+		return "100"
+	}
+	return "200"
+}
+
 func (dm *DeploymentManager) getPlanLimitsForDeployment(deploymentID string) (maxMemoryBytes int64, maxCPUCores int, err error) {
 	// Get deployment to find organization ID
 	var deployment database.Deployment
@@ -644,6 +652,7 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			rule = rule + " && PathPrefix(`" + routing.PathPrefix + "`)"
 		}
 		labels["traefik.http.routers."+routerName+".rule"] = rule
+		labels["traefik.http.routers."+routerName+".priority"] = traefikRouterPriority(routing.Domain)
 
 		// Entrypoints - respect protocol field
 		// HTTP protocol should use web (no SSL), HTTPS protocol or SSLEnabled=true should use websecure

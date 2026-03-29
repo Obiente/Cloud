@@ -48,37 +48,13 @@ func verificationTXTDomain(domain string) string {
 	return domain
 }
 
-func isWildcardCustomDomain(domain string) bool {
-	domain = normalizeCustomDomain(domain)
-	return strings.HasPrefix(domain, "*.") && !strings.Contains(strings.TrimPrefix(domain, "*."), "*")
-}
-
-func wildcardCoversHost(wildcardDomain, host string) bool {
-	wildcardDomain = normalizeCustomDomain(wildcardDomain)
-	host = normalizeCustomDomain(host)
-	if !isWildcardCustomDomain(wildcardDomain) || host == "" {
-		return false
-	}
-
-	suffix := strings.TrimPrefix(wildcardDomain, "*.")
-	if !strings.HasSuffix(host, "."+suffix) {
-		return false
-	}
-
-	label := strings.TrimSuffix(host, "."+suffix)
-	return label != "" && !strings.Contains(label, ".")
-}
-
 func customDomainsConflict(left, right string) bool {
 	left = normalizeCustomDomain(left)
 	right = normalizeCustomDomain(right)
 	if left == "" || right == "" {
 		return false
 	}
-	if left == right {
-		return true
-	}
-	return wildcardCoversHost(left, right) || wildcardCoversHost(right, left)
+	return left == right
 }
 
 // verifyDomainOwnershipInternal verifies domain ownership via DNS TXT record (internal method)

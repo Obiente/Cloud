@@ -36,9 +36,10 @@ func TestCustomDomainsConflict(t *testing.T) {
 		want  bool
 	}{
 		{name: "exact match", left: "example.com", right: "example.com", want: true},
-		{name: "wildcard covers one subdomain", left: "*.example.com", right: "foo.example.com", want: true},
+		{name: "wildcard and subdomain can coexist", left: "*.example.com", right: "foo.example.com", want: false},
 		{name: "wildcard does not cover apex", left: "*.example.com", right: "example.com", want: false},
-		{name: "wildcard does not cover nested subdomain", left: "*.example.com", right: "foo.bar.example.com", want: false},
+		{name: "wildcard and nested subdomain can coexist", left: "*.example.com", right: "foo.bar.example.com", want: false},
+		{name: "identical wildcard match", left: "*.example.com", right: "*.example.com", want: true},
 		{name: "different domains", left: "*.example.net", right: "foo.example.com", want: false},
 	}
 
