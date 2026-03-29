@@ -57,6 +57,45 @@ func customDomainsConflict(left, right string) bool {
 	return left == right
 }
 
+func verificationTokenStatusFromEntry(entry string) (string, DomainVerificationStatus, bool) {
+	parts := strings.Split(entry, ":")
+	if len(parts) < 3 || parts[1] != "token" {
+		return "", DomainVerificationStatusPending, false
+	}
+	status := DomainVerificationStatusPending
+	if len(parts) >= 4 {
+		status = DomainVerificationStatus(parts[3])
+	}
+	return parts[2], status, true
+}
+
+func findSharedVerificationToken(customDomains []string, domain string) (string, DomainVerificationStatus, bool) {
+	domain = normalizeCustomDomain(domain)
+	proofDomain := verificationTXTDomain(domain)
+
+	for _, entry := range customDomains {
+		entryDomain := extractDomainFromCustomDomainEntry(entry)
+		if !strings.EqualFold(entryDomain, domain) {
+			continue
+		}
+		if token, status, ok := verificationTokenStatusFromEntry(entry); ok {
+			return token, status, true
+		}
+	}
+
+	for _, entry := range customDomains {
+		entryDomain := extractDomainFromCustomDomainEntry(entry)
+		if verificationTXTDomain(entryDomain) != proofDomain {
+			continue
+		}
+		if token, _, ok := verificationTokenStatusFromEntry(entry); ok {
+			return token, DomainVerificationStatusPending, true
+		}
+	}
+
+	return "", DomainVerificationStatusPending, false
+}
+
 // verifyDomainOwnershipInternal verifies domain ownership via DNS TXT record (internal method)
 func (s *Service) verifyDomainOwnershipInternal(ctx context.Context, deploymentID string, domain string) error {
 	// Normalize domain (remove trailing dots, convert to lowercase)
@@ -192,37 +231,54 @@ func (s *Service) getOrCreateVerification(ctx context.Context, deploymentID stri
 		}
 	}
 
-	// Look for existing token in custom domains
+	canonicalToken := generateDeterministicToken(deploymentID, verificationTXTDomain(domain))
 	for _, entry := range customDomains {
-		parts := strings.Split(entry, ":")
 		entryDomain := extractDomainFromCustomDomainEntry(entry)
-
 		if !strings.EqualFold(entryDomain, domain) {
 			continue
 		}
-
-		// Found entry for this domain - check if it's a token entry (pending or verified)
-		if len(parts) >= 3 && parts[1] == "token" {
-			// Format: "domain.com:token:abc123:pending" or "domain.com:token:abc123:verified"
-			token := parts[2]
-			status := DomainVerificationStatusPending
-			if len(parts) >= 4 {
-				status = DomainVerificationStatus(parts[3])
+		if token, status, ok := verificationTokenStatusFromEntry(entry); ok {
+			if token != canonicalToken {
+				filteredDomains := []string{}
+				for _, existingDomain := range customDomains {
+					existingDomainName := extractDomainFromCustomDomainEntry(existingDomain)
+					if !strings.EqualFold(existingDomainName, domain) {
+						filteredDomains = append(filteredDomains, existingDomain)
+					}
+				}
+				filteredDomains = append(filteredDomains, fmt.Sprintf("%s:token:%s:%s", domain, canonicalToken, status))
+				customDomainsJSON, err := json.Marshal(filteredDomains)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal custom domains: %w", err)
+				}
+				deployment.CustomDomains = string(customDomainsJSON)
+				if err := database.DB.Save(&deployment).Error; err != nil {
+					return nil, fmt.Errorf("failed to normalize verification token: %w", err)
+				}
 			}
-			// Return existing token - never create a new one if token exists
 			return &DomainVerification{
 				DeploymentID: deploymentID,
 				Domain:       domain,
-				Token:        token,
+				Token:        canonicalToken,
 				Status:       status,
 				CreatedAt:    time.Now(),
 			}, nil
 		}
 	}
 
-	// No existing token found - generate deterministic token based on domain + deployment ID
-	// This ensures the token never changes for the same domain/deployment combination
-	token := generateDeterministicToken(deploymentID, domain)
+	if token, status, ok := findSharedVerificationToken(customDomains, domain); ok && token != "" {
+		return &DomainVerification{
+			DeploymentID: deploymentID,
+			Domain:       domain,
+			Token:        canonicalToken,
+			Status:       status,
+			CreatedAt:    time.Now(),
+		}, nil
+	}
+
+	// No existing token found - generate deterministic token based on the shared
+	// TXT verification target so root and wildcard domains can use one proof record.
+	token := canonicalToken
 
 	verification := &DomainVerification{
 		DeploymentID: deploymentID,
@@ -257,13 +313,13 @@ func (s *Service) getOrCreateVerification(ctx context.Context, deploymentID stri
 	return verification, nil
 }
 
-// generateDeterministicToken generates a deterministic token based on deployment ID and domain
-// This ensures the same domain+deployment always gets the same token, so it never changes
+// generateDeterministicToken generates a deterministic token based on deployment ID
+// and the normalized TXT verification target domain.
 // Uses SECRET environment variable for HMAC-based hashing
 func generateDeterministicToken(deploymentID string, domain string) string {
 	// Normalize inputs
 	deploymentID = strings.ToLower(strings.TrimSpace(deploymentID))
-	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
+	domain = verificationTXTDomain(domain)
 
 	// Get SECRET from environment
 	secret := os.Getenv("SECRET")
@@ -394,7 +450,7 @@ func (s *Service) storeVerifiedDomain(ctx context.Context, deploymentID string, 
 		filteredDomains = append(filteredDomains, tokenEntry)
 	} else {
 		// Fallback: generate deterministic token (shouldn't normally happen)
-		token := generateDeterministicToken(deploymentID, domain)
+		token := generateDeterministicToken(deploymentID, verificationTXTDomain(domain))
 		filteredDomains = append(filteredDomains, fmt.Sprintf("%s:token:%s:verified", domain, token))
 		log.Printf("[storeVerifiedDomain] Warning: No token entry found for domain %s, generated deterministic token", domain)
 	}

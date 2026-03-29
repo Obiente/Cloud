@@ -53,3 +53,14 @@ func TestCustomDomainsConflict(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateDeterministicTokenUsesSharedVerificationTarget(t *testing.T) {
+	t.Parallel()
+
+	deploymentID := "deploy-example"
+	rootToken := generateDeterministicToken(deploymentID, "example.com")
+	wildcardToken := generateDeterministicToken(deploymentID, "*.example.com")
+	if rootToken != wildcardToken {
+		t.Fatalf("expected root and wildcard domains to share a token, got %q and %q", rootToken, wildcardToken)
+	}
+}
