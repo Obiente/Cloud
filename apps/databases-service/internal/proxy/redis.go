@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -40,6 +41,7 @@ func (m *RedisPortManager) StartListener(port int, route *Route) error {
 	}
 
 	m.listeners[port] = ln
+	m.proxy.activeListeners.Add(1)
 	stopCh := make(chan struct{})
 	m.stopCh[port] = stopCh
 
@@ -62,6 +64,7 @@ func (m *RedisPortManager) StopListener(port int) {
 	if ln, ok := m.listeners[port]; ok {
 		ln.Close()
 		delete(m.listeners, port)
+		m.proxy.activeListeners.Add(-1)
 		logger.Info("Redis listener stopped on port %d", port)
 	}
 }
@@ -79,6 +82,7 @@ func (m *RedisPortManager) StopAll() {
 	for port, ln := range m.listeners {
 		ln.Close()
 		delete(m.listeners, port)
+		m.proxy.activeListeners.Add(-1)
 	}
 }
 
@@ -86,16 +90,29 @@ func (m *RedisPortManager) acceptLoop(ln net.Listener, port int, stopCh chan str
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				logger.Warn("Temporary Redis accept error on port %d: %v", port, err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			select {
 			case <-stopCh:
 				return
 			default:
-				logger.Debug("Redis accept error on port %d: %v", port, err)
+				logger.Error("Redis accept loop stopped on port %d: %v", port, err)
+				if m.proxy.activeListeners.Add(-1) <= 0 {
+					m.proxy.activeListeners.Store(0)
+					m.proxy.running.Store(false)
+				}
 				return
 			}
 		}
 
-		go m.handleRedisConn(conn, port)
+		m.proxy.activeConns.Add(1)
+		go func() {
+			defer m.proxy.activeConns.Done()
+			m.handleRedisConn(conn, port)
+		}()
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
@@ -17,6 +19,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+var sqlCommentPattern = regexp.MustCompile(`(?s)/\*.*?\*/|--[^\r\n]*|#[^\r\n]*`)
+
 // ExecuteQuery executes a SQL query on a database
 func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databasesv1.ExecuteQueryRequest]) (*connect.Response[databasesv1.ExecuteQueryResponse], error) {
 	orgID := req.Msg.GetOrganizationId()
@@ -26,8 +30,18 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		}
 	}
 
+	queryType, readOnly, err := classifySQLQuery(req.Msg.GetQuery())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	requiredPermission := auth.PermissionDatabaseManage
+	if readOnly {
+		requiredPermission = auth.PermissionDatabaseRead
+	}
+
 	// Check resource-level permission
-	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseRead); err != nil {
+	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), requiredPermission); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
@@ -124,6 +138,32 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("database unreachable at %s:%d: %w", directHost, directPort, err))
 	}
 
+	if !readOnly {
+		result, err := db.ExecContext(ctx, req.Msg.GetQuery())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query execution failed: %w", err))
+		}
+
+		affectedRows, err := result.RowsAffected()
+		if err != nil {
+			affectedRows = 0
+		}
+
+		executionTime := time.Since(startTime)
+
+		res := connect.NewResponse(&databasesv1.ExecuteQueryResponse{
+			Columns:         nil,
+			Rows:            nil,
+			RowCount:        0,
+			AffectedRows:    int32Ptr(int32(affectedRows)),
+			QueryType:       stringPtr(queryType),
+			Truncated:       false,
+			ExecutedAt:      timestamppb.Now(),
+			ExecutionTimeMs: int32(executionTime.Milliseconds()),
+		})
+		return res, nil
+	}
+
 	// Execute query
 	rows, err := db.QueryContext(ctx, req.Msg.GetQuery())
 	if err != nil {
@@ -212,7 +252,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		Columns:         resultColumns,
 		Rows:            resultRows,
 		RowCount:        int32(rowCount),
-		QueryType:       stringPtr("SELECT"), // TODO: Detect query type
+		QueryType:       stringPtr(queryType),
 		Truncated:       truncated,
 		ExecutedAt:      timestamppb.Now(),
 		ExecutionTimeMs: int32(executionTime.Milliseconds()),
@@ -220,9 +260,45 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 	return res, nil
 }
 
+func classifySQLQuery(query string) (queryType string, readOnly bool, err error) {
+	cleaned := sqlCommentPattern.ReplaceAllString(query, " ")
+	cleaned = strings.TrimSpace(cleaned)
+
+	for strings.HasSuffix(cleaned, ";") {
+		cleaned = strings.TrimSpace(strings.TrimSuffix(cleaned, ";"))
+	}
+
+	if cleaned == "" {
+		return "", false, fmt.Errorf("query is required")
+	}
+
+	if strings.Contains(cleaned, ";") {
+		return "", false, fmt.Errorf("multiple SQL statements are not supported")
+	}
+
+	fields := strings.Fields(cleaned)
+	if len(fields) == 0 {
+		return "", false, fmt.Errorf("query is required")
+	}
+
+	queryType = strings.ToUpper(fields[0])
+
+	switch queryType {
+	case "SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "VALUES":
+		return queryType, true, nil
+	case "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TRUNCATE", "GRANT", "REVOKE":
+		return queryType, false, nil
+	default:
+		return queryType, false, nil
+	}
+}
+
+func int32Ptr(v int32) *int32 {
+	return &v
+}
+
 // StreamQuery streams query results (placeholder)
 func (s *Service) StreamQuery(ctx context.Context, req *connect.Request[databasesv1.StreamQueryRequest], stream *connect.ServerStream[databasesv1.QueryResultRow]) error {
 	// Placeholder implementation
 	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("streaming queries not yet implemented"))
 }
-

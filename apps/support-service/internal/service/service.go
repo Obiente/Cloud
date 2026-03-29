@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
@@ -37,17 +38,17 @@ func (s *Service) CreateTicket(ctx context.Context, req *connect.Request[support
 	}
 
 	// Generate ticket ID
-	ticketID := fmt.Sprintf("ticket-%d", time.Now().Unix())
+	ticketID := fmt.Sprintf("ticket-%s", uuid.NewString())
 
 	// Create ticket in database
 	ticket := &database.SupportTicket{
-		ID:            ticketID,
-		Subject:       req.Msg.GetSubject(),
-		Description:   req.Msg.GetDescription(),
-		Status:        int32(supportv1.SupportTicketStatus_OPEN),
-		Priority:      int32(req.Msg.GetPriority()),
-		Category:      int32(req.Msg.GetCategory()),
-		CreatedBy:     userInfo.Id,
+		ID:             ticketID,
+		Subject:        req.Msg.GetSubject(),
+		Description:    req.Msg.GetDescription(),
+		Status:         int32(supportv1.SupportTicketStatus_OPEN),
+		Priority:       int32(req.Msg.GetPriority()),
+		Category:       int32(req.Msg.GetCategory()),
+		CreatedBy:      userInfo.Id,
 		OrganizationID: req.Msg.OrganizationId,
 	}
 
@@ -300,7 +301,7 @@ func (s *Service) AddComment(ctx context.Context, req *connect.Request[supportv1
 	}
 
 	// Generate comment ID
-	commentID := fmt.Sprintf("comment-%d", time.Now().Unix())
+	commentID := fmt.Sprintf("comment-%s", uuid.NewString())
 
 	// Create comment
 	comment := &database.TicketComment{
@@ -319,7 +320,7 @@ func (s *Service) AddComment(ctx context.Context, req *connect.Request[supportv1
 	s.db.Model(&ticket).Update("updated_at", time.Now())
 
 	protoComment := dbCommentToProto(comment)
-	
+
 	// Resolve user information if resolver is available
 	resolver := organizations.GetUserProfileResolver()
 	if resolver != nil && resolver.IsConfigured() {
@@ -387,7 +388,7 @@ func (s *Service) ListComments(ctx context.Context, req *connect.Request[support
 	resolver := organizations.GetUserProfileResolver()
 	for i, comment := range comments {
 		protoComment := dbCommentToProto(&comment)
-		
+
 		// Resolve user information if resolver is available
 		if resolver != nil && resolver.IsConfigured() {
 			if userProfile, err := resolver.Resolve(ctx, comment.CreatedBy); err == nil && userProfile != nil {
@@ -402,7 +403,7 @@ func (s *Service) ListComments(ctx context.Context, req *connect.Request[support
 				}
 			}
 		}
-		
+
 		protoComments[i] = protoComment
 	}
 
@@ -416,17 +417,17 @@ func (s *Service) ListComments(ctx context.Context, req *connect.Request[support
 
 func dbTicketToProto(dbTicket *database.SupportTicket, commentCount int32) *supportv1.SupportTicket {
 	ticket := &supportv1.SupportTicket{
-		Id:           dbTicket.ID,
-		Subject:      dbTicket.Subject,
-		Description:  dbTicket.Description,
-		Status:       supportv1.SupportTicketStatus(dbTicket.Status),
-		Priority:     supportv1.SupportTicketPriority(dbTicket.Priority),
-		Category:     supportv1.SupportTicketCategory(dbTicket.Category),
-		CreatedBy:    dbTicket.CreatedBy,
+		Id:             dbTicket.ID,
+		Subject:        dbTicket.Subject,
+		Description:    dbTicket.Description,
+		Status:         supportv1.SupportTicketStatus(dbTicket.Status),
+		Priority:       supportv1.SupportTicketPriority(dbTicket.Priority),
+		Category:       supportv1.SupportTicketCategory(dbTicket.Category),
+		CreatedBy:      dbTicket.CreatedBy,
 		OrganizationId: dbTicket.OrganizationID,
-		CreatedAt:    timestamppb.New(dbTicket.CreatedAt),
-		UpdatedAt:    timestamppb.New(dbTicket.UpdatedAt),
-		CommentCount: commentCount,
+		CreatedAt:      timestamppb.New(dbTicket.CreatedAt),
+		UpdatedAt:      timestamppb.New(dbTicket.UpdatedAt),
+		CommentCount:   commentCount,
 	}
 
 	if dbTicket.AssignedTo != nil {
@@ -482,4 +483,3 @@ func dbCommentToProto(dbComment *database.TicketComment) *supportv1.TicketCommen
 		UpdatedAt: timestamppb.New(dbComment.UpdatedAt),
 	}
 }
-
