@@ -59,7 +59,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 		// Admin users or users with org-wide read permission can see all deployments
 		IncludeAll: auth.IsSuperadmin(ctx, userInfo) || hasOrgWideRead,
 	}
-	
+
 	log.Printf("[ListDeployments] User %s, Org %s, IncludeAll: %v, hasOrgWideRead: %v", userInfo.Id, orgID, filters.IncludeAll, hasOrgWideRead)
 
 	// Add status filter if provided
@@ -73,14 +73,14 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
 	}
-	
+
 	log.Printf("[ListDeployments] Found %d deployments for user %s in org %s (IncludeAll: %v)", len(dbDeployments), userInfo.Id, orgID, filters.IncludeAll)
 
 	// Convert DB models to proto models and enrich with actual container status
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))
 	for _, dbDep := range dbDeployments {
 		deployment := dbDeploymentToProto(dbDep)
-		
+
 		// If deployment's build time is 0, try to get it from the latest successful build
 		if deployment.BuildTime == 0 {
 			latestBuild, err := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, dbDep.ID)
@@ -88,18 +88,18 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 				deployment.BuildTime = latestBuild.BuildTime
 			}
 		}
-		
+
 		// Get actual container status from Docker (not DB)
 		// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
 		if dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
-		   dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+			dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
 			running, total, err := s.getDeploymentContainerStatus(ctx, dbDep.ID)
 			if err == nil {
 				deployment.ContainersRunning = proto.Int32(running)
 				deployment.ContainersTotal = proto.Int32(total)
 			}
 		}
-		
+
 		items = append(items, deployment)
 	}
 
@@ -165,25 +165,25 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	// Type and build strategy will be auto-detected when repository is configured
 	healthcheckTypeUnspecified := deploymentsv1.HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED
 	deployment := &deploymentsv1.Deployment{
-		Id:             id,
-		Name:           req.Msg.GetName(),
-		Domain:         fmt.Sprintf("%s.my.obiente.cloud", id),
-		CustomDomains:  []string{},
-		Type:           deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED, // Will be auto-detected
-		BuildStrategy:  deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED,  // Will be auto-detected
-		Status:         deploymentsv1.DeploymentStatus_STOPPED,                    // Start as STOPPED
-		HealthStatus:   "pending",
-		Environment:    environment,
-		Groups:         groups, // Set groups from request
-		Branch:         "main", // Default branch
+		Id:              id,
+		Name:            req.Msg.GetName(),
+		Domain:          fmt.Sprintf("%s.my.obiente.cloud", id),
+		CustomDomains:   []string{},
+		Type:            deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED, // Will be auto-detected
+		BuildStrategy:   deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED,   // Will be auto-detected
+		Status:          deploymentsv1.DeploymentStatus_STOPPED,                   // Start as STOPPED
+		HealthStatus:    "pending",
+		Environment:     environment,
+		Groups:          groups,                      // Set groups from request
+		Branch:          "main",                      // Default branch
 		HealthcheckType: &healthcheckTypeUnspecified, // Default to auto-detection
-		LastDeployedAt: timestamppb.Now(),
-		BandwidthUsage: 0,
-		StorageUsage:   0,
-		BuildTime:      0,
-		Size:           "--",
-		CreatedAt:      timestamppb.Now(),
-		EnvVars:        map[string]string{},
+		LastDeployedAt:  timestamppb.Now(),
+		BandwidthUsage:  0,
+		StorageUsage:    0,
+		BuildTime:       0,
+		Size:            "--",
+		CreatedAt:       timestamppb.Now(),
+		EnvVars:         map[string]string{},
 	}
 
 	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.Id)
@@ -220,7 +220,7 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 
 	// Convert to proto and enrich with actual container status
 	deployment := dbDeploymentToProto(dbDeployment)
-	
+
 	// If deployment's build time is 0, get it from the latest successful build
 	if deployment.BuildTime == 0 {
 		latestBuild, err := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, deploymentID)
@@ -228,75 +228,51 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 			deployment.BuildTime = latestBuild.BuildTime
 		}
 	}
-	
+
 	// Get actual container status from Docker (not DB)
 	// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
 	if dbDeployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
-	   dbDeployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+		dbDeployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
 		running, total, err := s.getDeploymentContainerStatus(ctx, deploymentID)
 		if err == nil {
 			deployment.ContainersRunning = proto.Int32(running)
 			deployment.ContainersTotal = proto.Int32(total)
-			
+
 			// Sync deployment status with actual container status
 			// IMPORTANT: Don't sync status if deployment is currently BUILDING or DEPLOYING
 			// During builds, containers might not exist yet or be in transitional states
 			currentStatus := deploymentsv1.DeploymentStatus(dbDeployment.Status)
-			isBuildingOrDeploying := currentStatus == deploymentsv1.DeploymentStatus_BUILDING || 
-			                          currentStatus == deploymentsv1.DeploymentStatus_DEPLOYING
-			
+			isBuildingOrDeploying := currentStatus == deploymentsv1.DeploymentStatus_BUILDING ||
+				currentStatus == deploymentsv1.DeploymentStatus_DEPLOYING
+
 			if !isBuildingOrDeploying {
 				// If deployment has containers but none are running, it should be STOPPED
 				// If some containers are running, it should be RUNNING
 				if total > 0 {
 					if running == 0 {
-						// All containers stopped - update status to STOPPED
+						// Surface live status in the response without mutating state during reads.
 						deployment.Status = deploymentsv1.DeploymentStatus_STOPPED
-						// Optionally update DB to keep it in sync (async to not block response)
-						go func() {
-							if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_STOPPED)); err != nil {
-								log.Printf("[GetDeployment] Failed to sync deployment status to STOPPED: %v", err)
-							}
-						}()
 					} else if running > 0 && dbDeployment.Status == int32(deploymentsv1.DeploymentStatus_STOPPED) {
-						// Some containers running but DB says STOPPED - update to RUNNING
+						// Surface live status in the response without mutating state during reads.
 						deployment.Status = deploymentsv1.DeploymentStatus_RUNNING
-						// Optionally update DB to keep it in sync (async to not block response)
-						go func() {
-							if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
-								log.Printf("[GetDeployment] Failed to sync deployment status to RUNNING: %v", err)
-							}
-						}()
 					}
 				}
 			}
 		}
-		
+
 		// Get health status from Docker containers
 		healthStatus, err := s.getDeploymentHealthStatus(ctx, deploymentID)
 		if err == nil && healthStatus != "" {
 			deployment.HealthStatus = healthStatus
-			// Optionally update DB to keep it in sync (async to not block response)
-			go func() {
-				if err := s.repo.UpdateHealthStatus(context.Background(), deploymentID, healthStatus); err != nil {
-					log.Printf("[GetDeployment] Failed to sync health status: %v", err)
-				}
-			}()
 		}
 	} else {
 		// For image-based deployments, also check health status
 		healthStatus, err := s.getDeploymentHealthStatus(ctx, deploymentID)
 		if err == nil && healthStatus != "" {
 			deployment.HealthStatus = healthStatus
-			// Optionally update DB to keep it in sync (async to not block response)
-			go func() {
-				if err := s.repo.UpdateHealthStatus(context.Background(), deploymentID, healthStatus); err != nil {
-					log.Printf("[GetDeployment] Failed to sync health status: %v", err)
-				}
-			}()
 		}
 	}
-	
+
 	res := connect.NewResponse(&deploymentsv1.GetDeploymentResponse{Deployment: deployment})
 	return res, nil
 }
@@ -472,7 +448,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if req.Msg.CpuLimit != nil || req.Msg.MemoryLimit != nil {
 		// Get organization plan limits
 		maxMemoryBytes, maxCPUCores, planErr := quota.GetEffectiveLimits(dbDeployment.OrganizationID)
-		
+
 		if req.Msg.CpuLimit != nil {
 			cpuLimit := req.Msg.GetCpuLimit()
 			if cpuLimit <= 0 {
@@ -499,7 +475,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 				// Cap to plan limit if set
 				if planErr == nil && maxMemoryBytes > 0 && bytes > maxMemoryBytes {
 					bytes = maxMemoryBytes
-					log.Printf("[UpdateDeployment] Capping memory limit for deployment %s from %d MB to plan limit %d bytes (%d MB)", 
+					log.Printf("[UpdateDeployment] Capping memory limit for deployment %s from %d MB to plan limit %d bytes (%d MB)",
 						deploymentID, memMB, maxMemoryBytes, maxMemoryBytes/(1024*1024))
 				}
 				dbDeployment.MemoryBytes = &bytes
@@ -519,7 +495,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	}
 	// Get deployment before making changes (to preserve original domain for validation)
 	originalDomain := dbDeployment.Domain
-	
+
 	// Handle custom_domains (repeated string -> JSON array)
 	// Note: Handle this BEFORE domain validation so we can check against updated custom domains
 	// For protobuf repeated fields, the slice is always non-nil, so we process it if it's provided
@@ -534,7 +510,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 				currentCustomDomains = []string{}
 			}
 		}
-		
+
 		// Map to preserve tokens: domain -> token entry
 		tokenMap := make(map[string]string)
 		for _, entry := range currentCustomDomains {
@@ -544,14 +520,14 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 				tokenMap[strings.ToLower(domainName)] = entry
 			}
 		}
-		
+
 		// Process new domains and preserve existing tokens
 		processedDomains := []string{}
 		for _, domain := range customDomains {
 			parts := strings.Split(domain, ":")
 			domainName := parts[0] // Extract domain from entry
 			domainLower := strings.ToLower(domainName)
-			
+
 			// If this domain already has a token, preserve it
 			if tokenEntry, exists := tokenMap[domainLower]; exists {
 				processedDomains = append(processedDomains, tokenEntry)
@@ -561,15 +537,15 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 				processedDomains = append(processedDomains, domain)
 			}
 		}
-		
+
 		// Deduplicate domains (case-insensitive) before validating
 		customDomains = DeduplicateCustomDomains(processedDomains)
-		
+
 		// Validate custom domains before saving (check conflicts and verify ownership)
 		if err := s.ValidateCustomDomains(ctx, deploymentID, customDomains); err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom domain validation failed: %w", err))
 		}
-		
+
 		customDomainsJSON, err := json.Marshal(customDomains)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal custom domains: %w", err))
@@ -579,7 +555,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		// Empty array - clear custom domains
 		dbDeployment.CustomDomains = "[]"
 	}
-	
+
 	// Validate domain AFTER custom domains are updated (so we can check against newly verified custom domains)
 	// Note: Users can only set the domain to the original default domain or a verified custom domain
 	if req.Msg.Domain != nil {
@@ -600,7 +576,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 					}
 				}
 			}
-			
+
 			if !domainAllowed {
 				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("domain %s is not available for this deployment. You can only use the default domain (%s) or verified custom domains", newDomain, originalDomain))
 			}

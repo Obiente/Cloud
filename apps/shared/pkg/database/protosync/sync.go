@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
@@ -48,42 +49,42 @@ func (v *ModelValidator) ErrorsString() string {
 func ValidateDeployment(modelType reflect.Type) *ModelValidator {
 	validator := NewModelValidator()
 	protoFields := getDeploymentProtoFields()
-	
+
 	// Check each proto field exists in the model
 	for _, protoField := range protoFields {
 		field, found := modelType.FieldByName(protoField.Name)
-		
+
 		if !found {
-			validator.AddError("Model missing field %s corresponding to proto field %s", 
+			validator.AddError("Model missing field %s corresponding to proto field %s",
 				protoField.Name, protoField.ProtoName)
 			continue
 		}
-		
+
 		// Check if the field has a gorm tag
 		gormTag := field.Tag.Get("gorm")
 		if gormTag == "" {
 			validator.AddError("Field %s is missing gorm tag", protoField.Name)
 		}
-		
+
 		// Check if the field has a json tag that matches the proto field name
 		jsonTag := field.Tag.Get("json")
 		jsonName := strings.Split(jsonTag, ",")[0]
-		
+
 		snakeCaseProtoName := toSnakeCase(protoField.ProtoName)
 		if jsonName != snakeCaseProtoName && jsonName != protoField.ProtoName {
-			validator.AddError("Field %s has json tag %s but should match proto field %s", 
+			validator.AddError("Field %s has json tag %s but should match proto field %s",
 				protoField.Name, jsonName, protoField.ProtoName)
 		}
-		
+
 		// Check field type compatibility
 		// This could be expanded to check for more precise type compatibility
 		fieldType := field.Type.String()
 		if !isCompatibleType(fieldType, protoField.GoType) {
-			validator.AddError("Field %s has type %s but proto field %s has type %s", 
+			validator.AddError("Field %s has type %s but proto field %s has type %s",
 				protoField.Name, fieldType, protoField.ProtoName, protoField.GoType)
 		}
 	}
-	
+
 	return validator
 }
 
@@ -104,7 +105,7 @@ func getDeploymentProtoFields() []ProtoField {
 		{Name: "HealthStatus", ProtoName: "health_status", GoType: "string", Required: true},
 		{Name: "LastDeployedAt", ProtoName: "last_deployed_at", GoType: "time.Time", Required: true},
 		{Name: "BandwidthUsage", ProtoName: "bandwidth_usage", GoType: "int64", Required: true},
-		{Name: "StorageUsage", ProtoName: "storage_usage", GoType: "int64", Required: true},
+		{Name: "StorageBytes", ProtoName: "storage_usage", GoType: "int64", Required: true},
 		{Name: "CreatedAt", ProtoName: "created_at", GoType: "time.Time", Required: true},
 		{Name: "BuildTime", ProtoName: "build_time", GoType: "int32", Required: true},
 		{Name: "Size", ProtoName: "size", GoType: "string", Required: true},
@@ -117,12 +118,12 @@ func isCompatibleType(modelType string, protoType string) bool {
 	// Handle pointers
 	modelType = strings.TrimPrefix(modelType, "*")
 	protoType = strings.TrimPrefix(protoType, "*")
-	
+
 	// Check exact match
 	if modelType == protoType {
 		return true
 	}
-	
+
 	// Handle common mappings
 	switch protoType {
 	case "int32":
@@ -132,7 +133,7 @@ func isCompatibleType(modelType string, protoType string) bool {
 	case "[]string":
 		return strings.Contains(modelType, "string") && (strings.HasPrefix(modelType, "[]") || strings.Contains(modelType, "jsonb"))
 	}
-	
+
 	return false
 }
 
@@ -140,7 +141,7 @@ func isCompatibleType(modelType string, protoType string) bool {
 func toSnakeCase(s string) string {
 	var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")
 	var matchAllCap = regexp.MustCompile("([a-z0-9])([A-Z])")
-	
+
 	snake := matchFirstCap.ReplaceAllString(s, "${1}_${2}")
 	snake = matchAllCap.ReplaceAllString(snake, "${1}_${2}")
 	return strings.ToLower(snake)
@@ -149,11 +150,11 @@ func toSnakeCase(s string) string {
 // ValidateAllModels validates all known models against their proto definitions
 func ValidateAllModels() *ModelValidator {
 	validator := NewModelValidator()
-	
+
 	// Add more model validations here as needed
-	deploymentValidator := ValidateDeployment(reflect.TypeOf(struct{}{}))
+	deploymentValidator := ValidateDeployment(reflect.TypeOf(database.Deployment{}))
 	validator.Errors = append(validator.Errors, deploymentValidator.Errors...)
-	
+
 	return validator
 }
 
