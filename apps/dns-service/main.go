@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -24,6 +27,8 @@ import (
 const (
 	cacheTTL                  = 5 * time.Minute // Cache DNS responses for 5 minutes
 	defaultGameServerDNSGrace = 2 * time.Minute // Keep stale game server DNS briefly after stop
+	httpReadHeaderTimeout     = 10 * time.Second
+	serviceShutdownTimeout    = 30 * time.Second
 )
 
 type DNSServer struct {
@@ -1058,7 +1063,7 @@ func isVerifiedCustomDomain(domain string) bool {
 }
 
 // startDNSPusher starts a goroutine that periodically pushes DNS records to the production API
-func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval time.Duration, ttl int64, nodeIPMap map[string][]string) {
+func startDNSPusher(ctx context.Context, productionAPIURL, apiKey, sourceAPI string, pushInterval time.Duration, ttl int64, nodeIPMap map[string][]string) {
 	// Normalize production API URL (ensure it ends with /dns/push/batch)
 	baseURL := strings.TrimSuffix(productionAPIURL, "/")
 	pushURL := baseURL + "/dns/push/batch"
@@ -1070,7 +1075,7 @@ func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval tim
 
 	// Test the endpoint first to verify it exists
 	log.Printf("[DNS Pusher] Testing endpoint availability: %s", pushURL)
-	testReq, err := http.NewRequest(http.MethodOptions, pushURL, nil)
+	testReq, err := http.NewRequestWithContext(ctx, http.MethodOptions, pushURL, nil)
 	if err == nil {
 		testReq.Header.Set("Authorization", "Bearer "+apiKey)
 		testResp, testErr := client.Do(testReq)
@@ -1081,20 +1086,24 @@ func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval tim
 	}
 
 	// Initial push immediately
-	pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
+	pushDNSRecords(ctx, client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
 
 	// Then push at regular intervals
 	ticker := time.NewTicker(pushInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			pushDNSRecords(ctx, client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
+		}
 	}
 }
 
 // pushDNSRecords collects all DNS records and pushes them to the production API
-func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, nodeIPMap map[string][]string) {
-	ctx := context.Background()
+func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, nodeIPMap map[string][]string) {
 	records := make([]map[string]interface{}, 0)
 
 	// Get all running deployments
@@ -1308,7 +1317,10 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	}
 
 	// Create HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pushURL, strings.NewReader(string(jsonData)))
+	requestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, pushURL, strings.NewReader(string(jsonData)))
 	if err != nil {
 		log.Printf("[DNS Pusher] Failed to create request: %v", err)
 		return
@@ -1419,7 +1431,28 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	}
 }
 
+func startDelegatedRecordCleanup(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := database.CleanupExpiredDelegatedRecords(); err != nil {
+				log.Printf("[DNS] Failed to cleanup expired delegated records: %v", err)
+			}
+		}
+	}
+}
+
 func main() {
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 3)
+
 	// Start HTTP server for DNS delegation push endpoints
 	// This must always run, even when DNS service is disabled, to receive delegation pushes
 	httpMux := http.NewServeMux()
@@ -1434,11 +1467,17 @@ func main() {
 		httpPort = "8053" // Default HTTP port for DNS service
 	}
 
+	httpServer := &http.Server{
+		Addr:              ":" + httpPort,
+		Handler:           httpMux,
+		ReadHeaderTimeout: httpReadHeaderTimeout,
+	}
+
 	// Start HTTP server in a goroutine - this must always run
 	go func() {
 		log.Printf("[DNS] Starting HTTP server for DNS delegation on port %s", httpPort)
-		if err := http.ListenAndServe(":"+httpPort, httpMux); err != nil {
-			log.Fatalf("[DNS] Failed to start HTTP server: %v", err)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- fmt.Errorf("http server: %w", err)
 		}
 	}()
 
@@ -1543,7 +1582,7 @@ func main() {
 		log.Printf("[DNS Pusher] TTL: %d seconds", ttl)
 
 		// Start DNS pusher goroutine
-		go startDNSPusher(productionAPIURL, apiKey, sourceAPI, pushInterval, ttl, nodeIPMap)
+		go startDNSPusher(shutdownCtx, productionAPIURL, apiKey, sourceAPI, pushInterval, ttl, nodeIPMap)
 	} else {
 		if productionAPIURL == "" {
 			log.Printf("[DNS Pusher] DNS pusher not configured: DNS_DELEGATION_PRODUCTION_API_URL is not set")
@@ -1553,71 +1592,96 @@ func main() {
 		}
 	}
 
+	// Start cleanup loop for expired delegated DNS records regardless of DNS serving mode.
+	go startDelegatedRecordCleanup(shutdownCtx)
+
 	// Check if DNS service is enabled
 	// Set ENABLE_DNS=false to disable the DNS server (but keep HTTP server for delegation)
 	enableDNS := os.Getenv("ENABLE_DNS")
-	if enableDNS == "false" || enableDNS == "0" {
+	dnsEnabled := enableDNS != "false" && enableDNS != "0"
+	var udpServer *dns.Server
+	var tcpServer *dns.Server
+	if !dnsEnabled {
 		log.Printf("[DNS] DNS server is disabled (ENABLE_DNS=%s). HTTP delegation endpoints remain active.", enableDNS)
 		log.Printf("[DNS] This is expected when using DNS delegation to an external service.")
 		log.Printf("[DNS] HTTP server on port %s will continue running to receive delegation pushes.", httpPort)
-		// Keep the process alive to serve HTTP endpoints
-		select {} // Block forever to keep the process running
-	}
-
-	// Create DNS server (only when DNS is enabled)
-	server, err := NewDNSServer()
-	if err != nil {
-		log.Fatalf("Failed to create DNS server: %v", err)
-	}
-
-	log.Printf("[DNS] Starting DNS server for my.obiente.cloud zone")
-	log.Printf("[DNS] Node IPs configured for regions: %v", server.nodeIPMap)
-
-	// Get DNS port from environment (default to 53)
-	dnsPort := os.Getenv("DNS_PORT")
-	if dnsPort == "" {
-		dnsPort = "53"
-	}
-
-	log.Printf("[DNS] Using port %s for DNS server", dnsPort)
-
-	// Start cleanup goroutine for expired delegated DNS records
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute) // Cleanup every 5 minutes
-		defer ticker.Stop()
-		for range ticker.C {
-			if err := database.CleanupExpiredDelegatedRecords(); err != nil {
-				log.Printf("[DNS] Failed to cleanup expired delegated records: %v", err)
-			}
+	} else {
+		// Create DNS server (only when DNS is enabled)
+		server, err := NewDNSServer()
+		if err != nil {
+			log.Fatalf("Failed to create DNS server: %v", err)
 		}
-	}()
 
-	// Register DNS handler for my.obiente.cloud zone
-	dns.HandleFunc("my.obiente.cloud.", server.handleDNSRequest)
+		log.Printf("[DNS] Starting DNS server for my.obiente.cloud zone")
+		log.Printf("[DNS] Node IPs configured for regions: %v", server.nodeIPMap)
 
-	// Start UDP server
-	// Explicitly bind to 0.0.0.0 to listen on all interfaces (not just loopback)
-	go func() {
-		udpServer := &dns.Server{
+		// Get DNS port from environment (default to 53)
+		dnsPort := os.Getenv("DNS_PORT")
+		if dnsPort == "" {
+			dnsPort = "53"
+		}
+
+		log.Printf("[DNS] Using port %s for DNS server", dnsPort)
+
+		dnsMux := dns.NewServeMux()
+		dnsMux.HandleFunc("my.obiente.cloud.", server.handleDNSRequest)
+
+		udpServer = &dns.Server{
 			Addr:    "0.0.0.0:" + dnsPort,
 			Net:     "udp",
-			Handler: dns.DefaultServeMux,
+			Handler: dnsMux,
 		}
-		log.Printf("[DNS] Starting DNS server on UDP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
-		if err := udpServer.ListenAndServe(); err != nil {
-			log.Fatalf("[DNS] Failed to start UDP DNS server: %v", err)
+		tcpServer = &dns.Server{
+			Addr:    "0.0.0.0:" + dnsPort,
+			Net:     "tcp",
+			Handler: dnsMux,
 		}
-	}()
 
-	// Start TCP server
-	// Explicitly bind to 0.0.0.0 to listen on all interfaces (not just loopback)
-	tcpServer := &dns.Server{
-		Addr:    "0.0.0.0:" + dnsPort,
-		Net:     "tcp",
-		Handler: dns.DefaultServeMux,
+		go func() {
+			log.Printf("[DNS] Starting DNS server on UDP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
+			if err := udpServer.ListenAndServe(); err != nil {
+				select {
+				case <-shutdownCtx.Done():
+					return
+				default:
+					serverErr <- fmt.Errorf("udp dns server: %w", err)
+				}
+			}
+		}()
+
+		go func() {
+			log.Printf("[DNS] Starting DNS server on TCP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
+			if err := tcpServer.ListenAndServe(); err != nil {
+				select {
+				case <-shutdownCtx.Done():
+					return
+				default:
+					serverErr <- fmt.Errorf("tcp dns server: %w", err)
+				}
+			}
+		}()
 	}
-	log.Printf("[DNS] Starting DNS server on TCP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
-	if err := tcpServer.ListenAndServe(); err != nil {
-		log.Fatalf("[DNS] Failed to start TCP DNS server: %v", err)
+
+	select {
+	case err := <-serverErr:
+		log.Fatalf("[DNS] Server failed: %v", err)
+	case <-shutdownCtx.Done():
+		log.Printf("[DNS] Shutting down gracefully")
+		shutdownTimeoutCtx, cancel := context.WithTimeout(context.Background(), serviceShutdownTimeout)
+		defer cancel()
+
+		if udpServer != nil {
+			if err := udpServer.ShutdownContext(shutdownTimeoutCtx); err != nil {
+				log.Printf("[DNS] Failed to shutdown UDP DNS server: %v", err)
+			}
+		}
+		if tcpServer != nil {
+			if err := tcpServer.ShutdownContext(shutdownTimeoutCtx); err != nil {
+				log.Printf("[DNS] Failed to shutdown TCP DNS server: %v", err)
+			}
+		}
+		if err := httpServer.Shutdown(shutdownTimeoutCtx); err != nil {
+			log.Printf("[DNS] Failed to shutdown HTTP server: %v", err)
+		}
 	}
 }
