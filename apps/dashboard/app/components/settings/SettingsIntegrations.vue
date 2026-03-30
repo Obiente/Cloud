@@ -9,6 +9,18 @@
         </OuiText>
       </OuiStack>
 
+      <OuiCard
+        v-if="successMessage && !error"
+        variant="outline"
+        class="border-success"
+      >
+        <OuiCardBody>
+          <OuiText size="sm" weight="medium" color="success">
+            {{ successMessage }}
+          </OuiText>
+        </OuiCardBody>
+      </OuiCard>
+
       <!-- Loading State -->
       <OuiCard v-if="isLoading" variant="outline">
         <OuiCardBody>
@@ -435,6 +447,7 @@ const isLoading = ref(false);
 const isConnecting = ref(false);
 const isDisconnecting = ref(false);
 const error = ref("");
+const successMessage = ref("");
 const connectionType = ref<"user" | "organization">("user");
 const selectedOrgId = ref<string>("");
 
@@ -449,6 +462,7 @@ const organizationOptions = computed(() => {
 onMounted(async () => {
   // Reset connecting state in case user navigated back
   isConnecting.value = false;
+  let handledCallback = false;
 
   const provider = route.query.provider;
   if (provider === "github") {
@@ -459,21 +473,24 @@ onMounted(async () => {
     const orgId = route.query.orgId;
 
     if (success === "true" && username) {
+      handledCallback = true;
       // Successfully connected - reload integrations with a small delay to ensure backend processed it
       await new Promise((resolve) => setTimeout(resolve, 500));
-      await loadIntegrations();
       error.value = "";
       // Show success message briefly
-      const successMsg = orgId
+      successMessage.value = orgId
         ? `Successfully connected GitHub organization to ${orgId}`
         : `Successfully connected GitHub account: ${username}`;
-      console.log("[SettingsIntegrations]", successMsg);
+      console.log("[SettingsIntegrations]", successMessage.value);
+      await loadIntegrations({ preserveFeedback: true });
       // Clean up URL
       router.replace({ query: { tab: route.query.tab } });
     } else if (errorParam) {
+      handledCallback = true;
       // Handle errors from callback
       const errorMsg = String(errorParam);
       isConnecting.value = false; // Reset on error
+      successMessage.value = "";
       if (errorMsg === "missing_code") {
         error.value =
           "Authorization code missing. Please try connecting again.";
@@ -493,12 +510,19 @@ onMounted(async () => {
   }
 
   // Load integrations
-  await loadIntegrations();
+  if (!handledCallback) {
+    await loadIntegrations();
+  }
 });
 
-const loadIntegrations = async () => {
+const loadIntegrations = async (
+  options: { preserveFeedback?: boolean } = {}
+) => {
   isLoading.value = true;
-  error.value = "";
+  if (!options.preserveFeedback) {
+    error.value = "";
+    successMessage.value = "";
+  }
 
   try {
     const { useConnectClient } = await import("~/lib/connect-client");
@@ -543,6 +567,7 @@ const loadIntegrations = async () => {
 
 const connectGitHub = () => {
   error.value = "";
+  successMessage.value = "";
   isConnecting.value = true;
 
   const config = useRuntimeConfig();
@@ -618,6 +643,7 @@ const disconnectIntegration = async (
 
   isDisconnecting.value = true;
   error.value = "";
+  successMessage.value = "";
 
   try {
     const { useConnectClient } = await import("~/lib/connect-client");
