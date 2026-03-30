@@ -35,6 +35,46 @@ const (
 	gracefulShutdownMessage = "shutting down server"
 )
 
+func waitForDatabaseReadiness(ctx context.Context, requireMetrics bool) error {
+	deadline := time.NewTicker(2 * time.Second)
+	defer deadline.Stop()
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if database.DB != nil {
+			sqlDB, err := database.DB.DB()
+			if err == nil {
+				pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				err = sqlDB.PingContext(pingCtx)
+				cancel()
+				if err == nil {
+					if !requireMetrics || database.GetMetricsDB() == nil {
+						return nil
+					}
+					metricsDB, metricsErr := database.GetMetricsDB().DB()
+					if metricsErr == nil {
+						metricsPingCtx, metricsCancel := context.WithTimeout(ctx, 2*time.Second)
+						metricsErr = metricsDB.PingContext(metricsPingCtx)
+						metricsCancel()
+						if metricsErr == nil {
+							return nil
+						}
+					}
+				}
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+		}
+	}
+}
+
 func main() {
 	// Set log output and flags
 	log.SetOutput(os.Stdout)
@@ -198,8 +238,11 @@ func startMonthlyBillingService(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// Run once on startup (after a short delay to ensure DB is ready)
-	time.Sleep(5 * time.Second)
+	if err := waitForDatabaseReadiness(ctx, true); err != nil {
+		logger.Info("Monthly billing service stopped before initial run: %v", err)
+		return
+	}
+
 	if err := billing.ProcessMonthlyBilling(); err != nil {
 		logger.Warn("Monthly billing process error: %v", err)
 	}
@@ -222,8 +265,11 @@ func startMonthlyCreditsService(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// Run once on startup (after a short delay to ensure DB is ready)
-	time.Sleep(5 * time.Second)
+	if err := waitForDatabaseReadiness(ctx, false); err != nil {
+		logger.Info("Monthly credits service stopped before initial run: %v", err)
+		return
+	}
+
 	if err := billing.GrantMonthlyFreeCredits(); err != nil {
 		logger.Warn("Monthly credits process error: %v", err)
 	}

@@ -33,6 +33,46 @@ const (
 	gracefulShutdownMessage = "shutting down server"
 )
 
+func waitForDatabaseReadiness(ctx context.Context, requireMetrics bool) error {
+	deadline := time.NewTicker(2 * time.Second)
+	defer deadline.Stop()
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if database.DB != nil {
+			sqlDB, err := database.DB.DB()
+			if err == nil {
+				pingCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				err = sqlDB.PingContext(pingCtx)
+				cancel()
+				if err == nil {
+					if !requireMetrics || database.GetMetricsDB() == nil {
+						return nil
+					}
+					metricsDB, metricsErr := database.GetMetricsDB().DB()
+					if metricsErr == nil {
+						metricsPingCtx, metricsCancel := context.WithTimeout(ctx, 2*time.Second)
+						metricsErr = metricsDB.PingContext(metricsPingCtx)
+						metricsCancel()
+						if metricsErr == nil {
+							return nil
+						}
+					}
+				}
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+		}
+	}
+}
+
 func main() {
 	// Set log output and flags
 	log.SetOutput(os.Stdout)
@@ -174,8 +214,11 @@ func main() {
 // startAbuseDetectionService runs abuse detection periodically and on startup
 // This ensures abuse is detected even if no one is actively monitoring the dashboard
 func startAbuseDetectionService(ctx context.Context) {
-	// Run once on startup after a short delay to ensure DB is ready
-	time.Sleep(1 * time.Minute)
+	if err := waitForDatabaseReadiness(ctx, false); err != nil {
+		logger.Info("[AbuseDetection] Service stopped before initial run: %v", err)
+		return
+	}
+
 	logger.Info("[AbuseDetection] Running initial abuse detection on startup...")
 	runAbuseDetection(ctx)
 
@@ -203,7 +246,7 @@ func runAbuseDetection(ctx context.Context) {
 	defer cancel()
 
 	logger.Info("[AbuseDetection] Starting abuse detection scan...")
-	
+
 	// Call DetectAbuse directly from the superadmin package
 	// It will automatically send notifications to superadmins if abuse is detected
 	result, err := superadminsvc.DetectAbuse(bgCtx)
@@ -213,7 +256,7 @@ func runAbuseDetection(ctx context.Context) {
 		totalOrgs := len(result.SuspiciousOrganizations)
 		totalActivities := len(result.SuspiciousActivities)
 		logger.Info("[AbuseDetection] Abuse detection completed: %d suspicious orgs, %d suspicious activities", totalOrgs, totalActivities)
-		
+
 		if totalOrgs > 0 || totalActivities > 0 {
 			logger.Info("[AbuseDetection] Abuse detected! Triggering notification to superadmins (in background goroutine).")
 		}
