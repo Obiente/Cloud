@@ -114,7 +114,7 @@ func NewGatewayClient() (*GatewayClient, error) {
 	// Get instance ID (use hostname or generate)
 	instanceID, _ := os.Hostname()
 	if instanceID == "" {
-		instanceID = fmt.Sprintf("vps-api-%d", time.Now().Unix())
+		instanceID = "vps-api-" + uuid.NewString()
 	}
 
 	return &GatewayClient{

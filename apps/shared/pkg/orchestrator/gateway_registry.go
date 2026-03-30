@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
@@ -70,7 +71,7 @@ func GetGlobalGatewayRegistry() *GatewayRegistry {
 		// Get API instance ID (use hostname or generate)
 		apiInstanceID := os.Getenv("HOSTNAME")
 		if apiInstanceID == "" {
-			apiInstanceID = fmt.Sprintf("api-%d", time.Now().Unix())
+			apiInstanceID = "api-" + uuid.NewString()
 		}
 
 		globalRegistry = NewGatewayRegistry(apiSecret, apiInstanceID)
