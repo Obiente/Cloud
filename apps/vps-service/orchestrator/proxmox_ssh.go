@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"golang.org/x/crypto/ssh"
@@ -273,7 +274,7 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 				seedName = fmt.Sprintf("Imported: %s", comment)
 			}
 
-			keyID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
+			keyID := fmt.Sprintf("ssh-%s", uuid.NewString())
 			var vpsIDPtr *string
 			if vpsID != "" {
 				vpsIDPtr = &vpsID
@@ -571,7 +572,7 @@ func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, 
 
 	// Create audit log entry
 	auditLog := database.AuditLog{
-		ID:             fmt.Sprintf("audit-%d", time.Now().UnixNano()),
+		ID:             fmt.Sprintf("audit-%s", uuid.NewString()),
 		UserID:         "system", // System user for seeded keys
 		OrganizationID: &organizationID,
 		Action:         "SeedSSHKey",

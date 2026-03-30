@@ -414,7 +414,7 @@ func (c *GatewayConnection) SendRequest(ctx context.Context, method string, req 
 	}
 
 	// Generate request ID
-	requestID := fmt.Sprintf("%s-%d", c.GatewayID, time.Now().UnixNano())
+	requestID := fmt.Sprintf("%s-%s", c.GatewayID, uuid.NewString())
 
 	// Create response channel
 	responseChan := make(chan *vpsgatewayv1.GatewayResponse, 1)

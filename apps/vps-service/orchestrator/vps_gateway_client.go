@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
@@ -305,16 +306,16 @@ func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target strin
 	if port == 0 {
 		port = 22
 	}
-	
+
 	// Create ProxySSH stream
 	stream, err := c.ProxySSH(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ProxySSH stream: %w", err)
 	}
-	
+
 	// Generate connection ID
-	connectionID := fmt.Sprintf("tcp-%d", time.Now().UnixNano())
-	
+	connectionID := fmt.Sprintf("tcp-%s", uuid.NewString())
+
 	// Send connect request
 	req := &vpsgatewayv1.ProxySSHRequest{
 		ConnectionId: connectionID,
@@ -322,22 +323,22 @@ func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target strin
 		Target:       target,
 		Port:         int32(port),
 	}
-	
+
 	if err := stream.Send(req); err != nil {
 		return nil, fmt.Errorf("failed to send connect request: %w", err)
 	}
-	
+
 	// Wait for connected response FIRST (before starting read goroutine)
 	// This ensures we don't have a race where readFromStream consumes the "connected" message
 	resp, err := stream.Receive()
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive connect response: %w", err)
 	}
-	
+
 	if resp.Type != "connected" {
 		return nil, fmt.Errorf("unexpected response type: %s (expected connected)", resp.Type)
 	}
-	
+
 	// Create a connection wrapper that uses the stream
 	conn := &gatewayTCPConnection{
 		stream:       stream,
@@ -348,11 +349,11 @@ func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target strin
 		readErrChan:  make(chan error, 1),
 		ctx:          ctx,
 	}
-	
+
 	// Start goroutine to read from stream AFTER receiving connected
 	// This ensures we've consumed the "connected" message before the goroutine starts
 	go conn.readFromStream()
-	
+
 	return conn, nil
 }
 
@@ -378,7 +379,7 @@ func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
 		c.mu.Unlock()
 		return 0, io.EOF
 	}
-	
+
 	// If we have buffered data, use it
 	if len(c.readBuf) > c.readBufPos {
 		n = copy(b, c.readBuf[c.readBufPos:])
@@ -391,7 +392,7 @@ func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
 		return n, nil
 	}
 	c.mu.Unlock()
-	
+
 	// Wait for data from stream (without holding lock to allow readFromStream to send)
 	select {
 	case data := <-c.readChan:
@@ -414,44 +415,44 @@ func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
 func (c *gatewayTCPConnection) Write(b []byte) (n int, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if c.closed {
 		return 0, io.EOF
 	}
-	
+
 	req := &vpsgatewayv1.ProxySSHRequest{
 		ConnectionId: c.connectionID,
 		Type:         "data",
 		Data:         b,
 	}
-	
+
 	if err := c.stream.Send(req); err != nil {
 		logger.Debug("[VPSGatewayClient] Failed to send data to gateway stream for connection %s: %v", c.connectionID, err)
 		// Mark as closed if stream error
 		c.closed = true
 		return 0, fmt.Errorf("failed to send data to gateway: %w", err)
 	}
-	
+
 	return len(b), nil
 }
 
 func (c *gatewayTCPConnection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if c.closed {
 		return nil
 	}
-	
+
 	c.closed = true
-	
+
 	// Send close request
 	req := &vpsgatewayv1.ProxySSHRequest{
 		ConnectionId: c.connectionID,
 		Type:         "close",
 	}
 	c.stream.Send(req)
-	
+
 	return nil
 }
 
@@ -503,7 +504,7 @@ func (c *gatewayTCPConnection) readFromStream() {
 			}
 			return
 		}
-		
+
 		switch resp.Type {
 		case "connected":
 			// Already handled in CreateTCPConnection, but ignore it here
