@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -35,6 +36,13 @@ func NewService(vpsManager *orchestrator.VPSManager) *Service {
 func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]) error {
 	var gatewayID string
 	registry := sharedorchestrator.GetGlobalGatewayRegistry()
+	var sendMu sync.Mutex
+
+	send := func(msg *vpsgatewayv1.GatewayMessage) error {
+		sendMu.Lock()
+		defer sendMu.Unlock()
+		return stream.Send(msg)
+	}
 
 	logger.Info("[GatewayListener] New gateway connection (waiting for register message)")
 
@@ -72,7 +80,7 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 			}
 
 			// Send confirmation
-			if err := stream.Send(&vpsgatewayv1.GatewayMessage{Type: "registered"}); err != nil {
+			if err := send(&vpsgatewayv1.GatewayMessage{Type: "registered"}); err != nil {
 				logger.Warn("[GatewayListener] failed to send registered confirmation: %v", err)
 			}
 
@@ -98,7 +106,7 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 				if err := proto.Unmarshal(req.Payload, &leasesResp); err != nil {
 					logger.Warn("[GatewayListener] failed to unmarshal PushLeases payload: %v", err)
 					// send error response
-					_ = stream.Send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: false, Error: err.Error()}})
+					_ = send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: false, Error: err.Error()}})
 					continue
 				}
 
@@ -182,7 +190,7 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 				}
 
 				// Acknowledge success
-				_ = stream.Send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: true}})
+				_ = send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: true}})
 
 			} else if req.Method == "FindVPSByLease" {
 				// DEPRECATED: This code path is NOT USED in production
@@ -192,10 +200,10 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 				//              Gateways send requests over that stream, VPS responds
 				//              Handlers in handlers.go process those requests
 				// This RegisterGateway() endpoint exists for reverse connection (not currently used)
-				
+
 				logger.Warn("[GatewayListener] Received FindVPSByLease on deprecated inbound stream (ID: %s) - should use outbound stream handler instead", req.RequestId)
-				
-				_ = stream.Send(&vpsgatewayv1.GatewayMessage{
+
+				_ = send(&vpsgatewayv1.GatewayMessage{
 					Type: "response",
 					Response: &vpsgatewayv1.GatewayResponse{
 						RequestId: req.RequestId,
@@ -206,7 +214,7 @@ func (s *Service) RegisterGateway(ctx context.Context, stream *connect.BidiStrea
 
 			} else {
 				// Unknown request method from gateway; respond with error
-				_ = stream.Send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: false, Error: fmt.Sprintf("unknown method: %s", req.Method)}})
+				_ = send(&vpsgatewayv1.GatewayMessage{Type: "response", Response: &vpsgatewayv1.GatewayResponse{RequestId: req.RequestId, Success: false, Error: fmt.Sprintf("unknown method: %s", req.Method)}})
 			}
 
 		case "response":

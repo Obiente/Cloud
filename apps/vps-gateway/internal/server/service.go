@@ -290,6 +290,13 @@ func (s *GatewayService) ProxySSH(
 	// Map to track active data forwarding goroutines
 	dataForwardGoroutines := make(map[string]context.CancelFunc)
 	var mu sync.Mutex
+	var sendMu sync.Mutex
+
+	sendResponse := func(msg *vpsgatewayv1.ProxySSHResponse) error {
+		sendMu.Lock()
+		defer sendMu.Unlock()
+		return stream.Send(msg)
+	}
 
 	var connectionID string
 	startTime := time.Now()
@@ -393,7 +400,7 @@ func (s *GatewayService) ProxySSH(
 						default:
 						}
 
-						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
+						if sendErr := sendResponse(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connID,
 							Type:         "data",
 							Data:         buf[:n],
@@ -424,7 +431,7 @@ func (s *GatewayService) ProxySSH(
 					case <-handlerCtx.Done():
 						// Handler is closing, don't send
 					default:
-						stream.Send(&vpsgatewayv1.ProxySSHResponse{
+						_ = sendResponse(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connectionID,
 							Type:         "error",
 							Error:        err.Error(),
@@ -436,7 +443,7 @@ func (s *GatewayService) ProxySSH(
 					case <-handlerCtx.Done():
 						// Handler is closing, don't send
 					default:
-						stream.Send(&vpsgatewayv1.ProxySSHResponse{
+						_ = sendResponse(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connectionID,
 							Type:         "closed",
 						})
@@ -458,7 +465,7 @@ func (s *GatewayService) ProxySSH(
 
 			// Send connected response AFTER starting the data forwarding goroutine
 			// This ensures we're ready to receive data immediately
-			if err := stream.Send(&vpsgatewayv1.ProxySSHResponse{
+			if err := sendResponse(&vpsgatewayv1.ProxySSHResponse{
 				ConnectionId: connectionID,
 				Type:         "connected",
 			}); err != nil {
@@ -478,7 +485,7 @@ func (s *GatewayService) ProxySSH(
 			if !exists {
 				logger.Warn("Received data for unknown connection %s (connection may have been closed)", connectionID)
 				// Send error response
-				stream.Send(&vpsgatewayv1.ProxySSHResponse{
+				_ = sendResponse(&vpsgatewayv1.ProxySSHResponse{
 					ConnectionId: connectionID,
 					Type:         "error",
 					Error:        "connection not found",
@@ -500,7 +507,7 @@ func (s *GatewayService) ProxySSH(
 					delete(clientPipes, connectionID)
 					mu.Unlock()
 					clientPipe.Close()
-					stream.Send(&vpsgatewayv1.ProxySSHResponse{
+					_ = sendResponse(&vpsgatewayv1.ProxySSHResponse{
 						ConnectionId: connectionID,
 						Type:         "error",
 						Error:        fmt.Sprintf("failed to write data: %v", err),
@@ -848,7 +855,7 @@ func (s *GatewayService) SyncAllocations(
 
 			// Use FindVPSByLease to resolve MAC address to VPS ID via Proxmox
 			// Use generous timeout since Proxmox API can be slow (10-15s)
-			findCtx, findCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			findCtx, findCancel := context.WithTimeout(ctx, 15*time.Second)
 			findStart := time.Now()
 			vpsResp, findErr := s.FindVPSByLease(findCtx, lease.IP.String(), lease.MAC)
 			findDuration := time.Since(findStart)
@@ -880,7 +887,7 @@ func (s *GatewayService) SyncAllocations(
 			}
 
 			// Register this discovered lease with the database
-			registerCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			registerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			isPublic := !s.dhcpManager.IsIPInPool(lease.IP)
 
 			if err := s.dhcpManager.RegisterLeaseDirectly(registerCtx, vpsID, orgID, lease.IP, isPublic, lease.MAC); err != nil {
