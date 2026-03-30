@@ -207,12 +207,16 @@ func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check existing integration: %w", err))
 	} else {
 		// Update existing integration
-		existing.Token = encryptedToken
-		existing.Username = req.Msg.GetUsername()
-		existing.Scope = req.Msg.GetScope()
-		existing.UpdatedAt = now
+		updates := map[string]interface{}{
+			"token":      encryptedToken,
+			"username":   req.Msg.GetUsername(),
+			"scope":      req.Msg.GetScope(),
+			"updated_at": now,
+		}
 
-		if err := s.db.Save(&existing).Error; err != nil {
+		if err := s.db.Model(&database.GitHubIntegration{}).
+			Where("id = ?", existing.ID).
+			Updates(updates).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update GitHub integration: %w", err))
 		}
 	}
@@ -327,12 +331,16 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check existing integration: %w", err))
 	} else {
 		// Update existing integration
-		existing.Token = encryptedToken
-		existing.Username = req.Msg.GetUsername()
-		existing.Scope = req.Msg.GetScope()
-		existing.UpdatedAt = now
+		updates := map[string]interface{}{
+			"token":      encryptedToken,
+			"username":   req.Msg.GetUsername(),
+			"scope":      req.Msg.GetScope(),
+			"updated_at": now,
+		}
 
-		if err := s.db.Save(&existing).Error; err != nil {
+		if err := s.db.Model(&database.GitHubIntegration{}).
+			Where("id = ?", existing.ID).
+			Updates(updates).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update GitHub integration: %w", err))
 		}
 	}
