@@ -15,7 +15,12 @@
     OrganizationService,
     BillingService,
     type Organization,
+    type Subscription,
+    type MonthlyBill,
+    type UpdateBillingAccountRequest,
   } from "@obiente/proto";
+  import type { Timestamp } from "@bufbuild/protobuf/wkt";
+  import type { User } from "@obiente/types";
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
   import {
@@ -26,6 +31,9 @@
   } from "@heroicons/vue/24/outline";
 
   const error = ref("");
+
+  const getErrorMessage = (err: unknown, fallback: string): string =>
+    err instanceof Error ? err.message : (typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : fallback);
   const auth = useAuth();
   const orgClient = useConnectClient(OrganizationService);
   const billingClient = useConnectClient(BillingService);
@@ -54,17 +62,25 @@
 
   // Load organizations if not already loaded
   if (!organizations.value.length && auth.isAuthenticated) {
-    const res = await orgClient.listOrganizations({ onlyMine: true });
-    auth.setOrganizations(res.organizations || []);
-    if (targetOrgId) {
-      auth.switchOrganization(targetOrgId);
+    try {
+      const res = await orgClient.listOrganizations({ onlyMine: true });
+      auth.setOrganizations(res.organizations || []);
+      if (targetOrgId) {
+        auth.switchOrganization(targetOrgId);
+      }
+    } catch (err) {
+      console.error("[Billing] Failed to load organizations:", err);
     }
   }
 
   async function syncOrganizations() {
     if (!auth.isAuthenticated) return;
-    const res = await orgClient.listOrganizations({ onlyMine: true });
-    auth.setOrganizations(res.organizations || []);
+    try {
+      const res = await orgClient.listOrganizations({ onlyMine: true });
+      auth.setOrganizations(res.organizations || []);
+    } catch (err) {
+      console.error("[Billing] Failed to sync organizations:", err);
+    }
   }
 
   // Refresh current organization to get plan info
@@ -90,7 +106,7 @@
 
   const currentUserIdentifiers = computed(() => {
     const identifiers = new Set<string>();
-    const sessionUser: any = auth.user || null;
+    const sessionUser = auth.user as (User & { id?: string; userId?: string }) | null;
     if (!sessionUser) {
       return identifiers;
     }
@@ -211,12 +227,11 @@
         let dateStr = "";
         if (t.createdAt) {
           if (typeof t.createdAt === 'object' && t.createdAt !== null && 'seconds' in t.createdAt) {
-            dateStr = new Date(Number((t.createdAt as any).seconds) * 1000).toLocaleDateString();
+            const ts = t.createdAt as Timestamp;
+            dateStr = new Date(Number(ts.seconds) * 1000).toLocaleDateString();
           } else if (typeof t.createdAt === 'object' && t.createdAt !== null && 'toMillis' in t.createdAt) {
-            const timestamp = t.createdAt as any;
-            if (typeof timestamp.toMillis === 'function') {
-              dateStr = new Date(timestamp.toMillis()).toLocaleDateString();
-            }
+            const timestamp = t.createdAt as { toMillis: () => number };
+            dateStr = new Date(timestamp.toMillis()).toLocaleDateString();
           }
         }
         const amountCents = typeof t.amountCents === 'bigint' ? Number(t.amountCents) : Number(t.amountCents || 0);
@@ -361,14 +376,14 @@
       } else {
         throw new Error("No portal URL received");
       }
-    } catch (err: any) {
-      let errorMessage = err.message || "Failed to open customer portal";
-      
+    } catch (err: unknown) {
+      let errorMessage = getErrorMessage(err, "Failed to open customer portal");
+
       // Provide helpful message for portal configuration errors
       if (errorMessage.includes("not configured") || errorMessage.includes("configuration")) {
         errorMessage = "Stripe Customer Portal is not configured. Please contact support or configure it in your Stripe Dashboard.";
       }
-      
+
       error.value = errorMessage;
       const { toast } = useToast();
       toast.error(errorMessage);
@@ -413,23 +428,28 @@
     },
   });
 
+  // Stripe JS types — loaded dynamically so typed loosely via their interface shapes
+  type StripeInstance = { elements: (...a: unknown[]) => StripeElements; confirmSetup: (...a: unknown[]) => Promise<{ setupIntent?: { payment_method?: string }; error?: { message?: string } }>; retrievePaymentIntent: (...a: unknown[]) => Promise<{ paymentIntent?: { status: string }; error?: { message?: string } }>; confirmCardPayment: (...a: unknown[]) => Promise<{ error?: { message?: string } }> };
+  type StripeElements = { create: (type: string) => StripePaymentElement; clear: () => void };
+  type StripePaymentElement = { mount: (el: HTMLElement) => void; unmount: () => void };
+
   // Subscription management
-  const subscriptions = ref<any[]>([]);
+  const subscriptions = ref<Subscription[]>([]);
   const subscriptionsLoading = ref(false);
   const cancelSubscriptionDialogOpen = ref(false);
   const subscriptionToCancel = ref<string | null>(null);
   const updateSubscriptionPaymentDialogOpen = ref(false);
-  const subscriptionToUpdate = ref<any | null>(null);
+  const subscriptionToUpdate = ref<Subscription | null>(null);
   const addPaymentMethodLoading = ref(false);
   const paymentElementLoading = ref(false);
-  const stripe = ref<any>(null);
-  const stripeElements = ref<any>(null);
-  const paymentElement = ref<any>(null);
+  const stripe = ref<StripeInstance | null>(null);
+  const stripeElements = ref<StripeElements | null>(null);
+  const paymentElement = ref<StripePaymentElement | null>(null);
   const setupIntentClientSecret = ref<string>("");
   const paymentElementContainer = ref<HTMLElement | null>(null);
 
   // Monthly bills
-  const bills = ref<any[]>([]);
+  const bills = ref<MonthlyBill[]>([]);
   const billsLoading = ref(false);
   const payBillLoading = ref(false);
   const generateBillLoading = ref(false);
@@ -529,10 +549,10 @@
           } else {
             throw new Error("No client secret received");
           }
-        } catch (paymentIntentError: any) {
+        } catch (paymentIntentError: unknown) {
           // If PaymentIntent fails, fall back to CheckoutSession
           console.warn("PaymentIntent failed, falling back to CheckoutSession:", paymentIntentError);
-          error.value = paymentIntentError.message || "Failed to process payment with saved card. Redirecting to checkout...";
+          error.value = getErrorMessage(paymentIntentError, "Failed to process payment with saved card. Redirecting to checkout...");
           
           // Fall back to checkout session
           const response = await billingClient.createCheckoutSession({
@@ -559,8 +579,8 @@
           throw new Error("No checkout URL received");
         }
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to process payment";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to process payment");
       addCreditsLoading.value = false;
     }
   }
@@ -643,9 +663,9 @@
         paymentElement.value = stripeElements.value.create("payment");
         paymentElement.value.mount(container);
         paymentElementLoading.value = false;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to initialize payment form:", err);
-        error.value = err.message || "Failed to initialize payment form";
+        error.value = getErrorMessage(err, "Failed to initialize payment form");
         paymentElementLoading.value = false;
         addPaymentMethodDialogOpen.value = false;
       }
@@ -687,8 +707,8 @@
         addPaymentMethodDialogOpen.value = false;
         useToast().toast.success("Payment method added successfully");
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to add payment method";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to add payment method");
     } finally {
       addPaymentMethodLoading.value = false;
     }
@@ -704,8 +724,8 @@
       await refreshPaymentMethods();
       await refreshBillingAccount();
       useToast().toast.success("Default payment method updated");
-    } catch (err: any) {
-      error.value = err.message || "Failed to set default payment method";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to set default payment method");
       useToast().toast.error(error.value);
     }
   }
@@ -727,8 +747,8 @@
       useToast().toast.success("Payment method removed");
       removePaymentMethodDialogOpen.value = false;
       paymentMethodToRemove.value = null;
-    } catch (err: any) {
-      error.value = err.message || "Failed to remove payment method";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to remove payment method");
       useToast().toast.error(error.value);
     }
   }
@@ -758,7 +778,7 @@
     billingInfoLoading.value = true;
     error.value = "";
     try {
-      const updateData: any = {
+      const updateData: UpdateBillingAccountRequest = {
         organizationId: selectedOrg.value,
         billingEmail: billingInfoForm.value.billingEmail || undefined,
         companyName: billingInfoForm.value.companyName || undefined,
@@ -785,8 +805,8 @@
       await refreshBillingAccount();
       editBillingInfoDialogOpen.value = false;
       useToast().toast.success("Billing information updated");
-    } catch (err: any) {
-      error.value = err.message || "Failed to update billing information";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to update billing information");
       useToast().toast.error(error.value);
     } finally {
       billingInfoLoading.value = false;
@@ -798,11 +818,11 @@
     if (!selectedOrg.value) return;
     subscriptionsLoading.value = true;
     try {
-      const res = await (billingClient as any).listSubscriptions({
+      const res = await billingClient.listSubscriptions({
         organizationId: selectedOrg.value,
       });
       subscriptions.value = res.subscriptions || [];
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load subscriptions:", err);
       subscriptions.value = [];
     } finally {
@@ -820,7 +840,7 @@
     if (!selectedOrg.value || !subscriptionToCancel.value) return;
     subscriptionsLoading.value = true;
     try {
-      const res = await (billingClient as any).cancelSubscription({
+      const res = await billingClient.cancelSubscription({
         organizationId: selectedOrg.value,
         subscriptionId: subscriptionToCancel.value,
       });
@@ -828,8 +848,8 @@
       cancelSubscriptionDialogOpen.value = false;
       subscriptionToCancel.value = null;
       useToast().toast.success(res.message || "Subscription will be canceled at the end of the billing period");
-    } catch (err: any) {
-      error.value = err.message || "Failed to cancel subscription";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to cancel subscription");
       useToast().toast.error(error.value);
     } finally {
       subscriptionsLoading.value = false;
@@ -837,7 +857,7 @@
   }
 
   // Update subscription payment method
-  function openUpdateSubscriptionPaymentDialog(subscription: any) {
+  function openUpdateSubscriptionPaymentDialog(subscription: Subscription) {
     subscriptionToUpdate.value = subscription;
     updateSubscriptionPaymentDialogOpen.value = true;
   }
@@ -846,7 +866,7 @@
     if (!selectedOrg.value || !subscriptionToUpdate.value) return;
     subscriptionsLoading.value = true;
     try {
-      await (billingClient as any).updateSubscriptionPaymentMethod({
+      await billingClient.updateSubscriptionPaymentMethod({
         organizationId: selectedOrg.value,
         subscriptionId: subscriptionToUpdate.value.id,
         paymentMethodId,
@@ -856,8 +876,8 @@
       updateSubscriptionPaymentDialogOpen.value = false;
       subscriptionToUpdate.value = null;
       useToast().toast.success("Subscription payment method updated");
-    } catch (err: any) {
-      error.value = err.message || "Failed to update subscription payment method";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to update subscription payment method");
       useToast().toast.error(error.value);
     } finally {
       subscriptionsLoading.value = false;
@@ -922,7 +942,7 @@
     }
   }
 
-  function formatInvoiceDate(date: any): string {
+  function formatInvoiceDate(date: Timestamp | { toMillis: () => number } | number | null | undefined): string {
     if (!date) return "";
     let seconds = 0;
     if (typeof date === 'object' && date !== null) {
@@ -938,7 +958,7 @@
     return new Date(seconds * 1000).toLocaleDateString();
   }
 
-  function formatBillDate(date: any): string {
+  function formatBillDate(date: Timestamp | { toMillis: () => number } | number | null | undefined): string {
     if (!date) return "";
     let seconds = 0;
     if (typeof date === 'object' && date !== null) {
@@ -958,12 +978,12 @@
     if (!selectedOrg.value) return;
     billsLoading.value = true;
     try {
-      const res = await (billingClient as any).listBills({
+      const res = await billingClient.listBills({
         organizationId: selectedOrg.value,
         limit: 20,
       });
       bills.value = res.bills || [];
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load bills:", err);
       bills.value = [];
     } finally {
@@ -980,7 +1000,7 @@
     payBillLoading.value = true;
     error.value = "";
     try {
-      const res = await (billingClient as any).payBill({
+      const res = await billingClient.payBill({
         organizationId: selectedOrg.value,
         billId: billId,
       });
@@ -992,8 +1012,8 @@
       } else {
         throw new Error(res.message || "Failed to pay bill");
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to pay bill";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to pay bill");
       useToast().toast.error(error.value);
     } finally {
       payBillLoading.value = false;
@@ -1005,7 +1025,7 @@
     generateBillLoading.value = true;
     error.value = "";
     try {
-      const res = await (billingClient as any).generateCurrentBill({
+      const res = await billingClient.generateCurrentBill({
         organizationId: selectedOrg.value,
       });
       if (res.success) {
@@ -1018,8 +1038,8 @@
       } else {
         throw new Error(res.message || "Failed to generate bill");
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to generate bill";
+    } catch (err: unknown) {
+      error.value = getErrorMessage(err, "Failed to generate bill");
       useToast().toast.error(error.value);
     } finally {
       generateBillLoading.value = false;
