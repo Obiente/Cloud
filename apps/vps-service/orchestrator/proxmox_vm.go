@@ -223,7 +223,7 @@ func getMapKeys(m map[string]interface{}) []string {
 // Falls back to PROXMOX_NODE_ENDPOINTS if SSH override not configured
 func parseNodeSSHMapping() map[string]string {
 	mapping := make(map[string]string)
-	
+
 	// First, check for SSH-specific override
 	envValue := os.Getenv("PROXMOX_NODE_SSH_ENDPOINTS")
 	if envValue != "" {
@@ -1166,85 +1166,85 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 										}
 									}
 
-							skipResize:
-								// Check if we need to move disk to target storage
-								// This is needed for:
-								// 1. Linked clones where disk stays on template storage
-								// 2. Full clones to LVM thin (cloned to directory storage first, need to convert)
-								// 3. New boot disks created on intermediate storage when target is LVM thin
-								needsMove := false
-								var moveReason string
+								skipResize:
+									// Check if we need to move disk to target storage
+									// This is needed for:
+									// 1. Linked clones where disk stays on template storage
+									// 2. Full clones to LVM thin (cloned to directory storage first, need to convert)
+									// 3. New boot disks created on intermediate storage when target is LVM thin
+									needsMove := false
+									var moveReason string
 
-								if !useFullClone && templateStorage != "" && templateStorage != storage {
-									needsMove = true
-									moveReason = fmt.Sprintf("Linked clone created disk on template storage '%s', but target storage is '%s'", templateStorage, storage)
-								} else if useFullClone && needsQemuImgConvert && intermediateStorage != "" && intermediateStorage != storage {
-									needsMove = true
-									moveReason = fmt.Sprintf("Full clone created disk on directory storage '%s', but target LVM thin storage '%s' requires qemu-img convert", intermediateStorage, storage)
-								} else if needsQemuImgConvert && storage != "" {
-									// Check if disk is on a different storage than target (e.g., newly created disk on intermediate storage)
-									if diskConfig, ok := vmConfigAfter[actualDiskKey].(string); ok {
-										// Extract storage from disk config (e.g., "local:303/vm-303-disk-0.qcow2" -> "local")
-										if parts := strings.Split(diskConfig, ":"); len(parts) > 0 {
-											currentStorage := parts[0]
-											if currentStorage != storage {
-												needsMove = true
-												moveReason = fmt.Sprintf("Disk was created on storage '%s', but target LVM thin storage '%s' requires qemu-img convert", currentStorage, storage)
+									if !useFullClone && templateStorage != "" && templateStorage != storage {
+										needsMove = true
+										moveReason = fmt.Sprintf("Linked clone created disk on template storage '%s', but target storage is '%s'", templateStorage, storage)
+									} else if useFullClone && needsQemuImgConvert && intermediateStorage != "" && intermediateStorage != storage {
+										needsMove = true
+										moveReason = fmt.Sprintf("Full clone created disk on directory storage '%s', but target LVM thin storage '%s' requires qemu-img convert", intermediateStorage, storage)
+									} else if needsQemuImgConvert && storage != "" {
+										// Check if disk is on a different storage than target (e.g., newly created disk on intermediate storage)
+										if diskConfig, ok := vmConfigAfter[actualDiskKey].(string); ok {
+											// Extract storage from disk config (e.g., "local:303/vm-303-disk-0.qcow2" -> "local")
+											if parts := strings.Split(diskConfig, ":"); len(parts) > 0 {
+												currentStorage := parts[0]
+												if currentStorage != storage {
+													needsMove = true
+													moveReason = fmt.Sprintf("Disk was created on storage '%s', but target LVM thin storage '%s' requires qemu-img convert", currentStorage, storage)
+												}
 											}
 										}
 									}
-								}
 
-								if needsMove {
-									// For LVM thin moves: DON'T resize before move!
-									// The disk needs to be moved at its current size, then resized after
-									// This is because Proxmox storage API doesn't respect size parameter for LVM thin
-									logger.Info("[ProxmoxClient] %s. Moving disk at current size, will resize after...", moveReason)
-									writeLog("Converting disk storage format...", false)
-									writeLog("Moving disk to target storage...", false)
-									// Use separate context to avoid parent context cancellation during long disk operations
-									moveCtx, moveCancel := context.WithTimeout(context.Background(), 120*time.Second)
-									moveErr := pc.MoveDisk(moveCtx, nodeName, vmID, actualDiskKey, storage, true)
-									moveCancel()
-									if moveErr != nil {
-										logger.Error("[ProxmoxClient] Failed to move disk %s for VM %d to target storage '%s': %v", actualDiskKey, vmID, storage, moveErr)
-										writeLog(fmt.Sprintf("Failed to move disk: %v", moveErr), true)
-										return nil, fmt.Errorf("failed to move disk from template storage to target storage: %w", moveErr)
-									}
-									logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to target storage '%s'", actualDiskKey, vmID, storage)
-									writeLog("Disk moved successfully", false)
-									
-									// NOW resize the disk on the target storage
-									// Use separate context to avoid parent context cancellation
-									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size) after move", actualDiskKey, vmID, diskSizeGB)
-									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
-									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
-									resizeCancel()
-									if resizeErr != nil {
-										logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB after move: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
-										writeLog(fmt.Sprintf("Failed to resize disk: %v", resizeErr), true)
-										// Continue anyway - disk is moved, just not resized
+									if needsMove {
+										// For LVM thin moves: DON'T resize before move!
+										// The disk needs to be moved at its current size, then resized after
+										// This is because Proxmox storage API doesn't respect size parameter for LVM thin
+										logger.Info("[ProxmoxClient] %s. Moving disk at current size, will resize after...", moveReason)
+										writeLog("Converting disk storage format...", false)
+										writeLog("Moving disk to target storage...", false)
+										// Use separate context to avoid parent context cancellation during long disk operations
+										moveCtx, moveCancel := context.WithTimeout(context.Background(), 120*time.Second)
+										moveErr := pc.MoveDisk(moveCtx, nodeName, vmID, actualDiskKey, storage, true)
+										moveCancel()
+										if moveErr != nil {
+											logger.Error("[ProxmoxClient] Failed to move disk %s for VM %d to target storage '%s': %v", actualDiskKey, vmID, storage, moveErr)
+											writeLog(fmt.Sprintf("Failed to move disk: %v", moveErr), true)
+											return nil, fmt.Errorf("failed to move disk from template storage to target storage: %w", moveErr)
+										}
+										logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to target storage '%s'", actualDiskKey, vmID, storage)
+										writeLog("Disk moved successfully", false)
+
+										// NOW resize the disk on the target storage
+										// Use separate context to avoid parent context cancellation
+										logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size) after move", actualDiskKey, vmID, diskSizeGB)
+										writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
+										resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+										resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
+										resizeCancel()
+										if resizeErr != nil {
+											logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB after move: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
+											writeLog(fmt.Sprintf("Failed to resize disk: %v", resizeErr), true)
+											// Continue anyway - disk is moved, just not resized
+										} else {
+											logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+											writeLog("Disk resized successfully", false)
+										}
 									} else {
-										logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
-										writeLog("Disk resized successfully", false)
+										// No move needed - resize in place
+										// Use separate context to avoid parent context cancellation
+										logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
+										writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
+										resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+										resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
+										resizeCancel()
+										if resizeErr != nil {
+											logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
+											writeLog(fmt.Sprintf("Disk resize failed: %v", resizeErr), true)
+										} else {
+											logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+											writeLog("Disk resized successfully", false)
+										}
 									}
-								} else {
-									// No move needed - resize in place
-									// Use separate context to avoid parent context cancellation
-									logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
-									writeLog(fmt.Sprintf("Resizing disk to %dGB...", diskSizeGB), false)
-									resizeCtx, resizeCancel := context.WithTimeout(context.Background(), 2*time.Minute)
-									resizeErr := pc.resizeDisk(resizeCtx, nodeName, vmID, actualDiskKey, diskSizeGB)
-									resizeCancel()
-									if resizeErr != nil {
-										logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, resizeErr)
-										writeLog(fmt.Sprintf("Disk resize failed: %v", resizeErr), true)
-									} else {
-										logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
-										writeLog("Disk resized successfully", false)
-									}
-								}
 								}
 							} else {
 								logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
@@ -1335,12 +1335,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 	// Create or update VM
 	endpoint := fmt.Sprintf("/nodes/%s/qemu", nodeName)
-		if useCloudInit {
-			writeLog("Applying VM configuration...", false)
-			// Update cloned VM configuration
-			// Proxmox API expects form-encoded data for config updates
-			// Note: Don't include disk config in update when cloning - disk already exists and was resized separately
-			updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	if useCloudInit {
+		writeLog("Applying VM configuration...", false)
+		// Update cloned VM configuration
+		// Proxmox API expects form-encoded data for config updates
+		// Note: Don't include disk config in update when cloning - disk already exists and was resized separately
+		updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 
 		// Get the actual disk key from the cloned VM to use in boot order
 		vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
@@ -2486,21 +2486,24 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 		return fmt.Errorf("SSH key not configured")
 	}
 
-	// Create SSH client config
-	sshConfig := &ssh.ClientConfig{
-		User:            pc.config.SSHUser,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
-	}
-
 	// Connect to Proxmox node via SSH
 	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_NODE_ENDPOINTS mapping
 	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
 	if sshEndpoint == "" {
 		return fmt.Errorf("SSH endpoint not configured for node %s (configure PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS)", nodeName)
 	}
-	
+
+	hostKeyCallback, err := newProxmoxHostKeyCallback(nodeName, sshEndpoint)
+	if err != nil {
+		return fmt.Errorf("configure SSH host key verification: %w", err)
+	}
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
 	sshHost := sshEndpoint
 	sshPort := "22"
 	if strings.Contains(sshEndpoint, ":") {
@@ -2694,12 +2697,12 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 
 	// Verify both source and target sizes before converting
 	logger.Info("[ProxmoxClient] Verifying source and target disk sizes before conversion")
-	
+
 	// Get source size
 	sourceSizeCmd := fmt.Sprintf("stat -c '%%s' %s", sourceDiskPath)
 	sourceSizeStr, sourceErr := runSSHCommand(conn, sourceSizeCmd)
 	logger.Info("[ProxmoxClient] Source size command: %s, result: %s, err: %v", sourceSizeCmd, strings.TrimSpace(sourceSizeStr), sourceErr)
-	
+
 	// Get target size using blockdev (more reliable than lvs which may not be in PATH)
 	targetSizeCmd := fmt.Sprintf("blockdev --getsize64 %s 2>/dev/null || /usr/sbin/blockdev --getsize64 %s 2>/dev/null", targetDiskPath, targetDiskPath)
 	targetSizeStr, targetErr := runSSHCommand(conn, targetSizeCmd)
@@ -2779,16 +2782,16 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	// Delete source disk if requested - use Proxmox API DELETE endpoint
 	if deleteSource {
 		logger.Info("[ProxmoxClient] Deleting source disk via API: %s", sourceDiskVolumeID)
-		
+
 		// Use Proxmox API: DELETE /api2/json/nodes/{node}/storage/{storage}/content/{volumeid}
 		sourceStorage := strings.Split(sourceDiskVolumeID, ":")[0]
 		encodedVolumeID := url.PathEscape(sourceDiskVolumeID)
 		deleteEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, sourceStorage, encodedVolumeID)
 		logger.Info("[ProxmoxClient] Delete endpoint: %s", deleteEndpoint)
-		
+
 		apiDeleteCtx, apiDeleteCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer apiDeleteCancel()
-		
+
 		deleteResp, deleteErr := pc.apiRequest(apiDeleteCtx, "DELETE", deleteEndpoint, nil)
 		deleteSuccess := false
 		if deleteErr != nil {
@@ -2803,17 +2806,17 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 				logger.Warn("[ProxmoxClient] API delete returned status %d: %s", deleteResp.StatusCode, string(body))
 			}
 		}
-		
+
 		// Remove unused disk from VM config after deletion
 		// The deleted disk may show up as "unused disk" (typically scsi1) in the VM config
 		// We need to remove it from the config to clean up the "unused disks" view
 		if deleteSuccess {
 			logger.Info("[ProxmoxClient] Removing unused disk from VM %d config", vmID)
-			
+
 			// Get current VM config to find unused disk entries
 			vmConfigCtx, vmConfigCancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer vmConfigCancel()
-			
+
 			vmConfig, err := pc.GetVMConfig(vmConfigCtx, nodeName, vmID)
 			if err == nil {
 				// Check for unused disk entries (typically scsi1, but could be others)
@@ -2826,9 +2829,9 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 					if diskKey == disk {
 						continue
 					}
-					
-					if strings.HasPrefix(diskKey, "scsi") || strings.HasPrefix(diskKey, "virtio") || 
-					   strings.HasPrefix(diskKey, "sata") || strings.HasPrefix(diskKey, "ide") {
+
+					if strings.HasPrefix(diskKey, "scsi") || strings.HasPrefix(diskKey, "virtio") ||
+						strings.HasPrefix(diskKey, "sata") || strings.HasPrefix(diskKey, "ide") {
 						if diskValue, ok := vmConfig[diskKey].(string); ok && diskValue != "" {
 							// Check if this disk entry matches the deleted source disk exactly
 							// Match the full source disk volume ID (e.g., "local:301/vm-301-disk-0.raw")
@@ -3354,7 +3357,7 @@ func (pc *ProxmoxClient) ExecuteGuestCommand(ctx context.Context, nodeName strin
 
 	// Execute command via guest agent (Proxmox uses form-encoded data)
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec", nodeName, vmID)
-	
+
 	formData := url.Values{}
 	formData.Set("command", command)
 

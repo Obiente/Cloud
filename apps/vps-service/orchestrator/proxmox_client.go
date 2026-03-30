@@ -36,10 +36,14 @@ func NewProxmoxClient(config *ProxmoxConfig) (*ProxmoxClient, error) {
 		return nil, fmt.Errorf("either password or token (token_id + secret) must be provided")
 	}
 
-	// Create HTTP client with insecure TLS (Proxmox often uses self-signed certs)
+	if config.SkipTLSVerify {
+		logger.Warn("[ProxmoxClient] TLS verification disabled via PROXMOX_SKIP_TLS_VERIFY")
+	}
+
+	// Create HTTP client. TLS verification stays enabled unless explicitly disabled.
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // TODO: Make this configurable
+			InsecureSkipVerify: config.SkipTLSVerify,
 		},
 	}
 

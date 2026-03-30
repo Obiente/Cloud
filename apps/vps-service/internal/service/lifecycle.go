@@ -277,7 +277,7 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 		useDomainRouting := os.Getenv("USE_DOMAIN_ROUTING")
 		domain := os.Getenv("DOMAIN")
 		useTraefikRouting := os.Getenv("USE_TRAEFIK_ROUTING")
-		
+
 		// If domain routing is enabled and domain is set, use domain-based URL
 		if (useDomainRouting == "true" || useDomainRouting == "1") && domain != "" && domain != "localhost" {
 			scheme := "http"
@@ -334,7 +334,7 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 		// Final fallback: use localhost for dev
 		sshHost = "localhost"
 	}
-	
+
 	sshProxyPort := os.Getenv("SSH_PROXY_PORT")
 	if sshProxyPort == "" {
 		sshProxyPort = "2222"
@@ -354,7 +354,8 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
   User %s@%s
   PreferredAuthentications publickey,password
   PasswordAuthentication yes
-  StrictHostKeyChecking no
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile ~/.ssh/known_hosts
   # Use SSH key (recommended) or API token as password
   # To connect as a different user, use: ssh -p %s user@%s@%s`, vpsID, sshHost, sshPort, defaultUser, vpsID, sshPort, vpsID, sshHost)
 
@@ -393,5 +394,3 @@ Note:
 		ConnectionInstructions: instructions,
 	}), nil
 }
-
-

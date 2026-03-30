@@ -31,11 +31,11 @@ type LogWriter interface {
 
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
-	dockerClient       client.APIClient
-	gatewayClient      *VPSGatewayClient // Deprecated - use GetGatewayClientForNode or bidiGatewayClient instead
-	bidiGatewayClient  interface{}       // Bidirectional gateway client from internal/gateway package
-	gatewayClients     sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
-	proxmoxClients     sync.Map          // Cache of Proxmox clients per node (key: nodeName string, value: *ProxmoxClient)
+	dockerClient      client.APIClient
+	gatewayClient     *VPSGatewayClient // Deprecated - use GetGatewayClientForNode or bidiGatewayClient instead
+	bidiGatewayClient interface{}       // Bidirectional gateway client from internal/gateway package
+	gatewayClients    sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
+	proxmoxClients    sync.Map          // Cache of Proxmox clients per node (key: nodeName string, value: *ProxmoxClient)
 }
 
 // parseNodeEndpointsMapping parses the PROXMOX_NODE_ENDPOINTS environment variable (default mapping)
@@ -270,6 +270,7 @@ func GetProxmoxConfig(nodeName ...string) (*ProxmoxConfig, error) {
 	}
 	config.SSHKeyPath = os.Getenv("PROXMOX_SSH_KEY_PATH")
 	config.SSHKeyData = os.Getenv("PROXMOX_SSH_KEY_DATA")
+	config.SkipTLSVerify = strings.EqualFold(os.Getenv("PROXMOX_SKIP_TLS_VERIFY"), "true") || os.Getenv("PROXMOX_SKIP_TLS_VERIFY") == "1"
 
 	return config, nil
 }
@@ -285,10 +286,11 @@ type ProxmoxConfig struct {
 
 	// SSH configuration for writing snippet files directly to Proxmox storage
 	// SSHHost is no longer used - SSH endpoints are resolved via PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS
-	SSHHost    string // Deprecated - not used (SSH endpoints resolved via node mapping)
-	SSHUser    string // SSH user for snippet writing (e.g., "obiente-cloud")
-	SSHKeyPath string // Path to SSH private key file (e.g., "/path/to/id_rsa")
-	SSHKeyData string // SSH private key content (alternative to SSHKeyPath)
+	SSHHost       string // Deprecated - not used (SSH endpoints resolved via node mapping)
+	SSHUser       string // SSH user for snippet writing (e.g., "obiente-cloud")
+	SSHKeyPath    string // Path to SSH private key file (e.g., "/path/to/id_rsa")
+	SSHKeyData    string // SSH private key content (alternative to SSHKeyPath)
+	SkipTLSVerify bool
 }
 
 // NewVPSManager creates a new VPS manager
@@ -1130,7 +1132,7 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 				}
 			}
 		}
-		
+
 		// Fallback to unary RPC if bidirectional stream failed
 		if len(ipv4) == 0 {
 			gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
@@ -1943,12 +1945,12 @@ func extractMACFromNetConfig(netConfig string) string {
 	if netConfig == "" {
 		return ""
 	}
-	
+
 	// Split by comma to get individual parameters
 	parts := strings.Split(netConfig, ",")
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		
+
 		// Check if this part contains a MAC address
 		// MAC can be in format "virtio=BC:24:11:5E:13:8A" or standalone "BC:24:11:5E:13:8A"
 		if strings.Contains(part, "=") {
@@ -1961,13 +1963,13 @@ func extractMACFromNetConfig(netConfig string) string {
 				}
 			}
 		}
-		
+
 		// Check if the part itself is a MAC address (XX:XX:XX:XX:XX:XX)
 		if strings.Count(part, ":") == 5 && len(part) == 17 {
 			return strings.ToLower(part)
 		}
 	}
-	
+
 	return ""
 }
 
@@ -2011,7 +2013,7 @@ func (vm *VPSManager) FindVPSByMAC(ctx context.Context, macAddress string) (*dat
 	// Query each VPS's Proxmox VM to check its MAC address
 	for i, vpsInstance := range allVPS {
 		logger.Debug("[VPSManager.FindVPSByMAC] [%d/%d] Checking VPS %s", i+1, len(allVPS), vpsInstance.ID)
-		
+
 		if vpsInstance.InstanceID == nil || *vpsInstance.InstanceID == "" {
 			logger.Debug("[VPSManager.FindVPSByMAC]   Skipping: no instance_id")
 			continue
@@ -2051,10 +2053,10 @@ func (vm *VPSManager) FindVPSByMAC(ctx context.Context, macAddress string) (*dat
 			logger.Debug("[VPSManager.FindVPSByMAC]   net0 config: %s", net0)
 			vmMAC := extractMACFromNetConfig(net0)
 			logger.Debug("[VPSManager.FindVPSByMAC]   Extracted MAC: %s (comparing with %s)", vmMAC, macAddress)
-			
+
 			if vmMAC != "" && strings.EqualFold(vmMAC, macAddress) {
 				logger.Info("[VPSManager.FindVPSByMAC] ✓✓✓ MATCH FOUND! VPS %s (VM %d on %s) has MAC %s ========== END ==========", vpsInstance.ID, vmID, nodeName, macAddress)
-				
+
 				// Update database with MAC for future fast lookups
 				vpsInstance.MACAddress = &vmMAC
 				if err := database.DB.WithContext(ctx).Model(&vpsInstance).Update("mac_address", vmMAC).Error; err != nil {
@@ -2062,7 +2064,7 @@ func (vm *VPSManager) FindVPSByMAC(ctx context.Context, macAddress string) (*dat
 				} else {
 					logger.Info("[VPSManager.FindVPSByMAC] Updated database with MAC for future fast lookups")
 				}
-				
+
 				return &vpsInstance, nil
 			} else {
 				logger.Debug("[VPSManager.FindVPSByMAC]   No match (VM MAC=%s)", vmMAC)
@@ -2794,49 +2796,49 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 			// Try to fall back to the VPS record in our DB using the VPS ID.
 			orgID := alloc.OrganizationId
 			if orgID == "" {
-					var vps database.VPSInstance
-					if err := database.DB.WithContext(ctx).Where("id = ?", alloc.VpsId).First(&vps).Error; err == nil && vps.OrganizationID != "" {
-						orgID = vps.OrganizationID
-						logger.Debug("[LeaseSync] Filled missing org for VPS %s from DB: %s", alloc.VpsId, orgID)
-					} else {
-						// Try to resolve via existing DHCP lease records (match by MAC then IP)
-						if alloc.MacAddress != "" {
-							var existing database.DHCPLease
-							if err := database.DB.WithContext(ctx).Where("mac_address = ?", alloc.MacAddress).First(&existing).Error; err == nil {
-								orgID = existing.OrganizationID
-								alloc.VpsId = existing.VPSID
-								logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by MAC: %s", alloc.IpAddress, orgID)
-							}
-						}
-
-						if orgID == "" && alloc.IpAddress != "" {
-							var existing database.DHCPLease
-							if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&existing).Error; err == nil {
-								orgID = existing.OrganizationID
-								alloc.VpsId = existing.VPSID
-								logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by IP: %s", alloc.IpAddress, orgID)
-							}
-						}
-
-						// Final fallback: check public IP assignments
-						if orgID == "" && alloc.IpAddress != "" {
-							var pub database.VPSPublicIP
-							if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&pub).Error; err == nil {
-								if pub.VPSID != nil {
-									alloc.VpsId = *pub.VPSID
-								}
-								if pub.OrganizationID != nil {
-									orgID = *pub.OrganizationID
-								}
-								logger.Debug("[LeaseSync] Filled missing org for IP %s from VPSPublicIP: %s", alloc.IpAddress, orgID)
-							}
-						}
-
-						if orgID == "" {
-							logger.Debug("[LeaseSync] Skipping lease with missing org for VPS %s (%s) on node %s", alloc.VpsId, alloc.IpAddress, nodeName)
-							continue
+				var vps database.VPSInstance
+				if err := database.DB.WithContext(ctx).Where("id = ?", alloc.VpsId).First(&vps).Error; err == nil && vps.OrganizationID != "" {
+					orgID = vps.OrganizationID
+					logger.Debug("[LeaseSync] Filled missing org for VPS %s from DB: %s", alloc.VpsId, orgID)
+				} else {
+					// Try to resolve via existing DHCP lease records (match by MAC then IP)
+					if alloc.MacAddress != "" {
+						var existing database.DHCPLease
+						if err := database.DB.WithContext(ctx).Where("mac_address = ?", alloc.MacAddress).First(&existing).Error; err == nil {
+							orgID = existing.OrganizationID
+							alloc.VpsId = existing.VPSID
+							logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by MAC: %s", alloc.IpAddress, orgID)
 						}
 					}
+
+					if orgID == "" && alloc.IpAddress != "" {
+						var existing database.DHCPLease
+						if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&existing).Error; err == nil {
+							orgID = existing.OrganizationID
+							alloc.VpsId = existing.VPSID
+							logger.Debug("[LeaseSync] Filled missing org for IP %s from DHCPLease by IP: %s", alloc.IpAddress, orgID)
+						}
+					}
+
+					// Final fallback: check public IP assignments
+					if orgID == "" && alloc.IpAddress != "" {
+						var pub database.VPSPublicIP
+						if err := database.DB.WithContext(ctx).Where("ip_address = ?", alloc.IpAddress).First(&pub).Error; err == nil {
+							if pub.VPSID != nil {
+								alloc.VpsId = *pub.VPSID
+							}
+							if pub.OrganizationID != nil {
+								orgID = *pub.OrganizationID
+							}
+							logger.Debug("[LeaseSync] Filled missing org for IP %s from VPSPublicIP: %s", alloc.IpAddress, orgID)
+						}
+					}
+
+					if orgID == "" {
+						logger.Debug("[LeaseSync] Skipping lease with missing org for VPS %s (%s) on node %s", alloc.VpsId, alloc.IpAddress, nodeName)
+						continue
+					}
+				}
 			}
 
 			expires := alloc.LeaseExpires

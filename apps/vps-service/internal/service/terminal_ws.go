@@ -2,7 +2,6 @@ package vps
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -649,12 +648,10 @@ func (s *Service) handleProxmoxTermProxy(
 		}
 	}
 	if tr == nil {
-		// Fallback: create new transport with same config
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError("Terminal transport is unavailable")
+		log.Printf("[VPS Terminal WS] Proxmox HTTP transport unavailable for termproxy connection")
+		return
 	}
 
 	httpClient := &http.Client{

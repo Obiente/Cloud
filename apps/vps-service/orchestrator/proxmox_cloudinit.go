@@ -32,11 +32,9 @@ func GenerateRandomPassword(length int) string {
 	return string(b)
 }
 
-
 func GenerateCloudInitUserData(config *VPSConfig) string {
 	return generateCloudInitUserData(config)
 }
-
 
 func generateCloudInitUserData(config *VPSConfig) string {
 	userData := "#cloud-config\n\n"
@@ -568,11 +566,9 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	return userData
 }
 
-
 func (pc *ProxmoxClient) CreateCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
 	return pc.createCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
 }
-
 
 func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
 	// Proxmox snippets are stored in: <storage>/snippets/
@@ -640,7 +636,6 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 	return snippetPath, nil
 }
 
-
 func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string, content string) (string, error) {
 	// Check if we have a way to resolve SSH endpoint (via node mapping)
 	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
@@ -687,21 +682,24 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
 
-	// Create SSH client config
-	sshConfig := &ssh.ClientConfig{
-		User:            pc.config.SSHUser,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Consider validating host keys for production
-		Timeout:         10 * time.Second,
-	}
-
 	// Connect to Proxmox node via SSH
 	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_NODE_ENDPOINTS mapping
 	// (sshEndpoint was already resolved at the start of the function)
 	if sshEndpoint == "" {
 		return "", fmt.Errorf("SSH endpoint not configured for node %s (configure PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS)", nodeName)
 	}
-	
+
+	hostKeyCallback, err := newProxmoxHostKeyCallback(nodeName, sshEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("configure SSH host key verification: %w", err)
+	}
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
 	sshHost := sshEndpoint
 	sshPort := "22"
 	if strings.Contains(sshEndpoint, ":") {
@@ -800,7 +798,6 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 	return snippetPath, nil
 }
 
-
 func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) error {
 	// Check if we have a way to resolve SSH endpoint (via node mapping)
 	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
@@ -842,21 +839,24 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
 
-	// Create SSH client config
-	sshConfig := &ssh.ClientConfig{
-		User:            pc.config.SSHUser,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
-	}
-
 	// Connect to Proxmox node via SSH
 	// Use resolved SSH endpoint (from node mapping)
 	sshHost := sshEndpoint
 	if sshHost == "" {
 		return fmt.Errorf("SSH endpoint not configured for node %s (configure PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS)", nodeName)
 	}
-	
+
+	hostKeyCallback, err := newProxmoxHostKeyCallback(nodeName, sshEndpoint)
+	if err != nil {
+		return fmt.Errorf("configure SSH host key verification: %w", err)
+	}
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
 	sshPort := "22"
 	if strings.Contains(sshHost, ":") {
 		parts := strings.Split(sshHost, ":")
@@ -911,7 +911,6 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 	return nil
 }
 
-
 func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) (string, error) {
 	// Check if we have a way to resolve SSH endpoint (via node mapping)
 	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
@@ -953,21 +952,24 @@ func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string,
 		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
 
-	// Create SSH client config
-	sshConfig := &ssh.ClientConfig{
-		User:            pc.config.SSHUser,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
-	}
-
 	// Connect to Proxmox node via SSH
 	// Use resolved SSH endpoint (from node mapping)
 	sshHost := sshEndpoint
 	if sshHost == "" {
 		return "", fmt.Errorf("SSH endpoint not configured for node %s (configure PROXMOX_NODE_ENDPOINTS or PROXMOX_NODE_SSH_ENDPOINTS)", nodeName)
 	}
-	
+
+	hostKeyCallback, err := newProxmoxHostKeyCallback(nodeName, sshEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("configure SSH host key verification: %w", err)
+	}
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
 	sshPort := "22"
 	if strings.Contains(sshHost, ":") {
 		parts := strings.Split(sshHost, ":")
@@ -1244,7 +1246,6 @@ func generateGenericRuncmd(config *VPSConfig, needsSSHRestart bool) string {
 	return userData
 }
 
-
 // UpdateCloudInitUserDataWithStaticIP updates the cloud-init userData snippet to add a public IP address
 // alongside the existing internal DHCP IP. The public IP uses its own gateway for routing.
 // This function reads the existing userData and adds the public IP configuration without removing DHCP.
@@ -1347,7 +1348,7 @@ func updateUserDataWithPublicIP(userData string, publicIP string, publicGateway 
 
 	// Check if network config is disabled (using Proxmox ipconfig0 for DHCP)
 	networkDisabled := strings.Contains(userData, "network:\n  config: disabled")
-	
+
 	// We need to enable network config to add the public IP, but keep DHCP working
 	// Proxmox ipconfig0 will still work for the primary interface, we're just adding an additional address
 	if networkDisabled {
