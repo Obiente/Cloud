@@ -9,6 +9,7 @@ import (
 
 	gameserverorchestrator "gameservers-service/internal/orchestrator"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -129,7 +130,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	id := fmt.Sprintf("gs-%d", time.Now().Unix())
+	id := fmt.Sprintf("gs-%s", uuid.NewString())
 
 	// Get Docker image for game type (defaults if not specified)
 	dockerImage := req.Msg.GetDockerImage()
