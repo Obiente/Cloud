@@ -84,8 +84,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
         id: buildx
         with:
-          name: obiente-ci-${{ env.SERVICE_NAME }}
-          keep-state: true
           driver-opts: |
             image=${{ env.BUILDKIT_IMAGE }}
             network=host
