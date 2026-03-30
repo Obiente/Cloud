@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
@@ -17,13 +20,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	defaultAuditLogWorkerCount = 4
+	defaultAuditLogQueueSize   = 1024
+)
+
+var (
+	auditLogWorkerOnce sync.Once
+	auditLogQueue      chan auditLogData
+)
+
 // AuditLogInterceptor creates a Connect interceptor for audit logging
 func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			startTime := time.Now()
 			procedure := req.Spec().Procedure
-
 
 			// Skip audit logging for certain procedures
 			if shouldSkipAuditLog(procedure) {
@@ -33,7 +45,7 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 
 			// Extract IP address and user agent (before calling next)
 			ipAddress := getClientIP(req)
-			
+
 			userAgent := req.Header().Get("User-Agent")
 			if userAgent == "" {
 				userAgent = "unknown"
@@ -74,7 +86,7 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// calls next(), it runs authInterceptor which sets the user in context and calls the handler.
 			// The context chain should allow us to access the user via context.Value().
 			var userID string = "system"
-			
+
 			resp, err := next(ctx, req)
 
 			// Try to extract user from context - the auth interceptor should have set it
@@ -84,8 +96,8 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			isSuperAdmin := false
 			if user != nil {
 				if user.Id != "" {
-				userID = user.Id
-				logger.Debug("[Audit] Extracted user ID from context: %s", userID)
+					userID = user.Id
+					logger.Debug("[Audit] Extracted user ID from context: %s", userID)
 				}
 				// Check if user is superadmin
 				for _, role := range user.Roles {
@@ -140,61 +152,96 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 				responseStatus = 200 // Success
 			}
 
-			// Create audit log entry asynchronously (don't block the request)
-			// Use background context with timeout to avoid cancellation when request completes
-			go func() {
-				// Recover from any panics in the goroutine
-				defer func() {
-					if r := recover(); r != nil {
-						logger.Error("[Audit] Panic in audit log goroutine for %s/%s: %v", service, action, r)
-					}
-				}()
-				
-				// Use background context with timeout instead of request context to avoid cancellation
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				
-				// If superadmin is making a request through the superadmin service with an organization ID,
-				// log it to global audit logs (set orgID to nil) instead of the organization's audit logs.
-				// This prevents superadmin service actions from polluting organization audit logs.
-				// However, if a superadmin makes a normal request to an org/resource they have access to
-				// (through non-superadmin services), it should be logged normally to the org's audit logs.
-				logOrgID := orgID
-				isSuperAdminService := service == "SuperadminService"
-				if isSuperAdmin && isSuperAdminService && orgID != nil && *orgID != "" {
-					logger.Debug("[Audit] Superadmin service action on organization %s: %s/%s - logging to global audit logs (orgID=nil)", *orgID, service, action)
-					logOrgID = nil // Set to nil so it goes to global audit logs, not org-specific
-				}
-				
-				// Log what we're saving for debugging
-				orgIDStr := "nil"
-				if logOrgID != nil {
-					orgIDStr = *logOrgID
-				}
-				logger.Debug("[Audit] Saving log: service=%s, action=%s, userID=%s, orgID=%s, resourceType=%v, resourceID=%v",
-					service, action, userID, orgIDStr, resourceType, resourceID)
+			// Queue audit log work on a bounded async worker pool so requests do not
+			// spawn an unbounded number of goroutines under load.
+			logOrgID := orgID
+			isSuperAdminService := service == "SuperadminService"
+			if isSuperAdmin && isSuperAdminService && orgID != nil && *orgID != "" {
+				logger.Debug("[Audit] Superadmin service action on organization %s: %s/%s - logging to global audit logs (orgID=nil)", *orgID, service, action)
+				logOrgID = nil
+			}
 
-				if err := createAuditLog(ctx, auditLogData{
-					UserID:         userID,
-					OrganizationID: logOrgID,
-					Action:         action,
-					Service:        service,
-					ResourceType:   resourceType,
-					ResourceID:     resourceID,
-					IPAddress:      ipAddress,
-					UserAgent:      userAgent,
-					RequestData:    requestData,
-					ResponseStatus: responseStatus,
-					ErrorMessage:   errorMessage,
-					DurationMs:     duration.Milliseconds(),
-				}); err != nil {
-					logger.Error("[Audit] Failed to create audit log for %s/%s: %v", service, action, err)
-				}
-			}()
+			orgIDStr := "nil"
+			if logOrgID != nil {
+				orgIDStr = *logOrgID
+			}
+			logger.Debug("[Audit] Saving log: service=%s, action=%s, userID=%s, orgID=%s, resourceType=%v, resourceID=%v",
+				service, action, userID, orgIDStr, resourceType, resourceID)
+
+			enqueueAuditLog(auditLogData{
+				UserID:         userID,
+				OrganizationID: logOrgID,
+				Action:         action,
+				Service:        service,
+				ResourceType:   resourceType,
+				ResourceID:     resourceID,
+				IPAddress:      ipAddress,
+				UserAgent:      userAgent,
+				RequestData:    requestData,
+				ResponseStatus: responseStatus,
+				ErrorMessage:   errorMessage,
+				DurationMs:     duration.Milliseconds(),
+			})
 
 			return resp, err
 		}
 	}
+}
+
+func enqueueAuditLog(data auditLogData) {
+	ensureAuditLogWorkers()
+
+	select {
+	case auditLogQueue <- data:
+	default:
+		logger.Warn("[Audit] Dropping audit log for %s/%s because the async queue is full", data.Service, data.Action)
+	}
+}
+
+func ensureAuditLogWorkers() {
+	auditLogWorkerOnce.Do(func() {
+		workerCount := readAuditEnvInt("AUDIT_LOG_ASYNC_WORKERS", defaultAuditLogWorkerCount)
+		queueSize := readAuditEnvInt("AUDIT_LOG_ASYNC_QUEUE_SIZE", defaultAuditLogQueueSize)
+
+		auditLogQueue = make(chan auditLogData, queueSize)
+		for workerID := 0; workerID < workerCount; workerID++ {
+			go auditLogWorker(workerID + 1)
+		}
+	})
+}
+
+func auditLogWorker(workerID int) {
+	for data := range auditLogQueue {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("[Audit] Panic in audit log worker %d for %s/%s: %v", workerID, data.Service, data.Action, r)
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := createAuditLog(ctx, data); err != nil {
+				logger.Error("[Audit] Failed to create audit log for %s/%s: %v", data.Service, data.Action, err)
+			}
+		}()
+	}
+}
+
+func readAuditEnvInt(key string, defaultValue int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return defaultValue
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		logger.Warn("[Audit] Invalid %s=%q, using default %d", key, raw, defaultValue)
+		return defaultValue
+	}
+
+	return value
 }
 
 type auditLogData struct {
@@ -278,18 +325,18 @@ func shouldSkipAuditLog(procedure string) bool {
 
 	// Skip read-only operations (List, Get, Stream, Watch operations)
 	skipPrefixes := []string{
-		"List",     // ListDeployments, ListBuilds, ListOrganizations, etc.
-		"Get",      // GetDeployment, GetBuild, GetOrganization, etc.
-		"Stream",   // StreamBuildLogs, StreamDeploymentLogs, etc.
-		"Watch",    // WatchDeployment, etc.
-		"Query",    // QueryDeployments, etc.
-		"Search",   // SearchDeployments, etc.
-		"Validate", // ValidateDeploymentCompose, etc. (read-only validation)
-		"Check",    // CheckDomain, CheckStatus, etc.
-		"Has",      // HasDelegatedDNS, HasPermission, etc. (read-only checks)
+		"List",        // ListDeployments, ListBuilds, ListOrganizations, etc.
+		"Get",         // GetDeployment, GetBuild, GetOrganization, etc.
+		"Stream",      // StreamBuildLogs, StreamDeploymentLogs, etc.
+		"Watch",       // WatchDeployment, etc.
+		"Query",       // QueryDeployments, etc.
+		"Search",      // SearchDeployments, etc.
+		"Validate",    // ValidateDeploymentCompose, etc. (read-only validation)
+		"Check",       // CheckDomain, CheckStatus, etc.
+		"Has",         // HasDelegatedDNS, HasPermission, etc. (read-only checks)
 		"ChunkUpload", // ChunkUploadGameServerFiles, ChunkUploadContainerFiles
-		"Ping",     // Health checks
-		"Health",   // Health checks
+		"Ping",        // Health checks
+		"Health",      // Health checks
 	}
 
 	for _, prefix := range skipPrefixes {
@@ -391,11 +438,11 @@ func extractResourceInfo(req connect.AnyRequest, procedure string) (resourceType
 				_, action := parseProcedure(procedure)
 
 				// Try to extract organization_id from request
-			if orgIDVal, ok := jsonData["organizationId"].(string); ok && orgIDVal != "" {
-				orgID = &orgIDVal
-			} else if orgIDVal, ok := jsonData["organization_id"].(string); ok && orgIDVal != "" {
-				orgID = &orgIDVal
-			}
+				if orgIDVal, ok := jsonData["organizationId"].(string); ok && orgIDVal != "" {
+					orgID = &orgIDVal
+				} else if orgIDVal, ok := jsonData["organization_id"].(string); ok && orgIDVal != "" {
+					orgID = &orgIDVal
+				}
 
 				// Determine resource type and ID based on procedure
 				resourceType, resourceID = inferResourceFromAction(action, jsonData)
@@ -566,7 +613,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 				vpsID = vpsIDVal
 				hasVPSID = true
 			}
-			
+
 			if hasVPSID {
 				rt := "vps"
 				resourceType = &rt
@@ -575,7 +622,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 				return
 			}
 		}
-		
+
 		// For RemoveSSHKey, we need to look up the key in the database to see if it's VPS-specific
 		if strings.Contains(actionLower, "remove") {
 			// Extract key_id from request
@@ -585,7 +632,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 			} else if keyIDVal, ok := jsonData["key_id"].(string); ok && keyIDVal != "" {
 				keyID = keyIDVal
 			}
-			
+
 			if keyID != "" {
 				// Look up the key in database to see if it's VPS-specific
 				// This MUST happen before the key is deleted in the handler
@@ -597,7 +644,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 				}
 			}
 		}
-		
+
 		// Otherwise, it's an organization-wide SSH key
 		rt := "organization"
 		resourceType = &rt
@@ -614,18 +661,18 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 	// Organization-related actions
 	// Check for organization in action name OR organization member actions
 	organizationActions := []string{
-		"invite",      // InviteMember
-		"remove",      // RemoveMember
-		"decline",     // DeclineInvite
-		"accept",      // AcceptInvite
-		"leave",       // LeaveOrganization
-		"create",      // CreateOrganization
-		"update",      // UpdateOrganization
-		"delete",      // DeleteOrganization
-		"member",      // Any member-related action
+		"invite",       // InviteMember
+		"remove",       // RemoveMember
+		"decline",      // DeclineInvite
+		"accept",       // AcceptInvite
+		"leave",        // LeaveOrganization
+		"create",       // CreateOrganization
+		"update",       // UpdateOrganization
+		"delete",       // DeleteOrganization
+		"member",       // Any member-related action
 		"organization", // Direct organization actions
 	}
-	
+
 	isOrgAction := strings.Contains(actionLower, "organization")
 	if !isOrgAction {
 		for _, orgAction := range organizationActions {
@@ -675,7 +722,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 	// VPS-related actions
 	// Simplified: If action contains "vps" OR vpsId is present in request, it's a VPS action
 	isVPSAction := strings.Contains(actionLower, "vps")
-	
+
 	// Also check if vpsId is present in the request (catches VPSConfigService actions without "vps" in name)
 	if !isVPSAction {
 		if vpsIDVal, ok := jsonData["vpsId"].(string); ok && vpsIDVal != "" {
@@ -684,7 +731,7 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 			isVPSAction = true
 		}
 	}
-	
+
 	if isVPSAction {
 		rt := "vps"
 		resourceType = &rt
