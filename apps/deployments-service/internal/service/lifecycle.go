@@ -3,6 +3,7 @@ package deployments
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,9 +23,10 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+const deploymentStatusStreamPollInterval = 1500 * time.Millisecond
 
 // TriggerDeployment triggers a rebuild and redeployment
 func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest]) (*connect.Response[deploymentsv1.TriggerDeploymentResponse], error) {
@@ -615,38 +617,90 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 // StreamDeploymentStatus streams deployment status updates
 func (s *Service) StreamDeploymentStatus(ctx context.Context, req *connect.Request[deploymentsv1.StreamDeploymentStatusRequest], stream *connect.ServerStream[deploymentsv1.DeploymentStatusUpdate]) error {
-	updates := []deploymentsv1.DeploymentStatusUpdate{
-		{
-			DeploymentId: req.Msg.GetDeploymentId(),
-			Status:       deploymentsv1.DeploymentStatus_DEPLOYING,
-			HealthStatus: "starting",
-			Message:      proto.String("Build started"),
-			Timestamp:    timestamppb.Now(),
-		},
-		{
-			DeploymentId: req.Msg.GetDeploymentId(),
-			Status:       deploymentsv1.DeploymentStatus_DEPLOYING,
-			HealthStatus: "verifying",
-			Message:      proto.String("Running smoke tests"),
-			Timestamp:    timestamppb.New(time.Now().Add(5 * time.Second)),
-		},
-		{
-			DeploymentId: req.Msg.GetDeploymentId(),
-			Status:       deploymentsv1.DeploymentStatus_RUNNING,
-			HealthStatus: "healthy",
-			Message:      proto.String("Deployment complete"),
-			Timestamp:    timestamppb.New(time.Now().Add(10 * time.Second)),
-		},
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return err
 	}
 
-	for i := range updates {
-		if err := stream.Send(&updates[i]); err != nil {
+	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "read"); err != nil {
+		return err
+	}
+
+	ticker := time.NewTicker(deploymentStatusStreamPollInterval)
+	defer ticker.Stop()
+
+	lastStatus := int32(-1)
+	lastHealth := ""
+	lastDeleted := false
+
+	sendUpdate := func(dep *database.Deployment, deleted bool) error {
+		healthStatus := dep.HealthStatus
+		var message *string
+		if deleted {
+			healthStatus = "deleted"
+			deletedMessage := "Deployment deleted"
+			message = &deletedMessage
+		}
+
+		update := &deploymentsv1.DeploymentStatusUpdate{
+			DeploymentId: deploymentID,
+			Status:       deploymentsv1.DeploymentStatus(dep.Status),
+			HealthStatus: healthStatus,
+			Message:      message,
+			Timestamp:    timestamppb.Now(),
+		}
+		if err := stream.Send(update); err != nil {
 			return err
 		}
-		time.Sleep(1 * time.Second)
+
+		lastStatus = dep.Status
+		lastHealth = healthStatus
+		lastDeleted = deleted
+		return nil
 	}
 
-	return nil
+	for {
+		deployment, err := s.repo.GetByIDIncludeDeleted(ctx, deploymentID, true)
+		if err != nil {
+			if lastStatus == -1 {
+				return connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+			}
+			return nil
+		}
+
+		deleted := deployment.DeletedAt != nil
+		if deployment.Status != lastStatus || deployment.HealthStatus != lastHealth || deleted != lastDeleted {
+			if err := sendUpdate(deployment, deleted); err != nil {
+				return err
+			}
+			if deleted {
+				return nil
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string) {
+	if s.manager == nil || s.forwarder == nil {
+		return false, ""
+	}
+
+	var location database.DeploymentLocation
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Order("updated_at DESC").
+		First(&location).Error; err != nil {
+		return false, ""
+	}
+
+	return s.shouldForwardToNode(&location)
 }
 
 // StartDeployment starts a stopped deployment
@@ -681,6 +735,21 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		CPUshares:   startCPU,
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
+	}
+
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment", headers, &deploymentsv1.StartDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.StartDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 
 	// Check if this is a compose-based deployment
@@ -805,6 +874,21 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StopDeployment", headers, &deploymentsv1.StopDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.StopDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	// Check if this is a compose-based deployment
 	if dbDep.ComposeYaml != "" && s.manager != nil {
 		if err := s.manager.StopComposeDeployment(ctx, deploymentID); err != nil {
@@ -834,6 +918,21 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/RestartDeployment", headers, &deploymentsv1.RestartDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.RestartDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 
 	// Check if this is a compose-based deployment

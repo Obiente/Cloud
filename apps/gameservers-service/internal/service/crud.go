@@ -620,6 +620,21 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 		return nil, err
 	}
 
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/StartGameServer", headers)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response gameserversv1.StartGameServerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	// Update status to STARTING
 	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
@@ -666,6 +681,21 @@ func (s *Service) StopGameServer(ctx context.Context, req *connect.Request[games
 		return nil, err
 	}
 
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/StopGameServer", headers)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response gameserversv1.StopGameServerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	// Update status to STOPPING
 	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STOPPING)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
@@ -699,6 +729,21 @@ func (s *Service) RestartGameServer(ctx context.Context, req *connect.Request[ga
 	gameServerID := req.Msg.GetGameServerId()
 	if err := s.checkGameServerPermission(ctx, gameServerID, "restart"); err != nil {
 		return nil, err
+	}
+
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/RestartGameServer", headers)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response gameserversv1.RestartGameServerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 
 	// Update status to RESTARTING

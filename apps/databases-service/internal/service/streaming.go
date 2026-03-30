@@ -15,7 +15,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// StreamDatabaseStatus streams database status updates (placeholder)
+const databaseStatusStreamPollInterval = 1500 * time.Millisecond
+
+// StreamDatabaseStatus streams database status updates from shared state.
 func (s *Service) StreamDatabaseStatus(ctx context.Context, req *connect.Request[databasesv1.StreamDatabaseStatusRequest], stream *connect.ServerStream[databasesv1.DatabaseStatusUpdate]) error {
 	// Ensure authenticated
 	ctx, err := s.ensureAuthenticated(ctx, req)
@@ -28,20 +30,62 @@ func (s *Service) StreamDatabaseStatus(ctx context.Context, req *connect.Request
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Placeholder implementation - would poll database status and send updates
-	// For now, just send current status once
-	dbInstance, err := s.repo.GetByID(ctx, req.Msg.GetDatabaseId())
-	if err != nil {
-		return connect.NewError(connect.CodeNotFound, err)
+	databaseID := req.Msg.GetDatabaseId()
+	ticker := time.NewTicker(databaseStatusStreamPollInterval)
+	defer ticker.Stop()
+
+	lastStatus := int32(-1)
+	lastDeleted := false
+
+	sendUpdate := func(dbInstance *database.DatabaseInstance, deleted bool) error {
+		status := databasesv1.DatabaseStatus(dbInstance.Status)
+		var message *string
+		if deleted {
+			status = databasesv1.DatabaseStatus_DELETED
+			deletedMessage := "Database deleted"
+			message = &deletedMessage
+		}
+
+		update := &databasesv1.DatabaseStatusUpdate{
+			DatabaseId: databaseID,
+			Status:     status,
+			Message:    message,
+			Timestamp:  timestamppb.Now(),
+		}
+		if err := stream.Send(update); err != nil {
+			return err
+		}
+
+		lastStatus = dbInstance.Status
+		lastDeleted = deleted
+		return nil
 	}
 
-	update := &databasesv1.DatabaseStatusUpdate{
-		DatabaseId: req.Msg.GetDatabaseId(),
-		Status:     databasesv1.DatabaseStatus(dbInstance.Status),
-		Timestamp:  timestamppb.Now(),
-	}
+	for {
+		dbInstance, err := s.repo.GetByIDIncludeDeleted(ctx, databaseID, true)
+		if err != nil {
+			if lastStatus == -1 {
+				return connect.NewError(connect.CodeNotFound, err)
+			}
+			return nil
+		}
 
-	return stream.Send(update)
+		deleted := dbInstance.DeletedAt != nil
+		if dbInstance.Status != lastStatus || deleted != lastDeleted {
+			if err := sendUpdate(dbInstance, deleted); err != nil {
+				return err
+			}
+			if deleted {
+				return nil
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
 }
 
 // GetDatabaseMetrics retrieves historical database metrics
@@ -164,4 +208,3 @@ func (s *Service) ListDatabaseSizes(ctx context.Context, req *connect.Request[da
 	})
 	return res, nil
 }
-
