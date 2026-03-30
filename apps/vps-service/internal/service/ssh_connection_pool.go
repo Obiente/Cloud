@@ -273,7 +273,7 @@ func (p *SSHConnectionPool) createSSHConnectionViaGateway(ctx context.Context, v
 	// Perform SSH handshake over the stream connection
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: newVPSHostKeyCallback(ctx, vpsID),
 		Timeout:         10 * time.Second,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(sshSigner),

@@ -982,7 +982,7 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: newVPSHostKeyCallback(ctx, vpsID),
 		Timeout:         10 * time.Second,
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
@@ -1025,7 +1025,7 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword string, cols, rows int) (*SSHConnection, error) {
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: newVPSHostKeyCallback(ctx, vpsID),
 		Timeout:         10 * time.Second,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(rootPassword),
