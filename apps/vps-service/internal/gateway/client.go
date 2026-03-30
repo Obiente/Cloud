@@ -33,6 +33,11 @@ type RequestHandler interface {
 	HandleRequest(ctx context.Context, method string, payload []byte) ([]byte, error)
 }
 
+type gatewayStreamState struct {
+	stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	sendMu sync.Mutex
+}
+
 // GatewayClient maintains persistent connections to multiple VPS gateways
 type GatewayClient struct {
 	apiSecret  string
@@ -46,7 +51,7 @@ type GatewayClient struct {
 	syncMu       sync.RWMutex
 
 	// Track active streams per node for sending requests
-	streams   map[string]*connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	streams   map[string]*gatewayStreamState
 	streamsMu sync.RWMutex
 
 	// Track pending requests for responses
@@ -117,7 +122,7 @@ func NewGatewayClient() (*GatewayClient, error) {
 		instanceID:      instanceID,
 		version:         "1.0.0", // TODO: Get from build info
 		handlers:        make(map[string]RequestHandler),
-		streams:         make(map[string]*connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]),
+		streams:         make(map[string]*gatewayStreamState),
 		pendingRequests: make(map[string]chan *vpsgatewayv1.GatewayResponse),
 	}, nil
 }
@@ -217,6 +222,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 	// Establish bidirectional stream
 	// Note: For streaming calls, we need to set auth header using request options
 	stream := client.RegisterGateway(ctx)
+	streamState := &gatewayStreamState{stream: stream}
 
 	// Set auth header on the stream
 	stream.RequestHeader().Set("x-api-secret", c.apiSecret)
@@ -232,7 +238,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 		},
 	}
 
-	if err := stream.Send(regMsg); err != nil {
+	if err := c.sendStreamMessage(streamState, regMsg); err != nil {
 		return fmt.Errorf("failed to send registration: %w", err)
 	}
 
@@ -240,7 +246,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 
 	// Store stream for sending requests
 	c.streamsMu.Lock()
-	c.streams[nodeName] = stream
+	c.streams[nodeName] = streamState
 	c.streamsMu.Unlock()
 
 	// Remove stream on disconnect
@@ -251,10 +257,10 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 	}()
 
 	// Start heartbeat sender
-	go c.sendHeartbeats(ctx, stream)
+	go c.sendHeartbeats(ctx, streamState)
 
 	// Start periodic allocation sync (every 5 minutes)
-	go c.periodicSync(ctx, stream, nodeName)
+	go c.periodicSync(ctx, streamState, nodeName)
 
 	// Handle incoming messages
 	for {
@@ -272,7 +278,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 			logger.Info("[GatewayClient] Successfully registered with gateway %s", nodeName)
 
 			// Trigger initial sync on registration
-			go c.syncAllocations(ctx, stream, nodeName)
+			go c.syncAllocations(ctx, streamState, nodeName)
 
 		case "response":
 			// Handle response to our request
@@ -282,7 +288,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 
 		case "request":
 			if msg.Request != nil {
-				go c.handleRequest(ctx, stream, msg.Request, nodeName)
+				go c.handleRequest(ctx, streamState, msg.Request, nodeName)
 			}
 
 		case "heartbeat":
@@ -308,7 +314,7 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 	}
 }
 
-func (c *GatewayClient) sendHeartbeats(ctx context.Context, stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]) {
+func (c *GatewayClient) sendHeartbeats(ctx context.Context, streamState *gatewayStreamState) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -321,7 +327,7 @@ func (c *GatewayClient) sendHeartbeats(ctx context.Context, stream *connect.Bidi
 				Type:      "heartbeat",
 				Heartbeat: timestamppb.Now(),
 			}
-			if err := stream.Send(msg); err != nil {
+			if err := c.sendStreamMessage(streamState, msg); err != nil {
 				logger.Debug("[GatewayClient] Failed to send heartbeat: %v", err)
 				return
 			}
@@ -329,7 +335,7 @@ func (c *GatewayClient) sendHeartbeats(ctx context.Context, stream *connect.Bidi
 	}
 }
 
-func (c *GatewayClient) handleRequest(ctx context.Context, stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], req *vpsgatewayv1.GatewayRequest, nodeName string) {
+func (c *GatewayClient) handleRequest(ctx context.Context, streamState *gatewayStreamState, req *vpsgatewayv1.GatewayRequest, nodeName string) {
 	var respPayload []byte
 	var respError string
 
@@ -363,13 +369,13 @@ func (c *GatewayClient) handleRequest(ctx context.Context, stream *connect.BidiS
 		Response: resp,
 	}
 
-	if err := stream.Send(msg); err != nil {
+	if err := c.sendStreamMessage(streamState, msg); err != nil {
 		logger.Error("[GatewayClient] Failed to send response: %v", err)
 	}
 }
 
 // periodicSync sends allocation sync requests to the gateway every 5 minutes
-func (c *GatewayClient) periodicSync(ctx context.Context, stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], nodeName string) {
+func (c *GatewayClient) periodicSync(ctx context.Context, streamState *gatewayStreamState, nodeName string) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -379,13 +385,13 @@ func (c *GatewayClient) periodicSync(ctx context.Context, stream *connect.BidiSt
 			return
 		case <-ticker.C:
 			logger.Debug("[GatewayClient] Triggering periodic sync for gateway %s", nodeName)
-			c.syncAllocations(ctx, stream, nodeName)
+			c.syncAllocations(ctx, streamState, nodeName)
 		}
 	}
 }
 
 // syncAllocations queries the database and sends allocation sync to the gateway
-func (c *GatewayClient) syncAllocations(ctx context.Context, stream *connect.BidiStreamForClient[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], nodeName string) {
+func (c *GatewayClient) syncAllocations(ctx context.Context, streamState *gatewayStreamState, nodeName string) {
 	c.syncMu.RLock()
 	callback := c.syncCallback
 	c.syncMu.RUnlock()
@@ -412,7 +418,7 @@ func (c *GatewayClient) syncAllocations(ctx context.Context, stream *connect.Bid
 		},
 	}
 
-	if err := stream.Send(msg); err != nil {
+	if err := c.sendStreamMessage(streamState, msg); err != nil {
 		logger.Error("[GatewayClient] Failed to send sync message to %s: %v", nodeName, err)
 		return
 	}
@@ -424,10 +430,10 @@ func (c *GatewayClient) syncAllocations(ctx context.Context, stream *connect.Bid
 func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string, payload []byte) (*vpsgatewayv1.GatewayResponse, error) {
 	// Get stream for this node
 	c.streamsMu.RLock()
-	stream, ok := c.streams[nodeName]
+	streamState, ok := c.streams[nodeName]
 	c.streamsMu.RUnlock()
 
-	if !ok || stream == nil {
+	if !ok || streamState == nil || streamState.stream == nil {
 		return nil, fmt.Errorf("no active connection to gateway %s", nodeName)
 	}
 
@@ -458,7 +464,7 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 		},
 	}
 
-	if err := stream.Send(msg); err != nil {
+	if err := c.sendStreamMessage(streamState, msg); err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
@@ -471,6 +477,17 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 	case <-time.After(60 * time.Second):
 		return nil, fmt.Errorf("request timeout")
 	}
+}
+
+func (c *GatewayClient) sendStreamMessage(streamState *gatewayStreamState, msg *vpsgatewayv1.GatewayMessage) error {
+	if streamState == nil || streamState.stream == nil {
+		return fmt.Errorf("gateway stream not available")
+	}
+
+	streamState.sendMu.Lock()
+	defer streamState.sendMu.Unlock()
+
+	return streamState.stream.Send(msg)
 }
 
 // handleResponse handles a response from the gateway

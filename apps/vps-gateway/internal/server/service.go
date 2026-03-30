@@ -33,7 +33,7 @@ type GatewayService struct {
 	startTime   time.Time
 
 	// Track connected VPS service instances
-	connectedStreams  map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	connectedStreams  map[string]*gatewayStreamState
 	streamsMu         sync.RWMutex
 	pendingRequests   map[string]chan *vpsgatewayv1.GatewayResponse
 	pendingRequestsMu sync.RWMutex
@@ -43,6 +43,11 @@ type GatewayService struct {
 	lastStreamError  time.Time
 	streamErrorCount int
 	streamErrorMu    sync.Mutex
+}
+
+type gatewayStreamState struct {
+	stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]
+	sendMu sync.Mutex
 }
 
 // NewGatewayService creates a new gateway service
@@ -58,7 +63,7 @@ func NewGatewayService(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy) (*Ga
 		sshProxy:         sshProxy,
 		securityMgr:      securityMgr,
 		startTime:        time.Now(),
-		connectedStreams: make(map[string]*connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage]),
+		connectedStreams: make(map[string]*gatewayStreamState),
 		pendingRequests:  make(map[string]chan *vpsgatewayv1.GatewayResponse),
 	}, nil
 }
@@ -560,6 +565,7 @@ func (s *GatewayService) RegisterGateway(
 ) error {
 	var apiInstanceID string
 	startTime := time.Now()
+	streamState := &gatewayStreamState{stream: stream}
 
 	logger.Info("[GatewayService] New API connection attempt")
 
@@ -604,11 +610,11 @@ func (s *GatewayService) RegisterGateway(
 
 				// Store stream for this VPS service instance
 				s.streamsMu.Lock()
-				s.connectedStreams[apiInstanceID] = stream
+				s.connectedStreams[apiInstanceID] = streamState
 				s.streamsMu.Unlock()
 
 				// Send registration confirmation
-				if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+				if err := s.sendGatewayMessage(streamState, &vpsgatewayv1.GatewayMessage{
 					Type: "registered",
 				}); err != nil {
 					logger.Error("[GatewayService] Failed to send registration confirmation: %v", err)
@@ -656,7 +662,7 @@ func (s *GatewayService) RegisterGateway(
 			case "request":
 				// Handle requests from API (forwarded RPCs)
 				if msg.Request != nil {
-					go s.handleStreamRequest(ctx, stream, msg.Request, apiInstanceID)
+					go s.handleStreamRequest(ctx, streamState, msg.Request, apiInstanceID)
 				}
 
 			case "heartbeat":
@@ -687,7 +693,7 @@ func (s *GatewayService) RegisterGateway(
 						}
 
 						// Send complete response back via stream with discovered allocations
-						if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+						if err := s.sendGatewayMessage(streamState, &vpsgatewayv1.GatewayMessage{
 							Type:       "sync_result",
 							SyncResult: syncResp,
 						}); err != nil {
@@ -712,7 +718,7 @@ func (s *GatewayService) RegisterGateway(
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+				if err := s.sendGatewayMessage(streamState, &vpsgatewayv1.GatewayMessage{
 					Type:      "heartbeat",
 					Heartbeat: timestamppb.Now(),
 				}); err != nil {
@@ -976,8 +982,8 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	var requestIDs []string
 	var responseChans []chan *vpsgatewayv1.GatewayResponse
 
-	for instanceID, stream := range s.connectedStreams {
-		if stream == nil {
+	for instanceID, streamState := range s.connectedStreams {
+		if streamState == nil || streamState.stream == nil {
 			continue
 		}
 
@@ -1008,7 +1014,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 		logger.Debug("[GatewayService] Sending FindVPSByLease request %s to instance %s (MAC=%s IP=%s)",
 			requestID, instanceID, mac, ip)
 
-		if sendErr := stream.Send(msg); sendErr != nil {
+		if sendErr := s.sendGatewayMessage(streamState, msg); sendErr != nil {
 			// Stream not ready yet or connection issue
 			// Rate limit error logging to avoid spam during startup
 			s.logStreamError(instanceID, sendErr)
@@ -1164,7 +1170,7 @@ func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan
 }
 
 // handleStreamRequest processes incoming requests from VPS service over the bidirectional stream
-func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], req *vpsgatewayv1.GatewayRequest, instanceID string) {
+func (s *GatewayService) handleStreamRequest(ctx context.Context, streamState *gatewayStreamState, req *vpsgatewayv1.GatewayRequest, instanceID string) {
 	logger.Debug("[GatewayService] Processing request %s (ID: %s) from VPS instance %s", req.Method, req.RequestId, instanceID)
 
 	var respPayload []byte
@@ -1174,14 +1180,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		// Unmarshal AllocateIP request
 		var allocReq vpsgatewayv1.AllocateIPRequest
 		if err := proto.Unmarshal(req.Payload, &allocReq); err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal AllocateIP request: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to unmarshal AllocateIP request: %v", err))
 			return
 		}
 
 		// Call AllocateIP method
 		allocResp, err := s.AllocateIP(ctx, connect.NewRequest(&allocReq))
 		if err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("AllocateIP failed: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("AllocateIP failed: %v", err))
 			return
 		}
 
@@ -1189,7 +1195,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(allocResp.Msg)
 		if marshalErr != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal AllocateIP response: %v", marshalErr))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to marshal AllocateIP response: %v", marshalErr))
 			return
 		}
 
@@ -1197,14 +1203,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		// Unmarshal ReleaseIP request
 		var releaseReq vpsgatewayv1.ReleaseIPRequest
 		if err := proto.Unmarshal(req.Payload, &releaseReq); err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ReleaseIP request: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to unmarshal ReleaseIP request: %v", err))
 			return
 		}
 
 		// Call ReleaseIP method
 		releaseResp, err := s.ReleaseIP(ctx, connect.NewRequest(&releaseReq))
 		if err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ReleaseIP failed: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("ReleaseIP failed: %v", err))
 			return
 		}
 
@@ -1212,7 +1218,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(releaseResp.Msg)
 		if marshalErr != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ReleaseIP response: %v", marshalErr))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to marshal ReleaseIP response: %v", marshalErr))
 			return
 		}
 
@@ -1220,14 +1226,14 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		// Unmarshal ListIPs request
 		var listReq vpsgatewayv1.ListIPsRequest
 		if err := proto.Unmarshal(req.Payload, &listReq); err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to unmarshal ListIPs request: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to unmarshal ListIPs request: %v", err))
 			return
 		}
 
 		// Call ListIPs method
 		listResp, err := s.ListIPs(ctx, connect.NewRequest(&listReq))
 		if err != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("ListIPs failed: %v", err))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("ListIPs failed: %v", err))
 			return
 		}
 
@@ -1235,12 +1241,12 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		var marshalErr error
 		respPayload, marshalErr = proto.Marshal(listResp.Msg)
 		if marshalErr != nil {
-			s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("failed to marshal ListIPs response: %v", marshalErr))
+			s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("failed to marshal ListIPs response: %v", marshalErr))
 			return
 		}
 
 	default:
-		s.sendErrorResponse(stream, req.RequestId, fmt.Sprintf("unknown method: %s", req.Method))
+		s.sendErrorResponse(streamState, req.RequestId, fmt.Sprintf("unknown method: %s", req.Method))
 		return
 	}
 
@@ -1254,7 +1260,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 		},
 	}
 
-	if err := stream.Send(resp); err != nil {
+	if err := s.sendGatewayMessage(streamState, resp); err != nil {
 		logger.Error("[GatewayService] Failed to send response for request %s: %v", req.RequestId, err)
 	} else {
 		logger.Debug("[GatewayService] Sent response for request %s (%s)", req.RequestId, req.Method)
@@ -1262,7 +1268,7 @@ func (s *GatewayService) handleStreamRequest(ctx context.Context, stream *connec
 }
 
 // sendErrorResponse sends an error response over the stream
-func (s *GatewayService) sendErrorResponse(stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage], requestID, errorMsg string) {
+func (s *GatewayService) sendErrorResponse(streamState *gatewayStreamState, requestID, errorMsg string) {
 	logger.Error("[GatewayService] Request %s error: %s", requestID, errorMsg)
 
 	resp := &vpsgatewayv1.GatewayMessage{
@@ -1274,7 +1280,18 @@ func (s *GatewayService) sendErrorResponse(stream *connect.BidiStream[vpsgateway
 		},
 	}
 
-	if err := stream.Send(resp); err != nil {
+	if err := s.sendGatewayMessage(streamState, resp); err != nil {
 		logger.Error("[GatewayService] Failed to send error response for request %s: %v", requestID, err)
 	}
+}
+
+func (s *GatewayService) sendGatewayMessage(streamState *gatewayStreamState, msg *vpsgatewayv1.GatewayMessage) error {
+	if streamState == nil || streamState.stream == nil {
+		return fmt.Errorf("gateway stream not available")
+	}
+
+	streamState.sendMu.Lock()
+	defer streamState.sendMu.Unlock()
+
+	return streamState.stream.Send(msg)
 }
