@@ -20,13 +20,34 @@ export function buildGitHubCallbackUrl(event: H3Event): string {
     `http://${event.node.req.headers.host || "localhost:3000"}`
   );
   const forwardedProto = event.node.req.headers["x-forwarded-proto"];
+  const forwardedHost = event.node.req.headers["x-forwarded-host"];
+  const forwardedPort = event.node.req.headers["x-forwarded-port"];
   const protocolHeader = Array.isArray(forwardedProto)
     ? forwardedProto[0]
     : forwardedProto;
+  const hostHeader = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : forwardedHost;
+  const portHeader = Array.isArray(forwardedPort)
+    ? forwardedPort[0]
+    : forwardedPort;
   const protocol =
     protocolHeader || (requestUrl.protocol === "https:" ? "https" : "http");
-  const host =
+  const normalizedHost = hostHeader?.split(",")[0]?.trim();
+  const normalizedPort = portHeader?.split(",")[0]?.trim();
+  const fallbackHost =
     event.node.req.headers.host || requestUrl.host || "localhost:3000";
+
+  let host = normalizedHost || fallbackHost;
+  if (
+    normalizedPort &&
+    normalizedHost &&
+    !normalizedHost.includes(":") &&
+    normalizedPort !== "80" &&
+    normalizedPort !== "443"
+  ) {
+    host = `${normalizedHost}:${normalizedPort}`;
+  }
 
   return `${protocol}://${host}/api/github/callback`;
 }

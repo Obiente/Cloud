@@ -292,12 +292,16 @@ export default defineEventHandler(async (event) => {
       const getToken = () => Promise.resolve(userAccessToken || undefined);
       const authInterceptor = createAuthInterceptor(getToken);
 
-      const transport = createConnectTransport({
-        baseUrl: config.public.apiHost,
-        httpVersion: "1.1",
-        useBinaryFormat: false,
-        interceptors: [authInterceptor],
-      });
+      const createApiTransport = (baseUrl: string) =>
+        createConnectTransport({
+          baseUrl,
+          httpVersion: "1.1",
+          useBinaryFormat: false,
+          interceptors: [authInterceptor],
+        });
+
+      let apiHost = (config.apiHostInternal as string) || config.public.apiHost;
+      let transport = createApiTransport(apiHost);
 
       const { createClient } = await import("@connectrpc/connect");
       const {
@@ -306,7 +310,7 @@ export default defineEventHandler(async (event) => {
         ConnectGitHubRequestSchema,
       } = await import("@obiente/proto");
       const { create } = await import("@bufbuild/protobuf");
-      const client = createClient(AuthService, transport);
+      let client = createClient(AuthService, transport);
 
       let success = false;
       let apiError: Error | null = null;
@@ -340,41 +344,88 @@ export default defineEventHandler(async (event) => {
           success = response.success;
         }
       } catch (apiCallError: any) {
-        console.error("[GitHub OAuth] API call failed:", {
-          message: apiCallError.message,
-          code: apiCallError.code,
-        });
+        let finalApiError = apiCallError;
+        const shouldRetryViaPublicApi =
+          config.apiHostInternal &&
+          apiHost === (config.apiHostInternal as string);
 
-        // If the error is authentication-related, try refreshing the token once
-        // Connect-RPC error codes: 16 = UNAUTHENTICATED
-        const errorCode = apiCallError.code;
-        const errorMessage = apiCallError.message || "";
-        const isUnauthenticated =
-          errorCode === "UNAUTHENTICATED" ||
-          errorCode === 16 ||
-          String(errorCode) === "16" ||
-          errorMessage.toLowerCase().includes("unauthenticated") ||
-          errorMessage.toLowerCase().includes("invalid authorization token");
-
-        console.log("[GitHub OAuth] Error analysis:", {
-          errorCode,
-          errorCodeType: typeof errorCode,
-          errorMessage,
-          isUnauthenticated,
-          isAuthDisabled,
-          willAttemptRefresh: isUnauthenticated && !isAuthDisabled,
-        });
-
-        // If we get an authentication error, it means the proactive refresh didn't work
-        // This could happen if the refresh token wasn't available or expired
-        // In this case, we can't retry - the user needs to log in again
-        if (isUnauthenticated && !isAuthDisabled) {
-          console.error(
-            "[GitHub OAuth] Authentication error after proactive refresh - user may need to log in again"
+        if (shouldRetryViaPublicApi) {
+          console.warn(
+            `[GitHub OAuth] Internal API (${apiHost}) failed, retrying via public API:`,
+            apiCallError?.code || apiCallError?.message
           );
-          apiError = apiCallError;
+          apiHost = config.public.apiHost;
+          transport = createApiTransport(apiHost);
+          client = createClient(AuthService, transport);
+
+          try {
+            if (connectionType === "organization" && orgId) {
+              const request = create(ConnectOrganizationGitHubRequestSchema, {
+                organizationId: orgId,
+                accessToken: tokenResponse.access_token,
+                username: userResponse.login,
+                scope: tokenResponse.scope || "",
+              });
+              const response = await client.connectOrganizationGitHub(request);
+              success = response.success;
+              if (success && orgId) {
+                redirectUrl += `&orgId=${encodeURIComponent(orgId)}`;
+              }
+            } else {
+              const request = create(ConnectGitHubRequestSchema, {
+                accessToken: tokenResponse.access_token,
+                username: userResponse.login,
+                scope: tokenResponse.scope || "",
+              });
+              const response = await client.connectGitHub(request);
+              success = response.success;
+            }
+          } catch (publicApiError: any) {
+            finalApiError = publicApiError;
+          }
+        }
+
+        if (success) {
+          apiError = null;
         } else {
-          apiError = apiCallError;
+          console.error("[GitHub OAuth] API call failed:", {
+            message: finalApiError.message,
+            code: finalApiError.code,
+          });
+
+          // If the error is authentication-related, try refreshing the token once
+          // Connect-RPC error codes: 16 = UNAUTHENTICATED
+          const errorCode = finalApiError.code;
+          const errorMessage = finalApiError.message || "";
+          const isUnauthenticated =
+            errorCode === "UNAUTHENTICATED" ||
+            errorCode === 16 ||
+            String(errorCode) === "16" ||
+            errorMessage.toLowerCase().includes("unauthenticated") ||
+            errorMessage
+              .toLowerCase()
+              .includes("invalid authorization token");
+
+          console.log("[GitHub OAuth] Error analysis:", {
+            errorCode,
+            errorCodeType: typeof errorCode,
+            errorMessage,
+            isUnauthenticated,
+            isAuthDisabled,
+            willAttemptRefresh: isUnauthenticated && !isAuthDisabled,
+          });
+
+          // If we get an authentication error, it means the proactive refresh didn't work
+          // This could happen if the refresh token wasn't available or expired
+          // In this case, we can't retry - the user needs to log in again
+          if (isUnauthenticated && !isAuthDisabled) {
+            console.error(
+              "[GitHub OAuth] Authentication error after proactive refresh - user may need to log in again"
+            );
+            apiError = finalApiError;
+          } else {
+            apiError = finalApiError;
+          }
         }
       }
 
