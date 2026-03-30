@@ -42,8 +42,8 @@
 
         <OuiStack v-else gap="sm">
           <OuiCard
-            v-for="(env, idx) in envVars"
-            :key="idx"
+            v-for="env in envVars"
+            :key="env._id"
             variant="outline"
             class="p-3"
           >
@@ -67,7 +67,7 @@
                   variant="ghost"
                   size="sm"
                   color="danger"
-                  @click="removeVariable(idx)"
+                  @click="removeVariable(env._id)"
                 >
                   Remove
                 </OuiButton>
@@ -141,7 +141,10 @@
     deployment: Deployment;
   }
 
+  let _envVarIdCounter = 0;
+
   interface EnvVar {
+    _id: number;
     key: string;
     value: string;
     description?: string; // Comment from .env file
@@ -212,7 +215,7 @@
       
       if (equalIndex === -1) {
         // No equals sign, treat as key with empty value
-        envVar = { key: trimmed.toUpperCase(), value: "" };
+        envVar = { _id: ++_envVarIdCounter, key: trimmed.toUpperCase(), value: "" };
       } else {
         const key = trimmed.substring(0, equalIndex).trim().toUpperCase();
         const value = trimmed.substring(equalIndex + 1).trim();
@@ -223,7 +226,7 @@
             : value.startsWith("'") && value.endsWith("'")
             ? value.slice(1, -1)
             : value;
-        envVar = { key, value: unquotedValue };
+        envVar = { _id: ++_envVarIdCounter, key, value: unquotedValue };
       }
 
       // Attach pending comment as description
@@ -266,7 +269,7 @@
   };
 
   const addVariable = () => {
-    envVars.value.push({ key: "", value: "" });
+    envVars.value.push({ _id: ++_envVarIdCounter, key: "", value: "" });
     markDirty();
   };
 
@@ -276,8 +279,9 @@
     markDirty();
   };
 
-  const removeVariable = (idx: number) => {
-    envVars.value.splice(idx, 1);
+  const removeVariable = (id: number) => {
+    const idx = envVars.value.findIndex((e) => e._id === id);
+    if (idx !== -1) envVars.value.splice(idx, 1);
     markDirty();
   };
 
@@ -295,7 +299,31 @@
     }
   });
 
+  const ENV_KEY_REGEX = /^[A-Z_][A-Z0-9_]*$/;
+
+  const validateEnvVars = (): string | null => {
+    if (viewMode.value !== "list") return null;
+    const keys = new Set<string>();
+    for (const env of envVars.value) {
+      const key = env.key.trim();
+      if (!key) return "All variable keys must be non-empty.";
+      if (!ENV_KEY_REGEX.test(key))
+        return `Invalid key "${key}". Keys must start with a letter or underscore and contain only uppercase letters, digits, and underscores.`;
+      if (keys.has(key)) return `Duplicate key "${key}". Each key must be unique.`;
+      keys.add(key);
+    }
+    return null;
+  };
+
   const saveEnvVars = async () => {
+    // Validate list-view entries before saving
+    const validationError = validateEnvVars();
+    if (validationError) {
+      const { showAlert } = useDialog();
+      await showAlert({ title: "Validation Error", message: validationError });
+      return;
+    }
+
     // Store current view mode to preserve it
     const currentViewMode = viewMode.value;
 
