@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
@@ -29,7 +30,8 @@ type Service struct {
 	notificationsv1connect.UnimplementedNotificationServiceHandler
 }
 
-func NewService() notificationsv1connect.NotificationServiceHandler {
+func NewService(backgroundCtx context.Context) *Service {
+	InitAsyncEmailDispatcher(backgroundCtx)
 	return &Service{}
 }
 
@@ -342,15 +344,7 @@ func (s *Service) CreateNotification(ctx context.Context, req *connect.Request[n
 
 	logger.Info("[Notifications] Created notification via RPC for user %s, type %s, severity %s: %s", req.Msg.GetUserId(), notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
 
-	// Check user preferences and send email if enabled
-	// Use background context to avoid cancellation when the original request completes
-	go func() {
-		emailCtx := context.Background()
-		logger.Info("[Notifications] Starting email check for user %s, type %s", req.Msg.GetUserId(), notificationTypeToString(req.Msg.GetType()))
-		if err := sendNotificationEmailIfEnabled(emailCtx, req.Msg.GetUserId(), req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel); err != nil {
-			logger.Warn("[Notifications] Failed to send email notification for user %s: %v", req.Msg.GetUserId(), err)
-		}
-	}()
+	enqueueNotificationEmail(req.Msg.GetUserId(), req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
 
 	return connect.NewResponse(&notificationsv1.CreateNotificationResponse{
 		Notification: notificationToProto(notification),
@@ -451,15 +445,7 @@ func (s *Service) CreateOrganizationNotification(ctx context.Context, req *conne
 
 		logger.Info("[Notifications] Created notification for org member %s, type %s, severity %s: %s", member.UserID, notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
 
-		// Check user preferences and send email if enabled
-		// Use background context to avoid cancellation when the original request completes
-		go func(userID string, notifType notificationsv1.NotificationType, notifSeverity notificationsv1.NotificationSeverity, notifTitle, notifMessage string, notifActionURL, notifActionLabel *string) {
-			emailCtx := context.Background()
-			logger.Info("[Notifications] Starting email check for user %s, type %s", userID, notificationTypeToString(notifType))
-			if err := sendNotificationEmailIfEnabled(emailCtx, userID, notifType, notifSeverity, notifTitle, notifMessage, notifActionURL, notifActionLabel); err != nil {
-				logger.Warn("[Notifications] Failed to send email notification for user %s: %v", userID, err)
-			}
-		}(member.UserID, req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
+		enqueueNotificationEmail(member.UserID, req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
 
 		notifications = append(notifications, notificationToProto(notification))
 	}
@@ -473,7 +459,7 @@ func (s *Service) CreateOrganizationNotification(ctx context.Context, req *conne
 // Helper functions
 
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString())
 }
 
 func notificationToProto(n *database.Notification) *notificationsv1.Notification {
@@ -632,15 +618,7 @@ func CreateNotificationForUser(ctx context.Context, userID string, orgID *string
 
 	logger.Info("[Notifications] Created notification for user %s, type %s, severity %s: %s", userID, notificationTypeToString(notificationType), notificationSeverityToString(severity), title)
 
-	// Check user preferences and send email if enabled
-	// Use background context to avoid cancellation when the original request completes
-	go func() {
-		emailCtx := context.Background()
-		logger.Info("[Notifications] Starting email check for user %s, type %s", userID, notificationTypeToString(notificationType))
-		if err := sendNotificationEmailIfEnabled(emailCtx, userID, notificationType, severity, title, message, actionURL, actionLabel); err != nil {
-			logger.Warn("[Notifications] Failed to send email notification for user %s: %v", userID, err)
-		}
-	}()
+	enqueueNotificationEmail(userID, notificationType, severity, title, message, actionURL, actionLabel)
 
 	return nil
 }
@@ -970,9 +948,6 @@ func (s *Service) UpdateNotificationPreferences(ctx context.Context, req *connec
 			if err == gorm.ErrRecordNotFound {
 				// Create new preference with generated ID
 				prefID := generateID("notif-pref")
-				if prefID == "" {
-					prefID = fmt.Sprintf("notif-pref-%d", time.Now().UnixNano())
-				}
 				preference := &database.NotificationPreference{
 					ID:               prefID,
 					UserID:           user.Id,
@@ -981,10 +956,6 @@ func (s *Service) UpdateNotificationPreferences(ctx context.Context, req *connec
 					InAppEnabled:     pref.InAppEnabled,
 					Frequency:        notificationFrequencyToString(pref.Frequency),
 					MinSeverity:      notificationSeverityToString(pref.MinSeverity),
-				}
-				// Double-check ID is set (BeforeCreate hook should also set it, but ensure it here)
-				if preference.ID == "" {
-					preference.ID = fmt.Sprintf("notif-pref-%d", time.Now().UnixNano())
 				}
 				logger.Debug("[Notifications] Creating new preference with ID=%s for user=%s, type=%s", preference.ID, user.Id, notificationTypeStr)
 				if err := tx.Create(preference).Error; err != nil {
