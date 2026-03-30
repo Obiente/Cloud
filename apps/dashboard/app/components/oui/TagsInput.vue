@@ -46,7 +46,7 @@
         >
           <TagsInput.Item
             v-for="(value, index) in tagsInput.value"
-            :key="index"
+            :key="value"
             :index="index"
             :value="value"
           >

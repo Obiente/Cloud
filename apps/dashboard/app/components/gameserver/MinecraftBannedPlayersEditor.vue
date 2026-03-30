@@ -107,7 +107,7 @@
                 <tbody>
                   <tr
                     v-for="(player, index) in bannedPlayers"
-                    :key="index"
+                    :key="player.uuid || player.name || index"
                     class="border-b border-border-default hover:bg-surface-hover"
                   >
                     <td class="py-3 px-4">

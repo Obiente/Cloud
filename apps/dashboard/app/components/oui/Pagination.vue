@@ -15,7 +15,7 @@
     </Pagination.PrevTrigger>
 
     <Pagination.Context v-slot="pagination">
-      <template v-for="(pageItem, index) in pagination.pages" :key="index">
+      <template v-for="(pageItem, index) in pagination.pages" :key="pageItem.type === 'page' ? `page-${pageItem.value}` : `ellipsis-${index}`">
         <Pagination.Item
           v-if="pageItem.type === 'page'"
           :value="pageItem.value"
