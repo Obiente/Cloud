@@ -51,7 +51,7 @@ var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.support.v1.SupportService/":            "support-service:3009",
 	"/obiente.cloud.audit.v1.AuditService/":                "audit-service:3010",
 	"/obiente.cloud.notifications.v1.NotificationService/": "notifications-service:3012",
-	"/obiente.cloud.databases.v1.DatabaseService/": "databases-service:3014",
+	"/obiente.cloud.databases.v1.DatabaseService/":         "databases-service:3014",
 	"/webhooks/stripe":                                     "billing-service:3004",
 	"/dns/push":                                            "dns-service:8053",         // DNS delegation push endpoint
 	"/dns/push/batch":                                      "dns-service:8053",         // DNS delegation batch push endpoint
@@ -73,7 +73,7 @@ var serviceDomains = map[string]string{
 	"support-service:3009":       "support-service",
 	"audit-service:3010":         "audit-service",
 	"notifications-service:3012": "notifications-service",
-	"databases-service:3014": "databases-service",
+	"databases-service:3014":     "databases-service",
 	"dns-service:8053":           "dns-service",
 }
 
@@ -155,12 +155,15 @@ func main() {
 
 	// Health checks bypass Traefik when using Traefik routing to prevent feedback loops
 	healthCheckURLs, baseServiceAddrs := buildHealthCheckURLs(serviceRoutes, baseServiceRoutes)
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	mux := http.NewServeMux()
 	proxy := &ReverseProxy{
 		routes:           serviceRoutes,
 		healthCheckURLs:  healthCheckURLs,
 		baseServiceAddrs: baseServiceAddrs,
+		shutdownCtx:      shutdownCtx,
 	}
 
 	proxy.initHealthChecker()
@@ -301,9 +304,6 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	serverErr := make(chan error, 1)
 	go func() {
 		logger.Info("=== API Gateway Ready - Listening on %s ===", httpServer.Addr)
@@ -350,8 +350,11 @@ type ReverseProxy struct {
 	baseServiceAddrs map[string]string         // Routing URL -> base service address (for health checks)
 	healthStatus     map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
 	healthMutex      sync.RWMutex
+	shutdownCtx      context.Context
 	httpClient       *http.Client // Shared HTTP client with connection pooling
 	httpClientOnce   sync.Once    // Ensures client is initialized once
+	healthClient     *http.Client // Shared health-check client to avoid per-probe allocations
+	healthClientOnce sync.Once
 }
 
 // initHealthChecker starts background health checks for all backend services
@@ -365,6 +368,9 @@ func (p *ReverseProxy) initHealthChecker() {
 	if p.baseServiceAddrs == nil {
 		p.baseServiceAddrs = make(map[string]string)
 	}
+	if p.shutdownCtx == nil {
+		p.shutdownCtx = context.Background()
+	}
 
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
@@ -376,6 +382,8 @@ func (p *ReverseProxy) initHealthChecker() {
 
 		for {
 			select {
+			case <-p.shutdownCtx.Done():
+				return
 			case <-ticker.C:
 				p.checkAllServicesHealth()
 			case <-cleanupTicker.C:
@@ -603,37 +611,7 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error
 		return false, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	targetURL, err := url.Parse(healthURL)
-	if err != nil {
-		return false, "", fmt.Errorf("failed to parse health URL: %w", err)
-	}
-
-	var transport *http.Transport
-	if targetURL.Scheme == "https" {
-		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
-		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-		transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: shouldSkipVerify,
-			},
-			DialContext: (&net.Dialer{
-				Timeout: 2 * time.Second,
-			}).DialContext,
-		}
-	} else {
-		transport = &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 2 * time.Second,
-			}).DialContext,
-		}
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   3 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := p.getHealthHTTPClient().Do(req)
 	if err != nil {
 		return false, "", fmt.Errorf("request failed: %w", err)
 	}
@@ -653,6 +631,35 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error
 
 	isHealthy := healthResp.Status == "healthy"
 	return isHealthy, healthResp.ReplicaID, nil
+}
+
+func (p *ReverseProxy) getHealthHTTPClient() *http.Client {
+	p.healthClientOnce.Do(func() {
+		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: shouldSkipVerify,
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   2 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          50,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   3 * time.Second,
+			ResponseHeaderTimeout: 3 * time.Second,
+			ForceAttemptHTTP2:     false,
+		}
+
+		p.healthClient = &http.Client{
+			Transport: transport,
+			Timeout:   3 * time.Second,
+		}
+	})
+	return p.healthClient
 }
 
 // isServiceHealthy checks if a service is currently healthy (informational only, doesn't block routing)
