@@ -656,8 +656,7 @@ func (s *GatewayService) RegisterGateway(
 			case "request":
 				// Handle requests from API (forwarded RPCs)
 				if msg.Request != nil {
-					// Use background context for request handling to avoid cancellation issues
-					go s.handleStreamRequest(context.Background(), stream, msg.Request, apiInstanceID)
+					go s.handleStreamRequest(ctx, stream, msg.Request, apiInstanceID)
 				}
 
 			case "heartbeat":
@@ -1057,6 +1056,7 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 	}
 	deadlineTimer := time.After(timeout)
 	responsesReceived := 0
+	mergedResponses := mergeResponseChannels(responseChans)
 
 	for responsesReceived < len(responseChans) {
 		select {
@@ -1066,7 +1066,10 @@ func (s *GatewayService) FindVPSByLease(ctx context.Context, ip string, mac stri
 			// Timeout - return empty response if no valid results found
 			logger.Debug("[GatewayService] Timeout waiting for FindVPSByLease responses (received %d/%d)", responsesReceived, len(responseChans))
 			return &vpsv1.FindVPSByLeaseResponse{}, nil
-		case gatewayResp := <-mergeResponseChannels(responseChans):
+		case gatewayResp, ok := <-mergedResponses:
+			if !ok {
+				return &vpsv1.FindVPSByLeaseResponse{}, nil
+			}
 			responsesReceived++
 
 			if gatewayResp.Error != "" {
@@ -1140,14 +1143,22 @@ func (s *GatewayService) logStreamError(instanceID string, err error) {
 // mergeResponseChannels merges multiple response channels into a single channel
 func mergeResponseChannels(channels []chan *vpsgatewayv1.GatewayResponse) <-chan *vpsgatewayv1.GatewayResponse {
 	merged := make(chan *vpsgatewayv1.GatewayResponse, len(channels))
+	var wg sync.WaitGroup
+	wg.Add(len(channels))
 
 	for _, ch := range channels {
 		go func(c chan *vpsgatewayv1.GatewayResponse) {
+			defer wg.Done()
 			if resp, ok := <-c; ok {
 				merged <- resp
 			}
 		}(ch)
 	}
+
+	go func() {
+		wg.Wait()
+		close(merged)
+	}()
 
 	return merged
 }
