@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
@@ -37,23 +39,24 @@ type dockerHelper interface {
 }
 
 type DeploymentConfig struct {
-	DeploymentID       string
-	Image              string
-	Domain             string
-	Port               int
-	EnvVars            map[string]string
-	Labels             map[string]string
-	Memory             int64   // in bytes
-	CPUShares          int64
-	Replicas           int
-	StartCommand       *string // Optional start command to override container CMD
-	
+	DeploymentID string
+	Image        string
+	Domain       string
+	Port         int
+	EnvVars      map[string]string
+	Labels       map[string]string
+	Memory       int64 // in bytes
+	CPUShares    int64
+	Replicas     int
+	StartCommand *string // Optional start command to override container CMD
+
 	// Health check configuration
 	HealthcheckType           *int32  // Type of health check (HealthCheckType enum: DISABLED, TCP, HTTP, CUSTOM)
 	HealthcheckPort           *int32  // Port to check (if different from main port)
 	HealthcheckPath           *string // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
 	HealthcheckExpectedStatus *int32  // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
 	HealthcheckCustomCommand  *string // Custom command (sanitized, used with HEALTHCHECK_CUSTOM)
+	TargetNodeID              string
 }
 
 func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*DeploymentManager, error) {
@@ -132,6 +135,22 @@ func (dm *DeploymentManager) GetNodeHostname() string {
 	return dm.nodeHostname
 }
 
+func (dm *DeploymentManager) SelectTargetNode(ctx context.Context, preferredNodeID string) (*database.NodeMetadata, error) {
+	preferredNodeID = strings.TrimSpace(preferredNodeID)
+	if preferredNodeID == "" {
+		preferredNodeID = TargetNodeFromContext(ctx)
+	}
+	if preferredNodeID == "" {
+		return dm.nodeSelector.SelectNode(ctx)
+	}
+
+	var node database.NodeMetadata
+	if err := database.DB.WithContext(ctx).First(&node, "id = ?", preferredNodeID).Error; err != nil {
+		return nil, fmt.Errorf("failed to resolve preferred node %s: %w", preferredNodeID, err)
+	}
+	return &node, nil
+}
+
 // SyncNodeMetadata syncs node metadata with Docker Swarm/local Docker daemon
 // This updates node resource usage (CPU, memory) and other metadata
 func (dm *DeploymentManager) SyncNodeMetadata(ctx context.Context) error {
@@ -150,5 +169,3 @@ func (dm *DeploymentManager) Close() error {
 	}
 	return nil
 }
-
-

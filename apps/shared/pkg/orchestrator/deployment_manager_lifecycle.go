@@ -34,7 +34,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	}
 
 	// Select best node for deployment
-	targetNode, err := dm.nodeSelector.SelectNode(ctx)
+	targetNode, err := dm.SelectTargetNode(ctx, config.TargetNodeID)
 	if err != nil {
 		logger.Error("[DeploymentManager] Failed to select node for deployment %s: %v", config.DeploymentID, err)
 		return fmt.Errorf("failed to select node: %w", err)
@@ -45,6 +45,9 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	// Check if we're on the target node
 	if targetNode.ID != dm.nodeID {
+		if strings.TrimSpace(config.TargetNodeID) != "" {
+			return fmt.Errorf("deployment %s must be materialized on node %s, current node is %s", config.DeploymentID, targetNode.ID, dm.nodeID)
+		}
 		// Try to forward the request to the target node
 		if dm.forwarder.CanForward(targetNode.ID) {
 			logger.Info("[DeploymentManager] Forwarding deployment creation to node %s (%s)",
@@ -385,6 +388,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				HealthcheckPath:           deployment.HealthcheckPath,
 				HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 				HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
+				TargetNodeID:              TargetNodeFromContext(ctx),
 			}
 
 			// Log the config healthcheck values
@@ -512,6 +516,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					HealthcheckPath:           deployment.HealthcheckPath,
 					HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 					HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
+					TargetNodeID:              TargetNodeFromContext(ctx),
 				}
 
 				// Log the config healthcheck values
@@ -853,6 +858,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		HealthcheckPath:           deployment.HealthcheckPath,
 		HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 		HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
+		TargetNodeID:              TargetNodeFromContext(ctx),
 	}
 
 	// Log the config healthcheck values

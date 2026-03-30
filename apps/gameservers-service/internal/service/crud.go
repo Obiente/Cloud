@@ -14,6 +14,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -121,6 +122,7 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 
 // CreateGameServer creates a new game server
 func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gameserversv1.CreateGameServerRequest]) (*connect.Response[gameserversv1.CreateGameServerResponse], error) {
+	ctx = sharedorchestrator.WithTargetNode(ctx, req.Header().Get(sharedorchestrator.ForwardTargetNodeHeader))
 	orgID := req.Msg.GetOrganizationId()
 	if orgID == "" {
 		if eff, ok := resolveUserDefaultOrgID(ctx); ok {
@@ -136,6 +138,38 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	// Permission: org-level
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionGameServersCreate}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	if s.manager != nil && sharedorchestrator.TargetNodeFromContext(ctx) == "" {
+		targetNode, err := s.manager.SelectTargetNode(ctx, "")
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to select target node: %w", err))
+		}
+		if targetNode.ID != s.manager.GetNodeID() {
+			if s.forwarder == nil || !s.forwarder.CanForward(targetNode.ID) {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot forward game server creation to node %s", targetNode.ID))
+			}
+
+			reqBody, err := json.Marshal(req.Msg)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+			}
+
+			headers := map[string]string{
+				"Authorization": req.Header().Get("Authorization"),
+				sharedorchestrator.ForwardTargetNodeHeader: targetNode.ID,
+			}
+			bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNode.ID, "/obiente.cloud.gameservers.v1.GameServerService/CreateGameServer", headers)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+			}
+
+			var response gameserversv1.CreateGameServerResponse
+			if err := json.Unmarshal(bodyBytes, &response); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+			}
+			return connect.NewResponse(&response), nil
+		}
 	}
 
 	id := fmt.Sprintf("gs-%s", uuid.NewString())
@@ -287,6 +321,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 			MemoryBytes:  memoryBytes,
 			CPUCores:     cpuCores,
 			StartCommand: req.Msg.StartCommand,
+			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
 		}
 
 		if err := manager.CreateGameServer(ctx, config); err != nil {
@@ -615,6 +650,7 @@ func (s *Service) DeleteGameServer(ctx context.Context, req *connect.Request[gam
 
 // StartGameServer starts a stopped game server
 func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[gameserversv1.StartGameServerRequest]) (*connect.Response[gameserversv1.StartGameServerResponse], error) {
+	ctx = sharedorchestrator.WithTargetNode(ctx, req.Header().Get(sharedorchestrator.ForwardTargetNodeHeader))
 	gameServerID := req.Msg.GetGameServerId()
 	if err := s.checkGameServerPermission(ctx, gameServerID, "start"); err != nil {
 		return nil, err
@@ -622,7 +658,10 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 
 	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
-		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		headers := map[string]string{
+			"Authorization": req.Header().Get("Authorization"),
+			sharedorchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/StartGameServer", headers)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
@@ -633,6 +672,30 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
 		}
 		return connect.NewResponse(&response), nil
+	}
+
+	if s.manager != nil && sharedorchestrator.TargetNodeFromContext(ctx) == "" {
+		if targetNode, err := s.manager.SelectTargetNode(ctx, ""); err == nil && targetNode.ID != s.manager.GetNodeID() {
+			if s.forwarder == nil || !s.forwarder.CanForward(targetNode.ID) {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot forward game server start to node %s", targetNode.ID))
+			}
+
+			reqBody, _ := json.Marshal(req.Msg)
+			headers := map[string]string{
+				"Authorization": req.Header().Get("Authorization"),
+				sharedorchestrator.ForwardTargetNodeHeader: targetNode.ID,
+			}
+			bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNode.ID, "/obiente.cloud.gameservers.v1.GameServerService/StartGameServer", headers)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+			}
+
+			var response gameserversv1.StartGameServerResponse
+			if err := json.Unmarshal(bodyBytes, &response); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+			}
+			return connect.NewResponse(&response), nil
+		}
 	}
 
 	// Update status to STARTING

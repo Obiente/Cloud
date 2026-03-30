@@ -52,6 +52,7 @@ type GameServerConfig struct {
 	MemoryBytes  int64 // in bytes
 	CPUCores     int32
 	StartCommand *string // Optional start command to override container CMD
+	TargetNodeID string
 }
 
 // NewGameServerManager creates a new game server manager
@@ -111,6 +112,22 @@ func (gsm *GameServerManager) GetNodeID() string {
 	return gsm.nodeID
 }
 
+func (gsm *GameServerManager) SelectTargetNode(ctx context.Context, preferredNodeID string) (*database.NodeMetadata, error) {
+	preferredNodeID = strings.TrimSpace(preferredNodeID)
+	if preferredNodeID == "" {
+		preferredNodeID = sharedorchestrator.TargetNodeFromContext(ctx)
+	}
+	if preferredNodeID == "" {
+		return gsm.nodeSelector.SelectNode(ctx)
+	}
+
+	var node database.NodeMetadata
+	if err := database.DB.WithContext(ctx).First(&node, "id = ?", preferredNodeID).Error; err != nil {
+		return nil, fmt.Errorf("failed to resolve preferred node %s: %w", preferredNodeID, err)
+	}
+	return &node, nil
+}
+
 // getNodeIP retrieves the IP address for the current node from Swarm or NodeMetadata
 // This matches deployment behavior - for Swarm nodes, use the Swarm node's IP address
 func (gsm *GameServerManager) getNodeIP(ctx context.Context) string {
@@ -148,7 +165,7 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 	}
 
 	// Select best node for game server
-	targetNode, err := gsm.nodeSelector.SelectNode(ctx)
+	targetNode, err := gsm.SelectTargetNode(ctx, config.TargetNodeID)
 	if err != nil {
 		logger.Error("[GameServerManager] Failed to select node for game server %s: %v", config.GameServerID, err)
 		return fmt.Errorf("failed to select node: %w", err)
@@ -159,6 +176,9 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 
 	// Check if we're on the target node
 	if targetNode.ID != gsm.nodeID {
+		if strings.TrimSpace(config.TargetNodeID) != "" {
+			return fmt.Errorf("game server %s must be materialized on node %s, current node is %s", config.GameServerID, targetNode.ID, gsm.nodeID)
+		}
 		// Try to forward the request to the target node
 		if gsm.forwarder.CanForward(targetNode.ID) {
 			logger.Info("[GameServerManager] Forwarding game server creation to node %s (%s)",
@@ -259,6 +279,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
 			StartCommand: gameServer.StartCommand,
+			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
 		}
 
 		// Log env vars we are about to use when creating container
@@ -318,6 +339,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
 			StartCommand: gameServer.StartCommand,
+			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
 		}
 
 		// Create the container (this will reuse existing volumes)
@@ -390,6 +412,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 				MemoryBytes:  gameServer.MemoryBytes,
 				CPUCores:     gameServer.CPUCores,
 				StartCommand: gameServer.StartCommand,
+				TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
 			}
 
 			// Create the new container (will register container info in DB)

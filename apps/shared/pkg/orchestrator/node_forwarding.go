@@ -19,6 +19,26 @@ import (
 	"nhooyr.io/websocket"
 )
 
+const ForwardTargetNodeHeader = "X-Obiente-Target-Node"
+
+type targetNodeContextKey struct{}
+
+func WithTargetNode(ctx context.Context, nodeID string) context.Context {
+	nodeID = strings.TrimSpace(nodeID)
+	if nodeID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, targetNodeContextKey{}, nodeID)
+}
+
+func TargetNodeFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	nodeID, _ := ctx.Value(targetNodeContextKey{}).(string)
+	return strings.TrimSpace(nodeID)
+}
+
 // NodeForwarder handles forwarding requests to other nodes in the cluster
 type NodeForwarder struct {
 	httpClient *http.Client
@@ -34,7 +54,7 @@ func NewNodeForwarder() *NodeForwarder {
 		useDomainRouting := os.Getenv("USE_DOMAIN_ROUTING")
 		domain := os.Getenv("DOMAIN")
 		useTraefikRouting := os.Getenv("USE_TRAEFIK_ROUTING")
-		
+
 		// If domain routing is enabled and domain is set, use domain-based URL
 		if (useDomainRouting == "true" || useDomainRouting == "1") && domain != "" && domain != "localhost" {
 			scheme := "http"
@@ -71,17 +91,17 @@ func NewNodeForwarder() *NodeForwarder {
 	// Configure HTTP client with TLS support for HTTPS (domain-based routing)
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-	
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
 		},
 	}
-	
+
 	return &NodeForwarder{
 		httpClient: &http.Client{
 			Transport: transport,
-			Timeout:  30 * time.Second,
+			Timeout:   30 * time.Second,
 		},
 		apiBaseURL: strings.TrimSuffix(apiBaseURL, "/"),
 	}
@@ -121,7 +141,7 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 		if useTraefikRouting == "true" || useTraefikRouting == "1" {
 			scheme = "https"
 		}
-		
+
 		// Check for node-specific subdomain in labels
 		var nodeSubdomain string
 		if node.Labels != "" {
@@ -140,7 +160,7 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 				}
 			}
 		}
-		
+
 		// If no explicit subdomain, try to generate from hostname
 		if nodeSubdomain == "" && node.Hostname != "" {
 			// Check if hostname is already a full domain (contains dots and domain)
@@ -153,24 +173,24 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 				// Hostname is a full domain but different domain - use as-is
 				return fmt.Sprintf("%s://%s", scheme, node.Hostname), nil
 			}
-			
+
 			// Generate subdomain from hostname
 			// Sanitize hostname to be DNS-safe (lowercase, replace invalid chars with hyphens)
 			sanitizedHostname := strings.ToLower(node.Hostname)
 			sanitizedHostname = strings.ReplaceAll(sanitizedHostname, "_", "-")
 			sanitizedHostname = strings.ReplaceAll(sanitizedHostname, " ", "-")
-			
+
 			// Use hostname as subdomain (e.g., "node1" -> "node1.obiente.cloud")
 			// For API, we can use either "node1-api.obiente.cloud" or "api-node1.obiente.cloud"
 			// Default to "node1-api" pattern for clarity
 			nodeSubdomain = sanitizedHostname + "-api"
 		}
-		
+
 		// If we have a node subdomain, use it
 		if nodeSubdomain != "" {
 			return fmt.Sprintf("%s://%s.%s", scheme, nodeSubdomain, domain), nil
 		}
-		
+
 		// Fallback: use main API domain if no node-specific subdomain available
 		// This assumes all nodes share the same API gateway domain
 		return fmt.Sprintf("%s://api.%s", scheme, domain), nil
@@ -303,4 +323,3 @@ func (nf *NodeForwarder) ForwardWebSocket(ctx context.Context, nodeID string, pa
 
 	return conn, nil
 }
-

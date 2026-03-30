@@ -30,10 +30,60 @@ const deploymentStatusStreamPollInterval = 1500 * time.Millisecond
 
 // TriggerDeployment triggers a rebuild and redeployment
 func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest]) (*connect.Response[deploymentsv1.TriggerDeploymentResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has deploy permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "deploy"); err != nil {
 		return nil, err
+	}
+
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.TriggerDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
+	if s.manager != nil && orchestrator.TargetNodeFromContext(ctx) == "" {
+		locations, locErr := database.GetAllDeploymentLocations(deploymentID)
+		if locErr == nil && len(locations) == 0 {
+			targetNode, err := s.manager.SelectTargetNode(ctx, "")
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to select target node: %w", err))
+			}
+			if targetNode.ID != s.manager.GetNodeID() {
+				if s.forwarder == nil || !s.forwarder.CanForward(targetNode.ID) {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot forward deployment trigger to node %s", targetNode.ID))
+				}
+
+				reqBody, _ := json.Marshal(req.Msg)
+				headers := map[string]string{
+					"Authorization":                      req.Header().Get("Authorization"),
+					orchestrator.ForwardTargetNodeHeader: targetNode.ID,
+				}
+				bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNode.ID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
+				if err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+				}
+
+				var response deploymentsv1.TriggerDeploymentResponse
+				if err := json.Unmarshal(bodyBytes, &response); err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+				}
+				return connect.NewResponse(&response), nil
+			}
+		}
 	}
 
 	// Get deployment
@@ -705,6 +755,7 @@ func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID s
 
 // StartDeployment starts a stopped deployment
 func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[deploymentsv1.StartDeploymentRequest]) (*connect.Response[deploymentsv1.StartDeploymentResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentStart, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -739,7 +790,10 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 
 	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
-		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment", headers, &deploymentsv1.StartDeploymentResponse{})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
@@ -750,6 +804,37 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
 		}
 		return connect.NewResponse(&response), nil
+	}
+
+	if s.manager != nil && orchestrator.TargetNodeFromContext(ctx) == "" {
+		locations, locErr := database.GetAllDeploymentLocations(deploymentID)
+		if locErr == nil && len(locations) == 0 {
+			targetNode, err := s.manager.SelectTargetNode(ctx, "")
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to select target node: %w", err))
+			}
+			if targetNode.ID != s.manager.GetNodeID() {
+				if s.forwarder == nil || !s.forwarder.CanForward(targetNode.ID) {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cannot forward deployment start to node %s", targetNode.ID))
+				}
+
+				reqBody, _ := json.Marshal(req.Msg)
+				headers := map[string]string{
+					"Authorization":                      req.Header().Get("Authorization"),
+					orchestrator.ForwardTargetNodeHeader: targetNode.ID,
+				}
+				bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNode.ID, "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment", headers, &deploymentsv1.StartDeploymentResponse{})
+				if err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+				}
+
+				var response deploymentsv1.StartDeploymentResponse
+				if err := json.Unmarshal(bodyBytes, &response); err != nil {
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+				}
+				return connect.NewResponse(&response), nil
+			}
+		}
 	}
 
 	// Check if this is a compose-based deployment
@@ -818,6 +903,7 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 					HealthcheckPath:           dbDep.HealthcheckPath,
 					HealthcheckExpectedStatus: dbDep.HealthcheckExpectedStatus,
 					HealthcheckCustomCommand:  dbDep.HealthcheckCustomCommand,
+					TargetNodeID:              orchestrator.TargetNodeFromContext(ctx),
 				}
 				logger.Info("[StartDeployment-lifecycle.go] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
 					cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)
