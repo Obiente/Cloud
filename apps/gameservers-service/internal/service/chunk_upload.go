@@ -76,7 +76,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 
 	// Check if this is the last chunk
 	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
-	allChunksReceived := getChunkUploadManager().IsComplete(gameServerId, upload.FileName, upload.TotalChunks)
+	allChunksReceived := getChunkUploadManager().IsComplete(gameServerId, upload)
 
 	resp := &gameserversv1.ChunkUploadGameServerFilesResponse{
 		Result: &commonv1.ChunkedUploadResponsePayload{
@@ -182,7 +182,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 		}()
 
 		// Clean up the session after successful upload
-		getChunkUploadManager().RemoveSession(gameServerId, upload.FileName)
+		getChunkUploadManager().RemoveSession(gameServerId, upload)
 	}
 
 	return connect.NewResponse(resp), nil
@@ -191,7 +191,7 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 // uploadAssembledFile assembles all chunks from the session and uploads the complete file.
 func (s *Service) uploadAssembledFile(ctx context.Context, gameServerId string, upload *commonv1.ChunkedUploadPayload) error {
 	// Assemble file from chunks using shared manager
-	completeData, err := getChunkUploadManager().AssembleChunks(gameServerId, upload.FileName, upload.TotalChunks)
+	completeData, err := getChunkUploadManager().AssembleChunks(gameServerId, upload)
 	if err != nil {
 		return err
 	}

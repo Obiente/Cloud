@@ -39,6 +39,10 @@ var (
 	chunkUploadManagerOnce sync.Once
 )
 
+func deploymentUploadResourceKey(msg *deploymentsv1.ChunkUploadContainerFilesRequest) string {
+	return fmt.Sprintf("%s:%s:%s", msg.GetDeploymentId(), msg.GetContainerId(), msg.GetServiceName())
+}
+
 func getChunkUploadManager() *chunkupload.Manager {
 	chunkUploadManagerOnce.Do(func() {
 		chunkUploadManager = chunkupload.NewManager(30 * time.Minute)
@@ -603,14 +607,16 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	uploadResourceKey := deploymentUploadResourceKey(msg)
+
 	// Get or create session
-	sess, err := getChunkUploadManager().GetOrCreateSession(deploymentID, upload)
+	sess, err := getChunkUploadManager().GetOrCreateSession(uploadResourceKey, upload)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	// Store the chunk (use returned session so BytesReceived is up-to-date)
-	sess, err = getChunkUploadManager().StoreChunk(deploymentID, upload, upload.ChunkIndex)
+	sess, err = getChunkUploadManager().StoreChunk(uploadResourceKey, upload, upload.ChunkIndex)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -619,7 +625,7 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 
 	// Check if this is the last chunk
 	isLastChunk := upload.ChunkIndex == upload.TotalChunks-1
-	allChunksReceived := getChunkUploadManager().IsComplete(deploymentID, upload.FileName, upload.TotalChunks)
+	allChunksReceived := getChunkUploadManager().IsComplete(uploadResourceKey, upload)
 
 	resp := &deploymentsv1.ChunkUploadContainerFilesResponse{
 		Result: &commonv1.ChunkedUploadResponsePayload{
@@ -631,7 +637,7 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 
 	// If this is the last chunk and we have all chunks, assemble and upload
 	if isLastChunk && allChunksReceived {
-		if err := s.uploadAssembledContainerFile(ctx, deploymentID, upload); err != nil {
+		if err := s.uploadAssembledContainerFile(ctx, msg, upload); err != nil {
 			resp.Result.Success = false
 			errorMsg := fmt.Sprintf("failed to upload assembled file: %v", err)
 			resp.Result.Error = &errorMsg
@@ -726,16 +732,19 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 		}()
 
 		// Clean up the session after successful upload
-		getChunkUploadManager().RemoveSession(deploymentID, upload.FileName)
+		getChunkUploadManager().RemoveSession(uploadResourceKey, upload)
 	}
 
 	return connect.NewResponse(resp), nil
 }
 
 // uploadAssembledContainerFile assembles all chunks from the session and uploads the complete file
-func (s *Service) uploadAssembledContainerFile(ctx context.Context, deploymentID string, upload *commonv1.ChunkedUploadPayload) error {
+func (s *Service) uploadAssembledContainerFile(ctx context.Context, msg *deploymentsv1.ChunkUploadContainerFilesRequest, upload *commonv1.ChunkedUploadPayload) error {
+	deploymentID := msg.GetDeploymentId()
+	uploadResourceKey := deploymentUploadResourceKey(msg)
+
 	// Assemble file from chunks using shared manager
-	completeData, err := getChunkUploadManager().AssembleChunks(deploymentID, upload.FileName, upload.TotalChunks)
+	completeData, err := getChunkUploadManager().AssembleChunks(uploadResourceKey, upload)
 	if err != nil {
 		return err
 	}
@@ -752,8 +761,8 @@ func (s *Service) uploadAssembledContainerFile(ctx context.Context, deploymentID
 	defer dcli.Close()
 
 	// Find container - use first available for deployment
-	containerID := "" // Optional from request
-	serviceName := "" // Optional from request
+	containerID := msg.GetContainerId()
+	serviceName := msg.GetServiceName()
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return err

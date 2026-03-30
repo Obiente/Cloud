@@ -2,6 +2,8 @@ package chunkupload
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -42,9 +44,19 @@ func NewManager(timeout time.Duration) *Manager {
 	}
 }
 
-// SessionKey generates a unique key for a resource's file upload
-func SessionKey(resourceID, fileName string) string {
-	return resourceID + ":" + fileName
+// SessionKey generates a stable key for a specific upload target, so
+// the same filename can be uploaded concurrently to different destinations.
+func SessionKey(resourceID string, upload *commonv1.ChunkedUploadPayload) string {
+	var destinationPath string
+	var volumeName string
+	var fileName string
+	if upload != nil {
+		destinationPath = upload.GetDestinationPath()
+		volumeName = upload.GetVolumeName()
+		fileName = upload.GetFileName()
+	}
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%s\x00%s\x00%s", resourceID, destinationPath, volumeName, fileName)))
+	return hex.EncodeToString(sum[:])
 }
 
 // redis keys helpers
@@ -60,7 +72,7 @@ func idxSetKey(base string) string {
 
 // GetOrCreateSession gets an existing session or creates a new one
 func (m *Manager) GetOrCreateSession(resourceID string, upload *commonv1.ChunkedUploadPayload) (*Session, error) {
-	key := SessionKey(resourceID, upload.FileName)
+	key := SessionKey(resourceID, upload)
 	ctx := context.Background()
 	client := sharedredis.GetClient()
 	if client == nil {
@@ -108,7 +120,7 @@ func (m *Manager) StoreChunk(resourceID string, upload *commonv1.ChunkedUploadPa
 		return nil, err
 	}
 
-	key := SessionKey(resourceID, upload.FileName)
+	key := SessionKey(resourceID, upload)
 	ctx := context.Background()
 	client := sharedredis.GetClient()
 	if client == nil {
@@ -202,8 +214,8 @@ func (m *Manager) StoreChunk(resourceID string, upload *commonv1.ChunkedUploadPa
 }
 
 // AssembleChunks assembles all chunks into a single byte slice
-func (m *Manager) AssembleChunks(resourceID, fileName string, totalChunks int32) ([]byte, error) {
-	key := SessionKey(resourceID, fileName)
+func (m *Manager) AssembleChunks(resourceID string, upload *commonv1.ChunkedUploadPayload) ([]byte, error) {
+	key := SessionKey(resourceID, upload)
 	ctx := context.Background()
 	client := sharedredis.GetClient()
 	if client == nil {
@@ -219,18 +231,18 @@ func (m *Manager) AssembleChunks(resourceID, fileName string, totalChunks int32)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read chunk index set: %w", err)
 		}
-		if int32(idxCount) != totalChunks {
+		if int32(idxCount) != upload.TotalChunks {
 			if attempt < 2 {
 				// short wait for eventual consistency between writers
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			return nil, fmt.Errorf("incomplete upload: have %d of %d chunks", idxCount, totalChunks)
+			return nil, fmt.Errorf("incomplete upload: have %d of %d chunks", idxCount, upload.TotalChunks)
 		}
 		break
 	}
 
-	for i := int32(0); i < totalChunks; i++ {
+	for i := int32(0); i < upload.TotalChunks; i++ {
 		ck := chunkKey(key, i)
 		b, err := client.Get(ctx, ck).Bytes()
 		if err != nil {
@@ -245,8 +257,8 @@ func (m *Manager) AssembleChunks(resourceID, fileName string, totalChunks int32)
 }
 
 // IsComplete checks if all chunks have been received
-func (m *Manager) IsComplete(resourceID, fileName string, totalChunks int32) bool {
-	key := SessionKey(resourceID, fileName)
+func (m *Manager) IsComplete(resourceID string, upload *commonv1.ChunkedUploadPayload) bool {
+	key := SessionKey(resourceID, upload)
 	ctx := context.Background()
 	client := sharedredis.GetClient()
 	if client == nil {
@@ -256,12 +268,12 @@ func (m *Manager) IsComplete(resourceID, fileName string, totalChunks int32) boo
 	if err != nil {
 		return false
 	}
-	return int32(cnt) == totalChunks
+	return int32(cnt) == upload.TotalChunks
 }
 
 // RemoveSession removes a session after successful upload
-func (m *Manager) RemoveSession(resourceID, fileName string) {
-	key := SessionKey(resourceID, fileName)
+func (m *Manager) RemoveSession(resourceID string, upload *commonv1.ChunkedUploadPayload) {
+	key := SessionKey(resourceID, upload)
 	ctx := context.Background()
 	client := sharedredis.GetClient()
 	if client == nil {
