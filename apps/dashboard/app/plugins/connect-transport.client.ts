@@ -1,4 +1,5 @@
 import { createAuthInterceptor, createWebTransport } from "~/lib/transport";
+import { watch } from "vue";
 
 // Client-side plugin
 export default defineNuxtPlugin({
@@ -14,6 +15,17 @@ export default defineNuxtPlugin({
     let cachedToken: string | null = null;
     let tokenExpiry: number | null = null;
     let tokenFetchPromise: Promise<string | null> | null = null;
+
+    // Invalidate transport-layer cache whenever the session changes so we never
+    // serve a stale token after logout or a token rotation.
+    watch(
+      () => auth.session,
+      () => {
+        cachedToken = null;
+        tokenExpiry = null;
+        tokenFetchPromise = null;
+      }
+    );
 
     // Function to get the authentication token from the session
     // With caching to prevent repeated fetches
@@ -54,11 +66,10 @@ export default defineNuxtPlugin({
         tokenFetchPromise = null;
 
         if (token) {
-          // Cache the token - we'll use a conservative expiry (60 seconds)
-          // The auth composable already handles proper expiry, but we add
-          // an extra layer of caching here to prevent excessive calls
+          // Cache for 30 seconds — conservative enough to batch rapid requests
+          // while ensuring a rotation or logout invalidates quickly.
           cachedToken = token;
-          tokenExpiry = Date.now() + 60000; // Cache for 60 seconds
+          tokenExpiry = Date.now() + 30000;
         }
 
         if (!token) {

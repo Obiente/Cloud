@@ -431,7 +431,7 @@ export const useAuth = () => {
         error &&
         typeof error === "object" &&
         "statusCode" in error &&
-        (error as any).statusCode === 401
+        (error as { statusCode: unknown }).statusCode === 401
       ) {
         logout();
       }
