@@ -80,8 +80,83 @@ func (s *Service) ListVPSRegions(ctx context.Context, req *connect.Request[vpsv1
 
 // StreamVPSStatus streams VPS status updates
 func (s *Service) StreamVPSStatus(ctx context.Context, req *connect.Request[vpsv1.StreamVPSStatusRequest], stream *connect.ServerStream[vpsv1.VPSStatusUpdate]) error {
-	// TODO: Implement status streaming
-	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("not implemented"))
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSRead); err != nil {
+		return err
+	}
+
+	repo := database.NewVPSRepository(database.DB, database.RedisClient)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	var lastStatus *int32
+
+	sendStatus := func(vps *database.VPSInstance) error {
+		if vps == nil {
+			return nil
+		}
+
+		statusValue := vps.Status
+		if lastStatus != nil && *lastStatus == statusValue {
+			return nil
+		}
+
+		statusName := vpsv1.VPSStatus(statusValue).String()
+		update := &vpsv1.VPSStatusUpdate{
+			VpsId:     vps.ID,
+			Status:    vpsv1.VPSStatus(statusValue),
+			Message:   &statusName,
+			Timestamp: timestamppb.New(vps.UpdatedAt),
+		}
+
+		if err := stream.Send(update); err != nil {
+			return err
+		}
+
+		lastStatus = &statusValue
+		return nil
+	}
+
+	for {
+		vpsInstance, repoErr := repo.GetByIDIncludeDeleted(ctx, vpsID, true)
+		if repoErr != nil {
+			if errors.Is(repoErr, gorm.ErrRecordNotFound) {
+				notFoundStatus := int32(vpsv1.VPSStatus_DELETED)
+				if lastStatus == nil || *lastStatus != notFoundStatus {
+					message := "VPS no longer exists"
+					if err := stream.Send(&vpsv1.VPSStatusUpdate{
+						VpsId:     vpsID,
+						Status:    vpsv1.VPSStatus_DELETED,
+						Message:   &message,
+						Timestamp: timestamppb.Now(),
+					}); err != nil {
+						return err
+					}
+					lastStatus = &notFoundStatus
+				}
+				return nil
+			}
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load VPS status: %w", repoErr))
+		}
+
+		if err := sendStatus(vpsInstance); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
 }
 
 // StreamVPSLogs streams VPS provisioning logs from Redis
@@ -211,7 +286,7 @@ func (s *Service) StreamVPSMetrics(ctx context.Context, req *connect.Request[vps
 			query := database.GetMetricsDB().Where("vps_instance_id = ?", vpsID).
 				Order("timestamp DESC").
 				Limit(1)
-			
+
 			if !firstRun {
 				query = query.Where("timestamp > ?", lastSentTimestamp)
 			}
@@ -280,18 +355,18 @@ func (s *Service) streamLiveVPSMetrics(
 			if latest.ResourceType == "vps" && latest.ResourceID == vpsID {
 				cpuUsage := latest.CPUUsage
 				memoryUsedBytes := latest.MemoryUsage
-			diskReadIops := 0.0
-			diskWriteIops := 0.0
-			metric := &vpsv1.VPSMetric{
-				VpsId:            vpsID,
-				Timestamp:        timestamppb.New(latest.Timestamp),
-				CpuUsagePercent:  cpuUsage,
-				MemoryUsedBytes:  memoryUsedBytes,
-				NetworkRxBytes:   latest.NetworkRxBytes,
-				NetworkTxBytes:   latest.NetworkTxBytes,
-				DiskReadIops:     diskReadIops,
-				DiskWriteIops:    diskWriteIops,
-			}
+				diskReadIops := 0.0
+				diskWriteIops := 0.0
+				metric := &vpsv1.VPSMetric{
+					VpsId:           vpsID,
+					Timestamp:       timestamppb.New(latest.Timestamp),
+					CpuUsagePercent: cpuUsage,
+					MemoryUsedBytes: memoryUsedBytes,
+					NetworkRxBytes:  latest.NetworkRxBytes,
+					NetworkTxBytes:  latest.NetworkTxBytes,
+					DiskReadIops:    diskReadIops,
+					DiskWriteIops:   diskWriteIops,
+				}
 				if err := stream.Send(metric); err != nil {
 					logger.Error("[StreamVPSMetrics] Failed to send initial metric: %v", err)
 					return err
@@ -338,14 +413,14 @@ func (s *Service) streamLiveVPSMetrics(
 			diskReadIops := 0.0
 			diskWriteIops := 0.0
 			metric := &vpsv1.VPSMetric{
-				VpsId:            vpsID,
-				Timestamp:        timestamppb.New(liveMetric.Timestamp),
-				CpuUsagePercent:  cpuUsage,
-				MemoryUsedBytes:  memoryUsedBytes,
-				NetworkRxBytes:   networkRxBytes,
-				NetworkTxBytes:   networkTxBytes,
-				DiskReadIops:     diskReadIops,
-				DiskWriteIops:    diskWriteIops,
+				VpsId:           vpsID,
+				Timestamp:       timestamppb.New(liveMetric.Timestamp),
+				CpuUsagePercent: cpuUsage,
+				MemoryUsedBytes: memoryUsedBytes,
+				NetworkRxBytes:  networkRxBytes,
+				NetworkTxBytes:  networkTxBytes,
+				DiskReadIops:    diskReadIops,
+				DiskWriteIops:   diskWriteIops,
 			}
 
 			if err := stream.Send(metric); err != nil {
@@ -664,9 +739,9 @@ func (s *Service) GetVPSUsage(ctx context.Context, req *connect.Request[vpsv1.Ge
 		UptimeSeconds:      currentMetrics.UptimeSeconds,
 		EstimatedCostCents: currTotalCost,
 		CpuCostCents:       &currCPUCostPtr,
-		MemoryCostCents:   &currMemoryCostPtr,
+		MemoryCostCents:    &currMemoryCostPtr,
 		BandwidthCostCents: &currBandwidthCostPtr,
-		StorageCostCents:  &currStorageCostPtr,
+		StorageCostCents:   &currStorageCostPtr,
 	}
 
 	estCPUCostPtr := int64(estCPUCost)
@@ -688,10 +763,10 @@ func (s *Service) GetVPSUsage(ctx context.Context, req *connect.Request[vpsv1.Ge
 	}
 
 	response := &vpsv1.GetVPSUsageResponse{
-		VpsId:             vpsID,
-		Month:             month,
-		Current:           currentUsageMetrics,
-		EstimatedMonthly:  estimatedUsageMetrics,
+		VpsId:              vpsID,
+		Month:              month,
+		Current:            currentUsageMetrics,
+		EstimatedMonthly:   estimatedUsageMetrics,
 		EstimatedCostCents: estTotalCost,
 	}
 
