@@ -76,21 +76,23 @@ type DatabaseFilters struct {
 	Offset int64
 }
 
-func (r *DatabaseRepository) GetAll(ctx context.Context, organizationID string, filters *DatabaseFilters) ([]*DatabaseInstance, error) {
-	query := r.db.WithContext(ctx).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
-
+func (r *DatabaseRepository) databaseQuery(ctx context.Context, organizationID string, filters *DatabaseFilters) *gorm.DB {
+	query := r.db.WithContext(ctx).Model(&DatabaseInstance{}).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 	if filters != nil {
-		// Apply status filter if provided
 		if filters.Status != nil {
 			query = query.Where("status = ?", *filters.Status)
 		}
-
-		// Apply type filter if provided
 		if filters.Type != nil {
 			query = query.Where("type = ?", *filters.Type)
 		}
+	}
+	return query
+}
 
-		// Apply pagination
+func (r *DatabaseRepository) GetAll(ctx context.Context, organizationID string, filters *DatabaseFilters) ([]*DatabaseInstance, error) {
+	query := r.databaseQuery(ctx, organizationID, filters)
+
+	if filters != nil {
 		if filters.Limit > 0 {
 			query = query.Limit(int(filters.Limit))
 		}
@@ -115,6 +117,14 @@ func (r *DatabaseRepository) GetAll(ctx context.Context, organizationID string, 
 	}
 
 	return databases, nil
+}
+
+func (r *DatabaseRepository) CountAll(ctx context.Context, organizationID string, filters *DatabaseFilters) (int64, error) {
+	var total int64
+	if err := r.databaseQuery(ctx, organizationID, filters).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 func (r *DatabaseRepository) Update(ctx context.Context, database *DatabaseInstance) error {
@@ -271,4 +281,3 @@ func (r *DatabaseBackupRepository) Update(ctx context.Context, backup *DatabaseB
 func (r *DatabaseBackupRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&DatabaseBackup{}, "id = ?", id).Error
 }
-

@@ -10,6 +10,7 @@ import (
 	"databases-service/internal/proxy"
 	"databases-service/internal/secrets"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -99,10 +100,10 @@ func (s *Service) ListDatabases(ctx context.Context, req *connect.Request[databa
 	}
 
 	// Calculate total count for pagination
-	var totalCount int64
-	database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
-		Where("organization_id = ? AND deleted_at IS NULL", orgID).
-		Count(&totalCount)
+	totalCount, err := s.repo.CountAll(ctx, orgID, filters)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to count databases: %w", err))
+	}
 
 	res := connect.NewResponse(&databasesv1.ListDatabasesResponse{
 		Databases: items,
@@ -134,7 +135,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
 
-	id := fmt.Sprintf("db-%d", time.Now().UnixNano())
+	id := fmt.Sprintf("db-%s", uuid.NewString())
 
 	// Parse metadata
 	metadataJSON := "{}"
@@ -226,15 +227,15 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 				version = *req.Msg.Version
 			}
 			provCfg := &provisioner.DatabaseConfig{
-				DatabaseID:   id,
-				Type:         provisioner.DatabaseType(req.Msg.GetType()),
-				Version:      version,
-				Username:     initialUsername,
-				Password:     initialPassword,
-				Port:         int(port),
-				CPUCores:     float64(cpuCores),
-				MemoryBytes:  memoryBytes,
-				DiskBytes:    diskBytes,
+				DatabaseID:  id,
+				Type:        provisioner.DatabaseType(req.Msg.GetType()),
+				Version:     version,
+				Username:    initialUsername,
+				Password:    initialPassword,
+				Port:        int(port),
+				CPUCores:    float64(cpuCores),
+				MemoryBytes: memoryBytes,
+				DiskBytes:   diskBytes,
 			}
 
 			result, err := s.provisioner.ProvisionDatabase(provisionCtx, provCfg)
