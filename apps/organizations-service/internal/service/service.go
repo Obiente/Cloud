@@ -47,6 +47,8 @@ type Service struct {
 	supportEmail string
 }
 
+var _ organizationsv1connect.OrganizationServiceHandler = (*Service)(nil)
+
 func NewService(cfg Config) organizationsv1connect.OrganizationServiceHandler {
 	consoleURL := strings.TrimSuffix(strings.TrimSpace(cfg.ConsoleURL), "/")
 	if consoleURL == "" {
@@ -105,18 +107,18 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 			log.Printf("[ListOrganizations] Warning: failed to ensure plan assigned for org %s: %v", r.Id, err)
 			// Continue anyway - plan info just won't be populated
 		}
-		
+
 		// Convert row to database.Organization for organizationToProto
 		org := &database.Organization{
-			ID:            r.Id,
-			Name:          r.Name,
-			Slug:          r.Slug,
-			Plan:          r.Plan,
-			Status:        r.Status,
+			ID:             r.Id,
+			Name:           r.Name,
+			Slug:           r.Slug,
+			Plan:           r.Plan,
+			Status:         r.Status,
 			Domain:         r.Domain,
-			Credits:       r.Credits,
+			Credits:        r.Credits,
 			TotalPaidCents: r.TotalPaidCents,
-			CreatedAt:     r.CreatedAt,
+			CreatedAt:      r.CreatedAt,
 		}
 		orgProto := organizationToProto(org)
 		if orgProto.PlanInfo == nil {
@@ -277,7 +279,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 	if roleInput == "" {
 		roleInput = "member"
 	}
-	
+
 	// Convert role name to role ID if it's a system role
 	// If it's already a role ID (custom role), use it as-is
 	var roleID string
@@ -313,7 +315,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 	emailLower := strings.ToLower(emailAddr)
 	pendingUserID := "pending:" + emailLower
 	err = database.DB.Where("organization_id = ? AND LOWER(user_id) = ? AND status = ?", org.ID, strings.ToLower(pendingUserID), "invited").First(&existingMember).Error
-	
+
 	var m *database.OrganizationMember
 	if err == nil {
 		// User is already invited - update role and resend invite
@@ -323,7 +325,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update existing invite: %w", err))
 		}
 		m = &existingMember
-		
+
 		// Resend invite email with rate limiting
 		// Check rate limit first
 		const rateLimitWindow = 5 * time.Minute
@@ -337,7 +339,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 				)
 			}
 		}
-		
+
 		// Send invite email (errors are logged but don't fail the invite update)
 		if err := s.dispatchInviteEmail(ctx, &org, m, inviter, emailAddr); err != nil {
 			log.Printf("[Organizations] failed to resend invite email for existing member %s: %v", m.ID, err)
@@ -460,20 +462,20 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 		// Create notification for this invite if it doesn't already exist
 		// Check if notification already exists for this invite
 		var existingNotification database.Notification
-		notificationExists := database.DB.Where("user_id = ? AND organization_id = ? AND type = ? AND metadata->>'invite_id' = ?", 
+		notificationExists := database.DB.Where("user_id = ? AND organization_id = ? AND type = ? AND metadata->>'invite_id' = ?",
 			user.Id, org.ID, "INVITE", member.ID).First(&existingNotification).Error == nil
 
 		if !notificationExists {
 			actionURL := fmt.Sprintf("/organizations?tab=invitations&organizationId=%s", org.ID)
 			actionLabel := "View Invite"
 			metadata := map[string]string{
-				"invite_id":        member.ID,
-				"organization_id":  org.ID,
+				"invite_id":         member.ID,
+				"organization_id":   org.ID,
 				"organization_name": org.Name,
-				"role":             member.Role,
+				"role":              member.Role,
 			}
-			if err := notifications.CreateNotificationForUser(ctx, user.Id, &org.ID, 
-				notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE, 
+			if err := notifications.CreateNotificationForUser(ctx, user.Id, &org.ID,
+				notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE,
 				notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
 				fmt.Sprintf("Invitation to %s", org.Name),
 				fmt.Sprintf("You've been invited to join %s as a %s.", org.Name, member.Role),
@@ -486,12 +488,12 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 		// Convert role ID to role name for frontend compatibility
 		roleName := getRoleNameForAPI(member.Role)
 		invites = append(invites, &organizationsv1.PendingInvite{
-			Id:             member.ID,
-			OrganizationId: org.ID,
+			Id:               member.ID,
+			OrganizationId:   org.ID,
 			OrganizationName: org.Name,
-			Role:           roleName,
-			InvitedAt:      timestamppb.New(member.JoinedAt),
-			InviterEmail:   "", // TODO: Track inviter in future enhancement
+			Role:             roleName,
+			InvitedAt:        timestamppb.New(member.JoinedAt),
+			InviterEmail:     "", // TODO: Track inviter in future enhancement
 		})
 	}
 
@@ -551,7 +553,7 @@ func (s *Service) AcceptInvite(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("accept invite: %w", err))
 	}
 
-		// Build response
+	// Build response
 	// Convert role ID to role name for frontend compatibility
 	roleName := getRoleNameForAPI(member.Role)
 	om := &organizationsv1.OrganizationMember{
@@ -642,7 +644,7 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 			}
 			roleID = requestedRole
 		}
-		
+
 		// Check if we're demoting an owner
 		if m.Role == auth.SystemRoleIDOwner && roleID != auth.SystemRoleIDOwner {
 			if !isSuper {
@@ -658,7 +660,7 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
 			}
 		}
-		
+
 		m.Role = roleID
 	}
 
@@ -834,9 +836,9 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 
 	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
-	if err := common.AuthorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
-		return nil, err
-	}
+		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
+			return nil, err
+		}
 	}
 
 	// Determine month (default to current month)
@@ -849,7 +851,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
-	
+
 	// Calculate elapsed ratio for current month cost prorating
 	var elapsedRatio float64
 	if month == now.Format("2006-01") {
@@ -860,7 +862,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		// Historical month: use full month (1.0) for prorating
 		elapsedRatio = 1.0
 	}
-	
+
 	// Parse requested month for historical queries
 	requestedMonthStart := monthStart
 	if month != now.Format("2006-01") {
@@ -871,7 +873,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			monthEnd = requestedMonthStart.AddDate(0, 1, 0).Add(-time.Second)
 		}
 	}
-	
+
 	// Calculate usage from deployment_usage_hourly (single source of truth)
 	// This works for both current and historical months
 	var currentCPUCoreSeconds int64
@@ -883,7 +885,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 
 	if month == now.Format("2006-01") {
 		// Current month: calculate live from hourly aggregates (full month) + raw metrics (current incomplete hour)
-		
+
 		// Aggregate cutoff: current hour (aggregates exist up to current hour)
 		aggregateCutoff := time.Now().UTC().Truncate(time.Hour)
 		if aggregateCutoff.Before(monthStart) {
@@ -912,7 +914,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			`).
 			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, monthStart, aggregateCutoff).
 			Scan(&hourlyUsage)
-		
+
 		// Get game server usage from hourly aggregates and add to deployment usage
 		var gameServerHourlyUsage struct {
 			CPUCoreSeconds    int64
@@ -929,31 +931,31 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			`).
 			Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour <= ?", orgID, monthStart, aggregateCutoff).
 			Scan(&gameServerHourlyUsage)
-		
+
 		// Combine deployment and game server hourly usage
 		hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds
 		hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds
 		hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes
 		hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes
-		
+
 		// Check if aggregates exist for the current hour (aggregateCutoff)
 		// If they do, we should exclude raw metrics for that hour to avoid double-counting
 		var currentHourAggregateCount int64
 		metricsDB.Table("deployment_usage_hourly duh").
 			Where("duh.organization_id = ? AND duh.hour = ?", orgID, aggregateCutoff).
 			Count(&currentHourAggregateCount)
-		
+
 		// Also check game server aggregates for current hour
 		var gameServerCurrentHourAggregateCount int64
 		metricsDB.Table("game_server_usage_hourly gsuh").
 			Where("gsuh.organization_id = ? AND gsuh.hour = ?", orgID, aggregateCutoff).
 			Count(&gameServerCurrentHourAggregateCount)
-		
+
 		// If either has aggregates for current hour, we should exclude raw metrics for that hour
 		if gameServerCurrentHourAggregateCount > 0 {
 			currentHourAggregateCount += gameServerCurrentHourAggregateCount
 		}
-		
+
 		// Raw metrics start time: if aggregates exist for current hour, start from next hour
 		// Otherwise, start from current hour (aggregateCutoff)
 		rawMetricsStart := aggregateCutoff
@@ -961,15 +963,15 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			// Aggregates exist for current hour - only get raw metrics from next hour onwards
 			rawMetricsStart = aggregateCutoff.Add(1 * time.Hour)
 		}
-		
+
 		// Debug: Check if aggregates exist at all for this org
 		var aggregateCount int64
 		metricsDB.Table("deployment_usage_hourly duh").
 			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, monthStart, aggregateCutoff).
 			Count(&aggregateCount)
-		
-		logger.Debug("[Organizations] Aggregates for org %s: CPU=%d, Memory=%d bytes, Bandwidth=%d bytes, Hours=%s to %s (inclusive), Count=%d, CurrentHourAggregates=%d", 
-			orgID, hourlyUsage.CPUCoreSeconds, hourlyUsage.MemoryByteSeconds, 
+
+		logger.Debug("[Organizations] Aggregates for org %s: CPU=%d, Memory=%d bytes, Bandwidth=%d bytes, Hours=%s to %s (inclusive), Count=%d, CurrentHourAggregates=%d",
+			orgID, hourlyUsage.CPUCoreSeconds, hourlyUsage.MemoryByteSeconds,
 			hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, monthStart, aggregateCutoff, aggregateCount, currentHourAggregateCount)
 
 		// Get recent usage from raw metrics (current incomplete hour only - not yet aggregated)
@@ -981,23 +983,23 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Select("d.id").
 			Where("d.organization_id = ?", orgID).
 			Pluck("id", &deploymentIDs)
-		
+
 		var gameServerIDs []string
 		database.DB.Table("game_servers gs").
 			Select("gs.id").
 			Where("gs.organization_id = ?", orgID).
 			Pluck("id", &gameServerIDs)
-		
+
 		// Calculate CPU and Memory from raw metrics per deployment (same approach as deployment-level)
 		// Only get metrics from aggregateCutoff onwards (current incomplete hour)
 		type metricTimestamp struct {
-			CPUUsage    float64
-			MemorySum   int64
-			Timestamp   time.Time
+			CPUUsage  float64
+			MemorySum int64
+			Timestamp time.Time
 		}
 		var recentCPUFloat float64 // Use float64 to avoid truncation of small values
 		var recentMemory int64
-		
+
 		if len(deploymentIDs) > 0 {
 			// Process each deployment separately to avoid double-counting
 			// Only get raw metrics from aggregateCutoff (current hour start) onwards
@@ -1013,7 +1015,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 					Group("dm.timestamp").
 					Order("dm.timestamp ASC").
 					Scan(&deploymentTimestamps)
-				
+
 				// Calculate byte-seconds from timestamped metrics (same logic as deployment service)
 				metricInterval := int64(5)
 				if len(deploymentTimestamps) > 0 {
@@ -1027,7 +1029,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 					}
 					recentCPUFloat += (deploymentTimestamps[0].CPUUsage / 100.0) * float64(firstInterval)
 					recentMemory += deploymentTimestamps[0].MemorySum * firstInterval
-					
+
 					// Subsequent timestamps: use actual interval between timestamps
 					// For each interval from timestamps[i-1] to timestamps[i], use memory[i-1] (the value at the start of the interval)
 					for i := 1; i < len(deploymentTimestamps); i++ {
@@ -1043,7 +1045,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 			}
 		}
-		
+
 		// Process game server raw metrics (same logic as deployments)
 		if len(gameServerIDs) > 0 {
 			for _, gameServerID := range gameServerIDs {
@@ -1058,7 +1060,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 					Group("gsm.timestamp").
 					Order("gsm.timestamp ASC").
 					Scan(&gameServerTimestamps)
-				
+
 				// Calculate byte-seconds from timestamped metrics (same logic as deployments)
 				metricInterval := int64(5)
 				if len(gameServerTimestamps) > 0 {
@@ -1072,7 +1074,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 					}
 					recentCPUFloat += (gameServerTimestamps[0].CPUUsage / 100.0) * float64(firstInterval)
 					recentMemory += gameServerTimestamps[0].MemorySum * firstInterval
-					
+
 					// Subsequent timestamps: use actual interval between timestamps
 					for i := 1; i < len(gameServerTimestamps); i++ {
 						interval := metricInterval
@@ -1103,7 +1105,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawMetricsStart).
 				Scan(&recentBandwidth)
 		}
-		
+
 		// Add game server bandwidth
 		var gameServerRecentBandwidth struct {
 			BandwidthRxBytes int64
@@ -1126,12 +1128,12 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + recentMemory
 		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + recentBandwidth.BandwidthRxBytes
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + recentBandwidth.BandwidthTxBytes
-		
-		logger.Debug("[Organizations] Combined for org %s: CPU=%d (agg=%d + raw=%d), Memory=%d bytes (agg=%d + raw=%d), Bandwidth=%d bytes (agg=%d + raw=%d)", 
+
+		logger.Debug("[Organizations] Combined for org %s: CPU=%d (agg=%d + raw=%d), Memory=%d bytes (agg=%d + raw=%d), Bandwidth=%d bytes (agg=%d + raw=%d)",
 			orgID, currentCPUCoreSeconds, hourlyUsage.CPUCoreSeconds, recentCPU,
 			currentMemoryByteSeconds, hourlyUsage.MemoryByteSeconds, recentMemory,
 			currentBandwidthRxBytes+currentBandwidthTxBytes, hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, recentBandwidth.BandwidthRxBytes+recentBandwidth.BandwidthTxBytes)
-		
+
 		// Get storage from both deployments and game servers
 		var deploymentStorage struct {
 			StorageBytes int64
@@ -1140,7 +1142,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
 			Where("d.organization_id = ?", orgID).
 			Scan(&deploymentStorage)
-		
+
 		var gameServerStorage struct {
 			StorageBytes int64
 		}
@@ -1148,9 +1150,9 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
 			Where("gs.organization_id = ?", orgID).
 			Scan(&gameServerStorage)
-		
+
 		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
-		
+
 		// Get peak deployments count for current month
 		var peakCount int
 		database.DB.Table("deployment_locations dl").
@@ -1183,7 +1185,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			`).
 			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, requestedMonthStart, monthEnd).
 			Scan(&hourlyUsage)
-		
+
 		// Get game server usage from hourly aggregates and add to deployment usage
 		var gameServerHourlyUsage struct {
 			CPUCoreSeconds    int64
@@ -1200,13 +1202,13 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			`).
 			Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour <= ?", orgID, requestedMonthStart, monthEnd).
 			Scan(&gameServerHourlyUsage)
-		
+
 		// Combine deployment and game server usage
 		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + gameServerHourlyUsage.CPUCoreSeconds
 		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + gameServerHourlyUsage.MemoryByteSeconds
 		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + gameServerHourlyUsage.BandwidthRxBytes
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + gameServerHourlyUsage.BandwidthTxBytes
-		
+
 		// Storage: get snapshot from deployments and game servers tables for the month (use current, as historical storage is not tracked)
 		var deploymentStorage struct {
 			StorageBytes int64
@@ -1215,7 +1217,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
 			Where("d.organization_id = ?", orgID).
 			Scan(&deploymentStorage)
-		
+
 		var gameServerStorage struct {
 			StorageBytes int64
 		}
@@ -1223,13 +1225,13 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
 			Where("gs.organization_id = ?", orgID).
 			Scan(&gameServerStorage)
-		
+
 		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
-		
+
 		// Peak deployments: not tracked historically, use 0 or current
 		deploymentsActivePeak = 0
 	}
-	
+
 	var estimatedMonthly *organizationsv1.UsageMetrics
 	if month == now.Format("2006-01") {
 		// Current month: project based on elapsed time using live calculated values
@@ -1238,44 +1240,44 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		// This is inaccurate if deployments only ran briefly
 		daysElapsed := float64(now.Sub(monthStart).Hours()) / 24.0
 		minDaysForProjection := 7.0 // Only project if we have at least 7 days of data
-		
+
 		if elapsedRatio > 0 && elapsedRatio < 1.0 && daysElapsed >= minDaysForProjection {
 			// We have sufficient data - project to full month
 			estimatedMonthly = &organizationsv1.UsageMetrics{
-				CpuCoreSeconds:      int64(float64(currentCPUCoreSeconds) / elapsedRatio),
-				MemoryByteSeconds:   int64(float64(currentMemoryByteSeconds) / elapsedRatio),
-				BandwidthRxBytes:    currentBandwidthRxBytes, // Bandwidth is cumulative, use current value for estimate
-				BandwidthTxBytes:    currentBandwidthTxBytes,
-				StorageBytes:        currentStorageBytes, // Storage is snapshot, use current value for estimate
+				CpuCoreSeconds:        int64(float64(currentCPUCoreSeconds) / elapsedRatio),
+				MemoryByteSeconds:     int64(float64(currentMemoryByteSeconds) / elapsedRatio),
+				BandwidthRxBytes:      currentBandwidthRxBytes, // Bandwidth is cumulative, use current value for estimate
+				BandwidthTxBytes:      currentBandwidthTxBytes,
+				StorageBytes:          currentStorageBytes, // Storage is snapshot, use current value for estimate
 				DeploymentsActivePeak: int32(deploymentsActivePeak),
 			}
-			logger.Debug("[Organizations] Projected for org %s: CPU=%d, Memory=%d bytes (from current=%d, ratio=%.3f, days=%.1f)", 
-				orgID, estimatedMonthly.CpuCoreSeconds, estimatedMonthly.MemoryByteSeconds, 
+			logger.Debug("[Organizations] Projected for org %s: CPU=%d, Memory=%d bytes (from current=%d, ratio=%.3f, days=%.1f)",
+				orgID, estimatedMonthly.CpuCoreSeconds, estimatedMonthly.MemoryByteSeconds,
 				currentMemoryByteSeconds, elapsedRatio, daysElapsed)
 		} else {
 			// Not enough data for accurate projection - use current usage as estimate
 			// This avoids massive inflation early in the month when deployments may have only run briefly
 			estimatedMonthly = &organizationsv1.UsageMetrics{
-				CpuCoreSeconds:      currentCPUCoreSeconds,
-				MemoryByteSeconds:   currentMemoryByteSeconds,
-				BandwidthRxBytes:    currentBandwidthRxBytes,
-				BandwidthTxBytes:    currentBandwidthTxBytes,
-				StorageBytes:        currentStorageBytes,
+				CpuCoreSeconds:        currentCPUCoreSeconds,
+				MemoryByteSeconds:     currentMemoryByteSeconds,
+				BandwidthRxBytes:      currentBandwidthRxBytes,
+				BandwidthTxBytes:      currentBandwidthTxBytes,
+				StorageBytes:          currentStorageBytes,
 				DeploymentsActivePeak: int32(deploymentsActivePeak),
 			}
 			if daysElapsed < minDaysForProjection {
-				logger.Debug("[Organizations] Not projecting for org %s: only %.1f days elapsed (min=%d), using current usage as estimate", 
+				logger.Debug("[Organizations] Not projecting for org %s: only %.1f days elapsed (min=%d), using current usage as estimate",
 					orgID, daysElapsed, int(minDaysForProjection))
 			}
 		}
 	} else {
 		// Historical month: estimated equals current (from aggregated data)
 		estimatedMonthly = &organizationsv1.UsageMetrics{
-			CpuCoreSeconds:      currentCPUCoreSeconds,
-			MemoryByteSeconds:   currentMemoryByteSeconds,
-			BandwidthRxBytes:    currentBandwidthRxBytes,
-			BandwidthTxBytes:    currentBandwidthTxBytes,
-			StorageBytes:        currentStorageBytes,
+			CpuCoreSeconds:        currentCPUCoreSeconds,
+			MemoryByteSeconds:     currentMemoryByteSeconds,
+			BandwidthRxBytes:      currentBandwidthRxBytes,
+			BandwidthTxBytes:      currentBandwidthTxBytes,
+			StorageBytes:          currentStorageBytes,
 			DeploymentsActivePeak: int32(deploymentsActivePeak),
 		}
 	}
@@ -1283,7 +1285,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	// Calculate estimated cost using centralized pricing model
 	pricingModel := pricing.GetPricing()
 	bandwidthBytes := estimatedMonthly.BandwidthRxBytes + estimatedMonthly.BandwidthTxBytes
-	
+
 	// Calculate per-resource costs for estimated monthly
 	estCPUCost := pricingModel.CalculateCPUCost(estimatedMonthly.CpuCoreSeconds)
 	estMemoryCost := pricingModel.CalculateMemoryCost(estimatedMonthly.MemoryByteSeconds)
@@ -1300,7 +1302,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	cpuCost := pricingModel.CalculateCPUCost(currentCPUCoreSeconds)
 	memoryCost := pricingModel.CalculateMemoryCost(currentMemoryByteSeconds)
 	bandwidthCost := pricingModel.CalculateBandwidthCost(currBandwidthBytes)
-	
+
 	// Storage cost is monthly rate, prorate for current cost calculation
 	var currentCostCents int64
 	var currentStorageCost int64
@@ -1324,7 +1326,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	estimatedMonthly.MemoryCostCents = &memoryCostPtr
 	estimatedMonthly.BandwidthCostCents = &bandwidthCostPtr
 	estimatedMonthly.StorageCostCents = &storageCostPtr
-	
+
 	logger.Debug("[Organizations] Cost breakdown for org %s: CPU=%d cents (%.2f), Memory=%d cents (%.2f), Bandwidth=%d cents (%.2f), Storage=%d cents (%.2f), Total=%d cents (%.2f)",
 		orgID, cpuCostPtr, float64(cpuCostPtr)/100, memoryCostPtr, float64(memoryCostPtr)/100,
 		bandwidthCostPtr, float64(bandwidthCostPtr)/100, storageCostPtr, float64(storageCostPtr)/100,
@@ -1337,17 +1339,17 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	currStorageCostPtr := currentStorageCost
 
 	currentMetrics := &organizationsv1.UsageMetrics{
-		CpuCoreSeconds:      currentCPUCoreSeconds,
-		MemoryByteSeconds:   currentMemoryByteSeconds,
-		BandwidthRxBytes:    currentBandwidthRxBytes,
-		BandwidthTxBytes:    currentBandwidthTxBytes,
-		StorageBytes:        currentStorageBytes,
+		CpuCoreSeconds:        currentCPUCoreSeconds,
+		MemoryByteSeconds:     currentMemoryByteSeconds,
+		BandwidthRxBytes:      currentBandwidthRxBytes,
+		BandwidthTxBytes:      currentBandwidthTxBytes,
+		StorageBytes:          currentStorageBytes,
 		DeploymentsActivePeak: int32(deploymentsActivePeak),
-		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side with live data)
-		CpuCostCents:        &currCPUCostPtr,
-		MemoryCostCents:     &currMemoryCostPtr,
-		BandwidthCostCents:  &currBandwidthCostPtr,
-		StorageCostCents:    &currStorageCostPtr,
+		EstimatedCostCents:    currentCostCents, // Current usage cost (calculated server-side with live data)
+		CpuCostCents:          &currCPUCostPtr,
+		MemoryCostCents:       &currMemoryCostPtr,
+		BandwidthCostCents:    &currBandwidthCostPtr,
+		StorageCostCents:      &currStorageCostPtr,
 	}
 
 	// Get quota information
@@ -1372,7 +1374,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
-			
+
 			memoryLimit := plan.MemoryBytes
 			if orgQuota.MemoryBytesOverride != nil {
 				overrideMem := *orgQuota.MemoryBytesOverride
@@ -1386,7 +1388,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
-			
+
 			bandwidthLimit := plan.BandwidthBytesMonth
 			if orgQuota.BandwidthBytesMonthOverride != nil {
 				overrideBandwidth := *orgQuota.BandwidthBytesMonthOverride
@@ -1400,7 +1402,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
-			
+
 			storageLimit := plan.StorageBytes
 			if orgQuota.StorageBytesOverride != nil {
 				overrideStorage := *orgQuota.StorageBytesOverride
@@ -1414,7 +1416,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
-			
+
 			deploymentsMax := plan.DeploymentsMax
 			if orgQuota.DeploymentsMaxOverride != nil {
 				overrideDeployMax := *orgQuota.DeploymentsMaxOverride
@@ -1432,7 +1434,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			// Convert to monthly limits (CPU and Memory are per-second, so multiply by seconds in month)
 			secondsInMonth := int64(monthEnd.Sub(monthStart).Seconds())
 			quota = &organizationsv1.UsageQuota{
-				CpuCoreSecondsMonthly:   int64(cpuLimit) * secondsInMonth,
+				CpuCoreSecondsMonthly:    int64(cpuLimit) * secondsInMonth,
 				MemoryByteSecondsMonthly: memoryLimit * secondsInMonth,
 				BandwidthBytesMonthly:    bandwidthLimit,
 				StorageBytes:             storageLimit,
@@ -1440,11 +1442,11 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			}
 		}
 	}
-	
+
 	if quota == nil {
 		// Default quota (0 = unlimited)
 		quota = &organizationsv1.UsageQuota{
-			CpuCoreSecondsMonthly:   0,
+			CpuCoreSecondsMonthly:    0,
 			MemoryByteSecondsMonthly: 0,
 			BandwidthBytesMonthly:    0,
 			StorageBytes:             0,
@@ -1453,11 +1455,11 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	}
 
 	response := &organizationsv1.GetUsageResponse{
-		OrganizationId:    orgID,
-		Month:             month,
-		Current:           currentMetrics,
-		EstimatedMonthly:  estimatedMonthly,
-		Quota:             quota,
+		OrganizationId:   orgID,
+		Month:            month,
+		Current:          currentMetrics,
+		EstimatedMonthly: estimatedMonthly,
+		Quota:            quota,
 	}
 
 	return connect.NewResponse(response), nil
@@ -1487,14 +1489,14 @@ func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time
 // organizationToProto converts a database Organization to a proto Organization, including plan info
 func organizationToProto(org *database.Organization) *organizationsv1.Organization {
 	po := &organizationsv1.Organization{
-		Id:            org.ID,
-		Name:          org.Name,
-		Slug:          org.Slug,
-		Plan:          strings.ToLower(org.Plan),
-		Status:        org.Status,
-		Credits:       org.Credits,
+		Id:             org.ID,
+		Name:           org.Name,
+		Slug:           org.Slug,
+		Plan:           strings.ToLower(org.Plan),
+		Status:         org.Status,
+		Credits:        org.Credits,
 		TotalPaidCents: org.TotalPaidCents,
-		CreatedAt:     timestamppb.New(org.CreatedAt),
+		CreatedAt:      timestamppb.New(org.CreatedAt),
 	}
 	if org.Domain != nil {
 		po.Domain = org.Domain
@@ -1698,7 +1700,7 @@ func getRoleNameForAPI(roleID string) string {
 	if roleName := auth.GetSystemRoleNameFromID(roleID); roleName != "" {
 		return roleName
 	}
-	
+
 	// It's a custom role ID - return as-is (frontend will handle it via role catalog)
 	return roleID
 }
@@ -1709,7 +1711,7 @@ func getRoleDisplayName(roleID string) string {
 	if roleName := auth.GetSystemRoleNameFromID(roleID); roleName != "" {
 		return capitalize(roleName)
 	}
-	
+
 	// It's a custom role ID - try to look up the role name
 	// For now, we'll just capitalize the ID as a fallback
 	// In a real scenario, you might want to look up the role name from the database
@@ -1826,8 +1828,8 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 	_ = EnsurePlanAssigned(orgID)
 
 	return connect.NewResponse(&organizationsv1.AdminAddCreditsResponse{
-		Organization:      organizationToProto(&org),
-		NewBalanceCents:   org.Credits,
+		Organization:     organizationToProto(&org),
+		NewBalanceCents:  org.Credits,
 		AmountAddedCents: amountCents,
 	}), nil
 }
@@ -1898,8 +1900,8 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 	}
 
 	return connect.NewResponse(&organizationsv1.AdminRemoveCreditsResponse{
-		Organization:        organizationToProto(&org),
-		NewBalanceCents:     org.Credits,
+		Organization:       organizationToProto(&org),
+		NewBalanceCents:    org.Credits,
 		AmountRemovedCents: actualRemoved,
 	}), nil
 }
@@ -1954,20 +1956,20 @@ func (s *Service) GetCreditLog(ctx context.Context, req *connect.Request[organiz
 		Offset(offset).
 		Find(&transactions).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get credit log: %w", err))
-		}
+	}
 
 	// Convert to proto
 	protoTransactions := make([]*organizationsv1.CreditTransaction, 0, len(transactions))
 	for _, t := range transactions {
 		pt := &organizationsv1.CreditTransaction{
-			Id:           t.ID,
+			Id:             t.ID,
 			OrganizationId: t.OrganizationID,
-			AmountCents:  t.AmountCents,
-			BalanceAfter: t.BalanceAfter,
-			Type:         t.Type,
-			Source:       t.Source,
-			CreatedAt:    timestamppb.New(t.CreatedAt),
-	}
+			AmountCents:    t.AmountCents,
+			BalanceAfter:   t.BalanceAfter,
+			Type:           t.Type,
+			Source:         t.Source,
+			CreatedAt:      timestamppb.New(t.CreatedAt),
+		}
 		if t.Note != nil {
 			pt.Note = t.Note
 		}
