@@ -74,8 +74,16 @@ export default defineEventHandler(async (event) => {
 
   try {
     const runtimeConfig = useRuntimeConfig();
-    const githubClientId = runtimeConfig.public.githubClientId;
-    const githubClientSecret = runtimeConfig.githubClientSecret; // Server-side only
+    const githubClientId =
+      runtimeConfig.public.githubClientId ||
+      process.env.NUXT_PUBLIC_GITHUB_CLIENT_ID ||
+      process.env.GITHUB_CLIENT_ID ||
+      "";
+    const githubClientSecret =
+      runtimeConfig.githubClientSecret ||
+      process.env.NUXT_GITHUB_CLIENT_SECRET ||
+      process.env.GITHUB_CLIENT_SECRET ||
+      "";
 
     if (!githubClientId || !githubClientSecret) {
       console.error("[GitHub OAuth] Missing GitHub credentials in config");

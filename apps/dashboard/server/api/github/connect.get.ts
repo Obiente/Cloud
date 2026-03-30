@@ -21,7 +21,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const runtimeConfig = useRuntimeConfig(event);
-  const githubClientId = runtimeConfig.public.githubClientId;
+  const githubClientId =
+    runtimeConfig.public.githubClientId ||
+    process.env.NUXT_PUBLIC_GITHUB_CLIENT_ID ||
+    process.env.GITHUB_CLIENT_ID ||
+    "";
 
   if (!githubClientId) {
     return sendRedirect(
