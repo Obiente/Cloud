@@ -19,6 +19,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
+	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/redis"
 	gateway "github.com/obiente/cloud/apps/vps-service/internal/gateway"
@@ -308,6 +309,8 @@ func main() {
 		shutdownTimeout := 30 * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
+
+		sharedorchestrator.GetGlobalGatewayRegistry().Close()
 
 		// Stop SSH proxy server if running
 		if sshProxyServer != nil {

@@ -39,7 +39,7 @@ type GatewayMetadata struct {
 	GatewayIP     string    `json:"gateway_ip"`
 	RegisteredAt  time.Time `json:"registered_at"`
 	LastHeartbeat time.Time `json:"last_heartbeat"`
-	APIInstanceID string   `json:"api_instance_id"` // Which API instance has the connection
+	APIInstanceID string    `json:"api_instance_id"` // Which API instance has the connection
 }
 
 // GatewayRegistry manages connected gateways
@@ -50,6 +50,9 @@ type GatewayRegistry struct {
 	apiSecret      string
 	apiInstanceID  string // Unique ID for this API instance
 	redisClient    *database.RedisCache
+	ctx            context.Context
+	cancel         context.CancelFunc
+	closeOnce      sync.Once
 }
 
 var globalRegistry *GatewayRegistry
@@ -63,13 +66,13 @@ func GetGlobalGatewayRegistry() *GatewayRegistry {
 		if secret := os.Getenv("VPS_GATEWAY_API_SECRET"); secret != "" {
 			apiSecret = secret
 		}
-		
+
 		// Get API instance ID (use hostname or generate)
 		apiInstanceID := os.Getenv("HOSTNAME")
 		if apiInstanceID == "" {
 			apiInstanceID = fmt.Sprintf("api-%d", time.Now().Unix())
 		}
-		
+
 		globalRegistry = NewGatewayRegistry(apiSecret, apiInstanceID)
 	})
 	return globalRegistry
@@ -78,19 +81,22 @@ func GetGlobalGatewayRegistry() *GatewayRegistry {
 // NewGatewayRegistry creates a new gateway registry
 // Note: In forward connection pattern, API connects to gateway, so registry is mainly for tracking gateway metadata
 func NewGatewayRegistry(apiSecret, apiInstanceID string) *GatewayRegistry {
+	ctx, cancel := context.WithCancel(context.Background())
 	registry := &GatewayRegistry{
 		gateways:       make(map[string]*GatewayConnection),
 		gatewayMetrics: make(map[string]string),
 		apiSecret:      apiSecret,
 		apiInstanceID:  apiInstanceID,
 		redisClient:    database.RedisClient,
+		ctx:            ctx,
+		cancel:         cancel,
 	}
-	
+
 	// Start background task to sync gateway metadata from Redis (if needed)
 	if registry.redisClient != nil {
 		go registry.syncGatewayMetadata()
 	}
-	
+
 	return registry
 }
 
@@ -108,7 +114,7 @@ func (r *GatewayRegistry) getContainerIP() string {
 	if ip := os.Getenv("CONTAINER_IP"); ip != "" {
 		return ip
 	}
-	
+
 	// In Docker Swarm, the hostname resolves to the container's overlay network IP
 	// This is the most reliable way to get the overlay network IP
 	hostname := os.Getenv("HOSTNAME")
@@ -120,7 +126,7 @@ func (r *GatewayRegistry) getContainerIP() string {
 			return addrs[0]
 		}
 	}
-	
+
 	// Fallback: Try to get IP from overlay network interface
 	// Overlay networks typically use interfaces like 'eth0' or 'veth*'
 	// Look for IPs that are likely from the Docker overlay network (10.x.x.x, 172.16-31.x.x)
@@ -131,7 +137,7 @@ func (r *GatewayRegistry) getContainerIP() string {
 			if iface.Flags&net.FlagLoopback != 0 || iface.Name == "docker0" {
 				continue
 			}
-			
+
 			if iface.Flags&net.FlagUp != 0 {
 				addrs, err := iface.Addrs()
 				if err == nil {
@@ -151,7 +157,7 @@ func (r *GatewayRegistry) getContainerIP() string {
 			}
 		}
 	}
-	
+
 	// Last resort: Get any non-loopback IPv4 address
 	interfaces, err = net.Interfaces()
 	if err == nil {
@@ -171,7 +177,7 @@ func (r *GatewayRegistry) getContainerIP() string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -179,28 +185,32 @@ func (r *GatewayRegistry) getContainerIP() string {
 func (r *GatewayRegistry) syncGatewayMetadata() {
 	ticker := time.NewTicker(10 * time.Second) // Sync every 10 seconds
 	defer ticker.Stop()
-	
-	for range ticker.C {
-		ctx := context.Background()
-		
+
+	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
 		// Get all gateway keys from Redis
 		// Format: gateway:metadata:{gatewayID}
 		// We'll use a pattern to find all gateway metadata
 		// For now, we'll just update heartbeats for known gateways
-		
+
 		r.mu.RLock()
 		gatewayIDs := make([]string, 0, len(r.gateways))
 		for id := range r.gateways {
 			gatewayIDs = append(gatewayIDs, id)
 		}
 		r.mu.RUnlock()
-		
+
 		// Update heartbeats in Redis for our local connections
 		for _, gatewayID := range gatewayIDs {
 			r.mu.RLock()
 			conn, ok := r.gateways[gatewayID]
 			r.mu.RUnlock()
-			
+
 			if ok {
 				metadata := GatewayMetadata{
 					GatewayID:     conn.GatewayID,
@@ -210,15 +220,23 @@ func (r *GatewayRegistry) syncGatewayMetadata() {
 					LastHeartbeat: conn.LastHeartbeat,
 					APIInstanceID: r.apiInstanceID,
 				}
-				
+
 				key := fmt.Sprintf("gateway:metadata:%s", gatewayID)
 				if r.redisClient != nil {
 					// Store with 30 second TTL (will be refreshed on heartbeat)
-					r.redisClient.Set(ctx, key, metadata, 30*time.Second)
+					r.redisClient.Set(r.ctx, key, metadata, 30*time.Second)
 				}
 			}
 		}
 	}
+}
+
+func (r *GatewayRegistry) Close() {
+	r.closeOnce.Do(func() {
+		if r.cancel != nil {
+			r.cancel()
+		}
+	})
 }
 
 // RegisterGateway registers a new gateway connection
@@ -257,7 +275,7 @@ func (r *GatewayRegistry) RegisterGateway(ctx context.Context, gatewayID, versio
 			LastHeartbeat: time.Now(),
 			APIInstanceID: r.apiInstanceID,
 		}
-		
+
 		key := fmt.Sprintf("gateway:metadata:%s", gatewayID)
 		ctx := context.Background()
 		// Store with 30 second TTL (will be refreshed on heartbeat)
@@ -302,7 +320,7 @@ func (r *GatewayRegistry) GetAnyGateway() (*GatewayConnection, bool) {
 		return conn, true
 	}
 	r.mu.RUnlock()
-	
+
 	// If no local gateway, check Redis for any gateway metadata
 	// This allows API instances to know about gateways connected to other instances
 	if r.redisClient != nil {
@@ -311,7 +329,7 @@ func (r *GatewayRegistry) GetAnyGateway() (*GatewayConnection, bool) {
 		// TODO: Implement request forwarding to the API instance that has the connection
 		logger.Debug("[GatewayRegistry] No local gateway found, but gateways may exist on other API instances (check Redis)")
 	}
-	
+
 	return nil, false
 }
 
@@ -339,13 +357,13 @@ func (r *GatewayRegistry) UpdateHeartbeatWithRegistry(gatewayID string) {
 	r.mu.RLock()
 	conn, ok := r.gateways[gatewayID]
 	r.mu.RUnlock()
-	
+
 	if !ok {
 		return
 	}
-	
+
 	conn.UpdateHeartbeat()
-	
+
 	// Refresh Redis metadata
 	if r.redisClient != nil {
 		metadata := GatewayMetadata{
@@ -356,7 +374,7 @@ func (r *GatewayRegistry) UpdateHeartbeatWithRegistry(gatewayID string) {
 			LastHeartbeat: conn.LastHeartbeat,
 			APIInstanceID: r.apiInstanceID,
 		}
-		
+
 		key := fmt.Sprintf("gateway:metadata:%s", gatewayID)
 		ctx := context.Background()
 		// Store with 30 second TTL (will be refreshed on next heartbeat)
@@ -371,18 +389,18 @@ func (r *GatewayRegistry) GetGatewayMetadataFromRedis(ctx context.Context, gatew
 	if r.redisClient == nil {
 		return nil, fmt.Errorf("redis not available")
 	}
-	
+
 	key := fmt.Sprintf("gateway:metadata:%s", gatewayID)
 	data, err := r.redisClient.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var metadata GatewayMetadata
 	if err := json.Unmarshal([]byte(data), &metadata); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal gateway metadata: %w", err)
 	}
-	
+
 	return &metadata, nil
 }
 
