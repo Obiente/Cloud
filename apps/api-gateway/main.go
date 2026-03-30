@@ -353,6 +353,8 @@ type ReverseProxy struct {
 	shutdownCtx      context.Context
 	httpClient       *http.Client // Shared HTTP client with connection pooling
 	httpClientOnce   sync.Once    // Ensures client is initialized once
+	streamingClient  *http.Client // Shared client for long-lived streaming requests
+	streamingOnce    sync.Once
 	healthClient     *http.Client // Shared health-check client to avoid per-probe allocations
 	healthClientOnce sync.Once
 }
@@ -713,6 +715,39 @@ func (p *ReverseProxy) getHTTPClient() *http.Client {
 	return p.httpClient
 }
 
+func (p *ReverseProxy) getStreamingHTTPClient() *http.Client {
+	p.streamingOnce.Do(func() {
+		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: shouldSkipVerify,
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 0,
+			DisableKeepAlives:     false,
+			ForceAttemptHTTP2:     false,
+			WriteBufferSize:       4096,
+			ReadBufferSize:        4096,
+		}
+
+		p.streamingClient = &http.Client{
+			Transport: transport,
+			Timeout:   0,
+		}
+	})
+	return p.streamingClient
+}
+
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgradeHeader := r.Header.Get("Upgrade")
 	connectionHeader := r.Header.Get("Connection")
@@ -874,33 +909,15 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	isStreamingRequest := strings.Contains(r.URL.Path, "Stream") ||
 		strings.Contains(r.URL.Path, "stream")
 
-	// For streaming requests, use a client without timeout or with a very long timeout
-	var streamingClient *http.Client
+	// For streaming requests, use a shared client without a request timeout.
 	if isStreamingRequest {
 		logger.Debug("[API Gateway] Detected streaming request, using long-lived client for: %s", r.URL.Path)
-		// Create a client with no timeout for streaming (or very long timeout)
-		streamingTransport := &http.Transport{
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   10,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			ResponseHeaderTimeout: 0, // No timeout for response headers in streaming
-			DisableKeepAlives:     false,
-			ForceAttemptHTTP2:     false,
-			WriteBufferSize:       4096,
-			ReadBufferSize:        4096,
-		}
-		streamingClient = &http.Client{
-			Transport: streamingTransport,
-			Timeout:   0, // No timeout for streaming requests
-		}
 	}
 
 	// Forward request - use streaming client if this is a streaming request
 	requestClient := client
-	if isStreamingRequest && streamingClient != nil {
-		requestClient = streamingClient
+	if isStreamingRequest {
+		requestClient = p.getStreamingHTTPClient()
 	}
 
 	resp, err := requestClient.Do(req)
