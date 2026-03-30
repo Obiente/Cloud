@@ -85,6 +85,9 @@ func main() {
 		port = "3008"
 	}
 
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
@@ -109,20 +112,17 @@ func main() {
 	}
 
 	// Start background lease sync from gateways (API-initiated)
-	var leaseSyncCancel context.CancelFunc
 	if vpsManager != nil {
-		leaseSyncCtx, cancel := context.WithCancel(context.Background())
-		leaseSyncCancel = cancel
 		go func() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
-				if err := vpsManager.SyncLeasesFromGateways(leaseSyncCtx); err != nil {
+				if err := vpsManager.SyncLeasesFromGateways(shutdownCtx); err != nil {
 					logger.Debug("[LeaseSync] %v", err)
 				}
 
 				select {
-				case <-leaseSyncCtx.Done():
+				case <-shutdownCtx.Done():
 					return
 				case <-ticker.C:
 				}
@@ -167,7 +167,7 @@ func main() {
 			gatewayClient.SetSyncCallback(vpsManager.GetAllocationsForGateway)
 
 			go func() {
-				if err := gatewayClient.Start(context.Background()); err != nil {
+				if err := gatewayClient.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 					logger.Error("Gateway client error: %v", err)
 				}
 			}()
@@ -210,8 +210,7 @@ func main() {
 		sshProxyServer = nil
 	} else {
 		go func() {
-			ctx := context.Background()
-			if err := sshProxyServer.Start(ctx); err != nil {
+			if err := sshProxyServer.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
 				logger.Error("SSH proxy server error: %v", err)
 			}
 		}()
@@ -220,8 +219,10 @@ func main() {
 
 	// Start lease reconciler to ensure all VPSes have DHCP leases registered
 	// This handles cases where gateway was down during VPS creation
-	go vpsManager.StartLeaseReconciler(context.Background())
-	logger.Info("✓ Lease reconciler started")
+	if vpsManager != nil {
+		go vpsManager.StartLeaseReconciler(shutdownCtx)
+		logger.Info("✓ Lease reconciler started")
+	}
 
 	// Health check endpoint with replica ID
 	mux.HandleFunc("/health", health.HandleHealth("vps-service", func() (bool, string, map[string]interface{}) {
@@ -266,16 +267,6 @@ func main() {
 		ReadHeaderTimeout: readHeaderTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
-	}
-
-	// Set up graceful shutdown
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if leaseSyncCancel != nil {
-		go func() {
-			<-shutdownCtx.Done()
-			leaseSyncCancel()
-		}()
 	}
 
 	// Start background sync jobs if VPS manager is available
@@ -334,15 +325,20 @@ func startVPSStatusSync(ctx context.Context, vpsManager *orchestrator.VPSManager
 	defer ticker.Stop()
 
 	// Run once on startup (after a short delay to ensure DB is ready)
-	time.Sleep(10 * time.Second)
+	startupDelay := time.NewTimer(10 * time.Second)
+	defer startupDelay.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-startupDelay.C:
+	}
 	syncCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	deletedVPSs, err := vpsManager.SyncAllVPSStatuses(syncCtx)
 	cancel()
 	if err != nil {
 		logger.Warn("[VPS Status Sync] Error on startup sync: %v", err)
 	} else {
-		// Send notifications for deleted VPSs
-		sendDeletedVPSNotifications(context.Background(), deletedVPSs)
+		sendDeletedVPSNotificationsWithTimeout(ctx, deletedVPSs)
 	}
 
 	for {
@@ -351,17 +347,22 @@ func startVPSStatusSync(ctx context.Context, vpsManager *orchestrator.VPSManager
 			logger.Info("[VPS Status Sync] Status sync service stopped")
 			return
 		case <-ticker.C:
-			syncCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			syncCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			deletedVPSs, err := vpsManager.SyncAllVPSStatuses(syncCtx)
 			cancel()
 			if err != nil {
 				logger.Warn("[VPS Status Sync] Error during periodic sync: %v", err)
 			} else {
-				// Send notifications for deleted VPSs
-				sendDeletedVPSNotifications(context.Background(), deletedVPSs)
+				sendDeletedVPSNotificationsWithTimeout(ctx, deletedVPSs)
 			}
 		}
 	}
+}
+
+func sendDeletedVPSNotificationsWithTimeout(ctx context.Context, deletedVPSs map[string]int32) {
+	notifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	sendDeletedVPSNotifications(notifyCtx, deletedVPSs)
 }
 
 // sendDeletedVPSNotifications sends notifications for VPSs that were marked as deleted
@@ -427,12 +428,18 @@ func startVPSImportSync(ctx context.Context, vpsManager *orchestrator.VPSManager
 	defer ticker.Stop()
 
 	// Run once on startup (after a short delay to ensure DB is ready)
-	time.Sleep(15 * time.Second)
+	startupDelay := time.NewTimer(15 * time.Second)
+	defer startupDelay.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-startupDelay.C:
+	}
 	importCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
 	if err := vpsManager.ImportMissingVPSForAllOrgs(importCtx); err != nil {
 		logger.Warn("[VPS Import Sync] Error on startup import: %v", err)
 	}
+	cancel()
 
 	for {
 		select {
@@ -440,7 +447,7 @@ func startVPSImportSync(ctx context.Context, vpsManager *orchestrator.VPSManager
 			logger.Info("[VPS Import Sync] Import sync service stopped")
 			return
 		case <-ticker.C:
-			importCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			importCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			if err := vpsManager.ImportMissingVPSForAllOrgs(importCtx); err != nil {
 				logger.Warn("[VPS Import Sync] Error during periodic import: %v", err)
 			}
