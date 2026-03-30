@@ -109,7 +109,7 @@ func (r *BuildHistoryRepository) GetNextBuildNumber(ctx context.Context, deploym
 		Where("deployment_id = ?", deploymentID).
 		Select("COALESCE(MAX(build_number), 0)").
 		Scan(&maxBuildNumber).Error
-	
+
 	if err != nil {
 		return 0, err
 	}
@@ -120,19 +120,19 @@ func (r *BuildHistoryRepository) GetNextBuildNumber(ctx context.Context, deploym
 func (r *BuildHistoryRepository) UpdateBuildStatus(ctx context.Context, buildID string, status int32, buildTime int32, errorMsg *string) error {
 	now := time.Now()
 	update := map[string]interface{}{
-		"status":      status,
-		"build_time":  buildTime,
-		"updated_at":  now,
+		"status":     status,
+		"build_time": buildTime,
+		"updated_at": now,
 	}
-	
+
 	if status == 3 || status == 4 { // BUILD_SUCCESS or BUILD_FAILED
 		update["completed_at"] = &now
 	}
-	
+
 	if errorMsg != nil {
 		update["error"] = *errorMsg
 	}
-	
+
 	if err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
 		Where("id = ?", buildID).
@@ -153,7 +153,7 @@ func (r *BuildHistoryRepository) UpdateBuildResults(ctx context.Context, buildID
 	update := map[string]interface{}{
 		"updated_at": time.Now(),
 	}
-	
+
 	if imageName != nil {
 		update["image_name"] = *imageName
 	}
@@ -163,7 +163,7 @@ func (r *BuildHistoryRepository) UpdateBuildResults(ctx context.Context, buildID
 	if size != nil {
 		update["size"] = *size
 	}
-	
+
 	if err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
 		Where("id = ?", buildID).
@@ -191,7 +191,7 @@ func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, d
 		Where("deployment_id = ? AND status = ?", deploymentID, 3). // BUILD_SUCCESS = 3
 		Order("build_number DESC").
 		First(&build).Error
-	
+
 	if err != nil {
 		// "Record not found" is a normal condition - deployment simply has no successful builds yet
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -201,6 +201,36 @@ func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, d
 		return nil, err
 	}
 	return &build, nil
+}
+
+// GetLatestSuccessfulBuilds returns the most recent successful build for each deployment ID.
+func (r *BuildHistoryRepository) GetLatestSuccessfulBuilds(ctx context.Context, deploymentIDs []string) (map[string]*BuildHistory, error) {
+	if len(deploymentIDs) == 0 {
+		return map[string]*BuildHistory{}, nil
+	}
+
+	latestBuildNumbers := r.db.WithContext(ctx).
+		Model(&BuildHistory{}).
+		Select("deployment_id, MAX(build_number) AS build_number").
+		Where("deployment_id IN ? AND status = ?", deploymentIDs, 3).
+		Group("deployment_id")
+
+	var builds []BuildHistory
+	if err := r.db.WithContext(ctx).
+		Table("build_history AS bh").
+		Select("bh.*").
+		Joins("JOIN (?) AS latest ON bh.deployment_id = latest.deployment_id AND bh.build_number = latest.build_number", latestBuildNumbers).
+		Find(&builds).Error; err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*BuildHistory, len(builds))
+	for i := range builds {
+		build := builds[i]
+		result[build.DeploymentID] = &build
+	}
+
+	return result, nil
 }
 
 // DeleteBuild deletes a build from PostgreSQL
@@ -260,14 +290,14 @@ func (r *BuildHistoryRepository) DeleteBuildsByDeployment(ctx context.Context, d
 // The caller should use BuildLogsRepository to delete logs for the returned build IDs
 func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olderThan time.Duration) ([]string, int64, error) {
 	cutoff := time.Now().Add(-olderThan)
-	
+
 	// Get build IDs that will be deleted so caller can delete logs from TimescaleDB
 	var buildIDs []string
 	err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
 		Where("started_at < ?", cutoff).
 		Pluck("id", &buildIDs).Error
-	
+
 	if err != nil {
 		return nil, 0, err
 	}
@@ -276,6 +306,6 @@ func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olde
 	result := r.db.WithContext(ctx).
 		Where("started_at < ?", cutoff).
 		Delete(&BuildHistory{})
-	
+
 	return buildIDs, result.RowsAffected, result.Error
 }

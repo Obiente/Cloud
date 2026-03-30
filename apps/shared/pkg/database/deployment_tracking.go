@@ -221,6 +221,25 @@ func GetAllDeploymentLocations(deploymentID string) ([]DeploymentLocation, error
 	return locations, result.Error
 }
 
+// GetAllDeploymentLocationsByDeploymentIDs returns all tracked locations grouped by deployment ID.
+func GetAllDeploymentLocationsByDeploymentIDs(deploymentIDs []string) (map[string][]DeploymentLocation, error) {
+	if len(deploymentIDs) == 0 {
+		return map[string][]DeploymentLocation{}, nil
+	}
+
+	var locations []DeploymentLocation
+	if err := DB.Where("deployment_id IN ?", deploymentIDs).Find(&locations).Error; err != nil {
+		return nil, err
+	}
+
+	grouped := make(map[string][]DeploymentLocation, len(deploymentIDs))
+	for _, location := range locations {
+		grouped[location.DeploymentID] = append(grouped[location.DeploymentID], location)
+	}
+
+	return grouped, nil
+}
+
 // GetNodeByID returns node metadata by ID
 func GetNodeByID(nodeID string) (*NodeMetadata, error) {
 	var node NodeMetadata

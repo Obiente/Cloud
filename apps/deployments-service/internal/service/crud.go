@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
@@ -76,28 +77,50 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 
 	log.Printf("[ListDeployments] Found %d deployments for user %s in org %s (IncludeAll: %v)", len(dbDeployments), userInfo.Id, orgID, filters.IncludeAll)
 
+	buildTimeIDs := make([]string, 0, len(dbDeployments))
+	composeDeploymentIDs := make([]string, 0, len(dbDeployments))
+	for _, dbDep := range dbDeployments {
+		if dbDep.BuildTime == 0 {
+			buildTimeIDs = append(buildTimeIDs, dbDep.ID)
+		}
+		if dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
+			dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+			composeDeploymentIDs = append(composeDeploymentIDs, dbDep.ID)
+		}
+	}
+
+	latestBuilds := map[string]*database.BuildHistory{}
+	if len(buildTimeIDs) > 0 {
+		if builds, err := s.buildHistoryRepo.GetLatestSuccessfulBuilds(ctx, buildTimeIDs); err == nil {
+			latestBuilds = builds
+		} else {
+			log.Printf("[ListDeployments] Failed to batch load latest builds: %v", err)
+		}
+	}
+
+	containerStatuses := map[string]deploymentContainerStatus{}
+	if len(composeDeploymentIDs) > 0 {
+		if statuses, err := s.getDeploymentContainerStatuses(ctx, composeDeploymentIDs); err == nil {
+			containerStatuses = statuses
+		} else {
+			log.Printf("[ListDeployments] Failed to batch load container statuses: %v", err)
+		}
+	}
+
 	// Convert DB models to proto models and enrich with actual container status
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))
 	for _, dbDep := range dbDeployments {
 		deployment := dbDeploymentToProto(dbDep)
 
-		// If deployment's build time is 0, try to get it from the latest successful build
 		if deployment.BuildTime == 0 {
-			latestBuild, err := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, dbDep.ID)
-			if err == nil && latestBuild != nil && latestBuild.BuildTime > 0 {
+			if latestBuild := latestBuilds[dbDep.ID]; latestBuild != nil && latestBuild.BuildTime > 0 {
 				deployment.BuildTime = latestBuild.BuildTime
 			}
 		}
 
-		// Get actual container status from Docker (not DB)
-		// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
-		if dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
-			dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
-			running, total, err := s.getDeploymentContainerStatus(ctx, dbDep.ID)
-			if err == nil {
-				deployment.ContainersRunning = proto.Int32(running)
-				deployment.ContainersTotal = proto.Int32(total)
-			}
+		if status, ok := containerStatuses[dbDep.ID]; ok {
+			deployment.ContainersRunning = proto.Int32(status.running)
+			deployment.ContainersTotal = proto.Int32(status.total)
 		}
 
 		items = append(items, deployment)
@@ -150,7 +173,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 
-	id := fmt.Sprintf("deploy-%d", time.Now().Unix())
+	id := fmt.Sprintf("deploy-%s", uuid.NewString())
 
 	// Get environment from request, default to PRODUCTION
 	environment := req.Msg.GetEnvironment()

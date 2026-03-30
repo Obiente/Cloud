@@ -464,6 +464,48 @@ func (s *Service) getDeploymentContainerStatus(ctx context.Context, deploymentID
 	return runningCount, totalCount, nil
 }
 
+type deploymentContainerStatus struct {
+	running int32
+	total   int32
+}
+
+func (s *Service) getDeploymentContainerStatuses(ctx context.Context, deploymentIDs []string) (map[string]deploymentContainerStatus, error) {
+	if len(deploymentIDs) == 0 {
+		return map[string]deploymentContainerStatus{}, nil
+	}
+
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, fmt.Errorf("docker client: %w", err)
+	}
+	defer dcli.Close()
+
+	locationsByDeployment, err := database.GetAllDeploymentLocationsByDeploymentIDs(deploymentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get locations: %w", err)
+	}
+
+	statuses := make(map[string]deploymentContainerStatus, len(deploymentIDs))
+	for _, deploymentID := range deploymentIDs {
+		locations := locationsByDeployment[deploymentID]
+		status := deploymentContainerStatus{total: int32(len(locations))}
+
+		for _, loc := range locations {
+			containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+			if err != nil {
+				continue
+			}
+			if containerInfo.State.Running {
+				status.running++
+			}
+		}
+
+		statuses[deploymentID] = status
+	}
+
+	return statuses, nil
+}
+
 // getDeploymentHealthStatus gets the health status from Docker containers
 // Returns the health status: "none", "starting", "healthy", "unhealthy", or empty string if no health check
 func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID string) (string, error) {
