@@ -117,9 +117,11 @@ func main() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
-				if err := vpsManager.SyncLeasesFromGateways(shutdownCtx); err != nil {
+				syncCtx, cancel := context.WithTimeout(shutdownCtx, 30*time.Second)
+				if err := vpsManager.SyncLeasesFromGateways(syncCtx); err != nil && !errors.Is(err, context.Canceled) {
 					logger.Debug("[LeaseSync] %v", err)
 				}
+				cancel()
 
 				select {
 				case <-shutdownCtx.Done():

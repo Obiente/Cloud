@@ -177,7 +177,13 @@ func (c *GatewayClient) maintainConnection(ctx context.Context, nodeName, gatewa
 		default:
 			if err := c.connectAndServe(ctx, nodeName, gatewayURL); err != nil {
 				logger.Error("[GatewayClient] Connection to %s error: %v, reconnecting in 5s...", nodeName, err)
-				time.Sleep(5 * time.Second)
+				reconnectTimer := time.NewTimer(5 * time.Second)
+				select {
+				case <-ctx.Done():
+					reconnectTimer.Stop()
+					return
+				case <-reconnectTimer.C:
+				}
 				continue
 			}
 		}
@@ -285,9 +291,9 @@ func (c *GatewayClient) connectAndServe(ctx context.Context, nodeName, gatewayUR
 		case "sync_result":
 			// Handle sync response from gateway with discovered allocations
 			if msg.SyncResult != nil {
-				logger.Info("[GatewayClient] Received sync result from gateway %s: added=%d removed=%d discovered=%d", 
+				logger.Info("[GatewayClient] Received sync result from gateway %s: added=%d removed=%d discovered=%d",
 					nodeName, msg.SyncResult.Added, msg.SyncResult.Removed, len(msg.SyncResult.DiscoveredAllocations))
-				
+
 				if len(msg.SyncResult.DiscoveredAllocations) > 0 {
 					// Register discovered leases in database
 					go c.registerDiscoveredLeases(ctx, nodeName, msg.SyncResult.DiscoveredAllocations)
@@ -420,20 +426,20 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 	c.streamsMu.RLock()
 	stream, ok := c.streams[nodeName]
 	c.streamsMu.RUnlock()
-	
+
 	if !ok || stream == nil {
 		return nil, fmt.Errorf("no active connection to gateway %s", nodeName)
 	}
-	
+
 	// Generate unique request ID
 	requestID := fmt.Sprintf("vps-req-%d", atomic.AddUint64(&c.requestCounter, 1))
-	
+
 	// Create response channel
 	respChan := make(chan *vpsgatewayv1.GatewayResponse, 1)
 	c.pendingRequestsMu.Lock()
 	c.pendingRequests[requestID] = respChan
 	c.pendingRequestsMu.Unlock()
-	
+
 	// Clean up on exit
 	defer func() {
 		c.pendingRequestsMu.Lock()
@@ -441,7 +447,7 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 		c.pendingRequestsMu.Unlock()
 		close(respChan)
 	}()
-	
+
 	// Send request
 	msg := &vpsgatewayv1.GatewayMessage{
 		Type: "request",
@@ -451,11 +457,11 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 			Payload:   payload,
 		},
 	}
-	
+
 	if err := stream.Send(msg); err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	
+
 	// Wait for response with timeout
 	select {
 	case resp := <-respChan:
@@ -472,12 +478,12 @@ func (c *GatewayClient) handleResponse(resp *vpsgatewayv1.GatewayResponse) {
 	c.pendingRequestsMu.Lock()
 	respChan, ok := c.pendingRequests[resp.RequestId]
 	c.pendingRequestsMu.Unlock()
-	
+
 	if !ok {
 		logger.Warn("[GatewayClient] Received response for unknown request: %s", resp.RequestId)
 		return
 	}
-	
+
 	// Send response to waiting goroutine
 	select {
 	case respChan <- resp:
@@ -493,26 +499,26 @@ func (c *GatewayClient) AllocateIP(ctx context.Context, nodeName, vpsID, organiz
 		OrganizationId: organizationID,
 		MacAddress:     macAddress,
 	}
-	
+
 	payload, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	resp, err := c.sendRequest(ctx, nodeName, "AllocateIP", payload)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !resp.Success {
 		return nil, fmt.Errorf("gateway error: %s", resp.Error)
 	}
-	
+
 	var allocResp vpsgatewayv1.AllocateIPResponse
 	if err := proto.Unmarshal(resp.Payload, &allocResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	
+
 	return &allocResp, nil
 }
 
@@ -521,21 +527,21 @@ func (c *GatewayClient) ReleaseIP(ctx context.Context, nodeName, vpsID string) e
 	req := &vpsgatewayv1.ReleaseIPRequest{
 		VpsId: vpsID,
 	}
-	
+
 	payload, err := proto.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	resp, err := c.sendRequest(ctx, nodeName, "ReleaseIP", payload)
 	if err != nil {
 		return err
 	}
-	
+
 	if !resp.Success {
 		return fmt.Errorf("gateway error: %s", resp.Error)
 	}
-	
+
 	return nil
 }
 
@@ -572,7 +578,7 @@ func (c *GatewayClient) registerDiscoveredLeases(ctx context.Context, nodeName s
 		}
 
 		if result.RowsAffected > 0 {
-			logger.Info("[GatewayClient] Registered discovered lease: VPS %s -> IP %s (MAC: %s, Gateway: %s)", 
+			logger.Info("[GatewayClient] Registered discovered lease: VPS %s -> IP %s (MAC: %s, Gateway: %s)",
 				alloc.VpsId, alloc.IpAddress, alloc.MacAddress, nodeName)
 		} else {
 			logger.Debug("[GatewayClient] Lease for VPS %s already exists in database", alloc.VpsId)
@@ -588,25 +594,25 @@ func (c *GatewayClient) ListIPs(ctx context.Context, nodeName, organizationID, v
 		OrganizationId: organizationID,
 		VpsId:          vpsID,
 	}
-	
+
 	payload, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	resp, err := c.sendRequest(ctx, nodeName, "ListIPs", payload)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !resp.Success {
 		return nil, fmt.Errorf("gateway error: %s", resp.Error)
 	}
-	
+
 	var listResp vpsgatewayv1.ListIPsResponse
 	if err := proto.Unmarshal(resp.Payload, &listResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	
+
 	return listResp.Allocations, nil
 }
