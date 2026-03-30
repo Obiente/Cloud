@@ -31,12 +31,12 @@ func (a *attachReadWriteCloser) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	
+
 	if a.isTTY {
 		// TTY mode: raw output, no headers, read directly
 		return a.reader.Read(p)
 	}
-	
+
 	// Non-TTY mode: Docker multiplexes stdout/stderr with 8-byte headers
 	// Format: [stream_type(1)][reserved(3)][payload_length(4 bytes, big-endian)]
 	header := make([]byte, 8)
@@ -82,7 +82,7 @@ func (a *attachReadWriteCloser) Write(p []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
-	
+
 	// Try to flush if the writer supports it (important for TTY mode)
 	if flusher, ok := a.writer.(interface{ Flush() error }); ok {
 		if flushErr := flusher.Flush(); flushErr != nil {
@@ -90,7 +90,7 @@ func (a *attachReadWriteCloser) Write(p []byte) (n int, err error) {
 			// Don't fail the write if flush fails
 		}
 	}
-	
+
 	return n, err
 }
 
@@ -101,7 +101,7 @@ func (a *attachReadWriteCloser) Close() error {
 		return nil
 	}
 	a.closed = true
-	
+
 	var errs []error
 	if a.reader != nil {
 		if err := a.reader.Close(); err != nil {
@@ -135,10 +135,18 @@ type TerminalSession struct {
 var terminalSessions = make(map[string]*TerminalSession)
 var terminalSessionsMutex sync.RWMutex
 
+func (s *Service) createTerminalSession(ctx context.Context, gameServerID, orgID string, cols, rows int) (*TerminalSession, func(), bool, error) {
+	return s.openTerminalSession(ctx, gameServerID, orgID, cols, rows, false)
+}
+
 // ensureTerminalSession returns an active terminal session for the given game server,
 // creating one if necessary. It returns the session, a cleanup function, and a boolean
 // indicating whether a new session was created.
 func (s *Service) ensureTerminalSession(ctx context.Context, gameServerID, orgID string, cols, rows int) (*TerminalSession, func(), bool, error) {
+	return s.openTerminalSession(ctx, gameServerID, orgID, cols, rows, true)
+}
+
+func (s *Service) openTerminalSession(ctx context.Context, gameServerID, orgID string, cols, rows int, reuseExisting bool) (*TerminalSession, func(), bool, error) {
 	// Normalize terminal dimensions
 	if cols <= 0 {
 		cols = 80
@@ -179,6 +187,36 @@ func (s *Service) ensureTerminalSession(ctx context.Context, gameServerID, orgID
 	// Check if container has TTY enabled (from Config.Tty)
 	// If TTY is enabled, we need to attach with TTY mode for proper terminal support
 	containerHasTTY := containerInfo.Config.Tty
+
+	if !reuseExisting {
+		reader, writer, closeFn, err := dcli.ContainerAttach(ctx, *gameServer.ContainerID, docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stdout: true,
+			Stderr: true,
+			Tty:    containerHasTTY, // Match container's TTY setting
+		})
+		if err != nil {
+			log.Printf("[GameServer Terminal] Failed to attach to container %s: %v", *gameServer.ContainerID, err)
+			return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to attach to container: %w", err))
+		}
+
+		conn := &attachReadWriteCloser{
+			reader:  reader,
+			writer:  writer,
+			closeFn: closeFn,
+			isTTY:   containerHasTTY, // Track TTY mode for reading
+		}
+
+		session := &TerminalSession{
+			conn:        conn,
+			containerID: *gameServer.ContainerID,
+			createdAt:   time.Now(),
+		}
+		cleanup := func() {
+			_ = session.conn.Close()
+		}
+		return session, cleanup, true, nil
+	}
 
 	terminalSessionsMutex.Lock()
 	session, exists := terminalSessions[gameServerID]
@@ -228,7 +266,7 @@ func (s *Service) ensureTerminalSession(ctx context.Context, gameServerID, orgID
 func (s *Service) CloseTerminalSession(gameServerID string) {
 	terminalSessionsMutex.Lock()
 	defer terminalSessionsMutex.Unlock()
-	
+
 	if session, exists := terminalSessions[gameServerID]; exists {
 		log.Printf("[GameServer Terminal] Closing existing terminal session for game server %s", gameServerID)
 		if session.conn != nil {

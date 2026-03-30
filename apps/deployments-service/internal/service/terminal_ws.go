@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	"connectrpc.com/connect"
@@ -59,10 +59,10 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
-	
-	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s", 
+
+	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s",
 		isWildcard, corsConfig.AllowedOrigins, origin)
-	
+
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
 		// Setting to nil completely disables origin validation (allows all origins)
@@ -73,7 +73,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		// This ensures the websocket library can properly validate against all configured origins
 		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
 		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
-		
+
 		// Also add the current origin if it's not already in the list (for same-origin requests)
 		if origin != "" {
 			originInList := false
@@ -190,7 +190,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Try to initialize terminal session
-	session, cleanup, created, err := s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
+	session, cleanup, created, err := s.createTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
 
 	// If container is stopped, we need to find it first to get its ID
 	if err != nil {
@@ -435,7 +435,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						var newCleanup func()
 						var newCreated bool
 						var newErr error
-						newSession, newCleanup, newCreated, newErr = s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
+						newSession, newCleanup, newCreated, newErr = s.createTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
 
 						if newErr != nil {
 							errMsg := fmt.Sprintf("Error connecting to container: %v\r\n", newErr)
@@ -572,10 +572,10 @@ func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseW
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
-	
-	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s", 
+
+	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s",
 		isWildcard, corsConfig.AllowedOrigins, origin)
-	
+
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
 		// Setting to nil completely disables origin validation (allows all origins)
@@ -586,7 +586,7 @@ func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseW
 		// This ensures the websocket library can properly validate against all configured origins
 		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
 		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
-		
+
 		// Also add the current origin if it's not already in the list (for same-origin requests)
 		if origin != "" {
 			originInList := false

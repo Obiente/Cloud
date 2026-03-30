@@ -74,10 +74,10 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
-	
-	log.Printf("[GameServer Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s", 
+
+	log.Printf("[GameServer Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s",
 		isWildcard, corsConfig.AllowedOrigins, origin, r.Host)
-	
+
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
 		// Setting to nil completely disables origin validation (allows all origins)
@@ -90,7 +90,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		// even when the Host header doesn't match (e.g., when behind a gateway)
 		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
 		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
-		
+
 		// Also add the current origin if it's not already in the list
 		if origin != "" {
 			originInList := false
@@ -198,7 +198,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Try to initialize terminal session
-	session, cleanup, created, err := s.ensureTerminalSession(ctx, initMsg.GameServerID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows)
+	session, cleanup, created, err := s.createTerminalSession(ctx, initMsg.GameServerID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows)
 
 	// If container is stopped, allow user to type "start" command
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		cleanupOnce.Do(cleanup)
 	}
 	defer cleanupFn()
-	
+
 	// Use a mutex to protect session access from concurrent goroutines
 	var sessionMu sync.RWMutex
 	getSession := func() *TerminalSession {
@@ -320,14 +320,14 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				if conn, ok := currentSession.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
 					conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 				}
-				
+
 				n, err := currentSession.conn.Read(buf)
-				
+
 				// Clear the deadline
 				if conn, ok := currentSession.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
 					conn.SetReadDeadline(time.Time{})
 				}
-				
+
 				if n > 0 {
 					// Log first 100 bytes of output for debugging
 					previewLen := n
@@ -361,7 +361,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				}
 			}
 		}()
-		
+
 		// Also start a log reader as fallback (some game servers don't output to attach stream)
 		// Docker logs API reads from the logging driver and may be more reliable than attach
 		outputDoneWg.Add(1)
@@ -374,14 +374,14 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 					_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Log stream error (panic recovered)"})
 				}
 			}()
-			
+
 			dcli, err := docker.New()
 			if err != nil {
 				log.Printf("[GameServer Terminal WS] Failed to create docker client for logs: %v", err)
 				return
 			}
 			defer dcli.Close()
-			
+
 			// Get the current session to access containerID
 			currentSession := getSession()
 			if currentSession == nil {
@@ -389,7 +389,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				return
 			}
 			containerID := currentSession.containerID
-			
+
 			// Read logs with follow=true to stream new output
 			// Use tail=0 to get all logs, or a small number to get recent logs
 			logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true, nil, nil)
@@ -398,19 +398,19 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				return
 			}
 			defer logsReader.Close()
-			
+
 			// Docker logs API returns frames with 8-byte headers for non-TTY containers
 			// Read frame by frame and strip headers
 			header := make([]byte, 8)
 			frameBuf := make([]byte, 32*1024)
-			
+
 			for {
 				select {
 				case <-outputCtx.Done():
 					return
 				default:
 				}
-				
+
 				// Read header
 				if _, err := io.ReadFull(logsReader, header); err != nil {
 					if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -419,18 +419,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 					log.Printf("[GameServer Terminal WS] Log stream header read error: %v", err)
 					return
 				}
-				
+
 				// Parse payload length (bytes 4-7, big-endian)
 				payloadLength := int(uint32(header[4])<<24 | uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7]))
 				if payloadLength == 0 {
 					continue // Empty frame, read next
 				}
-				
+
 				// Read payload
 				if payloadLength > len(frameBuf) {
 					frameBuf = make([]byte, payloadLength)
 				}
-				
+
 				n, err := io.ReadFull(logsReader, frameBuf[:payloadLength])
 				if err != nil {
 					if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -448,7 +448,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 					log.Printf("[GameServer Terminal WS] Log stream payload read error: %v", err)
 					return
 				}
-				
+
 				if n > 0 {
 					data := make([]int, n)
 					for i := 0; i < n; i++ {
@@ -602,7 +602,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								oldSession.conn.Close()
 							}
 						}
-						
+
 						// Force close any existing session in the cache (ensures we get a fresh attach)
 						log.Printf("[GameServer Terminal WS] Removing old session from cache to force new attach")
 						s.CloseTerminalSession(initMsg.GameServerID)
@@ -612,7 +612,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						var newCleanup func()
 						var newCreated bool
 						var newErr error
-						newSession, newCleanup, newCreated, newErr = s.ensureTerminalSession(ctx, initMsg.GameServerID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows)
+						newSession, newCleanup, newCreated, newErr = s.createTerminalSession(ctx, initMsg.GameServerID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows)
 
 						if newErr != nil {
 							errMsg := fmt.Sprintf("Error connecting to container: %v\r\n", newErr)
@@ -626,9 +626,9 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 
 						// Success! Update session
 						setSession(newSession, newCleanup)
-						
+
 						log.Printf("[GameServer Terminal WS] Session updated after server start: containerID=%s, conn=%v", newSession.containerID, newSession.conn != nil)
-						
+
 						// Verify the connection is ready
 						if newSession.conn == nil {
 							log.Printf("[GameServer Terminal WS] ERROR: New session has nil connection!")
@@ -645,7 +645,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						outputDone = make(chan struct{})
 						outputCancel()
 						outputCtx, outputCancel = context.WithCancel(ctx)
-						
+
 						// Start attach stream reader
 						outputDoneWg.Add(1)
 						go func() {
@@ -669,7 +669,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								log.Printf("[GameServer Terminal WS] ERROR: Session connection is nil!")
 								return
 							}
-							
+
 							buf := make([]byte, 4096)
 							for {
 								// Check if context is cancelled
@@ -679,7 +679,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 									return
 								default:
 								}
-								
+
 								// Read from the captured session connection
 								n, err := sessionConn.Read(buf)
 								if n > 0 {
@@ -710,7 +710,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								}
 							}
 						}()
-						
+
 						// Also restart logs reader goroutine with new container
 						outputDoneWg.Add(1)
 						go func() {
@@ -722,14 +722,14 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 									_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Log stream error (panic recovered)"})
 								}
 							}()
-							
+
 							dcli, err := docker.New()
 							if err != nil {
 								log.Printf("[GameServer Terminal WS] Failed to create docker client for logs: %v", err)
 								return
 							}
 							defer dcli.Close()
-							
+
 							// Get the current session to access containerID
 							currentSession := getSession()
 							if currentSession == nil {
@@ -737,7 +737,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								return
 							}
 							containerID := currentSession.containerID
-							
+
 							// Read logs with follow=true to stream new output
 							logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true, nil, nil)
 							if err != nil {
@@ -745,18 +745,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								return
 							}
 							defer logsReader.Close()
-							
+
 							// Docker logs API returns frames with 8-byte headers for non-TTY containers
 							header := make([]byte, 8)
 							frameBuf := make([]byte, 32*1024)
-							
+
 							for {
 								select {
 								case <-outputCtx.Done():
 									return
 								default:
 								}
-								
+
 								// Read header
 								if _, err := io.ReadFull(logsReader, header); err != nil {
 									if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -765,18 +765,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 									log.Printf("[GameServer Terminal WS] Log stream header read error: %v", err)
 									return
 								}
-								
+
 								// Parse payload length (bytes 4-7, big-endian)
 								payloadLength := int(uint32(header[4])<<24 | uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7]))
 								if payloadLength == 0 {
 									continue // Empty frame, read next
 								}
-								
+
 								// Read payload
 								if payloadLength > len(frameBuf) {
 									frameBuf = make([]byte, payloadLength)
 								}
-								
+
 								n, err := io.ReadFull(logsReader, frameBuf[:payloadLength])
 								if err != nil {
 									if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -794,7 +794,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 									log.Printf("[GameServer Terminal WS] Log stream payload read error: %v", err)
 									return
 								}
-								
+
 								if n > 0 {
 									data := make([]int, n)
 									for i := 0; i < n; i++ {
@@ -841,9 +841,9 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				inputBytes[i] = byte(v)
 			}
 			commandStr := strings.TrimSpace(string(inputBytes))
-			
+
 			log.Printf("[GameServer Terminal WS] Sending command to game server: %q", commandStr)
-			
+
 			// Get fresh session reference - session might have been updated after server start
 			currentSession = getSession()
 			if currentSession == nil {
@@ -851,20 +851,20 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				sendError("No active terminal session. Please wait for server to start.")
 				continue
 			}
-			
+
 			log.Printf("[GameServer Terminal WS] Session found: containerID=%s, conn=%v", currentSession.containerID, currentSession.conn != nil)
-			
+
 			// Verify connection is valid before writing
 			if currentSession.conn == nil {
 				log.Printf("[GameServer Terminal WS] ERROR: Session has nil connection!")
 				sendError("Terminal session connection is invalid. Please reconnect.")
 				continue
 			}
-			
+
 			// Send command via stdin (for real-time terminal interaction)
 			if n, err := currentSession.conn.Write(inputBytes); err == nil {
 				log.Printf("[GameServer Terminal WS] Successfully wrote %d bytes to game server stdin", n)
-				
+
 				// Try to flush if supported (important for TTY mode to ensure data is sent immediately)
 				if flusher, ok := currentSession.conn.(interface{ Flush() error }); ok {
 					if flushErr := flusher.Flush(); flushErr != nil {
@@ -929,7 +929,7 @@ func (s *Service) streamStartingLogs(ctx context.Context, gameServerID string, c
 	// stream_type: 1=stdout, 2=stderr
 	header := make([]byte, 8)
 	buf := make([]byte, 4096)
-	
+
 	for {
 		select {
 		case <-ctx.Done():

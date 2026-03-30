@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -36,10 +36,18 @@ type TerminalSession struct {
 var terminalSessions = make(map[string]*TerminalSession)
 var terminalSessionsMutex sync.RWMutex
 
+func (s *Service) createTerminalSession(ctx context.Context, deploymentID, orgID string, cols, rows int, containerID, serviceName string) (*TerminalSession, func(), bool, error) {
+	return s.openTerminalSession(ctx, deploymentID, orgID, cols, rows, containerID, serviceName, false)
+}
+
 // ensureTerminalSession returns an active terminal session for the given deployment,
 // creating one if necessary. It returns the session, a cleanup function, and a boolean
 // indicating whether a new session was created.
 func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID string, cols, rows int, containerID, serviceName string) (*TerminalSession, func(), bool, error) {
+	return s.openTerminalSession(ctx, deploymentID, orgID, cols, rows, containerID, serviceName, true)
+}
+
+func (s *Service) openTerminalSession(ctx context.Context, deploymentID, orgID string, cols, rows int, containerID, serviceName string, reuseExisting bool) (*TerminalSession, func(), bool, error) {
 	// Normalize terminal dimensions
 	if cols <= 0 {
 		cols = 80
@@ -86,6 +94,22 @@ func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID
 			connect.CodeFailedPrecondition,
 			fmt.Errorf("container is stopped. Type 'start' to start the container first."),
 		)
+	}
+
+	if !reuseExisting {
+		conn, err := dcli.ContainerExec(ctx, loc.ContainerID, cols, rows)
+		if err != nil {
+			return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create terminal: %w", err))
+		}
+		session := &TerminalSession{
+			conn:        conn,
+			containerID: loc.ContainerID,
+			createdAt:   time.Now(),
+		}
+		cleanup := func() {
+			_ = session.conn.Close()
+		}
+		return session, cleanup, true, nil
 	}
 
 	terminalSessionsMutex.Lock()
