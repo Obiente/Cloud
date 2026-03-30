@@ -11,7 +11,7 @@
       />
     </div>
     
-    <template v-for="(filter, index) in filters" :key="index">
+    <template v-for="filter in filters" :key="filter.key">
       <div :class="filter.class || 'min-w-[160px]'">
         <OuiSelect
           v-model="filterValues[filter.key]"

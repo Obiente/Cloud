@@ -161,7 +161,8 @@
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type StripeWebhookEvent } from "@obiente/proto";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { useConnectClient } from "~/lib/connect-client";
 import { useRouter } from "vue-router";
 
@@ -294,15 +295,14 @@ const filteredEvents = computed(() => {
   return filtered;
 });
 
-function formatDate(timestamp: any): string {
+function formatDate(timestamp: Timestamp | null | undefined): string {
   if (!timestamp) return "—";
   const date = new Date(Number(timestamp.seconds) * 1000);
   return date.toLocaleString();
 }
 
-function viewEvent(event: any) {
+function viewEvent(event: StripeWebhookEvent) {
   // Could open a dialog with full event details
-  console.log("View event:", event);
 }
 
 function viewOrganization(orgId: string) {

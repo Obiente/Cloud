@@ -76,7 +76,6 @@ export function useMultiSelect(options: MultiSelectOptions) {
     event: MouseEvent,
     onSelectionChange?: (selectedPaths: string[]) => void
   ) {
-    console.log("[useMultiSelect] handleNodeClick called", {
       path: node.path,
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
@@ -88,36 +87,28 @@ export function useMultiSelect(options: MultiSelectOptions) {
 
     // Don't allow selecting root
     if (node.path === "/") {
-      console.log("[useMultiSelect] Ignoring root node");
       return;
     }
 
     let nodeIndex = findNodeIndex(node.path);
-    console.log("[useMultiSelect] Node index found:", nodeIndex);
     
     // If node not found, try to add it to visible nodes and find again
     if (nodeIndex === -1) {
-      console.log("[useMultiSelect] Node not in visibleNodes, adding it");
       // Add the node to visible nodes if it's not there
       // This can happen if the tree structure changed
       visibleNodes.value.push(node);
       nodeIndex = visibleNodes.value.length - 1;
-      console.log("[useMultiSelect] Added node, new index:", nodeIndex);
     }
 
     if (event.ctrlKey || event.metaKey) {
-      console.log("[useMultiSelect] Ctrl/Cmd+Click detected");
       // Ctrl/Cmd+Click: Toggle selection (node + descendants)
       if (selectedNodes.value.has(node.path)) {
-        console.log("[useMultiSelect] Removing from selection (with descendants)");
         removeNodeWithDescendants(node);
       } else {
-        console.log("[useMultiSelect] Adding to selection (with descendants)");
         addNodeWithDescendants(node);
       }
       lastSelectedIndex.value = nodeIndex;
     } else if (event.shiftKey && lastSelectedIndex.value !== null) {
-      console.log("[useMultiSelect] Shift+Click detected, range selection", {
         start: Math.min(lastSelectedIndex.value, nodeIndex),
         end: Math.max(lastSelectedIndex.value, nodeIndex),
       });
@@ -133,14 +124,12 @@ export function useMultiSelect(options: MultiSelectOptions) {
       }
       // Don't update lastSelectedIndex for range selection
     } else {
-      console.log("[useMultiSelect] Normal click, clearing and selecting single node");
       // Normal click: Clear selection and select only this node
       selectedNodes.value.clear();
       addNodeWithDescendants(node);
       lastSelectedIndex.value = nodeIndex;
     }
 
-    console.log("[useMultiSelect] Final state", {
       selectedCount: selectedNodes.value.size,
       selectedPaths: Array.from(selectedNodes.value),
       lastSelectedIndex: lastSelectedIndex.value,

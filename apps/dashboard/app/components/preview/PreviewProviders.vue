@@ -75,23 +75,9 @@ const componentKey = computed(() => {
   return `${props.mode}-${id}-${Date.now()}`;
 });
 
-console.log('[PreviewProviders] Component initializing', {
-  mode: props.mode,
-  hasComponent: !!props.component,
-  hasDeploymentMock: !!props.deploymentMock,
-  hasGameServerMock: !!props.gameServerMock,
-  hasVpsMock: !!props.vpsMock,
-  componentKey: componentKey.value,
-});
-
 // Store original transport and WebSocket BEFORE setup
 const originalTransport = (globalThis as { __OBIENTE_PREVIEW_CONNECT__?: unknown }).__OBIENTE_PREVIEW_CONNECT__ ?? null;
 const originalWebSocket = globalThis.WebSocket;
-
-console.log('[PreviewProviders] Stored originals', {
-  hasOriginalTransport: !!originalTransport,
-  hasOriginalWebSocket: !!originalWebSocket,
-});
 
 // Don't log the entire props object - it contains BigInt values that can't be stringified
 const defaultId =
@@ -100,8 +86,6 @@ const defaultId =
     : props.mode === "game"
     ? props.gameServerMock?.id || "mock-game-server"
     : props.vpsMock?.id || "mock-vps";
-
-console.log('[PreviewProviders] Default ID calculated:', defaultId);
 
 const pathForMode =
   props.mode === "deployment"
@@ -124,8 +108,6 @@ const route: RouteLocationNormalizedLoaded = reactive({
   redirectedFrom: undefined,
   meta: {},
 } as RouteLocationNormalizedLoaded);
-
-console.log('[PreviewProviders] Creating router for path:', pathForMode);
 
 const router = createRouter({
   history: createMemoryHistory(),
@@ -150,7 +132,6 @@ const blockedRouter = new Proxy(router, {
           const method = prop === 'push' ? target.push.bind(target) : target.replace.bind(target);
           return method(to);
         }
-        console.log('[PreviewProviders] Navigation blocked via', prop, ':', to);
         return Promise.resolve(undefined as any);
       };
     }
@@ -162,14 +143,12 @@ const blockedRouter = new Proxy(router, {
 try {
   allowNextNavigation.value = true; // allow initial navigation
   blockedRouter.push(pathForMode);
-  console.log('[PreviewProviders] Router pushed to:', pathForMode);
 } catch (error) {
   console.error('[PreviewProviders] Error pushing router:', error);
 }
 
 provide(routeLocationKey, route);
 provide(routerKey, blockedRouter);
-console.log('[PreviewProviders] Provided route and router contexts');
 
 // Watch for prop changes and update route accordingly
 let lastMode = props.mode;
@@ -191,12 +170,6 @@ watchEffect(() => {
     
     // If mode or ID changed, force component recreation
     if (props.mode !== lastMode || newId !== lastId) {
-      console.log('[PreviewProviders] Mode/ID change detected - forcing component recreation', {
-        oldMode: lastMode,
-        newMode: props.mode,
-        oldId: lastId,
-        newId,
-      });
       
       // Hide component briefly to force unmount
       isReady.value = false;
@@ -214,13 +187,8 @@ watchEffect(() => {
       // Show component again after brief delay
       nextTick(() => {
         isReady.value = true;
-        console.log('[PreviewProviders] Component recreated and ready');
       });
     } else if (route.path !== newPath) {
-      console.log('[PreviewProviders] Route change detected', {
-        oldPath: route.path,
-        newPath,
-      });
       route.path = newPath;
       route.fullPath = newPath;
       route.params.id = newId;
@@ -235,14 +203,11 @@ watchEffect(() => {
 const orgStore = useOrganizationsStore();
 if (!orgStore.currentOrgId) {
   orgStore.currentOrgId = "mock-org";
-  console.log('[PreviewProviders] Set preview org ID');
 } else {
-  console.log('[PreviewProviders] Org ID already set:', orgStore.currentOrgId);
 }
 
 // Provide a mocked Connect transport so pages resolve data without network calls.
 const nuxtApp = useNuxtApp();
-console.log('[PreviewProviders] Got Nuxt app instance');
 
 // Patch the global Nuxt router to block navigation during preview
 const globalRouter = nuxtApp.$router;
@@ -266,7 +231,6 @@ const shouldBlockNavigation = (to: RouteLocationRaw): boolean => {
 
 globalRouter.push = (to: RouteLocationRaw) => {
   if (inPreviewMode.value && shouldBlockNavigation(to)) {
-    console.log('[PreviewProviders] Global router.push blocked:', to);
     return Promise.resolve(undefined as any);
   }
   return originalGlobalPush(to);
@@ -274,7 +238,6 @@ globalRouter.push = (to: RouteLocationRaw) => {
 
 globalRouter.replace = (to: RouteLocationRaw) => {
   if (inPreviewMode.value && shouldBlockNavigation(to)) {
-    console.log('[PreviewProviders] Global router.replace blocked:', to);
     return Promise.resolve(undefined as any);
   }
   return originalGlobalReplace(to);
@@ -388,11 +351,6 @@ const addLog = (type: 'deployment' | 'gameserver' | 'vps' | 'build', message: st
 const mockTransport: any = {
   unary: async (_service: any, method: any, _signal?: AbortSignal, _timeout?: number, header?: HeadersInit | unknown, input: any = {}) => {
     const methodName = String(_service?.name || method?.name || method?.localName || "").toLowerCase();
-    console.log('[MockTransport.unary] Called', {
-      methodName,
-      hasInput: !!input,
-      service: _service?.name,
-    });
 
     try {
       const isHeadersInit = (value: unknown): value is HeadersInit => {
@@ -418,7 +376,6 @@ const mockTransport: any = {
           header: emptyHeaders(),
           trailer: emptyHeaders()
         };
-        console.log('[PreviewTransport.unary] Returning response for:', name);
         return response;
       } catch (error) {
         console.error('[PreviewTransport.unary] Error creating response:', error);
@@ -725,7 +682,6 @@ const mockTransport: any = {
 
     // Deployment mocks
     if (name.includes("deployment")) {
-      console.log('[MockTransport.unary] ✅ Inside deployment block for:', name);
       if ((name.includes("getdeployment") && !name.includes("metrics") && !name.includes("usage") && !name.includes("health") && !name.includes("logs") && !name.includes("services") && !name.includes("routings") && !name.includes("compose")) || name === "deployment") {
         return { message: { deployment }, header: emptyHeaders(), trailer: emptyHeaders() };
       }
@@ -782,16 +738,6 @@ const mockTransport: any = {
         });
       }
       if (name.includes("getdeploymentmetrics")) {
-        console.log('[PreviewTransport.unary] 🎯 METRICS HANDLER REACHED');
-        console.log('[PreviewTransport.unary] Request input:', {
-          deploymentId: input?.deploymentId,
-          organizationId: input?.organizationId,
-          serviceName: input?.serviceName,
-          containerId: input?.containerId,
-          aggregate: input?.aggregate,
-          startTime: input?.startTime,
-          endTime: input?.endTime,
-        });
         
         // Use time range from request or default to last 30 days
         const endTime = input?.endTime?.seconds ? Number(input.endTime.seconds) * 1000 : Date.now();
@@ -832,11 +778,6 @@ const mockTransport: any = {
             diskWriteBytes: baseDiskWrite * randomVariation(),
           };
         });
-        console.log('[PreviewTransport.unary] Generated', metrics.length, 'deployment metric data points for', {
-          serviceName: input?.serviceName || 'aggregated',
-          timeRange: `${new Date(startTime).toLocaleString()} - ${new Date(endTime).toLocaleString()}`,
-          durationHours: (durationMs / 3600000).toFixed(1),
-        });
         return mockResponse({ metrics });
       }
       if (name.includes("getdeploymentusage")) {
@@ -859,18 +800,15 @@ const mockTransport: any = {
         });
       }
       if (name.includes("updatedeployment")) {
-        console.log('[PreviewTransport.unary] Updating deployment with:', input);
         // Merge updates into deployment object and persist
         Object.assign(mockTransport._resources.deployment, input);
         return mockResponse({ deployment: mockTransport._resources.deployment, success: true });
       }
       if (name.includes("updatedeploymentenvvars")) {
-        console.log('[PreviewTransport.unary] Updating deployment env vars');
         return mockResponse({ success: true });
       }
       if (name.includes("startdeployment") || name.includes("stopdeployment") || name.includes("triggerdeployment") || name.includes("restartdeployment")) {
         const action = name.includes("stop") ? 'stop' : name.includes("start") ? 'start' : name.includes("restart") ? 'restart' : 'trigger';
-        console.log(`[MockTransport.unary] Deployment action: ${action}`);
         
         // Update state and add logs
         if (action === 'stop') {
@@ -1022,11 +960,6 @@ const mockTransport: any = {
         builds: buildSamples,
         total: buildSamples.length,
       });
-      console.log('[MockTransport] ListBuilds response:', {
-        hasBuilds: !!responseMessage.builds,
-        buildsLength: responseMessage.builds?.length,
-        responseKeys: Object.keys(responseMessage),
-      });
       return mockResponse(responseMessage);
     }
     if (name.includes("reverttobuild") || name.includes("deletebuild")) {
@@ -1037,7 +970,6 @@ const mockTransport: any = {
     if (name.includes("gameserver")) {
       // Check for specific methods BEFORE general ones
       if (name.includes("getgameservermetrics") || name.includes("metrics")) {
-        console.log('[PreviewTransport.unary] Returning game server metrics');
         // Use time range from request or default to last 30 days
         const endTime = input?.endTime?.seconds ? Number(input.endTime.seconds) * 1000 : Date.now();
         const startTime = input?.startTime?.seconds ? Number(input.startTime.seconds) * 1000 : endTime - (30 * 24 * 3600000);
@@ -1075,7 +1007,6 @@ const mockTransport: any = {
             diskWriteBytes: baseDiskWrite * randomVariation(),
           };
         });
-        console.log('[PreviewTransport.unary] Generated', metrics.length, 'metric data points');
         return mockResponse({ metrics, ...(props.gameMetricsMock || {}) });
       }
       if (name.includes("listgameservers")) {
@@ -1158,7 +1089,6 @@ const mockTransport: any = {
         name.includes("deletegameserver")
       ) {
         const action = name.includes("stop") ? 'stop' : name.includes("start") ? 'start' : name.includes("restart") ? 'restart' : 'delete';
-        console.log(`[MockTransport.unary] Game server action: ${action}`);
         
         if (action === 'stop') {
           mockTransport._resourceStates.gameserver.status = 'stopping';
@@ -1197,7 +1127,6 @@ const mockTransport: any = {
         return mockResponse({ gameServer, success: true });
       }
       if (name.includes("updategameserver")) {
-        console.log('[MockTransport.unary] Updating game server with:', input);
         // Merge updates into game server object and persist
         Object.assign(mockTransport._resources.gameServer, input);
         return mockResponse({ gameServer: mockTransport._resources.gameServer, success: true });
@@ -1280,7 +1209,6 @@ const mockTransport: any = {
       }
       if (name.includes("startvps") || name.includes("stopvps") || name.includes("rebootvps")) {
         const action = name.includes("stop") ? 'stop' : name.includes("start") ? 'start' : 'reboot';
-        console.log(`[MockTransport.unary] VPS action: ${action}`);
         
         if (action === 'stop') {
           mockTransport._resourceStates.vps.status = 'stopping';
@@ -1321,7 +1249,6 @@ const mockTransport: any = {
         return mockResponse({ vps, success: true });
       }
       if (name.includes("updatevps")) {
-        console.log('[MockTransport.unary] Updating VPS with:', input);
         // Merge updates into vps object and persist
         Object.assign(mockTransport._resources.vps, input);
         return mockResponse({ vps: mockTransport._resources.vps, success: true });
@@ -1407,7 +1334,6 @@ const mockTransport: any = {
     }
 
     if (name.includes("audit")) {
-      console.log('[MockTransport.unary] Handling audit logs request', { input });
       const auditLogs = [
         {
           id: "audit-1",
@@ -1539,23 +1465,8 @@ const mockTransport: any = {
       if (filteredLogs.length === 0 && auditLogs.length > 0) {
         const firstLog = auditLogs[0];
         if (firstLog) {
-          console.log('[MockTransport.unary] All audit logs filtered out. First log details:', {
-            requestFilters: request,
-            sampleLog: {
-              organizationId: firstLog.organizationId,
-              service: firstLog.service,
-              action: firstLog.action,
-              resourceType: firstLog.resourceType,
-            },
-          });
         }
       }
-      
-      console.log('[MockTransport.unary] Audit logs filtered', {
-        totalLogs: auditLogs.length,
-        filteredCount: filteredLogs.length,
-        filters: request,
-      });
 
       return mockResponse({
         auditLogs: filteredLogs,
@@ -1586,7 +1497,6 @@ const mockTransport: any = {
   },
   stream: (method: any, signal?: AbortSignal, _timeout?: number, _header?: HeadersInit, input?: any) => {
     const name = String(method?.name || "").toLowerCase();
-    console.log('[MockTransport.stream] Called for method:', name, { hasSignal: !!signal, hasInput: !!input });
 
     // Persistent log buffers for each resource type
     if (!mockTransport._logBuffers) {
@@ -1609,16 +1519,13 @@ const mockTransport: any = {
 
     try {
       const makeStream = async function* (messages: any[]) {
-        console.log('[MockTransport.stream] makeStream starting with', messages.length, 'messages');
         try {
           for (const msg of messages) {
             if (signal?.aborted) {
-              console.log('[MockTransport.stream] Stream aborted');
               break;
             }
             yield msg;
           }
-          console.log('[MockTransport.stream] makeStream completed');
         } catch (error) {
           console.error('[MockTransport.stream] Error in makeStream:', error);
           throw error;
@@ -1626,23 +1533,19 @@ const mockTransport: any = {
       };
 
       const makeLiveMetricsStream = async function* (factory: () => any) {
-        console.log('[MockTransport.stream] makeLiveMetricsStream starting');
         let count = 0;
         try {
           while (count < 200) {
             if (signal?.aborted) {
-              console.log('[MockTransport.stream] Metrics stream aborted at count', count);
               break;
             }
             const metric = factory();
             yield metric;
             count += 1;
             if (count % 10 === 0) {
-              console.log('[MockTransport.stream] Metrics stream progress:', count);
             }
             await sleep(5000);
           }
-          console.log('[MockTransport.stream] Metrics stream completed at count', count);
         } catch (error) {
           console.error('[MockTransport.stream] Error in makeLiveMetricsStream:', error);
           throw error;
@@ -1650,7 +1553,6 @@ const mockTransport: any = {
       };
 
       const makeBuildLogsStream = async function* () {
-        console.log('[MockTransport.stream] makeBuildLogsStream starting');
         const buffer = mockTransport._logBuffers.build;
         
         // First, yield all existing logs from buffer
@@ -1718,7 +1620,6 @@ const mockTransport: any = {
       };
 
       const makeDeploymentLogsStream = async function* () {
-        console.log('[MockTransport.stream] makeDeploymentLogsStream starting');
         const buffer = mockTransport._logBuffers.deployment;
         
         // First, yield all existing logs from buffer
@@ -1776,7 +1677,6 @@ const mockTransport: any = {
       };
 
       const makeGameServerLogsStream = async function* () {
-        console.log('[MockTransport.stream] makeGameServerLogsStream starting');
         const buffer = mockTransport._logBuffers.gameserver;
         
         // First, yield all existing logs from buffer
@@ -1827,7 +1727,6 @@ const mockTransport: any = {
       };
 
       const makeVPSLogsStream = async function* () {
-        console.log('[MockTransport.stream] makeVPSLogsStream starting');
         const buffer = mockTransport._logBuffers.vps;
         
         // First, yield all existing logs from buffer
@@ -1876,13 +1775,11 @@ const mockTransport: any = {
       };
 
       const makeLiveAuditStream = async function* () {
-        console.log('[MockTransport.stream] makeLiveAuditStream starting');
         let i = 0;
         try {
           while (i < 100) {
             i += 1;
             if (signal?.aborted) {
-              console.log('[MockTransport.stream] Audit stream aborted at', i);
               break;
             }
             yield {
@@ -1907,7 +1804,6 @@ const mockTransport: any = {
             };
             await sleep(5000);
           }
-          console.log('[MockTransport.stream] Audit stream completed');
         } catch (error) {
           console.error('[MockTransport.stream] Error in makeLiveAuditStream:', error);
           throw error;
@@ -1925,7 +1821,6 @@ const mockTransport: any = {
           trailer: emptyHeaders(),
           message: makeStreamResponse(gen, { signal })
         };
-        console.log('[MockTransport.stream] Created stream response for method:', name);
         return response;
       } catch (error) {
         console.error('[MockTransport.stream] Error creating stream response:', error);
@@ -1935,17 +1830,13 @@ const mockTransport: any = {
 
     // Deployment streams
     if (name.includes("deployment")) {
-      console.log('[MockTransport.stream] Handling deployment stream:', name);
       if (name.includes("buildlogs")) {
-        console.log('[MockTransport.stream] Creating build logs stream');
         return Promise.resolve(createStreamResponse(makeBuildLogsStream()));
       }
       if (name.includes("logs")) {
-        console.log('[MockTransport.stream] Creating deployment logs stream');
         return Promise.resolve(createStreamResponse(makeDeploymentLogsStream()));
       }
       if (name.includes("metrics")) {
-        console.log('[MockTransport.stream] Creating deployment metrics stream');
         return Promise.resolve(createStreamResponse(
           makeLiveMetricsStream(() => ({
             timestamp: timestamp(new Date()),
@@ -1962,13 +1853,10 @@ const mockTransport: any = {
 
     // Game server streams
     if (name.includes("gameserver")) {
-      console.log('[MockTransport.stream] Handling game server stream:', name);
       if (name.includes("logs")) {
-        console.log('[MockTransport.stream] Creating game server logs stream');
         return Promise.resolve(createStreamResponse(makeGameServerLogsStream()));
       }
       if (name.includes("metrics")) {
-        console.log('[MockTransport.stream] Creating game server metrics stream');
         return Promise.resolve(createStreamResponse(
           makeLiveMetricsStream(() => ({
             timestamp: timestamp(new Date()),
@@ -1985,13 +1873,10 @@ const mockTransport: any = {
 
     // VPS streams
     if (name.includes("vps")) {
-      console.log('[MockTransport.stream] Handling VPS stream:', name);
       if (name.includes("logs")) {
-        console.log('[MockTransport.stream] Creating VPS logs stream');
         return Promise.resolve(createStreamResponse(makeVPSLogsStream()));
       }
       if (name.includes("metrics")) {
-        console.log('[MockTransport.stream] Creating VPS metrics stream');
         const baseMemory = 20 * 1024 * 1024; // 20 MB base
         const baseDisk = 5 * 1024 * 1024 * 1024; // 5 GB base
         const totalDisk = 20 * 1024 * 1024 * 1024; // 20 GB total
@@ -2011,7 +1896,6 @@ const mockTransport: any = {
 
     // Audit streams
     if (name.includes("audit")) {
-      console.log('[MockTransport.stream] Creating audit stream');
       return Promise.resolve(createStreamResponse(makeLiveAuditStream()));
     }
 
@@ -2056,23 +1940,19 @@ class MockWebSocket extends EventTarget {
   constructor(url: string) {
     super();
     this.url = url;
-    console.log('[MockWebSocket] Created for URL:', url);
     
     // Simulate connection opening
     setTimeout(() => {
       const openEvent = new Event("open");
       this.dispatchEvent(openEvent);
       if (this.onopen) this.onopen(openEvent);
-      console.log('[MockWebSocket] Connection opened');
     }, 100);
   }
 
   send(data: any) {
-    console.log('[MockWebSocket] Send called with:', data);
     
     try {
       const message = JSON.parse(data);
-      console.log('[MockWebSocket] Parsed message:', message);
       
       // Handle init message - respond with connected
       if (message.type === 'init') {
@@ -2093,17 +1973,14 @@ class MockWebSocket extends EventTarget {
       
       // Handle input message - process terminal commands
       if (message.type === 'input' && message.input) {
-        console.log('[MockWebSocket] Received input:', message.input);
         const input = new Uint8Array(message.input);
         const text = new TextDecoder().decode(input);
-        console.log('[MockWebSocket] Decoded input text:', JSON.stringify(text));
         this.handleTerminalInput(text);
         return;
       }
       
       // Handle resize - just acknowledge
       if (message.type === 'resize') {
-        console.log('[MockWebSocket] Terminal resized to:', message.cols, 'x', message.rows);
         return;
       }
       
@@ -2560,7 +2437,6 @@ class MockWebSocket extends EventTarget {
   }
 
   close() {
-    console.log('[MockWebSocket] Close called');
     this.readyState = 3; // CLOSED
     if (this.#timer !== null) {
       clearInterval(this.#timer);
@@ -2589,12 +2465,10 @@ try {
   globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   // Scope preview transport to this provider's subtree via injection
   provide(PREVIEW_CONNECT_KEY, mockTransport);
-  console.log('[PreviewProviders] Mock transport and WebSocket installed successfully');
   
   // Mark as ready after a small delay to ensure everything is set up
   nextTick(() => {
     isReady.value = true;
-    console.log('[PreviewProviders] Component marked as ready');
   });
 } catch (error) {
   console.error('[PreviewProviders] Error installing mock transport:', error);
@@ -2602,7 +2476,6 @@ try {
 
 onBeforeUnmount(() => {
   try {
-    console.log('[PreviewProviders] Cleanup starting for instance:', instanceId, 'mode:', props.mode);
     
     // Disable preview mode to restore global router
     inPreviewMode.value = false;
@@ -2611,12 +2484,10 @@ onBeforeUnmount(() => {
     if (globalRouter) {
       globalRouter.push = originalGlobalPush;
       globalRouter.replace = originalGlobalReplace;
-      console.log('[PreviewProviders] Restored global router methods');
     }
     
     // First, mark as not ready to hide component
     isReady.value = false;
-    console.log('[PreviewProviders] Component marked as not ready');
     
     // Give component time to unmount before restoring globals
     setTimeout(() => {
@@ -2624,16 +2495,12 @@ onBeforeUnmount(() => {
       const globalWithPreview = globalThis as typeof globalThis & { __OBIENTE_PREVIEW_CONNECT__?: unknown };
       if (originalTransport) {
         globalWithPreview.__OBIENTE_PREVIEW_CONNECT__ = originalTransport;
-        console.log('[PreviewProviders] Restored original transport');
       } else {
         delete globalWithPreview.__OBIENTE_PREVIEW_CONNECT__;
-        console.log('[PreviewProviders] Deleted mock transport');
       }
       if (originalWebSocket) {
         globalThis.WebSocket = originalWebSocket;
-        console.log('[PreviewProviders] Restored original WebSocket');
       }
-      console.log('[PreviewProviders] Mock transport cleanup completed');
     }, 0);
   } catch (error) {
     console.error('[PreviewProviders] Error during cleanup:', error);
@@ -2644,7 +2511,7 @@ onBeforeUnmount(() => {
 onErrorCaptured((err, instance, info) => {
   console.error('[PreviewProviders] Error captured from child component:', {
     error: err,
-    message: err?.message,
+    message: (err as Error | undefined)?.message,
     stack: err?.stack,
     componentName: instance?.$options?.name || instance?.$?.type?.name,
     errorInfo: info,
@@ -2660,7 +2527,4 @@ const handleComponentError = (error: any) => {
 
 // Track instance ID for debugging
 const instanceId = `preview-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-console.log('[PreviewProviders] Instance created:', instanceId, 'mode:', props.mode);
-
-console.log('[PreviewProviders] Setup complete - component ready to render');
 </script>

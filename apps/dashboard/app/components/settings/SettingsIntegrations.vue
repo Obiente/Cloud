@@ -481,7 +481,6 @@ onMounted(async () => {
       successMessage.value = orgId
         ? `Successfully connected GitHub organization to ${orgId}`
         : `Successfully connected GitHub account: ${username}`;
-      console.log("[SettingsIntegrations]", successMessage.value);
       await loadIntegrations({ preserveFeedback: true });
       // Clean up URL
       router.replace({ query: { tab: route.query.tab } });
@@ -552,13 +551,12 @@ const loadIntegrations = async (
     }));
 
     // Log for debugging
-    console.log(
       `[SettingsIntegrations] Loaded ${integrations.value.length} GitHub integration(s)`
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load GitHub integrations:", err);
     error.value =
-      err.message || "Failed to load connected accounts. Please try again.";
+      (err as Error).message || "Failed to load connected accounts. Please try again.";
     integrations.value = [];
   } finally {
     isLoading.value = false;
@@ -668,10 +666,10 @@ const disconnectIntegration = async (
 
     // Reload integrations list
     await loadIntegrations();
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to disconnect GitHub:", err);
     error.value =
-      err.message || "Failed to disconnect GitHub account. Please try again.";
+      (err as Error).message || "Failed to disconnect GitHub account. Please try again.";
   } finally {
     isDisconnecting.value = false;
   }
