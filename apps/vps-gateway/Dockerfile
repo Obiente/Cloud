@@ -1,4 +1,6 @@
-FROM golang:1.25-alpine AS builder
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH=amd64
@@ -21,7 +23,7 @@ RUN --mount=type=bind,source=.,target=/src,rw \
            -o /build/apps/vps-gateway/vps-gateway /src/apps/vps-gateway/main.go"
 
 # Final stage
-FROM alpine:latest
+FROM ${BASE_REGISTRY}/library/alpine:latest
 
 # Install dnsmasq and required tools
 # Use --no-scripts to disable triggers and avoid QEMU emulation issues

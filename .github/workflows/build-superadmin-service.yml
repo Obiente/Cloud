@@ -5,41 +5,45 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
     paths:
-      - 'apps/superadmin-service/**'
-      - 'apps/shared/pkg/auth/**'
-      - 'apps/shared/pkg/database/**'
-      - 'apps/shared/pkg/logger/**'
-      - 'apps/shared/pkg/health/**'
-      - 'apps/shared/pkg/middleware/**'
-      - 'apps/shared/proto/**'
-      - 'packages/proto/proto/obiente/cloud/**'
-      - 'apps/shared/go.mod'
-      - 'apps/shared/go.sum'
-      - '.github/scripts/go-service-affected.sh'
-      - '.github/workflows/build-superadmin-service.yml'
+      - "apps/superadmin-service/**"
+      - "apps/shared/pkg/auth/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/logger/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/middleware/**"
+      - "apps/shared/proto/**"
+      - "packages/proto/proto/obiente/cloud/**"
+      - "apps/shared/go.mod"
+      - "apps/shared/go.sum"
+      - ".github/scripts/go-service-affected.sh"
+      - ".github/workflows/build-superadmin-service.yml"
   pull_request:
     branches:
       - main
     paths:
-      - 'apps/superadmin-service/**'
-      - 'apps/shared/pkg/auth/**'
-      - 'apps/shared/pkg/database/**'
-      - 'apps/shared/pkg/logger/**'
-      - 'apps/shared/pkg/health/**'
-      - 'apps/shared/pkg/middleware/**'
-      - 'apps/shared/proto/**'
-      - 'packages/proto/proto/obiente/cloud/**'
-      - 'apps/shared/go.mod'
-      - 'apps/shared/go.sum'
-      - '.github/scripts/go-service-affected.sh'
-      - '.github/workflows/build-superadmin-service.yml'
+      - "apps/superadmin-service/**"
+      - "apps/shared/pkg/auth/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/logger/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/middleware/**"
+      - "apps/shared/proto/**"
+      - "packages/proto/proto/obiente/cloud/**"
+      - "apps/shared/go.mod"
+      - "apps/shared/go.sum"
+      - ".github/scripts/go-service-affected.sh"
+      - ".github/workflows/build-superadmin-service.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   detect-changes:
@@ -49,7 +53,7 @@ jobs:
       reason: ${{ steps.detect.outputs.reason }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -69,9 +73,13 @@ jobs:
       REGISTRY: ghcr.io
       SERVICE_NAME: superadmin-service
       IMAGE_NAME: ghcr.io/obiente/cloud-superadmin-service
+      LOCAL_REGISTRY: registry.obiente.cloud
+      BASE_REGISTRY: registry.obiente.cloud/dockerhub
+      BUILDKIT_IMAGE: registry.obiente.cloud/dockerhub/moby/buildkit:buildx-stable-1
+      CACHE_IMAGE: registry.obiente.cloud/buildcache/superadmin-service
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -80,16 +88,18 @@ jobs:
         uses: docker/setup-buildx-action@v3
         id: buildx
         with:
+          name: obiente-ci-${{ env.SERVICE_NAME }}
+          keep-state: true
           driver-opts: |
-            image=moby/buildkit:latest
+            image=${{ env.BUILDKIT_IMAGE }}
             network=host
 
-      - name: Log in to Docker Hub
+      - name: Log in to Obiente Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-        continue-on-error: true
+          registry: ${{ env.LOCAL_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -131,10 +141,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -150,10 +161,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -167,10 +179,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: linux/amd64,linux/arm64
           builder: ${{ steps.buildx.outputs.name }}
-

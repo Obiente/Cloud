@@ -1,5 +1,7 @@
 # Build stage for Vps Service
-FROM golang:1.25-alpine AS go-builder
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH=amd64
@@ -29,7 +31,7 @@ RUN --mount=type=bind,source=.,target=/src,rw \
            -o /build/vps-service /src/apps/vps-service"
 
 # Final stage
-FROM alpine:latest
+FROM ${BASE_REGISTRY}/library/alpine:latest
 
 # Install CA certificates, curl, and netcat for health checks
 # Use --no-scripts to disable triggers and avoid QEMU emulation issues

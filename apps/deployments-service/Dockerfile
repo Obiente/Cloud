@@ -1,5 +1,7 @@
 # Build stage for Deployments Service
-FROM golang:1.25-alpine AS go-builder
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH=amd64
@@ -27,7 +29,7 @@ RUN --mount=type=bind,source=.,target=/src,rw \
            -o /build/deployments-service /src/apps/deployments-service"
 
 # Build stage for nixpacks
-FROM rust:1.75-alpine AS nixpacks-builder
+FROM ${BASE_REGISTRY}/library/rust:1.75-alpine AS nixpacks-builder
 
 # Install build dependencies
 RUN apk add --no-cache musl-dev
@@ -41,7 +43,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # Final stage
 ARG TARGETARCH=amd64
 ARG TARGETOS=linux
-FROM alpine:latest
+FROM ${BASE_REGISTRY}/library/alpine:latest
 
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management

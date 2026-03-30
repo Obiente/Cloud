@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1.4
-FROM node:22-alpine AS base
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/node:22-alpine AS base
 
 # Install pnpm in a single layer
 RUN corepack enable && \
@@ -69,7 +71,7 @@ RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     pnpm exec nuxt build
 
 # Production image - minimal runtime
-FROM node:20-alpine AS runner
+FROM ${BASE_REGISTRY}/library/node:20-alpine AS runner
 
 # Accept build arguments
 ARG DASHBOARD_COMMIT

@@ -1,5 +1,7 @@
 # Build stage for Orchestrator Service
-FROM golang:1.25-alpine AS go-builder
+ARG BASE_REGISTRY=docker.io
+
+FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH=amd64
@@ -28,7 +30,7 @@ RUN --mount=type=bind,source=.,target=/src,rw \
            -o /build/orchestrator-service /src/apps/orchestrator-service"
 
 # Final stage
-FROM alpine:latest
+FROM ${BASE_REGISTRY}/library/alpine:latest
 
 # Install CA certificates, curl, netcat for health checks, and Docker CLI
 # Docker CLI is needed for network operations and Traefik label updates

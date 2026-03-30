@@ -10,11 +10,15 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   main:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           filter: tree:0
           fetch-depth: 0
@@ -37,80 +41,27 @@ jobs:
           node-version: 22
           cache: "pnpm"
 
-      # Cache Nx computation cache for faster task execution
-      # Nx Cloud also provides distributed caching, but local cache helps too
-      - name: Cache Nx
-        uses: actions/cache@v4
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'nx.json') }}
-          restore-keys: |
-            nx-${{ runner.os }}-
+      - name: Derive NX SHAs
+        id: nx-shas
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
 
-      # Cache TypeScript build info for faster type checking
-      - name: Cache TypeScript build info
-        uses: actions/cache@v4
-        with:
-          path: |
-            apps/dashboard/tsconfig.tsbuildinfo
-            packages/*/tsconfig.tsbuildinfo
-            **/tsconfig.tsbuildinfo
-          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('**/tsconfig*.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            tsbuildinfo-${{ runner.os }}-
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            BASE="$(git rev-parse HEAD~1)"
+          fi
 
-      # Cache Nuxt build artifacts (.nuxt directory)
-      # Use more specific hash to avoid unnecessary cache invalidation
-      # Only hash config files and lockfile, not all source files (Nx handles source changes)
-      - name: Cache Nuxt build
-        uses: actions/cache@v4
-        with:
-          path: apps/dashboard/.nuxt
-          key: nuxt-${{ runner.os }}-${{ hashFiles('apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml', 'package.json') }}
-          restore-keys: |
-            nuxt-${{ runner.os }}-
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      # Cache Nitro build artifacts (.nitro directory)
-      - name: Cache Nitro build
-        uses: actions/cache@v4
-        with:
-          path: apps/dashboard/.nitro
-          key: nitro-${{ runner.os }}-${{ hashFiles('apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml', 'package.json') }}
-          restore-keys: |
-            nitro-${{ runner.os }}-
-
-      # Cache Vite build cache (Dependency pre-bundling cache)
-      - name: Cache Vite
-        uses: actions/cache@v4
-        with:
-          path: |
-            apps/dashboard/node_modules/.vite
-            node_modules/.vite
-          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/dashboard/nuxt.config.ts', 'package.json') }}
-          restore-keys: |
-            vite-${{ runner.os }}-
-
-      # Cache node_modules for faster installs (complements pnpm store cache)
-      # This is especially useful on self-hosted runners where disk I/O might be slower
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            apps/dashboard/node_modules
-            packages/*/node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-
-
-      # Install dependencies
-      # Use --prefer-offline to use cached packages when available
-      # This works well with the pnpm store cache from setup-node
       - run: pnpm install --frozen-lockfile --prefer-offline
 
       # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
       # - run: pnpm exec nx-cloud record -- echo Hello World
-      - run: pnpm exec nx run-many -t lint test build typecheck
+      - run: pnpm exec nx affected -t lint test build typecheck --base=${{ steps.nx-shas.outputs.base }} --head=${{ steps.nx-shas.outputs.head }}
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
       - run: pnpm exec nx fix-ci
         if: always()

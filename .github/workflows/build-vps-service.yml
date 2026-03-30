@@ -5,53 +5,57 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
     paths:
-      - 'apps/vps-service/**'
-      - 'apps/shared/pkg/auth/**'
-      - 'apps/shared/pkg/database/**'
-      - 'apps/shared/pkg/logger/**'
-      - 'apps/shared/pkg/health/**'
-      - 'apps/shared/pkg/middleware/**'
-      - 'apps/shared/pkg/notifications/**'
-      - 'apps/shared/pkg/redis/**'
-      - 'apps/shared/pkg/orchestrator/**'
-      - 'apps/shared/pkg/services/common/**'
-      - 'apps/shared/proto/obiente/cloud/vps/**'
-      - 'apps/shared/proto/obiente/cloud/common/**'
-      - 'packages/proto/proto/obiente/cloud/vps/**'
-      - 'packages/proto/proto/obiente/cloud/common/**'
-      - 'apps/shared/go.mod'
-      - 'apps/shared/go.sum'
-      - '.github/scripts/go-service-affected.sh'
-      - '.github/workflows/build-vps-service.yml'
+      - "apps/vps-service/**"
+      - "apps/shared/pkg/auth/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/logger/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/middleware/**"
+      - "apps/shared/pkg/notifications/**"
+      - "apps/shared/pkg/redis/**"
+      - "apps/shared/pkg/orchestrator/**"
+      - "apps/shared/pkg/services/common/**"
+      - "apps/shared/proto/obiente/cloud/vps/**"
+      - "apps/shared/proto/obiente/cloud/common/**"
+      - "packages/proto/proto/obiente/cloud/vps/**"
+      - "packages/proto/proto/obiente/cloud/common/**"
+      - "apps/shared/go.mod"
+      - "apps/shared/go.sum"
+      - ".github/scripts/go-service-affected.sh"
+      - ".github/workflows/build-vps-service.yml"
   pull_request:
     branches:
       - main
     paths:
-      - 'apps/vps-service/**'
-      - 'apps/shared/pkg/auth/**'
-      - 'apps/shared/pkg/database/**'
-      - 'apps/shared/pkg/logger/**'
-      - 'apps/shared/pkg/health/**'
-      - 'apps/shared/pkg/middleware/**'
-      - 'apps/shared/pkg/notifications/**'
-      - 'apps/shared/pkg/redis/**'
-      - 'apps/shared/pkg/orchestrator/**'
-      - 'apps/shared/pkg/services/common/**'
-      - 'apps/shared/proto/obiente/cloud/vps/**'
-      - 'apps/shared/proto/obiente/cloud/common/**'
-      - 'packages/proto/proto/obiente/cloud/vps/**'
-      - 'packages/proto/proto/obiente/cloud/common/**'
-      - 'apps/shared/go.mod'
-      - 'apps/shared/go.sum'
-      - '.github/scripts/go-service-affected.sh'
-      - '.github/workflows/build-vps-service.yml'
+      - "apps/vps-service/**"
+      - "apps/shared/pkg/auth/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/logger/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/middleware/**"
+      - "apps/shared/pkg/notifications/**"
+      - "apps/shared/pkg/redis/**"
+      - "apps/shared/pkg/orchestrator/**"
+      - "apps/shared/pkg/services/common/**"
+      - "apps/shared/proto/obiente/cloud/vps/**"
+      - "apps/shared/proto/obiente/cloud/common/**"
+      - "packages/proto/proto/obiente/cloud/vps/**"
+      - "packages/proto/proto/obiente/cloud/common/**"
+      - "apps/shared/go.mod"
+      - "apps/shared/go.sum"
+      - ".github/scripts/go-service-affected.sh"
+      - ".github/workflows/build-vps-service.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   detect-changes:
@@ -61,7 +65,7 @@ jobs:
       reason: ${{ steps.detect.outputs.reason }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -85,9 +89,13 @@ jobs:
       REGISTRY: ghcr.io
       SERVICE_NAME: vps-service
       IMAGE_NAME: ghcr.io/obiente/cloud-vps-service
+      LOCAL_REGISTRY: registry.obiente.cloud
+      BASE_REGISTRY: registry.obiente.cloud/dockerhub
+      BUILDKIT_IMAGE: registry.obiente.cloud/dockerhub/moby/buildkit:buildx-stable-1
+      CACHE_IMAGE: registry.obiente.cloud/buildcache/vps-service
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -96,16 +104,18 @@ jobs:
         uses: docker/setup-buildx-action@v3
         id: buildx
         with:
+          name: obiente-ci-${{ env.SERVICE_NAME }}
+          keep-state: true
           driver-opts: |
-            image=moby/buildkit:latest
+            image=${{ env.BUILDKIT_IMAGE }}
             network=host
 
-      - name: Log in to Docker Hub
+      - name: Log in to Obiente Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-        continue-on-error: true
+          registry: ${{ env.LOCAL_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -151,12 +161,11 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: |
-            type=gha
-            type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -174,10 +183,11 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -194,10 +204,11 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
+            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
             COMMIT=${{ github.sha }}
             COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,compression=zstd
+          cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }},mode=max
           platforms: ${{ matrix.platform }}
           builder: ${{ steps.buildx.outputs.name }}
 
@@ -208,7 +219,7 @@ jobs:
         run: |
           PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-amd64' || 'linux-arm64' }}"
           OTHER_PLATFORM_TAG="${{ env.IMAGE_NAME }}:${{ matrix.platform == 'linux/amd64' && 'linux-arm64' || 'linux-amd64' }}"
-          
+
           echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
             if [ -n "$tag" ]; then
               echo "Updating manifest for tag: $tag with platform: ${{ matrix.platform }}"
@@ -224,7 +235,6 @@ jobs:
               fi
             fi
           done
-
 
   merge-manifest:
     name: Merge Multi-Platform Manifest - VPS Service
