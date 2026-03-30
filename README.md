@@ -193,7 +193,11 @@ See [Requirements](docs/self-hosting/requirements.md) for detailed specification
 ```
 cloud/
 ├── apps/
-│   └── api/                 # Go ConnectRPC API
+│   ├── api-gateway/         # Public entrypoint and routing
+│   ├── dashboard/           # Nuxt dashboard
+│   └── */                   # Go backend services
+├── packages/                # Shared TypeScript and config packages
+├── tools/                   # Nx plugins and workspace tooling
 ├── docs/                    # Documentation
 ├── monitoring/              # Prometheus & Grafana configs
 ├── docker-compose.yml       # Local development
@@ -204,18 +208,21 @@ cloud/
 ## Development
 
 ```bash
-# Install dependencies
-go mod download
+# Install workspace dependencies
+pnpm install
 
-# Run API locally
-cd apps/api
-go run main.go
+# See available Nx projects
+pnpm exec nx show projects
 
-# Run tests
+# Run the dashboard locally
+pnpm exec nx serve dashboard
+
+# Run Go service tests from the service directory
+cd apps/auth-service
 go test ./...
 
-# Build Docker image
-docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+# Build a service image
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
 ```
 
 See [Development Guide](docs/getting-started/development.md) for more details.

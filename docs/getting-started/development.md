@@ -7,6 +7,7 @@ This guide will help you set up Obiente Cloud for local development.
 - Docker and Docker Compose
 - Go 1.21+
 - Node.js 18+ (for frontend development)
+- pnpm 10.x
 - Git
 
 ## Local Development
@@ -23,6 +24,8 @@ cd cloud
 Start database and other dependencies:
 
 ```bash
+pnpm install
+
 # Start PostgreSQL (main database)
 docker compose up -d postgres
 
@@ -33,39 +36,51 @@ docker compose up -d timescaledb
 # docker compose up -d redis
 ```
 
-### 3. Run API Locally
+### 3. Run Services Locally
 
 ```bash
-cd apps/api
-go run main.go
+# Start the dashboard
+pnpm exec nx serve dashboard
+
+# In another terminal, run a Go service from its own directory
+cd apps/api-gateway
+go run .
 ```
 
-The API will be available at `http://localhost:3001`.
+The dashboard will be available through the Nuxt dev server, and Go services run on their configured service ports.
 
 ## Development Workflow
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Show inferred Nx projects
+pnpm exec nx show projects
+
+# Run frontend lint/typecheck through Nx
+pnpm exec nx run dashboard:lint
+pnpm exec nx run dashboard:typecheck
+
+# Run Go tests from a specific service directory
+cd apps/deployments-service
 go test ./...
 
-# Run tests in specific package
-go test ./internal/database/...
-
-# Run with coverage
+# Run with coverage for a specific Go service
 go test -cover ./...
 ```
 
 ### Building
 
 ```bash
-# Build API binary
-cd apps/api
-go build -o bin/api main.go
+# Build the dashboard
+pnpm exec nx run dashboard:nuxt:build
 
-# Build Docker image
-docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+# Build a service binary
+cd apps/api-gateway
+go build ./...
+
+# Build a service Docker image
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
 ```
 
 ### Rebuilding Docker Images
@@ -74,18 +89,18 @@ docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
 
 ```bash
 # Build and restart in one command (recommended)
-docker compose up -d --build api
+docker compose up -d --build api-gateway
 
 # Or rebuild separately
-docker compose build api
-docker compose restart api
+docker compose build api-gateway
+docker compose restart api-gateway
 
 # Force full rebuild (ignores cache)
-docker compose build --no-cache api
-docker compose restart api
+docker compose build --no-cache api-gateway
+docker compose restart api-gateway
 ```
 
-**Note:** If running the API locally (not in Docker), code changes are picked up automatically on restart.
+**Note:** If running a Go service locally (not in Docker), code changes are picked up when you restart that service.
 
 ### Hot Reload
 
