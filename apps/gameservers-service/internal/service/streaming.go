@@ -3,6 +3,7 @@ package gameservers
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -12,12 +13,14 @@ import (
 	"gameservers-service/internal/orchestrator"
 
 	"github.com/acarl005/stripansi"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 // StreamGameServerStatus streams status updates for a game server
@@ -34,20 +37,85 @@ func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Reque
 		return err
 	}
 
-	// TODO: Implement actual streaming
-	// For now, return current status
-	gameServer, err := s.repo.GetByID(ctx, gameServerID)
-	if err != nil {
-		return connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	var lastStatus *int32
+	var lastDeleted bool
+
+	sendStatus := func(gameServer *database.GameServer) error {
+		if gameServer == nil {
+			return nil
+		}
+
+		isDeleted := gameServer.DeletedAt != nil
+		statusValue := gameServer.Status
+		if lastStatus != nil && *lastStatus == statusValue && lastDeleted == isDeleted {
+			return nil
+		}
+
+		update := &gameserversv1.GameServerStatusUpdate{
+			GameServerId: gameServerID,
+			Status:       gameserversv1.GameServerStatus(statusValue),
+			Timestamp:    timestamppb.New(gameServer.UpdatedAt),
+		}
+
+		if isDeleted {
+			message := "Game server no longer exists"
+			update.Status = gameserversv1.GameServerStatus_GAME_SERVER_STATUS_UNSPECIFIED
+			update.Message = &message
+		} else {
+			statusName := gameserversv1.GameServerStatus(statusValue).String()
+			update.Message = &statusName
+		}
+
+		if err := stream.Send(update); err != nil {
+			return err
+		}
+
+		lastStatus = &statusValue
+		lastDeleted = isDeleted
+		return nil
 	}
 
-	update := &gameserversv1.GameServerStatusUpdate{
-		GameServerId: gameServerID,
-		Status:       gameserversv1.GameServerStatus(gameServer.Status),
-		Timestamp:    timestamppb.Now(),
-	}
+	for {
+		gameServer, repoErr := s.repo.GetByIDIncludeDeleted(ctx, gameServerID, true)
+		if repoErr != nil {
+			if errors.Is(repoErr, gorm.ErrRecordNotFound) {
+				if lastDeleted {
+					return nil
+				}
+				message := "Game server no longer exists"
+				update := &gameserversv1.GameServerStatusUpdate{
+					GameServerId: gameServerID,
+					Status:       gameserversv1.GameServerStatus_GAME_SERVER_STATUS_UNSPECIFIED,
+					Message:      &message,
+					Timestamp:    timestamppb.Now(),
+				}
+				if err := stream.Send(update); err != nil {
+					return err
+				}
+				return nil
+			}
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load game server status: %w", repoErr))
+		}
 
-	return stream.Send(update)
+		if err := sendStatus(gameServer); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if gameServer.DeletedAt != nil {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
 }
 
 // GetGameServerLogs is deprecated - use StreamGameServerLogs instead
@@ -176,7 +244,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 
 	// Hybrid approach: Try follow=false first (fast, returns immediately), then fallback to follow=true
 	tailParam := fmt.Sprintf("%d", dockerTailLimit)
-	
+
 	// Parse and stream historical logs
 	// For until queries, Docker returns logs in chronological order (oldest to newest)
 	// We need to keep only the last N lines, so we use a sliding window
@@ -198,14 +266,14 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 	// Try follow=false first - it's faster and more reliable for historical logs
 	// According to Docker docs, follow=false with tail returns the last N lines and closes immediately
 	logger.Info("[streamHistoricalLogs] Trying follow=false with tail=%s - Docker should return logs immediately or EOF", effectiveTail)
-	
+
 	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, effectiveTail, false, sinceTime, untilTime)
 	if err != nil {
 		logger.Error("[streamHistoricalLogs] Failed to get logs reader with follow=false: %v", err)
 		return fmt.Errorf("failed to get historical logs: %w", err)
 	}
 	defer logsReader.Close()
-	
+
 	logger.Info("[streamHistoricalLogs] Successfully obtained logs reader (follow=false), reading until EOF...")
 
 	// Read all logs until EOF with follow=false
@@ -232,7 +300,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 				_, readErr := io.ReadFull(logsReader, header)
 				headerChan <- readErr
 			}()
-			
+
 			select {
 			case err = <-headerChan:
 				// Got result, continue reading
@@ -252,7 +320,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 			_, err = io.ReadFull(logsReader, header)
 			logger.Debug("[streamHistoricalLogs] Read header result: err=%v", err)
 		}
-		
+
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				logger.Info("[streamHistoricalLogs] EOF reached (follow=%v), read %d lines total, sent %d lines", useFollow, linesRead, linesSent)
@@ -260,7 +328,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 					// Got EOF immediately with follow=false and no logs - try follow=true as fallback
 					logger.Warn("[streamHistoricalLogs] Got EOF immediately with follow=false and no logs, trying follow=true as fallback")
 					logsReader.Close()
-					
+
 					// Retry with follow=true and longer timeout
 					logsReader, err = manager.GetGameServerLogs(ctx, gameServerID, tailParam, true, sinceTime, untilTime)
 					if err != nil {
@@ -269,7 +337,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 					}
 					useFollow = true
 					logger.Info("[streamHistoricalLogs] Retrying with follow=true, will use timeout to detect when Docker finishes sending tail")
-					
+
 					// Continue to next iteration to read with follow=true
 					continue
 				} else if !readAnyLogs {
@@ -285,7 +353,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 			}
 			return fmt.Errorf("failed to read log header: %w", err)
 		}
-		
+
 		readAnyLogs = true
 
 		streamType := header[0]
@@ -326,10 +394,10 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 			}
 			logger.Info("[streamHistoricalLogs] First line preview: %q", lines[0].Line[:previewLen])
 		}
-		
+
 		for _, line := range lines {
 			linesRead++
-			
+
 			// Apply search filter if provided
 			if searchQuery != "" && !strings.Contains(strings.ToLower(line.Line), searchQuery) {
 				continue
@@ -543,74 +611,74 @@ func stripAnsiEscapeSequences(line string) string {
 	// Matches: ESC[ followed by parameters and command letter
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b[=<>]|\033\[[0-9;?]*[a-zA-Z]|\033[=<>]`)
 	line = ansiRegex.ReplaceAllString(line, "")
-	
+
 	// Pattern 2: CSI sequences that may appear without ESC prefix (common in malformed logs)
 	// These sequences can appear concatenated like [?1h[=[?2004h
 	// We need to be careful not to match valid log content like [INFO] or [21:45:50]
-	
+
 	// Iteratively remove escape sequences until no more changes occur
 	// This handles cases where sequences are concatenated without spaces
 	for {
 		original := line
-		
+
 		// Remove terminal mode sequences: [?1h, [?2004h, etc.
 		line = regexp.MustCompile(`\[\?[0-9]+[hHlLmM]`).ReplaceAllString(line, "")
-		
+
 		// Remove application keypad mode sequences: [=, [>, [<
 		line = regexp.MustCompile(`\[[=<>]`).ReplaceAllString(line, "")
-		
+
 		// Remove single-character CSI sequences: [K (clear to end of line), [H (cursor home), etc.
 		// Common CSI single-letter commands: A-H, J, K, m, s, u
 		// Match [K specifically first since it's very common
 		line = regexp.MustCompile(`\[K`).ReplaceAllString(line, "")
 		line = regexp.MustCompile(`\[[A-HJmsu]`).ReplaceAllString(line, "")
-		
+
 		// Remove escape sequences that might appear as text: <--ERE], <--ERE, <--, etc.
 		// These are often malformed escape sequences that got converted to text
 		// Do this FIRST before other patterns to catch it early
 		// Match <-- followed by any characters (including letters, numbers, etc.) up to and including ]
 		line = regexp.MustCompile(`<--[A-Z0-9]*\]`).ReplaceAllString(line, "") // Match <--ERE] specifically
-		line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")     // Match <--ERE (without bracket)
-		line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")           // Match <-- alone
-		
+		line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")      // Match <--ERE (without bracket)
+		line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")            // Match <-- alone
+
 		// Remove formatting codes: [0m, [1m, [4m, [3m, [30m, etc.
 		// Match [ followed by digits and 'm' (SGR - Select Graphic Rendition)
 		// But exclude timestamps like [21:45:50] by requiring the 'm' suffix
 		line = regexp.MustCompile(`\[[0-9;]+m`).ReplaceAllString(line, "")
-		
+
 		// Remove prompt continuation indicators like ">...." anywhere in the line
 		// These can appear at the start or after escape sequences
 		line = regexp.MustCompile(`>\.+`).ReplaceAllString(line, "")
-		
+
 		// Remove any remaining malformed escape patterns
 		line = regexp.MustCompile(`\[=[?0-9]*`).ReplaceAllString(line, "")
-		
+
 		// If no changes were made, we're done
 		if line == original {
 			break
 		}
 	}
-	
+
 	// Final pass: remove any remaining control sequences that might have been missed
 	// This is a more aggressive pass that catches edge cases
 	// Remove patterns like [ followed by non-alphanumeric characters that aren't part of valid log content
 	// But be very careful not to remove valid log brackets like [INFO] or [21:45:50]
 	// We only remove if it's clearly an escape sequence pattern
 	line = regexp.MustCompile(`^\[\?[0-9]*[hHlLmM]?`).ReplaceAllString(line, "") // At start of line
-	line = regexp.MustCompile(`\[K$`).ReplaceAllString(line, "")                // At end of line
-	line = regexp.MustCompile(`\[K\s`).ReplaceAllString(line, " ")              // Before whitespace
-	
+	line = regexp.MustCompile(`\[K$`).ReplaceAllString(line, "")                 // At end of line
+	line = regexp.MustCompile(`\[K\s`).ReplaceAllString(line, " ")               // Before whitespace
+
 	// Final cleanup: remove any remaining <-- patterns (should have been caught earlier, but be safe)
 	// Be very aggressive here - match <-- followed by anything up to ]
 	line = regexp.MustCompile(`<--[A-Z0-9]*\]`).ReplaceAllString(line, "") // Match <--ERE] specifically
-	line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")     // Match <--ERE (without bracket)
-	line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")           // Match <-- alone
-	
+	line = regexp.MustCompile(`<--[A-Z]*`).ReplaceAllString(line, "")      // Match <--ERE (without bracket)
+	line = regexp.MustCompile(`<--`).ReplaceAllString(line, "")            // Match <-- alone
+
 	// Also remove standalone ERE] patterns that might remain (leftover from incomplete stripping)
 	line = regexp.MustCompile(`^ERE\]`).ReplaceAllString(line, "")
 	line = regexp.MustCompile(`\s+ERE\]`).ReplaceAllString(line, "")
 	line = regexp.MustCompile(`ERE\]`).ReplaceAllString(line, "") // Remove anywhere
-	
+
 	return strings.TrimSpace(line)
 }
 
@@ -619,16 +687,16 @@ func stripAnsiEscapeSequences(line string) string {
 func stripTimestampFromLine(line string) string {
 	// First strip ANSI escape sequences
 	line = stripAnsiEscapeSequences(line)
-	
+
 	// Remove Minecraft-style timestamps: [HH:MM:SS]
 	line = regexp.MustCompile(`^\[\d{2}:\d{2}:\d{2}\]\s*`).ReplaceAllString(line, "")
-	
+
 	// Remove ISO timestamps: 2025-11-05T01:57:06.052Z at start of line
 	line = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\s+`).ReplaceAllString(line, "")
-	
+
 	// Remove init/other timestamps: [init] or similar
 	line = regexp.MustCompile(`^\[init\]\s+`).ReplaceAllString(line, "")
-	
+
 	return strings.TrimSpace(line)
 }
 
@@ -636,7 +704,7 @@ func stripTimestampFromLine(line string) string {
 // For game servers, we prioritize content-based detection over stderr/stdout
 func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 	lineLower := strings.ToLower(strings.TrimSpace(line))
-	
+
 	// Priority 1: Check for Minecraft/Java server log patterns (most specific)
 	// Format: [HH:MM:SS] [Thread/LEVEL]: message
 	// Examples: [Server thread/INFO]: Done, [Server thread/WARN]: Warning, [Server thread/ERROR]: Error
@@ -653,7 +721,7 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 	if matched, _ := regexp.MatchString(`/\s*(debug|trace)\s*]:`, lineLower); matched {
 		return v1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Priority 2: Check for standalone log level markers at start of line
 	// Examples: INFO mc-server-runner, WARN something, ERROR something
 	// Use word boundaries to ensure we match whole words, not parts of other words
@@ -669,7 +737,7 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 	if matched, _ := regexp.MatchString(`^(debug|trace)\s+`, lineLower); matched {
 		return v1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Priority 3: Check for bracketed log level markers
 	// Examples: [INFO], [WARN], [ERROR], [DEBUG]
 	if matched, _ := regexp.MatchString(`\[(info|information)\]`, lineLower); matched {
@@ -684,7 +752,7 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 	if matched, _ := regexp.MatchString(`\[(debug|trace)\]`, lineLower); matched {
 		return v1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Priority 4: Check for log level markers with colon
 	// Examples: INFO:, WARN:, ERROR:, DEBUG:
 	if matched, _ := regexp.MatchString(`^(info|information):`, lineLower); matched {
@@ -699,7 +767,7 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 	if matched, _ := regexp.MatchString(`^(debug|trace):`, lineLower); matched {
 		return v1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Priority 5: Check for error/fatal patterns in content (but be careful not to match "error" in "information")
 	// Only match if "error" or "fatal" appears as a standalone word or in specific contexts
 	if matched, _ := regexp.MatchString(`\berror\b|\bfatal\b|\bfailed\b`, lineLower); matched {
@@ -708,12 +776,12 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 			return v1.LogLevel_LOG_LEVEL_ERROR
 		}
 	}
-	
+
 	// Priority 6: Check for warning patterns
 	if matched, _ := regexp.MatchString(`\bwarn(ing)?\b`, lineLower); matched {
 		return v1.LogLevel_LOG_LEVEL_WARN
 	}
-	
+
 	// Priority 7: Game server specific patterns (usually INFO)
 	if strings.Contains(lineLower, "[server]") || strings.Contains(lineLower, "[minecraft]") ||
 		strings.Contains(lineLower, "[console]") ||
@@ -723,10 +791,9 @@ func detectLogLevelFromContent(line string, isStderr bool) v1.LogLevel {
 		strings.Contains(lineLower, "done") || strings.Contains(lineLower, "waiting") {
 		return v1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Priority 8: Default behavior
 	// For game servers, most logs are INFO regardless of stderr/stdout
 	// Many game servers send all logs to stderr, so we don't use isStderr as a strong indicator
 	return v1.LogLevel_LOG_LEVEL_INFO
 }
-

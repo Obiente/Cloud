@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	gameserverorchestrator "gameservers-service/internal/orchestrator"
@@ -87,9 +88,16 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 	}
 
 	// Add game type filter if provided
-	if req.Msg.GameType != nil && *req.Msg.GameType != "" {
-		// Convert string to int32 enum value
-		// TODO: Implement proper enum conversion
+	if req.Msg.GameType != nil {
+		gameTypeName := strings.TrimSpace(*req.Msg.GameType)
+		if gameTypeName != "" {
+			enumKey := strings.ToUpper(strings.ReplaceAll(gameTypeName, "-", "_"))
+			gameTypeValue, ok := gameserversv1.GameType_value[enumKey]
+			if !ok {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unknown game type %q", gameTypeName))
+			}
+			filters.GameType = &gameTypeValue
+		}
 	}
 
 	// Get game servers filtered by organization and user ID
