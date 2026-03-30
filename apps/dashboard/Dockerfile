@@ -5,7 +5,7 @@ FROM ${BASE_REGISTRY}/library/node:22-alpine AS base
 
 # Install pnpm in a single layer
 RUN corepack enable && \
-    COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@10.20.0 --activate
+    COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@10.23.0 --activate
 
 WORKDIR /app
 
@@ -102,4 +102,3 @@ EXPOSE 3000
 
 WORKDIR /app/apps/dashboard
 CMD ["node", ".output/server/index.mjs"]
-

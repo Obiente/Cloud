@@ -1,9 +1,10 @@
-import typescript from "@typescript-eslint/eslint-plugin";
-import typescriptParser from "@typescript-eslint/parser";
-import vue from "eslint-plugin-vue";
-import vueParser from "vue-eslint-parser";
+const js = require("@eslint/js");
+const typescript = require("@typescript-eslint/eslint-plugin");
+const typescriptParser = require("@typescript-eslint/parser");
+const vue = require("eslint-plugin-vue");
+const vueParser = require("vue-eslint-parser");
 
-export default [
+module.exports = [
   js.configs.recommended,
   {
     files: ["**/*.{js,ts,vue}"],
@@ -17,6 +18,21 @@ export default [
       "no-unused-vars": "off", // Handled by TypeScript
       "prefer-const": "error",
       "no-var": "error",
+    },
+  },
+  {
+    files: ["**/*.cjs", "**/eslint.config.js", "**/.eslintrc.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "commonjs",
+      globals: {
+        __dirname: "readonly",
+        __filename: "readonly",
+        exports: "writable",
+        module: "readonly",
+        process: "readonly",
+        require: "readonly",
+      },
     },
   },
   {
@@ -59,7 +75,7 @@ export default [
       vue,
     },
     rules: {
-      ...vue.configs["vue3-recommended"].rules,
+      ...(vue.configs["flat/recommended"]?.[1]?.rules ?? vue.configs["vue3-recommended"]?.rules ?? {}),
       "vue/html-self-closing": [
         "error",
         {
