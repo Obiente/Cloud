@@ -25,6 +25,10 @@ func NewTokenCipherFromEnv() (*TokenCipher, error) {
 		"GITHUB_TOKEN_ENCRYPTION_KEY",
 		"DATABASE_ENCRYPTION_KEY",
 		"API_SECRET",
+		"SECRET",
+		"ZITADEL_CLIENT_SECRET",
+		"ZITADEL_MANAGEMENT_TOKEN",
+		"GITHUB_CLIENT_SECRET",
 	} {
 		if secret := strings.TrimSpace(os.Getenv(envName)); secret != "" {
 			return &TokenCipher{key: deriveEncryptionKey(secret)}, nil
