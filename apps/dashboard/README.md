@@ -294,7 +294,7 @@ docker node ls  # Should work, not show "not a manager" error
 
 # Build images first (required before deploying)
 export DOCKER_BUILDKIT=1
-docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
 
 # Set main deployment DNS server IP (replace with your actual DNS server IP)
 export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server IP
@@ -303,7 +303,7 @@ export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server I
 docker stack deploy -c docker-compose.swarm.dev.yml obiente-dev
 
 # View logs
-docker service logs -f obiente-dev_api
+docker service logs -f obiente-dev_api-gateway
 
 # List services
 docker stack services obiente-dev
@@ -312,7 +312,7 @@ docker stack services obiente-dev
 docker stack rm obiente-dev
 ```
 
-**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Docker Swarm doesn't support building images during deployment - you must build them first.
+**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Docker Swarm doesn't support building images during deployment, so build the required images first.
 
 **Worker Nodes**: If you're on a worker node, use regular `docker compose` with production DNS instead (see Docker Compose section above).
 
@@ -339,9 +339,9 @@ export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server I
        name: obiente_obiente-network  # Replace with your actual network name
    ```
 
-3. Update the API service to connect to it:
+3. Update the API gateway service to connect to it:
    ```yaml
-   api:
+   api-gateway:
      networks:
        - obiente-network
        - main-deployment-network  # Add this line

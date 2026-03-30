@@ -67,7 +67,7 @@ apk add dnsmasq
 
 ```bash
 cd apps/vps-gateway
-docker-compose -f docker-compose.test.yml up --build
+docker compose -f docker-compose.test.yml up --build
 ```
 
 **Note**: The service requires `network_mode: host` and `privileged: true` to manage network interfaces and run dnsmasq. This is only suitable for testing. For production, you'll need to configure the network differently.
@@ -157,10 +157,10 @@ Proto files are generated using buf. From the repository root:
 
 ```bash
 cd packages/proto
-npm run build  # or: buf generate
+pnpm build  # or: buf generate
 ```
 
-This will generate Go code in both `apps/api/gen/proto` and `apps/vps-gateway/gen/proto`.
+This generates Go bindings under `apps/shared/proto` and TypeScript bindings under `packages/proto/src/generated`.
 
 ### Running Tests
 
@@ -214,4 +214,3 @@ For production deployment:
 4. Set up monitoring and alerting based on Prometheus metrics
 5. Configure log aggregation
 6. Use a process manager (systemd, supervisor, etc.) for service management
-

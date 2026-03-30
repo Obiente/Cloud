@@ -2,12 +2,12 @@
 
 ## How Authentication Works
 
-The API validates bearer tokens by calling Zitadel's **userinfo endpoint**, just like your frontend does. This is simple and reliable:
+Backend services validate bearer tokens by calling Zitadel's **userinfo endpoint**, just like the frontend does. This is simple and reliable:
 
 1. Frontend gets token from Zitadel (during login)
-2. Frontend sends token to API in `Authorization: Bearer <token>` header
-3. API validates token by calling `{ZITADEL_URL}/oidc/v1/userinfo`
-4. If valid, API extracts user info and processes the request
+2. Frontend sends the token to backend services in the `Authorization: Bearer <token>` header
+3. Services validate the token by calling `{ZITADEL_URL}/oidc/v1/userinfo`
+4. If valid, the request proceeds with the resolved user identity
 
 No JWKS, no local JWT validation - just a simple userinfo check.
 
@@ -19,7 +19,7 @@ If you're seeing this error:
 failed to fetch user info: x509: certificate is valid for [traefik-default], not obiente.cloud
 ```
 
-This means the API is trying to call Zitadel's userinfo endpoint over HTTPS, but there's a TLS certificate issue.
+This means a backend service is trying to call Zitadel's userinfo endpoint over HTTPS, but there's a TLS certificate issue.
 
 ## Solutions
 
@@ -44,7 +44,7 @@ This allows you to develop and test all features without needing Zitadel configu
 - Accessing all organizations and resources
 - Full admin permissions for testing
 
-**Important**: Both the API and Dashboard must have `DISABLE_AUTH=true` set in their environment for this to work correctly.
+**Important**: Set `DISABLE_AUTH=true` consistently for the dashboard and any backend services you are running locally.
 
 ### Option 2: Skip TLS Verification (Development)
 
@@ -113,11 +113,11 @@ Logs will show on startup:
 # Set in .env
 DISABLE_AUTH=true
 
-# Rebuild and restart
-docker service update --force obiente_api
+# Rebuild and restart the affected backend service(s)
+docker service update --force obiente_api-gateway
 
-# Test API
-curl http://localhost:3001/api.deployments.v1.DeploymentService/ListDeployments
+# Test the gateway health endpoint
+curl http://localhost:3001/health
 ```
 
 ### 3. Test With Auth
@@ -162,7 +162,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 LOG_LEVEL=debug
 
 # Check logs for auth errors
-docker service logs obiente_api | grep -E "(Auth|token|validated)"
+docker service logs obiente_api-gateway | grep -E "(Auth|token|validated)"
 ```
 
 ### Issue: Can't connect to Zitadel
@@ -171,11 +171,11 @@ docker service logs obiente_api | grep -E "(Auth|token|validated)"
 
 **Solution**:
 
-1. Check Zitadel is accessible from the API (if running in a container):
+1. Check Zitadel is accessible from the backend service (if running in a container):
 
 ```bash
-docker exec -it <api-container> wget -O- https://auth.obiente.cloud/oidc/v1/userinfo
-# Replace <api-container> with your container ID or name
+docker exec -it <service-container> wget -O- https://auth.obiente.cloud/oidc/v1/userinfo
+# Replace <service-container> with your container ID or name
 ```
 
 2. If it fails, check firewall/network rules
@@ -218,14 +218,14 @@ DISABLE_AUTH=true
 LOG_LEVEL=debug
 CORS_ORIGIN=*
 
-# 2. For API (Docker)
-docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
-docker service update --force obiente_api
+# 2. For the API gateway / backend services (Docker)
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
+docker service update --force obiente_api-gateway
 
 # 3. For Dashboard (if running separately)
 # Make sure DISABLE_AUTH=true is set in your environment
 export DISABLE_AUTH=true
-pnpm --filter dashboard dev
+pnpm --filter @obiente/dashboard dev
 
 # 4. Test
 curl http://localhost:3001/health

@@ -1,27 +1,36 @@
 # GitHub Container Registry Setup
 
-This repository uses GitHub Container Registry (ghcr.io) for Docker image builds and distribution.
+This repository uses GitHub Container Registry (`ghcr.io`) for Docker image builds and distribution.
 
 ## Overview
 
-Docker images for both the API and Dashboard are automatically built and pushed to GitHub Container Registry on:
+Docker images for the dashboard and individual backend services are built and pushed by dedicated GitHub Actions workflows on:
 - Push to `main` branch
 - Push of version tags (e.g., `v1.0.0`)
 - Manual workflow dispatch
 
 ## Image Locations
 
-### API Images
-- `ghcr.io/obiente/cloud-api:latest` - Latest build from main branch
-- `ghcr.io/obiente/cloud-api:main` - Latest build from main branch (alternative tag)
-- `ghcr.io/obiente/cloud-api:v1.0.0` - Tagged versions
-- `ghcr.io/obiente/cloud-api:main-<sha>` - Build-specific tags
+### API Gateway Images
+- `ghcr.io/obiente/cloud-api-gateway:latest` - Latest build from main branch
+- `ghcr.io/obiente/cloud-api-gateway:main` - Latest build from main branch (alternative tag)
+- `ghcr.io/obiente/cloud-api-gateway:v1.0.0` - Tagged versions
+- `ghcr.io/obiente/cloud-api-gateway:main-<sha>` - Build-specific tags
 
 ### Dashboard Images
 - `ghcr.io/obiente/cloud-dashboard:latest` - Latest build from main branch
 - `ghcr.io/obiente/cloud-dashboard:main` - Latest build from main branch (alternative tag)
 - `ghcr.io/obiente/cloud-dashboard:v1.0.0` - Tagged versions
 - `ghcr.io/obiente/cloud-dashboard:main-<sha>` - Build-specific tags
+
+### Other Service Images
+
+Other services follow the same pattern, for example:
+
+- `ghcr.io/obiente/cloud-auth-service:latest`
+- `ghcr.io/obiente/cloud-deployments-service:latest`
+- `ghcr.io/obiente/cloud-vps-service:latest`
+- `ghcr.io/obiente/cloud-<service>:<tag>`
 
 ## Authentication
 
@@ -55,7 +64,7 @@ gh auth token | docker login ghcr.io -u USERNAME --password-stdin
 
 If you want to make packages public (no authentication required):
 1. Go to your repository on GitHub
-2. Navigate to Packages → `obiente/cloud-api` or `obiente/cloud-dashboard`
+2. Navigate to Packages → `obiente/cloud-api-gateway`, `obiente/cloud-dashboard`, or another `obiente/cloud-<service>` package
 3. Click "Package settings"
 4. Scroll down to "Danger Zone" → "Change visibility"
 5. Select "Public"
@@ -82,23 +91,20 @@ To build images locally instead:
 BUILD_LOCAL=true ./scripts/deploy-swarm.sh
 ```
 
-Or set a custom image:
+Or set a custom registry prefix:
 
 ```bash
-API_IMAGE=ghcr.io/obiente/cloud-api:v1.0.0 ./scripts/deploy-swarm.sh
+REGISTRY=ghcr.io/obiente ./scripts/deploy-swarm.sh
 ```
 
 ### Docker Compose
 
 The docker-compose files support environment variables for image selection:
 
-#### API Images
+#### API Gateway Images
 ```bash
-# Use registry image (default)
-API_IMAGE=ghcr.io/obiente/cloud-api:latest docker stack deploy -c docker-compose.swarm.yml obiente
-
-# Use local build
-API_IMAGE=obiente/cloud-api:latest docker stack deploy -c docker-compose.swarm.yml obiente
+# Build and tag the API gateway image explicitly
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
 ```
 
 #### Dashboard Images
@@ -112,31 +118,31 @@ DASHBOARD_IMAGE=obiente/cloud-dashboard:latest docker compose -f docker-compose.
 
 ## CI/CD Workflow
 
-The GitHub Actions workflow (`.github/workflows/docker-build.yml`) automatically:
-- Builds both API and Dashboard Docker images with BuildKit
-- Pushes to ghcr.io on pushes to main
-- Creates tags for version releases
-- Uses GitHub Actions cache for faster builds
-- Supports multi-platform builds (currently linux/amd64)
+The GitHub Actions workflows in `.github/workflows/` automatically:
+- Build individual service images with BuildKit
+- Push to `ghcr.io` on pushes to `main`
+- Create tags for version releases
+- Use GitHub Actions cache for faster builds
+- Run separate workflows such as `build-api-gateway.yml`, `build-dashboard.yml`, and service-specific `build-*.yml` files
 
-The workflow runs two parallel jobs:
-- `build-and-push-api` - Builds and pushes the API image
+Example jobs:
+- `build-and-push-api-gateway` - Builds and pushes the API gateway image
 - `build-and-push-dashboard` - Builds and pushes the Dashboard image
 
 ## Manual Image Push
 
 To manually push locally built images:
 
-### API Image
+### API Gateway Image
 ```bash
 # Build locally
-docker build -f apps/api/Dockerfile -t ghcr.io/obiente/cloud-api:latest .
+docker build -f apps/api-gateway/Dockerfile -t ghcr.io/obiente/cloud-api-gateway:latest .
 
 # Login
 docker login ghcr.io
 
 # Push
-docker push ghcr.io/obiente/cloud-api:latest
+docker push ghcr.io/obiente/cloud-api-gateway:latest
 ```
 
 ### Dashboard Image
@@ -165,7 +171,7 @@ If you get authentication errors:
 If the image doesn't exist:
 1. Check the workflow ran successfully in GitHub Actions
 2. Verify the package exists at https://github.com/orgs/obiente/packages
-   - Look for `obiente/cloud-api` or `obiente/cloud-dashboard`
+   - Look for `obiente/cloud-api-gateway`, `obiente/cloud-dashboard`, or the specific service package you expect
 3. Make sure you're using the correct image name and tag
 
 ### Permission Denied
@@ -174,4 +180,3 @@ If you get permission errors:
 1. Ensure your GitHub token has the right permissions
 2. For private packages, make sure you have access to the repository
 3. Consider making the package public if appropriate
-

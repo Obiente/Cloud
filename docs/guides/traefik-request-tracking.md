@@ -109,7 +109,7 @@ type Config struct {
 
 func CreateConfig() *Config {
     return &Config{
-        APIEndpoint: "http://api:3001/api/v1/metrics/request",
+        APIEndpoint: "http://api-gateway:3001/api/v1/metrics/request",
     }
 }
 
@@ -143,7 +143,7 @@ traefik:
 
 ```yaml
 labels:
-  - "traefik.http.middlewares.request-tracker.plugin.requesttracker.apiendpoint=http://api:3001/api/v1/metrics/request"
+  - "traefik.http.middlewares.request-tracker.plugin.requesttracker.apiendpoint=http://api-gateway:3001/api/v1/metrics/request"
   - "traefik.http.routers.deployment-abc123.middlewares=request-tracker"
 ```
 
@@ -185,7 +185,7 @@ The orchestrator service can be extended to:
 ### Example Log Parser
 
 ```go
-// apps/api/internal/orchestrator/log_parser.go
+// apps/orchestrator-service/internal/orchestrator/log_parser.go
 package orchestrator
 
 import (
@@ -258,4 +258,3 @@ This allows the log parser to identify which deployment each request belongs to.
 2. Implement log parser in orchestrator service
 3. Update `DeploymentMetrics` to include request/error counts from logs
 4. Optionally integrate Prometheus scraping for additional metrics
-

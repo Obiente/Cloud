@@ -4,7 +4,7 @@ This guide explains how to test the vps-gateway service implementation.
 
 ## Prerequisites
 
-1. **Proto files generated**: Run `cd packages/proto && npm run build` (or `buf generate`)
+1. **Proto files generated**: Run `cd packages/proto && pnpm build` (or `buf generate`)
 2. **dnsmasq installed**: Required for DHCP functionality
 3. **Network interface configured**: You need a network interface for dnsmasq to bind to
 
@@ -256,4 +256,3 @@ After verifying the service works:
 2. **Update SSH proxy**: Modify SSH proxy to use vps-gateway for proxying
 3. **Configure production**: Set up proper network configuration and secrets management
 4. **Set up monitoring**: Configure Prometheus scraping and Grafana dashboards
-
