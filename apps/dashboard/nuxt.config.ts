@@ -1,19 +1,10 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import tailwindcss from "@tailwindcss/vite";
 
-const SESSION_PASSWORD_PLACEHOLDER = "changeme_dashboard_session_password_please_override";
-const sessionPassword = process.env.NUXT_SESSION_PASSWORD || SESSION_PASSWORD_PLACEHOLDER;
-
-if (
-  sessionPassword === SESSION_PASSWORD_PLACEHOLDER &&
-  process.env.NODE_ENV === "production"
-) {
-  // Fail loudly in production so misconfigured deployments are caught at startup.
-  throw new Error(
-    "[nuxt.config] NUXT_SESSION_PASSWORD is not set. " +
-    "You MUST provide a strong random secret (≥32 chars) via the NUXT_SESSION_PASSWORD environment variable."
-  );
-}
+const SESSION_PASSWORD_PLACEHOLDER =
+  "changeme_dashboard_session_password_please_override";
+const sessionPassword =
+  process.env.NUXT_SESSION_PASSWORD || SESSION_PASSWORD_PLACEHOLDER;
 
 export default defineNuxtConfig({
   // Disable devtools in production builds

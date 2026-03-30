@@ -4,6 +4,8 @@ import { defu } from "defu";
 import type { UserSession } from "@obiente/types";
 
 type UseSessionEvent = Parameters<typeof useSession>[0];
+const SESSION_PASSWORD_PLACEHOLDER =
+  "changeme_dashboard_session_password_please_override";
 
 /**
  * Get the user session from the current request
@@ -122,5 +124,17 @@ export function _useSession<T extends Record<string, any> = UserSession>(
     }
   }
   const finalConfig = defu(config, sessionConfig) as SessionConfig;
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!finalConfig.password ||
+      finalConfig.password === SESSION_PASSWORD_PLACEHOLDER)
+  ) {
+    throw createError({
+      statusCode: 500,
+      message:
+        "[obiente-auth] NUXT_SESSION_PASSWORD is not set. " +
+        "You MUST provide a strong random secret (>=32 chars) via the NUXT_SESSION_PASSWORD environment variable.",
+    });
+  }
   return useSession<T>(event, finalConfig);
 }
