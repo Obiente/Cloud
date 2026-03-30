@@ -87,7 +87,7 @@
                 <tbody>
                   <tr
                     v-for="(player, index) in whitelist"
-                    :key="index"
+                    :key="player.uuid || player.name || index"
                     class="border-b border-border-default hover:bg-surface-hover"
                   >
                     <td class="py-3 px-4">
@@ -351,7 +351,6 @@ async function handleAddPlayer() {
         ? `op ${commandPlayerName.trim()}`
         : `whitelist add ${commandPlayerName.trim()}`;
       
-      console.log("[WhitelistEditor] Sending command via WebSocket:", command);
       
       // Send command via WebSocket
       await gameServerCommand.sendCommand(command);
@@ -398,7 +397,6 @@ async function handleRemovePlayer(index: number) {
         ? `deop ${playerName.trim()}`
         : `whitelist remove ${playerName.trim()}`;
       
-      console.log("[WhitelistEditor] Sending command via WebSocket:", command);
       
       // Send command via WebSocket
       await gameServerCommand.sendCommand(command);

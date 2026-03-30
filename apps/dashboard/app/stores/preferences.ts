@@ -54,23 +54,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
 
   function persist() {
     if (!import.meta.client || !hydrated.value) {
-      console.log("[PreferencesStore] persist() skipped:", {
-        isClient: import.meta.client,
-        hydrated: hydrated.value,
-      });
       return;
     }
     try {
       const serialized = JSON.stringify(preferences.value);
-      console.log("[PreferencesStore] Persisting preferences:", serialized);
       localStorage.setItem(PREFERENCES_KEY, serialized);
-
-      // Verify it was actually saved
-      const verify = localStorage.getItem(PREFERENCES_KEY);
-      if (verify) {
-        const parsed = JSON.parse(verify);
-        console.log("[PreferencesStore] Verified save - metrics timeframe:", parsed.metrics?.timeframe);
-      }
     } catch (error) {
       console.error("[PreferencesStore] Failed to persist preferences:", error);
     }
@@ -78,21 +66,17 @@ export const usePreferencesStore = defineStore("preferences", () => {
 
   function hydrate() {
     if (hydrated.value || !import.meta.client) {
-      console.log("[PreferencesStore] hydrate() skipped:", { hydrated: hydrated.value, isClient: import.meta.client });
       return;
     }
-    console.log("[PreferencesStore] Starting hydration...");
     try {
       const raw = localStorage.getItem(PREFERENCES_KEY);
-      console.log("[PreferencesStore] Raw from localStorage:", raw ? "exists" : "empty");
-      
+
       // Preserve current preferences (in case user made changes before hydration)
       const currentMetrics = preferences.value.metrics ? { ...preferences.value.metrics } : null;
       const currentEnvVarsMode = preferences.value.envVarsViewMode;
-      
+
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<Preferences>;
-        console.log("[PreferencesStore] Parsed preferences:", JSON.stringify(parsed, null, 2));
         // Start with defaults, merge saved values, then preserve any current changes
         preferences.value = { ...defaultPreferences };
         // Merge top-level properties
@@ -111,7 +95,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
           ...defaultEditorPreferences,
           ...(parsed.editor || {}),
         };
-        
+
         // Preserve any changes made before hydration (current values take priority)
         // Only preserve if current value differs from default (indicating user changed it)
         if (currentMetrics?.timeframe && currentMetrics.timeframe !== defaultMetricsPreferences.timeframe) {
@@ -123,9 +107,6 @@ export const usePreferencesStore = defineStore("preferences", () => {
         if (currentEnvVarsMode && currentEnvVarsMode !== defaultPreferences.envVarsViewMode) {
           preferences.value.envVarsViewMode = currentEnvVarsMode;
         }
-        
-        console.log("[PreferencesStore] After merge - metrics:", JSON.stringify(preferences.value.metrics, null, 2));
-        console.log("[PreferencesStore] After merge - timeframe:", preferences.value.metrics.timeframe);
       } else {
         // No saved preferences, but preserve any current changes
         preferences.value = { ...defaultPreferences };
@@ -138,14 +119,12 @@ export const usePreferencesStore = defineStore("preferences", () => {
         if (currentEnvVarsMode && currentEnvVarsMode !== defaultPreferences.envVarsViewMode) {
           preferences.value.envVarsViewMode = currentEnvVarsMode;
         }
-        console.log("[PreferencesStore] No saved preferences, using defaults");
       }
     } catch (error) {
       console.error("[PreferencesStore] Error during hydration:", error);
       preferences.value = { ...defaultPreferences };
     } finally {
       hydrated.value = true;
-      console.log("[PreferencesStore] Hydration complete, hydrated =", hydrated.value);
       // Persist after hydration to save any changes made before hydration
       persist();
     }
@@ -178,11 +157,6 @@ export const usePreferencesStore = defineStore("preferences", () => {
       preferences.value.metrics = { ...defaultMetricsPreferences };
     }
     preferences.value.metrics[key] = value;
-    console.log("[PreferencesStore] Set metrics preference:", key, value);
-    console.log(
-      "[PreferencesStore] Current metrics:",
-      preferences.value.metrics
-    );
     persist();
   }
 
@@ -204,16 +178,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
     
     unwatch = watch(
       () => preferences.value,
-      (newVal, oldVal) => {
+      () => {
         // Skip persistence during hydration to prevent infinite loops
         if (!hydrated.value) {
           return;
         }
-        console.log("[PreferencesStore] Watcher fired, calling persist()", {
-          hydrated: hydrated.value,
-          newMetrics: newVal.metrics,
-          oldMetrics: oldVal?.metrics,
-        });
         persist();
       },
       { deep: true }
