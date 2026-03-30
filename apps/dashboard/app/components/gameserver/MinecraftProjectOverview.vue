@@ -234,6 +234,7 @@ import { MinecraftProjectType as ProjectTypeEnum } from "@obiente/proto";
 import { GameServerService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { marked, type Renderer, type Tokens } from "marked";
+import DOMPurify from "isomorphic-dompurify";
 
 interface Props {
   project: MinecraftProject;
@@ -310,24 +311,40 @@ const createMarkdownRenderer = (): Renderer => {
 
 const markdownRenderer = createMarkdownRenderer();
 
+const DOMPURIFY_CONFIG: DOMPurify.Config = {
+  ALLOWED_TAGS: [
+    "p", "br", "b", "i", "strong", "em", "u", "s", "del", "ins",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "ul", "ol", "li", "dl", "dt", "dd",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "a", "img", "code", "pre", "blockquote", "hr",
+    "div", "span", "section",
+  ],
+  ALLOWED_ATTR: ["href", "src", "alt", "title", "class", "target", "rel", "width", "height"],
+  FORBID_TAGS: ["script", "style", "iframe", "form", "input"],
+  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
+};
+
+const sanitize = (html: string) => DOMPurify.sanitize(html, DOMPURIFY_CONFIG) as string;
+
 const renderedBody = computed(() => {
   const body = displayProject.value.body || displayProject.value.description;
   if (!body) return "";
-  
+
   // Check if content is clearly HTML (has complete HTML tags with attributes and closing tags)
   // This is a more strict check - we want to see actual HTML structure
-  const hasCompleteHTMLTags = /<[a-z]+[^>]*\s[^>]*>.*?<\/[a-z]+>/i.test(body) || 
+  const hasCompleteHTMLTags = /<[a-z]+[^>]*\s[^>]*>.*?<\/[a-z]+>/i.test(body) ||
                                /<[a-z]+[^>]*\/\s*>/i.test(body) ||
                                /<[a-z]+[^>]*>[\s\S]*<\/[a-z]+>/i.test(body);
-  
+
   // Check for markdown patterns (more comprehensive)
-  const hasMarkdownPatterns = 
+  const hasMarkdownPatterns =
     /\[[^\]]+\]\([^)]+\)/.test(body) ||  // [text](url) links
     /^#{1,6}\s/m.test(body) ||            // Headers
     /^[-*+]\s/m.test(body) ||             // Lists
     /\|.*\|/m.test(body) ||               // Tables
     /!\[.*?\]\(.*?\)/.test(body);         // Images
-  
+
   // If it has markdown patterns, always try to render as markdown first
   // Only treat as HTML if it has complete HTML tags AND no markdown patterns
   if (hasMarkdownPatterns || !hasCompleteHTMLTags) {
@@ -336,28 +353,28 @@ const renderedBody = computed(() => {
       const html = marked.parse(body, { renderer: markdownRenderer }) as string;
       // Verify we got actual HTML back (not just the input)
       if (html && html !== body && html.includes('<')) {
-        return html;
+        return sanitize(html);
       }
     } catch {
       // Markdown parsing failed, will fall through to HTML or plain text handling
     }
   }
-  
+
   // If markdown rendering failed or content is clearly HTML, process as HTML
   if (hasCompleteHTMLTags) {
     // It's already HTML, just ensure links open in new tabs
-    return body.replace(/<a\s+([^>]*?)>/gi, (match, attrs) => {
+    const processed = body.replace(/<a\s+([^>]*?)>/gi, (match, attrs) => {
       if (!attrs.includes('href=')) {
         return match;
       }
-      
+
       // Update target
       if (attrs.includes('target=')) {
         attrs = attrs.replace(/target=["'][^"']*["']/gi, 'target="_blank"');
       } else {
         attrs = attrs.trim() + ' target="_blank"';
       }
-      
+
       // Update rel
       if (attrs.includes('rel=')) {
         attrs = attrs.replace(/rel=["']([^"']*)["']/gi, (_m: string, rel: string) => {
@@ -367,13 +384,14 @@ const renderedBody = computed(() => {
       } else {
         attrs = attrs.trim() + ' rel="noopener noreferrer"';
       }
-      
+
       return `<a ${attrs}>`;
     });
+    return sanitize(processed);
   }
-  
+
   // Final fallback: plain text with line breaks
-  return body.replace(/\n/g, '<br />');
+  return sanitize(body.replace(/\n/g, '<br />'));
 });
 
 function openImageLightbox(imageUrl: string, index: number) {
