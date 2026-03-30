@@ -210,7 +210,7 @@
         v-model="newDomain"
         label="Domain"
         placeholder="example.com"
-        helper-text="Enter your domain name (e.g., example.com or www.example.com)"
+        helper-text="Enter your domain name (e.g., example.com, www.example.com, or *.example.com)"
       />
     </OuiStack>
   </OuiDialog>
@@ -273,6 +273,12 @@ const domains = ref<DomainInfo[]>([]);
 
 const defaultDomain = computed(() => props.deployment.domain || "");
 
+const getVerificationTxtRecordName = (domain: string) => {
+  const normalized = domain.trim().replace(/\.$/, "").toLowerCase();
+  const verificationDomain = normalized.startsWith("*.") ? normalized.slice(2) : normalized;
+  return `_obiente-verification.${verificationDomain}`;
+};
+
 // Parse domains from deployment.customDomains
 const parseDomains = () => {
   const parsed: DomainInfo[] = [];
@@ -291,7 +297,7 @@ const parseDomains = () => {
           domain,
           status,
           verificationToken: parts[2],
-          txtRecordName: `_obiente-verification.${domain}`,
+          txtRecordName: getVerificationTxtRecordName(domain),
           txtRecordValue: `obiente-verification=${parts[2]}`,
         });
       } else if (parts.length >= 2 && parts[1] === "verified") {
@@ -499,4 +505,3 @@ onMounted(() => {
   });
 });
 </script>
-
