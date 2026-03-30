@@ -48,7 +48,7 @@ func (p *Proxy) handleMongoDB(clientConn net.Conn) {
 	// We need to look at the actual database being connected to.
 	// For routing, we use the database name from the connection string which
 	// MongoDB drivers send in the initial handshake's $db field.
-	route, ok := p.registry.Lookup(dbName)
+	route, ok := p.lookupRoute(dbName)
 	if !ok {
 		sendMongoError(clientConn, header, fmt.Sprintf("database \"%s\" not found", dbName))
 		return

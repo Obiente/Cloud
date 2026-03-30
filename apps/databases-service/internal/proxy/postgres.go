@@ -66,7 +66,7 @@ func (p *Proxy) handlePostgres(clientConn net.Conn) {
 	}
 
 	// Look up route
-	route, ok := p.registry.Lookup(dbName)
+	route, ok := p.lookupRoute(dbName)
 	if !ok {
 		sendPgError(clientConn, fmt.Sprintf("database \"%s\" does not exist", dbName))
 		return

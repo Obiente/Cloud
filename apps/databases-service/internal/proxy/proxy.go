@@ -104,6 +104,7 @@ func (p *Proxy) Start(ctx context.Context) error {
 
 	// Start auto-sleep monitor
 	go p.autoSleepMonitor(ctx)
+	go p.routeSyncLoop(ctx)
 
 	return nil
 }
@@ -201,6 +202,56 @@ func (p *Proxy) handleConnection(conn net.Conn, protocol string) {
 	case "mongodb":
 		p.handleMongoDB(conn)
 	}
+}
+
+func (p *Proxy) refreshRoutes(ctx context.Context) {
+	if err := p.registry.LoadFromDatabase(ctx); err != nil {
+		logger.Warn("Failed to refresh proxy routes from database: %v", err)
+		return
+	}
+	p.syncRedisListeners()
+}
+
+func (p *Proxy) routeSyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			syncCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			p.refreshRoutes(syncCtx)
+			cancel()
+		case <-p.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (p *Proxy) lookupRoute(dbName string) (*Route, bool) {
+	if route, ok := p.registry.Lookup(dbName); ok {
+		return route, true
+	}
+
+	refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p.refreshRoutes(refreshCtx)
+
+	return p.registry.Lookup(dbName)
+}
+
+func (p *Proxy) lookupRouteByRedisPort(port int) (*Route, bool) {
+	if route, ok := p.registry.LookupByRedisPort(port); ok {
+		return route, true
+	}
+
+	refreshCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p.refreshRoutes(refreshCtx)
+
+	return p.registry.LookupByRedisPort(port)
 }
 
 // bidirectionalCopy performs bidirectional TCP forwarding
@@ -302,14 +353,31 @@ func (p *Proxy) autoSleepMonitor(ctx context.Context) {
 }
 
 func (p *Proxy) startRedisListeners() {
-	p.registry.mu.RLock()
-	defer p.registry.mu.RUnlock()
+	for _, route := range p.registry.RedisRoutesSnapshot() {
+		if err := p.redisManager.StartListener(route.RedisPort, route); err != nil {
+			logger.Error("Failed to start Redis listener for %s: %v", route.DatabaseID, err)
+		}
+	}
+}
 
-	for _, route := range p.registry.routesByID {
-		if route.DatabaseType == "redis" && route.RedisPort > 0 {
-			if err := p.redisManager.StartListener(route.RedisPort, route); err != nil {
-				logger.Error("Failed to start Redis listener for %s: %v", route.DatabaseID, err)
-			}
+func (p *Proxy) syncRedisListeners() {
+	desiredRoutes := p.registry.RedisRoutesSnapshot()
+	activePorts := p.redisManager.Ports()
+
+	activePortSet := make(map[int]struct{}, len(activePorts))
+	for _, port := range activePorts {
+		activePortSet[port] = struct{}{}
+		if _, ok := desiredRoutes[port]; !ok {
+			p.redisManager.StopListener(port)
+		}
+	}
+
+	for port, route := range desiredRoutes {
+		if _, ok := activePortSet[port]; ok {
+			continue
+		}
+		if err := p.redisManager.StartListener(port, route); err != nil {
+			logger.Error("Failed to start Redis listener for %s during sync: %v", route.DatabaseID, err)
 		}
 	}
 }

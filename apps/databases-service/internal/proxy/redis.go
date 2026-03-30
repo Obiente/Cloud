@@ -86,6 +86,17 @@ func (m *RedisPortManager) StopAll() {
 	}
 }
 
+func (m *RedisPortManager) Ports() []int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	ports := make([]int, 0, len(m.listeners))
+	for port := range m.listeners {
+		ports = append(ports, port)
+	}
+	return ports
+}
+
 func (m *RedisPortManager) acceptLoop(ln net.Listener, port int, stopCh chan struct{}) {
 	for {
 		conn, err := ln.Accept()
@@ -119,7 +130,7 @@ func (m *RedisPortManager) acceptLoop(ln net.Listener, port int, stopCh chan str
 func (m *RedisPortManager) handleRedisConn(clientConn net.Conn, port int) {
 	defer clientConn.Close()
 
-	route, ok := m.proxy.registry.LookupByRedisPort(port)
+	route, ok := m.proxy.lookupRouteByRedisPort(port)
 	if !ok {
 		logger.Debug("No route for Redis port %d", port)
 		return

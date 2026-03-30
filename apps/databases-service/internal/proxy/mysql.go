@@ -56,7 +56,7 @@ func (p *Proxy) handleMySQL(clientConn net.Conn) {
 	}
 
 	// Look up route
-	route, ok := p.registry.Lookup(dbName)
+	route, ok := p.lookupRoute(dbName)
 	if !ok {
 		sendMySQLError(clientConn, 1049, "42000", fmt.Sprintf("Unknown database '%s'", dbName))
 		return

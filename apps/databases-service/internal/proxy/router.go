@@ -3,6 +3,8 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"sort"
 	"sync"
 	"time"
 
@@ -140,14 +142,12 @@ func (r *RouteRegistry) AllocateRedisPort(databaseID string) (int, error) {
 	r.redisMu.Lock()
 	defer r.redisMu.Unlock()
 
-	for port := r.redisPortStart; port <= r.redisPortEnd; port++ {
-		if _, used := r.usedRedisPorts[port]; !used {
-			r.usedRedisPorts[port] = databaseID
-			return port, nil
-		}
+	port, err := r.allocateRedisPortLocked(databaseID, r.usedRedisPorts)
+	if err != nil {
+		return 0, err
 	}
-
-	return 0, fmt.Errorf("no available Redis ports in range %d-%d", r.redisPortStart, r.redisPortEnd)
+	r.usedRedisPorts[port] = databaseID
+	return port, nil
 }
 
 // ReleaseRedisPort releases an allocated Redis port
@@ -176,9 +176,28 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		connMap[connections[i].DatabaseID] = &connections[i]
 	}
 
+	sort.Slice(instances, func(i, j int) bool {
+		return instances[i].ID < instances[j].ID
+	})
+
+	r.mu.RLock()
+	existingRoutes := make(map[string]*Route, len(r.routesByID))
+	for id, route := range r.routesByID {
+		existingRoutes[id] = route
+	}
+	r.mu.RUnlock()
+
+	newRoutes := make(map[string]*Route, len(instances))
+	newRoutesByID := make(map[string]*Route, len(instances))
+	newUsedRedisPorts := make(map[int]string)
+
 	for _, inst := range instances {
 		dbType := databaseTypeIntToString(inst.Type)
 		internalPort := standardPort(dbType)
+		lastConnectionAt := time.Now()
+		if existing, ok := existingRoutes[inst.ID]; ok && !existing.LastConnectionAt.IsZero() {
+			lastConnectionAt = existing.LastConnectionAt
+		}
 
 		route := &Route{
 			DatabaseID:       inst.ID,
@@ -187,7 +206,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			OrganizationID:   inst.OrganizationID,
 			DBStatus:         inst.Status,
 			AutoSleepSeconds: inst.AutoSleepSeconds,
-			LastConnectionAt: time.Now(),
+			LastConnectionAt: lastConnectionAt,
 		}
 
 		// Mark sleeping/stopped routes
@@ -207,16 +226,17 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		// Only resolve IPs for running databases
 		if route.Stopped {
-			r.Register(route)
-			// Allocate Redis port if needed
 			if dbType == "redis" {
-				port, err := r.AllocateRedisPort(inst.ID)
+				port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
 				if err != nil {
 					logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
 				} else {
 					route.RedisPort = port
+					newUsedRedisPorts[port] = inst.ID
 				}
 			}
+			newRoutes[route.DatabaseID] = route
+			newRoutesByID[route.DatabaseID] = route
 			continue
 		}
 
@@ -238,16 +258,27 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		// Allocate Redis port if needed
 		if dbType == "redis" {
-			port, err := r.AllocateRedisPort(inst.ID)
+			port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
 			if err != nil {
 				logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
 				continue
 			}
 			route.RedisPort = port
+			newUsedRedisPorts[port] = inst.ID
 		}
 
-		r.Register(route)
+		newRoutes[route.DatabaseID] = route
+		newRoutesByID[route.DatabaseID] = route
 	}
+
+	r.mu.Lock()
+	r.routes = newRoutes
+	r.routesByID = newRoutesByID
+	r.mu.Unlock()
+
+	r.redisMu.Lock()
+	r.usedRedisPorts = newUsedRedisPorts
+	r.redisMu.Unlock()
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
@@ -420,6 +451,39 @@ func (r *RouteRegistry) RouteCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.routes)
+}
+
+func (r *RouteRegistry) RedisRoutesSnapshot() map[int]*Route {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	routes := make(map[int]*Route)
+	for _, route := range r.routesByID {
+		if route.DatabaseType == "redis" && route.RedisPort > 0 {
+			routes[route.RedisPort] = route
+		}
+	}
+	return routes
+}
+
+func (r *RouteRegistry) allocateRedisPortLocked(databaseID string, usedPorts map[int]string) (int, error) {
+	span := r.redisPortEnd - r.redisPortStart + 1
+	if span <= 0 {
+		return 0, fmt.Errorf("invalid Redis port range %d-%d", r.redisPortStart, r.redisPortEnd)
+	}
+
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(databaseID))
+	offset := int(hasher.Sum32() % uint32(span))
+
+	for probe := 0; probe < span; probe++ {
+		port := r.redisPortStart + ((offset + probe) % span)
+		if assignedID, used := usedPorts[port]; !used || assignedID == databaseID {
+			return port, nil
+		}
+	}
+
+	return 0, fmt.Errorf("no available Redis ports in range %d-%d", r.redisPortStart, r.redisPortEnd)
 }
 
 func databaseTypeIntToString(t int32) string {

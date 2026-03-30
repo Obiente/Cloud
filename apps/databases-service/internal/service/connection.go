@@ -65,6 +65,12 @@ func (s *Service) GetDatabaseConnectionInfo(ctx context.Context, req *connect.Re
 			if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok && route.RedisPort > 0 {
 				externalPort = int32(route.RedisPort)
 			} else {
+				if err := s.routeRegistry.LoadFromDatabase(ctx); err == nil {
+					if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok && route.RedisPort > 0 {
+						externalPort = int32(route.RedisPort)
+						break
+					}
+				}
 				externalPort = conn.Port
 			}
 		} else {
