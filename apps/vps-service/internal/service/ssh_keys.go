@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -181,8 +181,8 @@ func (s *Service) AddSSHKey(ctx context.Context, req *connect.Request[vpsv1.AddS
 	}
 	// err is ErrRecordNotFound - key doesn't exist, we can proceed
 
-	// Generate ID (format: ssh-{timestamp}-{random})
-	keyID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
+	// Generate ID
+	keyID := fmt.Sprintf("ssh-%s", uuid.NewString())
 
 	// Prepare SSH key record
 	sshKey := database.SSHKey{

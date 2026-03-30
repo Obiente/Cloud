@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -440,7 +441,7 @@ func getOrCreateGameServerDomainVerification(gameServerID string, domain string)
 	}
 
 	verification := &database.GameServerDomainVerification{
-		ID:           fmt.Sprintf("gsv-%s-%d", gameServerID, time.Now().UnixNano()),
+		ID:           fmt.Sprintf("gsv-%s-%s", gameServerID, uuid.NewString()),
 		GameServerID: gameServerID,
 		Domain:       domain,
 		Token:        generateGameServerDeterministicToken(gameServerID, domain),

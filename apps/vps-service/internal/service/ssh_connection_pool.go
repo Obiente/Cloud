@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -239,7 +240,7 @@ func (p *SSHConnectionPool) createSSHConnectionViaGateway(ctx context.Context, v
 	}
 
 	// Create connection ID
-	connectionID := fmt.Sprintf("pool-%d", time.Now().UnixNano())
+	connectionID := fmt.Sprintf("pool-%s", uuid.NewString())
 
 	// Send connect request
 	connectReq := &vpsgatewayv1.ProxySSHRequest{
