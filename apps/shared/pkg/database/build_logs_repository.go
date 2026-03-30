@@ -34,10 +34,10 @@ func (r *BuildLogsRepository) AddBuildLog(ctx context.Context, buildID string, l
 // AddBuildLogsBatch adds multiple log lines to a build in a single transaction
 // This is much more efficient for TimescaleDB than individual inserts
 func (r *BuildLogsRepository) AddBuildLogsBatch(ctx context.Context, buildID string, logs []struct {
-	Line      string
-	Stderr    bool
+	Line       string
+	Stderr     bool
 	LineNumber int32
-	Timestamp time.Time
+	Timestamp  time.Time
 }) error {
 	if len(logs) == 0 {
 		return nil
@@ -89,8 +89,25 @@ func (r *BuildLogsRepository) GetBuildLogs(ctx context.Context, buildID string, 
 	return logs, total, nil
 }
 
+// GetBuildLogsAfterLine retrieves log lines after a specific line number.
+func (r *BuildLogsRepository) GetBuildLogsAfterLine(ctx context.Context, buildID string, afterLineNumber int32, limit int) ([]*BuildLog, error) {
+	query := r.db.WithContext(ctx).
+		Where("build_id = ? AND line_number > ?", buildID, afterLineNumber).
+		Order("line_number ASC")
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	var logs []*BuildLog
+	if err := query.Find(&logs).Error; err != nil {
+		return nil, err
+	}
+
+	return logs, nil
+}
+
 // DeleteBuildLogs deletes all logs for a specific build
 func (r *BuildLogsRepository) DeleteBuildLogs(ctx context.Context, buildID string) error {
 	return r.db.WithContext(ctx).Where("build_id = ?", buildID).Delete(&BuildLog{}).Error
 }
-

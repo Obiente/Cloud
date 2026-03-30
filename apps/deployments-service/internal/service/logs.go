@@ -24,6 +24,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const (
+	remoteBuildLogPollInterval = 500 * time.Millisecond
+	remoteBuildLogDrainWindow  = 3 * time.Second
+	remoteBuildLogBatchSize    = 500
+)
+
 // GetDeploymentLogs retrieves a fixed number of deployment logs
 func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentLogsRequest]) (*connect.Response[deploymentsv1.GetDeploymentLogsResponse], error) {
 	lines := req.Msg.GetLines()
@@ -53,17 +59,17 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	orgID := req.Msg.GetOrganizationId()
 	containerID := req.Msg.GetContainerId()
 	serviceName := req.Msg.GetServiceName()
-	
+
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
-	
+
 	dcli, err := docker.New()
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
-	
+
 	// Find container by container_id or service_name, or use first if neither specified
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
@@ -75,19 +81,19 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 		log.Printf("[StreamDeploymentLogs] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
 		return s.forwardStreamDeploymentLogs(ctx, req, stream, targetNodeID)
 	}
-	
+
 	// Get all containers for this deployment to filter events
 	locations, err := database.GetAllDeploymentLocations(deploymentID)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get deployment locations: %w", err))
 	}
-	
+
 	// Build set of container IDs for this deployment
 	containerIDs := make(map[string]bool)
 	for _, location := range locations {
 		containerIDs[location.ContainerID] = true
 	}
-	
+
 	// Also get images used by these containers to track image pull events
 	imageNames := make(map[string]bool)
 	for _, location := range locations {
@@ -98,12 +104,12 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			}
 		}
 	}
-	
+
 	tail := req.Msg.GetTail()
 	if tail <= 0 {
 		tail = 200
 	}
-	
+
 	// Check if container is running to determine if we should follow logs
 	// For stopped containers, we'll get historical logs but won't follow
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
@@ -111,21 +117,21 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	if err == nil {
 		isRunning = containerInfo.State.Running
 	}
-	
+
 	// For stopped containers, use follow=false to get historical logs
 	// For running containers, use follow=true to stream new logs
 	follow := isRunning
-	
+
 	// Start container logs stream
 	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), follow, nil, nil)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
 	}
 	defer reader.Close()
-	
+
 	// Start Docker events stream filtered for this deployment
 	eventFilters := map[string][]string{
-		"type": {"container", "image"},
+		"type":  {"container", "image"},
 		"label": {fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID)},
 	}
 	eventChan, eventErrChan, cleanup, err := dcli.Events(ctx, eventFilters)
@@ -137,17 +143,17 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	if cleanup != nil {
 		defer cleanup()
 	}
-	
+
 	// Create a channel to send log lines
 	logChan := make(chan *deploymentsv1.DeploymentLogLine, 100)
 	var wg sync.WaitGroup
-	
+
 	// Close channel after all goroutines finish
 	go func() {
 		wg.Wait()
 		close(logChan)
 	}()
-	
+
 	// Helper function to safely send to channel
 	safeSend := func(line *deploymentsv1.DeploymentLogLine) bool {
 		select {
@@ -157,7 +163,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			return false
 		}
 	}
-	
+
 	// Stream container logs
 	wg.Add(1)
 	go func() {
@@ -188,7 +194,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			}
 		}
 	}()
-	
+
 	// Stream Docker events
 	if eventChan != nil {
 		wg.Add(1)
@@ -202,7 +208,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 					if !ok {
 						return
 					}
-					
+
 					// Format and send relevant events
 					eventLine := s.formatDockerEvent(deploymentID, event, containerIDs, imageNames)
 					if eventLine != nil {
@@ -219,7 +225,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			}
 		}()
 	}
-	
+
 	// Send merged logs and events to client
 	for {
 		select {
@@ -241,25 +247,25 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 // This is a shared function for both build logs and container logs
 func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 	lineLower := strings.ToLower(strings.TrimSpace(line))
-	
+
 	// Check for explicit log level markers (case-insensitive)
 	if strings.Contains(lineLower, "[error]") || strings.Contains(lineLower, "error:") ||
 		strings.Contains(lineLower, "fatal:") || strings.Contains(lineLower, "failed") ||
 		strings.HasPrefix(lineLower, "error") || strings.Contains(lineLower, " ❌ ") {
 		return commonv1.LogLevel_LOG_LEVEL_ERROR
 	}
-	
+
 	if strings.Contains(lineLower, "[warn]") || strings.Contains(lineLower, "[warning]") ||
 		strings.Contains(lineLower, "warning:") || strings.Contains(lineLower, "⚠️") ||
 		strings.HasPrefix(lineLower, "warn") {
 		return commonv1.LogLevel_LOG_LEVEL_WARN
 	}
-	
+
 	if strings.Contains(lineLower, "[debug]") || strings.Contains(lineLower, "[trace]") ||
 		strings.HasPrefix(lineLower, "debug") || strings.HasPrefix(lineLower, "trace") {
 		return commonv1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
 	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpack") ||
 		strings.Contains(lineLower, "building") || strings.Contains(lineLower, "setup") ||
@@ -272,14 +278,14 @@ func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 		strings.Contains(lineLower, "metadata") {
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Docker build output patterns - usually INFO
 	if strings.Contains(lineLower, "[") && strings.Contains(lineLower, "]") &&
 		(strings.Contains(lineLower, "step") || strings.Contains(lineLower, "from") ||
-		strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
+			strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Default: if stderr is true and no pattern matched, it might be an error
 	if isStderr {
 		if strings.Contains(lineLower, "error") || strings.Contains(lineLower, "fail") {
@@ -287,7 +293,7 @@ func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 		}
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Default to INFO for stdout
 	return commonv1.LogLevel_LOG_LEVEL_INFO
 }
@@ -296,7 +302,7 @@ func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 func (s *Service) formatDockerEvent(deploymentID string, event events.Message, containerIDs map[string]bool, imageNames map[string]bool) *deploymentsv1.DeploymentLogLine {
 	var line string
 	var isRelevant bool
-	
+
 	switch event.Type {
 	case "container":
 		// Check if this container belongs to our deployment
@@ -304,7 +310,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 		if len(containerID) > 12 {
 			containerID = containerID[:12]
 		}
-		
+
 		// Check by container ID
 		isOurContainer := false
 		for id := range containerIDs {
@@ -313,18 +319,18 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 				break
 			}
 		}
-		
+
 		// Also check by deployment label
 		if len(event.Actor.Attributes) > 0 {
 			if event.Actor.Attributes["cloud.obiente.deployment_id"] == deploymentID {
 				isOurContainer = true
 			}
 		}
-		
+
 		if !isOurContainer {
 			return nil
 		}
-		
+
 		// Format container events
 		containerName := containerID
 		if len(event.Actor.Attributes) > 0 {
@@ -336,7 +342,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 				containerName = name
 			}
 		}
-		
+
 		switch event.Action {
 		case "create":
 			line = fmt.Sprintf("[docker] Creating container %s", containerName)
@@ -364,7 +370,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 			return nil
 		}
 		isRelevant = true
-		
+
 	case "image":
 		// Check if this image is used by our deployment
 		imageName := event.Actor.ID
@@ -373,7 +379,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 				imageName = name
 			}
 		}
-		
+
 		// Check if this image is used by any of our containers
 		isOurImage := false
 		for img := range imageNames {
@@ -382,7 +388,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 				break
 			}
 		}
-		
+
 		// Also check by matching image name patterns
 		if !isOurImage && imageName != "" {
 			for img := range imageNames {
@@ -395,17 +401,17 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 				}
 			}
 		}
-		
+
 		if !isOurImage {
 			return nil
 		}
-		
+
 		// Format image events
 		displayName := imageName
 		if len(displayName) > 60 {
 			displayName = displayName[:57] + "..."
 		}
-		
+
 		switch event.Action {
 		case "pull":
 			line = fmt.Sprintf("[docker] Pulling image %s", displayName)
@@ -429,11 +435,11 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 		}
 		isRelevant = true
 	}
-	
+
 	if !isRelevant {
 		return nil
 	}
-	
+
 	// Create timestamp from event time
 	var timestamp time.Time
 	if event.Time != 0 {
@@ -441,7 +447,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 	} else {
 		timestamp = time.Now()
 	}
-	
+
 	return &deploymentsv1.DeploymentLogLine{
 		DeploymentId: deploymentID,
 		Line:         line,
@@ -521,8 +527,37 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 		return connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Get or create build log streamer
 	buildStreamer := GetBuildLogStreamer(deploymentID)
+	var latestBuild *database.BuildHistory
+
+	// Give the async trigger path a short window to create the build record and bind
+	// the local streamer before deciding how to stream logs.
+	waitDeadline := time.Now().Add(5 * time.Second)
+	for {
+		builds, _, listErr := s.buildHistoryRepo.ListBuilds(ctx, deploymentID, orgID, 1, 0)
+		if listErr == nil && len(builds) > 0 {
+			latestBuild = builds[0]
+		}
+		if latestBuild != nil || buildStreamer.CurrentBuildID() != "" || time.Now().After(waitDeadline) || ctx.Err() != nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	if latestBuild != nil {
+		localBuildID := buildStreamer.CurrentBuildID()
+		if isBuildStreamingActive(latestBuild.Status) && latestBuild.ID != "" && latestBuild.ID != localBuildID {
+			return s.streamRemoteBuildLogs(ctx, stream, deploymentID, latestBuild.ID)
+		}
+		if !isBuildStreamingActive(latestBuild.Status) {
+			_, err := s.streamRemoteBuildLogsSnapshot(ctx, stream, deploymentID, latestBuild.ID)
+			return err
+		}
+	}
 
 	// Subscribe FIRST to avoid race conditions where logs are written
 	// between getting buffered logs and subscribing
@@ -531,50 +566,6 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 		// Unsubscribe when done
 		buildStreamer.Unsubscribe(logChan)
 	}()
-
-	// Check if we need to load logs from database (for builds happening on other nodes)
-	// Only do this if there are no buffered logs in memory
-	bufferedLogs := buildStreamer.GetLogs()
-	if len(bufferedLogs) == 0 {
-		// Get latest active build for this deployment
-		builds, _, err := s.buildHistoryRepo.ListBuilds(ctx, deploymentID, orgID, 1, 0)
-		if err == nil && len(builds) > 0 {
-			build := builds[0]
-			// Check if build is currently building (status 2 = BUILD_BUILDING)
-			if build.Status == 2 {
-				// Load logs from database for this build
-				buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
-				dbLogs, _, err := buildLogsRepo.GetBuildLogs(ctx, build.ID, 10000, 0)
-				if err == nil && len(dbLogs) > 0 {
-					// Convert database logs to proto format and send them
-					// These are logs from a build on another node, so they won't be in the buffer
-					for _, logEntry := range dbLogs {
-						// Check context before sending
-						if ctx.Err() != nil {
-							return nil
-						}
-						logLine := &deploymentsv1.DeploymentLogLine{
-							DeploymentId: deploymentID,
-							Line:         logEntry.Line,
-							Timestamp:    timestamppb.New(logEntry.Timestamp),
-							Stderr:       logEntry.Stderr,
-							LogLevel:     commonv1.LogLevel_LOG_LEVEL_INFO,
-						}
-						if err := stream.Send(logLine); err != nil {
-							// If context is cancelled, return nil for proper closure
-							if ctx.Err() != nil {
-								return nil
-							}
-							// For other errors, still return nil to ensure proper stream closure
-							return nil
-						}
-					}
-				}
-			}
-		}
-	}
-	// Note: Buffered logs from the current node are handled by the Subscribe() method
-	// which sends them in a goroutine. We don't send them here to avoid duplicates.
 
 	// Stream new logs to client
 	for {
@@ -597,6 +588,124 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 				// This handles cases where the client disconnected but context isn't cancelled yet
 				return nil
 			}
+		}
+	}
+}
+
+func isBuildStreamingActive(status int32) bool {
+	return status == int32(deploymentsv1.BuildStatus_BUILD_PENDING) || status == int32(deploymentsv1.BuildStatus_BUILD_BUILDING)
+}
+
+func buildLogEntryToProto(deploymentID string, logEntry *database.BuildLog) *deploymentsv1.DeploymentLogLine {
+	return &deploymentsv1.DeploymentLogLine{
+		DeploymentId: deploymentID,
+		Line:         logEntry.Line,
+		Timestamp:    timestamppb.New(logEntry.Timestamp),
+		Stderr:       logEntry.Stderr,
+		LogLevel:     detectLogLevelFromContent(logEntry.Line, logEntry.Stderr),
+	}
+}
+
+func sendBuildLogEntries(stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], deploymentID string, logs []*database.BuildLog) (int32, error) {
+	var lastLineNumber int32 = -1
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		if err := stream.Send(buildLogEntryToProto(deploymentID, logEntry)); err != nil {
+			return lastLineNumber, err
+		}
+		lastLineNumber = logEntry.LineNumber
+	}
+	return lastLineNumber, nil
+}
+
+func (s *Service) streamRemoteBuildLogsSnapshot(ctx context.Context, stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], deploymentID, buildID string) (int32, error) {
+	if buildID == "" {
+		return -1, nil
+	}
+
+	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+	lastLineNumber := int32(-1)
+	for {
+		logs, err := buildLogsRepo.GetBuildLogsAfterLine(ctx, buildID, lastLineNumber, remoteBuildLogBatchSize)
+		if err != nil {
+			return lastLineNumber, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load build logs: %w", err))
+		}
+		if len(logs) == 0 {
+			return lastLineNumber, nil
+		}
+		sentUntil, err := sendBuildLogEntries(stream, deploymentID, logs)
+		if err != nil {
+			if ctx.Err() != nil {
+				return lastLineNumber, nil
+			}
+			return lastLineNumber, nil
+		}
+		lastLineNumber = sentUntil
+		if len(logs) < remoteBuildLogBatchSize {
+			return lastLineNumber, nil
+		}
+	}
+}
+
+func (s *Service) streamRemoteBuildLogs(ctx context.Context, stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], deploymentID, buildID string) error {
+	lastLineNumber, err := s.streamRemoteBuildLogsSnapshot(ctx, stream, deploymentID, buildID)
+	if err != nil {
+		return err
+	}
+
+	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+	drainingSince := time.Time{}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(remoteBuildLogPollInterval):
+		}
+
+		logs, err := buildLogsRepo.GetBuildLogsAfterLine(ctx, buildID, lastLineNumber, remoteBuildLogBatchSize)
+		if err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to poll build logs: %w", err))
+		}
+		if len(logs) > 0 {
+			sentUntil, sendErr := sendBuildLogEntries(stream, deploymentID, logs)
+			if sendErr != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return nil
+			}
+			lastLineNumber = sentUntil
+		}
+
+		build, err := s.buildHistoryRepo.GetBuildByID(ctx, buildID)
+		if err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check build status: %w", err))
+		}
+
+		if isBuildStreamingActive(build.Status) {
+			drainingSince = time.Time{}
+			continue
+		}
+
+		if drainingSince.IsZero() {
+			drainingSince = time.Now()
+			continue
+		}
+
+		if len(logs) == 0 && time.Since(drainingSince) >= remoteBuildLogDrainWindow {
+			finalLogs, err := buildLogsRepo.GetBuildLogsAfterLine(ctx, buildID, lastLineNumber, remoteBuildLogBatchSize)
+			if err != nil {
+				return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to flush final build logs: %w", err))
+			}
+			if len(finalLogs) > 0 {
+				if _, err := sendBuildLogEntries(stream, deploymentID, finalLogs); err != nil {
+					return nil
+				}
+			}
+			return nil
 		}
 	}
 }

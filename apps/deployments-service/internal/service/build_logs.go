@@ -280,6 +280,17 @@ func (s *BuildLogStreamer) Subscribe() chan *deploymentsv1.DeploymentLogLine {
 	return ch
 }
 
+// SubscribeLiveOnly subscribes to new log lines without replaying the buffered log history.
+func (s *BuildLogStreamer) SubscribeLiveOnly() chan *deploymentsv1.DeploymentLogLine {
+	ch := make(chan *deploymentsv1.DeploymentLogLine, 5000)
+
+	s.mu.Lock()
+	s.subscribers[ch] = struct{}{}
+	s.mu.Unlock()
+
+	return ch
+}
+
 // Unsubscribe removes a subscription
 func (s *BuildLogStreamer) Unsubscribe(ch chan *deploymentsv1.DeploymentLogLine) {
 	s.mu.Lock()
@@ -313,6 +324,13 @@ func (s *BuildLogStreamer) GetLogs() []*deploymentsv1.DeploymentLogLine {
 	logs := make([]*deploymentsv1.DeploymentLogLine, len(s.logs))
 	copy(logs, s.logs)
 	return logs
+}
+
+// CurrentBuildID returns the build currently associated with the streamer.
+func (s *BuildLogStreamer) CurrentBuildID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.buildID
 }
 
 // DetectPortFromLogs parses the first N log lines to detect a port number
