@@ -52,7 +52,7 @@ func newUserProfileResolver() *userProfileResolver {
 	baseURL := strings.TrimSuffix(os.Getenv("ZITADEL_URL"), "/")
 	token := strings.TrimSpace(os.Getenv("ZITADEL_MANAGEMENT_TOKEN"))
 	organizationID := strings.TrimSpace(os.Getenv("ZITADEL_ORGANIZATION_ID"))
-	
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	return &userProfileResolver{
 		httpClient:     client,
@@ -89,7 +89,7 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 	}
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Accept", "application/json")
-	
+
 	// Add organization context header if available
 	// This helps Zitadel route the request to the correct organization context
 	if r.organizationID != "" {
@@ -141,14 +141,14 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 	// The v2 API requires specifying the user type (human) in the request body
 	updateBody := make(map[string]interface{})
 	human := make(map[string]interface{})
-	
+
 	if profile, ok := updates["profile"].(map[string]interface{}); ok {
 		human["profile"] = profile
 	}
 	if preferredLanguage, ok := updates["preferredLanguage"].(string); ok {
 		human["preferredLanguage"] = preferredLanguage
 	}
-	
+
 	if len(human) > 0 {
 		updateBody["human"] = human
 	}
@@ -162,7 +162,7 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 	// Create PATCH request to v2 API endpoint
 	// The v2 API uses /v2/users/:userId (without /management prefix)
 	// The request body must wrap human updates in a "human" object
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, 
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
 		fmt.Sprintf("%s/v2/users/%s", r.baseURL, userID),
 		strings.NewReader(string(bodyBytes)))
 	if err != nil {
@@ -218,8 +218,8 @@ type managementUserResponse struct {
 		CreationDate  string `json:"creationDate"`
 	} `json:"details"`
 	User struct {
-		UserID             string   `json:"userId"`
-		Details            struct {
+		UserID  string `json:"userId"`
+		Details struct {
 			Sequence      string `json:"sequence"`
 			ChangeDate    string `json:"changeDate"`
 			ResourceOwner string `json:"resourceOwner"`
@@ -231,8 +231,8 @@ type managementUserResponse struct {
 		PreferredLoginName string   `json:"preferredLoginName"`
 		Human              struct {
 			Profile struct {
-				GivenName         string `json:"givenName"`         // Note: givenName, not firstName
-				FamilyName        string `json:"familyName"`         // Note: familyName, not lastName
+				GivenName         string `json:"givenName"`  // Note: givenName, not firstName
+				FamilyName        string `json:"familyName"` // Note: familyName, not lastName
 				DisplayName       string `json:"displayName"`
 				NickName          string `json:"nickName"`
 				PreferredLanguage string `json:"preferredLanguage"`
@@ -256,7 +256,7 @@ func (m managementUserResponse) toAuthUser() *authv1.User {
 
 	userID := m.User.UserID
 	user := &authv1.User{Id: userID}
-	
+
 	// Extract email
 	email := m.User.Human.Email.Email
 	if email != "" {
@@ -298,4 +298,26 @@ func (m managementUserResponse) toAuthUser() *authv1.User {
 	}
 
 	return user
+}
+
+func deriveNameFromEmail(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) == 0 || parts[0] == "" {
+		return "New Team Member"
+	}
+
+	tokens := strings.FieldsFunc(parts[0], func(r rune) bool { return r == '.' || r == '_' || r == '-' })
+	for i, token := range tokens {
+		if token == "" {
+			continue
+		}
+		tokens[i] = strings.ToUpper(token[:1]) + token[1:]
+	}
+
+	name := strings.Join(tokens, " ")
+	if name == "" {
+		return "New Team Member"
+	}
+
+	return name
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
+	sharedorganizations "github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -103,7 +104,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	for _, r := range rows {
 		// Ensure organization has a plan assigned (defaults to Starter plan)
 		// This ensures plan info is available when converting to proto
-		if err := EnsurePlanAssigned(r.Id); err != nil {
+		if err := sharedorganizations.EnsurePlanAssigned(r.Id); err != nil {
 			log.Printf("[ListOrganizations] Warning: failed to ensure plan assigned for org %s: %v", r.Id, err)
 			// Continue anyway - plan info just won't be populated
 		}
@@ -162,7 +163,7 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = EnsurePlanAssigned(org.ID)
+	_ = sharedorganizations.EnsurePlanAssigned(org.ID)
 	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: organizationToProto(org)}), nil
 }
 
@@ -172,7 +173,7 @@ func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organi
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	if err := EnsurePlanAssigned(r.ID); err != nil {
+	if err := sharedorganizations.EnsurePlanAssigned(r.ID); err != nil {
 		log.Printf("[GetOrganization] Warning: failed to ensure plan assigned for org %s: %v", r.ID, err)
 		// Continue anyway - plan info just won't be populated
 	}
@@ -225,7 +226,7 @@ func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organiza
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list members: %w", err))
 	}
 
-	resolver := getUserProfileResolver()
+	resolver := sharedorganizations.GetUserProfileResolver()
 	list := make([]*organizationsv1.OrganizationMember, 0, len(members))
 	for _, member := range members {
 		userProto := buildUserProfile(ctx, resolver, member)
@@ -1481,7 +1482,7 @@ func ensurePersonalOrg(userID string) {
 	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = EnsurePlanAssigned(org.ID)
+	_ = sharedorganizations.EnsurePlanAssigned(org.ID)
 }
 
 func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()) }
@@ -1727,7 +1728,11 @@ func capitalize(input string) string {
 	return strings.ToUpper(lowered[:1]) + lowered[1:]
 }
 
-func buildUserProfile(ctx context.Context, resolver *userProfileResolver, member database.OrganizationMember) *authv1.User {
+type userProfileLookup interface {
+	Resolve(context.Context, string) (*authv1.User, error)
+}
+
+func buildUserProfile(ctx context.Context, resolver userProfileLookup, member database.OrganizationMember) *authv1.User {
 	userProto := &authv1.User{Id: member.UserID}
 
 	if strings.HasPrefix(member.UserID, "pending:") {
@@ -1825,7 +1830,7 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 	}
 
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = EnsurePlanAssigned(orgID)
+	_ = sharedorganizations.EnsurePlanAssigned(orgID)
 
 	return connect.NewResponse(&organizationsv1.AdminAddCreditsResponse{
 		Organization:     organizationToProto(&org),

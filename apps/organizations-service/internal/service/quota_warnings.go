@@ -9,6 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
+	sharedorganizations "github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 
 	organizationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1"
 
@@ -207,7 +208,7 @@ func (s *Service) sendQuotaWarningEmail(ctx context.Context, orgID, orgName stri
 
 	// Get user emails using the user profile resolver
 	var emails []string
-	resolver := getUserProfileResolver()
+	resolver := sharedorganizations.GetUserProfileResolver()
 	for _, member := range members {
 		if member.UserID == "" || strings.HasPrefix(member.UserID, "pending:") {
 			continue // Skip pending invites
