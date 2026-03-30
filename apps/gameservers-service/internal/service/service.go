@@ -26,6 +26,7 @@ type Service struct {
 	modClient             *modrinth.Client
 	resourcePressureMu    sync.Mutex
 	resourcePressureState map[string]*resourcePressureState
+	backgroundCtx         context.Context
 }
 
 type resourcePressureState struct {
@@ -35,14 +36,26 @@ type resourcePressureState struct {
 	lastObservedMemoryUsage int64
 }
 
-func NewService(repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
+func NewService(backgroundCtx context.Context, repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
 	return &Service{
 		repo:                  repo,
 		permissionChecker:     auth.NewPermissionChecker(),
 		manager:               manager,
 		modClient:             modrinth.NewClient(nil),
 		resourcePressureState: make(map[string]*resourcePressureState),
+		backgroundCtx:         backgroundCtx,
 	}
+}
+
+func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := s.backgroundCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	if timeout <= 0 {
+		return context.WithCancel(baseCtx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
 }
 
 // getGameServerManager returns the game server manager
@@ -62,7 +75,11 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 // createSystemContext creates a context with a system user that has admin permissions.
 // This is used for internal operations that need to bypass permission checks.
 func (s *Service) createSystemContext() context.Context {
-	return auth.WithSystemUser(context.Background())
+	baseCtx := s.backgroundCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	return auth.WithSystemUser(baseCtx)
 }
 
 // checkGameServerPermission verifies user permissions for a game server

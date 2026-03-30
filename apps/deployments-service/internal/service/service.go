@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -24,9 +25,10 @@ type Service struct {
 	quotaChecker      *quota.Checker
 	buildRegistry     *BuildStrategyRegistry
 	forwarder         *orchestrator.NodeForwarder
+	backgroundCtx     context.Context
 }
 
-func NewService(repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) *Service {
+func NewService(backgroundCtx context.Context, repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) *Service {
 	forwarder := orchestrator.NewNodeForwarder()
 	return &Service{
 		repo:              repo,
@@ -36,7 +38,19 @@ func NewService(repo *database.DeploymentRepository, manager *orchestrator.Deplo
 		quotaChecker:      qc,
 		buildRegistry:     NewBuildStrategyRegistry(),
 		forwarder:         forwarder,
+		backgroundCtx:     backgroundCtx,
 	}
+}
+
+func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := s.backgroundCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	if timeout <= 0 {
+		return context.WithCancel(baseCtx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
 }
 
 // ensureAuthenticated ensures the user is authenticated for streaming RPCs.

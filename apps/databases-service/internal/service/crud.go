@@ -2,8 +2,10 @@ package databases
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"databases-service/internal/provisioner"
@@ -214,7 +216,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 
 	// Provision the actual database container asynchronously
 	go func() {
-		provisionCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		provisionCtx, cancel := s.detachedContext(5 * time.Minute)
 		defer cancel()
 
 		// Use Obiente DNS naming pattern like deployments/vps/gameservers
@@ -260,7 +262,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		}
 
 		// Create connection record
-		connID := fmt.Sprintf("conn-%d", time.Now().UnixNano())
+		connID := fmt.Sprintf("conn-%s", uuid.NewString())
 
 		// Encrypt password before storing
 		encryptedPassword := initialPassword
@@ -472,7 +474,7 @@ func (s *Service) DeleteDatabase(ctx context.Context, req *connect.Request[datab
 
 	// Delete the actual database container asynchronously
 	go func() {
-		deleteCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		deleteCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
 		// Update status to DELETING
@@ -519,8 +521,11 @@ func stringPtr(s string) *string {
 func generateRandomPassword(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	b := make([]byte, length)
+	if _, err := cryptorand.Read(b); err != nil {
+		return strings.Repeat("x", length)
+	}
 	for i := range b {
-		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		b[i] = charset[int(b[i])%len(charset)]
 	}
 	return string(b)
 }

@@ -78,6 +78,10 @@ func main() {
 		port = "3005"
 	}
 
+	// Set up graceful shutdown
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
@@ -115,7 +119,7 @@ func main() {
 	// Create repositories and services
 	deploymentRepo := database.NewDeploymentRepository(database.DB, database.RedisClient)
 	qc := quota.NewChecker()
-	deploymentService := deploymentsvc.NewService(deploymentRepo, manager, qc)
+	deploymentService := deploymentsvc.NewService(shutdownCtx, deploymentRepo, manager, qc)
 
 	// Register deployments service
 	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(
@@ -171,10 +175,6 @@ func main() {
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
-
-	// Set up graceful shutdown
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)

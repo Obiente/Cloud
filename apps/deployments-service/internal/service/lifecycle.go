@@ -59,11 +59,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if r := recover(); r != nil {
 				logger.Error("[TriggerDeployment] PANIC in build goroutine for deployment %s: %v", deploymentID, r)
 				// Ensure deployment status is updated even on panic
-				_ = s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				panicCtx, cancel := s.detachedContext(30 * time.Second)
+				defer cancel()
+				_ = s.repo.UpdateStatus(panicCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 			}
 		}()
 
-		buildCtx := context.Background()
+		buildCtx, buildCancel := s.detachedContext(0)
+		defer buildCancel()
 		buildStartTime := time.Now()
 
 		// Get or create build log streamer

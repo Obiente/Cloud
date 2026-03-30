@@ -134,7 +134,7 @@ func main() {
 
 	// Create services
 	qc := quota.NewChecker()
-	vpsService := vpssvc.NewService(vpsManager, qc)
+	vpsService := vpssvc.NewService(shutdownCtx, vpsManager, qc)
 
 	// Register VPS service
 	vpsPath, vpsHandler := vpsv1connect.NewVPSServiceHandler(

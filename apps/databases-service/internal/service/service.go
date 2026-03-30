@@ -16,8 +16,8 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
-	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 	databasesv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1/databasesv1connect"
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 
 	"connectrpc.com/connect"
 )
@@ -32,9 +32,11 @@ type Service struct {
 	secretManager     *secrets.SecretManager
 	proxy             *proxy.Proxy
 	routeRegistry     *proxy.RouteRegistry
+	backgroundCtx     context.Context
 }
 
 func NewService(
+	backgroundCtx context.Context,
 	repo *database.DatabaseRepository,
 	connRepo *database.DatabaseConnectionRepository,
 	backupRepo *database.DatabaseBackupRepository,
@@ -70,6 +72,7 @@ func NewService(
 		secretManager:     secretMgr,
 		proxy:             proxyServer,
 		routeRegistry:     registry,
+		backgroundCtx:     backgroundCtx,
 	}
 
 	// Wire wake/sleep callbacks
@@ -77,6 +80,17 @@ func NewService(
 	registry.OnSleep = svc.sleepDatabaseAuto
 
 	return svc
+}
+
+func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := s.backgroundCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	if timeout <= 0 {
+		return context.WithCancel(baseCtx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
 }
 
 // wakeDatabase starts a sleeping database container and returns its IP
@@ -111,7 +125,7 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 
 	// Send notification
 	go func() {
-		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		notifCtx, cancel := s.detachedContext(10 * time.Second)
 		defer cancel()
 		actionURL := fmt.Sprintf("/databases/%s", route.DatabaseID)
 		notifications.CreateNotificationForOrganization(
@@ -156,7 +170,7 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 
 	// Send notification
 	go func() {
-		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		notifCtx, cancel := s.detachedContext(10 * time.Second)
 		defer cancel()
 		actionURL := fmt.Sprintf("/databases/%s", route.DatabaseID)
 		dbName := route.DatabaseID

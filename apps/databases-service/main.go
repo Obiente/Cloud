@@ -70,6 +70,10 @@ func main() {
 		port = "3014"
 	}
 
+	// Set up graceful shutdown
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
@@ -84,7 +88,7 @@ func main() {
 	databaseRepo := database.NewDatabaseRepository(database.DB, database.RedisClient)
 	connRepo := database.NewDatabaseConnectionRepository(database.DB)
 	backupRepo := database.NewDatabaseBackupRepository(database.DB)
-	databaseService := databasessvc.NewService(databaseRepo, connRepo, backupRepo)
+	databaseService := databasessvc.NewService(shutdownCtx, databaseRepo, connRepo, backupRepo)
 
 	// Register databases service
 	databasesPath, databasesHandler := databasesv1connect.NewDatabaseServiceHandler(
@@ -97,7 +101,7 @@ func main() {
 	proxyServer := databaseService.GetProxy()
 	routeRegistry := databaseService.GetRouteRegistry()
 
-	loadCtx, loadCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	loadCtx, loadCancel := context.WithTimeout(shutdownCtx, 30*time.Second)
 	if err := routeRegistry.LoadFromDatabase(loadCtx); err != nil {
 		logger.Warn("Failed to load routes from database: %v", err)
 	} else {
@@ -106,9 +110,10 @@ func main() {
 	loadCancel()
 
 	// Start proxy in background
+	proxyErr := make(chan error, 1)
 	go func() {
-		if err := proxyServer.Start(context.Background()); err != nil {
-			logger.Error("Failed to start proxy: %v", err)
+		if err := proxyServer.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+			proxyErr <- err
 		}
 	}()
 	logger.Info("✓ Database proxy starting")
@@ -181,10 +186,6 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
-	// Set up graceful shutdown
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
@@ -198,6 +199,8 @@ func main() {
 	select {
 	case err := <-serverErr:
 		logger.Fatalf("server failed: %v", err)
+	case err := <-proxyErr:
+		logger.Fatalf("proxy failed: %v", err)
 	case <-shutdownCtx.Done():
 		logger.Info("\n=== Shutting down gracefully ===")
 		shutdownTimeout := 30 * time.Second

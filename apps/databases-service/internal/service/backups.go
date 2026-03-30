@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
@@ -111,7 +113,7 @@ func (s *Service) CreateBackup(ctx context.Context, req *connect.Request[databas
 	}
 
 	// Create backup record
-	backupID := fmt.Sprintf("backup-%d", time.Now().UnixNano())
+	backupID := fmt.Sprintf("backup-%s", uuid.NewString())
 	backupName := req.Msg.GetName()
 	if backupName == "" {
 		backupName = fmt.Sprintf("backup-%s", time.Now().Format("20060102-150405"))
@@ -134,12 +136,25 @@ func (s *Service) CreateBackup(ctx context.Context, req *connect.Request[databas
 	// TODO: Actually perform the backup operation
 	// For now, simulate async backup
 	go func() {
-		time.Sleep(5 * time.Second) // Simulate backup time
+		backupCtx, cancel := s.detachedContext(15 * time.Second)
+		defer cancel()
+
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-backupCtx.Done():
+			return
+		case <-timer.C:
+		}
+
 		now := time.Now()
 		backup.Status = 2 // COMPLETED
 		backup.CompletedAt = &now
 		backup.SizeBytes = 1024 * 1024 * 100 // 100MB placeholder
-		s.backupRepo.Update(context.Background(), backup)
+		if err := s.backupRepo.Update(backupCtx, backup); err != nil {
+			backup.Status = 3 // FAILED
+			logger.Warn("Failed to finalize backup %s: %v", backup.ID, err)
+		}
 	}()
 
 	res := connect.NewResponse(&databasesv1.CreateBackupResponse{
@@ -208,4 +223,3 @@ func (s *Service) RestoreBackup(ctx context.Context, req *connect.Request[databa
 	// Placeholder implementation
 	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("backup restoration not yet implemented"))
 }
-

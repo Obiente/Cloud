@@ -120,7 +120,9 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 				} else {
 					requestData = string(requestDataBytes)
 				}
-				if err := middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+				auditCtx, cancel := s.detachedContext(5 * time.Second)
+				defer cancel()
+				if err := middleware.CreateAuditLog(auditCtx, middleware.AuditEntry{
 					UserID:         userID,
 					OrganizationID: nil,
 					Action:         action,
@@ -159,7 +161,9 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 			service := "GameServerService"
 			rt := "game_server"
 			logger.Debug("[ChunkUpload] Emitting audit log (success): gameServer=%s file=%s", gameServerId, upload.FileName)
-			if err := middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
+			auditCtx, cancel := s.detachedContext(5 * time.Second)
+			defer cancel()
+			if err := middleware.CreateAuditLog(auditCtx, middleware.AuditEntry{
 				UserID:         userID,
 				OrganizationID: nil,
 				Action:         action,

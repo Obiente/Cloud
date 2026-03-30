@@ -29,14 +29,27 @@ type Service struct {
 	permissionChecker *auth.PermissionChecker
 	quotaChecker      *quota.Checker
 	vpsManager        *orchestrator.VPSManager
+	backgroundCtx     context.Context
 }
 
-func NewService(vpsManager *orchestrator.VPSManager, qc *quota.Checker) *Service {
+func NewService(backgroundCtx context.Context, vpsManager *orchestrator.VPSManager, qc *quota.Checker) *Service {
 	return &Service{
 		permissionChecker: auth.NewPermissionChecker(),
 		quotaChecker:      qc,
 		vpsManager:        vpsManager,
+		backgroundCtx:     backgroundCtx,
 	}
+}
+
+func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	baseCtx := s.backgroundCtx
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	if timeout <= 0 {
+		return context.WithCancel(baseCtx)
+	}
+	return context.WithTimeout(baseCtx, timeout)
 }
 
 // ensureAuthenticated ensures the user is authenticated for streaming RPCs
@@ -113,13 +126,13 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vp
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
-	
+
 	// Use FirstOrCreate to avoid duplicates
 	var existingPublicLease database.DHCPLease
 	result := database.DB.WithContext(ctx).
 		Where("vps_id = ? AND is_public = ?", vpsID, true).
 		FirstOrCreate(&existingPublicLease, publicLease)
-	
+
 	if result.Error != nil {
 		logger.Warn("[VPS Service] Failed to register public IP DHCP lease for %s: %v", vpsID, result.Error)
 	}
@@ -136,7 +149,7 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vp
 			log.Printf("[VPS Service] Warning: failed to update vps_public_ips for %s: %v", publicIP, err)
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
-		newID := fmt.Sprintf("ip-%d", time.Now().UnixNano())
+		newID := fmt.Sprintf("ip-%s", uuid.NewString())
 		// Determine default monthly cost (env-configurable; fallback $1.00 = 100 cents)
 		defaultCostCents := int64(100)
 		if v := os.Getenv("DEFAULT_PUBLIC_IP_MONTHLY_COST_CENTS"); v != "" {

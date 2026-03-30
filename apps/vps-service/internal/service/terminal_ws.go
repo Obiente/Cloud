@@ -147,11 +147,8 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 	log.Printf("[VPS Terminal WS] WebSocket connection accepted successfully")
 
-	// Create a background context for the WebSocket connection lifecycle
-	// This prevents premature cancellation by HTTP server timeouts or load balancers in swarm
-	// The request context may be cancelled by proxies/load balancers, but we want the WebSocket
-	// to stay alive as long as the client is connected
-	wsCtx, wsCancel := context.WithCancel(context.Background())
+	// Keep the websocket alive beyond the HTTP request context, but still tie it to service shutdown.
+	wsCtx, wsCancel := s.detachedContext(0)
 	defer wsCancel()
 
 	var writeMu sync.Mutex
@@ -452,7 +449,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		log.Printf("[VPS Terminal WS] Sent 'connected' message to client, SSH connection ready")
 
 		// Create audit log for successful web terminal connection
-		go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
+		go s.createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
 
 		// Use wsCtx for output forwarding to prevent cancellation by HTTP server/load balancer
 		outputCtx, outputCancel := context.WithCancel(wsCtx)
@@ -742,10 +739,9 @@ func (s *Service) handleProxmoxTermProxy(
 		return
 	}
 
-	// Proxy messages bidirectionally using binary for better performance
-	// Use a background context for WebSocket operations to prevent cancellation by HTTP server/load balancer
+	// Proxy messages bidirectionally using binary for better performance while still respecting service shutdown.
 	errChan := make(chan error, 2)
-	proxyCtx, cancel := context.WithCancel(context.Background())
+	proxyCtx, cancel := s.detachedContext(0)
 	defer cancel()
 
 	// Helper to safely send errors
@@ -1204,8 +1200,8 @@ func getClientIPFromRequest(r *http.Request) string {
 	return "unknown"
 }
 
-// createWebTerminalAuditLog creates an audit log entry for a web terminal connection
-func createWebTerminalAuditLog(vpsID string, userInfo *authv1.User, organizationID string, clientIP, userAgent string) {
+// createWebTerminalAuditLog creates an audit log entry for a web terminal connection.
+func (s *Service) createWebTerminalAuditLog(vpsID string, userInfo *authv1.User, organizationID string, clientIP, userAgent string) {
 	// Recover from any panics
 	defer func() {
 		if r := recover(); r != nil {
@@ -1213,8 +1209,7 @@ func createWebTerminalAuditLog(vpsID string, userInfo *authv1.User, organization
 		}
 	}()
 
-	// Use background context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := s.detachedContext(5 * time.Second)
 	defer cancel()
 
 	// Use MetricsDB (TimescaleDB) for audit logs

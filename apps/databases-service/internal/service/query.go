@@ -80,7 +80,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 				}
 				// SLEEPING - wake it
 				if s.routeRegistry.OnWake != nil {
-					wakeCtx, wakeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					wakeCtx, wakeCancel := s.detachedContext(30 * time.Second)
 					ip, err := s.routeRegistry.OnWake(wakeCtx, route)
 					wakeCancel()
 					if err != nil {

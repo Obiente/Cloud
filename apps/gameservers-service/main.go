@@ -91,6 +91,10 @@ func main() {
 		port = "3006"
 	}
 
+	// Set up graceful shutdown
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
@@ -114,7 +118,7 @@ func main() {
 
 	// Create repositories and services
 	gameServerRepo := database.NewGameServerRepository(database.DB, database.RedisClient)
-	gameServerService := gameserversvc.NewService(gameServerRepo, manager)
+	gameServerService := gameserversvc.NewService(shutdownCtx, gameServerRepo, manager)
 
 	// Register game servers service
 	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(
@@ -165,10 +169,6 @@ func main() {
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
-
-	// Set up graceful shutdown
-	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	// Start health monitor in a background goroutine
 	// Check every 30 seconds to sync game server status with Docker container status

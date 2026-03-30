@@ -315,7 +315,7 @@ func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int6
 		s.resourcePressureMu.Unlock()
 	}()
 
-	restartCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	restartCtx, cancel := s.detachedContext(2 * time.Minute)
 	defer cancel()
 
 	manager, err := s.getGameServerManager()
@@ -333,12 +333,14 @@ func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int6
 			"gracePeriodSeconds":   int(resourcePressureGracePeriod.Seconds()),
 			"cooldownSeconds":      int(resourcePressureRestartCooldown.Seconds()),
 		}, err)
-		s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, false, err.Error())
+		notifyCtx, notifyCancel := s.detachedContext(15 * time.Second)
+		defer notifyCancel()
+		s.sendMemoryPressureNotification(notifyCtx, gameServerID, memoryUsage, memoryLimit, firstExceededAt, false, err.Error())
 		return
 	}
 
 	go func() {
-		updateCtx, updateCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		updateCtx, updateCancel := s.detachedContext(30 * time.Second)
 		defer updateCancel()
 		if err := s.updateGameServerStorage(updateCtx, gameServerID); err != nil {
 			logger.Warn("[HealthMonitor] Failed to update storage after memory-pressure restart for game server %s: %v", gameServerID, err)
@@ -353,7 +355,9 @@ func (s *Service) restartForMemoryPressure(gameServerID string, memoryUsage int6
 		"gracePeriodSeconds":   int(resourcePressureGracePeriod.Seconds()),
 		"cooldownSeconds":      int(resourcePressureRestartCooldown.Seconds()),
 	}, nil)
-	s.sendMemoryPressureNotification(context.Background(), gameServerID, memoryUsage, memoryLimit, firstExceededAt, true, "")
+	notifyCtx, notifyCancel := s.detachedContext(15 * time.Second)
+	defer notifyCancel()
+	s.sendMemoryPressureNotification(notifyCtx, gameServerID, memoryUsage, memoryLimit, firstExceededAt, true, "")
 }
 
 func (s *Service) sendMemoryPressureNotification(ctx context.Context, gameServerID string, memoryUsage int64, memoryLimit int64, firstExceededAt time.Time, restarted bool, restartErr string) {

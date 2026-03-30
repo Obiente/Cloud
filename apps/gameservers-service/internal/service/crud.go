@@ -289,8 +289,8 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 
 		// Update storage after container is created
 		go func() {
-			// Use background context for async storage update
-			bgCtx := context.Background()
+			bgCtx, cancel := s.detachedContext(30 * time.Second)
+			defer cancel()
 			if err := s.updateGameServerStorage(bgCtx, id); err != nil {
 				logger.Warn("[CreateGameServer] Failed to update storage for game server %s: %v", id, err)
 			}
@@ -552,7 +552,7 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		if err == nil && manager != nil {
 			// Update container resource limits in background (non-blocking)
 			go func() {
-				updateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				updateCtx, cancel := s.detachedContext(30 * time.Second)
 				defer cancel()
 
 				if err := s.updateContainerResourceLimits(updateCtx, *dbGameServer.ContainerID, dbGameServer.MemoryBytes, dbGameServer.CPUCores); err != nil {
@@ -631,8 +631,8 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 
 	// Update storage after container is started
 	go func() {
-		// Use background context for async storage update
-		bgCtx := context.Background()
+		bgCtx, cancel := s.detachedContext(30 * time.Second)
+		defer cancel()
 		if err := s.updateGameServerStorage(bgCtx, gameServerID); err != nil {
 			logger.Warn("[StartGameServer] Failed to update storage for game server %s: %v", gameServerID, err)
 		}
@@ -711,8 +711,8 @@ func (s *Service) RestartGameServer(ctx context.Context, req *connect.Request[ga
 
 	// Update storage after container is restarted
 	go func() {
-		// Use background context for async storage update
-		bgCtx := context.Background()
+		bgCtx, cancel := s.detachedContext(30 * time.Second)
+		defer cancel()
 		if err := s.updateGameServerStorage(bgCtx, gameServerID); err != nil {
 			logger.Warn("[RestartGameServer] Failed to update storage for game server %s: %v", gameServerID, err)
 		}

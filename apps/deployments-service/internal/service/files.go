@@ -46,7 +46,6 @@ func getChunkUploadManager() *chunkupload.Manager {
 	return chunkUploadManager
 }
 
-
 // ListContainerFiles lists files in a deployment container or volume
 func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ListContainerFilesRequest]) (*connect.Response[deploymentsv1.ListContainerFilesResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
@@ -157,7 +156,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if path == "" {
 		path = "/"
 	}
-	
+
 	// Sanitize path to prevent directory traversal attacks
 	// Ensure path is absolute and normalized
 	// Use path/filepath carefully - on Windows filepath.Clean might change slashes
@@ -165,19 +164,19 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	path = strings.TrimSpace(path)
 	// Remove any invalid characters that might have been parsed incorrectly
 	path = strings.Trim(path, "\x00\r\n")
-	
+
 	// Ensure path is absolute and normalized (use Unix-style paths)
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	
+
 	// Clean up the path - remove any double slashes, resolve . and ..
 	path = filepath.ToSlash(filepath.Clean(path))
 	// Ensure it starts with /
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	
+
 	// Final validation: path should only contain valid characters for Unix paths
 	if strings.Contains(path, "\x00") || strings.Contains(path, "..") {
 		path = "/"
@@ -241,12 +240,12 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if err != nil {
 		// Check if error mentions container being stopped or can't be started
 		errStr := err.Error()
-		if strings.Contains(errStr, "container is stopped") || 
-		   strings.Contains(errStr, "cannot be started automatically") ||
-		   strings.Contains(errStr, "failed to start stopped container") {
+		if strings.Contains(errStr, "container is stopped") ||
+			strings.Contains(errStr, "cannot be started automatically") ||
+			strings.Contains(errStr, "failed to start stopped container") {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and cannot be started automatically for file listing. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or manually start the container"))
 		}
-		
+
 		// Check if the error is from ContainerExecRun (command failed with exit code)
 		if strings.Contains(errStr, "failed with exit code") || strings.Contains(errStr, "command") {
 			if !isRunning {
@@ -254,7 +253,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 			}
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 		}
-		
+
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 	}
 
@@ -296,7 +295,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	if path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
-	
+
 	// Sanitize path to prevent directory traversal attacks
 	// Ensure path is absolute and normalized
 	// Use path/filepath carefully - on Windows filepath.Clean might change slashes
@@ -304,19 +303,19 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	path = strings.TrimSpace(path)
 	// Remove any invalid characters that might have been parsed incorrectly
 	path = strings.Trim(path, "\x00\r\n")
-	
+
 	// Ensure path is absolute and normalized (use Unix-style paths)
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	
+
 	// Clean up the path - remove any double slashes, resolve . and ..
 	path = filepath.ToSlash(filepath.Clean(path))
 	// Ensure it starts with /
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	
+
 	// Final validation: path should only contain valid characters for Unix paths
 	if strings.Contains(path, "\x00") || strings.Contains(path, "..") {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid path: %q", path))
@@ -392,12 +391,12 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	// since Docker might report stale state. We'll attempt the read and let Docker API handle the actual state check.
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
-			// Container might have been deleted - try to refresh and find again
-			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
-			if refreshErr != nil {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
-			}
-			loc = refreshedLoc
+		// Container might have been deleted - try to refresh and find again
+		refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if refreshErr != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
+		}
+		loc = refreshedLoc
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -429,7 +428,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		content = []byte(base64.StdEncoding.EncodeToString(content))
 		log.Printf("[GetContainerFile] Content contains invalid UTF-8, encoding as base64")
 	}
-	
+
 	resp := &deploymentsv1.GetContainerFileResponse{
 		Content:   string(content),
 		Encoding:  encoding,
@@ -439,7 +438,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	if statInfo != nil {
 		resp.Metadata = fileInfoToProto(*statInfo, "")
 	}
-	
+
 	return connect.NewResponse(resp), nil
 }
 
@@ -639,6 +638,8 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 
 			// Emit a single audit log for the failed upload (async)
 			go func() {
+				auditCtx, cancel := s.detachedContext(5 * time.Second)
+				defer cancel()
 				userID := "system"
 				if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
 					userID = u.Id
@@ -651,31 +652,31 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 						ip = h
 					}
 				}
-				   action := "UploadContainerFile"
-				   service := "DeploymentService"
-				   rt := "deployment"
-				   // Marshal request data for audit log
-				   requestDataBytes, marshalErr := json.Marshal(req.Msg)
-				   requestData := "{}"
-				   if marshalErr != nil {
-					   requestData = "{}"
-				   } else {
-					   requestData = string(requestDataBytes)
-				   }
-				   _ = middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
-					   UserID:         userID,
-					   OrganizationID: &orgID,
-					   Action:         action,
-					   Service:        service,
-					   ResourceType:   &rt,
-					   ResourceID:     &deploymentID,
-					   IPAddress:      ip,
-					   UserAgent:      req.Header().Get("User-Agent"),
-					   RequestData:    requestData,
-					   ResponseStatus: 500,
-					   ErrorMessage:   &errorMsg,
-					   DurationMs:     0,
-				   })
+				action := "UploadContainerFile"
+				service := "DeploymentService"
+				rt := "deployment"
+				// Marshal request data for audit log
+				requestDataBytes, marshalErr := json.Marshal(req.Msg)
+				requestData := "{}"
+				if marshalErr != nil {
+					requestData = "{}"
+				} else {
+					requestData = string(requestDataBytes)
+				}
+				_ = middleware.CreateAuditLog(auditCtx, middleware.AuditEntry{
+					UserID:         userID,
+					OrganizationID: &orgID,
+					Action:         action,
+					Service:        service,
+					ResourceType:   &rt,
+					ResourceID:     &deploymentID,
+					IPAddress:      ip,
+					UserAgent:      req.Header().Get("User-Agent"),
+					RequestData:    requestData,
+					ResponseStatus: 500,
+					ErrorMessage:   &errorMsg,
+					DurationMs:     0,
+				})
 			}()
 
 			return connect.NewResponse(resp), nil
@@ -683,6 +684,8 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 
 		// Emit a single audit log for the successful upload (async)
 		go func() {
+			auditCtx, cancel := s.detachedContext(5 * time.Second)
+			defer cancel()
 			userID := "system"
 			if u, _ := auth.GetUserFromContext(ctx); u != nil && u.Id != "" {
 				userID = u.Id
@@ -695,31 +698,31 @@ func (s *Service) ChunkUploadContainerFiles(ctx context.Context, req *connect.Re
 					ip = h
 				}
 			}
-			   action := "UploadContainerFile"
-			   service := "DeploymentService"
-			   rt := "deployment"
-			   // Marshal request data for audit log
-			   requestDataBytes, marshalErr := json.Marshal(req.Msg)
-			   requestData := "{}"
-			   if marshalErr != nil {
-				   requestData = "{}"
-			   } else {
-				   requestData = string(requestDataBytes)
-			   }
-			   _ = middleware.CreateAuditLog(context.Background(), middleware.AuditEntry{
-				   UserID:         userID,
-				   OrganizationID: &orgID,
-				   Action:         action,
-				   Service:        service,
-				   ResourceType:   &rt,
-				   ResourceID:     &deploymentID,
-				   IPAddress:      ip,
-				   UserAgent:      req.Header().Get("User-Agent"),
-				   RequestData:    requestData,
-				   ResponseStatus: 200,
-				   ErrorMessage:   nil,
-				   DurationMs:     0,
-			   })
+			action := "UploadContainerFile"
+			service := "DeploymentService"
+			rt := "deployment"
+			// Marshal request data for audit log
+			requestDataBytes, marshalErr := json.Marshal(req.Msg)
+			requestData := "{}"
+			if marshalErr != nil {
+				requestData = "{}"
+			} else {
+				requestData = string(requestDataBytes)
+			}
+			_ = middleware.CreateAuditLog(auditCtx, middleware.AuditEntry{
+				UserID:         userID,
+				OrganizationID: &orgID,
+				Action:         action,
+				Service:        service,
+				ResourceType:   &rt,
+				ResourceID:     &deploymentID,
+				IPAddress:      ip,
+				UserAgent:      req.Header().Get("User-Agent"),
+				RequestData:    requestData,
+				ResponseStatus: 200,
+				ErrorMessage:   nil,
+				DurationMs:     0,
+			})
 		}()
 
 		// Clean up the session after successful upload
@@ -749,8 +752,8 @@ func (s *Service) uploadAssembledContainerFile(ctx context.Context, deploymentID
 	defer dcli.Close()
 
 	// Find container - use first available for deployment
-	containerID := ""    // Optional from request
-	serviceName := ""    // Optional from request
+	containerID := "" // Optional from request
+	serviceName := "" // Optional from request
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return err
@@ -982,7 +985,7 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 	// Note: Deleted files must be from a running container since we need to execute commands
 	// However, we don't return an error here immediately - we'll try to delete and let docker API handle the error
 	// This matches the behavior of ListContainerFiles and UploadContainerFiles which work on both running and stopped containers
-	
+
 	for _, p := range paths {
 		if strings.TrimSpace(p) == "" {
 			continue
@@ -1463,7 +1466,7 @@ func (s *Service) ExtractDeploymentFile(ctx context.Context, req *connect.Reques
 	}
 
 	return connect.NewResponse(&deploymentsv1.ExtractDeploymentFileResponse{
-		Success:       true,
+		Success:        true,
 		FilesExtracted: int32(len(extractedFiles)),
 	}), nil
 }
@@ -1527,7 +1530,7 @@ func (s *Service) CreateDeploymentFileArchive(ctx context.Context, req *connect.
 	if archiveReq == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("archive_request is required"))
 	}
-	
+
 	sourcePaths := archiveReq.GetSourcePaths()
 	destPath := archiveReq.GetDestinationPath()
 	includeParentFolder := archiveReq.GetIncludeParentFolder()
@@ -1784,7 +1787,7 @@ func collectFilesFromVolumeDir(volumePath, resolvedPath, sourcePath string, file
 			// Remove the source path prefix to get relative path within the source
 			archivePath := strings.TrimPrefix(relativePath, sourcePath)
 			archivePath = strings.TrimPrefix(archivePath, "/")
-			
+
 			// If includeParentFolder is true, prepend the base name
 			// If false and archivePath is empty, it means this is the root file
 			if includeParentFolder {
@@ -1909,7 +1912,7 @@ func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, cont
 			// Remove the root path prefix to get relative path within the source
 			archivePath := strings.TrimPrefix(file.Path, rootPath)
 			archivePath = strings.TrimPrefix(archivePath, "/")
-			
+
 			// If includeParentFolder is true, prepend the base name
 			// If false and archivePath is empty, it means this is the root file
 			if includeParentFolder {
@@ -2280,4 +2283,3 @@ func writeVolumeFile(path string, content []byte, mode os.FileMode, create bool)
 
 	return nil
 }
-

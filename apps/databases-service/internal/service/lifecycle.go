@@ -46,7 +46,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 
 	// Start the database container asynchronously
 	go func() {
-		startCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		startCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
@@ -113,7 +113,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 
 	// Stop the database container asynchronously
 	go func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		stopCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
@@ -178,7 +178,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 
 	// Restart the database container asynchronously
 	go func() {
-		restartCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		restartCtx, cancel := s.detachedContext(3 * time.Minute)
 		defer cancel()
 
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
@@ -239,7 +239,7 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 
 	// Stop the database container asynchronously
 	go func() {
-		sleepCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		sleepCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {

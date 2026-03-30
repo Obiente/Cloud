@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -134,7 +135,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	}
 
 	// Generate VPS ID
-	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
+	vpsID := fmt.Sprintf("vps-%s", uuid.NewString())
 
 	// Create Redis log writer for this VPS using shared helper
 	logWriter := redis.NewLogStreamer(vpsID).WithAutoExpiry(24 * time.Hour).AsLogWriter()
@@ -307,7 +308,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// Create VPS via manager
 	// Use independent context to avoid HTTP request timeout/cancellation
 	// VPS creation can take 1-2 minutes, but HTTP requests typically timeout at 30-60 seconds
-	createCtx, createCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	createCtx, createCancel := s.detachedContext(5 * time.Minute)
 	defer createCancel()
 	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(createCtx, config, logWriter)
 	if err != nil {
@@ -339,8 +340,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 
 	// Send notification asynchronously with independent context to avoid blocking response
 	go func() {
-		// Use background context with timeout for notifications
-		notifyCtx, notifyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		notifyCtx, notifyCancel := s.detachedContext(10 * time.Second)
 		defer notifyCancel()
 		s.notifyVPSCreated(notifyCtx, vpsInstance)
 	}()
@@ -379,7 +379,7 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 	if vps.InstanceID != nil {
 		cachedVPS := vps // capture for goroutine
 		go func() {
-			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), lookupTimeout)
+			refreshCtx, refreshCancel := s.detachedContext(lookupTimeout)
 			defer refreshCancel()
 
 			// Sync status (best effort)
