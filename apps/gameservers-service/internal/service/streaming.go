@@ -1,11 +1,14 @@
 package gameservers
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -143,6 +146,11 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		return err
 	}
 
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		logger.Info("[StreamGameServerLogs] Forwarding log stream for %s to node %s", gameServerID, targetNodeID)
+		return s.forwardStreamGameServerLogs(ctx, req, stream, targetNodeID)
+	}
+
 	// Get logs from Docker container
 	manager, err := s.getGameServerManager()
 	if err != nil {
@@ -221,6 +229,57 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 
 	// Stream live logs
 	return s.streamLiveLogs(ctx, logsReader, stream, searchQuery)
+}
+
+func (s *Service) forwardStreamGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.StreamGameServerLogsRequest], stream *connect.ServerStream[gameserversv1.GameServerLogLine], targetNodeID string) error {
+	if s.forwarder == nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("node forwarder not available"))
+	}
+
+	reqBody, err := json.Marshal(req.Msg)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+	}
+
+	headers := map[string]string{
+		"Authorization": req.Header().Get("Authorization"),
+		sharedorchestrator.ForwardTargetNodeHeader: targetNodeID,
+	}
+
+	resp, err := s.forwarder.ForwardConnectRPCRequest(ctx, targetNodeID, "POST", "/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerLogs", bytes.NewReader(reqBody), headers)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		code := connect.CodeInternal
+		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			code = connect.CodeUnauthenticated
+		case http.StatusForbidden:
+			code = connect.CodePermissionDenied
+		case http.StatusNotFound:
+			code = connect.CodeNotFound
+		}
+		return connect.NewError(code, fmt.Errorf("node returned status %d: %s", resp.StatusCode, string(bodyBytes)))
+	}
+
+	decoder := json.NewDecoder(resp.Body)
+	for {
+		var logLine gameserversv1.GameServerLogLine
+		if err := decoder.Decode(&logLine); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+
+		if err := stream.Send(&logLine); err != nil {
+			return err
+		}
+	}
 }
 
 // streamHistoricalLogs fetches and streams historical logs (non-following)
