@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
@@ -1050,7 +1051,7 @@ func (s *Service) billingAccountToProto(ba *database.BillingAccount) *billingv1.
 
 // generateID is deprecated - use common.generateID instead (but it's not exported, so keep this for now)
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString())
 }
 
 func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, req *connect.Request[billingv1.CreateDNSDelegationSubscriptionCheckoutRequest]) (*connect.Response[billingv1.CreateDNSDelegationSubscriptionCheckoutResponse], error) {

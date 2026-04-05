@@ -77,7 +77,7 @@ func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[vps
 	// Apply pagination and ordering
 	var ipRows []struct {
 		database.VPSPublicIP
-		VPSName         *string `gorm:"column:vps_name"`
+		VPSName          *string `gorm:"column:vps_name"`
 		OrganizationName *string `gorm:"column:organization_name"`
 	}
 	if err := query.Order("ip.created_at DESC").Offset(offset).Limit(perPage).Scan(&ipRows).Error; err != nil {
@@ -89,11 +89,11 @@ func (s *Service) ListVPSPublicIPs(ctx context.Context, req *connect.Request[vps
 	ips := make([]*vpsv1.VPSPublicIP, 0, len(ipRows))
 	for _, row := range ipRows {
 		ip := &vpsv1.VPSPublicIP{
-			Id:              row.ID,
-			IpAddress:       row.IPAddress,
+			Id:               row.ID,
+			IpAddress:        row.IPAddress,
 			MonthlyCostCents: row.MonthlyCostCents,
-			CreatedAt:       timestamppb.New(row.CreatedAt),
-			UpdatedAt:       timestamppb.New(row.UpdatedAt),
+			CreatedAt:        timestamppb.New(row.CreatedAt),
+			UpdatedAt:        timestamppb.New(row.UpdatedAt),
 		}
 		if row.VPSID != nil {
 			ip.VpsId = row.VPSID
@@ -158,7 +158,7 @@ func (s *Service) CreateVPSPublicIP(ctx context.Context, req *connect.Request[vp
 	}
 
 	// Create IP record
-	ipID := fmt.Sprintf("ip-%d", time.Now().UnixNano())
+	ipID := fmt.Sprintf("ip-%s", uuid.NewString())
 	ip := &database.VPSPublicIP{
 		ID:               ipID,
 		IPAddress:        ipAddress,
@@ -462,18 +462,18 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vp
 								return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid IP address format: %s", ip.IPAddress))
 							}
 						}
-						
+
 						netmask := "24" // Default netmask /24
 						if ip.Netmask != nil && *ip.Netmask != "" {
 							netmask = *ip.Netmask
 						}
-						
+
 						// Update cloud-init userData with public IP (alongside existing DHCP)
 						if err := proxmoxClient.UpdateCloudInitUserDataWithStaticIP(ctx, nodes[0], vmIDInt, ip.IPAddress, publicGateway, netmask); err != nil {
 							logger.Warn("[SuperAdmin] Failed to update cloud-init with public IP %s for VPS %s: %v. The IP has been assigned in the database but may not be configured on the VPS until it reboots or cloud-init runs.", ip.IPAddress, vpsID, err)
 						} else {
 							logger.Info("[SuperAdmin] Successfully updated cloud-init with public IP %s (gateway: %s, netmask: %s) for VPS %s", ip.IPAddress, publicGateway, netmask, vpsID)
-							
+
 							// Try to configure the IP immediately on the running VPS (if VM is running)
 							if err := proxmoxClient.ConfigurePublicIPOnVM(ctx, nodes[0], vmIDInt, ip.IPAddress, publicGateway, netmask); err != nil {
 								logger.Warn("[SuperAdmin] Failed to configure public IP %s immediately on VPS %s: %v. The IP will be configured on next boot via cloud-init.", ip.IPAddress, vpsID, err)
@@ -511,7 +511,7 @@ func (s *Service) AssignVPSPublicIP(ctx context.Context, req *connect.Request[vp
 		IPAddress:      ip.IPAddress,
 		IsPublic:       true,
 		ExpiresAt:      time.Now().Add(365 * 24 * time.Hour), // Long expiry for public IPs
-		GatewayNode:    "",                                    // Not gateway-specific
+		GatewayNode:    "",                                   // Not gateway-specific
 	}
 	if err := database.DB.Create(&lease).Error; err != nil {
 		logger.Warn("[SuperAdmin] Failed to create lease record for public IP %s: %v", ip.IPAddress, err)
@@ -605,4 +605,3 @@ func (s *Service) UnassignVPSPublicIP(ctx context.Context, req *connect.Request[
 		Message: fmt.Sprintf("Public IP %s unassigned from VPS %s", ip.IPAddress, vpsID),
 	}), nil
 }
-

@@ -3,12 +3,9 @@ package databases
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
@@ -92,11 +89,6 @@ func (s *Service) CreateBackup(ctx context.Context, req *connect.Request[databas
 		}
 	}
 
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
-	}
-
 	// Check resource-level permission
 	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseUpdate); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -112,55 +104,13 @@ func (s *Service) CreateBackup(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
-	// Create backup record
-	backupID := fmt.Sprintf("backup-%s", uuid.NewString())
-	backupName := req.Msg.GetName()
-	if backupName == "" {
-		backupName = fmt.Sprintf("backup-%s", time.Now().Format("20060102-150405"))
-	}
-
-	backup := &database.DatabaseBackup{
-		ID:             backupID,
-		DatabaseID:     req.Msg.GetDatabaseId(),
-		Name:           backupName,
-		Description:    req.Msg.Description,
-		Status:         1, // CREATING
-		OrganizationID: orgID,
-		CreatedBy:      userInfo.Id,
-	}
-
-	if err := s.backupRepo.Create(ctx, backup); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create backup: %w", err))
-	}
-
-	// TODO: Actually perform the backup operation
-	// For now, simulate async backup
-	go func() {
-		backupCtx, cancel := s.detachedContext(15 * time.Second)
-		defer cancel()
-
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
-		select {
-		case <-backupCtx.Done():
-			return
-		case <-timer.C:
-		}
-
-		now := time.Now()
-		backup.Status = 2 // COMPLETED
-		backup.CompletedAt = &now
-		backup.SizeBytes = 1024 * 1024 * 100 // 100MB placeholder
-		if err := s.backupRepo.Update(backupCtx, backup); err != nil {
-			backup.Status = 3 // FAILED
-			logger.Warn("Failed to finalize backup %s: %v", backup.ID, err)
-		}
-	}()
-
-	res := connect.NewResponse(&databasesv1.CreateBackupResponse{
-		Backup: dbBackupToProto(backup),
-	})
-	return res, nil
+	return nil, connect.NewError(
+		connect.CodeUnimplemented,
+		fmt.Errorf(
+			"database backups are not implemented yet for managed databases; refusing to create placeholder backup records for %s",
+			req.Msg.GetDatabaseId(),
+		),
+	)
 }
 
 // GetBackup gets a backup by ID

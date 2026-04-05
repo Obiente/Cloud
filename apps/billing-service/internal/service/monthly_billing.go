@@ -14,12 +14,12 @@ import (
 
 // UsageBreakdown represents the cost breakdown for a monthly bill
 type UsageBreakdown struct {
-	CPUCostCents      int64 `json:"cpu_cost_cents"`
-	MemoryCostCents   int64 `json:"memory_cost_cents"`
+	CPUCostCents       int64 `json:"cpu_cost_cents"`
+	MemoryCostCents    int64 `json:"memory_cost_cents"`
 	BandwidthCostCents int64 `json:"bandwidth_cost_cents"`
-	StorageCostCents  int64 `json:"storage_cost_cents"`
-	PublicIPCostCents int64 `json:"public_ip_cost_cents"` // Flat rate cost for public IPs
-	TotalCostCents    int64 `json:"total_cost_cents"`
+	StorageCostCents   int64 `json:"storage_cost_cents"`
+	PublicIPCostCents  int64 `json:"public_ip_cost_cents"` // Flat rate cost for public IPs
+	TotalCostCents     int64 `json:"total_cost_cents"`
 }
 
 // ProcessMonthlyBilling processes monthly billing for all organizations that should be billed today
@@ -232,9 +232,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 
 	// Calculate costs using pricing model
 	pricingModel := pricing.GetPricing()
-	
+
 	var cpuCost, memoryCost, bandwidthCost, storageCost int64
-	
+
 	cpuCost = pricingModel.CalculateCPUCost(hourlyUsage.CPUCoreSeconds)
 	memoryCost = pricingModel.CalculateMemoryCost(hourlyUsage.MemoryByteSeconds)
 	bandwidthBytes := hourlyUsage.BandwidthRxBytes + hourlyUsage.BandwidthTxBytes
@@ -262,18 +262,18 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
 		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
 		Scan(&publicIPAssignments)
-	
+
 	for _, assignment := range publicIPAssignments {
 		// Calculate prorated cost based on when IP was assigned
 		assignmentDate := assignment.AssignedAt
 		if assignmentDate.Before(billingPeriodStart) {
 			assignmentDate = billingPeriodStart
 		}
-		
+
 		periodDuration := billingPeriodEnd.Sub(assignmentDate)
 		daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
 		daysInPeriod := periodDuration.Hours() / 24.0
-		
+
 		if daysInPeriod > 0 && daysInMonth > 0 {
 			proratedCost := int64(float64(assignment.MonthlyCostCents) * (daysInPeriod / daysInMonth))
 			publicIPCost += proratedCost
@@ -300,20 +300,20 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 	}
 
 	// Create the bill
-	billID := fmt.Sprintf("bill-%d", time.Now().UnixNano())
+	billID := generateID("bill")
 	dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
 
 	bill := &database.MonthlyBill{
-		ID:                billID,
-		OrganizationID:    orgID,
+		ID:                 billID,
+		OrganizationID:     orgID,
 		BillingPeriodStart: billingPeriodStart,
 		BillingPeriodEnd:   billingPeriodEnd,
-		AmountCents:       totalCostCents,
-		Status:            "PENDING",
-		DueDate:           dueDate,
-		UsageBreakdown:    string(breakdownJSON),
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		AmountCents:        totalCostCents,
+		Status:             "PENDING",
+		DueDate:            dueDate,
+		UsageBreakdown:     string(breakdownJSON),
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 
 	// Process payment in a transaction
@@ -347,9 +347,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 				}
 
 				// Record credit transaction
-				note := fmt.Sprintf("Monthly bill payment for period %s to %s", 
+				note := fmt.Sprintf("Monthly bill payment for period %s to %s",
 					billingPeriodStart.Format("2006-01-02"), billingPeriodEnd.Format("2006-01-02"))
-				transactionID := fmt.Sprintf("ct-%d", time.Now().UnixNano())
+				transactionID := generateID("ct")
 				transaction := &database.CreditTransaction{
 					ID:             transactionID,
 					OrganizationID: orgID,
@@ -398,7 +398,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 // This allows users to create and pay bills before their scheduled billing date
 func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error) {
 	now := time.Now()
-	
+
 	// Get the billing account to find the billing date
 	var billingAccount database.BillingAccount
 	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
@@ -585,9 +585,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 
 	// Calculate costs using pricing model
 	pricingModel := pricing.GetPricing()
-	
+
 	var cpuCost, memoryCost, bandwidthCost, storageCost int64
-	
+
 	cpuCost = pricingModel.CalculateCPUCost(hourlyUsage.CPUCoreSeconds)
 	memoryCost = pricingModel.CalculateMemoryCost(hourlyUsage.MemoryByteSeconds)
 	bandwidthBytes := hourlyUsage.BandwidthRxBytes + hourlyUsage.BandwidthTxBytes
@@ -615,18 +615,18 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
 		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
 		Scan(&publicIPAssignments)
-	
+
 	for _, assignment := range publicIPAssignments {
 		// Calculate prorated cost based on when IP was assigned
 		assignmentDate := assignment.AssignedAt
 		if assignmentDate.Before(billingPeriodStart) {
 			assignmentDate = billingPeriodStart
 		}
-		
+
 		periodDuration := billingPeriodEnd.Sub(assignmentDate)
 		daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
 		daysInPeriod := periodDuration.Hours() / 24.0
-		
+
 		if daysInPeriod > 0 && daysInMonth > 0 {
 			proratedCost := int64(float64(assignment.MonthlyCostCents) * (daysInPeriod / daysInMonth))
 			publicIPCost += proratedCost
@@ -652,21 +652,21 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		return nil, false, fmt.Errorf("marshal breakdown: %w", err)
 	}
 
-		// Create the bill
-		billID := fmt.Sprintf("bill-%d", time.Now().UnixNano())
-		dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
+	// Create the bill
+	billID := generateID("bill")
+	dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
 
 	bill := &database.MonthlyBill{
-		ID:                billID,
-		OrganizationID:    orgID,
+		ID:                 billID,
+		OrganizationID:     orgID,
 		BillingPeriodStart: billingPeriodStart,
 		BillingPeriodEnd:   billingPeriodEnd,
-		AmountCents:       totalCostCents,
-		Status:            "PENDING",
-		DueDate:           dueDate,
-		UsageBreakdown:    string(breakdownJSON),
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		AmountCents:        totalCostCents,
+		Status:             "PENDING",
+		DueDate:            dueDate,
+		UsageBreakdown:     string(breakdownJSON),
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 
 	// Create the bill (but don't auto-pay - let user pay it manually)
@@ -721,7 +721,7 @@ func PayBillPrematurely(billID string, orgID string) error {
 		// Record credit transaction
 		note := fmt.Sprintf("Premature payment for bill %s (period %s to %s)",
 			billID, bill.BillingPeriodStart.Format("2006-01-02"), bill.BillingPeriodEnd.Format("2006-01-02"))
-		transactionID := fmt.Sprintf("ct-%d", time.Now().UnixNano())
+		transactionID := generateID("ct")
 		transaction := &database.CreditTransaction{
 			ID:             transactionID,
 			OrganizationID: orgID,
@@ -742,4 +742,3 @@ func PayBillPrematurely(billID string, orgID string) error {
 		return nil
 	})
 }
-

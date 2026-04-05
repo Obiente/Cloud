@@ -75,7 +75,7 @@ func GrantMonthlyFreeCredits() error {
 			// Record credit transaction
 			monthStr := monthStart.Format("2006-01")
 			note := fmt.Sprintf("Monthly free credits for %s (plan: %s)", monthStr, plan.Name)
-			transactionID := fmt.Sprintf("ct-%d", time.Now().UnixNano())
+			transactionID := generateID("ct")
 			transaction := &database.CreditTransaction{
 				ID:             transactionID,
 				OrganizationID: quota.OrganizationID,
