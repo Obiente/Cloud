@@ -10,8 +10,8 @@
             View and manage your delegated DNS records. Your organization is using DNS delegation to push DNS records to the production DNS server.
           </span>
           <span v-else>
-            Query DNS records and view DNS configuration for deployments and game
-            servers.
+            Query DNS records and view DNS configuration for deployments, databases, game
+            servers, and delegated DNS.
           </span>
         </OuiText>
       </OuiStack>
@@ -143,7 +143,7 @@
                 <OuiText size="sm" weight="medium">Domain</OuiText>
                 <OuiInput
                   v-model="queryDomain"
-                  placeholder="deploy-123.my.obiente.cloud or _minecraft._tcp.gs-123.my.obiente.cloud"
+                  placeholder="deploy-123.my.obiente.cloud, db-123e4567e89b12d3.my.obiente.cloud, or _minecraft._tcp.gs-123.my.obiente.cloud"
                   @keyup.enter="queryDNS"
                 />
               </OuiStack>
@@ -413,7 +413,16 @@
               <OuiInput
                 v-model="recordsSearch"
                 type="search"
-                placeholder="Search by domain, deployment ID, game server ID, organization ID..."
+                placeholder="Search by domain, resource name, resource ID, or organization ID..."
+                clearable
+                size="sm"
+              />
+            </div>
+            <div class="min-w-[160px]">
+              <OuiSelect
+                v-model="recordsResourceTypeFilter"
+                :items="resourceTypeFilterOptions"
+                placeholder="Resource Type"
                 clearable
                 size="sm"
               />
@@ -429,9 +438,9 @@
             </div>
             <div class="min-w-[160px]">
               <OuiSelect
-                v-model="recordsDeploymentFilter"
-                :items="deploymentFilterOptions"
-                placeholder="Deployment"
+                v-model="recordsResourceFilter"
+                :items="resourceFilterOptions"
+                placeholder="Resource"
                 clearable
                 size="sm"
               />
@@ -469,33 +478,18 @@
           <template #cell-domain="{ value }">
             <div class="font-mono text-sm">{{ value }}</div>
           </template>
-          <template #cell-resource="{ value, row }">
-            <div>
-              <div class="font-medium text-text-primary">
-                {{ row.deploymentName || row.gameServerName || value }}
-              </div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                {{ row.deploymentId || row.gameServerId || value }}
-              </div>
-            </div>
+          <template #cell-resourceType="{ value }">
+            <OuiBadge size="sm" variant="outline">
+              {{ value }}
+            </OuiBadge>
           </template>
-          <template #cell-deployment="{ value, row }">
+          <template #cell-resource="{ row }">
             <div>
               <div class="font-medium text-text-primary">
-                {{ row.deploymentName || value }}
+                {{ row.resourceName || row.resourceId || row.domain }}
               </div>
               <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                {{ value }}
-              </div>
-            </div>
-          </template>
-          <template #cell-gameServer="{ value, row }">
-            <div>
-              <div class="font-medium text-text-primary">
-                {{ row.gameServerName || value }}
-              </div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                {{ value }}
+                {{ row.resourceId || "—" }}
               </div>
             </div>
           </template>
@@ -759,7 +753,8 @@
 
   const recordsSearch = ref("");
   const recordsRecordTypeFilter = ref<string | null>(null);
-  const recordsDeploymentFilter = ref<string | null>(null);
+  const recordsResourceTypeFilter = ref<string | null>(null);
+  const recordsResourceFilter = ref<string | null>(null);
   const recordsOrgFilter = ref<string | null>(null);
 
   const dnsRecords = ref<any[]>([]);
@@ -806,14 +801,79 @@
     { label: "SRV", value: "SRV" },
   ];
 
-  const deploymentFilterOptions = computed(() => {
-    const deployments = new Set<string>();
-    dnsRecords.value.forEach((record) => {
-      if (record.deploymentId) deployments.add(record.deploymentId);
+  function inferResourceType(record: any): string {
+    if (record.recordType === "SRV" || record.gameServerId?.startsWith("gs-")) {
+      return "Game Server";
+    }
+
+    const deploymentLikeID = record.deploymentId || "";
+    const label = String(record.domain || "").split(".")[0] || "";
+
+    if (deploymentLikeID.startsWith("db-") || label.startsWith("db-")) {
+      return "Database";
+    }
+    if (deploymentLikeID.startsWith("deploy-") || record.deploymentId) {
+      return "Deployment";
+    }
+    if (label.startsWith("gs-")) {
+      return "Game Server";
+    }
+    return "Custom";
+  }
+
+  function normalizeDNSRecord(record: any) {
+    const resourceType = inferResourceType(record);
+    const resourceId =
+      record.gameServerId ||
+      record.deploymentId ||
+      "";
+    const resourceName =
+      record.gameServerName ||
+      record.deploymentName ||
+      "";
+
+    return {
+      ...record,
+      resourceType,
+      resourceId,
+      resourceName,
+    };
+  }
+
+  const normalizedDNSRecords = computed(() => {
+    return dnsRecords.value.map((record) => normalizeDNSRecord(record));
+  });
+
+  const resourceTypeFilterOptions = computed(() => {
+    const resourceTypes = new Set<string>();
+    normalizedDNSRecords.value.forEach((record) => {
+      if (record.resourceType) resourceTypes.add(record.resourceType);
     });
-    return Array.from(deployments)
+
+    return Array.from(resourceTypes)
       .sort()
-      .map((dep) => ({ label: dep, value: dep }));
+      .map((resourceType) => ({ label: resourceType, value: resourceType }));
+  });
+
+  const resourceFilterOptions = computed(() => {
+    const resources = new Map<string, { label: string; value: string }>();
+
+    normalizedDNSRecords.value.forEach((record) => {
+      if (!record.resourceId) return;
+
+      const label = record.resourceName
+        ? `${record.resourceName} (${record.resourceId})`
+        : record.resourceId;
+
+      resources.set(record.resourceId, {
+        label,
+        value: record.resourceId,
+      });
+    });
+
+    return Array.from(resources.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
   });
 
   const orgFilterOptions = computed(() => {
@@ -915,13 +975,16 @@
   const filteredRecords = computed(() => {
     const term = recordsSearch.value.trim().toLowerCase();
     const recordTypeFilter = recordsRecordTypeFilter.value;
-    const deploymentFilter = recordsDeploymentFilter.value;
+    const resourceTypeFilter = recordsResourceTypeFilter.value;
+    const resourceFilter = recordsResourceFilter.value;
     const orgFilter = recordsOrgFilter.value;
 
-    return dnsRecords.value.filter((record) => {
+    return normalizedDNSRecords.value.filter((record) => {
       if (recordTypeFilter && record.recordType !== recordTypeFilter)
         return false;
-      if (deploymentFilter && record.deploymentId !== deploymentFilter)
+      if (resourceTypeFilter && record.resourceType !== resourceTypeFilter)
+        return false;
+      if (resourceFilter && record.resourceId !== resourceFilter)
         return false;
       if (orgFilter && record.organizationId !== orgFilter) return false;
 
@@ -929,6 +992,9 @@
 
       const searchable = [
         record.domain,
+        record.resourceId,
+        record.resourceName,
+        record.resourceType,
         record.deploymentId,
         record.deploymentName,
         record.gameServerId,
@@ -951,38 +1017,13 @@
   const tableColumns = computed(() => {
     const baseColumns = [
       { key: "recordType", label: "Type", defaultWidth: 80, minWidth: 60 },
+      { key: "resourceType", label: "Resource Type", defaultWidth: 130, minWidth: 110 },
+      { key: "resource", label: "Resource", defaultWidth: 220, minWidth: 180 },
       { key: "domain", label: "Domain", defaultWidth: 300, minWidth: 250 },
     ];
 
-    // Add resource column based on record type filter
-    const recordTypeFilter = recordsRecordTypeFilter.value;
-    if (!recordTypeFilter) {
-      // Show all types - use resource column
-      baseColumns.push({
-        key: "resource",
-        label: "Resource",
-        defaultWidth: 200,
-        minWidth: 150,
-      });
-    } else if (recordTypeFilter === "A") {
-      // Only A records - show deployment column
-      baseColumns.push({
-        key: "deployment",
-        label: "Deployment",
-        defaultWidth: 200,
-        minWidth: 150,
-      });
-    } else if (recordTypeFilter === "SRV") {
-      // Only SRV records - show game server column
-      baseColumns.push({
-        key: "gameServer",
-        label: "Game Server",
-        defaultWidth: 200,
-        minWidth: 150,
-      });
-    }
-
     // Add type-specific columns
+    const recordTypeFilter = recordsRecordTypeFilter.value;
     if (!recordTypeFilter || recordTypeFilter === "A") {
       baseColumns.push({
         key: "ips",
@@ -1038,6 +1079,9 @@
         status,
         organizationId: record.organizationId || "—",
         recordType: record.recordType || "A",
+        resourceType: record.resourceType || "Custom",
+        resourceId: record.resourceId || "",
+        resourceName: record.resourceName || "",
         // Map ipAddresses to ips for table column
         ips: record.ipAddresses || [],
         // Map target and port to srvTarget for SRV records
