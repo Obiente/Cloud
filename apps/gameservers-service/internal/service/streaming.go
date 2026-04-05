@@ -27,6 +27,56 @@ import (
 	"gorm.io/gorm"
 )
 
+type logLineSender interface {
+	Send(*gameserversv1.GameServerLogLine) error
+}
+
+type gameServerLogStreamSender struct {
+	stream *connect.ServerStream[gameserversv1.GameServerLogLine]
+}
+
+func (s gameServerLogStreamSender) Send(line *gameserversv1.GameServerLogLine) error {
+	return s.stream.Send(line)
+}
+
+type gameServerLogCollector struct {
+	lines []*gameserversv1.GameServerLogLine
+}
+
+func (c *gameServerLogCollector) Send(line *gameserversv1.GameServerLogLine) error {
+	c.lines = append(c.lines, line)
+	return nil
+}
+
+func resolveGameServerLogOptions(limitPtr *int32, sinceTS, untilTS *timestamppb.Timestamp, searchPtr *string, defaultLimit int32) (int32, *time.Time, *time.Time, string) {
+	limit := defaultLimit
+	if limitPtr != nil && *limitPtr > 0 {
+		limit = *limitPtr
+	}
+
+	var sinceTime *time.Time
+	if sinceTS != nil {
+		since := sinceTS.AsTime()
+		sinceTime = &since
+	}
+
+	var untilTime *time.Time
+	if untilTS != nil {
+		until := untilTS.AsTime()
+		untilTime = &until
+	} else if sinceTime != nil {
+		untilTime = sinceTime
+		sinceTime = nil
+	}
+
+	searchQuery := ""
+	if searchPtr != nil && *searchPtr != "" {
+		searchQuery = strings.ToLower(strings.TrimSpace(*searchPtr))
+	}
+
+	return limit, sinceTime, untilTime, searchQuery
+}
+
 // StreamGameServerStatus streams status updates for a game server
 func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Request[gameserversv1.StreamGameServerStatusRequest], stream *connect.ServerStream[gameserversv1.GameServerStatusUpdate]) error {
 	// Ensure authenticated - use the returned context
@@ -122,10 +172,55 @@ func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Reque
 	}
 }
 
-// GetGameServerLogs is deprecated - use StreamGameServerLogs instead
-// This endpoint blocks until all logs are fetched, which can cause timeouts
 func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerLogsRequest]) (*connect.Response[gameserversv1.GetGameServerLogsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("GetGameServerLogs is deprecated. Please use StreamGameServerLogs instead, which connects immediately and streams logs without blocking"))
+	var err error
+	ctx, err = s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	gameServerID := req.Msg.GetGameServerId()
+	if err := s.checkGameServerPermission(ctx, gameServerID, "read"); err != nil {
+		return nil, err
+	}
+
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		reqBody, err := json.Marshal(req.Msg)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+		}
+
+		headers := map[string]string{
+			"Authorization": req.Header().Get("Authorization"),
+			sharedorchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerLogs", headers)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response gameserversv1.GetGameServerLogsResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
+	}
+
+	limit, sinceTime, untilTime, searchQuery := resolveGameServerLogOptions(req.Msg.Limit, req.Msg.Since, req.Msg.Until, req.Msg.SearchQuery, 100)
+
+	collector := &gameServerLogCollector{}
+	if err := s.streamHistoricalLogs(ctx, manager, gameServerID, collector, limit, sinceTime, untilTime, searchQuery); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
+	}
+
+	return connect.NewResponse(&gameserversv1.GetGameServerLogsResponse{
+		Lines: collector.lines,
+	}), nil
 }
 
 // StreamGameServerLogs streams logs for a game server
@@ -160,11 +255,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 	}
 
 	// Parse request parameters
-	tail := req.Msg.Tail
-	if tail == nil || *tail == 0 {
-		tailVal := int32(100) // Default to last 100 lines
-		tail = &tailVal
-	}
+	tail, sinceTime, untilTime, searchQuery := resolveGameServerLogOptions(req.Msg.Tail, req.Msg.Since, req.Msg.Until, req.Msg.SearchQuery, 100)
 
 	follow := req.Msg.Follow
 	if follow == nil {
@@ -172,31 +263,8 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 		follow = &followVal
 	}
 
-	// Parse since/until timestamps for historical logs
-	var sinceTime *time.Time
-	if req.Msg.Since != nil {
-		since := req.Msg.Since.AsTime()
-		sinceTime = &since
-	}
-
-	var untilTime *time.Time
-	if req.Msg.Until != nil {
-		until := req.Msg.Until.AsTime()
-		untilTime = &until
-	} else if sinceTime != nil {
-		// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
-		untilTime = sinceTime
-		sinceTime = nil
-	}
-
-	// Get search query if provided
-	searchQuery := ""
-	if req.Msg.SearchQuery != nil && *req.Msg.SearchQuery != "" {
-		searchQuery = strings.ToLower(strings.TrimSpace(*req.Msg.SearchQuery))
-	}
-
 	logger.Info("[StreamGameServerLogs] Streaming logs for %s (tail=%d, follow=%v, since=%v, until=%v, search=%s)",
-		gameServerID, *tail, *follow, sinceTime, untilTime, func() string {
+		gameServerID, tail, *follow, sinceTime, untilTime, func() string {
 			if searchQuery != "" {
 				return searchQuery
 			}
@@ -207,7 +275,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 	// Always fetch initial tail as historical logs to ensure connection is established immediately
 	// If since/until is provided, use those; otherwise just get the tail
 	logger.Info("[StreamGameServerLogs] Fetching historical logs for %s", gameServerID)
-	if err := s.streamHistoricalLogs(ctx, manager, gameServerID, stream, *tail, sinceTime, untilTime, searchQuery); err != nil {
+	if err := s.streamHistoricalLogs(ctx, manager, gameServerID, gameServerLogStreamSender{stream: stream}, tail, sinceTime, untilTime, searchQuery); err != nil {
 		logger.Warn("[StreamGameServerLogs] Error streaming historical logs: %v", err)
 		// Continue to live streaming even if historical fails
 	}
@@ -229,7 +297,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 	defer logsReader.Close()
 
 	// Stream live logs
-	return s.streamLiveLogs(ctx, logsReader, stream, searchQuery)
+	return s.streamLiveLogs(ctx, logsReader, gameServerLogStreamSender{stream: stream}, searchQuery)
 }
 
 func (s *Service) forwardStreamGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.StreamGameServerLogsRequest], stream *connect.ServerStream[gameserversv1.GameServerLogLine], targetNodeID string) error {
@@ -284,7 +352,7 @@ func (s *Service) forwardStreamGameServerLogs(ctx context.Context, req *connect.
 }
 
 // streamHistoricalLogs fetches and streams historical logs (non-following)
-func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrator.GameServerManager, gameServerID string, stream *connect.ServerStream[gameserversv1.GameServerLogLine], limit int32, sinceTime *time.Time, untilTime *time.Time, searchQuery string) error {
+func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrator.GameServerManager, gameServerID string, sink logLineSender, limit int32, sinceTime *time.Time, untilTime *time.Time, searchQuery string) error {
 	// Calculate how many lines to fetch
 	// For historical logs, we fetch more than requested to account for filtering
 	dockerTailLimit := int(limit)
@@ -484,7 +552,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 						previewLen = len(line.Line)
 					}
 					logger.Debug("[streamHistoricalLogs] Sending log line to client: %q", line.Line[:previewLen])
-					if err := stream.Send(line); err != nil {
+					if err := sink.Send(line); err != nil {
 						logger.Error("[streamHistoricalLogs] Failed to send log line to client: %v", err)
 						return err
 					}
@@ -516,7 +584,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 		}
 		sentCount := 0
 		for i := startIdx; i < len(allLines); i++ {
-			if err := stream.Send(allLines[i]); err != nil {
+			if err := sink.Send(allLines[i]); err != nil {
 				logger.Warn("[streamHistoricalLogs] Failed to send log line from buffer: %v", err)
 				return err
 			}
@@ -538,7 +606,7 @@ func (s *Service) streamHistoricalLogs(ctx context.Context, manager *orchestrato
 }
 
 // streamLiveLogs streams live logs (following)
-func (s *Service) streamLiveLogs(ctx context.Context, logsReader io.ReadCloser, stream *connect.ServerStream[gameserversv1.GameServerLogLine], searchQuery string) error {
+func (s *Service) streamLiveLogs(ctx context.Context, logsReader io.ReadCloser, sink logLineSender, searchQuery string) error {
 	header := make([]byte, 8)
 	for {
 		// Check if context is cancelled
@@ -587,7 +655,7 @@ func (s *Service) streamLiveLogs(ctx context.Context, logsReader io.ReadCloser, 
 					lines := s.parseLogPayload(payload, streamType == 2)
 					for _, line := range lines {
 						if searchQuery == "" || strings.Contains(strings.ToLower(line.Line), searchQuery) {
-							if sendErr := stream.Send(line); sendErr != nil {
+							if sendErr := sink.Send(line); sendErr != nil {
 								if ctx.Err() != nil {
 									return nil
 								}
@@ -620,7 +688,7 @@ func (s *Service) streamLiveLogs(ctx context.Context, logsReader io.ReadCloser, 
 				continue
 			}
 
-			if sendErr := stream.Send(line); sendErr != nil {
+			if sendErr := sink.Send(line); sendErr != nil {
 				if ctx.Err() != nil {
 					return nil
 				}
