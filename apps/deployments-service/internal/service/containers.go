@@ -119,6 +119,7 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 				HealthcheckPath:           dbDep.HealthcheckPath,
 				HealthcheckExpectedStatus: dbDep.HealthcheckExpectedStatus,
 				HealthcheckCustomCommand:  dbDep.HealthcheckCustomCommand,
+				TargetNodeID:              orchestrator.TargetNodeFromContext(ctx),
 			}
 			log.Printf("[attemptAutomaticRedeployment] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
 				cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)

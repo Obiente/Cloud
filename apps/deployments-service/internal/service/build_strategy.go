@@ -106,7 +106,7 @@ func (r *BuildStrategyRegistry) AutoDetect(ctx context.Context, repoPath string)
 	detectionOrder := []deploymentsv1.BuildStrategy{
 		deploymentsv1.BuildStrategy_COMPOSE_REPO, // Check for docker-compose.yml in repo first
 		deploymentsv1.BuildStrategy_DOCKERFILE,   // Then Dockerfile
-		deploymentsv1.BuildStrategy_RAILPACK,    // Then Railpack (default for most languages)
+		deploymentsv1.BuildStrategy_RAILPACK,     // Then Railpack (default for most languages)
 		deploymentsv1.BuildStrategy_NIXPACKS,     // Then generic Nixpacks (fallback)
 		deploymentsv1.BuildStrategy_STATIC_SITE,  // Finally static
 	}
@@ -335,9 +335,9 @@ func cloneRepository(ctx context.Context, repoURL, branch, destDir string, githu
 
 // isGitHubURL checks if the URL is a GitHub repository URL
 func isGitHubURL(url string) bool {
-	return strings.HasPrefix(url, "https://github.com/") || 
-		   strings.HasPrefix(url, "http://github.com/") ||
-		   strings.HasPrefix(url, "git@github.com:")
+	return strings.HasPrefix(url, "https://github.com/") ||
+		strings.HasPrefix(url, "http://github.com/") ||
+		strings.HasPrefix(url, "git@github.com:")
 }
 
 // injectGitHubToken injects a GitHub token into a repository URL for authentication
@@ -419,7 +419,7 @@ func getEnvAsStringSlice(envVars map[string]string) []string {
 	// Start with current environment
 	existingEnv := os.Environ()
 	envMap := make(map[string]string)
-	
+
 	// Parse existing environment into a map to allow overrides
 	for _, env := range existingEnv {
 		parts := strings.SplitN(env, "=", 2)
@@ -427,18 +427,18 @@ func getEnvAsStringSlice(envVars map[string]string) []string {
 			envMap[parts[0]] = parts[1]
 		}
 	}
-	
+
 	// Override/add custom environment variables
 	for k, v := range envVars {
 		envMap[k] = v
 	}
-	
+
 	// Convert back to []string format
 	env := make([]string, 0, len(envMap))
 	for k, v := range envMap {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
-	
+
 	return env
 }
 
@@ -612,7 +612,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 				startCmd = &normalized
 			}
 		}
-		
+
 		// Ensure image name includes registry prefix for Swarm mode
 		imageName := result.ImageName
 		if imageName != "" {
@@ -631,7 +631,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 					isSwarmMode = lower == "true" || lower == "1" || lower == "yes" || lower == "on"
 				}
 			}
-			
+
 			if isSwarmMode {
 				registryURL := os.Getenv("REGISTRY_URL")
 				if registryURL == "" {
@@ -651,21 +651,21 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 						registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
 					}
 				}
-				
+
 				registryHost := strings.TrimPrefix(registryURL, "https://")
 				registryHost = strings.TrimPrefix(registryHost, "http://")
-				
+
 				// If image doesn't have registry prefix and looks like our deployment image, add it
-				if !strings.Contains(imageName, registryHost) && 
-				   !strings.Contains(imageName, "ghcr.io/") && 
-				   !strings.Contains(imageName, "docker.io/") &&
-				   strings.Contains(imageName, "obiente/deploy-") {
+				if !strings.Contains(imageName, registryHost) &&
+					!strings.Contains(imageName, "ghcr.io/") &&
+					!strings.Contains(imageName, "docker.io/") &&
+					strings.Contains(imageName, "obiente/deploy-") {
 					imageName = fmt.Sprintf("%s/%s", registryHost, imageName)
 					log.Printf("[deployResultToOrchestrator] Added registry prefix to image name: %s", imageName)
 				}
 			}
 		}
-		
+
 		cfg := &orchestrator.DeploymentConfig{
 			DeploymentID:              deployment.ID,
 			Image:                     imageName,
@@ -682,6 +682,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			HealthcheckPath:           deployment.HealthcheckPath,
 			HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 			HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
+			TargetNodeID:              manager.GetNodeID(),
 		}
 
 		if deployment.Replicas != nil {
