@@ -10,6 +10,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -63,7 +64,26 @@ func (s *Service) GetDeploymentRoutings(ctx context.Context, req *connect.Reques
 
 // UpdateDeploymentRoutings updates routing rules for a deployment
 func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRoutingsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentRoutingsResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentRoutings", headers, &deploymentsv1.UpdateDeploymentRoutingsResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.UpdateDeploymentRoutingsResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
@@ -90,7 +110,7 @@ func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Req
 
 	// Get available domains for this deployment (default + verified custom domains)
 	availableDomains := s.getAvailableDomainsForDeployment(dbDeployment)
-	
+
 	// Create new routing rules
 	newRules := make([]*deploymentsv1.RoutingRule, 0, len(req.Msg.GetRules()))
 	for _, rule := range req.Msg.GetRules() {
@@ -104,7 +124,7 @@ func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Req
 					break
 				}
 			}
-			
+
 			if !domainAllowed {
 				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("domain %s is not available for this deployment. You can only use the default domain or verified custom domains", ruleDomain))
 			}
@@ -133,27 +153,27 @@ func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Req
 		} else if protocol == "https" {
 			sslEnabled = true
 		}
-		
+
 		var dbRouting *database.DeploymentRouting
-		
+
 		// Check if routing already exists
 		var existingRouting database.DeploymentRouting
 		err := database.DB.Where("id = ?", ruleID).First(&existingRouting).Error
-		
+
 		if err == nil {
 			// Update existing routing - explicitly update all fields including SSLEnabled
 			// Using Updates with map to ensure boolean false values are properly saved
 			updateData := map[string]interface{}{
-				"domain":           rule.GetDomain(),
-				"service_name":     serviceName,
-				"path_prefix":      rule.GetPathPrefix(),
-				"target_port":      int(rule.GetTargetPort()),
-				"protocol":         protocol,
-				"ssl_enabled":      sslEnabled, // Explicitly set to ensure false values are saved
+				"domain":            rule.GetDomain(),
+				"service_name":      serviceName,
+				"path_prefix":       rule.GetPathPrefix(),
+				"target_port":       int(rule.GetTargetPort()),
+				"protocol":          protocol,
+				"ssl_enabled":       sslEnabled, // Explicitly set to ensure false values are saved
 				"ssl_cert_resolver": rule.GetSslCertResolver(),
-				"updated_at":       time.Now(),
+				"updated_at":        time.Now(),
 			}
-			
+
 			if updateErr := database.DB.Model(&existingRouting).Updates(updateData).Error; updateErr != nil {
 				log.Printf("[UpdateDeploymentRoutings] Warning: Failed to update routing rule for %s: %v", rule.GetDomain(), updateErr)
 				continue
@@ -241,12 +261,12 @@ func (s *Service) GetDeploymentServiceNames(ctx context.Context, req *connect.Re
 // Includes: default domain + verified custom domains
 func (s *Service) getAvailableDomainsForDeployment(dbDeployment *database.Deployment) []string {
 	domains := []string{}
-	
+
 	// Add default domain
 	if dbDeployment.Domain != "" {
 		domains = append(domains, dbDeployment.Domain)
 	}
-	
+
 	// Add verified custom domains
 	if dbDeployment.CustomDomains != "" {
 		var customDomains []string
@@ -257,7 +277,7 @@ func (s *Service) getAvailableDomainsForDeployment(dbDeployment *database.Deploy
 					continue
 				}
 				domain := parts[0]
-				
+
 				// Check if domain is verified
 				isVerified := false
 				if len(parts) >= 2 && parts[1] == "verified" {
@@ -265,7 +285,7 @@ func (s *Service) getAvailableDomainsForDeployment(dbDeployment *database.Deploy
 				} else if len(parts) >= 4 && parts[1] == "token" && parts[3] == "verified" {
 					isVerified = true
 				}
-				
+
 				if isVerified {
 					// Check for duplicates
 					alreadyAdded := false
@@ -282,7 +302,6 @@ func (s *Service) getAvailableDomainsForDeployment(dbDeployment *database.Deploy
 			}
 		}
 	}
-	
+
 	return domains
 }
-

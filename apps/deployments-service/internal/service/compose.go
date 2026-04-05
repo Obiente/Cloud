@@ -2,10 +2,12 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -72,7 +74,26 @@ func (s *Service) ValidateDeploymentCompose(ctx context.Context, req *connect.Re
 
 // UpdateDeploymentCompose updates the Docker Compose configuration for a deployment
 func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentComposeRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentComposeResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentCompose", headers, &deploymentsv1.UpdateDeploymentComposeResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.UpdateDeploymentComposeResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	orgID := req.Msg.GetOrganizationId()
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentUpdate, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -153,4 +174,3 @@ func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Requ
 
 	return res, nil
 }
-

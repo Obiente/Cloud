@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -302,8 +303,27 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 
 // UpdateDeployment updates a deployment's configuration
 func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has edit permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeployment", headers, &deploymentsv1.UpdateDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.UpdateDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "edit"); err != nil {
 		return nil, err
 	}

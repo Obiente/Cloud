@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -34,7 +35,26 @@ func (s *Service) GetDeploymentEnvVars(ctx context.Context, req *connect.Request
 
 // UpdateDeploymentEnvVars updates environment variables for a deployment
 func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentEnvVarsResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{
+			"Authorization":                      req.Header().Get("Authorization"),
+			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentEnvVars", headers, &deploymentsv1.UpdateDeploymentEnvVarsResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response deploymentsv1.UpdateDeploymentEnvVarsResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	orgID := req.Msg.GetOrganizationId()
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentUpdate, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -114,4 +134,3 @@ func parseEnvFileToMap(envFileContent string) map[string]string {
 
 	return envMap
 }
-
