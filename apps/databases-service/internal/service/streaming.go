@@ -169,42 +169,10 @@ func (s *Service) StreamDatabaseMetrics(ctx context.Context, req *connect.Reques
 	}
 }
 
-// ListDatabaseSizes lists available database sizes/pricing (placeholder)
+// ListDatabaseSizes lists available database sizes/pricing.
 func (s *Service) ListDatabaseSizes(ctx context.Context, req *connect.Request[databasesv1.ListDatabaseSizesRequest]) (*connect.Response[databasesv1.ListDatabaseSizesResponse], error) {
-	// Placeholder implementation - would return available sizes from catalog
 	res := connect.NewResponse(&databasesv1.ListDatabaseSizesResponse{
-		Sizes: []*databasesv1.DatabaseSize{
-			{
-				Id:                 "small",
-				Name:               "Small",
-				Type:               databasesv1.DatabaseType_POSTGRESQL,
-				CpuCores:           1,
-				MemoryBytes:        2147483648,  // 2GB
-				DiskBytes:          10737418240, // 10GB
-				MaxConnections:     100,
-				PriceCentsPerMonth: 1000, // $10/month
-			},
-			{
-				Id:                 "medium",
-				Name:               "Medium",
-				Type:               databasesv1.DatabaseType_POSTGRESQL,
-				CpuCores:           2,
-				MemoryBytes:        4294967296,  // 4GB
-				DiskBytes:          53687091200, // 50GB
-				MaxConnections:     200,
-				PriceCentsPerMonth: 2000, // $20/month
-			},
-			{
-				Id:                 "large",
-				Name:               "Large",
-				Type:               databasesv1.DatabaseType_POSTGRESQL,
-				CpuCores:           4,
-				MemoryBytes:        8589934592,   // 8GB
-				DiskBytes:          107374182400, // 100GB
-				MaxConnections:     500,
-				PriceCentsPerMonth: 4000, // $40/month
-			},
-		},
+		Sizes: listDatabaseSizes(req.Msg.Type),
 	})
 	return res, nil
 }

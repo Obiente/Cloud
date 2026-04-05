@@ -154,17 +154,21 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		}
 	}
 
-	// Get database size specs (defaults)
-	cpuCores := int32(1)
-	memoryBytes := int64(2147483648) // 2GB default
-	diskBytes := int64(10737418240)  // 10GB default
-	maxConnections := int64(100)
-
-	// TODO: Look up size from catalog
 	size := req.Msg.GetSize()
 	if size == "" {
 		size = "small"
 	}
+	sizeSpec, ok := lookupDatabaseSize(req.Msg.GetType(), size)
+	if !ok {
+		return nil, connect.NewError(
+			connect.CodeInvalidArgument,
+			fmt.Errorf("unknown database size %q for type %s", size, req.Msg.GetType().String()),
+		)
+	}
+	cpuCores := sizeSpec.CpuCores
+	memoryBytes := sizeSpec.MemoryBytes
+	diskBytes := sizeSpec.DiskBytes
+	maxConnections := sizeSpec.MaxConnections
 
 	// Auto-sleep configuration
 	var autoSleepSeconds int32
