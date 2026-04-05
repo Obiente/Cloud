@@ -682,7 +682,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			HealthcheckPath:           deployment.HealthcheckPath,
 			HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 			HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
-			TargetNodeID:              manager.GetNodeID(),
+			TargetNodeID:              orchestrator.TargetNodeFromContext(ctx),
 		}
 
 		if deployment.Replicas != nil {

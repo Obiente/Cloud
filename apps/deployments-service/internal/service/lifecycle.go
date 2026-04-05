@@ -119,6 +119,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		buildCtx, buildCancel := s.detachedContext(0)
 		defer buildCancel()
+		buildCtx = orchestrator.WithTargetNode(buildCtx, orchestrator.TargetNodeFromContext(ctx))
 		buildStartTime := time.Now()
 
 		// Get or create build log streamer
