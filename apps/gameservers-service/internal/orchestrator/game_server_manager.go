@@ -176,23 +176,12 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 
 	// Check if we're on the target node
 	if targetNode.ID != gsm.nodeID {
-		if strings.TrimSpace(config.TargetNodeID) != "" {
-			return fmt.Errorf("game server %s must be materialized on node %s, current node is %s", config.GameServerID, targetNode.ID, gsm.nodeID)
-		}
-		// Try to forward the request to the target node
-		if gsm.forwarder.CanForward(targetNode.ID) {
-			logger.Info("[GameServerManager] Forwarding game server creation to node %s (%s)",
-				targetNode.ID, targetNode.Hostname)
-			// For now, we'll proceed on current node since forwarding CreateGameServer
-			// requires serializing the config and calling the internal API
-			// TODO: Implement full forwarding for CreateGameServer via internal API endpoint
-			logger.Warn("[GameServerManager] Node forwarding available but CreateGameServer forwarding not fully implemented. "+
-				"Proceeding with game server creation on current node %s", gsm.nodeID)
-		} else {
-			logger.Warn("[GameServerManager] Cannot forward to node %s (%s) - proceeding with game server creation on current node %s (%s)",
-				targetNode.ID, targetNode.Hostname, gsm.nodeID, gsm.nodeHostname)
-		}
-		// Continue with game server creation on current node
+		return fmt.Errorf(
+			"game server %s must be materialized on node %s, current node is %s; callers must forward or pin the target node before creating resources",
+			config.GameServerID,
+			targetNode.ID,
+			gsm.nodeID,
+		)
 	}
 
 	containerName := fmt.Sprintf("gameserver-%s", config.GameServerID)
@@ -270,6 +259,10 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		}
 
 		// Build config from database game server
+		targetNodeID := sharedorchestrator.TargetNodeFromContext(ctx)
+		if targetNodeID == "" {
+			targetNodeID = gsm.nodeID
+		}
 		config := &GameServerConfig{
 			GameServerID: gameServerID,
 			Image:        gameServer.DockerImage,
@@ -279,7 +272,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
 			StartCommand: gameServer.StartCommand,
-			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
+			TargetNodeID: targetNodeID,
 		}
 
 		// Log env vars we are about to use when creating container
@@ -330,6 +323,10 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		}
 
 		// Build config from database game server
+		targetNodeID := sharedorchestrator.TargetNodeFromContext(ctx)
+		if targetNodeID == "" {
+			targetNodeID = gsm.nodeID
+		}
 		config := &GameServerConfig{
 			GameServerID: gameServerID,
 			Image:        gameServer.DockerImage,
@@ -339,7 +336,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			MemoryBytes:  gameServer.MemoryBytes,
 			CPUCores:     gameServer.CPUCores,
 			StartCommand: gameServer.StartCommand,
-			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
+			TargetNodeID: targetNodeID,
 		}
 
 		// Create the container (this will reuse existing volumes)
@@ -403,6 +400,10 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			}
 
 			// Build config from database game server
+			targetNodeID := sharedorchestrator.TargetNodeFromContext(ctx)
+			if targetNodeID == "" {
+				targetNodeID = gsm.nodeID
+			}
 			config := &GameServerConfig{
 				GameServerID: gameServerID,
 				Image:        gameServer.DockerImage,
@@ -412,7 +413,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 				MemoryBytes:  gameServer.MemoryBytes,
 				CPUCores:     gameServer.CPUCores,
 				StartCommand: gameServer.StartCommand,
-				TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
+				TargetNodeID: targetNodeID,
 			}
 
 			// Create the new container (will register container info in DB)
@@ -474,6 +475,10 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 				}
 
 				// Build config from database game server
+				targetNodeID := sharedorchestrator.TargetNodeFromContext(ctx)
+				if targetNodeID == "" {
+					targetNodeID = gsm.nodeID
+				}
 				config := &GameServerConfig{
 					GameServerID: gameServerID,
 					Image:        gameServer.DockerImage,
@@ -483,6 +488,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 					MemoryBytes:  gameServer.MemoryBytes,
 					CPUCores:     gameServer.CPUCores,
 					StartCommand: gameServer.StartCommand,
+					TargetNodeID: targetNodeID,
 				}
 
 				// Recreate the container with current network

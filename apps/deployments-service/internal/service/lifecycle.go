@@ -889,6 +889,10 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 				}
 
 				// Recreate containers using deployment config
+				targetNodeID := orchestrator.TargetNodeFromContext(ctx)
+				if targetNodeID == "" && s.manager != nil {
+					targetNodeID = s.manager.GetNodeID()
+				}
 				cfg := &orchestrator.DeploymentConfig{
 					DeploymentID:              deploymentID,
 					Image:                     image,
@@ -904,7 +908,7 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 					HealthcheckPath:           dbDep.HealthcheckPath,
 					HealthcheckExpectedStatus: dbDep.HealthcheckExpectedStatus,
 					HealthcheckCustomCommand:  dbDep.HealthcheckCustomCommand,
-					TargetNodeID:              orchestrator.TargetNodeFromContext(ctx),
+					TargetNodeID:              targetNodeID,
 				}
 				logger.Info("[StartDeployment-lifecycle.go] DeploymentConfig created from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
 					cfg.HealthcheckType, cfg.HealthcheckPort, cfg.HealthcheckPath, cfg.HealthcheckExpectedStatus, cfg.HealthcheckCustomCommand)

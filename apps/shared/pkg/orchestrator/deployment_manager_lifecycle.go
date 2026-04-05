@@ -45,23 +45,12 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	// Check if we're on the target node
 	if targetNode.ID != dm.nodeID {
-		if strings.TrimSpace(config.TargetNodeID) != "" {
-			return fmt.Errorf("deployment %s must be materialized on node %s, current node is %s", config.DeploymentID, targetNode.ID, dm.nodeID)
-		}
-		// Try to forward the request to the target node
-		if dm.forwarder.CanForward(targetNode.ID) {
-			logger.Info("[DeploymentManager] Forwarding deployment creation to node %s (%s)",
-				targetNode.ID, targetNode.Hostname)
-			// For now, we'll proceed on current node since forwarding CreateDeployment
-			// requires serializing the config and calling the internal API
-			// TODO: Implement full forwarding for CreateDeployment via internal API endpoint
-			logger.Warn("[DeploymentManager] Node forwarding available but CreateDeployment forwarding not fully implemented. "+
-				"Proceeding with deployment on current node %s", dm.nodeID)
-		} else {
-			logger.Warn("[DeploymentManager] Cannot forward to node %s (%s) - proceeding with deployment on current node %s (%s)",
-				targetNode.ID, targetNode.Hostname, dm.nodeID, dm.nodeHostname)
-		}
-		// Continue with deployment on current node
+		return fmt.Errorf(
+			"deployment %s must be materialized on node %s, current node is %s; callers must forward or pin the target node before creating resources",
+			config.DeploymentID,
+			targetNode.ID,
+			dm.nodeID,
+		)
 	}
 
 	// Always reload environment variables from database for Dockerfile deployments
@@ -372,6 +361,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				logger.Info("[StartDeployment] Deployment %s has no exposed port configured; continuing without Traefik/health checks", deploymentID)
 			}
 
+			targetNodeID := TargetNodeFromContext(ctx)
+			if targetNodeID == "" {
+				targetNodeID = dm.nodeID
+			}
 			config := &DeploymentConfig{
 				DeploymentID:              deploymentID,
 				Image:                     image,
@@ -388,7 +381,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				HealthcheckPath:           deployment.HealthcheckPath,
 				HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 				HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
-				TargetNodeID:              TargetNodeFromContext(ctx),
+				TargetNodeID:              targetNodeID,
 			}
 
 			// Log the config healthcheck values
@@ -500,6 +493,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					replicas = int(*deployment.Replicas)
 				}
 
+				targetNodeID := TargetNodeFromContext(ctx)
+				if targetNodeID == "" {
+					targetNodeID = dm.nodeID
+				}
 				config := &DeploymentConfig{
 					DeploymentID:              deploymentID,
 					Image:                     image,
@@ -516,7 +513,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					HealthcheckPath:           deployment.HealthcheckPath,
 					HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 					HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
-					TargetNodeID:              TargetNodeFromContext(ctx),
+					TargetNodeID:              targetNodeID,
 				}
 
 				// Log the config healthcheck values
@@ -842,6 +839,10 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	}
 
 	// Create deployment config
+	targetNodeID := TargetNodeFromContext(ctx)
+	if targetNodeID == "" {
+		targetNodeID = dm.nodeID
+	}
 	config := &DeploymentConfig{
 		DeploymentID:              deploymentID,
 		Image:                     image,
@@ -858,7 +859,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		HealthcheckPath:           deployment.HealthcheckPath,
 		HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 		HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
-		TargetNodeID:              TargetNodeFromContext(ctx),
+		TargetNodeID:              targetNodeID,
 	}
 
 	// Log the config healthcheck values

@@ -312,6 +312,10 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		// Log error but don't fail - container can be created later when starting
 		logger.Warn("[GameServerService] Failed to get game server manager during creation: %v", err)
 	} else {
+		targetNodeID := sharedorchestrator.TargetNodeFromContext(ctx)
+		if targetNodeID == "" && manager != nil {
+			targetNodeID = manager.GetNodeID()
+		}
 		config := &gameserverorchestrator.GameServerConfig{
 			GameServerID: id,
 			Image:        dockerImage,
@@ -321,7 +325,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 			MemoryBytes:  memoryBytes,
 			CPUCores:     cpuCores,
 			StartCommand: req.Msg.StartCommand,
-			TargetNodeID: sharedorchestrator.TargetNodeFromContext(ctx),
+			TargetNodeID: targetNodeID,
 		}
 
 		if err := manager.CreateGameServer(ctx, config); err != nil {

@@ -666,6 +666,10 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			}
 		}
 
+		targetNodeID := orchestrator.TargetNodeFromContext(ctx)
+		if targetNodeID == "" && manager != nil {
+			targetNodeID = manager.GetNodeID()
+		}
 		cfg := &orchestrator.DeploymentConfig{
 			DeploymentID:              deployment.ID,
 			Image:                     imageName,
@@ -682,7 +686,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			HealthcheckPath:           deployment.HealthcheckPath,
 			HealthcheckExpectedStatus: deployment.HealthcheckExpectedStatus,
 			HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
-			TargetNodeID:              orchestrator.TargetNodeFromContext(ctx),
+			TargetNodeID:              targetNodeID,
 		}
 
 		if deployment.Replicas != nil {
