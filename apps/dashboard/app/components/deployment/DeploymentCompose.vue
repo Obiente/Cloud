@@ -260,7 +260,7 @@ services:
         const newErrors = res.validationErrors.map((err) => ({
           line: err.line || 1,
           column: err.column || 1,
-          message: err.message || "",
+          message: (err as Error).message || "",
           severity: (err.severity || "error") as "error" | "warning",
           startLine: err.startLine || err.line || 1,
           endLine: err.endLine || err.line || 1,
@@ -295,8 +295,8 @@ services:
         validationErrors.value = [];
         validationSuccess.value = true;
       }
-    } catch (error: any) {
-      validationError.value = error.message || "Invalid YAML syntax";
+    } catch (error: unknown) {
+      validationError.value = (error as Error).message || "Invalid YAML syntax";
       validationSuccess.value = false;
       validationErrors.value = [];
     }
@@ -324,7 +324,7 @@ services:
         const newErrors = res.validationErrors.map((err) => ({
           line: err.line || 1,
           column: err.column || 1,
-          message: err.message || "",
+          message: (err as Error).message || "",
           severity: (err.severity || "error") as "error" | "warning",
           startLine: err.startLine || err.line || 1,
           endLine: err.endLine || err.line || 1,

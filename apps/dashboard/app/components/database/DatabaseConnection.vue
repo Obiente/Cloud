@@ -219,7 +219,7 @@ async function loadConnectionInfo() {
       databaseId: props.databaseId,
     });
     connectionInfo.value = res.connectionInfo;
-  } catch (err: any) {
+  } catch (err: unknown) {
     error.value = err;
   } finally {
     loading.value = false;
@@ -244,8 +244,8 @@ async function handleResetPassword() {
     );
 
     loadConnectionInfo();
-  } catch (err: any) {
-    toast.error("Failed to reset password", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to reset password", (err as Error).message);
   }
 }
 

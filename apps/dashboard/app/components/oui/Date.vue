@@ -5,9 +5,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { formatDate, formatDateOnly } from "~/utils/common";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 interface Props {
-  value: any; // Timestamp object with seconds/nanos or Date
+  value: Timestamp | Date | number | string | null | undefined;
   dateOnly?: boolean; // If true, show only date without time
 }
 

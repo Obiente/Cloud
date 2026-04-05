@@ -219,7 +219,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { DatabaseType, DatabaseService, type DatabaseInstance } from "@obiente/proto";
+import { DatabaseType, DatabaseService, type DatabaseInstance, type UpdateDatabaseRequest } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
@@ -295,9 +295,9 @@ async function handleSave() {
   
   try {
     // Only send changed fields that are editable
-    const updates: any = {};
-    
-    const dbRef = props.database as any;
+    const updates: Partial<UpdateDatabaseRequest> = {};
+
+    const dbRef = props.database as DatabaseInstance;
     if (formData.value.name !== dbRef.name) {
       updates.name = formData.value.name;
     }

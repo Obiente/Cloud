@@ -285,8 +285,8 @@ export function useFileExplorer(options: ExplorerOptions) {
         node.nextCursor = res.nextCursor ?? null;
         node.hasLoaded = true;
       }
-    } catch (err: any) {
-      errorMessage.value = err?.message ?? "Failed to load files";
+    } catch (err: unknown) {
+      errorMessage.value = (err as Error | undefined)?.message ?? "Failed to load files";
     } finally {
       node.isLoading = false;
     }

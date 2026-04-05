@@ -326,7 +326,7 @@ async function saveRole() {
   error.value = "";
   saving.value = true;
   try {
-    const roleData: any = {
+    const roleData: { name: string; permissionsJson: string; id?: string; description?: string; organizationId?: string } = {
       name: name.value,
       permissionsJson: JSON.stringify(selectedPerms.value),
     };
@@ -364,7 +364,7 @@ async function saveRole() {
       selectedPerms.value = [];
     }
     await props.onRefreshRoles();
-  } catch (e: any) {
+  } catch (e: unknown) {
     error.value = e?.message || "Error";
     if (props.onError) {
       props.onError(error.value);
@@ -389,7 +389,7 @@ async function removeRole(id: string) {
       toast.success(message);
     }
     await props.onRefreshRoles();
-  } catch (e: any) {
+  } catch (e: unknown) {
     const errorMsg = e?.message || "Error";
     if (props.onError) {
       props.onError(errorMsg);

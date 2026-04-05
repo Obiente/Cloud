@@ -597,7 +597,7 @@
         deploymentId: props.deploymentId,
       });
       serviceNames.value = res.serviceNames || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to load service names:", error);
       // If this fails, we'll still work with containers that have service names
     }
@@ -611,12 +611,12 @@
         deploymentId: props.deploymentId,
       });
       containers.value = res.containers || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to load containers:", error);
       await showAlert({
         title: "Failed to Load Containers",
         message:
-          error.message ||
+          (error as Error).message ||
           "Failed to load container information. Please try again.",
       });
       containers.value = [];
@@ -685,7 +685,7 @@
 
       localRoutingRules.value = rulesByService;
       isRoutingDirty.value = false;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to load routing rules:", error);
     } finally {
       isLoadingRouting.value = false;
@@ -785,10 +785,10 @@
         title: "Success",
         message: "Routing rules saved successfully.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       await showAlert({
         title: "Failed to Save",
-        message: error.message || "Failed to save routing rules. Please try again.",
+        message: (error as Error).message || "Failed to save routing rules. Please try again.",
       });
     } finally {
       isSavingRouting.value = false;
@@ -845,11 +845,11 @@
       setTimeout(() => {
         loadContainers();
       }, 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await showAlert({
         title: "Failed to Start Service",
         message:
-          error.message ||
+          (error as Error).message ||
           `Failed to start service "${serviceName}". Please try again.`,
       });
     } finally {
@@ -923,7 +923,7 @@
         });
       }
       // Otherwise, assume success (containers might have stopped even if API timed out)
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Only show error if it's not a network/timeout error
       const isNetworkError = 
         error?.message?.includes("NetworkError") ||
@@ -937,7 +937,7 @@
         await showAlert({
           title: "Failed to Stop Service",
           message:
-            error.message ||
+            (error as Error).message ||
             `Failed to stop service "${serviceName}". Please try again.`,
         });
       }
@@ -974,11 +974,11 @@
       setTimeout(() => {
         loadContainers();
       }, 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await showAlert({
         title: "Failed to Restart Service",
         message:
-          error.message ||
+          (error as Error).message ||
           `Failed to restart service "${serviceName}". Please try again.`,
       });
     } finally {
@@ -999,11 +999,11 @@
       setTimeout(() => {
         loadContainers();
       }, 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await showAlert({
         title: "Failed to Start Container",
         message:
-          error.message ||
+          (error as Error).message ||
           "Failed to start container. Please try again.",
       });
     } finally {
@@ -1025,7 +1025,7 @@
       setTimeout(() => {
         loadContainers();
       }, 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Only show error if it's not a network/timeout error
       // Container might have stopped even if API timed out
       const isNetworkError = 
@@ -1040,7 +1040,7 @@
         await showAlert({
           title: "Failed to Stop Container",
           message:
-            error.message ||
+            (error as Error).message ||
             "Failed to stop container. Please try again.",
         });
       }
@@ -1067,11 +1067,11 @@
       setTimeout(() => {
         loadContainers();
       }, 1000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await showAlert({
         title: "Failed to Restart Container",
         message:
-          error.message ||
+          (error as Error).message ||
           "Failed to restart container. Please try again.",
       });
     } finally {

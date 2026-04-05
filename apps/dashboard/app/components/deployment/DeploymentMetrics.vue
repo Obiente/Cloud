@@ -318,7 +318,7 @@
     watch,
   } from "vue";
   import { useConnectClient } from "~/lib/connect-client";
-  import { DeploymentService } from "@obiente/proto";
+  import { DeploymentService, type DeploymentContainer, type DeploymentMetric, type GetDeploymentMetricsRequest, type StreamDeploymentMetricsRequest } from "@obiente/proto";
   import {
     registerOUIEChartsTheme,
     getOUIEChartsColors,
@@ -349,7 +349,6 @@
   const selectedTimeframe = computed({
     get: () => {
       const value = preferencesStore.metricsPreferences?.timeframe;
-      console.log("[DeploymentMetrics] selectedTimeframe get() called:", {
         value,
         metricsPreferences: preferencesStore.metricsPreferences,
         hydrated: preferencesStore.hydrated,
@@ -359,7 +358,6 @@
       return value ?? "24h";
     },
     set: (value: TimeframeOption) => {
-      console.log("[DeploymentMetrics] selectedTimeframe set() called:", value);
       preferencesStore.setMetricsPreference("timeframe", value);
       if (value !== "custom") {
         customDateRange.value = [];
@@ -376,7 +374,6 @@
   watch(
     () => preferencesStore.metricsPreferences,
     async (newMetrics, oldMetrics) => {
-      console.log("[DeploymentMetrics] metricsPreferences changed:", {
         new: newMetrics,
         old: oldMetrics,
         newTimeframe: newMetrics?.timeframe,
@@ -1086,8 +1083,8 @@
 
       if (res?.containers) {
         containers.value = res.containers
-          .filter((c: any) => c.status === "running")
-          .map((c: any) => ({
+          .filter((c: DeploymentContainer) => c.status === "running")
+          .map((c: DeploymentContainer) => ({
             containerId: c.containerId,
             serviceName: c.serviceName || undefined,
           }));
@@ -1101,7 +1098,7 @@
   };
 
   // Helper to convert DateValue to Date
-  const dateValueToDate = (dateValue: any): Date | null => {
+  const dateValueToDate = (dateValue: { year?: number; month?: number; day?: number; hour?: number; minute?: number; second?: number; toDate?: () => Date } | null | undefined): Date | null => {
     if (!dateValue) return null;
     // DateValue from @internationalized/date can be CalendarDate, CalendarDateTime, etc.
     // Try to get year, month, day, hour, minute, second
@@ -1175,15 +1172,15 @@
     try {
       const { startTime, endTime } = getTimeRange();
 
-      const request: any = {
+      const request: Partial<GetDeploymentMetricsRequest> = {
         deploymentId: props.deploymentId,
         organizationId: props.organizationId,
         startTime: {
-          seconds: Math.floor(startTime.getTime() / 1000),
+          seconds: BigInt(Math.floor(startTime.getTime() / 1000)),
           nanos: 0,
         },
         endTime: {
-          seconds: Math.floor(endTime.getTime() / 1000),
+          seconds: BigInt(Math.floor(endTime.getTime() / 1000)),
           nanos: 0,
         },
       };
@@ -1216,7 +1213,7 @@
         const diskRead: number[] = [];
         const diskWrite: number[] = [];
 
-        res.metrics.forEach((metric: any) => {
+        res.metrics.forEach((metric: DeploymentMetric) => {
           const date = metric.timestamp
             ? new Date(Number(metric.timestamp.seconds) * 1000)
             : new Date();
@@ -1295,7 +1292,7 @@
   };
 
   // Add new metric point
-  const addMetricPoint = (metric: any) => {
+  const addMetricPoint = (metric: DeploymentMetric) => {
     const date = metric.timestamp
       ? new Date(Number(metric.timestamp.seconds) * 1000)
       : new Date();
@@ -1399,7 +1396,7 @@
     streamController = new AbortController();
 
     try {
-      const request: any = {
+      const request: Partial<StreamDeploymentMetricsRequest> = {
         deploymentId: props.deploymentId,
         organizationId: props.organizationId,
         intervalSeconds: 5,
@@ -1432,7 +1429,7 @@
         }
         addMetricPoint(metric);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.name === "AbortError") {
         // User intentionally cancelled
         return;
@@ -1440,8 +1437,8 @@
 
       // Suppress "missing trailer" errors if we successfully received metrics
       const isMissingTrailerError =
-        err.message?.toLowerCase().includes("missing trailer") ||
-        err.message?.toLowerCase().includes("trailer") ||
+        (err as Error).message?.toLowerCase().includes("missing trailer") ||
+        (err as Error).message?.toLowerCase().includes("trailer") ||
         err.code === "unknown";
 
       if (!isMissingTrailerError) {

@@ -417,12 +417,12 @@
         message:
           "Routing rules saved successfully. Note: Changes will take effect on the next deployment.",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to save routing rules:", error);
       await showAlert({
         title: "Error",
         message:
-          error.message || "Failed to save routing rules. Please try again.",
+          (error as Error).message || "Failed to save routing rules. Please try again.",
       });
     } finally {
       isLoading.value = false;

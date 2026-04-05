@@ -903,9 +903,9 @@ const handleSave = async () => {
 
     toast.success("Game server settings updated successfully");
     emit("saved");
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to update game server:", error);
-    toast.error(error?.message || "Failed to update game server settings");
+    toast.error((error as Error | undefined)?.message || "Failed to update game server settings");
   } finally {
     isSaving.value = false;
   }

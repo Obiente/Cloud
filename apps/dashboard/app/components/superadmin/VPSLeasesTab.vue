@@ -195,7 +195,7 @@ const fetchLeases = async () => {
     }
 
     leases.value = allLeases;
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to load leases: ${error?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;

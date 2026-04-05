@@ -80,7 +80,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { ArrowPathIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
-import { DeploymentService } from "@obiente/proto";
+import { DeploymentService, type StreamDeploymentLogsRequest } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
@@ -213,7 +213,7 @@ const startStream = async () => {
     streamController = new AbortController();
     
     // Build request with service/container filter
-    const request: any = {
+    const request: Partial<StreamDeploymentLogsRequest> = {
       organizationId: effectiveOrgId.value,
       deploymentId: props.deploymentId,
       tail: tailLines.value,
@@ -251,13 +251,13 @@ const startStream = async () => {
         });
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Suppress all abort-related errors - they're intentional when switching services
     const isAbortError = 
       error.name === "AbortError" || 
-      error.message?.toLowerCase().includes("aborted") ||
-      error.message?.toLowerCase().includes("canceled") ||
-      error.message?.toLowerCase().includes("cancelled") ||
+      (error as Error).message?.toLowerCase().includes("aborted") ||
+      (error as Error).message?.toLowerCase().includes("canceled") ||
+      (error as Error).message?.toLowerCase().includes("cancelled") ||
       isAborting;
 
     if (isAbortError) {
@@ -270,12 +270,12 @@ const startStream = async () => {
     // - "missing EndStreamResponse": Connect/gRPC-Web quirk where streams end without explicit end marker
     // - "invalid UTF-8": Docker logs can contain binary data (now sanitized server-side)
     const isBenignError =
-      error.message?.toLowerCase().includes("missing trailer") ||
-      error.message?.toLowerCase().includes("trailer") ||
-      error.message?.toLowerCase().includes("missing endstreamresponse") ||
-      error.message?.toLowerCase().includes("endstreamresponse") ||
-      error.message?.toLowerCase().includes("invalid utf-8") ||
-      error.message?.toLowerCase().includes("marshal message") ||
+      (error as Error).message?.toLowerCase().includes("missing trailer") ||
+      (error as Error).message?.toLowerCase().includes("trailer") ||
+      (error as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
+      (error as Error).message?.toLowerCase().includes("endstreamresponse") ||
+      (error as Error).message?.toLowerCase().includes("invalid utf-8") ||
+      (error as Error).message?.toLowerCase().includes("marshal message") ||
       error.code === "unknown";
 
     // Only show error if it's not a benign error after successful streaming,
@@ -283,14 +283,14 @@ const startStream = async () => {
     if (!isBenignError || !hasReceivedLogs) {
       console.error("Log stream error:", error);
       logs.value.push({
-        line: `[error] Failed to stream logs: ${error.message}`,
+        line: `[error] Failed to stream logs: ${(error as Error).message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
         logLevel: 5, // ERROR
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
-      console.debug("Stream ended with benign error:", error.message);
+      console.debug("Stream ended with benign error:", (error as Error).message);
     }
   } finally {
     isLoading.value = false;

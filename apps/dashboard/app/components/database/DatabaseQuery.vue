@@ -579,8 +579,8 @@ async function executeCurrentQuery(selectedOnly = false) {
     addToHistory(queryText);
     sortColumn.value = null;
     toast.success(`Query returned ${formatNumber(tab.results.rowCount)} rows`);
-  } catch (err: any) {
-    tab.error = err.message || "Query execution failed";
+  } catch (err: unknown) {
+    tab.error = (err as Error).message || "Query execution failed";
     toast.error("Query failed");
   } finally {
     executing.value = false;

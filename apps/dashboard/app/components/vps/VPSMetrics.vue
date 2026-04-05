@@ -217,7 +217,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
 import { useConnectClient } from "~/lib/connect-client";
-import { VPSService } from "@obiente/proto";
+import { VPSService, type VPSMetric } from "@obiente/proto";
 import {
   registerOUIEChartsTheme,
   getOUIEChartsColors,
@@ -693,7 +693,7 @@ const updateCharts = () => {
 };
 
 // Helper to convert DateValue to Date
-const dateValueToDate = (dateValue: any): Date | null => {
+const dateValueToDate = (dateValue: { year?: number; month?: number; day?: number; hour?: number; minute?: number; second?: number; toDate?: () => Date } | null | undefined): Date | null => {
   if (!dateValue) return null;
   if (typeof dateValue === "object" && dateValue.year !== undefined) {
     const year = dateValue.year;
@@ -799,7 +799,6 @@ const loadHistoricalMetrics = async () => {
   try {
     const { startTime, endTime } = getTimeRange();
 
-    console.log("[VPSMetrics] Loading metrics for VPS:", props.vpsId);
     const res = await client.getVPSMetrics({
       vpsId: props.vpsId,
       startTime: {
@@ -821,7 +820,7 @@ const loadHistoricalMetrics = async () => {
       const diskUsed: number[] = [];
       const diskTotal: number[] = [];
 
-      res.metrics.forEach((metric: any) => {
+      res.metrics.forEach((metric: VPSMetric) => {
         const date = metric.timestamp
           ? new Date(Number(metric.timestamp.seconds) * 1000)
           : new Date();
@@ -850,7 +849,7 @@ const loadHistoricalMetrics = async () => {
 };
 
 // Add new metric point
-const addMetricPoint = async (metric: any) => {
+const addMetricPoint = async (metric: VPSMetric) => {
   const date = metric.timestamp
     ? new Date(Number(metric.timestamp.seconds) * 1000)
     : new Date();
@@ -901,7 +900,6 @@ const scheduleReconnect = () => {
     if (!streaming.value || props.vpsStatus !== 3) {
       return;
     }
-    console.log(`[VPSMetrics] Attempting to reconnect stream (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
     await startStreaming();
   }, delay);
 };
@@ -921,7 +919,6 @@ const startStreaming = async () => {
   streamController = new AbortController();
 
   try {
-    console.log("[VPSMetrics] Starting metrics stream for VPS:", props.vpsId);
     
     const stream = await (client as any).streamVPSMetrics(
       {
@@ -932,58 +929,51 @@ const startStreaming = async () => {
       }
     );
 
-    console.log("[VPSMetrics] Stream started, listening for metrics...");
     reconnectAttempts = 0;
     
     for await (const metric of stream) {
       if (streamController?.signal.aborted) {
-        console.log("[VPSMetrics] Stream aborted, stopping...");
         break;
       }
       
       if (!streaming.value) {
-        console.log("[VPSMetrics] Streaming disabled, stopping...");
         break;
       }
       
       const currentStatus = props.vpsStatus;
       if (currentStatus !== undefined && currentStatus !== null && currentStatus !== 3) {
-        console.log("[VPSMetrics] VPS not running (status:", currentStatus, "), stopping stream...");
         break;
       }
       
-      console.log("[VPSMetrics] Received metric:", metric);
       addMetricPoint(metric);
     }
     
-    console.log("[VPSMetrics] Stream ended");
     
     if (streaming.value && props.vpsStatus === 3 && !streamController?.signal.aborted) {
       scheduleReconnect();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === "AbortError" || streamController?.signal.aborted) {
-      console.log("[VPSMetrics] Stream aborted");
       streaming.value = false;
       streamController = null;
       return;
     }
 
     const isMissingTrailerError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
-      err.message?.toLowerCase().includes("unimplemented") ||
+      (err as Error).message?.toLowerCase().includes("missing trailer") ||
+      (err as Error).message?.toLowerCase().includes("trailer") ||
+      (err as Error).message?.toLowerCase().includes("unimplemented") ||
       err.code === "unknown";
 
     if (!isMissingTrailerError) {
       console.error("[VPSMetrics] Failed to stream metrics:", err);
       
       const isNetworkError =
-        err.message?.toLowerCase().includes("networkerror") ||
-        err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("502") ||
-        err.message?.toLowerCase().includes("503") ||
-        err.message?.toLowerCase().includes("504") ||
+        (err as Error).message?.toLowerCase().includes("networkerror") ||
+        (err as Error).message?.toLowerCase().includes("failed to fetch") ||
+        (err as Error).message?.toLowerCase().includes("502") ||
+        (err as Error).message?.toLowerCase().includes("503") ||
+        (err as Error).message?.toLowerCase().includes("504") ||
         err.code === "ECONNREFUSED" ||
         err.code === "ETIMEDOUT";
       

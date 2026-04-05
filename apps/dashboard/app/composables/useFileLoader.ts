@@ -209,15 +209,15 @@ export function useFileLoader(
       }
 
       fileError.value = null;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
-      if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
+      if (err?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         console.log("[useFileLoader] Request was aborted");
         return;
       }
 
       console.error("load file", err);
-      fileError.value = err?.message || "Failed to load file";
+      fileError.value = (err as Error | undefined)?.message || "Failed to load file";
       fileContent.value = "";
       fileLanguage.value = "plaintext";
       filePreviewType.value = null;

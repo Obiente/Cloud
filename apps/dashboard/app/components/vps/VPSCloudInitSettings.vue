@@ -401,7 +401,7 @@
       actualUserData.value = res.userData || "";
     } catch (err: unknown) {
       userDataError.value =
-        err instanceof Error ? err.message : "Unknown error";
+        err instanceof Error ? (err as Error).message : "Unknown error";
       actualUserData.value = null;
     } finally {
       loadingUserData.value = false;
@@ -447,7 +447,7 @@
     } catch (err: unknown) {
       error.value =
         err instanceof Error
-          ? err.message
+          ? (err as Error).message
           : "Failed to load cloud-init configuration";
     } finally {
       loading.value = false;
@@ -501,7 +501,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to save configuration",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     } finally {
       saving.value = false;

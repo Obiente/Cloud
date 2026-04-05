@@ -569,8 +569,8 @@ async function createTable() {
     toast.success(`Table "${tableName.value}" created`);
     emit("created");
     close();
-  } catch (err: any) {
-    toast.error("Failed to create table", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to create table", (err as Error).message);
   } finally {
     creating.value = false;
   }

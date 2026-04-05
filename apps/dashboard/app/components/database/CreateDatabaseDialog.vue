@@ -199,8 +199,8 @@ async function handleCreate() {
 
     emit("update:modelValue", false);
     emit("created");
-  } catch (err: any) {
-    toast.error("Failed to create database", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to create database", (err as Error).message);
   } finally {
     creating.value = false;
   }

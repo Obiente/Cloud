@@ -898,9 +898,9 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
     if (!isReset && isLoadingMore.value) {
       regenerateInfiniteSkeletons(fetchedCount);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    errorMessage.value = err?.message ?? "Failed to load catalog";
+    errorMessage.value = (err as Error | undefined)?.message ?? "Failed to load catalog";
     toast.error("Failed to load Minecraft catalog", errorMessage.value || undefined);
   } finally {
     if (isReset) {
@@ -1359,9 +1359,9 @@ async function fetchVersions(projectId: string) {
       // Show a helpful message if no versions are available
       toast.warning("No versions available", "This project may not have any compatible versions.");
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    toast.error("Failed to load versions", err?.message || "Unknown error");
+    toast.error("Failed to load versions", (err as Error | undefined)?.message || "Unknown error");
     versionOptions.value = [];
   } finally {
     isVersionsLoading.value = false;
@@ -1380,9 +1380,9 @@ async function installSelected() {
     });
     toast.success(`${selectedProject.value.title} installed`, "Restart the server to enable it.");
     closeInstallDialog();
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
-    toast.error("Failed to install", err?.message || "Unknown error");
+    toast.error("Failed to install", (err as Error | undefined)?.message || "Unknown error");
   } finally {
     isInstalling.value = false;
   }

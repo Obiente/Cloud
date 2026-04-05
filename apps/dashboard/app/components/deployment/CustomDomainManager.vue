@@ -361,10 +361,10 @@ const addDomain = async () => {
     await refreshDomainInfo(newDomain.value.trim());
     newDomain.value = "";
     showAddDomain.value = false;
-  } catch (err: any) {
+  } catch (err: unknown) {
     await showAlert({
       title: "Failed to Add Domain",
-      message: err.message || "Failed to add domain. Please try again.",
+      message: (err as Error).message || "Failed to add domain. Please try again.",
     });
   } finally {
     isAdding.value = false;
@@ -422,11 +422,11 @@ const verifyDomain = async (domain: string) => {
       }
       // Error is shown inline in the UI, no need for alert dialog
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     const domainInfo = domains.value.find((d) => d.domain === domain);
     if (domainInfo) {
       domainInfo.status = "failed";
-      domainInfo.errorMessage = err.message || "Failed to verify domain. Please try again.";
+      domainInfo.errorMessage = (err as Error).message || "Failed to verify domain. Please try again.";
     }
   } finally {
     isVerifying.value = false;
@@ -467,11 +467,11 @@ const removeDomain = async (domain: string) => {
       title: "Domain Removed",
       message: `${domain} has been removed successfully.`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to remove domain:", err);
     await showAlert({
       title: "Failed to Remove Domain",
-      message: err.message || "Failed to remove domain. Please try again.",
+      message: (err as Error).message || "Failed to remove domain. Please try again.",
     });
   } finally {
     isRemoving.value = false;

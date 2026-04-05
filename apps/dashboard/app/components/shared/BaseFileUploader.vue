@@ -305,7 +305,7 @@
                   v-for="error in rejection.errors"
                   :key="error.code"
                 >
-                  {{ error.message }}
+                  {{ (error as Error).message }}
                 </OuiText>
               </OuiStack>
             </OuiCard>
@@ -824,7 +824,7 @@
       totalBytesToUpload.value = 0;
       smoothedSpeedBuffer.value = [];
       smoothedEta.value = undefined;
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.dismiss(toastId);
       if (!uploadCancelled.value) {
         toast.error("Upload Failed", error?.message || "An error occurred during upload");

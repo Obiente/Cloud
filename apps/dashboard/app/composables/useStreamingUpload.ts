@@ -106,8 +106,8 @@ export function useChunkedGameServerUpload() {
       }
 
       return success;
-    } catch (err: any) {
-      error.value = err?.message || "Upload failed";
+    } catch (err: unknown) {
+      error.value = (err as Error | undefined)?.message || "Upload failed";
       return false;
     }
   };

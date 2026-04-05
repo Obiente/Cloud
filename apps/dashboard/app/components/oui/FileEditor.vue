@@ -528,7 +528,7 @@ watch(
 
       // Build a formatted message with severity prefix for clarity
       const severityLabel = err.severity === "error" ? "Error" : "Warning";
-      const formattedMessage = `[${severityLabel}] ${err.message}`;
+      const formattedMessage = `[${severityLabel}] ${(err as Error).message}`;
 
       return {
         startLineNumber: startLine,

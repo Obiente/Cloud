@@ -606,7 +606,7 @@ import {
   ExclamationTriangleIcon,
   XCircleIcon,
 } from "@heroicons/vue/24/outline";
-import type { Deployment } from "@obiente/proto";
+import { type Deployment, type StreamDeploymentMetricsRequest } from "@obiente/proto";
 import {
   DeploymentType,
   DeploymentStatus,
@@ -614,6 +614,7 @@ import {
   BuildStrategy,
   DeploymentService,
 } from "@obiente/proto";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { date } from "@obiente/proto/utils";
 import { useConnectClient } from "~/lib/connect-client";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -752,7 +753,7 @@ const startStreaming = async () => {
   streamController.value = new AbortController();
 
   try {
-    const request: any = {
+    const request: Partial<StreamDeploymentMetricsRequest> = {
       deploymentId: props.deployment.id,
       organizationId: props.organizationId || "",
       intervalSeconds: 5,
@@ -776,14 +777,14 @@ const startStreaming = async () => {
       }
       latestMetric.value = metric;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === "AbortError") {
       return;
     }
     // Suppress "missing trailer" errors
     const isMissingTrailerError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
+      (err as Error).message?.toLowerCase().includes("missing trailer") ||
+      (err as Error).message?.toLowerCase().includes("trailer") ||
       err.code === "unknown";
 
     if (!isMissingTrailerError) {
@@ -1053,7 +1054,7 @@ const getHealthLabel = (healthStatus: string) => {
   return "Unknown";
 };
 
-const formatDate = (timestamp: any) => {
+const formatDate = (timestamp: Timestamp | null | undefined) => {
   if (!timestamp) return "";
   const d = date(timestamp);
   if (!d) return "";

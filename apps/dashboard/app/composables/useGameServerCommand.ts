@@ -87,8 +87,8 @@ export function useGameServerCommand(options: UseGameServerCommandOptions) {
             };
 
             websocket!.send(JSON.stringify(initMessage));
-          } catch (err: any) {
-            error.value = err.message || "Failed to initialize connection";
+          } catch (err: unknown) {
+            error.value = (err as Error).message || "Failed to initialize connection";
             isLoading.value = false;
             websocket?.close();
             reject(err);
@@ -115,7 +115,7 @@ export function useGameServerCommand(options: UseGameServerCommandOptions) {
               connectionPromise = null;
               reject(new Error(errMsg));
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error("Error processing WebSocket message:", err);
           }
         };
@@ -137,8 +137,8 @@ export function useGameServerCommand(options: UseGameServerCommandOptions) {
           isConnecting = false;
           connectionPromise = null;
         };
-      } catch (err: any) {
-        error.value = err.message || "Failed to connect";
+      } catch (err: unknown) {
+        error.value = (err as Error).message || "Failed to connect";
         isLoading.value = false;
         isConnecting = false;
         connectionPromise = null;
@@ -170,9 +170,9 @@ export function useGameServerCommand(options: UseGameServerCommandOptions) {
           input: Array.from(input),
         })
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to send command:", err);
-      throw new Error(`Failed to send command: ${err.message || "Unknown error"}`);
+      throw new Error(`Failed to send command: ${(err as Error).message || "Unknown error"}`);
     }
   };
 

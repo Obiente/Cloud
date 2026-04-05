@@ -275,13 +275,11 @@ const handleScroll = (event?: Event) => {
 
   // Debug logging (remove in production if needed)
   if (scrollTop < 500) {
-    console.log('[GameServerLogs] Scroll detected:', { scrollTop, logsLength: logs.value.length });
   }
 
   // If user scrolls within 300px of the top, load older logs
   // Increased threshold for better UX - starts loading before reaching the very top
   if (scrollTop < 300 && logs.value.length > 0) {
-    console.log('[GameServerLogs] Triggering loadOlderLogs - scrollTop:', scrollTop);
     
     // Debounce to avoid multiple rapid requests
     if (isLoadingOlderLogsDebounce) {
@@ -297,7 +295,6 @@ const handleScroll = (event?: Event) => {
 
 // Load older logs using the since parameter
 const loadOlderLogs = async () => {
-  console.log('[GameServerLogs] loadOlderLogs called', {
     isLoadingOlderLogs: isLoadingOlderLogs.value,
     hasLoadedAllLogs: hasLoadedAllLogs.value,
     logsLength: logs.value.length
@@ -308,11 +305,9 @@ const loadOlderLogs = async () => {
     hasLoadedAllLogs.value ||
     logs.value.length === 0
   ) {
-    console.log('[GameServerLogs] loadOlderLogs aborted - conditions not met');
     return;
   }
 
-  console.log('[GameServerLogs] Starting to load older logs...');
   isLoadingOlderLogs.value = true;
 
   try {
@@ -335,7 +330,6 @@ const loadOlderLogs = async () => {
     oldestDate.setMilliseconds(oldestDate.getMilliseconds() - 1);
     const untilTimestamp = timestamp(oldestDate);
 
-    console.log('[GameServerLogs] Fetching older logs before timestamp:', oldestDate.toISOString());
 
     // Fetch logs before this timestamp using the streaming endpoint with until parameter
     // Use follow=false to get historical logs only (no live streaming)
@@ -343,7 +337,6 @@ const loadOlderLogs = async () => {
     const abortController = new AbortController();
     
     try {
-      console.log('[GameServerLogs] Calling streamGameServerLogs with until parameter');
       const logStream = client.streamGameServerLogs(
         {
           gameServerId: props.gameServerId,
@@ -355,7 +348,6 @@ const loadOlderLogs = async () => {
         { signal: abortController.signal }
       );
       
-      console.log('[GameServerLogs] Stream obtained, reading logs...');
 
       // Collect all logs from the stream
       for await (const logLine of logStream) {
@@ -386,7 +378,7 @@ const loadOlderLogs = async () => {
           });
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle abort errors silently (user might have scrolled away)
       if (err?.name === "AbortError" || err?.code === "aborted") {
         return;
@@ -423,7 +415,7 @@ const loadOlderLogs = async () => {
       // No more logs available
       hasLoadedAllLogs.value = true;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load older logs:", err);
     // Don't set hasLoadedAllLogs on error - user can try again
   } finally {
@@ -463,7 +455,6 @@ const scheduleReconnect = () => {
     if (!isFollowing.value) {
       return;
     }
-    console.log(
       `Attempting to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
     );
     error.value = `Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
@@ -556,7 +547,7 @@ const startFollowing = async () => {
           // Ensure logs are sorted chronologically after adding initial logs
           sortLogsByTimestamp();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Handle abort errors silently
         if (err?.name !== "AbortError" && err?.code !== "aborted") {
           console.warn("Failed to fetch initial logs:", err);
@@ -644,29 +635,29 @@ const startFollowing = async () => {
       isConnected.value = false;
       scheduleReconnect();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     const isAbortError =
       err.name === "AbortError" ||
-      err.message?.toLowerCase().includes("aborted") ||
-      err.message?.toLowerCase().includes("canceled") ||
-      err.message?.toLowerCase().includes("cancelled");
+      (err as Error).message?.toLowerCase().includes("aborted") ||
+      (err as Error).message?.toLowerCase().includes("canceled") ||
+      (err as Error).message?.toLowerCase().includes("cancelled");
 
     if (isAbortError) {
       return;
     }
 
     const isBenignError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
-      err.message?.toLowerCase().includes("missing endstreamresponse") ||
-      err.message?.toLowerCase().includes("endstreamresponse") ||
-      err.message?.toLowerCase().includes("unimplemented") ||
-      err.message?.toLowerCase().includes("not fully implemented") ||
+      (err as Error).message?.toLowerCase().includes("missing trailer") ||
+      (err as Error).message?.toLowerCase().includes("trailer") ||
+      (err as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
+      (err as Error).message?.toLowerCase().includes("endstreamresponse") ||
+      (err as Error).message?.toLowerCase().includes("unimplemented") ||
+      (err as Error).message?.toLowerCase().includes("not fully implemented") ||
       err.code === "unknown";
 
     if (!isBenignError) {
       console.error("Failed to stream logs:", err);
-      error.value = err.message || "Failed to connect to logs stream";
+      error.value = (err as Error).message || "Failed to connect to logs stream";
     }
 
     if (isFollowing.value && !isAbortError) {
@@ -768,11 +759,11 @@ const handleSearch = async () => {
       // Ensure search results are sorted chronologically
       sortLogsByTimestamp();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Handle abort errors silently
     if (err?.name !== "AbortError" && err?.code !== "aborted") {
       console.error("Failed to search logs:", err);
-      error.value = err.message || "Failed to search logs";
+      error.value = (err as Error).message || "Failed to search logs";
     }
   } finally {
     isSearching.value = false;
@@ -882,7 +873,6 @@ const attachScrollListener = (): boolean => {
     scrollContainer.removeEventListener('scroll', handleScroll);
     // Add the listener
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    console.log('[GameServerLogs] ✓ Scroll listener attached to OuiLogs container');
     return true;
   } else {
     console.warn('[GameServerLogs] Could not find scroll container (.oui-logs-viewer), will retry...');

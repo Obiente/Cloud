@@ -24,8 +24,8 @@ export const useVpsLeases = () => {
       });
 
       leases.value = response.leases || [];
-    } catch (err: any) {
-      error.value = err?.message || 'Failed to fetch leases';
+    } catch (err: unknown) {
+      error.value = (err as Error | undefined)?.message || 'Failed to fetch leases';
       leases.value = [];
     } finally {
       loading.value = false;

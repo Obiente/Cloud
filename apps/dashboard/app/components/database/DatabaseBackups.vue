@@ -33,7 +33,7 @@
               { key: 'created', label: 'Created' },
               { key: 'actions', label: 'Actions' },
             ]"
-            :rows="backups.map((b: any) => ({
+            :rows="backups.map((b: DatabaseBackup) => ({
               name: b.name,
               size: formatBytes(b.sizeBytes),
               status: b.status,
@@ -115,7 +115,7 @@
 <script setup lang="ts">
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import { ref, onMounted } from "vue";
-import { DatabaseService, DatabaseBackupStatus } from "@obiente/proto";
+import { DatabaseService, DatabaseBackupStatus, type DatabaseBackup } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
@@ -147,8 +147,8 @@ async function loadBackups() {
       perPage: 100,
     });
     backups.value = res.backups || [];
-  } catch (err: any) {
-    toast.error("Failed to load backups", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to load backups", (err as Error).message);
   } finally {
     loading.value = false;
   }
@@ -169,14 +169,14 @@ async function handleCreate() {
     backupName.value = "";
     backupDescription.value = "";
     loadBackups();
-  } catch (err: any) {
-    toast.error("Failed to create backup", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to create backup", (err as Error).message);
   } finally {
     creating.value = false;
   }
 }
 
-async function handleRestore(backup: any) {
+async function handleRestore(backup: DatabaseBackup) {
   if (!confirm(`Are you sure you want to restore from backup "${backup.name}"?`)) {
     return;
   }
@@ -189,12 +189,12 @@ async function handleRestore(backup: any) {
       backupId: backup.id,
     });
     toast.success("Backup restoration started");
-  } catch (err: any) {
-    toast.error("Failed to restore backup", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to restore backup", (err as Error).message);
   }
 }
 
-async function handleDelete(backup: any) {
+async function handleDelete(backup: DatabaseBackup) {
   if (!confirm(`Are you sure you want to delete backup "${backup.name}"?`)) {
     return;
   }
@@ -208,8 +208,8 @@ async function handleDelete(backup: any) {
     });
     toast.success("Backup deleted");
     loadBackups();
-  } catch (err: any) {
-    toast.error("Failed to delete backup", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to delete backup", (err as Error).message);
   }
 }
 

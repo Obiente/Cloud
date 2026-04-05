@@ -161,7 +161,7 @@ export function useDatabaseSchema(databaseId: Ref<string>) {
         functions: mappedFunctions,
         fetchedAt: Date.now(),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       error.value = err;
     } finally {
       loading.value = false;

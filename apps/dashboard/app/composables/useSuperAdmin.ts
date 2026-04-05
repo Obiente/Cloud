@@ -107,7 +107,7 @@ export const useSuperAdmin = () => {
           state.value.error = null;
         } else if (err.code === Code.Internal) {
           // Internal server error - log it but don't set allowed to false if already initialized
-          console.error("[SuperAdmin] Internal server error:", err.message);
+          console.error("[SuperAdmin] Internal server error:", (err as Error).message);
           if (!state.value.initialized) {
             // First time fetch failed with 500 - set allowed to false
             state.value.allowed = false;
@@ -115,7 +115,7 @@ export const useSuperAdmin = () => {
             state.value.isFullSuperadmin = false;
           }
           // Otherwise, keep the existing allowed state (don't change it)
-          state.value.error = err.message || "Internal server error";
+          state.value.error = (err as Error).message || "Internal server error";
         } else {
           // Other ConnectError codes - preserve previous allowed state if initialized
           console.error("[SuperAdmin] Unexpected ConnectError:", err);
@@ -126,7 +126,7 @@ export const useSuperAdmin = () => {
             state.value.isFullSuperadmin = false;
           }
           // Otherwise, keep the existing allowed state (don't change it)
-          state.value.error = err.message || String(err);
+          state.value.error = (err as Error).message || String(err);
         }
       } else {
         // Network errors or other errors - preserve previous allowed state if initialized
@@ -139,7 +139,7 @@ export const useSuperAdmin = () => {
           state.value.isFullSuperadmin = false;
         }
         // Otherwise, keep the existing allowed state (don't change it)
-        state.value.error = err instanceof Error ? err.message : String(err);
+        state.value.error = err instanceof Error ? (err as Error).message : String(err);
       }
       return null;
     } finally {
@@ -208,7 +208,7 @@ export const useSuperAdmin = () => {
       return response;
     } catch (err) {
       if (err instanceof ConnectError) {
-        throw new Error(err.message);
+        throw new Error((err as Error).message);
       }
       throw err;
     }
@@ -220,7 +220,7 @@ export const useSuperAdmin = () => {
       return response;
     } catch (err) {
       if (err instanceof ConnectError) {
-        throw new Error(err.message);
+        throw new Error((err as Error).message);
       }
       throw err;
     }
@@ -248,7 +248,7 @@ export const useSuperAdmin = () => {
       return response;
     } catch (err) {
       if (err instanceof ConnectError) {
-        throw new Error(err.message);
+        throw new Error((err as Error).message);
       }
       throw err;
     }

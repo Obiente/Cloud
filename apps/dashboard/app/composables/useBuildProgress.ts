@@ -758,14 +758,14 @@ export function useBuildProgress(options: BuildProgressOptions) {
           updateProgressFromLog(update.line);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.name === "AbortError") {
         return;
       }
       // Suppress benign stream errors
       const isBenignError =
-        err.message?.toLowerCase().includes("missing trailer") ||
-        err.message?.toLowerCase().includes("trailer") ||
+        (err as Error).message?.toLowerCase().includes("missing trailer") ||
+        (err as Error).message?.toLowerCase().includes("trailer") ||
         err.code === "unknown";
 
       if (!isBenignError) {

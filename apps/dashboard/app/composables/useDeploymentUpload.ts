@@ -149,8 +149,8 @@ export function useDeploymentUpload() {
       }
 
       return true;
-    } catch (err: any) {
-      error.value = err?.message || "Upload failed";
+    } catch (err: unknown) {
+      error.value = (err as Error | undefined)?.message || "Upload failed";
       return false;
     } finally {
       isUploading.value = false;

@@ -250,7 +250,7 @@ const fetchSizes = async () => {
   try {
     const response = await client.listVPSSizes({ includeUnavailable: true });
     sizes.value = response.sizes || [];
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to load sizes: ${error?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;
@@ -370,7 +370,7 @@ const saveSize = async () => {
     }
     closeSizeDialog();
     await fetchSizes();
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to save size: ${error?.message || "Unknown error"}`);
   } finally {
     isSaving.value = false;
@@ -392,7 +392,7 @@ const confirmDelete = async () => {
     deleteDialogOpen.value = false;
     sizeToDelete.value = null;
     await fetchSizes();
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to delete size: ${error?.message || "Unknown error"}`);
   } finally {
     isDeleting.value = false;

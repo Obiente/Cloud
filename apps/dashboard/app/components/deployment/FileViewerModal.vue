@@ -225,9 +225,9 @@ const loadFile = async () => {
     } else {
       await initEditor();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load file:", err);
-    error.value = err.message || "Failed to load file content";
+    error.value = (err as Error).message || "Failed to load file content";
   } finally {
     isLoading.value = false;
   }

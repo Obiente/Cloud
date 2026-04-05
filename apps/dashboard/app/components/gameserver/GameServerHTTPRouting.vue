@@ -520,10 +520,10 @@ const addDomain = async () => {
     newDomain.value = "";
     showAddDomain.value = false;
     toast.success("Domain added", "Add the TXT record to verify ownership.");
-  } catch (err: any) {
+  } catch (err: unknown) {
     await showAlert({
       title: "Failed to add domain",
-      message: err?.message || "An error occurred while adding the domain.",
+      message: (err as Error | undefined)?.message || "An error occurred while adding the domain.",
     });
   } finally {
     isAdding.value = false;
@@ -555,8 +555,8 @@ const verifyDomain = async (domain: string) => {
       if (entry) entry.status = res.status as DomainInfo["status"];
       toast.error("Verification failed", "TXT record not found. Ensure it's added and allow DNS propagation.");
     }
-  } catch (err: any) {
-    toast.error("Verification error", err?.message || "Could not verify domain.");
+  } catch (err: unknown) {
+    toast.error("Verification error", (err as Error | undefined)?.message || "Could not verify domain.");
   } finally {
     isVerifying.value = false;
   }
@@ -584,8 +584,8 @@ const removeDomain = async (domain: string) => {
     verifiedDomains.value = verifiedDomains.value.filter((d) => d.domain !== domain);
     routes.value = routes.value.filter((r) => r.domain !== domain);
     toast.success("Domain removed");
-  } catch (err: any) {
-    toast.error("Failed to remove domain", err?.message);
+  } catch (err: unknown) {
+    toast.error("Failed to remove domain", (err as Error | undefined)?.message);
   } finally {
     isRemoving.value = false;
   }
@@ -663,10 +663,10 @@ const saveRule = async () => {
 
     editingRule.value = null;
     toast.success(rule.id ? "Rule updated" : "Rule added", "Server will restart to apply new routing.");
-  } catch (err: any) {
+  } catch (err: unknown) {
     await showAlert({
       title: "Failed to save rule",
-      message: err?.message || "An error occurred.",
+      message: (err as Error | undefined)?.message || "An error occurred.",
     });
   } finally {
     isSavingRule.value = false;
@@ -688,8 +688,8 @@ const deleteRoute = async (routeId: string) => {
     });
     routes.value = routes.value.filter((r) => r.id !== routeId);
     toast.success("Rule deleted");
-  } catch (err: any) {
-    toast.error("Failed to delete rule", err?.message);
+  } catch (err: unknown) {
+    toast.error("Failed to delete rule", (err as Error | undefined)?.message);
   }
 };
 

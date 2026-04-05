@@ -374,16 +374,16 @@ export function useVPSProgress(options: VPSProgressOptions) {
           animateProgress();
         }
       }
-    } catch (err: any) {
-      const message = err?.message?.toLowerCase?.() || "";
+    } catch (err: unknown) {
+      const message = (err as Error | undefined)?.message?.toLowerCase?.() || "";
       const isCanceledCode = err?.code === "canceled" || err?.code === "cancelled";
       if (err.name === "AbortError" || streamController?.signal.aborted || isCanceledCode || message.includes("aborted")) {
         return;
       }
       // Suppress benign stream errors
       const isBenignError =
-        err.message?.toLowerCase().includes("missing trailer") ||
-        err.message?.toLowerCase().includes("trailer") ||
+        (err as Error).message?.toLowerCase().includes("missing trailer") ||
+        (err as Error).message?.toLowerCase().includes("trailer") ||
         err.code === "unknown";
 
       if (!isBenignError) {

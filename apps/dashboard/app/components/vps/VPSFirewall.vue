@@ -467,7 +467,7 @@ async function loadRules() {
     });
     rules.value = res.rules || [];
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load firewall rules";
+    const message = err instanceof Error ? (err as Error).message : "Failed to load firewall rules";
     rulesError.value = message;
     toast.error("Failed to load firewall rules", message);
   } finally {
@@ -488,7 +488,7 @@ async function loadOptions() {
       optionsForm.value.policyOut = res.options.policyOut || "ACCEPT";
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to load firewall options";
+    const message = err instanceof Error ? (err as Error).message : "Failed to load firewall options";
     toast.error("Failed to load firewall options", message);
   }
 }
@@ -509,7 +509,7 @@ async function saveOptions() {
     editingOptions.value = false;
     await loadOptions();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to update firewall options";
+    const message = err instanceof Error ? (err as Error).message : "Failed to update firewall options";
     toast.error("Failed to update firewall options", message);
   } finally {
     savingOptions.value = false;
@@ -609,7 +609,7 @@ async function saveRule() {
     closeDialog();
     await loadRules();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to save firewall rule";
+    const message = err instanceof Error ? (err as Error).message : "Failed to save firewall rule";
     toast.error("Failed to save firewall rule", message);
   } finally {
     savingRule.value = false;
@@ -634,7 +634,7 @@ async function handleDeleteRule(rule: FirewallRule) {
     toast.success("Firewall rule deleted", "The firewall rule has been deleted.");
     await loadRules();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Failed to delete firewall rule";
+    const message = err instanceof Error ? (err as Error).message : "Failed to delete firewall rule";
     toast.error("Failed to delete firewall rule", message);
   }
 }

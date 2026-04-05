@@ -100,9 +100,9 @@ async function loadFile() {
     });
 
     fileContent.value = res.content || "[]"; // Default to empty JSON array for JSON files
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[MinecraftFileEditor] Failed to load file:", err);
-    error.value = err?.message || "Failed to load file";
+    error.value = (err as Error | undefined)?.message || "Failed to load file";
     // Set default content based on file type so editor can initialize
     if (props.filePath.endsWith('.json')) {
       fileContent.value = "[]";
@@ -152,10 +152,10 @@ async function handleSave(content: string) {
 
     fileContent.value = content; // Update local content
     toast.success("File saved successfully");
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[MinecraftFileEditor] Failed to save file:", err);
-    error.value = err?.message || "Failed to save file";
-    toast.error("Failed to save file", err?.message);
+    error.value = (err as Error | undefined)?.message || "Failed to save file";
+    toast.error("Failed to save file", (err as Error | undefined)?.message);
   } finally {
     isSaving.value = false;
   }

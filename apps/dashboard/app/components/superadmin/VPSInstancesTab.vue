@@ -461,7 +461,7 @@ const fetchInstances = async (page: number = 1) => {
     instances.value = response.vpsInstances || [];
     pagination.value = response.pagination;
     currentPage.value = page;
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to load VPS instances: ${error?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;
@@ -517,7 +517,7 @@ const openResizeDialog = async (row: any) => {
         memoryBytes: s.memoryBytes,
         diskBytes: s.diskBytes,
       }));
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to load sizes: ${error?.message || "Unknown error"}`);
   } finally {
     loadingSizes.value = false;
@@ -538,7 +538,7 @@ const handleResize = async () => {
     toast.success(response.message || "VPS resized successfully");
     resizeDialogOpen.value = false;
     await fetchInstances(currentPage.value);
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to resize VPS: ${error?.message || "Unknown error"}`);
   } finally {
     isResizing.value = false;
@@ -569,7 +569,7 @@ const handleSuspend = async () => {
     toast.success(response.message || "VPS suspended successfully");
     suspendDialogOpen.value = false;
     await fetchInstances(currentPage.value);
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to suspend VPS: ${error?.message || "Unknown error"}`);
   } finally {
     isSuspending.value = false;
@@ -586,7 +586,7 @@ const handleUnsuspend = async (row: any) => {
     });
     toast.success(response.message || "VPS unsuspended successfully");
     await fetchInstances(currentPage.value);
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to unsuspend VPS: ${error?.message || "Unknown error"}`);
   }
 };
@@ -635,7 +635,7 @@ const handleForceStop = async () => {
     toast.success(response.message || "VPS force stopped successfully");
     forceStopDialogOpen.value = false;
     await fetchInstances(currentPage.value);
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to force stop VPS: ${error?.message || "Unknown error"}`);
   } finally {
     isForceStopping.value = false;
@@ -666,7 +666,7 @@ const handleForceDelete = async () => {
     toast.success(response.message || "VPS deleted successfully");
     forceDeleteDialogOpen.value = false;
     await fetchInstances(currentPage.value);
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(`Failed to delete VPS: ${error?.message || "Unknown error"}`);
   } finally {
     isForceDeleting.value = false;

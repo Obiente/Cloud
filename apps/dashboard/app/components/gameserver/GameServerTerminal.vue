@@ -421,9 +421,9 @@ const connectTerminal = async () => {
         isLoading.value = false;
       }
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to connect:", err);
-    const errMsg = err.message || "Failed to connect. Please try again.";
+    const errMsg = (err as Error).message || "Failed to connect. Please try again.";
     error.value = errMsg;
     isConnected.value = false;
     isLoading.value = false;

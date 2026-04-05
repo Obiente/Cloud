@@ -31,11 +31,9 @@ export function useFileEditor(
       return;
     }
     if (isSaving.value) {
-      console.log("Save already in progress, skipping");
       return;
     }
 
-    console.log("Starting save for:", currentFilePath.value);
     isSaving.value = true;
     saveStatus.value = "saving";
     saveErrorMessage.value = null;
@@ -45,7 +43,6 @@ export function useFileEditor(
     try {
       await writer(currentFilePath.value, fileContent.value);
 
-      console.log("File saved successfully");
       saveStatus.value = "success";
       originalFileContent.value = fileContent.value;
 
@@ -59,11 +56,11 @@ export function useFileEditor(
           saveStatus.value = "idle";
         }
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("save file error:", err);
       saveStatus.value = "error";
 
-      const errorMsg = err?.message || "Failed to save file. Please try again.";
+      const errorMsg = (err as Error | undefined)?.message || "Failed to save file. Please try again.";
       saveErrorMessage.value = errorMsg;
 
       // Show error message dialog after showing status
@@ -79,7 +76,6 @@ export function useFileEditor(
         // Reset status after showing dialog (5 seconds total)
         setTimeout(() => {
           if (saveStatus.value === "error") {
-            console.log("Resetting save status from error to idle");
             saveStatus.value = "idle";
             saveErrorMessage.value = null;
           }

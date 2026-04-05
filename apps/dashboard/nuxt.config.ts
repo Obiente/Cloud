@@ -6,6 +6,17 @@ const SESSION_PASSWORD_PLACEHOLDER =
 const sessionPassword =
   process.env.NUXT_SESSION_PASSWORD || SESSION_PASSWORD_PLACEHOLDER;
 
+// Fail loudly if the placeholder is still set in production
+if (
+  sessionPassword === SESSION_PASSWORD_PLACEHOLDER &&
+  process.env.NODE_ENV === "production"
+) {
+  throw new Error(
+    "[nuxt.config] NUXT_SESSION_PASSWORD is not set. " +
+      "Provide a strong random secret (≥32 chars) via the NUXT_SESSION_PASSWORD env var."
+  );
+}
+
 export default defineNuxtConfig({
   // Disable devtools in production builds
   devtools: { enabled: process.env.NODE_ENV !== "production" },

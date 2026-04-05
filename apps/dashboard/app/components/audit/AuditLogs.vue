@@ -295,7 +295,7 @@ import {
   DocumentTextIcon,
   EyeIcon,
 } from "@heroicons/vue/24/outline";
-import { AuditService, OrganizationService, type AuditLogEntry } from "@obiente/proto";
+import { AuditService, OrganizationService, type AuditLogEntry, type ListAuditLogsRequest } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { date } from "@obiente/proto/utils";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -341,7 +341,7 @@ const loadFilterOptions = async () => {
   isLoadingFilterOptions.value = true;
 
   try {
-    const request: any = {
+    const request: Partial<ListAuditLogsRequest> = {
       pageSize: 1000, // Load a large sample to get all available filter values
     };
 
@@ -514,7 +514,7 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
   isLoading.value = true;
 
   try {
-    const request: any = {
+    const request: Partial<ListAuditLogsRequest> = {
       pageSize: pageSize.value,
     };
 

@@ -292,12 +292,12 @@ const saveProfile = async () => {
       title: "Profile Updated",
       message: "Your profile has been successfully updated.",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to update profile:", err);
-    saveError.value = err.message || "Failed to update profile. Please try again.";
+    saveError.value = (err as Error).message || "Failed to update profile. Please try again.";
     
     // Handle validation errors
-    if (err.code === "invalid_argument" || err.message?.includes("validation")) {
+    if (err.code === "invalid_argument" || (err as Error).message?.includes("validation")) {
       // Could parse error details here if available
     }
   } finally {

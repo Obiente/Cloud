@@ -484,7 +484,7 @@
 <script setup lang="ts">
   import { ref, reactive, watchEffect, computed, watch, onMounted } from "vue";
   import { LinkIcon, TrashIcon, PencilIcon } from "@heroicons/vue/24/outline";
-  import type { Deployment } from "@obiente/proto";
+  import { type Deployment, type UpdateDeploymentRequest } from "@obiente/proto";
   import {
     DeploymentType,
     Environment as EnvEnum,
@@ -926,12 +926,10 @@
       ) {
         // Integration ID will be set via handleIntegrationIdChange when picker emits it
         // If it's still empty after selection, we'll need to wait for the picker to emit it
-        console.log(
           "[DeploymentSettings] GitHub repo selected, waiting for integration ID..."
         );
       }
       markConfigDirty();
-      console.log(
         "[DeploymentSettings] GitHub repo selected:",
         repoFullName,
         "URL:",
@@ -955,13 +953,10 @@
   };
 
   const handleIntegrationIdChange = (id: string) => {
-    console.log("[DeploymentSettings] handleIntegrationIdChange called with:", id, "current value:", githubIntegrationId.value);
     if (githubIntegrationId.value !== id) {
       githubIntegrationId.value = id;
       markConfigDirty();
-      console.log("[DeploymentSettings] GitHub integration ID changed to:", id);
     } else {
-      console.log("[DeploymentSettings] Integration ID unchanged (already set to:", id, ")");
     }
   };
 
@@ -1020,7 +1015,6 @@
     
     markConfigDirty();
 
-    console.log("[DeploymentSettings] Changed repository - showing current values:", {
       repositoryUrl: config.repositoryUrl,
       selectedGitHubRepo: selectedGitHubRepo.value,
       repositorySource: repositorySource.value,
@@ -1078,7 +1072,6 @@
   );
 
   const handleComposeFromGitHub = (composeContent: string) => {
-    console.log("Compose loaded from GitHub:", composeContent.length, "bytes");
   };
 
   const navigateToGitHubSettings = () => {
@@ -1323,9 +1316,9 @@
       setTimeout(() => {
         saveSuccess.value = false;
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to save general settings:", err);
-      error.value = err.message || "Failed to save settings. Please try again.";
+      error.value = (err as Error).message || "Failed to save settings. Please try again.";
     } finally {
       isSaving.value = false;
     }
@@ -1359,7 +1352,7 @@
     configSuccess.value = false;
 
     try {
-      const updates: any = {
+      const updates: Partial<UpdateDeploymentRequest> = {
         branch:
           config.branch !== undefined && config.branch !== null
             ? config.branch
@@ -1435,7 +1428,6 @@
         updates.githubIntegrationId = trimmed || null;
       }
 
-      console.log("[DeploymentSettings] Saving config:", {
         repositoryUrl: updates.repositoryUrl,
         branch: updates.branch,
         githubIntegrationId: updates.githubIntegrationId,
@@ -1466,10 +1458,10 @@
       setTimeout(() => {
         configSuccess.value = false;
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to save config:", err);
       configError.value =
-        err.message || "Failed to save settings. Please try again.";
+        (err as Error).message || "Failed to save settings. Please try again.";
     } finally {
       isSaving.value = false;
     }
@@ -1488,11 +1480,11 @@
       try {
         await deploymentActions.deleteDeployment(String(route.params.id));
         router.push("/deployments");
-      } catch (err: any) {
+      } catch (err: unknown) {
         await showAlert({
           title: "Failed to Delete",
           message:
-            err.message || "Failed to delete deployment. Please try again.",
+            (err as Error).message || "Failed to delete deployment. Please try again.",
         });
       }
     }

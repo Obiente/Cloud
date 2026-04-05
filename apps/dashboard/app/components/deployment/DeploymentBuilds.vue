@@ -240,11 +240,11 @@ const loadBuilds = async (reset = false) => {
     }
     total.value = response.total;
     offset.value += response.builds.length;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load builds:", error);
     await showAlert({
       title: "Failed to Load Builds",
-      message: error.message || "Failed to load build history. Please try again.",
+      message: (error as Error).message || "Failed to load build history. Please try again.",
     });
   } finally {
     isLoading.value = false;
@@ -286,11 +286,11 @@ const revertToBuild = async (buildId: string) => {
     // Refresh builds and deployment data
     await loadBuilds(true);
     await refreshNuxtData(`deployment-${props.deploymentId}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to revert build:", error);
     await showAlert({
       title: "Failed to Revert",
-      message: error.message || "Failed to revert to the selected build. Please try again.",
+      message: (error as Error).message || "Failed to revert to the selected build. Please try again.",
     });
   } finally {
     isReverting.value = false;
@@ -331,11 +331,11 @@ const deleteBuild = async (buildId: string) => {
     // Remove the build from the list
     builds.value = builds.value.filter(b => b.id !== buildId);
     total.value = Math.max(0, total.value - 1);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to delete build:", error);
     await showAlert({
       title: "Failed to Delete Build",
-      message: error.message || "Failed to delete the build. Please try again.",
+      message: (error as Error).message || "Failed to delete the build. Please try again.",
     });
   } finally {
     isDeleting.value = false;

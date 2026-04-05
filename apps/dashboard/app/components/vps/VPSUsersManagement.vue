@@ -496,7 +496,7 @@
       });
       users.value = res.users || [];
     } catch (err: unknown) {
-      error.value = err instanceof Error ? err.message : "Failed to load users";
+      error.value = err instanceof Error ? (err as Error).message : "Failed to load users";
     } finally {
       loading.value = false;
     }
@@ -589,7 +589,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to create user",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     } finally {
       creatingUser.value = false;
@@ -625,7 +625,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to delete user",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     } finally {
       deletingUser.value = null;
@@ -677,7 +677,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to update SSH keys",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     } finally {
       savingSSHKeys.value = false;
@@ -719,7 +719,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to update password",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     } finally {
       savingPassword.value = false;
@@ -758,7 +758,7 @@
     } catch (err: unknown) {
       toast.error(
         "Failed to remove SSH key",
-        err instanceof Error ? err.message : "Unknown error"
+        err instanceof Error ? (err as Error).message : "Unknown error"
       );
     }
   };

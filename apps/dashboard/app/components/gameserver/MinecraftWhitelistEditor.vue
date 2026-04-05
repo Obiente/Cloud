@@ -359,9 +359,9 @@ async function handleAddPlayer() {
       
       // Reload file immediately - commands are sent via WebSocket and take effect instantly
       emit("reload");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[WhitelistEditor] Failed to send command:", error);
-      toast.error(`Failed to add player: ${error?.message || "Unknown error"}`);
+      toast.error(`Failed to add player: ${(error as Error | undefined)?.message || "Unknown error"}`);
       return;
     }
   } else {
@@ -405,9 +405,9 @@ async function handleRemovePlayer(index: number) {
       
       // Reload file immediately - commands are sent via WebSocket and take effect instantly
       emit("reload");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[WhitelistEditor] Failed to send command:", error);
-      toast.error(`Failed to remove player: ${error?.message || "Unknown error"}`);
+      toast.error(`Failed to remove player: ${(error as Error | undefined)?.message || "Unknown error"}`);
       return;
     }
   } else {

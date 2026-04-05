@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useConnectClient } from "~/lib/connect-client";
-import { DeploymentService } from "@obiente/proto";
+import { DeploymentService, type DeploymentContainer } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
@@ -188,7 +188,7 @@ const loadContainers = async () => {
 
     if (res?.containers) {
       containers.value = res.containers
-        .map((c: any) => ({
+        .map((c: DeploymentContainer) => ({
           containerId: c.containerId,
           serviceName: c.serviceName || undefined,
           status: c.status || "unknown",

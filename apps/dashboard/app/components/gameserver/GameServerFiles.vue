@@ -1064,11 +1064,11 @@
     try {
       // createEntry now handles refreshing the parent directory
       await createEntry(payload as Parameters<typeof createEntry>[0]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create entry:", err);
       await dialog.showAlert({
         title: "Creation Failed",
-        message: err?.message || `Failed to create ${type}. Please try again.`,
+        message: (err as Error | undefined)?.message || `Failed to create ${type}. Please try again.`,
         confirmLabel: "OK",
       });
     }
@@ -1090,7 +1090,7 @@
       console.error("Failed to delete:", err);
       dialog.showAlert({
         title: "Delete Failed",
-        message: err?.message || "Failed to delete item(s). Please try again.",
+        message: (err as Error | undefined)?.message || "Failed to delete item(s). Please try again.",
         confirmLabel: "OK",
       });
     });
@@ -1200,7 +1200,7 @@
   }
 
   function parseFileError(err: any): string {
-    const errorMessage = err?.message || String(err) || "Unknown error";
+    const errorMessage = (err as Error | undefined)?.message || String(err) || "Unknown error";
 
     // Check for device file errors
     if (
@@ -1320,7 +1320,6 @@
 
     // Prevent concurrent loads of the same file
     if (isLoadingFile.value && currentFilePath.value === node.path) {
-      console.log(
         "[handleLoadFile] Already loading this file, skipping duplicate request"
       );
       return;
@@ -1386,7 +1385,6 @@
 
       // Verify this request is still valid (file hasn't changed during load)
       if (currentFilePath.value !== requestPath) {
-        console.log(
           "[handleLoadFile] File changed during load, discarding stale response"
         );
         return;
@@ -1468,10 +1466,9 @@
       }
 
       fileError.value = null; // Clear error on success
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
-      if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
-        console.log("[handleLoadFile] Request was aborted");
+      if (err?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         return;
       }
 
@@ -1507,20 +1504,15 @@
       return;
     }
     if (isSaving.value) {
-      console.log("Save already in progress, skipping");
       return; // Prevent double-saving
     }
 
-    console.log("Starting save for:", currentFilePath.value);
-    console.log("Current saveStatus before save:", saveStatus.value);
     isSaving.value = true;
     saveStatus.value = "saving";
-    console.log("Save status set to 'saving':", saveStatus.value);
     saveErrorMessage.value = null;
 
     // Force Vue to update by using nextTick
     await nextTick();
-    console.log("After nextTick, saveStatus:", saveStatus.value);
 
     try {
       await writeFile({
@@ -1529,7 +1521,6 @@
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
 
-      console.log("File saved successfully");
       saveStatus.value = "success";
       // Update original content to match saved content
       originalFileContent.value = fileContent.value;
@@ -1540,11 +1531,11 @@
           saveStatus.value = "idle";
         }
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("save file error:", err);
       saveStatus.value = "error";
 
-      const errorMsg = err?.message || "Failed to save file. Please try again.";
+      const errorMsg = (err as Error | undefined)?.message || "Failed to save file. Please try again.";
       saveErrorMessage.value = errorMsg;
 
       // Show error message dialog after showing status
@@ -1560,7 +1551,6 @@
         // Reset status after showing dialog (5 seconds total)
         setTimeout(() => {
           if (saveStatus.value === "error") {
-            console.log("Resetting save status from error to idle");
             saveStatus.value = "idle";
             saveErrorMessage.value = null;
           }
@@ -1930,7 +1920,7 @@
       // Cleanup
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to download file:", err);
       // Show user-friendly error
       const errorMsg = parseFileError(err);
@@ -1961,7 +1951,6 @@
 
   // Handle node selection
   function handleNodeSelect(node: ExplorerNode, event: MouseEvent) {
-    console.log("[GameServerFiles] handleNodeSelect called", {
       path: node.path,
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
@@ -1969,7 +1958,6 @@
     });
 
     multiSelect.handleNodeClick(node, event, (selectedPaths) => {
-      console.log("[GameServerFiles] Selection changed callback", {
         selectedPaths,
         selectedCount: selectedPaths.length,
       });
@@ -2160,9 +2148,9 @@
           response.error || "Failed to create archive"
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create archive:", err);
-      toast.error("Archive Error", err?.message || "Failed to create archive");
+      toast.error("Archive Error", (err as Error | undefined)?.message || "Failed to create archive");
     }
   }
 
@@ -2233,11 +2221,11 @@
           response.error || "Failed to extract archive"
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to extract zip:", err);
       toast.error(
         "Extraction Error",
-        err?.message || "Failed to extract archive"
+        (err as Error | undefined)?.message || "Failed to extract archive"
       );
     }
   }
@@ -2565,7 +2553,7 @@
       } else {
         await refreshRoot();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
       
       // Clear node progress
@@ -2574,10 +2562,10 @@
       // Dismiss loading toast and show error
       toast.dismiss(progressToastId);
       
-      if (abortController.signal.aborted || error.message === "Upload cancelled") {
+      if (abortController.signal.aborted || (error as Error).message === "Upload cancelled") {
         toast.info("Upload cancelled", "Upload was stopped");
       } else {
-        toast.error("Upload Error", error.message || "Failed to upload files");
+        toast.error("Upload Error", (error as Error).message || "Failed to upload files");
       }
     } finally {
       isDragDropUploading.value = false;

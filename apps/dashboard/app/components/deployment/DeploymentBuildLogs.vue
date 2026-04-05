@@ -229,15 +229,15 @@ const startStream = async () => {
         logs.value = newLogs;
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Suppress benign stream closure errors if we successfully received logs
     // These are Connect/gRPC-Web quirks where streams can end without
     // proper HTTP trailers or end-of-stream markers, but the stream itself worked correctly
     const isBenignStreamError =
-      error.message?.toLowerCase().includes("missing trailer") ||
-      error.message?.toLowerCase().includes("trailer") ||
-      error.message?.toLowerCase().includes("missing endstreamresponse") ||
-      error.message?.toLowerCase().includes("endstreamresponse") ||
+      (error as Error).message?.toLowerCase().includes("missing trailer") ||
+      (error as Error).message?.toLowerCase().includes("trailer") ||
+      (error as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
+      (error as Error).message?.toLowerCase().includes("endstreamresponse") ||
       error.code === "unknown";
 
     if (error.name === "AbortError") {
@@ -250,14 +250,14 @@ const startStream = async () => {
     if (!isBenignStreamError || !hasReceivedLogs) {
       console.error("Build log stream error:", error);
       logs.value.push({
-        line: `[error] Failed to stream build logs: ${error.message}`,
+        line: `[error] Failed to stream build logs: ${(error as Error).message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
         logLevel: 5, // ERROR
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
-      console.debug("Stream ended with benign error (expected):", error.message);
+      console.debug("Stream ended with benign error (expected):", (error as Error).message);
     }
   } finally {
     isLoading.value = false;
@@ -336,7 +336,7 @@ const loadLatestBuildLogs = async () => {
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load latest build logs:", error);
     // Don't show error to user, just log it
   } finally {

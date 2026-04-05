@@ -76,9 +76,9 @@ export function useFileBrowserSearch(
 
       searchResults.value = response.results;
       hasCompletedSearch.value = true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Search failed:", err);
-      searchError.value = err?.message || "Failed to search files";
+      searchError.value = (err as Error | undefined)?.message || "Failed to search files";
       searchResults.value = [];
       hasCompletedSearch.value = true;
     } finally {

@@ -919,8 +919,6 @@ const loadHistoricalMetrics = async () => {
   try {
     const { startTime, endTime } = getTimeRange();
 
-    console.log("[GameServerMetrics] Loading metrics for game server:", props.gameServerId);
-    console.log("[GameServerMetrics] Time range:", { startTime, endTime });
     const res = await client.getGameServerMetrics({
       gameServerId: props.gameServerId,
       startTime: {
@@ -933,8 +931,6 @@ const loadHistoricalMetrics = async () => {
       },
     });
 
-    console.log("[GameServerMetrics] Received metrics response:", res);
-    console.log("[GameServerMetrics] Metrics count:", res.metrics?.length || 0);
 
     if (res.metrics && res.metrics.length > 0) {
       const timestamps: string[] = [];
@@ -973,7 +969,7 @@ const loadHistoricalMetrics = async () => {
     console.error("[GameServerMetrics] Failed to load historical metrics:", err);
     // Show error to user
     if (err instanceof Error) {
-      console.error("[GameServerMetrics] Error details:", err.message, err.stack);
+      console.error("[GameServerMetrics] Error details:", (err as Error).message, err.stack);
     }
   }
 };
@@ -1034,7 +1030,6 @@ const scheduleReconnect = () => {
     if (!streaming.value || props.gameServerStatus !== 3) {
       return;
     }
-    console.log(
       `[GameServerMetrics] Attempting to reconnect stream (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
     );
     await startStreaming();
@@ -1057,7 +1052,6 @@ const startStreaming = async () => {
   streamController = new AbortController();
 
   try {
-    console.log("[GameServerMetrics] Starting metrics stream for game server:", props.gameServerId);
     
     // Call the stream method - Connect-RPC server streaming methods return async iterables
     const stream = await (client as any).streamGameServerMetrics(
@@ -1069,20 +1063,16 @@ const startStreaming = async () => {
       }
     );
 
-    console.log("[GameServerMetrics] Stream started, listening for metrics...");
-    console.log("[GameServerMetrics] Current game server status:", props.gameServerStatus, "type:", typeof props.gameServerStatus);
     reconnectAttempts = 0; // Reset on successful connection
     
     // Iterate over the stream
     for await (const metric of stream) {
       if (streamController?.signal.aborted) {
-        console.log("[GameServerMetrics] Stream aborted, stopping...");
         break;
       }
       
       // Only process metrics if we're still supposed to be streaming
       if (!streaming.value) {
-        console.log("[GameServerMetrics] Streaming disabled, stopping...");
         break;
       }
       
@@ -1092,25 +1082,21 @@ const startStreaming = async () => {
       // Only stop if status is explicitly set and not RUNNING
       const currentStatus = props.gameServerStatus;
       if (currentStatus !== undefined && currentStatus !== null && currentStatus !== 3) {
-        console.log("[GameServerMetrics] Game server not running (status:", currentStatus, "type:", typeof currentStatus, "), stopping stream...");
         break;
       }
       // If status is undefined/null, continue streaming (data might still be loading)
       
-      console.log("[GameServerMetrics] Received metric:", metric);
       addMetricPoint(metric);
     }
     
-    console.log("[GameServerMetrics] Stream ended");
     
     // If we're still supposed to be streaming and server is running, reconnect
     if (streaming.value && props.gameServerStatus === 3 && !streamController?.signal.aborted) {
       scheduleReconnect();
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === "AbortError" || streamController?.signal.aborted) {
       // User intentionally cancelled
-      console.log("[GameServerMetrics] Stream aborted");
       streaming.value = false;
       streamController = null;
       return;
@@ -1118,27 +1104,27 @@ const startStreaming = async () => {
 
     // Suppress "missing trailer" errors if we successfully received metrics
     const isMissingTrailerError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
-      err.message?.toLowerCase().includes("missing endstreamresponse") ||
-      err.message?.toLowerCase().includes("endstreamresponse") ||
-      err.message?.toLowerCase().includes("unimplemented") ||
-      err.message?.toLowerCase().includes("not fully implemented") ||
+      (err as Error).message?.toLowerCase().includes("missing trailer") ||
+      (err as Error).message?.toLowerCase().includes("trailer") ||
+      (err as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
+      (err as Error).message?.toLowerCase().includes("endstreamresponse") ||
+      (err as Error).message?.toLowerCase().includes("unimplemented") ||
+      (err as Error).message?.toLowerCase().includes("not fully implemented") ||
       err.code === "unknown";
 
     if (!isMissingTrailerError) {
       console.error("[GameServerMetrics] Failed to stream metrics:", err);
       if (err instanceof Error) {
-        console.error("[GameServerMetrics] Stream error details:", err.message, err.stack);
+        console.error("[GameServerMetrics] Stream error details:", (err as Error).message, err.stack);
       }
       
       // Check if it's a network/connection error (502, 503, etc.)
       const isNetworkError =
-        err.message?.toLowerCase().includes("networkerror") ||
-        err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("502") ||
-        err.message?.toLowerCase().includes("503") ||
-        err.message?.toLowerCase().includes("504") ||
+        (err as Error).message?.toLowerCase().includes("networkerror") ||
+        (err as Error).message?.toLowerCase().includes("failed to fetch") ||
+        (err as Error).message?.toLowerCase().includes("502") ||
+        (err as Error).message?.toLowerCase().includes("503") ||
+        (err as Error).message?.toLowerCase().includes("504") ||
         err.code === "ECONNREFUSED" ||
         err.code === "ETIMEDOUT";
       

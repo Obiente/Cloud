@@ -470,10 +470,10 @@
           isLoading.value = false;
         }
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to connect terminal:", err);
       const errMsg =
-        err.message || "Failed to connect terminal. Please try again.";
+        (err as Error).message || "Failed to connect terminal. Please try again.";
       error.value = errMsg;
 
       if (terminal) {

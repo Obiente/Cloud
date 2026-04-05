@@ -1118,11 +1118,11 @@
     try {
       // createEntry now handles refreshing the parent directory
       await createEntry(payload as Parameters<typeof createEntry>[0]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create entry:", err);
       await dialog.showAlert({
         title: "Creation Failed",
-        message: err?.message || `Failed to create ${type}. Please try again.`,
+        message: (err as Error | undefined)?.message || `Failed to create ${type}. Please try again.`,
         confirmLabel: "OK",
       });
     }
@@ -1140,11 +1140,11 @@
     }
 
     // Delete is now non-blocking and handles its own optimistic updates
-    deleteEntries(paths).catch((err: any) => {
+    deleteEntries(paths).catch((err: unknown) => {
       console.error("Failed to delete:", err);
       dialog.showAlert({
         title: "Delete Failed",
-        message: err?.message || "Failed to delete item(s). Please try again.",
+        message: (err as Error | undefined)?.message || "Failed to delete item(s). Please try again.",
         confirmLabel: "OK",
       });
     });
@@ -1253,8 +1253,8 @@
       : errorMessage;
   }
 
-  function parseFileError(err: any): string {
-    const errorMessage = err?.message || String(err) || "Unknown error";
+  function parseFileError(err: unknown): string {
+    const errorMessage = (err as Error | undefined)?.message || String(err) || "Unknown error";
 
     // Check for device file errors
     if (
@@ -1532,9 +1532,9 @@
       }
 
       fileError.value = null; // Clear error on success
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
-      if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
+      if (err?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         return;
       }
 
@@ -1596,11 +1596,11 @@
           saveStatus.value = "idle";
         }
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("save file error:", err);
       saveStatus.value = "error";
 
-      const errorMsg = err?.message || "Failed to save file. Please try again.";
+      const errorMsg = (err as Error | undefined)?.message || "Failed to save file. Please try again.";
       saveErrorMessage.value = errorMsg;
 
       // Show error message dialog after showing status
@@ -1993,7 +1993,7 @@
       // Cleanup
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to download file:", err);
       // Show user-friendly error
       const errorMsg = parseFileError(err);
@@ -2221,9 +2221,9 @@
           response.error || "Failed to create archive"
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to create archive:", err);
-      toast.error("Archive Error", err?.message || "Failed to create archive");
+      toast.error("Archive Error", (err as Error | undefined)?.message || "Failed to create archive");
     }
   }
 
@@ -2302,11 +2302,11 @@
           response.error || "Failed to extract archive"
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to extract zip:", err);
       toast.error(
         "Extraction Error",
-        err?.message || "Failed to extract archive"
+        (err as Error | undefined)?.message || "Failed to extract archive"
       );
     }
   }
@@ -2586,7 +2586,7 @@
           response.error || "Failed to upload files"
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload error:", error);
 
       // Clear node progress
@@ -2594,7 +2594,7 @@
 
       // Dismiss loading toast and show error
       toast.dismiss(progressToastId);
-      toast.error("Upload Error", error.message || "Failed to upload files");
+      toast.error("Upload Error", (error as Error).message || "Failed to upload files");
     } finally {
       isDragDropUploading.value = false;
       dragDropUploadingFileCount.value = 0;

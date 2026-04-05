@@ -350,7 +350,7 @@ const connectTerminal = async () => {
     };
   } catch (err) {
     console.error("Failed to connect terminal:", err);
-    error.value = err instanceof Error ? err.message : "Failed to connect";
+    error.value = err instanceof Error ? (err as Error).message : "Failed to connect";
     isLoading.value = false;
   }
 };

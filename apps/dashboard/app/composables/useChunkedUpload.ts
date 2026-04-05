@@ -152,9 +152,9 @@ export function useChunkedUpload() {
                   etaSeconds: eta,
                 });
               }
-            } catch (err: any) {
+            } catch (err: unknown) {
               failed = true;
-              error.value = err?.message || `Failed to upload chunk ${chunkIndex}`;
+              error.value = (err as Error | undefined)?.message || `Failed to upload chunk ${chunkIndex}`;
               return;
             }
           })
@@ -187,8 +187,8 @@ export function useChunkedUpload() {
       }
 
       return true;
-    } catch (err: any) {
-      error.value = err?.message || "Upload failed";
+    } catch (err: unknown) {
+      error.value = (err as Error | undefined)?.message || "Upload failed";
       return false;
     } finally {
       isUploading.value = false;

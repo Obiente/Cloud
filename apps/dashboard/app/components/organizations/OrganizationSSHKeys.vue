@@ -65,7 +65,7 @@ const fetchSSHKeys = async () => {
       createdAt: key.createdAt as { seconds: number | bigint; nanos: number } | undefined,
     }));
   } catch (err: unknown) {
-    sshKeysError.value = err instanceof Error ? err.message : "Unknown error";
+    sshKeysError.value = err instanceof Error ? (err as Error).message : "Unknown error";
     sshKeys.value = [];
   } finally {
     sshKeysLoading.value = false;
@@ -107,9 +107,9 @@ const addSSHKey = async () => {
     await fetchSSHKeys();
   } catch (err: unknown) {
     if (err instanceof ConnectError) {
-      addSSHKeyError.value = err.message || "Failed to add SSH key";
+      addSSHKeyError.value = (err as Error).message || "Failed to add SSH key";
     } else {
-      addSSHKeyError.value = err instanceof Error ? err.message : "Unknown error";
+      addSSHKeyError.value = err instanceof Error ? (err as Error).message : "Unknown error";
     }
     toast.error("Failed to add SSH key", addSSHKeyError.value);
   } finally {
@@ -142,9 +142,9 @@ const updateSSHKey = async () => {
     await fetchSSHKeys();
   } catch (err: unknown) {
     if (err instanceof ConnectError) {
-      editingSSHKeyError.value = err.message || "Failed to update SSH key";
+      editingSSHKeyError.value = (err as Error).message || "Failed to update SSH key";
     } else {
-      editingSSHKeyError.value = err instanceof Error ? err.message : "Unknown error";
+      editingSSHKeyError.value = err instanceof Error ? (err as Error).message : "Unknown error";
     }
     toast.error("Failed to update SSH key", editingSSHKeyError.value);
   } finally {
@@ -224,7 +224,7 @@ const removeSSHKey = async (keyId: string) => {
     }
     await fetchSSHKeys();
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = err instanceof Error ? (err as Error).message : "Unknown error";
     toast.error("Failed to remove SSH key", message);
   } finally {
     removingSSHKey.value = null;

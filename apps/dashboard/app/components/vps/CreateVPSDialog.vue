@@ -930,10 +930,10 @@
           // In this case, the VPS might still have been created successfully
           const isTimeoutError = 
             err instanceof Error && (
-              err.message.includes("context canceled") ||
-              err.message.includes("timeout") ||
-              err.message.includes("NetworkError") ||
-              err.message.includes("Failed to fetch")
+              (err as Error).message.includes("context canceled") ||
+              (err as Error).message.includes("timeout") ||
+              (err as Error).message.includes("NetworkError") ||
+              (err as Error).message.includes("Failed to fetch")
             );
           
           if (isTimeoutError) {

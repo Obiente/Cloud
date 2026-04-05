@@ -297,8 +297,8 @@
         gameServerId: props.gameServer.id,
       });
       emit("refresh");
-    } catch (error: any) {
-      const errorMessage = error?.message || "Unknown error";
+    } catch (error: unknown) {
+      const errorMessage = (error as Error | undefined)?.message || "Unknown error";
 
       // Check for common configuration errors
       let hint = "";
@@ -343,7 +343,7 @@
     } catch (error) {
       await showAlert({
         title: "Failed to stop game server",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? (error as Error).message : "Unknown error",
       });
     } finally {
       isActioning.value = false;

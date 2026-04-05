@@ -156,13 +156,13 @@ import { formatBytes } from "~/utils/common";
 import { useDialog } from "~/composables/useDialog";
 import { useToast } from "~/composables/useToast";
 import { useConnectClient } from "~/lib/connect-client";
-import { DatabaseService } from "@obiente/proto";
+import { DatabaseService, type DatabaseInstance } from "@obiente/proto";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import ResourceCard from "~/components/shared/ResourceCard.vue";
 import OuiCode from "~/components/oui/Code.vue";
 
 const props = defineProps<{
-  database?: any;
+  database?: DatabaseInstance;
   loading?: boolean;
 }>();
 

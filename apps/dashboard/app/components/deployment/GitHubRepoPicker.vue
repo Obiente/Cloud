@@ -168,7 +168,7 @@ const loadAvailableIntegrations = async () => {
     if (availableIntegrations.value.length === 0) {
       error.value = "No GitHub accounts connected. Please connect a GitHub account in Settings > Integrations.";
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load GitHub integrations:", err);
     error.value = "Failed to load GitHub accounts. Please ensure your GitHub account is connected in Settings.";
     availableIntegrations.value = [];
@@ -217,11 +217,11 @@ const refreshRepos = async () => {
       const accountName = integration?.username || "this account";
       error.value = `No repositories found for ${accountName}. Make sure the account has access to repositories.`;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load repos:", err);
     const integration = availableIntegrations.value.find(i => i.id === selectedIntegrationId.value);
     const accountName = integration?.username || "the selected account";
-    error.value = `Failed to load repositories for ${accountName}. ${err.message || "Please ensure the GitHub account is properly connected."}`;
+    error.value = `Failed to load repositories for ${accountName}. ${(err as Error).message || "Please ensure the GitHub account is properly connected."}`;
     repos.value = [];
   } finally {
     isLoading.value = false;
@@ -263,9 +263,9 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
     } else {
       error.value = "No branches found for this repository.";
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load branches:", err);
-    error.value = `Failed to load branches for this repository: ${err.message || err}`;
+    error.value = `Failed to load branches for this repository: ${(err as Error).message || err}`;
     branches.value = [];
   } finally {
     isLoadingBranches.value = false;
@@ -290,7 +290,7 @@ const loadComposeFile = async () => {
       path: "docker-compose.yml",
     });
     emit("composeLoaded", res.content || "");
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load compose file:", err);
     error.value = "docker-compose.yml not found in this repository/branch.";
   } finally {

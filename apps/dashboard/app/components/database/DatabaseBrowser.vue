@@ -605,7 +605,7 @@ import {
   ClipboardDocumentIcon,
 } from "@heroicons/vue/24/outline";
 import { ref, computed, onMounted, onUnmounted, toRef, watch, nextTick } from "vue";
-import { DatabaseService } from "@obiente/proto";
+import { DatabaseService, type QueryResultRow } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
@@ -929,15 +929,15 @@ async function loadTableData() {
     });
 
     dataResponse.value = res;
-    dataRows.value = (res.rows || []).map((row: any, idx: number) => {
+    dataRows.value = (res.rows || []).map((row: QueryResultRow, idx: number) => {
       const obj: Record<string, any> = { __rowIdx: idx };
       for (const cell of row.cells || []) {
         obj[cell.columnName] = cell.isNull ? null : cell.value;
       }
       return obj;
     });
-  } catch (err: any) {
-    toast.error("Failed to load table data", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to load table data", (err as Error).message);
   } finally {
     dataLoading.value = false;
   }
@@ -1025,8 +1025,8 @@ async function saveEdits() {
     pendingEdits.value.clear();
     toast.success("Changes saved");
     loadTableData();
-  } catch (err: any) {
-    toast.error("Failed to save changes", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to save changes", (err as Error).message);
   } finally {
     savingEdits.value = false;
   }
@@ -1065,8 +1065,8 @@ async function confirmInsertRow() {
     newRowValues.value = {};
     toast.success("Row inserted");
     loadTableData();
-  } catch (err: any) {
-    toast.error("Failed to insert row", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to insert row", (err as Error).message);
   }
 }
 
@@ -1106,8 +1106,8 @@ async function deleteRow(rowIdx: number) {
     });
     toast.success("Row deleted");
     loadTableData();
-  } catch (err: any) {
-    toast.error("Failed to delete row", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to delete row", (err as Error).message);
   }
 }
 
@@ -1123,8 +1123,8 @@ async function loadTableDDL() {
       tableName: selectedTableName.value,
     });
     tableDDL.value = res.ddl;
-  } catch (err: any) {
-    toast.error("Failed to load DDL", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to load DDL", (err as Error).message);
     tableDDL.value = "";
   } finally {
     loadingDDL.value = false;
@@ -1185,8 +1185,8 @@ async function addColumn() {
     showAddColumn.value = false;
     newColumn.value = { name: "", dataType: "varchar(255)", isNullable: true, defaultValue: "", isUnique: false };
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to add column", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to add column", (err as Error).message);
   }
 }
 
@@ -1217,8 +1217,8 @@ async function dropColumn(colName: string) {
     });
     toast.success(`Column "${colName}" dropped`);
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to drop column", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to drop column", (err as Error).message);
   }
 }
 
@@ -1242,8 +1242,8 @@ async function createIndex() {
     showCreateIndex.value = false;
     newIndex.value = { name: "", columnNames: [], isUnique: false };
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to create index", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to create index", (err as Error).message);
   }
 }
 
@@ -1269,8 +1269,8 @@ async function dropIndex(indexName: string) {
     });
     toast.success(`Index "${indexName}" dropped`);
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to drop index", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to drop index", (err as Error).message);
   }
 }
 
@@ -1289,8 +1289,8 @@ async function renameTable() {
     showRenameTable.value = false;
     selectedTableName.value = renameTableName.value;
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to rename table", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to rename table", (err as Error).message);
   }
 }
 
@@ -1319,8 +1319,8 @@ async function truncateSelectedTable(table: SchemaTable) {
       loadTableData();
     }
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to truncate table", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to truncate table", (err as Error).message);
   }
 }
 
@@ -1352,8 +1352,8 @@ async function dropSelectedTable(table: SchemaTable) {
       dataRows.value = [];
     }
     refreshSchema();
-  } catch (err: any) {
-    toast.error("Failed to drop table", err.message);
+  } catch (err: unknown) {
+    toast.error("Failed to drop table", (err as Error).message);
   }
 }
 

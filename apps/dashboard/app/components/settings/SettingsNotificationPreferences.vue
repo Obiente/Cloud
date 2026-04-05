@@ -217,9 +217,9 @@ async function loadNotificationTypes() {
   try {
     const response = await client.getNotificationTypes({});
     notificationTypes.value = response.types || [];
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load notification types:", err);
-    error.value = err.message || "Failed to load notification types";
+    error.value = (err as Error).message || "Failed to load notification types";
   }
 }
 
@@ -234,9 +234,9 @@ async function loadPreferences() {
     });
     preferences.value = prefsMap;
     originalPreferences.value = new Map(prefsMap);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load preferences:", err);
-    error.value = err.message || "Failed to load preferences";
+    error.value = (err as Error).message || "Failed to load preferences";
   }
 }
 
@@ -310,9 +310,9 @@ async function savePreferences() {
       "Preferences Saved",
       "Your notification preferences have been saved successfully."
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to save preferences:", err);
-    const errorMessage = err.message || "Failed to save preferences";
+    const errorMessage = (err as Error).message || "Failed to save preferences";
     error.value = errorMessage;
     // Don't update preferences on error - keep the existing state
     toast.error("Failed to Save Preferences", errorMessage);
