@@ -137,6 +137,21 @@ func (r *RouteRegistry) LookupByRedisPort(port int) (*Route, bool) {
 	return route, ok
 }
 
+// UpdateCredentials refreshes in-memory credentials for an existing route.
+func (r *RouteRegistry) UpdateCredentials(databaseID, username, password string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	route, ok := r.routesByID[databaseID]
+	if !ok {
+		return false
+	}
+
+	route.Username = username
+	route.Password = password
+	return true
+}
+
 // AllocateRedisPort allocates a port for a Redis instance
 func (r *RouteRegistry) AllocateRedisPort(databaseID string) (int, error) {
 	r.redisMu.Lock()

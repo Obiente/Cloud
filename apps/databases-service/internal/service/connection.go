@@ -2,6 +2,7 @@ package databases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -14,7 +15,10 @@ import (
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
 
 	"connectrpc.com/connect"
+	"github.com/redis/go-redis/v9"
 )
+
+var errPasswordResetUnsupported = errors.New("password reset is not supported for this database type")
 
 // GetDatabaseConnectionInfo gets connection information for a database
 func (s *Service) GetDatabaseConnectionInfo(ctx context.Context, req *connect.Request[databasesv1.GetDatabaseConnectionInfoRequest]) (*connect.Response[databasesv1.GetDatabaseConnectionInfoResponse], error) {
@@ -172,6 +176,9 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 	resetCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := s.applyPrimaryDatabasePassword(resetCtx, req.Msg.GetDatabaseId(), databasesv1.DatabaseType(dbInstance.Type), username, newPassword); err != nil {
+		if errors.Is(err, errPasswordResetUnsupported) {
+			return nil, connect.NewError(connect.CodeUnimplemented, err)
+		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to reset password in database engine: %w", err))
 	}
 
@@ -189,6 +196,9 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 	conn.Password = encryptedPassword
 	if err := s.connRepo.Update(ctx, conn); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update password: %w", err))
+	}
+	if s.routeRegistry != nil {
+		s.routeRegistry.UpdateCredentials(req.Msg.GetDatabaseId(), conn.Username, encryptedPassword)
 	}
 
 	res := connect.NewResponse(&databasesv1.ResetDatabasePasswordResponse{
@@ -241,9 +251,42 @@ func (s *Service) applyPrimaryDatabasePassword(ctx context.Context, databaseID s
 		}
 		return fmt.Errorf("mysql password update failed: %w", resetErr)
 	case databasesv1.DatabaseType_MONGODB:
-		return fmt.Errorf("password reset is not implemented yet for mongodb databases")
+		return fmt.Errorf("%w: mongodb databases", errPasswordResetUnsupported)
 	case databasesv1.DatabaseType_REDIS:
-		return fmt.Errorf("password reset is not implemented yet for redis databases")
+		_, _, directHost, directPort, currentPassword, err := s.resolveDirectConnectionDetails(ctx, databaseID)
+		if err != nil {
+			return err
+		}
+
+		redisAddr := fmt.Sprintf("%s:%d", directHost, directPort)
+		client := redis.NewClient(&redis.Options{
+			Addr:         redisAddr,
+			Password:     currentPassword,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 5 * time.Second,
+		})
+		defer client.Close()
+
+		if err := client.Ping(ctx).Err(); err != nil {
+			client.Close()
+			client = redis.NewClient(&redis.Options{
+				Addr:         redisAddr,
+				DialTimeout:  5 * time.Second,
+				ReadTimeout:  5 * time.Second,
+				WriteTimeout: 5 * time.Second,
+			})
+			defer client.Close()
+			if retryErr := client.Ping(ctx).Err(); retryErr != nil {
+				return fmt.Errorf("redis connection failed: %w", err)
+			}
+		}
+
+		if err := client.Do(ctx, "CONFIG", "SET", "requirepass", newPassword).Err(); err != nil {
+			return fmt.Errorf("redis password update failed: %w", err)
+		}
+		_ = client.Do(ctx, "CONFIG", "REWRITE").Err()
+		return nil
 	default:
 		return fmt.Errorf("unsupported database type %d", dbType)
 	}

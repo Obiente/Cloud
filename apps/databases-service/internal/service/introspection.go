@@ -8,27 +8,22 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
 
 	"connectrpc.com/connect"
 )
 
-// openDirectConnection opens a direct SQL connection to a database using the overlay network,
-// matching the pattern from query.go. It handles wake/sleep, password decryption, etc.
-func (s *Service) openDirectConnection(ctx context.Context, databaseID string, dbName string) (*sql.DB, int32, error) {
+func (s *Service) resolveDirectConnectionDetails(ctx context.Context, databaseID string) (*database.DatabaseInstance, *database.DatabaseConnection, string, int32, string, error) {
 	dbInstance, err := s.repo.GetByID(ctx, databaseID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("database not found: %w", err)
+		return nil, nil, "", 0, "", fmt.Errorf("database not found: %w", err)
 	}
 
 	conn, err := s.connRepo.GetByDatabaseID(ctx, databaseID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get connection info: %w", err)
-	}
-
-	if dbName == "" {
-		dbName = conn.DatabaseName
+		return nil, nil, "", 0, "", fmt.Errorf("failed to get connection info: %w", err)
 	}
 
 	directHost := fmt.Sprintf("obiente-%s", databaseID)
@@ -38,15 +33,14 @@ func (s *Service) openDirectConnection(ctx context.Context, databaseID string, d
 			directPort = int32(route.InternalPort)
 			if route.Stopped {
 				if route.DBStatus == 5 { // STOPPED
-					return nil, 0, fmt.Errorf("database is stopped")
+					return nil, nil, "", 0, "", fmt.Errorf("database is stopped")
 				}
-				// SLEEPING - wake it
 				if s.routeRegistry.OnWake != nil {
 					wakeCtx, wakeCancel := s.detachedContext(30 * time.Second)
 					ip, err := s.routeRegistry.OnWake(wakeCtx, route)
 					wakeCancel()
 					if err != nil {
-						return nil, 0, fmt.Errorf("failed to wake database: %w", err)
+						return nil, nil, "", 0, "", fmt.Errorf("failed to wake database: %w", err)
 					}
 					directHost = ip
 				}
@@ -59,6 +53,21 @@ func (s *Service) openDirectConnection(ctx context.Context, databaseID string, d
 		if decrypted, err := s.secretManager.DecryptPassword(conn.Password); err == nil {
 			password = decrypted
 		}
+	}
+
+	return dbInstance, conn, directHost, directPort, password, nil
+}
+
+// openDirectConnection opens a direct SQL connection to a database using the overlay network,
+// matching the pattern from query.go. It handles wake/sleep, password decryption, etc.
+func (s *Service) openDirectConnection(ctx context.Context, databaseID string, dbName string) (*sql.DB, int32, error) {
+	dbInstance, conn, directHost, directPort, password, err := s.resolveDirectConnectionDetails(ctx, databaseID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if dbName == "" {
+		dbName = conn.DatabaseName
 	}
 
 	dbType := databasesv1.DatabaseType(dbInstance.Type)

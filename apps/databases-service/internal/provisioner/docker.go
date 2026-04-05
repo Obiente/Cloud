@@ -119,6 +119,7 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 
 	// Build environment variables for database initialization
 	env := []string{}
+	var cmd []string
 
 	switch cfg.Type {
 	case DatabaseType_POSTGRESQL:
@@ -140,6 +141,8 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 			fmt.Sprintf("MONGO_INITDB_ROOT_PASSWORD=%s", cfg.Password),
 			fmt.Sprintf("MONGO_INITDB_DATABASE=%s", cfg.DatabaseID),
 		)
+	case DatabaseType_REDIS:
+		cmd = []string{"redis-server", "--requirepass", cfg.Password}
 	}
 
 	// Create container using docker client
@@ -148,6 +151,7 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 		Image:  image,
 		Env:    env,
 		Labels: labels,
+		Cmd:    cmd,
 		// Don't expose ports - Traefik will handle routing
 		// PortBindings: nil,
 		Networks:      []string{"obiente-databases"},
