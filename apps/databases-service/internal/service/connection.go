@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
@@ -47,7 +48,10 @@ func (s *Service) GetDatabaseConnectionInfo(ctx context.Context, req *connect.Re
 	// Determine proxy host and port for connection info
 	proxyHost := os.Getenv("DATABASE_PROXY_HOST")
 	if proxyHost == "" {
-		proxyHost = conn.Host
+		proxyHost = database.DefaultMyObienteCloudDomain(req.Msg.GetDatabaseId())
+		if proxyHost == "" {
+			proxyHost = conn.Host
+		}
 	}
 
 	// Determine the external port based on database type

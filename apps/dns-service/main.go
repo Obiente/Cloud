@@ -490,7 +490,7 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 		return s.handleGameServerAQuery(msg, domain, q, resourceID)
 	}
 
-	// Check if this is a managed database (db-123)
+	// Check if this is a managed database (db-123 or shortened db-abc123...)
 	if strings.HasPrefix(resourceID, "db-") {
 		return s.handleDatabaseAQuery(msg, domain, q, resourceID)
 	}
@@ -502,6 +502,14 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 // handleDatabaseAQuery handles A record queries for managed databases.
 // Format: db-123.my.obiente.cloud -> db-123
 func (s *DNSServer) handleDatabaseAQuery(msg *dns.Msg, domain string, q dns.Question, databaseID string) bool {
+	resolvedID, err := database.ResolveDatabaseIDByLabel(databaseID)
+	if err == nil {
+		databaseID = resolvedID
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("[DNS] Failed to resolve database label %s: %v", databaseID, err)
+		return false
+	}
+
 	ips, err := database.GetDatabaseNodeIP(databaseID, s.nodeIPMap)
 	if err == nil && len(ips) > 0 {
 		for _, ip := range ips {
@@ -562,6 +570,10 @@ func (s *DNSServer) handleDatabaseAQuery(msg *dns.Msg, domain string, q dns.Ques
 
 // handleDeploymentAQuery handles A record queries for deployments
 func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question, deploymentID string) bool {
+	if resolvedID, err := database.ResolveDeploymentIDByDomain(domain); err == nil {
+		deploymentID = resolvedID
+	}
+
 	// When DNS is enabled locally, prioritize local database records over delegated records
 	// Local records are the source of truth for the local DNS server
 	// Delegated records are only used as a fallback when local records don't exist
@@ -1111,13 +1123,14 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 	// Only filter out soft-deleted deployments
 	type deploymentDNSRow struct {
 		DeploymentID  string
+		Domain        string
 		CustomDomains string
 	}
 	var deploymentRows []deploymentDNSRow
 
 	// Try case-insensitive status check first
 	if err := database.DB.Table("deployment_locations dl").
-		Select("DISTINCT dl.deployment_id, d.custom_domains").
+		Select("DISTINCT dl.deployment_id, d.domain, d.custom_domains").
 		Joins("INNER JOIN deployments d ON d.id = dl.deployment_id AND d.deleted_at IS NULL").
 		Where("LOWER(dl.status) = ?", "running"). // Case-insensitive check
 		Scan(&deploymentRows).Error; err != nil {
@@ -1127,7 +1140,7 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 		if len(deploymentRows) == 0 {
 			var fallbackRows []deploymentDNSRow
 			if err := database.DB.Table("deployments d").
-				Select("DISTINCT d.id as deployment_id, d.custom_domains").
+				Select("DISTINCT d.id as deployment_id, d.domain, d.custom_domains").
 				Joins("LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id").
 				Where("d.deleted_at IS NULL AND d.status = ? AND dl.id IS NOT NULL", 3). // 3 = RUNNING
 				Scan(&fallbackRows).Error; err == nil && len(fallbackRows) > 0 {
@@ -1145,7 +1158,10 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 
 			if len(ips) > 0 {
 				// Always create DNS record for the default my.obiente.cloud domain
-				defaultDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
+				defaultDomain := row.Domain
+				if defaultDomain == "" {
+					defaultDomain = database.DefaultMyObienteCloudDomain(row.DeploymentID)
+				}
 				records = append(records, map[string]interface{}{
 					"domain":      defaultDomain,
 					"record_type": "A",
@@ -1211,16 +1227,30 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 				}
 			}
 
+			if resolvedIPs, err := database.GetDatabaseNodeIP(row.DatabaseID, nodeIPMap); err == nil && len(resolvedIPs) > 0 {
+				ips = resolvedIPs
+			}
+
 			if len(ips) > 0 {
-				// Database IDs are already "db-*"; use the canonical domain directly.
-				dbDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DatabaseID)
+				canonicalDomain := database.DefaultMyObienteCloudDomain(row.DatabaseID)
 				records = append(records, map[string]interface{}{
-					"domain":      dbDomain,
+					"domain":      canonicalDomain,
 					"record_type": "A",
 					"records":     ips,
 					"ttl":         ttl,
 				})
-				log.Printf("[DNS Pusher] Added DNS record for database %s (domain: %s)", row.DatabaseID, dbDomain)
+				log.Printf("[DNS Pusher] Added DNS record for database %s (domain: %s)", row.DatabaseID, canonicalDomain)
+
+				legacyDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DatabaseID)
+				if legacyDomain != canonicalDomain {
+					records = append(records, map[string]interface{}{
+						"domain":      legacyDomain,
+						"record_type": "A",
+						"records":     ips,
+						"ttl":         ttl,
+					})
+					log.Printf("[DNS Pusher] Added legacy DNS record for database %s (domain: %s)", row.DatabaseID, legacyDomain)
+				}
 			} else {
 				log.Printf("[DNS Pusher] No node IPs available for database %s", row.DatabaseID)
 			}

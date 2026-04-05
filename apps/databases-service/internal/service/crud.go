@@ -219,8 +219,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		provisionCtx, cancel := s.detachedContext(5 * time.Minute)
 		defer cancel()
 
-		// Use Obiente DNS naming pattern like deployments/vps/gameservers
-		host := fmt.Sprintf("db-%s.my.obiente.cloud", id)
+		host := database.DefaultMyObienteCloudDomain(id)
 
 		// Provision Docker container if provisioner is available
 		if s.provisioner != nil {

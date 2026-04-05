@@ -148,6 +148,13 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 // Database domains point to proxy/ingress node IPs and should resolve for any
 // provisioned (non-deleted) database.
 func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]string, error) {
+	resolvedID, err := ResolveDatabaseIDByLabel(databaseID)
+	if err == nil {
+		databaseID = resolvedID
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to resolve database label %s: %w", databaseID, err)
+	}
+
 	var dbInstance DatabaseInstance
 	if err := DB.Where("id = ? AND deleted_at IS NULL", databaseID).First(&dbInstance).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -85,8 +86,7 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 	image := p.getImageForType(cfg.Type, cfg.Version)
 	containerName := fmt.Sprintf("obiente-%s", cfg.DatabaseID)
 
-	// Use Obiente DNS naming pattern like deployments/vps/gameservers
-	hostname := fmt.Sprintf("%s.my.obiente.cloud", cfg.DatabaseID)
+	hostname := database.DefaultMyObienteCloudDomain(cfg.DatabaseID)
 
 	// Get standard port for database type
 	var standardPort int

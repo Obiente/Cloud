@@ -190,7 +190,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	deployment := &deploymentsv1.Deployment{
 		Id:              id,
 		Name:            req.Msg.GetName(),
-		Domain:          fmt.Sprintf("%s.my.obiente.cloud", id),
+		Domain:          database.DefaultMyObienteCloudDomain(id),
 		CustomDomains:   []string{},
 		Type:            deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED, // Will be auto-detected
 		BuildStrategy:   deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED,   // Will be auto-detected

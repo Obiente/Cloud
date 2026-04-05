@@ -252,9 +252,6 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 		}), nil
 	}
 
-	// Otherwise, treat as deployment
-	deploymentID := resourceID
-
 	// Get Traefik IPs from environment
 	nodeIPsEnv := os.Getenv("NODE_IPS")
 	logger.Debug("[SuperAdmin] QueryDNS - NODE_IPS env value: %q", nodeIPsEnv)
@@ -269,6 +266,41 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse NODE_IPS: %w", err))
 	}
 	logger.Debug("[SuperAdmin] QueryDNS - Parsed NODE_IPS: %+v", nodeIPMap)
+
+	if strings.HasPrefix(resourceID, "db-") {
+		databaseID, err := database.ResolveDatabaseIDByLabel(resourceID)
+		if err != nil {
+			return connect.NewResponse(&superadminv1.QueryDNSResponse{
+				Domain:     domain,
+				RecordType: recordType,
+				Error:      err.Error(),
+				Ttl:        int64(cacheTTL.Seconds()),
+			}), nil
+		}
+
+		ips, err := database.GetDatabaseNodeIP(databaseID, nodeIPMap)
+		if err != nil {
+			return connect.NewResponse(&superadminv1.QueryDNSResponse{
+				Domain:     domain,
+				RecordType: recordType,
+				Error:      err.Error(),
+				Ttl:        int64(cacheTTL.Seconds()),
+			}), nil
+		}
+
+		return connect.NewResponse(&superadminv1.QueryDNSResponse{
+			Domain:     domain,
+			RecordType: recordType,
+			Records:    ips,
+			Ttl:        int64(cacheTTL.Seconds()),
+		}), nil
+	}
+
+	// Otherwise, treat as deployment.
+	deploymentID, err := database.ResolveDeploymentIDByDomain(domain)
+	if err != nil {
+		deploymentID = resourceID
+	}
 
 	// Query database for deployment location
 	ips, err := database.GetDeploymentNodeIP(deploymentID, nodeIPMap)
@@ -289,7 +321,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	}), nil
 }
 
-// ListDNSRecords lists all DNS records for deployments and game servers
+// ListDNSRecords lists all DNS records for deployments, databases, and game servers.
 func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[superadminv1.ListDNSRecordsRequest]) (*connect.Response[superadminv1.ListDNSRecordsResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
@@ -321,6 +353,12 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 			return nil, err
 		}
 		records = append(records, deploymentRecords...)
+
+		databaseRecords, err := s.listDatabaseDNSRecords(req, nodeIPMap, now)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, databaseRecords...)
 	}
 
 	// Fetch game server SRV records if filter allows
@@ -351,6 +389,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 			d.id as deployment_id,
 			d.organization_id,
 			d.name as deployment_name,
+			d.domain,
 			d.status,
 			dl.node_id,
 			nm.region
@@ -373,6 +412,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		DeploymentID   string
 		OrganizationID string
 		DeploymentName string
+		Domain         string
 		Status         int32
 		NodeID         *string
 		Region         *string
@@ -386,8 +426,10 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 	records := make([]*superadminv1.DNSRecord, 0, len(rows))
 
 	for _, row := range rows {
-		// Build domain
-		domain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
+		domain := row.Domain
+		if domain == "" {
+			domain = fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
+		}
 
 		// Get IPs for this deployment using the shared DNS resolver so the dashboard
 		// matches the live DNS service behavior.
@@ -437,6 +479,72 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 			OrganizationId: row.OrganizationID,
 			DeploymentName: row.DeploymentName,
 			Domain:         domain,
+			IpAddresses:    ips,
+			Region:         region,
+			Status:         fmt.Sprintf("%d", row.Status),
+			LastResolved:   timestamppb.New(now),
+		})
+	}
+
+	return records, nil
+}
+
+// listDatabaseDNSRecords lists DNS A records for managed databases.
+func (s *Service) listDatabaseDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], nodeIPMap map[string][]string, now time.Time) ([]*superadminv1.DNSRecord, error) {
+	query := database.DB.Table("database_instances d").
+		Select(`
+			d.id as database_id,
+			d.organization_id,
+			d.name as database_name,
+			d.status,
+			d.node_id,
+			nm.region
+		`).
+		Joins("LEFT JOIN node_metadata nm ON nm.id = d.node_id").
+		Where("d.deleted_at IS NULL")
+
+	if orgID := req.Msg.GetOrganizationId(); orgID != "" {
+		query = query.Where("d.organization_id = ?", orgID)
+	}
+	if deploymentID := req.Msg.GetDeploymentId(); deploymentID != "" {
+		query = query.Where("d.id = ?", deploymentID)
+	}
+
+	type dnsRecordRow struct {
+		DatabaseID     string
+		OrganizationID string
+		DatabaseName   string
+		Status         int32
+		NodeID         *string
+		Region         *string
+	}
+
+	var rows []dnsRecordRow
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query database DNS records: %w", err))
+	}
+
+	records := make([]*superadminv1.DNSRecord, 0, len(rows))
+	for _, row := range rows {
+		ips, err := database.GetDatabaseNodeIP(row.DatabaseID, nodeIPMap)
+		if err != nil {
+			logger.Warn("[SuperAdmin] Failed to get node IPs for database %s: %v", row.DatabaseID, err)
+			continue
+		}
+
+		region := ""
+		if row.Region != nil {
+			region = *row.Region
+		}
+
+		// DNSRecord does not have database-specific fields yet, so reuse the
+		// generic resource slots to expose database DNS rows in the current UI.
+		records = append(records, &superadminv1.DNSRecord{
+			RecordType:     "A",
+			DeploymentId:   row.DatabaseID,
+			OrganizationId: row.OrganizationID,
+			DeploymentName: row.DatabaseName,
+			Domain:         database.DefaultMyObienteCloudDomain(row.DatabaseID),
 			IpAddresses:    ips,
 			Region:         region,
 			Status:         fmt.Sprintf("%d", row.Status),

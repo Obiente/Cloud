@@ -12,6 +12,11 @@ import (
 )
 
 func dbDatabaseToProto(db *database.DatabaseInstance) *databasesv1.DatabaseInstance {
+	host := db.Host
+	if canonicalHost := database.DefaultMyObienteCloudDomain(db.ID); canonicalHost != "" {
+		host = &canonicalHost
+	}
+
 	proto := &databasesv1.DatabaseInstance{
 		Id:             db.ID,
 		Name:           db.Name,
@@ -25,7 +30,7 @@ func dbDatabaseToProto(db *database.DatabaseInstance) *databasesv1.DatabaseInsta
 		DiskBytes:      db.DiskBytes,
 		DiskUsedBytes:  db.DiskUsedBytes,
 		MaxConnections: db.MaxConnections,
-		Host:           db.Host,
+		Host:           host,
 		Port:           db.Port,
 		InstanceId:     db.InstanceID,
 		NodeId:         db.NodeID,
@@ -58,9 +63,14 @@ func dbDatabaseToProto(db *database.DatabaseInstance) *databasesv1.DatabaseInsta
 }
 
 func dbConnectionToProto(conn *database.DatabaseConnection, databaseID string) *databasesv1.DatabaseConnectionInfo {
+	host := conn.Host
+	if canonicalHost := database.DefaultMyObienteCloudDomain(databaseID); canonicalHost != "" {
+		host = canonicalHost
+	}
+
 	proto := &databasesv1.DatabaseConnectionInfo{
 		DatabaseId:     databaseID,
-		Host:           conn.Host,
+		Host:           host,
 		Port:           conn.Port,
 		DatabaseName:   conn.DatabaseName,
 		Username:       conn.Username,
@@ -72,17 +82,17 @@ func dbConnectionToProto(conn *database.DatabaseConnection, databaseID string) *
 	// This would need to be determined from the database instance type
 	// For now, we'll generate a generic PostgreSQL URL without embedding the password
 	proto.PostgresqlUrl = fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=require",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+		conn.Username, host, conn.Port, conn.DatabaseName)
 	proto.MysqlUrl = fmt.Sprintf("mysql://%s@%s:%d/%s?ssl-mode=REQUIRED",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+		conn.Username, host, conn.Port, conn.DatabaseName)
 	proto.MongodbUrl = fmt.Sprintf("mongodb://%s@%s:%d/%s?ssl=true",
-		conn.Username, conn.Host, conn.Port, conn.DatabaseName)
+		conn.Username, host, conn.Port, conn.DatabaseName)
 	proto.RedisUrl = fmt.Sprintf("redis://%s:%d",
-		conn.Host, conn.Port)
+		host, conn.Port)
 
 	proto.ConnectionInstructions = fmt.Sprintf(
 		"Connect to your database using:\nHost: %s\nPort: %d\nDatabase: %s\nUsername: %s\n\nSSL is required for secure connections.",
-		conn.Host, conn.Port, conn.DatabaseName, conn.Username,
+		host, conn.Port, conn.DatabaseName, conn.Username,
 	)
 
 	return proto
@@ -106,4 +116,3 @@ func dbBackupToProto(backup *database.DatabaseBackup) *databasesv1.DatabaseBacku
 
 	return proto
 }
-
