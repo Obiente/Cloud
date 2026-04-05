@@ -136,6 +136,12 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
+	if s.provisioner == nil {
+		return nil, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("database provisioning is unavailable on this node; no provisioner is configured"),
+		)
+	}
 
 	id := fmt.Sprintf("db-%s", uuid.NewString())
 
@@ -219,46 +225,36 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		provisionCtx, cancel := s.detachedContext(5 * time.Minute)
 		defer cancel()
 
-		host := database.DefaultMyObienteCloudDomain(id)
-
-		// Provision Docker container if provisioner is available
-		if s.provisioner != nil {
-			version := ""
-			if req.Msg.Version != nil {
-				version = *req.Msg.Version
-			}
-			provCfg := &provisioner.DatabaseConfig{
-				DatabaseID:  id,
-				Type:        provisioner.DatabaseType(req.Msg.GetType()),
-				Version:     version,
-				Username:    initialUsername,
-				Password:    initialPassword,
-				Port:        int(port),
-				CPUCores:    float64(cpuCores),
-				MemoryBytes: memoryBytes,
-				DiskBytes:   diskBytes,
-			}
-
-			result, err := s.provisioner.ProvisionDatabase(provisionCtx, provCfg)
-			if err != nil {
-				logger.Error("Failed to provision database container: %v", err)
-				// Mark as failed
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(provisionCtx, dbInstance)
-				return
-			}
-
-			// Update database instance with container info
-			dbInstance.InstanceID = &result.ContainerID
-			dbInstance.Host = &result.Host
-			dbInstance.Port = &port
-			dbInstance.Status = 3 // RUNNING
-		} else {
-			logger.Warn("Docker provisioner not available, skipping container provisioning")
-			dbInstance.Host = &host
-			dbInstance.Port = &port
-			dbInstance.Status = 3 // RUNNING (simulated)
+		version := ""
+		if req.Msg.Version != nil {
+			version = *req.Msg.Version
 		}
+		provCfg := &provisioner.DatabaseConfig{
+			DatabaseID:  id,
+			Type:        provisioner.DatabaseType(req.Msg.GetType()),
+			Version:     version,
+			Username:    initialUsername,
+			Password:    initialPassword,
+			Port:        int(port),
+			CPUCores:    float64(cpuCores),
+			MemoryBytes: memoryBytes,
+			DiskBytes:   diskBytes,
+		}
+
+		result, err := s.provisioner.ProvisionDatabase(provisionCtx, provCfg)
+		if err != nil {
+			logger.Error("Failed to provision database container: %v", err)
+			// Mark as failed
+			dbInstance.Status = 8 // FAILED
+			s.repo.Update(provisionCtx, dbInstance)
+			return
+		}
+
+		// Update database instance with container info
+		dbInstance.InstanceID = &result.ContainerID
+		dbInstance.Host = &result.Host
+		dbInstance.Port = &port
+		dbInstance.Status = 3 // RUNNING
 
 		// Create connection record
 		connID := fmt.Sprintf("conn-%s", uuid.NewString())
