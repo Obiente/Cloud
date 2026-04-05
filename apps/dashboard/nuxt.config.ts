@@ -6,14 +6,18 @@ const SESSION_PASSWORD_PLACEHOLDER =
 const sessionPassword =
   process.env.NUXT_SESSION_PASSWORD || SESSION_PASSWORD_PLACEHOLDER;
 
-// Fail loudly if the placeholder is still set in production
+// Nuxt config runs during `nuxt prepare`/`nuxt build`, including Docker image
+// creation where runtime secrets are often injected later. Runtime session
+// enforcement still happens in `server/utils/session.ts`, so warn here instead
+// of aborting the build.
 if (
   sessionPassword === SESSION_PASSWORD_PLACEHOLDER &&
   process.env.NODE_ENV === "production"
 ) {
-  throw new Error(
+  console.warn(
     "[nuxt.config] NUXT_SESSION_PASSWORD is not set. " +
-      "Provide a strong random secret (≥32 chars) via the NUXT_SESSION_PASSWORD env var."
+      "Continuing build with a placeholder because runtime env injection is supported. " +
+      "You must provide a strong random secret (≥32 chars) via the NUXT_SESSION_PASSWORD env var before starting the server."
   );
 }
 
