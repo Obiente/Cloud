@@ -153,6 +153,7 @@ import {
 } from "@heroicons/vue/24/outline";
 import { DatabaseType, DatabaseStatus } from "@obiente/proto";
 import { formatBytes } from "~/utils/common";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { useDialog } from "~/composables/useDialog";
 import { useToast } from "~/composables/useToast";
 import { useConnectClient } from "~/lib/connect-client";
@@ -185,7 +186,7 @@ const databaseSubtitle = computed(() => {
 
 const createdAtDate = computed(() => {
   if (!props.database?.createdAt) return undefined;
-  return new Date(props.database.createdAt);
+  return timestampToDate(props.database.createdAt);
 });
 
 const statusMeta = computed(() => {
@@ -267,6 +268,14 @@ function getTypeLabel(type: number | string): string {
     [DatabaseType.MARIADB]: "MariaDB",
   };
   return types[typeValue] || `Type ${typeValue}`;
+}
+
+function timestampToDate(timestamp?: Timestamp): Date | undefined {
+  if (!timestamp) return undefined;
+  const seconds = Number(timestamp.seconds ?? 0);
+  const nanos = Number(timestamp.nanos ?? 0);
+  const date = new Date(seconds * 1000 + Math.floor(nanos / 1_000_000));
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 async function handleRestart() {

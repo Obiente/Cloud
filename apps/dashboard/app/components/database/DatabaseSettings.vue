@@ -155,36 +155,12 @@
         <!-- Backup & Recovery Settings -->
         <OuiStack gap="md">
           <OuiText as="h3" size="lg" weight="bold">Backup & Recovery</OuiText>
-          
-          <OuiStack gap="md">
-            <OuiFormField label="Auto Backups Enabled">
-              <OuiCheckbox
-                v-model="formData.autoBackupEnabled"
-                label="Enable automatic backups"
-                :disabled="isSaving"
-              />
-              <OuiText size="xs" color="secondary" class="mt-1">
-                Automatically backup database daily
-              </OuiText>
-            </OuiFormField>
 
-            <OuiFormField 
-              v-if="formData.autoBackupEnabled" 
-              label="Backup Retention Days"
-            >
-              <OuiInput
-                v-model.number="formData.backupRetentionDays"
-                type="number"
-                :min="1"
-                :max="365"
-                placeholder="Number of days"
-                :disabled="isSaving"
-              />
-              <OuiText size="xs" color="secondary" class="mt-1">
-                Keep backups for this many days
-              </OuiText>
-            </OuiFormField>
-          </OuiStack>
+          <OuiAlert variant="info">
+            <OuiText size="sm">
+              Backup scheduling is not configurable from settings yet. Use the Backups tab to create and manage backups for this database.
+            </OuiText>
+          </OuiAlert>
         </OuiStack>
 
         <!-- Actions -->
@@ -219,7 +195,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { DatabaseType, DatabaseService, type DatabaseInstance, type UpdateDatabaseRequest } from "@obiente/proto";
+import { create } from "@bufbuild/protobuf";
+import { DatabaseType, DatabaseService, type DatabaseInstance, type UpdateDatabaseRequest, UpdateDatabaseRequestSchema } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
@@ -254,8 +231,6 @@ const formData = ref({
   port: db?.port || 5432,
   autoSleepEnabled: (db?.autoSleepSeconds || 0) > 0,
   autoSleepMinutes: Math.max(5, Math.round((db?.autoSleepSeconds || 0) / 60)) || 30,
-  autoBackupEnabled: db?.autoBackupEnabled !== false,
-  backupRetentionDays: db?.backupRetentionDays || 7,
 });
 
 const originalFormData = ref({ ...formData.value });
@@ -278,8 +253,6 @@ watch(() => props.database, (newDatabase) => {
       port: d.port || 5432,
       autoSleepEnabled: (d.autoSleepSeconds || 0) > 0,
       autoSleepMinutes: Math.max(5, Math.round((d.autoSleepSeconds || 0) / 60)) || 30,
-      autoBackupEnabled: d.autoBackupEnabled !== false,
-      backupRetentionDays: d.backupRetentionDays || 7,
     };
     originalFormData.value = { ...formData.value };
   }
@@ -302,14 +275,6 @@ async function handleSave() {
       updates.name = formData.value.name;
     }
 
-    if (formData.value.autoBackupEnabled !== dbRef.autoBackupEnabled) {
-      updates.autoBackupEnabled = formData.value.autoBackupEnabled;
-    }
-
-    if (formData.value.backupRetentionDays !== dbRef.backupRetentionDays) {
-      updates.backupRetentionDays = formData.value.backupRetentionDays;
-    }
-
     // Auto-sleep: convert minutes to seconds for API
     const newAutoSleepSeconds = formData.value.autoSleepEnabled
       ? Math.max(300, formData.value.autoSleepMinutes * 60)
@@ -319,11 +284,11 @@ async function handleSave() {
       updates.autoSleepSeconds = newAutoSleepSeconds;
     }
 
-    await client.updateDatabase({
+    await client.updateDatabase(create(UpdateDatabaseRequestSchema, {
       organizationId: organizationId.value || "",
       databaseId: props.database.id,
       ...updates,
-    });
+    }));
 
     toast.success("Settings saved successfully");
     originalFormData.value = { ...formData.value };

@@ -219,7 +219,27 @@ func (s *Service) applyPrimaryDatabasePassword(ctx context.Context, databaseID s
 		}
 		return nil
 	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
-		return fmt.Errorf("password reset is not implemented yet for %s databases", dbType.String())
+		db, _, err := s.openDirectConnection(ctx, databaseID, databaseID)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		var resetErr error
+		for _, host := range []string{"%", "localhost"} {
+			statement := fmt.Sprintf(
+				"ALTER USER %s@%s IDENTIFIED BY %s",
+				quoteSQLLiteral(username),
+				quoteSQLLiteral(host),
+				quoteSQLLiteral(newPassword),
+			)
+			if _, err := db.ExecContext(ctx, statement); err == nil {
+				return nil
+			} else {
+				resetErr = err
+			}
+		}
+		return fmt.Errorf("mysql password update failed: %w", resetErr)
 	case databasesv1.DatabaseType_MONGODB:
 		return fmt.Errorf("password reset is not implemented yet for mongodb databases")
 	case databasesv1.DatabaseType_REDIS:
