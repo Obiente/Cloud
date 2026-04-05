@@ -18,6 +18,7 @@ import (
 	"github.com/acarl005/stripansi"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 

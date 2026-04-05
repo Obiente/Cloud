@@ -379,7 +379,30 @@ func (s *Service) GetGameServer(ctx context.Context, req *connect.Request[gamese
 
 // UpdateGameServer updates a game server configuration
 func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gameserversv1.UpdateGameServerRequest]) (*connect.Response[gameserversv1.UpdateGameServerResponse], error) {
+	ctx = sharedorchestrator.WithTargetNode(ctx, req.Header().Get(sharedorchestrator.ForwardTargetNodeHeader))
 	gameServerID := req.Msg.GetGameServerId()
+	if shouldForward, targetNodeID := s.getGameServerForwardTarget(ctx, gameServerID); shouldForward {
+		reqBody, err := json.Marshal(req.Msg)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+		}
+
+		headers := map[string]string{
+			"Authorization": req.Header().Get("Authorization"),
+			sharedorchestrator.ForwardTargetNodeHeader: targetNodeID,
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.gameservers.v1.GameServerService/UpdateGameServer", headers)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+
+		var response gameserversv1.UpdateGameServerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	if err := s.checkGameServerPermission(ctx, gameServerID, "update"); err != nil {
 		return nil, err
 	}
