@@ -337,9 +337,23 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 
 	// Return immediately with CREATING status
 	protoDB := dbDatabaseToProto(dbInstance)
+	createConnInfo := buildDatabaseConnectionInfo(
+		req.Msg.GetType(),
+		&database.DatabaseConnection{
+			DatabaseID:   id,
+			DatabaseName: id,
+			Username:     initialUsername,
+			Host:         database.DefaultMyObienteCloudDomain(id),
+			Port:         port,
+			SSLRequired:  true,
+		},
+		id,
+		initialPassword,
+	)
 
 	res := connect.NewResponse(&databasesv1.CreateDatabaseResponse{
-		Database: protoDB,
+		Database:       protoDB,
+		ConnectionInfo: createConnInfo,
 	})
 	return res, nil
 }

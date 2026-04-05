@@ -3,6 +3,7 @@ package databases
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
@@ -63,6 +64,15 @@ func dbDatabaseToProto(db *database.DatabaseInstance) *databasesv1.DatabaseInsta
 }
 
 func dbConnectionToProto(conn *database.DatabaseConnection, databaseID string) *databasesv1.DatabaseConnectionInfo {
+	return buildDatabaseConnectionInfo(databasesv1.DatabaseType_DATABASE_TYPE_UNSPECIFIED, conn, databaseID, "")
+}
+
+func buildDatabaseConnectionInfo(
+	dbType databasesv1.DatabaseType,
+	conn *database.DatabaseConnection,
+	databaseID string,
+	password string,
+) *databasesv1.DatabaseConnectionInfo {
 	host := conn.Host
 	if canonicalHost := database.DefaultMyObienteCloudDomain(databaseID); canonicalHost != "" {
 		host = canonicalHost
@@ -77,23 +87,41 @@ func dbConnectionToProto(conn *database.DatabaseConnection, databaseID string) *
 		SslRequired:    conn.SSLRequired,
 		SslCertificate: conn.SSLCertificate,
 	}
+	if password != "" {
+		proto.Password = password
+	}
 
-	// Generate connection strings based on database type
-	// This would need to be determined from the database instance type
-	// For now, we'll generate a generic PostgreSQL URL without embedding the password
+	escapedUser := url.QueryEscape(conn.Username)
+	escapedPassword := url.QueryEscape(password)
+	authSegment := escapedUser
+	if password != "" {
+		authSegment = fmt.Sprintf("%s:%s", escapedUser, escapedPassword)
+	}
+	redisAuthSegment := ""
+	if password != "" {
+		redisAuthSegment = ":" + escapedPassword + "@"
+	}
+
 	proto.PostgresqlUrl = fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=require",
-		conn.Username, host, conn.Port, conn.DatabaseName)
+		authSegment, host, conn.Port, conn.DatabaseName)
 	proto.MysqlUrl = fmt.Sprintf("mysql://%s@%s:%d/%s?ssl-mode=REQUIRED",
-		conn.Username, host, conn.Port, conn.DatabaseName)
+		authSegment, host, conn.Port, conn.DatabaseName)
 	proto.MongodbUrl = fmt.Sprintf("mongodb://%s@%s:%d/%s?ssl=true",
-		conn.Username, host, conn.Port, conn.DatabaseName)
-	proto.RedisUrl = fmt.Sprintf("redis://%s:%d",
-		host, conn.Port)
+		authSegment, host, conn.Port, conn.DatabaseName)
+	proto.RedisUrl = fmt.Sprintf("redis://%s%s:%d",
+		redisAuthSegment, host, conn.Port)
 
 	proto.ConnectionInstructions = fmt.Sprintf(
 		"Connect to your database using:\nHost: %s\nPort: %d\nDatabase: %s\nUsername: %s\n\nSSL is required for secure connections.",
 		host, conn.Port, conn.DatabaseName, conn.Username,
 	)
+
+	if dbType == databasesv1.DatabaseType_REDIS {
+		proto.ConnectionInstructions = fmt.Sprintf(
+			"Connect to your Redis database using:\nHost: %s\nPort: %d\nPassword: available in this response only.\n\nUse TLS-aware clients if you expose Redis over a secure endpoint.",
+			host, conn.Port,
+		)
+	}
 
 	return proto
 }
