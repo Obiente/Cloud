@@ -747,12 +747,12 @@ func ensurePersonalOrgForUser(ctx context.Context, userID string) (string, bool)
 		return "", false
 	}
 	now := time.Now()
-	orgID := fmt.Sprintf("%s-%d", "org", now.UnixNano())
+	orgID := fmt.Sprintf("org-%s", uuid.NewString())
 	org := &database.Organization{ID: orgID, Name: "Personal", Slug: "personal-" + userID, Plan: "personal", Status: "active", CreatedAt: now}
 	if err := database.DB.Create(org).Error; err != nil {
 		return "", false
 	}
-	mem := &database.OrganizationMember{ID: fmt.Sprintf("%s-%d", "mem", now.UnixNano()), OrganizationID: orgID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
+	mem := &database.OrganizationMember{ID: fmt.Sprintf("mem-%s", uuid.NewString()), OrganizationID: orgID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
 	if err := database.DB.Create(mem).Error; err != nil {
 		return "", false
 	}

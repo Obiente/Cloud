@@ -2,6 +2,7 @@ package sshproxy
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -22,7 +23,10 @@ func queryDNSDirect(ctx context.Context, hostname string) ([]net.IP, error) {
 	// Query: QNAME (variable) + QTYPE (2 bytes) + QCLASS (2 bytes)
 
 	// Generate a random query ID
-	queryID := uint16(time.Now().UnixNano() & 0xFFFF)
+	queryID, err := randomUint16()
+	if err != nil {
+		return nil, fmt.Errorf("generate DNS query ID: %w", err)
+	}
 
 	// Build DNS query packet
 	packet := make([]byte, 512)
@@ -205,6 +209,14 @@ func queryDNSDirect(ctx context.Context, hostname string) ([]net.IP, error) {
 	}
 
 	return ips, nil
+}
+
+func randomUint16() (uint16, error) {
+	var buf [2]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint16(buf[:]), nil
 }
 
 // Proxy handles SSH TCP proxying
