@@ -251,7 +251,39 @@ func (s *Service) applyPrimaryDatabasePassword(ctx context.Context, databaseID s
 		}
 		return fmt.Errorf("mysql password update failed: %w", resetErr)
 	case databasesv1.DatabaseType_MONGODB:
-		return fmt.Errorf("%w: mongodb databases", errPasswordResetUnsupported)
+		dbInstance, conn, _, _, _, err := s.resolveDirectConnectionDetails(ctx, databaseID)
+		if err != nil {
+			return err
+		}
+		if s.provisioner == nil {
+			return fmt.Errorf("mongodb password update requires docker provisioner")
+		}
+		if dbInstance.InstanceID == nil || *dbInstance.InstanceID == "" {
+			return fmt.Errorf("mongodb instance container not found")
+		}
+
+		eval := fmt.Sprintf("db.changeUserPassword(%q, %q)", username, newPassword)
+		cmd := []string{
+			"mongosh",
+			"admin",
+			"--quiet",
+			"--username", username,
+			"--password", conn.Password,
+			"--eval", eval,
+		}
+
+		currentPassword := conn.Password
+		if s.secretManager != nil {
+			if decrypted, decErr := s.secretManager.DecryptPassword(conn.Password); decErr == nil {
+				currentPassword = decrypted
+			}
+		}
+		cmd[6] = currentPassword
+
+		if _, err := s.provisioner.ExecInDatabase(ctx, *dbInstance.InstanceID, cmd); err != nil {
+			return fmt.Errorf("mongodb password update failed: %w", err)
+		}
+		return nil
 	case databasesv1.DatabaseType_REDIS:
 		_, _, directHost, directPort, currentPassword, err := s.resolveDirectConnectionDetails(ctx, databaseID)
 		if err != nil {

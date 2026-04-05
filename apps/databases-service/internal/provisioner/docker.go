@@ -213,6 +213,11 @@ func (p *DockerProvisioner) RestartDatabase(ctx context.Context, containerID str
 	return p.client.RestartContainer(ctx, containerID, 30*time.Second)
 }
 
+// ExecInDatabase runs a command inside a database container.
+func (p *DockerProvisioner) ExecInDatabase(ctx context.Context, containerID string, cmd []string) (string, error) {
+	return p.client.ContainerExecRun(ctx, containerID, cmd)
+}
+
 // getImageForType returns the Docker image for a database type
 func (p *DockerProvisioner) getImageForType(dbType DatabaseType, version string) string {
 	if version == "" {
