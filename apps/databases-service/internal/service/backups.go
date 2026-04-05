@@ -115,6 +115,13 @@ func (s *Service) CreateBackup(ctx context.Context, req *connect.Request[databas
 
 // GetBackup gets a backup by ID
 func (s *Service) GetBackup(ctx context.Context, req *connect.Request[databasesv1.GetBackupRequest]) (*connect.Response[databasesv1.GetBackupResponse], error) {
+	orgID := req.Msg.GetOrganizationId()
+	if orgID == "" {
+		if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+			orgID = eff
+		}
+	}
+
 	// Check resource-level permission
 	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseRead); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -131,7 +138,7 @@ func (s *Service) GetBackup(ctx context.Context, req *connect.Request[databasesv
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found: %w", err))
 	}
 
-	if backup.DatabaseID != req.Msg.GetDatabaseId() || dbInstance.OrganizationID != req.Msg.GetOrganizationId() {
+	if backup.DatabaseID != req.Msg.GetDatabaseId() || dbInstance.OrganizationID != orgID {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found"))
 	}
 
@@ -143,6 +150,13 @@ func (s *Service) GetBackup(ctx context.Context, req *connect.Request[databasesv
 
 // DeleteBackup deletes a backup
 func (s *Service) DeleteBackup(ctx context.Context, req *connect.Request[databasesv1.DeleteBackupRequest]) (*connect.Response[databasesv1.DeleteBackupResponse], error) {
+	orgID := req.Msg.GetOrganizationId()
+	if orgID == "" {
+		if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+			orgID = eff
+		}
+	}
+
 	// Check resource-level permission
 	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseDelete); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -158,6 +172,14 @@ func (s *Service) DeleteBackup(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found"))
 	}
 
+	dbInstance, err := s.repo.GetByID(ctx, req.Msg.GetDatabaseId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found: %w", err))
+	}
+	if dbInstance.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found"))
+	}
+
 	if err := s.backupRepo.Delete(ctx, req.Msg.GetBackupId()); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete backup: %w", err))
 	}
@@ -168,8 +190,33 @@ func (s *Service) DeleteBackup(ctx context.Context, req *connect.Request[databas
 	return res, nil
 }
 
-// RestoreBackup restores a backup (placeholder)
 func (s *Service) RestoreBackup(ctx context.Context, req *connect.Request[databasesv1.RestoreBackupRequest]) (*connect.Response[databasesv1.RestoreBackupResponse], error) {
-	// Placeholder implementation
+	orgID := req.Msg.GetOrganizationId()
+	if orgID == "" {
+		if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+			orgID = eff
+		}
+	}
+
+	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), auth.PermissionDatabaseUpdate); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	backup, err := s.backupRepo.GetByID(ctx, req.Msg.GetBackupId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found: %w", err))
+	}
+	if backup.DatabaseID != req.Msg.GetDatabaseId() {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found"))
+	}
+
+	dbInstance, err := s.repo.GetByID(ctx, req.Msg.GetDatabaseId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found: %w", err))
+	}
+	if dbInstance.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("backup not found"))
+	}
+
 	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("backup restoration not yet implemented"))
 }

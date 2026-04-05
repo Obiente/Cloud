@@ -1,10 +1,12 @@
 package vps
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -384,40 +386,77 @@ func (s *SSHProxyServer) parseProxyProtocol(conn net.Conn) (net.Conn, string) {
 		return conn, ""
 	}
 
-	// Check for PROXY protocol v1 (text-based, starts with "PROXY ")
-	if n >= 6 && string(buffer[:6]) == "PROXY " {
-		// Parse PROXY protocol v1
-		// Format: "PROXY TCP4|TCP6 <srcip> <dstip> <srcport> <dstport>\r\n"
-		line := string(buffer[:n])
-		// Remove trailing \r\n if present
-		line = strings.TrimSuffix(line, "\r\n")
-		line = strings.TrimSuffix(line, "\n")
-		parts := strings.Fields(line)
-		if len(parts) >= 3 {
-			// Extract source IP (real client IP) - it's the 3rd field
-			realIP := parts[2]
-			// Validate it's a valid IP
-			if net.ParseIP(realIP) != nil {
-				logger.Debug("[SSHProxy] Parsed PROXY protocol v1: real IP=%s", realIP)
-				// Create a wrapper that prepends the read data back
-				return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, realIP
-			}
+	consumed, realIP, ok := parseProxyProtocolHeader(buffer[:n])
+	if ok {
+		if realIP != "" {
+			logger.Debug("[SSHProxy] Parsed PROXY protocol: real IP=%s", realIP)
 		}
-	}
-
-	// Check for PROXY protocol v2 (binary)
-	// V2 starts with: 0x0D 0x0A 0x0D 0x0A 0x00 0x0D 0x0A 0x51 0x55 0x49 0x54 0x0A
-	if n >= 12 && buffer[0] == 0x0D && buffer[1] == 0x0A && buffer[2] == 0x0D && buffer[3] == 0x0A &&
-		buffer[4] == 0x00 && buffer[5] == 0x0D && buffer[6] == 0x0A && buffer[7] == 0x51 &&
-		buffer[8] == 0x55 && buffer[9] == 0x49 && buffer[10] == 0x54 && buffer[11] == 0x0A {
-		// Parse PROXY protocol v2 (simplified - just extract IP for now)
-		// V2 is complex, for now we'll log and return empty (can be enhanced later)
-		logger.Debug("[SSHProxy] Detected PROXY protocol v2 (binary parsing not yet implemented)")
-		return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, ""
+		return &proxyProtocolConn{Conn: conn, prefix: buffer[consumed:n]}, realIP
 	}
 
 	// No PROXY protocol detected, prepend the read data back
 	return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, ""
+}
+
+var proxyProtocolV2Signature = []byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A}
+
+func parseProxyProtocolHeader(data []byte) (consumed int, realIP string, ok bool) {
+	if len(data) >= 6 && bytes.HasPrefix(data, []byte("PROXY ")) {
+		lineEnd := bytes.IndexByte(data, '\n')
+		if lineEnd == -1 {
+			return 0, "", false
+		}
+		line := strings.TrimSuffix(string(data[:lineEnd+1]), "\n")
+		line = strings.TrimSuffix(line, "\r")
+		parts := strings.Fields(line)
+		if len(parts) >= 2 && strings.EqualFold(parts[1], "UNKNOWN") {
+			return lineEnd + 1, "", true
+		}
+		if len(parts) >= 3 {
+			if ip := net.ParseIP(parts[2]); ip != nil {
+				return lineEnd + 1, ip.String(), true
+			}
+		}
+		return lineEnd + 1, "", true
+	}
+
+	if len(data) < 16 || !bytes.Equal(data[:12], proxyProtocolV2Signature) {
+		return 0, "", false
+	}
+
+	versionCommand := data[12]
+	if versionCommand>>4 != 0x2 {
+		return 0, "", false
+	}
+
+	totalLength := 16 + int(binary.BigEndian.Uint16(data[14:16]))
+	if len(data) < totalLength {
+		return 0, "", false
+	}
+
+	command := versionCommand & 0x0F
+	if command == 0x00 {
+		return totalLength, "", true
+	}
+	if command != 0x01 {
+		return totalLength, "", true
+	}
+
+	addressFamily := data[13] >> 4
+	switch addressFamily {
+	case 0x1:
+		if totalLength < 28 {
+			return totalLength, "", true
+		}
+		return totalLength, net.IP(data[16:20]).String(), true
+	case 0x2:
+		if totalLength < 52 {
+			return totalLength, "", true
+		}
+		return totalLength, net.IP(data[16:32]).String(), true
+	default:
+		return totalLength, "", true
+	}
 }
 
 // proxyProtocolConn wraps a connection and prepends data that was read for PROXY protocol detection

@@ -3,6 +3,7 @@ package databases
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -21,6 +22,8 @@ import (
 
 var sqlCommentPattern = regexp.MustCompile(`(?s)/\*.*?\*/|--[^\r\n]*|#[^\r\n]*`)
 
+var errUnsupportedQueryDatabaseType = errors.New("query execution not supported for this database type")
+
 // ExecuteQuery executes a SQL query on a database
 func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databasesv1.ExecuteQueryRequest]) (*connect.Response[databasesv1.ExecuteQueryResponse], error) {
 	orgID := req.Msg.GetOrganizationId()
@@ -30,116 +33,17 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 		}
 	}
 
-	queryType, readOnly, err := classifySQLQuery(req.Msg.GetQuery())
+	queryCtx, cancel, db, queryType, readOnly, err := s.prepareQueryExecution(ctx, orgID, req.Msg.GetDatabaseId(), req.Msg.GetDatabaseName(), req.Msg.GetQuery(), req.Msg.TimeoutSeconds)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		return nil, err
 	}
-
-	requiredPermission := auth.PermissionDatabaseManage
-	if readOnly {
-		requiredPermission = auth.PermissionDatabaseRead
-	}
-
-	// Check resource-level permission
-	if err := s.checkDatabasePermission(ctx, req.Msg.GetDatabaseId(), requiredPermission); err != nil {
-		return nil, connect.NewError(connect.CodePermissionDenied, err)
-	}
-
-	// Get database
-	dbInstance, err := s.repo.GetByID(ctx, req.Msg.GetDatabaseId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found: %w", err))
-	}
-
-	// Verify organization ownership
-	if dbInstance.OrganizationID != orgID {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
-	}
-
-	// Get connection info
-	conn, err := s.connRepo.GetByDatabaseID(ctx, req.Msg.GetDatabaseId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get connection info: %w", err))
-	}
-
-	// Connect to database directly on overlay network
-	dbName := req.Msg.GetDatabaseName()
-	if dbName == "" {
-		dbName = conn.DatabaseName
-	}
-
-	// Check if database is sleeping/stopped and handle accordingly
-	directHost := fmt.Sprintf("obiente-%s", req.Msg.GetDatabaseId())
-	directPort := conn.Port
-	if s.routeRegistry != nil {
-		if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok {
-			directPort = int32(route.InternalPort)
-			if route.Stopped {
-				if route.DBStatus == 5 { // STOPPED
-					return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("database is stopped"))
-				}
-				// SLEEPING - wake it
-				if s.routeRegistry.OnWake != nil {
-					wakeCtx, wakeCancel := s.detachedContext(30 * time.Second)
-					ip, err := s.routeRegistry.OnWake(wakeCtx, route)
-					wakeCancel()
-					if err != nil {
-						return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to wake database: %w", err))
-					}
-					directHost = ip
-				}
-			}
-		}
-	}
-
-	// Decrypt password for direct connection
-	password := conn.Password
-	if s.secretManager != nil {
-		if decrypted, err := s.secretManager.DecryptPassword(conn.Password); err == nil {
-			password = decrypted
-		}
-	}
-
-	// Set timeout early so it applies to the connection attempt too
-	timeout := 10 * time.Second
-	if req.Msg.TimeoutSeconds != nil && *req.Msg.TimeoutSeconds > 0 {
-		timeout = time.Duration(*req.Msg.TimeoutSeconds) * time.Second
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	defer db.Close()
 
-	var db *sql.DB
 	startTime := time.Now()
-	switch databasesv1.DatabaseType(dbInstance.Type) {
-	case databasesv1.DatabaseType_POSTGRESQL:
-		connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&connect_timeout=5",
-			url.QueryEscape(conn.Username), url.QueryEscape(password), url.QueryEscape(directHost), directPort, url.QueryEscape(dbName))
-		var err error
-		db, err = sql.Open("postgres", connStr)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to connect: %w", err))
-		}
-		defer db.Close()
-	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
-		connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=5s",
-			url.QueryEscape(conn.Username), url.QueryEscape(password), url.QueryEscape(directHost), directPort, url.QueryEscape(dbName))
-		var err error
-		db, err = sql.Open("mysql", connStr)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to connect: %w", err))
-		}
-		defer db.Close()
-	default:
-		return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("query execution not yet supported for database type %d", dbInstance.Type))
-	}
-
-	// Verify connectivity before running query
-	if err := db.PingContext(ctx); err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("database unreachable at %s:%d: %w", directHost, directPort, err))
-	}
 
 	if !readOnly {
-		result, err := db.ExecContext(ctx, req.Msg.GetQuery())
+		result, err := db.ExecContext(queryCtx, req.Msg.GetQuery())
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query execution failed: %w", err))
 		}
@@ -165,7 +69,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 	}
 
 	// Execute query
-	rows, err := db.QueryContext(ctx, req.Msg.GetQuery())
+	rows, err := db.QueryContext(queryCtx, req.Msg.GetQuery())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query execution failed: %w", err))
 	}
@@ -222,23 +126,7 @@ func (s *Service) ExecuteQuery(ctx context.Context, req *connect.Request[databas
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to scan row: %w", err))
 		}
 
-		// Convert to result cells
-		cells := make([]*databasesv1.QueryResultCell, len(columns))
-		for i, val := range values {
-			cell := &databasesv1.QueryResultCell{
-				ColumnName: columns[i],
-				IsNull:     val == nil,
-			}
-			if val != nil {
-				cellValue := fmt.Sprintf("%v", val)
-				cell.Value = &cellValue
-			}
-			cells[i] = cell
-		}
-
-		resultRows = append(resultRows, &databasesv1.QueryResultRow{
-			Cells: cells,
-		})
+		resultRows = append(resultRows, buildQueryResultRow(columns, values))
 		rowCount++
 	}
 
@@ -297,8 +185,163 @@ func int32Ptr(v int32) *int32 {
 	return &v
 }
 
-// StreamQuery streams query results (placeholder)
 func (s *Service) StreamQuery(ctx context.Context, req *connect.Request[databasesv1.StreamQueryRequest], stream *connect.ServerStream[databasesv1.QueryResultRow]) error {
-	// Placeholder implementation
-	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("streaming queries not yet implemented"))
+	orgID := req.Msg.GetOrganizationId()
+	if orgID == "" {
+		if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+			orgID = eff
+		}
+	}
+
+	queryCtx, cancel, db, _, readOnly, err := s.prepareQueryExecution(ctx, orgID, req.Msg.GetDatabaseId(), req.Msg.GetDatabaseName(), req.Msg.GetQuery(), req.Msg.TimeoutSeconds)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	defer db.Close()
+
+	if !readOnly {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("streaming queries only supports read-only statements"))
+	}
+
+	rows, err := db.QueryContext(queryCtx, req.Msg.GetQuery())
+	if err != nil {
+		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("query execution failed: %w", err))
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get columns: %w", err))
+	}
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to scan row: %w", err))
+		}
+
+		if err := stream.Send(buildQueryResultRow(columns, values)); err != nil {
+			return err
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("row iteration error: %w", err))
+	}
+
+	return nil
+}
+
+func (s *Service) prepareQueryExecution(ctx context.Context, organizationID, databaseID, databaseName, query string, timeoutSeconds *int32) (context.Context, context.CancelFunc, *sql.DB, string, bool, error) {
+	queryType, readOnly, err := classifySQLQuery(query)
+	if err != nil {
+		return nil, nil, nil, "", false, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	requiredPermission := auth.PermissionDatabaseManage
+	if readOnly {
+		requiredPermission = auth.PermissionDatabaseRead
+	}
+	if err := s.checkDatabasePermission(ctx, databaseID, requiredPermission); err != nil {
+		return nil, nil, nil, "", false, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	dbInstance, conn, directHost, directPort, password, err := s.resolveDirectConnectionDetails(ctx, databaseID)
+	if err != nil {
+		return nil, nil, nil, "", false, mapQueryPreparationError(err)
+	}
+	if dbInstance.OrganizationID != organizationID {
+		return nil, nil, nil, "", false, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
+	}
+
+	if databaseName == "" {
+		databaseName = conn.DatabaseName
+	}
+
+	timeout := 10 * time.Second
+	if timeoutSeconds != nil && *timeoutSeconds > 0 {
+		timeout = time.Duration(*timeoutSeconds) * time.Second
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, timeout)
+
+	db, err := openSQLQueryConnection(databasesv1.DatabaseType(dbInstance.Type), conn.Username, password, directHost, directPort, databaseName)
+	if err != nil {
+		cancel()
+		if errors.Is(err, errUnsupportedQueryDatabaseType) {
+			return nil, nil, nil, "", false, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("query execution is only supported for PostgreSQL, MySQL, and MariaDB databases"))
+		}
+		return nil, nil, nil, "", false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to connect: %w", err))
+	}
+	if err := db.PingContext(queryCtx); err != nil {
+		cancel()
+		db.Close()
+		return nil, nil, nil, "", false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("database unreachable at %s:%d: %w", directHost, directPort, err))
+	}
+
+	return queryCtx, cancel, db, queryType, readOnly, nil
+}
+
+func openSQLQueryConnection(dbType databasesv1.DatabaseType, username, password, host string, port int32, databaseName string) (*sql.DB, error) {
+	switch dbType {
+	case databasesv1.DatabaseType_POSTGRESQL:
+		connStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&connect_timeout=5",
+			url.QueryEscape(username), url.QueryEscape(password), host, port, url.QueryEscape(databaseName))
+		return sql.Open("postgres", connStr)
+	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
+		connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?timeout=5s",
+			url.QueryEscape(username), url.QueryEscape(password), host, port, url.QueryEscape(databaseName))
+		return sql.Open("mysql", connStr)
+	default:
+		return nil, errUnsupportedQueryDatabaseType
+	}
+}
+
+func buildQueryResultRow(columns []string, values []interface{}) *databasesv1.QueryResultRow {
+	cells := make([]*databasesv1.QueryResultCell, len(columns))
+	for i, val := range values {
+		cell := &databasesv1.QueryResultCell{
+			ColumnName: columns[i],
+			IsNull:     val == nil,
+		}
+		if val != nil {
+			cellValue := stringifyQueryValue(val)
+			cell.Value = &cellValue
+		}
+		cells[i] = cell
+	}
+
+	return &databasesv1.QueryResultRow{
+		Cells: cells,
+	}
+}
+
+func stringifyQueryValue(val interface{}) string {
+	switch v := val.(type) {
+	case []byte:
+		return string(v)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+func mapQueryPreparationError(err error) error {
+	errText := err.Error()
+	switch {
+	case strings.Contains(errText, "database not found"):
+		return connect.NewError(connect.CodeNotFound, err)
+	case strings.Contains(errText, "database is stopped"):
+		return connect.NewError(connect.CodeFailedPrecondition, err)
+	case strings.Contains(errText, "failed to wake database"):
+		return connect.NewError(connect.CodeUnavailable, err)
+	case strings.Contains(errText, "failed to get connection info"):
+		return connect.NewError(connect.CodeInternal, err)
+	default:
+		return connect.NewError(connect.CodeInternal, err)
+	}
 }
