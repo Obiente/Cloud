@@ -461,6 +461,10 @@ import UsageStatistics from "~/components/shared/UsageStatistics.vue";
 import CostBreakdown from "~/components/shared/CostBreakdown.vue";
 import LiveMetrics from "~/components/shared/LiveMetrics.vue";
 import { useToast } from "~/composables/useToast";
+import {
+  getGameServerConnectionDomain,
+  getGameServerSrvDomains,
+} from "~/utils/domains";
 
 interface Props {
   gameServer: any;
@@ -485,44 +489,14 @@ const estimatedMonthlyCost = computed(() => {
 });
 
 const connectionDomain = computed(() => {
-  if (!props.gameServer?.id) return "";
-  return `${props.gameServer.id}.my.obiente.cloud`;
+  return getGameServerConnectionDomain(props.gameServer?.id);
 });
 
 const srvDomains = computed(() => {
-  if (!props.gameServer?.id || props.gameServer?.gameType === undefined) return [];
-  
-  const gameType = typeof props.gameServer.gameType === 'number'
-    ? props.gameServer.gameType as GameType
-    : props.gameServer.gameType;
-  const id = props.gameServer.id;
-  const domains: Array<{ label: string; domain: string; description: string }> = [];
-  
-  if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_JAVA) {
-    domains.push({
-      label: "Minecraft Java (SRV)",
-      domain: `_minecraft._tcp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Minecraft Java Edition for automatic port resolution"
-    });
-  }
-  
-  if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_BEDROCK) {
-    domains.push({
-      label: "Minecraft Bedrock (SRV)",
-      domain: `_minecraft._udp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Minecraft Bedrock Edition for automatic port resolution"
-    });
-  }
-  
-  if (gameType === GameType.RUST) {
-    domains.push({
-      label: "Rust (SRV)",
-      domain: `_rust._udp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Rust for automatic port resolution"
-    });
-  }
-  
-  return domains;
+  return getGameServerSrvDomains(
+    props.gameServer?.id,
+    props.gameServer?.gameType
+  );
 });
 
 const hasSRVRecords = computed(() => {
@@ -623,4 +597,3 @@ const copyToClipboard = async (text: string) => {
   }
 };
 </script>
-

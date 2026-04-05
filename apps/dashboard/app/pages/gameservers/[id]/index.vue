@@ -288,7 +288,7 @@
             <template #routing>
               <GameServerHTTPRouting
                 :game-server-id="gameServerId"
-                :default-domain="`${gameServerId}.my.obiente.cloud`"
+                :default-domain="getGameServerConnectionDomain(gameServerId)"
               />
             </template>
             <template #settings>
@@ -684,6 +684,10 @@ import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService, GameType } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { SuperadminService } from "@obiente/proto";
+import {
+  getGameServerConnectionDomain,
+  getGameServerSrvDomains,
+} from "~/utils/domains";
 
 definePageMeta({
   layout: "default",
@@ -1065,52 +1069,15 @@ const getGameTypeLabel = (gameType: number) => {
   return types[gameType] || "Unknown";
 };
 
-// Connection domain helpers
 const connectionDomain = computed(() => {
-  if (!gameServer.value?.id) return "";
-  // Format: gs-123.my.obiente.cloud
-  return `${gameServer.value.id}.my.obiente.cloud`;
+  return getGameServerConnectionDomain(gameServer.value?.id);
 });
 
-// Get SRV domains based on game type
 const srvDomains = computed(() => {
-  if (!gameServer.value?.id || !gameServer.value?.gameType) return [];
-  
-  const gameType = typeof gameServer.value.gameType === 'number'
-    ? gameServer.value.gameType as GameType
-    : gameServer.value.gameType;
-  const id = gameServer.value.id;
-  const domains: Array<{ label: string; domain: string; description: string }> = [];
-  
-  // GameType enum values: MINECRAFT = 1, MINECRAFT_JAVA = 2, MINECRAFT_BEDROCK = 3, RUST = 6
-  if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_JAVA) {
-    // Minecraft Java Edition - TCP SRV record
-    domains.push({
-      label: "Minecraft Java (SRV)",
-      domain: `_minecraft._tcp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Minecraft Java Edition for automatic port resolution"
-    });
-  }
-  
-  if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_BEDROCK) {
-    // Minecraft Bedrock Edition - UDP SRV record
-    domains.push({
-      label: "Minecraft Bedrock (SRV)",
-      domain: `_minecraft._udp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Minecraft Bedrock Edition for automatic port resolution"
-    });
-  }
-  
-  if (gameType === GameType.RUST) {
-    // Rust - UDP SRV record
-    domains.push({
-      label: "Rust (SRV)",
-      domain: `_rust._udp.${id}.my.obiente.cloud`,
-      description: "Use this domain in Rust for automatic port resolution"
-    });
-  }
-  
-  return domains;
+  return getGameServerSrvDomains(
+    gameServer.value?.id,
+    gameServer.value?.gameType
+  );
 });
 
 const isMinecraftServer = computed(() => {
@@ -1366,4 +1333,3 @@ const deleteGameServer = async () => {
   }
 };
 </script>
-

@@ -214,6 +214,7 @@ import { useSkeletonVariations, randomTextWidthByType, randomIconVariation } fro
 import OuiSkeleton from "~/components/oui/Skeleton.vue";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
+import { isDefaultObienteDomain } from "~/utils/domains";
 
 interface Props {
   deployment?: Deployment;
@@ -266,8 +267,7 @@ const { data: routingData } = await useClientFetch(
   }
 );
 
-// Computed property to get the primary domain from routing rules
-// Prefers custom domains over deploy-XXX.my.obiente.cloud domains
+// Prefers custom domains over the managed default *.my.obiente.cloud domain.
 const primaryDomain = computed(() => {
   if (!props.deployment) return "";
 
@@ -280,22 +280,20 @@ const primaryDomain = computed(() => {
   // Get the first routing rule's domain
   const firstRuleDomain = rules[0]?.domain || "";
 
-  // If the first rule has a custom domain (not deploy-XXX.my.obiente.cloud), use it
-  if (firstRuleDomain && !firstRuleDomain.match(/^deploy-\d+\.my\.obiente\.cloud$/)) {
+  if (firstRuleDomain && !isDefaultObienteDomain(firstRuleDomain, ["deploy"])) {
     return firstRuleDomain;
   }
 
-  // If first rule is deploy-XXX.my.obiente.cloud, look for a custom domain in other rules
+  // If the first rule is the managed default domain, look for a custom domain in other rules.
   const customDomain = rules.find((rule: { domain?: string }) =>
-    rule.domain && !rule.domain.match(/^deploy-\d+\.my\.obiente\.cloud$/)
+    rule.domain && !isDefaultObienteDomain(rule.domain, ["deploy"])
   );
 
   if (customDomain?.domain) {
     return customDomain.domain;
   }
 
-  // If no custom domain found, use the first rule's domain (even if it's deploy-XXX.my.obiente.cloud)
-  // Only if it's actually routed (has a domain set)
+  // If no custom domain is available, use the first routed domain.
   if (firstRuleDomain) {
     return firstRuleDomain;
   }
