@@ -426,6 +426,7 @@
   import {
     DeploymentService,
     type Deployment,
+    type DeploymentContainer,
     DeploymentType,
     DeploymentStatus,
     Environment as EnvEnum,
@@ -743,7 +744,7 @@
       });
 
       if (res?.containers) {
-        containers.value = res.containers.map((c: any) => ({
+        containers.value = res.containers.map((c: DeploymentContainer) => ({
           containerId: c.containerId,
           serviceName: c.serviceName || undefined,
           status: c.status || "unknown",
@@ -795,7 +796,7 @@
       await loadContainers();
       // Start polling to catch status changes as containers start
       startPolling();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to start deployment:", error);
     }
   }
@@ -809,7 +810,7 @@
       await loadContainers();
       // Start polling to catch status changes as containers stop
       startPolling();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to stop deployment:", error);
     }
   }
@@ -969,12 +970,12 @@
 
       // Refresh deployment data
       await refreshDeployment();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to save compose:", error);
       await showAlert({
         title: "Failed to Save",
         message:
-          error.message ||
+          (error as Error).message ||
           "Failed to save Docker Compose configuration. Please try again.",
       });
     }
@@ -997,7 +998,7 @@
       if (res.deployment) {
         localDeployment.value = res.deployment;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to refresh deployment after env vars save:", error);
     }
   }

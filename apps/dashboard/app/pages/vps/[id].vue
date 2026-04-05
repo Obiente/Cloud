@@ -2243,7 +2243,7 @@
         connectionInstructions: res.connectionInstructions || "",
       };
     } catch (err: unknown) {
-      sshInfoError.value = err instanceof Error ? err.message : "Unknown error";
+      sshInfoError.value = err instanceof Error ? (err as Error).message : "Unknown error";
       sshInfo.value = null;
     } finally {
       sshInfoLoading.value = false;
@@ -2406,14 +2406,14 @@
         updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
       };
       terminalKeyLoading.value = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError && err.code === Code.NotFound) {
         // Key doesn't exist - this is fine, just set to null
         terminalKey.value = null;
       } else {
         terminalKeyError.value =
           err instanceof Error
-            ? err.message
+            ? (err as Error).message
             : "Failed to load terminal key status";
       }
       terminalKeyLoading.value = false;
@@ -2442,14 +2442,14 @@
         updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
       };
       bastionKeyLoading.value = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError && err.code === Code.NotFound) {
         // Key doesn't exist - this is fine, just set to null
         bastionKey.value = null;
       } else {
         bastionKeyError.value =
           err instanceof Error
-            ? err.message
+            ? (err as Error).message
             : "Failed to load bastion key status";
       }
       bastionKeyLoading.value = false;
@@ -2474,12 +2474,12 @@
 
       sshAlias.value = res.alias || null;
       sshAliasLoading.value = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError && err.code === Code.NotFound) {
         sshAlias.value = null;
       } else {
         sshAliasError.value =
-          err instanceof Error ? err.message : "Failed to load SSH alias";
+          err instanceof Error ? (err as Error).message : "Failed to load SSH alias";
       }
       sshAliasLoading.value = false;
     }
@@ -2534,9 +2534,9 @@
       sshAlias.value = response.alias;
       setSSHAliasDialogOpen.value = false;
       newSSHAlias.value = "";
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "Failed to set SSH alias";
+        err instanceof Error ? (err as Error).message : "Failed to set SSH alias";
       toast.error(errorMsg);
     } finally {
       settingSSHAlias.value = false;
@@ -2558,9 +2558,9 @@
       toast.success(response.message || "SSH alias has been removed.");
       sshAlias.value = null;
       removeSSHAliasDialogOpen.value = false;
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "Failed to remove SSH alias";
+        err instanceof Error ? (err as Error).message : "Failed to remove SSH alias";
       toast.error(errorMsg);
     } finally {
       removingSSHAlias.value = false;
@@ -2610,7 +2610,7 @@
           | undefined,
       }));
     } catch (err: unknown) {
-      sshKeysError.value = err instanceof Error ? err.message : "Unknown error";
+      sshKeysError.value = err instanceof Error ? (err as Error).message : "Unknown error";
       sshKeys.value = [];
     } finally {
       sshKeysLoading.value = false;
@@ -2652,10 +2652,10 @@
       await fetchSSHKeys();
     } catch (err: unknown) {
       if (err instanceof ConnectError) {
-        addSSHKeyError.value = err.message || "Failed to add SSH key";
+        addSSHKeyError.value = (err as Error).message || "Failed to add SSH key";
       } else {
         addSSHKeyError.value =
-          err instanceof Error ? err.message : "Unknown error";
+          err instanceof Error ? (err as Error).message : "Unknown error";
       }
       toast.error("Failed to add SSH key", addSSHKeyError.value);
     } finally {
@@ -2692,10 +2692,10 @@
       await fetchSSHKeys();
     } catch (err: unknown) {
       if (err instanceof ConnectError) {
-        editingSSHKeyError.value = err.message || "Failed to update SSH key";
+        editingSSHKeyError.value = (err as Error).message || "Failed to update SSH key";
       } else {
         editingSSHKeyError.value =
-          err instanceof Error ? err.message : "Unknown error";
+          err instanceof Error ? (err as Error).message : "Unknown error";
       }
       toast.error("Failed to update SSH key", editingSSHKeyError.value);
     } finally {
@@ -2782,7 +2782,7 @@
       }
       await fetchSSHKeys();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to remove SSH key", message);
     } finally {
       removingSSHKey.value = null;
@@ -2825,7 +2825,7 @@
 
       // Refresh VPS to ensure UI is up to date
       await refreshVPS();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError) {
         if (err.code === Code.NotFound) {
           // Key doesn't exist - this shouldn't happen with rotate, but handle it
@@ -2834,11 +2834,11 @@
           );
           terminalKey.value = null;
         } else {
-          toast.error(`Failed to rotate terminal key: ${err.message}`);
+          toast.error(`Failed to rotate terminal key: ${(err as Error).message}`);
         }
       } else {
         toast.error(
-          `Failed to rotate terminal key: ${err.message || "Unknown error"}`
+          `Failed to rotate terminal key: ${(err as Error).message || "Unknown error"}`
         );
       }
     } finally {
@@ -2867,7 +2867,7 @@
 
       // Refresh VPS to ensure UI is up to date
       await refreshVPS();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError) {
         if (err.code === Code.NotFound) {
           toast.error(
@@ -2875,11 +2875,11 @@
           );
           bastionKey.value = null;
         } else {
-          toast.error(`Failed to rotate bastion key: ${err.message}`);
+          toast.error(`Failed to rotate bastion key: ${(err as Error).message}`);
         }
       } else {
         toast.error(
-          `Failed to rotate bastion key: ${err.message || "Unknown error"}`
+          `Failed to rotate bastion key: ${(err as Error).message || "Unknown error"}`
         );
       }
     } finally {
@@ -2914,16 +2914,16 @@
 
       // Refresh VPS to ensure UI is up to date
       await refreshVPS();
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ConnectError) {
         if (err.code === Code.NotFound) {
           toast.error("Terminal key not found.");
         } else {
-          toast.error(`Failed to remove terminal key: ${err.message}`);
+          toast.error(`Failed to remove terminal key: ${(err as Error).message}`);
         }
       } else {
         toast.error(
-          `Failed to remove terminal key: ${err.message || "Unknown error"}`
+          `Failed to remove terminal key: ${(err as Error).message || "Unknown error"}`
         );
       }
     } finally {
@@ -2947,7 +2947,7 @@
         "Please save the new password - it will not be shown again."
       );
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to reset password", message);
       resetPasswordDialogOpen.value = false;
     } finally {
@@ -3141,7 +3141,7 @@
       toast.success("VPS instance started", "The VPS instance is starting up.");
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to start VPS", message);
     } finally {
       isActioning.value = false;
@@ -3168,7 +3168,7 @@
       );
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to stop VPS", message);
     } finally {
       isActioning.value = false;
@@ -3214,7 +3214,7 @@
       }
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to reboot VPS", message);
     } finally {
       isActioning.value = false;
@@ -3235,7 +3235,7 @@
       toast.success("VPS renamed", "The VPS name has been updated.");
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to rename VPS", message);
     } finally {
       isActioning.value = false;
@@ -3258,7 +3258,7 @@
       );
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to update description", message);
     } finally {
       isActioning.value = false;
@@ -3300,7 +3300,7 @@
       // Refresh VPS data
       await refreshVPS();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to reinitialize VPS", message);
     } finally {
       isActioning.value = false;
@@ -3332,7 +3332,7 @@
       // Redirect immediately to prevent any refetch attempts
       await router.push("/vps");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
+      const message = err instanceof Error ? (err as Error).message : "Unknown error";
       toast.error("Failed to delete VPS", message);
       isActioning.value = false;
     }

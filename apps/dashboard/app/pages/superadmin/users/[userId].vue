@@ -217,10 +217,10 @@ async function loadUser() {
       user: response.user,
       organizations: response.organizations || [],
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load user:", error);
     const { toast } = useToast();
-    toast.error(error?.message || "Failed to load user");
+    toast.error((error as Error | undefined)?.message || "Failed to load user");
     throw error;
   }
 }

@@ -179,7 +179,7 @@ async function createBinding() {
     userId.value = "";
     roleId.value = "";
     await refreshBindings();
-  } catch (e: any) {
+  } catch (e: unknown) {
     error.value = e?.message || "Error";
     toast.error(error.value);
   } finally {
@@ -195,7 +195,7 @@ async function removeBinding(id: string) {
     await superadminClient.deleteSuperadminRoleBinding({ id });
     toast.success("Role binding removed successfully");
     await refreshBindings();
-  } catch (e: any) {
+  } catch (e: unknown) {
     error.value = e?.message || "Error";
     toast.error(error.value);
   }

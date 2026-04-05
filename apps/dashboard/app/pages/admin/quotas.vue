@@ -116,7 +116,7 @@ async function save() {
       storageBytesOverride: BigInt(form.storage_bytes_override || "0"),
     });
     message.value = "Saved";
-  } catch (e: any) {
+  } catch (e: unknown) {
     error.value = e?.message || "Error";
   }
 }

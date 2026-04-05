@@ -1055,6 +1055,7 @@ import {
   type GameServer,
   type VPSInstance,
   type GameServerUsageMetrics,
+  type StreamDeploymentMetricsRequest,
   GameType,
   GameServerStatus
 } from "@obiente/proto";
@@ -1242,34 +1243,31 @@ const startHomepageMetricsStream = async () => {
   homepageStreamController.value = new AbortController();
 
   try {
-    const request: any = {
+    const request: Partial<StreamDeploymentMetricsRequest> = {
       deploymentId: exampleWebDeployment.id,
       organizationId: "mock-org",
       intervalSeconds: 5,
       aggregate: true,
     };
 
-    console.log("[Homepage] Starting metrics stream with mock transport");
     const stream = await (deploymentClient as any).streamDeploymentMetrics(request, {
       signal: homepageStreamController.value.signal,
     });
 
-    console.log("[Homepage] Metrics stream started, receiving data...");
     for await (const metric of stream) {
       if (homepageStreamController.value?.signal.aborted) {
         break;
       }
       homepageLatestMetric.value = metric;
-      console.log("[Homepage] Received metric:", metric);
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err.name === "AbortError") {
       return;
     }
     // Suppress "missing trailer" errors
     const isMissingTrailerError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
+      (err as Error).message?.toLowerCase().includes("missing trailer") ||
+      (err as Error).message?.toLowerCase().includes("trailer") ||
       err.code === "unknown";
 
     if (!isMissingTrailerError) {
@@ -1299,7 +1297,6 @@ onMounted(() => {
   const checkAndStart = () => {
     const previewTransport = (globalThis as any).__OBIENTE_PREVIEW_CONNECT__;
     if (previewTransport) {
-      console.log('[Homepage] Mock transport available, starting metrics stream');
       startHomepageMetricsStream();
     } else {
       // Retry after a short delay if transport not ready yet

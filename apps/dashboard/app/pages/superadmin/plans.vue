@@ -205,7 +205,7 @@
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import { computed, ref, onMounted } from "vue";
 import { useConnectClient } from "~/lib/connect-client";
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type Plan, type UpdatePlanRequest } from "@obiente/proto";
 import { useToast } from "~/composables/useToast";
 
 definePageMeta({
@@ -253,8 +253,8 @@ const fetchPlans = async () => {
   try {
     const response = await client.listPlans({});
     return response.plans || [];
-  } catch (error: any) {
-    toast.error(`Failed to load plans: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to load plans: ${(error as Error | undefined)?.message || "Unknown error"}`);
     throw error;
   }
 };
@@ -280,7 +280,7 @@ const openCreateDialog = () => {
   planDialogOpen.value = true;
 };
 
-const openEditDialog = (plan: any) => {
+const openEditDialog = (plan: Plan) => {
   editingPlan.value = plan;
   planForm.value = {
     name: plan.name || "",
@@ -323,7 +323,7 @@ const savePlan = async () => {
     const trialDays = Number(planForm.value.trialDays) || 0;
 
     if (editingPlan.value) {
-      const updateRequest: any = {
+      const updateRequest: Partial<UpdatePlanRequest> = {
         id: editingPlan.value.id,
       };
       if (planForm.value.name) updateRequest.name = planForm.value.name;
@@ -358,14 +358,14 @@ const savePlan = async () => {
     }
     closePlanDialog();
     await fetchPlans();
-  } catch (error: any) {
-    toast.error(`Failed to save plan: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to save plan: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isSaving.value = false;
   }
 };
 
-const openDeleteDialog = (plan: any) => {
+const openDeleteDialog = (plan: Plan) => {
   planToDelete.value = plan;
   deleteDialogOpen.value = true;
 };
@@ -380,8 +380,8 @@ const confirmDelete = async () => {
     deleteDialogOpen.value = false;
     planToDelete.value = null;
     await fetchPlans();
-  } catch (error: any) {
-    toast.error(`Failed to delete plan: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to delete plan: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isDeleting.value = false;
   }

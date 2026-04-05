@@ -479,7 +479,7 @@
 
 <script setup lang="ts">
 import { ArrowLeftIcon } from "@heroicons/vue/24/outline";
-import { SuperadminService, VPSStatus, VPSImage } from "@obiente/proto";
+import { SuperadminService, VPSStatus, VPSImage, type SuperadminResizeVPSRequest } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import SuperadminStatusBadge from "~/components/superadmin/SuperadminStatusBadge.vue";
 import type { BadgeVariant } from "~/components/oui/Badge.vue";
@@ -637,9 +637,9 @@ async function loadVPS() {
       organizationName: response.organizationName,
       createdBy: response.createdBy,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load VPS:", error);
-    toast.error(error?.message || "Failed to load VPS");
+    toast.error((error as Error | undefined)?.message || "Failed to load VPS");
     throw error;
   }
 }
@@ -708,8 +708,8 @@ async function loadSizes() {
       memoryBytes: size.memoryBytes,
       diskBytes: size.diskBytes,
     }));
-  } catch (error: any) {
-    toast.error(`Failed to load sizes: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to load sizes: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     loadingSizes.value = false;
   }
@@ -746,7 +746,7 @@ async function handleResize() {
   if (!vps.value || !resizeForm.value.newSize) return;
   isResizing.value = true;
   try {
-    const request: any = {
+    const request: Partial<SuperadminResizeVPSRequest> = {
       vpsId: vps.value.id,
       newSize: resizeForm.value.newSize,
       growDisk: resizeForm.value.growDisk,
@@ -781,8 +781,8 @@ async function handleResize() {
     toast.success("VPS resized successfully");
     resizeDialogOpen.value = false;
     await loadVPS(); // Refresh VPS data
-  } catch (error: any) {
-    toast.error(`Failed to resize VPS: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to resize VPS: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isResizing.value = false;
   }
@@ -799,8 +799,8 @@ async function handleSuspend() {
     toast.success("VPS suspended successfully");
     suspendDialogOpen.value = false;
     await loadVPS(); // Refresh VPS data
-  } catch (error: any) {
-    toast.error(`Failed to suspend VPS: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to suspend VPS: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isSuspending.value = false;
   }
@@ -815,8 +815,8 @@ async function handleUnsuspend() {
     });
     toast.success("VPS unsuspended successfully");
     await loadVPS(); // Refresh VPS data
-  } catch (error: any) {
-    toast.error(`Failed to unsuspend VPS: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to unsuspend VPS: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isUnsuspending.value = false;
   }
@@ -830,8 +830,8 @@ async function handleUpdateCloudInit() {
     // For now, show an error that this needs proper YAML parsing
     toast.error("CloudInit update requires proper YAML parsing. This feature is not yet fully implemented.");
     cloudInitDialogOpen.value = false;
-  } catch (error: any) {
-    toast.error(`Failed to update CloudInit: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to update CloudInit: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isUpdatingCloudInit.value = false;
   }
@@ -847,8 +847,8 @@ async function handleForceStop() {
     toast.success("VPS force stopped successfully");
     forceStopDialogOpen.value = false;
     await loadVPS(); // Refresh VPS data
-  } catch (error: any) {
-    toast.error(`Failed to force stop VPS: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to force stop VPS: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isForceStopping.value = false;
   }
@@ -864,8 +864,8 @@ async function handleForceDelete() {
     toast.success("VPS force deleted successfully");
     forceDeleteDialogOpen.value = false;
     router.push("/superadmin/vps");
-  } catch (error: any) {
-    toast.error(`Failed to force delete VPS: ${error?.message || "Unknown error"}`);
+  } catch (error: unknown) {
+    toast.error(`Failed to force delete VPS: ${(error as Error | undefined)?.message || "Unknown error"}`);
   } finally {
     isForceDeleting.value = false;
   }

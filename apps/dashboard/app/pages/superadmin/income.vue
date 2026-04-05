@@ -188,7 +188,7 @@
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type MonthlyIncome, type TopCustomer, type BillingTransaction } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useRouter } from "vue-router";
 
@@ -274,7 +274,7 @@ const paymentMetrics = computed(() => {
 
 const monthlyIncome = computed(() => {
   return (
-    incomeData.value?.monthlyIncome?.map((mi: any) => ({
+    incomeData.value?.monthlyIncome?.map((mi: MonthlyIncome) => ({
       month: mi.month || "—",
       revenue: mi.revenue || 0,
       transactionCount: mi.transactionCount || 0,
@@ -286,7 +286,7 @@ const monthlyIncome = computed(() => {
 
 const topCustomers = computed(() => {
   return (
-    incomeData.value?.topCustomers?.map((tc: any) => ({
+    incomeData.value?.topCustomers?.map((tc: TopCustomer) => ({
       organizationId: tc.organizationId,
       organizationName: tc.organizationName || "Unknown",
       totalRevenue: tc.totalRevenue || 0,
@@ -299,7 +299,7 @@ const topCustomers = computed(() => {
 
 const transactions = computed(() => {
   return (
-    incomeData.value?.transactions?.map((t: any) => ({
+    incomeData.value?.transactions?.map((t: BillingTransaction) => ({
       id: t.id,
       organizationId: t.organizationId,
       organizationName: t.organizationName || "Unknown",
@@ -319,7 +319,7 @@ const transactions = computed(() => {
 const filteredTransactions = computed(() => {
   const term = transactionSearch.value.trim().toLowerCase();
   if (!term) return transactions.value;
-  return transactions.value.filter((t: any) => {
+  return transactions.value.filter((t) => {
     const searchable = [
       t.organizationId,
       t.organizationName,

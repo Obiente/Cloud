@@ -191,6 +191,7 @@ definePageMeta({
 });
 
 import { ref, computed, onMounted } from "vue";
+import type { NodeInfo } from "@obiente/proto";
 import { useSuperAdmin } from "~/composables/useSuperAdmin";
 import { useToast } from "~/composables/useToast";
 import { formatBytes } from "~/utils/common";
@@ -312,11 +313,11 @@ const tableRows = computed(() => {
 
 // Check if node is a Swarm node (not a compose deployment)
 // Swarm nodes have node IDs that don't start with "local-"
-const isSwarmNode = (node: any) => {
+const isSwarmNode = (node: NodeInfo) => {
   return node?.id && !node.id.startsWith("local-");
 };
 
-const getNodeActions = (node: any) => {
+const getNodeActions = (node: NodeInfo) => {
   return [
     {
       label: "Configure",
@@ -326,7 +327,7 @@ const getNodeActions = (node: any) => {
   ];
 };
 
-const openEditDialog = (node: any) => {
+const openEditDialog = (node: NodeInfo) => {
   editingNode.value = node;
   editNodeForm.value = {
     subdomain: node.config?.subdomain || "",
@@ -361,10 +362,10 @@ const saveNodeConfig = async () => {
 
     editNodeDialogOpen.value = false;
     await refresh();
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(
       "Failed to update node configuration",
-      error.message || "An error occurred"
+      (error as Error).message || "An error occurred"
     );
   } finally {
     isSaving.value = false;
@@ -386,10 +387,10 @@ const refresh = async () => {
       region: undefined,
     });
     nodes.value = response.nodes || [];
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error(
       "Failed to load nodes",
-      error.message || "An error occurred"
+      (error as Error).message || "An error occurred"
     );
   } finally {
     isLoading.value = false;

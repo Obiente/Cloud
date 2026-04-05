@@ -312,7 +312,7 @@ const members = computed(() => membersData.value || []);
 
 const currentUserIdentifiers = computed(() => {
   const identifiers = new Set<string>();
-  const sessionUser: any = auth.user || null;
+  const sessionUser = auth.user as (import("@obiente/types").User & { id?: string; userId?: string }) | null;
   if (!sessionUser) {
     return identifiers;
   }
@@ -775,7 +775,7 @@ async function removeBinding(id: string) {
   try {
     await adminClient.deleteRoleBinding({ id });
     await refreshBindings();
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("Failed to delete role binding:", e);
     alert(e?.message || "Failed to delete role binding");
   }

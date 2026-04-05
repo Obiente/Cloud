@@ -68,7 +68,7 @@
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref, onMounted } from "vue";
-import { OrganizationService } from "@obiente/proto";
+import { OrganizationService, type PendingInvite } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useAuth } from "~/composables/useAuth";
@@ -102,14 +102,14 @@ async function refresh() {
   try {
     const res = await orgClient.listMyInvites({});
     invites.value = res.invites || [];
-  } catch (error: any) {
-    toast.error(error?.message || "Failed to load invitations");
+  } catch (error: unknown) {
+    toast.error((error as Error | undefined)?.message || "Failed to load invitations");
   } finally {
     isLoading.value = false;
   }
 }
 
-async function acceptInvite(invite: any) {
+async function acceptInvite(invite: PendingInvite) {
   if (processingInvite.value === invite.id) return;
   processingInvite.value = invite.id;
   declining.value = false;
@@ -137,14 +137,14 @@ async function acceptInvite(invite: any) {
     
     // Navigate to dashboard or organizations page
     router.push('/dashboard');
-  } catch (error: any) {
-    toast.error(error?.message || "Failed to accept invitation");
+  } catch (error: unknown) {
+    toast.error((error as Error | undefined)?.message || "Failed to accept invitation");
   } finally {
     processingInvite.value = null;
   }
 }
 
-async function declineInvite(invite: any) {
+async function declineInvite(invite: PendingInvite) {
   if (processingInvite.value === invite.id) return;
   processingInvite.value = invite.id;
   declining.value = true;
@@ -159,8 +159,8 @@ async function declineInvite(invite: any) {
     
     // Remove from list
     invites.value = invites.value.filter(i => i.id !== invite.id);
-  } catch (error: any) {
-    toast.error(error?.message || "Failed to decline invitation");
+  } catch (error: unknown) {
+    toast.error((error as Error | undefined)?.message || "Failed to decline invitation");
   } finally {
     processingInvite.value = null;
     declining.value = false;

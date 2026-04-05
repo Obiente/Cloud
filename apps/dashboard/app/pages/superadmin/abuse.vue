@@ -120,7 +120,7 @@
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type SuspiciousOrganization, type SuspiciousActivity } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useRouter } from "vue-router";
 
@@ -150,7 +150,7 @@ const metrics = computed(() => {
   if (!m) return [];
   
   // Count activities by type
-  const activityCounts = activities.reduce((acc: Record<string, number>, act: any) => {
+  const activityCounts = activities.reduce((acc: Record<string, number>, act) => {
     const type = act.activityType || "unknown";
     acc[type] = (acc[type] || 0) + 1;
     return acc;
@@ -222,7 +222,7 @@ const metrics = computed(() => {
 
 const suspiciousOrgs = computed(() => {
   return (
-    abuseData.value?.suspiciousOrganizations?.map((org: any) => ({
+    abuseData.value?.suspiciousOrganizations?.map((org: SuspiciousOrganization) => ({
       organizationId: org.organizationId,
       organizationName: org.organizationName || "Unknown",
       reason: org.reason || "—",
@@ -238,7 +238,7 @@ const suspiciousOrgs = computed(() => {
 
 const suspiciousActivities = computed(() => {
   return (
-    abuseData.value?.suspiciousActivities?.map((act: any) => ({
+    abuseData.value?.suspiciousActivities?.map((act: SuspiciousActivity) => ({
       id: act.id,
       organizationId: act.organizationId,
       organization: act.organizationName || act.organizationId || "Unknown",

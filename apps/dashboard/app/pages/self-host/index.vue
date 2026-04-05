@@ -513,7 +513,7 @@ if (!organizations.value.length && auth.isAuthenticated) {
 // Get current user identifiers (similar to billing page)
 const currentUserIdentifiers = computed(() => {
   const identifiers = new Set<string>();
-  const sessionUser: any = auth.user || null;
+  const sessionUser = auth.user as (import("@obiente/types").User & { id?: string; userId?: string }) | null;
   if (!sessionUser) {
     return identifiers;
   }
@@ -711,8 +711,8 @@ async function subscribeToDNSDelegation() {
     } else {
       throw new Error("No checkout URL received");
     }
-  } catch (err: any) {
-    error.value = err.message || "Failed to create subscription checkout";
+  } catch (err: unknown) {
+    error.value = (err as Error).message || "Failed to create subscription checkout";
     toast.error(error.value);
     dnsDelegationSubscribing.value = false;
   }
@@ -727,8 +727,8 @@ async function openCustomerPortal() {
     if (response.portalUrl) {
       window.location.href = response.portalUrl;
     }
-  } catch (err: any) {
-    error.value = err.message || "Failed to open customer portal";
+  } catch (err: unknown) {
+    error.value = (err as Error).message || "Failed to open customer portal";
     toast.error(error.value);
   }
 }
@@ -760,8 +760,8 @@ async function cancelSubscription() {
     } else {
       throw new Error(response.message || "Failed to cancel subscription");
     }
-  } catch (err: any) {
-    error.value = err.message || "Failed to cancel subscription";
+  } catch (err: unknown) {
+    error.value = (err as Error).message || "Failed to cancel subscription";
     toast.error(error.value);
   } finally {
     cancelingSubscription.value = false;
@@ -812,7 +812,7 @@ async function loadAPIKey() {
       apiKeyCreatedAt.value = null;
       apiKeyDescription.value = "";
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to load API key:", err);
     currentAPIKey.value = null;
     hasActiveSubscription.value = false;
@@ -854,8 +854,8 @@ async function createAPIKey() {
     } else {
       throw new Error("No API key received");
     }
-  } catch (err: any) {
-    error.value = err.message || "Failed to create API key";
+  } catch (err: unknown) {
+    error.value = (err as Error).message || "Failed to create API key";
     toast.error(error.value);
   } finally {
     creatingAPIKey.value = false;
@@ -879,8 +879,8 @@ async function revokeAPIKey() {
     currentAPIKey.value = null;
     apiKeyCreatedAt.value = null;
     toast.success("API key revoked successfully");
-  } catch (err: any) {
-    error.value = err.message || "Failed to revoke API key";
+  } catch (err: unknown) {
+    error.value = (err as Error).message || "Failed to revoke API key";
     toast.error(error.value);
   } finally {
     revokingAPIKey.value = false;

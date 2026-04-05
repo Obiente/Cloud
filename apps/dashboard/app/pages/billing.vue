@@ -33,7 +33,7 @@
   const error = ref("");
 
   const getErrorMessage = (err: unknown, fallback: string): string =>
-    err instanceof Error ? err.message : (typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : fallback);
+    err instanceof Error ? (err as Error).message : (typeof err === "object" && err !== null && "message" in err ? String((err as { message: unknown }).message) : fallback);
   const auth = useAuth();
   const orgClient = useConnectClient(OrganizationService);
   const billingClient = useConnectClient(BillingService);

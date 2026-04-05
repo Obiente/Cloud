@@ -727,7 +727,7 @@ const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchE
       }
       
       return res.gameServer;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Check if it's a permission denied or not found error
       if (err && (err.code === "permission_denied" || err.code === "not_found")) {
         accessError.value = err;
@@ -872,7 +872,6 @@ const isVanillaServer = computed(() => {
   
   // Debug logging (remove after fixing)
   if (process.env.NODE_ENV === 'development') {
-    console.log('[isVanillaServer]', {
       serverType,
       envVars: gameServer.value.envVars,
       isVanilla,
@@ -902,7 +901,6 @@ const tabs = computed<TabItem[]>(() => {
     // Explicitly check isVanillaServer to ensure reactivity
     const vanilla = isVanillaServer.value;
     if (process.env.NODE_ENV === 'development') {
-      console.log('[tabs computed]', {
         isMinecraft: isMinecraft.value,
         isVanillaServer: vanilla,
         willShowModsTab: !vanilla,
@@ -1198,14 +1196,14 @@ const startStreaming = async () => {
       }
       latestMetric.value = metric;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Handle abort errors silently
     if (err?.name === "AbortError" || err?.code === "aborted") {
       return;
     }
     
     // Suppress common stream errors that are expected/non-critical
-    const errorMessage = err?.message?.toLowerCase() || "";
+    const errorMessage = (err as Error | undefined)?.message?.toLowerCase() || "";
     const errorCode = err?.code || "";
     const isExpectedError =
       errorMessage.includes("missing trailer") ||
@@ -1297,9 +1295,9 @@ const startServer = async () => {
     });
     await loadGameServer();
     toast.success("Game server started");
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Extract error message from backend
-    const errorMessage = error?.message || "Unknown error";
+    const errorMessage = (error instanceof Error ? (error as Error).message : null) || "Unknown error";
     
     // Check for common configuration errors
     let hint = "";

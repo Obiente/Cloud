@@ -342,11 +342,11 @@ const handleSignup = async () => {
     } else {
       error.value = response.message || "Failed to create account. Please try again.";
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Signup error:", err);
     error.value =
       err.data?.message ||
-      err.message ||
+      (err as Error).message ||
       "An error occurred. Please try again.";
   } finally {
     loading.value = false;

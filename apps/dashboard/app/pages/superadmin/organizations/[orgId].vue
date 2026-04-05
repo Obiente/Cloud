@@ -219,10 +219,10 @@ async function loadOrganization() {
       organization: orgResponse.organization,
       members: membersResponse.members || [],
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load organization:", error);
     const { toast } = useToast();
-    toast.error(error?.message || "Failed to load organization");
+    toast.error((error as Error | undefined)?.message || "Failed to load organization");
     throw error;
   }
 }

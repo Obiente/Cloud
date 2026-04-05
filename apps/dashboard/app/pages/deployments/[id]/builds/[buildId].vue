@@ -180,7 +180,7 @@ const loadBuild = async () => {
     if (buildResponse.build) {
       build.value = buildResponse.build;
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load build:", error);
     router.push(`/deployments/${deploymentId.value}?tab=builds`);
   } finally {
@@ -201,7 +201,7 @@ const loadBuildLogs = async () => {
     });
 
     logs.value = logsResponse.logs;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load build logs:", error);
     logs.value = [];
   } finally {

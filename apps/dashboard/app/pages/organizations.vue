@@ -7,7 +7,9 @@
     VPSService,
     type OrganizationMember,
     type Organization,
+    type PendingInvite,
   } from "@obiente/proto";
+  import type { Timestamp } from "@bufbuild/protobuf/wkt";
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import { useToast } from "~/composables/useToast";
@@ -168,7 +170,7 @@
 
   const currentUserIdentifiers = computed(() => {
     const identifiers = new Set<string>();
-    const sessionUser: any = auth.user || null;
+    const sessionUser = auth.user as (import("@obiente/types").User & { id?: string; userId?: string }) | null;
     if (!sessionUser) {
       return identifiers;
     }
@@ -319,7 +321,7 @@
       auth.notifyOrganizationsUpdated();
       name.value = "";
       slug.value = "";
-    } catch (e: any) {
+    } catch (e: unknown) {
       error.value = e?.message || "Error creating organization";
     }
   }
@@ -345,8 +347,8 @@
       toast.success(`Invitation email sent to ${inviteEmail.value}`);
       inviteEmail.value = "";
       await refreshMembers();
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to send invitation email");
+    } catch (error: unknown) {
+      toast.error((error instanceof Error ? error.message : null) || "Failed to send invitation email");
     } finally {
       inviting.value = false;
     }
@@ -363,8 +365,8 @@
       const email = member.user?.email || "the user";
       toast.success(`Invitation email resent to ${email}`);
       await refreshMembers();
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to resend invitation email");
+    } catch (error: unknown) {
+      toast.error((error instanceof Error ? error.message : null) || "Failed to resend invitation email");
     } finally {
       resendingInvite.value = null;
     }
@@ -421,7 +423,7 @@
     try {
       const res = await orgClient.listMyInvites({});
       myInvitations.value = res.invites || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       const { toast } = useToast();
       toast.error(error?.message || "Failed to load invitations");
     } finally {
@@ -429,7 +431,7 @@
     }
   }
   
-  async function acceptInvite(invite: any) {
+  async function acceptInvite(invite: PendingInvite) {
     if (processingInvite.value === invite.id) return;
     processingInvite.value = invite.id;
     decliningInvite.value = false;
@@ -461,7 +463,7 @@
       if (res.organization?.id) {
         await refreshMembers();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const { toast } = useToast();
       toast.error(error?.message || "Failed to accept invitation");
     } finally {
@@ -469,7 +471,7 @@
     }
   }
   
-  async function declineInvite(invite: any) {
+  async function declineInvite(invite: PendingInvite) {
     if (processingInvite.value === invite.id) return;
     processingInvite.value = invite.id;
     decliningInvite.value = true;
@@ -485,7 +487,7 @@
       
       // Remove from list
       myInvitations.value = myInvitations.value.filter(i => i.id !== invite.id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const { toast } = useToast();
       toast.error(error?.message || "Failed to decline invitation");
     } finally {
@@ -521,8 +523,8 @@
       } else {
         throw new Error("No checkout URL received");
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to create checkout session";
+    } catch (err: unknown) {
+      error.value = (err as Error).message || "Failed to create checkout session";
       addCreditsLoading.value = false;
     }
   }
@@ -714,8 +716,8 @@
       if (response.portalUrl) {
         window.location.href = response.portalUrl;
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to open customer portal";
+    } catch (err: unknown) {
+      error.value = (err as Error).message || "Failed to open customer portal";
     }
   }
   
@@ -834,9 +836,9 @@
         paymentElement.value = stripeElements.value.create("payment");
         paymentElement.value.mount(container);
         paymentElementLoading.value = false;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to initialize payment form:", err);
-        error.value = err.message || "Failed to initialize payment form";
+        error.value = (err as Error).message || "Failed to initialize payment form";
         paymentElementLoading.value = false;
         addPaymentMethodDialogOpen.value = false;
       }
@@ -882,8 +884,8 @@
         addPaymentMethodDialogOpen.value = false;
         useToast().toast.success("Payment method added successfully");
       }
-    } catch (err: any) {
-      error.value = err.message || "Failed to add payment method";
+    } catch (err: unknown) {
+      error.value = (err as Error).message || "Failed to add payment method";
     } finally {
       addPaymentMethodLoading.value = false;
     }
@@ -899,8 +901,8 @@
       await refreshPaymentMethods();
       await refreshBillingAccount();
       useToast().toast.success("Default payment method updated");
-    } catch (err: any) {
-      error.value = err.message || "Failed to set default payment method";
+    } catch (err: unknown) {
+      error.value = (err as Error).message || "Failed to set default payment method";
       useToast().toast.error(error.value);
     }
   }
@@ -918,8 +920,8 @@
       await refreshPaymentMethods();
       await refreshBillingAccount();
       useToast().toast.success("Payment method removed");
-    } catch (err: any) {
-      error.value = err.message || "Failed to remove payment method";
+    } catch (err: unknown) {
+      error.value = (err as Error).message || "Failed to remove payment method";
       useToast().toast.error(error.value);
     }
   }
@@ -952,7 +954,7 @@
     }
   }
 
-  function formatInvoiceDate(date: any): string {
+  function formatInvoiceDate(date: Timestamp | number | null | undefined): string {
     if (!date) return "";
     const seconds = typeof date === 'object' && 'seconds' ? Number(date.seconds) : typeof date === 'number' ? date : 0;
     if (seconds === 0) return "";

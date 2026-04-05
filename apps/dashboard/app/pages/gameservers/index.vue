@@ -267,7 +267,7 @@ import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiByte from "~/components/oui/Byte.vue";
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
-import { GameServerService, GameType } from "@obiente/proto";
+import { GameServerService, GameType, type CreateGameServerRequest } from "@obiente/proto";
 import { ConnectError, Code } from "@connectrpc/connect";
 
 definePageMeta({
@@ -533,21 +533,32 @@ const getStatusMeta = (status: string) => {
 
 // Actions
 const handleStart = async (id: string) => {
-  // TODO: Implement start game server API call
-  toast.success("Starting game server...");
-  console.log("Start game server:", id);
+  try {
+    await client.startGameServer({ gameServerId: id });
+    toast.success("Game server is starting...");
+    await refreshGameServers();
+  } catch (err: unknown) {
+    toast.error(`Failed to start game server: ${err instanceof Error ? (err as Error).message : String(err)}`);
+  }
 };
 
 const handleStop = async (id: string) => {
-  // TODO: Implement stop game server API call
-  toast.success("Stopping game server...");
-  console.log("Stop game server:", id);
+  try {
+    await client.stopGameServer({ gameServerId: id });
+    toast.success("Game server is stopping...");
+    await refreshGameServers();
+  } catch (err: unknown) {
+    toast.error(`Failed to stop game server: ${err instanceof Error ? (err as Error).message : String(err)}`);
+  }
 };
 
 const handleRefresh = async (id: string) => {
-  // TODO: Implement refresh game server status API call
-  toast.success("Refreshing game server status...");
-  console.log("Refresh game server:", id);
+  try {
+    await refreshGameServers();
+    toast.success("Game server status refreshed.");
+  } catch (err: unknown) {
+    toast.error(`Failed to refresh game server: ${err instanceof Error ? (err as Error).message : String(err)}`);
+  }
 };
 
 // Create game server
@@ -582,7 +593,7 @@ const createGameServer = async () => {
     const memoryGB = parseFloat(newGameServer.value.memoryGBStr) || 2;
     const cpuCores = parseFloat(newGameServer.value.cpuCoresStr) || 1;
 
-    const request: any = {
+    const request: Partial<CreateGameServerRequest> = {
       organizationId: organizationId.value,
       name: newGameServer.value.name,
       gameType: newGameServer.value.gameType,
@@ -643,7 +654,7 @@ const createGameServer = async () => {
 
     // Navigate to the detail page
     router.push(`/gameservers/${gameServer.id}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to create game server:", error);
     createError.value = error;
     toast.error("Failed to create game server");

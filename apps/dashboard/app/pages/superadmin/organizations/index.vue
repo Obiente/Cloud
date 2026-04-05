@@ -195,7 +195,7 @@ definePageMeta({
 import { PlusIcon, MinusIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
-import { OrganizationService, SuperadminService } from "@obiente/proto";
+import { OrganizationService, SuperadminService, type OrganizationOverview } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
@@ -471,7 +471,7 @@ const orgStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
   cancelled: { label: "CANCELLED", variant: "danger" },
 };
 
-const getOrgActions = (row: any): Action[] => {
+const getOrgActions = (row: OrganizationOverview): Action[] => {
   return [
     {
       key: "credits",
@@ -538,9 +538,9 @@ async function manageCredits() {
     manageCreditsAmount.value = "";
     manageCreditsNote.value = "";
     await refresh(); // Refresh to get updated organizations with credits
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to manage credits:", err);
-    toast.error(err?.message || "Failed to manage credits");
+    toast.error((err as Error | undefined)?.message || "Failed to manage credits");
   } finally {
     manageCreditsLoading.value = false;
   }
@@ -561,8 +561,8 @@ async function setPlan() {
     setPlanDialogOpen.value = false;
     selectedPlanId.value = null;
     await refresh();
-  } catch (err: any) {
-    toast.error(err?.message || 'Failed to update plan');
+  } catch (err: unknown) {
+    toast.error((err as Error | undefined)?.message || 'Failed to update plan');
   } finally {
     setPlanLoading.value = false;
   }

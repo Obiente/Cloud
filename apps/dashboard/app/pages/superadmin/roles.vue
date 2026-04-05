@@ -38,7 +38,7 @@ const { data: permissionsCatalog, error: permissionsError } = await useClientFet
         resourceType: p.resourceType ?? "admin",
       }));
       return perms;
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("[SuperadminRoles] Failed to load permissions:", e);
       throw e;
     }

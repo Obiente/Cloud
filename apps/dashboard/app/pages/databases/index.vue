@@ -143,7 +143,7 @@
 import { CircleStackIcon, PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon } from "@heroicons/vue/24/outline";
 import { computed, ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { DatabaseService, DatabaseStatus, DatabaseType } from "@obiente/proto";
+import { DatabaseService, DatabaseStatus, DatabaseType, type DatabaseInstance } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useClientFetch } from "~/composables/useClientFetch";
@@ -224,7 +224,7 @@ const filteredDatabases = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase();
     result = result.filter(
-      (db: any) =>
+      (db: DatabaseInstance) =>
         db.name?.toLowerCase().includes(query) ||
         getTypeLabel(db.type)?.toLowerCase().includes(query)
     );
@@ -233,13 +233,13 @@ const filteredDatabases = computed(() => {
   // Status filter
   if (statusFilter.value) {
     const statusValue = parseInt(statusFilter.value);
-    result = result.filter((db: any) => db.status === statusValue);
+    result = result.filter((db: DatabaseInstance) => db.status === statusValue);
   }
 
   // Type filter
   if (typeFilter.value) {
     const typeValue = parseInt(typeFilter.value);
-    result = result.filter((db: any) => db.type === typeValue);
+    result = result.filter((db: DatabaseInstance) => db.type === typeValue);
   }
 
   return result;

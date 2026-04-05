@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type UserInfo, type UserOrganization } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
 import SuperadminResourceCell from "~/components/superadmin/SuperadminResourceCell.vue";
@@ -162,7 +162,7 @@ const filteredUsers = computed(() => {
       user.preferredUsername,
       user.id,
       ...(user.roles || []),
-      ...(user.organizations || []).map((org: any) => org.organizationName || org.organizationId),
+      ...(user.organizations || []).map((org: UserOrganization) => org.organizationName || org.organizationId),
     ]
       .filter(Boolean)
       .join(" ")
@@ -222,10 +222,10 @@ async function loadUsers() {
         totalPages: response.pagination?.totalPages || 0,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to load users:", error);
     const { toast } = useToast();
-    toast.error(error?.message || "Failed to load users");
+    toast.error((error as Error | undefined)?.message || "Failed to load users");
     throw error;
   }
 }
@@ -263,7 +263,7 @@ function viewUser(userId: string) {
   router.push(`/superadmin/users/${userId}`);
 }
 
-const getUserActions = (row: any): Action[] => {
+const getUserActions = (row: UserInfo): Action[] => {
   return [
     {
       key: "view",

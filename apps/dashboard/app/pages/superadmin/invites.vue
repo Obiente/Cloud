@@ -180,8 +180,8 @@ async function resendInvite(invite: { organizationId: string; id: string; email:
     toast.success(`Invitation email sent to ${invite.email}`);
     // Optionally refresh the overview to update timestamps
     await superAdmin.fetchOverview(true);
-  } catch (error: any) {
-    toast.error(error?.message || "Failed to resend invitation email");
+  } catch (error: unknown) {
+    toast.error((error as Error | undefined)?.message || "Failed to resend invitation email");
   } finally {
     resendingInvite.value = null;
   }

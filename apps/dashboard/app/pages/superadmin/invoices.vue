@@ -180,7 +180,7 @@
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
-import { SuperadminService } from "@obiente/proto";
+import { SuperadminService, type InvoiceWithOrganization } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useRouter } from "vue-router";
 
@@ -239,12 +239,12 @@ const metrics = computed(() => {
   const invoices = invoicesData.value?.invoices || [];
   const total = invoices.length;
   const open = invoices.filter(
-    (inv: any) => inv.invoice?.status === "open"
+    (inv: InvoiceWithOrganization) => inv.invoice?.status === "open"
   ).length;
   const paid = invoices.filter(
-    (inv: any) => inv.invoice?.status === "paid"
+    (inv: InvoiceWithOrganization) => inv.invoice?.status === "paid"
   ).length;
-  const overdue = invoices.filter((inv: any) => {
+  const overdue = invoices.filter((inv: InvoiceWithOrganization) => {
     const dueDate = inv.invoice?.dueDate;
     if (!dueDate || inv.invoice?.status === "paid") return false;
     const due = new Date(Number(dueDate.seconds) * 1000);
@@ -273,7 +273,7 @@ const metrics = computed(() => {
 
 const invoices = computed(() => {
   return (
-    invoicesData.value?.invoices?.map((inv: any) => {
+    invoicesData.value?.invoices?.map((inv: InvoiceWithOrganization) => {
       // Sanitize invoice object to convert BigInt values to numbers/strings
       const invoice = inv.invoice
         ? {
@@ -310,7 +310,7 @@ const invoices = computed(() => {
 const filteredInvoices = computed(() => {
   const term = search.value.trim().toLowerCase();
   if (!term) return invoices.value;
-  return invoices.value.filter((inv: any) => {
+  return invoices.value.filter((inv) => {
     const searchable = [
       inv.organizationId,
       inv.organizationName,

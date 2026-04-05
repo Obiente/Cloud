@@ -325,12 +325,13 @@
   // Compute available groups from deployments
   const groupOptions = computed(() => {
     const groups = new Set<string>();
-    (deployments.value || []).forEach((deployment: any) => {
+    (deployments.value || []).forEach((deployment: Deployment) => {
       const deploymentGroups = (deployment.groups || []).filter((g: string) => g && g.trim());
       deploymentGroups.forEach((g: string) => groups.add(g.trim()));
       // Also check legacy group field for backward compatibility
-      if ((deployment as any).group && (deployment as any).group.trim()) {
-        groups.add((deployment as any).group.trim());
+      const legacyGroup = (deployment as Deployment & { group?: string }).group;
+      if (legacyGroup && legacyGroup.trim()) {
+        groups.add(legacyGroup.trim());
       }
     });
     return Array.from(groups)

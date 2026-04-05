@@ -737,7 +737,8 @@
 
   import { ArrowPathIcon, KeyIcon } from "@heroicons/vue/24/outline";
   import { computed, ref, onMounted, watch } from "vue";
-  import { SuperadminService } from "@obiente/proto";
+  import { SuperadminService, type DNSDelegationAPIKeyInfo } from "@obiente/proto";
+  import type { Timestamp } from "@bufbuild/protobuf/wkt";
   import { useConnectClient } from "~/lib/connect-client";
   import { useToast } from "~/composables/useToast";
 
@@ -1079,11 +1080,11 @@
         recordType: queryRecordType.value,
       });
       queryResult.value = response;
-    } catch (err: any) {
+    } catch (err: unknown) {
       queryResult.value = {
         domain: queryDomain.value,
         recordType: queryRecordType.value,
-        error: err.message || "Failed to query DNS",
+        error: (err as Error).message || "Failed to query DNS",
         records: [],
         ttl: 0,
       };
@@ -1189,7 +1190,7 @@
     try {
       // We need to revoke by key hash, but we only have the ID
       // For now, we'll use the organization revoke endpoint if we have org ID
-      const key = apiKeys.value.find((k: any) => k.id === keyID);
+      const key = apiKeys.value.find((k: DNSDelegationAPIKeyInfo) => k.id === keyID);
       if (key?.organization_id) {
         await client.revokeDNSDelegationAPIKeyForOrganization({
           organizationId: key.organization_id,
@@ -1199,17 +1200,17 @@
       } else {
         toast.error("Cannot revoke: organization ID not found");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to revoke API key");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to revoke API key");
     } finally {
       revokingAPIKey.value = null;
     }
   }
 
-  function formatDate(timestamp: any): string {
+  function formatDate(timestamp: Timestamp | null | undefined): string {
     if (!timestamp) return "—";
-    const seconds = typeof timestamp.seconds === "bigint" 
-      ? Number(timestamp.seconds) 
+    const seconds = typeof timestamp.seconds === "bigint"
+      ? Number(timestamp.seconds)
       : (timestamp.seconds || 0);
     const nanos = timestamp.nanos || 0;
     const millis = seconds * 1000 + Math.floor(nanos / 1_000_000);
@@ -1226,7 +1227,7 @@
   ]);
 
   const apiKeyRows = computed(() => {
-    return apiKeys.value.map((key: any) => ({
+    return apiKeys.value.map((key: DNSDelegationAPIKeyInfo) => ({
       id: key.id,
       description: key.description,
       organization_id: key.organizationId,
@@ -1359,8 +1360,8 @@
           createdAPIKey.value = null;
         }, 5000);
       }
-    } catch (err: any) {
-      apiKeyError.value = err.message || "Failed to create API key";
+    } catch (err: unknown) {
+      apiKeyError.value = (err as Error).message || "Failed to create API key";
       toast.error(apiKeyError.value);
     } finally {
       creatingAPIKey.value = false;

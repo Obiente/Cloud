@@ -237,11 +237,11 @@ const handleLogin = async () => {
     } else {
       error.value = response.message || "Invalid email or password";
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Login error:", err);
     error.value =
       err.data?.message ||
-      err.message ||
+      (err as Error).message ||
       "An error occurred. Please try again.";
   } finally {
     loading.value = false;
