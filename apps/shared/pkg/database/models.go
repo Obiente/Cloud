@@ -357,6 +357,24 @@ type BuildLog struct {
 
 func (BuildLog) TableName() string { return "build_logs" }
 
+// DeploymentRuntimeLog stores persisted runtime/service log lines for deployments.
+// Unlike BuildLog, these lines are captured from live containers/services so users can
+// still inspect crash output after Swarm has already replaced or removed a task.
+type DeploymentRuntimeLog struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	DeploymentID string    `gorm:"index;not null" json:"deployment_id"`
+	ServiceName  string    `gorm:"index" json:"service_name"`
+	ContainerID  string    `gorm:"index" json:"container_id"`
+	NodeID       string    `gorm:"index" json:"node_id"`
+	Source       string    `gorm:"index" json:"source"`
+	Line         string    `gorm:"type:text" json:"line"`
+	Timestamp    time.Time `gorm:"index" json:"timestamp"`
+	Stderr       bool      `gorm:"default:false" json:"stderr"`
+	LogLevel     int32     `gorm:"default:0" json:"log_level"`
+}
+
+func (DeploymentRuntimeLog) TableName() string { return "deployment_runtime_logs" }
+
 // StrayContainer tracks containers that were running but don't exist in the database
 // These are containers that were stopped by the cleanup process
 type StrayContainer struct {

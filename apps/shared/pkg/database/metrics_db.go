@@ -62,7 +62,7 @@ func InitMetricsDatabase() error {
 		host, port, user, password, dbname)
 
 	logger.Info("Attempting to connect to metrics database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
-	
+
 	// Diagnostic: Log network information for troubleshooting
 	if host != "localhost" && host != "127.0.0.1" {
 		logger.Debug("[MetricsDB] Resolving metrics database hostname: %s", host)
@@ -86,7 +86,7 @@ func InitMetricsDatabase() error {
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: getGormLogger(),
 		})
-		
+
 		if err == nil {
 			// Configure sql.DB connection pool settings for better reliability
 			sqlDB, err := db.DB()
@@ -166,6 +166,9 @@ func InitMetricsTables() error {
 	}
 	if !hypertableMap["build_logs"] {
 		tablesToMigrate = append(tablesToMigrate, &BuildLog{})
+	}
+	if !hypertableMap["deployment_runtime_logs"] {
+		tablesToMigrate = append(tablesToMigrate, &DeploymentRuntimeLog{})
 	}
 	if !hypertableMap["audit_logs"] {
 		tablesToMigrate = append(tablesToMigrate, &AuditLog{})

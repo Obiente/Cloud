@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -32,16 +33,42 @@ const (
 
 // GetDeploymentLogs retrieves a fixed number of deployment logs
 func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentLogsRequest]) (*connect.Response[deploymentsv1.GetDeploymentLogsResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
 	lines := req.Msg.GetLines()
 	if lines <= 0 {
 		lines = 50
 	}
 
-	logs := make([]string, 0, lines)
-	for i := int32(0); i < lines; i++ {
-		logs = append(logs, fmt.Sprintf("[%s] Log line %d for deployment %s", time.Now().Format(time.RFC3339), i+1, req.Msg.GetDeploymentId()))
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
+	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, int(lines))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load deployment logs: %w", err))
+	}
+	if len(persistedLogs) == 0 {
+		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, "", lines)
+		if snapshotErr == nil && len(snapshotLogs) > 0 {
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "swarm_service_snapshot", snapshotLogs)
+			persistedLogs = snapshotLogs
+		}
+	}
+	if len(persistedLogs) == 0 && s.manager != nil {
+		if liveLogs, liveErr := s.manager.GetDeploymentLogs(ctx, deploymentID, fmt.Sprintf("%d", lines)); liveErr == nil && strings.TrimSpace(liveLogs) != "" {
+			persistedLogs = parseDockerServiceLogOutput(deploymentID, liveLogs)
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "manager_snapshot", persistedLogs)
+		}
+	}
+	if len(persistedLogs) == 0 {
+		return connect.NewResponse(&deploymentsv1.GetDeploymentLogsResponse{Logs: []string{}}), nil
+	}
+
+	logs := make([]string, 0, len(persistedLogs))
+	for _, line := range persistedLogs {
+		logs = append(logs, line.Line)
+	}
 	res := connect.NewResponse(&deploymentsv1.GetDeploymentLogsResponse{Logs: logs})
 	return res, nil
 }
@@ -70,9 +97,36 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	}
 	defer dcli.Close()
 
+	tail := req.Msg.GetTail()
+	if tail <= 0 {
+		tail = 200
+	}
+
+	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, int(tail))
+	if err == nil {
+		for _, line := range persistedLogs {
+			if sendErr := stream.Send(line); sendErr != nil {
+				return sendErr
+			}
+		}
+	}
+
 	// Find container by container_id or service_name, or use first if neither specified
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
+		if len(persistedLogs) > 0 {
+			return nil
+		}
+		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
+		if snapshotErr == nil && len(snapshotLogs) > 0 {
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, "", "swarm_service_snapshot", snapshotLogs)
+			for _, line := range snapshotLogs {
+				if sendErr := stream.Send(line); sendErr != nil {
+					return sendErr
+				}
+			}
+			return nil
+		}
 		return connect.NewError(connect.CodeNotFound, err)
 	}
 
@@ -105,26 +159,51 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 		}
 	}
 
-	tail := req.Msg.GetTail()
-	if tail <= 0 {
-		tail = 200
-	}
-
 	// Check if container is running to determine if we should follow logs
 	// For stopped containers, we'll get historical logs but won't follow
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	isRunning := false
 	if err == nil {
 		isRunning = containerInfo.State.Running
+	} else {
+		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
+		if snapshotErr == nil && len(snapshotLogs) > 0 {
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, loc.ContainerID, "swarm_service_snapshot", snapshotLogs)
+			if len(persistedLogs) == 0 {
+				for _, line := range snapshotLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
+				}
+			}
+			return nil
+		}
 	}
 
 	// For stopped containers, use follow=false to get historical logs
 	// For running containers, use follow=true to stream new logs
 	follow := isRunning
+	liveTail := tail
+	if len(persistedLogs) > 0 {
+		liveTail = 0
+	}
 
 	// Start container logs stream
-	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), follow, nil, nil)
+	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", liveTail), follow, nil, nil)
 	if err != nil {
+		if len(persistedLogs) > 0 {
+			return nil
+		}
+		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
+		if snapshotErr == nil && len(snapshotLogs) > 0 {
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, loc.ContainerID, "swarm_service_snapshot", snapshotLogs)
+			for _, line := range snapshotLogs {
+				if sendErr := stream.Send(line); sendErr != nil {
+					return sendErr
+				}
+			}
+			return nil
+		}
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
 	}
 	defer reader.Close()
@@ -296,6 +375,145 @@ func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 
 	// Default to INFO for stdout
 	return commonv1.LogLevel_LOG_LEVEL_INFO
+}
+
+func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymentID string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
+	if s.runtimeLogsRepo == nil {
+		return nil, nil
+	}
+	logs, err := s.runtimeLogsRepo.GetRecentLogs(ctx, deploymentID, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	protoLogs := make([]*deploymentsv1.DeploymentLogLine, 0, len(logs))
+	for _, entry := range logs {
+		protoLogs = append(protoLogs, &deploymentsv1.DeploymentLogLine{
+			DeploymentId: deploymentID,
+			Line:         entry.Line,
+			Timestamp:    timestamppb.New(entry.Timestamp),
+			Stderr:       entry.Stderr,
+			LogLevel:     commonv1.LogLevel(entry.LogLevel),
+		})
+	}
+	return protoLogs, nil
+}
+
+func (s *Service) persistDeploymentLogLines(ctx context.Context, deploymentID, serviceName, containerID, source string, lines []*deploymentsv1.DeploymentLogLine) error {
+	if s.runtimeLogsRepo == nil || len(lines) == 0 {
+		return nil
+	}
+
+	entries := make([]database.DeploymentRuntimeLog, 0, len(lines))
+	for _, line := range lines {
+		if line == nil || strings.TrimSpace(line.Line) == "" {
+			continue
+		}
+		timestamp := time.Now()
+		if line.Timestamp != nil {
+			timestamp = line.Timestamp.AsTime()
+		}
+		entries = append(entries, database.DeploymentRuntimeLog{
+			DeploymentID: deploymentID,
+			ServiceName:  serviceName,
+			ContainerID:  containerID,
+			NodeID:       "",
+			Source:       source,
+			Line:         line.Line,
+			Timestamp:    timestamp,
+			Stderr:       line.Stderr,
+			LogLevel:     int32(line.LogLevel),
+		})
+	}
+
+	return s.runtimeLogsRepo.AddLogsBatch(ctx, entries)
+}
+
+func (s *Service) fetchSwarmServiceLogsSnapshot(ctx context.Context, deploymentID, serviceName string, tail int32) ([]*deploymentsv1.DeploymentLogLine, error) {
+	serviceNames, err := listSwarmServiceNames(ctx, deploymentID, serviceName)
+	if err != nil || len(serviceNames) == 0 {
+		return nil, err
+	}
+
+	var combined []*deploymentsv1.DeploymentLogLine
+	for _, swarmServiceName := range serviceNames {
+		args := []string{"service", "logs", "--timestamps", "--tail", fmt.Sprintf("%d", tail), "--raw", swarmServiceName}
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		output, cmdErr := cmd.CombinedOutput()
+		if cmdErr != nil {
+			continue
+		}
+		combined = append(combined, parseDockerServiceLogOutput(deploymentID, string(output))...)
+	}
+	return combined, nil
+}
+
+func listSwarmServiceNames(ctx context.Context, deploymentID, serviceName string) ([]string, error) {
+	candidates := make([]string, 0, 4)
+	seen := make(map[string]struct{})
+	addCandidate := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if _, ok := seen[name]; ok {
+			return
+		}
+		seen[name] = struct{}{}
+		candidates = append(candidates, name)
+	}
+
+	if serviceName != "" {
+		addCandidate(serviceName)
+		addCandidate(fmt.Sprintf("deploy-%s-%s", deploymentID, serviceName))
+	}
+
+	cmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=cloud.obiente.deployment_id=%s", deploymentID), "--format", "{{.Name}}")
+	output, err := cmd.Output()
+	if err != nil && len(candidates) > 0 {
+		return candidates, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		addCandidate(line)
+	}
+	return candidates, nil
+}
+
+func parseDockerServiceLogOutput(deploymentID, output string) []*deploymentsv1.DeploymentLogLine {
+	if strings.TrimSpace(output) == "" {
+		return nil
+	}
+
+	lines := make([]*deploymentsv1.DeploymentLogLine, 0)
+	for _, rawLine := range strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n") {
+		rawLine = strings.TrimSpace(rawLine)
+		if rawLine == "" {
+			continue
+		}
+		timestamp, line := parseTimestampedDockerLogLine(rawLine)
+		lines = append(lines, &deploymentsv1.DeploymentLogLine{
+			DeploymentId: deploymentID,
+			Line:         line,
+			Timestamp:    timestamppb.New(timestamp),
+			Stderr:       false,
+			LogLevel:     detectLogLevelFromContent(line, false),
+		})
+	}
+	return lines
+}
+
+func parseTimestampedDockerLogLine(rawLine string) (time.Time, string) {
+	parts := strings.SplitN(rawLine, " ", 2)
+	if len(parts) == 2 {
+		if ts, err := time.Parse(time.RFC3339Nano, parts[0]); err == nil {
+			return ts, parts[1]
+		}
+	}
+	return time.Now(), rawLine
 }
 
 // formatDockerEvent formats a Docker event into a log line

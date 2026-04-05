@@ -175,6 +175,20 @@ func createMetricsIndexes() error {
 		return fmt.Errorf("failed to create usage_hourly index: %w", err)
 	}
 
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_runtime_logs_deployment_timestamp
+		ON deployment_runtime_logs(deployment_id, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create deployment_runtime_logs index: %w", err)
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_runtime_logs_service_timestamp
+		ON deployment_runtime_logs(service_name, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create deployment_runtime_logs service index: %w", err)
+	}
+
 	// Game server metrics indexes
 	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_gameserver_timestamp 

@@ -426,6 +426,39 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	return createResp.ID, nil
 }
 
+func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serviceName, nodeID, output string) {
+	if database.MetricsDB == nil || strings.TrimSpace(output) == "" {
+		return
+	}
+
+	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
+	entries := make([]database.DeploymentRuntimeLog, 0, len(lines))
+	now := time.Now()
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		entries = append(entries, database.DeploymentRuntimeLog{
+			DeploymentID: deploymentID,
+			ServiceName:  serviceName,
+			NodeID:       nodeID,
+			Source:       "swarm_rollout",
+			Line:         line,
+			Timestamp:    now,
+			Stderr:       false,
+		})
+	}
+	if len(entries) == 0 {
+		return
+	}
+
+	repo := database.NewDeploymentRuntimeLogsRepository(database.MetricsDB)
+	if err := repo.AddLogsBatch(ctx, entries); err != nil {
+		logger.Debug("[DeploymentManager] Failed to persist runtime log snapshot for %s: %v", deploymentID, err)
+	}
+}
+
 func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (string, string, error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
@@ -832,6 +865,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		initialLogs := strings.TrimSpace(initialLogsStdout.String())
 		if initialLogs != "" {
 			logger.Info("[DeploymentManager] Initial service logs for %s:\n%s", swarmServiceName, initialLogs)
+			persistDeploymentServiceLogSnapshot(ctx, config.DeploymentID, swarmServiceName, dm.nodeID, initialLogs)
 		}
 	}
 
@@ -912,6 +946,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 						logs := strings.TrimSpace(logsStdout.String())
 						if logs != "" {
 							logger.Error("[DeploymentManager] Service %s logs (last 200 lines):\n%s", swarmServiceName, logs)
+							persistDeploymentServiceLogSnapshot(ctx, config.DeploymentID, swarmServiceName, dm.nodeID, logs)
 						} else {
 							logger.Warn("[DeploymentManager] Service %s has no logs yet - container may have exited before producing output", swarmServiceName)
 						}
@@ -987,6 +1022,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 				checkLogs := strings.TrimSpace(checkLogsStdout.String())
 				if checkLogs != "" {
 					logger.Info("[DeploymentManager] Service %s logs (check %d/%d, last 20 lines):\n%s", swarmServiceName, i+1, maxChecks, checkLogs)
+					persistDeploymentServiceLogSnapshot(ctx, config.DeploymentID, swarmServiceName, dm.nodeID, checkLogs)
 				}
 			}
 		}
@@ -1069,6 +1105,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 									logs := strings.TrimSpace(logsStdout.String())
 									if logs != "" {
 										logger.Error("[DeploymentManager] Service %s logs (last 50 lines):\n%s", swarmServiceName, logs)
+										persistDeploymentServiceLogSnapshot(ctx, config.DeploymentID, swarmServiceName, dm.nodeID, logs)
 									}
 								} else {
 									// Fallback: try container logs if we have container ID

@@ -20,6 +20,7 @@ type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
 	repo              *database.DeploymentRepository
 	buildHistoryRepo  *database.BuildHistoryRepository
+	runtimeLogsRepo   *database.DeploymentRuntimeLogsRepository
 	permissionChecker *auth.PermissionChecker
 	manager           *orchestrator.DeploymentManager
 	quotaChecker      *quota.Checker
@@ -33,6 +34,7 @@ func NewService(backgroundCtx context.Context, repo *database.DeploymentReposito
 	return &Service{
 		repo:              repo,
 		buildHistoryRepo:  database.NewBuildHistoryRepository(database.DB),
+		runtimeLogsRepo:   database.NewDeploymentRuntimeLogsRepository(database.MetricsDB),
 		permissionChecker: auth.NewPermissionChecker(),
 		manager:           manager,
 		quotaChecker:      qc,
