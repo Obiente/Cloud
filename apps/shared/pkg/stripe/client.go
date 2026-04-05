@@ -218,13 +218,13 @@ func (c *Client) GetPaymentIntent(ctx context.Context, paymentIntentID string) (
 // CreatePaymentIntent creates a Payment Intent for charging an existing payment method
 func (c *Client) CreatePaymentIntent(ctx context.Context, customerID string, amountCents int64, paymentMethodID string) (*stripe.PaymentIntent, error) {
 	params := &stripe.PaymentIntentParams{
-		Amount:   stripe.Int64(amountCents),
-		Currency: stripe.String("usd"),
-		Customer: stripe.String(customerID),
-		PaymentMethod: stripe.String(paymentMethodID),
+		Amount:             stripe.Int64(amountCents),
+		Currency:           stripe.String("usd"),
+		Customer:           stripe.String(customerID),
+		PaymentMethod:      stripe.String(paymentMethodID),
 		ConfirmationMethod: stripe.String(string(stripe.PaymentIntentConfirmationMethodAutomatic)),
-		Confirm: stripe.Bool(true),
-		OffSession: stripe.Bool(true), // Indicates this is an off-session payment
+		Confirm:            stripe.Bool(true),
+		OffSession:         stripe.Bool(true), // Indicates this is an off-session payment
 		Metadata: map[string]string{
 			"description": fmt.Sprintf("Add %s credits to account", formatAmount(amountCents)),
 		},
@@ -436,19 +436,20 @@ func (c *Client) GetSubscription(ctx context.Context, subscriptionID string) (*s
 func (c *Client) ListSubscriptionsForCustomer(ctx context.Context, customerID string) ([]*stripe.Subscription, error) {
 	params := &stripe.SubscriptionListParams{
 		Customer: stripe.String(customerID),
-		Status:   stripe.String("active"), // Only get active subscriptions
+		Status:   stripe.String("all"),
 	}
-	
+	params.AddExpand("data.items.data.price.product")
+
 	iter := subscription.List(params)
 	var subscriptions []*stripe.Subscription
 	for iter.Next() {
 		subscriptions = append(subscriptions, iter.Subscription())
 	}
-	
+
 	if err := iter.Err(); err != nil {
 		return nil, fmt.Errorf("list subscriptions: %w", err)
 	}
-	
+
 	return subscriptions, nil
 }
 
@@ -458,7 +459,7 @@ func (c *Client) FindDNSDelegationSubscription(ctx context.Context, customerID s
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Look for DNS delegation subscription ($2/month = 200 cents)
 	for _, sub := range subscriptions {
 		if len(sub.Items.Data) > 0 {
@@ -471,7 +472,7 @@ func (c *Client) FindDNSDelegationSubscription(ctx context.Context, customerID s
 			}
 		}
 	}
-	
+
 	return nil, nil // No active DNS delegation subscription found
 }
 
@@ -492,12 +493,12 @@ func (c *Client) UpdateSubscriptionPaymentMethod(ctx context.Context, subscripti
 	params := &stripe.SubscriptionParams{
 		DefaultPaymentMethod: stripe.String(paymentMethodID),
 	}
-	
+
 	sub, err := subscription.Update(subscriptionID, params)
 	if err != nil {
 		return nil, fmt.Errorf("update subscription payment method: %w", err)
 	}
-	
+
 	return sub, nil
 }
 
@@ -517,7 +518,7 @@ func (c *Client) getOrCreateDNSDelegationPrice(ctx context.Context) (string, err
 		},
 	}
 	products := product.List(productParams)
-	
+
 	var dnsProduct *stripe.Product
 	for products.Next() {
 		p := products.Product()
@@ -587,7 +588,7 @@ type SubscriptionCheckoutSessionParams struct {
 	CustomerID     string // Optional: existing Stripe customer ID
 	SuccessURL     string
 	CancelURL      string
-	TrialDays      int    // Optional: number of trial days (0 = no trial)
+	TrialDays      int // Optional: number of trial days (0 = no trial)
 }
 
 // SendInvoice sends an invoice to the customer via email
@@ -626,7 +627,7 @@ func (c *Client) ListAllInvoices(ctx context.Context, limit int, status *string,
 	var invoices []*stripe.Invoice
 	for iter.Next() {
 		inv := iter.Invoice()
-		
+
 		// Filter by date range if provided
 		if startDate != nil && inv.Created < startDate.Unix() {
 			continue
@@ -634,7 +635,7 @@ func (c *Client) ListAllInvoices(ctx context.Context, limit int, status *string,
 		if endDate != nil && inv.Created > endDate.Unix() {
 			continue
 		}
-		
+
 		invoices = append(invoices, inv)
 	}
 

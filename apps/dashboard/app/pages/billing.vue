@@ -14,11 +14,13 @@
   import {
     OrganizationService,
     BillingService,
+    AddressSchema,
     type Organization,
     type Subscription,
     type MonthlyBill,
-    type UpdateBillingAccountRequest,
+    UpdateBillingAccountRequestSchema,
   } from "@obiente/proto";
+  import { create } from "@bufbuild/protobuf";
   import type { Timestamp } from "@bufbuild/protobuf/wkt";
   import type { User } from "@obiente/types";
   import { useConnectClient } from "~/lib/connect-client";
@@ -149,8 +151,8 @@
       }) || null
   );
 
-  const currentUserIsOwner = computed(
-    () => currentMemberRecord.value?.role === "owner"
+  const currentUserCanManageBilling = computed(() =>
+    ["owner", "admin"].includes(currentMemberRecord.value?.role || "")
   );
 
   const currentMonth = computed(() => {
@@ -514,6 +516,9 @@
             if (retrieveError) {
               throw new Error(retrieveError.message);
             }
+            if (!paymentIntent) {
+              throw new Error("Payment could not be verified with Stripe");
+            }
             
             // Check if payment requires action (3D Secure)
             if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_payment_method') {
@@ -778,20 +783,22 @@
     billingInfoLoading.value = true;
     error.value = "";
     try {
-      const updateData: UpdateBillingAccountRequest = {
+      const address = create(AddressSchema, {
+        line1: billingInfoForm.value.address.line1,
+        line2: billingInfoForm.value.address.line2 || undefined,
+        city: billingInfoForm.value.address.city,
+        state: billingInfoForm.value.address.state || undefined,
+        postalCode: billingInfoForm.value.address.postalCode,
+        country: billingInfoForm.value.address.country,
+      });
+
+      const updateData = create(UpdateBillingAccountRequestSchema, {
         organizationId: selectedOrg.value,
         billingEmail: billingInfoForm.value.billingEmail || undefined,
         companyName: billingInfoForm.value.companyName || undefined,
         taxId: billingInfoForm.value.taxId || undefined,
-        address: {
-          line1: billingInfoForm.value.address.line1,
-          line2: billingInfoForm.value.address.line2 || undefined,
-          city: billingInfoForm.value.address.city,
-          state: billingInfoForm.value.address.state || undefined,
-          postalCode: billingInfoForm.value.address.postalCode,
-          country: billingInfoForm.value.address.country,
-        },
-      };
+        address,
+      });
       
       // Add billingDate if provided (convert string to number)
       if (billingInfoForm.value.billingDate && billingInfoForm.value.billingDate.trim() !== "") {
@@ -943,35 +950,15 @@
   }
 
   function formatInvoiceDate(date: Timestamp | { toMillis: () => number } | number | null | undefined): string {
-    if (!date) return "";
-    let seconds = 0;
-    if (typeof date === 'object' && date !== null) {
-      if ('seconds' in date) {
-        seconds = Number(date.seconds);
-      } else if ('toMillis' in date && typeof date.toMillis === 'function') {
-        return new Date(date.toMillis()).toLocaleDateString();
-      }
-    } else if (typeof date === 'number') {
-      seconds = date;
-    }
-    if (seconds === 0) return "";
-    return new Date(seconds * 1000).toLocaleDateString();
+    const millis = timestampToMillis(date);
+    if (millis === undefined) return "";
+    return new Date(millis).toLocaleDateString();
   }
 
   function formatBillDate(date: Timestamp | { toMillis: () => number } | number | null | undefined): string {
-    if (!date) return "";
-    let seconds = 0;
-    if (typeof date === 'object' && date !== null) {
-      if ('seconds' in date) {
-        seconds = Number(date.seconds);
-      } else if ('toMillis' in date && typeof date.toMillis === 'function') {
-        return new Date(date.toMillis()).toLocaleDateString();
-      }
-    } else if (typeof date === 'number') {
-      seconds = date;
-    }
-    if (seconds === 0) return "";
-    return new Date(seconds * 1000).toLocaleDateString();
+    const millis = timestampToMillis(date);
+    if (millis === undefined) return "";
+    return new Date(millis).toLocaleDateString();
   }
 
   async function loadBills() {
@@ -1202,6 +1189,30 @@
     if (percentage >= 75) return "warning";
     return "success";
   };
+
+  function timestampToMillis(date: Timestamp | { toMillis: () => number } | number | null | undefined): number | undefined {
+    if (!date) return undefined;
+    if (typeof date === "number") {
+      return date * 1000;
+    }
+    if (typeof date === "object" && date !== null) {
+      if ("toMillis" in date && typeof date.toMillis === "function") {
+        return date.toMillis();
+      }
+      if ("seconds" in date) {
+        return Number(date.seconds) * 1000 + Math.floor(Number(date.nanos ?? 0) / 1_000_000);
+      }
+    }
+    return undefined;
+  }
+
+  function formatSubscriptionInterval(sub: Subscription): string {
+    if (!sub.interval) return "";
+    if ((sub.intervalCount || 1) <= 1) {
+      return sub.interval;
+    }
+    return `${sub.intervalCount} ${sub.interval}s`;
+  }
 </script>
 
 <template>
@@ -1647,7 +1658,7 @@
                           variant="solid" 
                           size="sm" 
                           @click="addCreditsDialogOpen = true"
-                          v-if="currentUserIsOwner"
+                          v-if="currentUserCanManageBilling"
                         >
                           <PlusIcon class="h-4 w-4 mr-2" />
                           Add Credits
@@ -1703,8 +1714,8 @@
                     variant="outline" 
                     size="sm"
                     @click="addPaymentMethodDialogOpen = true"
-                    :disabled="!billingAccount?.stripeCustomerId && !currentUserIsOwner"
-                    v-if="currentUserIsOwner"
+                    :disabled="!billingAccount?.stripeCustomerId && !currentUserCanManageBilling"
+                    v-if="currentUserCanManageBilling"
                   >
                     <PlusIcon class="h-4 w-4 mr-2" />
                     Add Payment Method
@@ -1785,9 +1796,12 @@
                                 <OuiText size="xs" color="muted" v-if="pm.card">
                                   Expires {{ pm.card.expMonth }}/{{ pm.card.expYear }}
                                 </OuiText>
+                                <OuiText size="xs" color="muted" v-if="pm.createdAt">
+                                  Added {{ formatInvoiceDate(pm.createdAt) }}
+                                </OuiText>
                               </OuiStack>
                             </OuiFlex>
-                            <OuiFlex gap="sm" v-if="currentUserIsOwner">
+                            <OuiFlex gap="sm" v-if="currentUserCanManageBilling">
                               <OuiButton
                                 variant="ghost"
                                 size="sm"
@@ -1815,7 +1829,7 @@
             </OuiStack>
 
             <!-- Billing Information -->
-            <OuiStack gap="lg" v-if="currentUserIsOwner">
+            <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
                 <OuiText size="2xl" weight="bold">Billing Information</OuiText>
                 <OuiButton 
@@ -1849,6 +1863,16 @@
                     <template v-else>
                       <OuiStack gap="sm">
                         <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Account Status</OuiText>
+                          <OuiBadge :variant="billingAccount.status === 'PAST_DUE' ? 'warning' : 'success'">
+                            {{ billingAccount.status || "ACTIVE" }}
+                          </OuiBadge>
+                        </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Stripe Customer</OuiText>
+                          <OuiText size="sm" weight="medium" class="font-mono">{{ billingAccount.stripeCustomerId }}</OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between">
                           <OuiText size="sm" color="muted">Billing Email</OuiText>
                           <OuiText size="sm" weight="medium">{{ billingAccount.billingEmail || "Not set" }}</OuiText>
                         </OuiFlex>
@@ -1878,6 +1902,14 @@
                             {{ billingAccount.billingDate ? `Day ${billingAccount.billingDate} of each month` : "Not set (defaults to org creation day)" }}
                           </OuiText>
                         </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Created</OuiText>
+                          <OuiText size="sm" weight="medium">{{ formatInvoiceDate(billingAccount.createdAt) || "—" }}</OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Last Updated</OuiText>
+                          <OuiText size="sm" weight="medium">{{ formatInvoiceDate(billingAccount.updatedAt) || "—" }}</OuiText>
+                        </OuiFlex>
                       </OuiStack>
                     </template>
                   </OuiStack>
@@ -1886,7 +1918,7 @@
             </OuiStack>
 
             <!-- Monthly Bills -->
-            <OuiStack gap="lg" v-if="currentUserIsOwner">
+            <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
                 <OuiText size="2xl" weight="bold">Monthly Bills</OuiText>
                 <OuiFlex gap="sm">
@@ -1971,7 +2003,7 @@
             </OuiStack>
 
             <!-- Subscriptions -->
-            <OuiStack gap="lg" v-if="currentUserIsOwner">
+            <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
                 <OuiText size="2xl" weight="bold">Subscriptions</OuiText>
                 <OuiButton 
@@ -2001,7 +2033,7 @@
                     </template>
                     <template v-else-if="subscriptions.length === 0">
                       <OuiStack gap="sm" align="center">
-                        <OuiText size="sm" color="muted">No active subscriptions found.</OuiText>
+                        <OuiText size="sm" color="muted">No subscriptions found.</OuiText>
                       </OuiStack>
                     </template>
                     <template v-else>
@@ -2028,14 +2060,14 @@
                               <OuiText size="sm" color="muted">Amount</OuiText>
                               <OuiText size="sm" weight="medium">
                                 {{ formatCurrency(sub.amount || 0) }} {{ sub.currency?.toUpperCase() || 'USD' }}
-                                <span v-if="sub.interval">/ {{ sub.interval }}</span>
+                                <span v-if="sub.interval">/ {{ formatSubscriptionInterval(sub) }}</span>
                               </OuiText>
                             </OuiFlex>
                             <OuiFlex justify="between" v-if="sub.currentPeriodStart">
                               <OuiText size="sm" color="muted">Current Period</OuiText>
                               <OuiText size="sm">
-                                {{ new Date(sub.currentPeriodStart.seconds * 1000).toLocaleDateString() }} - 
-                                {{ sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd.seconds * 1000).toLocaleDateString() : 'N/A' }}
+                                {{ formatInvoiceDate(sub.currentPeriodStart) }} -
+                                {{ sub.currentPeriodEnd ? formatInvoiceDate(sub.currentPeriodEnd) : 'N/A' }}
                               </OuiText>
                             </OuiFlex>
                             <OuiFlex justify="between" v-if="sub.cancelAtPeriodEnd">
@@ -2111,6 +2143,15 @@
                         <OuiText size="xs" color="muted" v-if="row.description">
                           {{ row.description }}
                         </OuiText>
+                        <OuiText size="xs" color="muted" v-if="row.amountPaid || row.amountRemaining">
+                          Paid {{ formatCurrency(row.amountPaid ?? 0) }}
+                          <span v-if="row.amountRemaining !== undefined">
+                            • Remaining {{ formatCurrency(row.amountRemaining ?? 0) }}
+                          </span>
+                        </OuiText>
+                        <OuiText size="xs" color="muted" v-if="row.paidAt">
+                          Paid on {{ formatInvoiceDate(row.paidAt) }}
+                        </OuiText>
                       </OuiStack>
                     </template>
                     <template #cell-date="{ row }">
@@ -2119,12 +2160,20 @@
                       </OuiText>
                     </template>
                     <template #cell-amount="{ row }">
-                      <OuiText size="sm" weight="medium">
-                        {{ formatCurrency(row.amountDue ?? 0) }}
-                        <span v-if="row.currency && row.currency.toLowerCase() !== 'usd'" class="text-xs text-muted">
-                          {{ row.currency.toUpperCase() }}
-                        </span>
-                      </OuiText>
+                      <OuiStack gap="xs">
+                        <OuiText size="sm" weight="medium">
+                          {{ formatCurrency(row.total ?? row.amountDue ?? 0) }}
+                          <span v-if="row.currency && row.currency.toLowerCase() !== 'usd'" class="text-xs text-muted">
+                            {{ row.currency.toUpperCase() }}
+                          </span>
+                        </OuiText>
+                        <OuiText size="xs" color="muted" v-if="row.subtotal !== undefined">
+                          Subtotal {{ formatCurrency(row.subtotal ?? 0) }}
+                        </OuiText>
+                        <OuiText size="xs" color="muted">
+                          Due {{ formatCurrency(row.amountDue ?? 0) }}
+                        </OuiText>
+                      </OuiStack>
                     </template>
                     <template #cell-status="{ row }">
                       <OuiBadge v-if="row.status && row.status.trim()" :variant="getInvoiceStatusVariant(row.status)">

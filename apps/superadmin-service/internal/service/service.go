@@ -20,7 +20,6 @@ import (
 
 	"errors"
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
-	billingv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	superadminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
@@ -2157,7 +2156,8 @@ func (s *Service) ListAllInvoices(ctx context.Context, req *connect.Request[supe
 	}
 	if req.Msg.EndDate != nil && *req.Msg.EndDate != "" {
 		if parsed, err := time.Parse("2006-01-02", *req.Msg.EndDate); err == nil {
-			endDate = &parsed
+			inclusiveEnd := parsed.Add(24 * time.Hour)
+			endDate = &inclusiveEnd
 		}
 	}
 
@@ -2207,39 +2207,14 @@ func (s *Service) ListAllInvoices(ctx context.Context, req *connect.Request[supe
 			continue // Skip if org filter doesn't match
 		}
 
-		protoInvoice := &billingv1.Invoice{
-			Id:         inv.ID,
-			Number:     inv.Number,
-			Status:     string(inv.Status),
-			AmountDue:  inv.AmountDue,
-			AmountPaid: inv.AmountPaid,
-			Currency:   strings.ToUpper(string(inv.Currency)),
-		}
-
-		if inv.Created > 0 {
-			protoInvoice.Date = timestamppb.New(time.Unix(inv.Created, 0))
-		}
-
-		if inv.DueDate > 0 {
-			protoInvoice.DueDate = timestamppb.New(time.Unix(inv.DueDate, 0))
-		}
-
-		if inv.InvoicePDF != "" {
-			protoInvoice.InvoicePdf = &inv.InvoicePDF
-		}
-
-		if inv.HostedInvoiceURL != "" {
-			protoInvoice.HostedInvoiceUrl = &inv.HostedInvoiceURL
-		}
-
-		if inv.Description != "" {
-			protoInvoice.Description = &inv.Description
-		}
+		protoInvoice := stripe.InvoiceToProto(inv)
 
 		customerEmail := ""
-		if orgInfo != nil && orgInfo.BillingEmail != nil {
+		if inv.CustomerEmail != "" {
+			customerEmail = inv.CustomerEmail
+		} else if orgInfo != nil && orgInfo.BillingEmail != nil {
 			customerEmail = *orgInfo.BillingEmail
-		} else if inv.Customer.Email != "" {
+		} else if inv.Customer != nil && inv.Customer.Email != "" {
 			customerEmail = inv.Customer.Email
 		}
 

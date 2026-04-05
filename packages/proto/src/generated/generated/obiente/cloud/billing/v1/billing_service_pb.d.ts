@@ -533,6 +533,42 @@ export type Invoice = Message<"obiente.cloud.billing.v1.Invoice"> & {
      * @generated from field: optional string description = 11;
      */
     description?: string;
+    /**
+     * Subtotal before tax/credits/discount adjustments
+     *
+     * @generated from field: optional int64 subtotal = 12;
+     */
+    subtotal?: bigint;
+    /**
+     * Final invoice total
+     *
+     * @generated from field: optional int64 total = 13;
+     */
+    total?: bigint;
+    /**
+     * Remaining amount still owed
+     *
+     * @generated from field: optional int64 amount_remaining = 14;
+     */
+    amountRemaining?: bigint;
+    /**
+     * When the invoice was fully paid
+     *
+     * @generated from field: optional google.protobuf.Timestamp paid_at = 15;
+     */
+    paidAt?: Timestamp;
+    /**
+     * Number of attempted collections
+     *
+     * @generated from field: optional int32 attempt_count = 16;
+     */
+    attemptCount?: number;
+    /**
+     * Stripe collection method, e.g. charge_automatically or send_invoice
+     *
+     * @generated from field: optional string collection_method = 17;
+     */
+    collectionMethod?: string;
 };
 /**
  * Describes the message obiente.cloud.billing.v1.Invoice.

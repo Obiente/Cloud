@@ -229,6 +229,18 @@ message Invoice {
   optional string hosted_invoice_url = 10;
   // Description or memo
   optional string description = 11;
+  // Subtotal before tax/credits/discount adjustments
+  optional int64 subtotal = 12;
+  // Final invoice total
+  optional int64 total = 13;
+  // Remaining amount still owed
+  optional int64 amount_remaining = 14;
+  // When the invoice was fully paid
+  optional google.protobuf.Timestamp paid_at = 15;
+  // Number of attempted collections
+  optional int32 attempt_count = 16;
+  // Stripe collection method, e.g. charge_automatically or send_invoice
+  optional string collection_method = 17;
 }
 
 message BillingAccount {
@@ -404,5 +416,4 @@ message GenerateCurrentBillResponse {
   MonthlyBill bill = 3; // The generated bill (or existing bill if one already exists)
   bool already_exists = 4; // Whether the bill already existed
 }
-
 

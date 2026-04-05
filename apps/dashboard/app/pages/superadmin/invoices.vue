@@ -123,8 +123,16 @@
               </div>
             </div>
           </template>
-          <template #cell-amount="{ value }">
-            <span class="font-semibold">{{ formatCurrency(value) }}</span>
+          <template #cell-amount="{ row }">
+            <div class="space-y-1">
+              <div class="font-semibold">{{ formatCurrency(row.total ?? row.amountDue) }}</div>
+              <div class="text-xs text-text-tertiary" v-if="row.amountPaid || row.amountRemaining !== undefined">
+                Paid {{ formatCurrency(row.amountPaid || 0) }}
+                <span v-if="row.amountRemaining !== undefined">
+                  • Remaining {{ formatCurrency(row.amountRemaining || 0) }}
+                </span>
+              </div>
+            </div>
           </template>
           <template #cell-status="{ value }">
             <OuiBadge :variant="getStatusVariant(value)">
@@ -297,12 +305,21 @@ const invoices = computed(() => {
         organizationId: inv.organizationId || "",
         organizationName: inv.organizationName || "Unknown",
         customerEmail: inv.customerEmail || "",
-        amountDue: Number(inv.invoice?.amountDue || 0),
-        amountPaid: Number(inv.invoice?.amountPaid || 0),
-        status: inv.invoice?.status || "unknown",
-        dueDate: inv.invoice?.dueDate,
-        date: inv.invoice?.date,
-      };
+            amountDue: Number(inv.invoice?.amountDue || 0),
+            amountPaid: Number(inv.invoice?.amountPaid || 0),
+            subtotal: inv.invoice?.subtotal !== undefined
+              ? Number(inv.invoice.subtotal)
+              : undefined,
+            total: inv.invoice?.total !== undefined
+              ? Number(inv.invoice.total)
+              : undefined,
+            amountRemaining: inv.invoice?.amountRemaining !== undefined
+              ? Number(inv.invoice.amountRemaining)
+              : undefined,
+            status: inv.invoice?.status || "unknown",
+            dueDate: inv.invoice?.dueDate,
+            date: inv.invoice?.date,
+          };
     }) || []
   );
 });
@@ -340,7 +357,7 @@ const columns = computed(() => [
     defaultWidth: 200,
     minWidth: 150,
   },
-  { key: "amount", label: "Amount Due", defaultWidth: 120, minWidth: 100 },
+  { key: "amount", label: "Amounts", defaultWidth: 180, minWidth: 140 },
   { key: "status", label: "Status", defaultWidth: 120, minWidth: 100 },
   { key: "dueDate", label: "Due Date", defaultWidth: 150, minWidth: 120 },
   { key: "date", label: "Date", defaultWidth: 150, minWidth: 120 },

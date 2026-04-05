@@ -1286,9 +1286,21 @@ type Invoice struct {
 	// Hosted invoice URL (if available)
 	HostedInvoiceUrl *string `protobuf:"bytes,10,opt,name=hosted_invoice_url,json=hostedInvoiceUrl,proto3,oneof" json:"hosted_invoice_url,omitempty"`
 	// Description or memo
-	Description   *string `protobuf:"bytes,11,opt,name=description,proto3,oneof" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Description *string `protobuf:"bytes,11,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	// Subtotal before tax/credits/discount adjustments
+	Subtotal *int64 `protobuf:"varint,12,opt,name=subtotal,proto3,oneof" json:"subtotal,omitempty"`
+	// Final invoice total
+	Total *int64 `protobuf:"varint,13,opt,name=total,proto3,oneof" json:"total,omitempty"`
+	// Remaining amount still owed
+	AmountRemaining *int64 `protobuf:"varint,14,opt,name=amount_remaining,json=amountRemaining,proto3,oneof" json:"amount_remaining,omitempty"`
+	// When the invoice was fully paid
+	PaidAt *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=paid_at,json=paidAt,proto3,oneof" json:"paid_at,omitempty"`
+	// Number of attempted collections
+	AttemptCount *int32 `protobuf:"varint,16,opt,name=attempt_count,json=attemptCount,proto3,oneof" json:"attempt_count,omitempty"`
+	// Stripe collection method, e.g. charge_automatically or send_invoice
+	CollectionMethod *string `protobuf:"bytes,17,opt,name=collection_method,json=collectionMethod,proto3,oneof" json:"collection_method,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Invoice) Reset() {
@@ -1394,6 +1406,48 @@ func (x *Invoice) GetHostedInvoiceUrl() string {
 func (x *Invoice) GetDescription() string {
 	if x != nil && x.Description != nil {
 		return *x.Description
+	}
+	return ""
+}
+
+func (x *Invoice) GetSubtotal() int64 {
+	if x != nil && x.Subtotal != nil {
+		return *x.Subtotal
+	}
+	return 0
+}
+
+func (x *Invoice) GetTotal() int64 {
+	if x != nil && x.Total != nil {
+		return *x.Total
+	}
+	return 0
+}
+
+func (x *Invoice) GetAmountRemaining() int64 {
+	if x != nil && x.AmountRemaining != nil {
+		return *x.AmountRemaining
+	}
+	return 0
+}
+
+func (x *Invoice) GetPaidAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PaidAt
+	}
+	return nil
+}
+
+func (x *Invoice) GetAttemptCount() int32 {
+	if x != nil && x.AttemptCount != nil {
+		return *x.AttemptCount
+	}
+	return 0
+}
+
+func (x *Invoice) GetCollectionMethod() string {
+	if x != nil && x.CollectionMethod != nil {
+		return *x.CollectionMethod
 	}
 	return ""
 }
@@ -3112,7 +3166,7 @@ const file_obiente_cloud_billing_v1_billing_service_proto_rawDesc = "" +
 	"\x06_limit\"p\n" +
 	"\x14ListInvoicesResponse\x12=\n" +
 	"\binvoices\x18\x01 \x03(\v2!.obiente.cloud.billing.v1.InvoiceR\binvoices\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"\xd5\x03\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"\xb7\x06\n" +
 	"\aInvoice\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\tR\x06number\x12\x16\n" +
@@ -3128,11 +3182,24 @@ const file_obiente_cloud_billing_v1_billing_service_proto_rawDesc = "" +
 	"invoicePdf\x88\x01\x01\x121\n" +
 	"\x12hosted_invoice_url\x18\n" +
 	" \x01(\tH\x02R\x10hostedInvoiceUrl\x88\x01\x01\x12%\n" +
-	"\vdescription\x18\v \x01(\tH\x03R\vdescription\x88\x01\x01B\v\n" +
+	"\vdescription\x18\v \x01(\tH\x03R\vdescription\x88\x01\x01\x12\x1f\n" +
+	"\bsubtotal\x18\f \x01(\x03H\x04R\bsubtotal\x88\x01\x01\x12\x19\n" +
+	"\x05total\x18\r \x01(\x03H\x05R\x05total\x88\x01\x01\x12.\n" +
+	"\x10amount_remaining\x18\x0e \x01(\x03H\x06R\x0famountRemaining\x88\x01\x01\x128\n" +
+	"\apaid_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampH\aR\x06paidAt\x88\x01\x01\x12(\n" +
+	"\rattempt_count\x18\x10 \x01(\x05H\bR\fattemptCount\x88\x01\x01\x120\n" +
+	"\x11collection_method\x18\x11 \x01(\tH\tR\x10collectionMethod\x88\x01\x01B\v\n" +
 	"\t_due_dateB\x0e\n" +
 	"\f_invoice_pdfB\x15\n" +
 	"\x13_hosted_invoice_urlB\x0e\n" +
-	"\f_description\"\xc4\x04\n" +
+	"\f_descriptionB\v\n" +
+	"\t_subtotalB\b\n" +
+	"\x06_totalB\x13\n" +
+	"\x11_amount_remainingB\n" +
+	"\n" +
+	"\b_paid_atB\x10\n" +
+	"\x0e_attempt_countB\x14\n" +
+	"\x12_collection_method\"\xc4\x04\n" +
 	"\x0eBillingAccount\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x121\n" +
@@ -3381,77 +3448,78 @@ var file_obiente_cloud_billing_v1_billing_service_proto_depIdxs = []int32{
 	24, // 5: obiente.cloud.billing.v1.ListInvoicesResponse.invoices:type_name -> obiente.cloud.billing.v1.Invoice
 	49, // 6: obiente.cloud.billing.v1.Invoice.date:type_name -> google.protobuf.Timestamp
 	49, // 7: obiente.cloud.billing.v1.Invoice.due_date:type_name -> google.protobuf.Timestamp
-	28, // 8: obiente.cloud.billing.v1.BillingAccount.address:type_name -> obiente.cloud.billing.v1.Address
-	49, // 9: obiente.cloud.billing.v1.BillingAccount.created_at:type_name -> google.protobuf.Timestamp
-	49, // 10: obiente.cloud.billing.v1.BillingAccount.updated_at:type_name -> google.protobuf.Timestamp
-	27, // 11: obiente.cloud.billing.v1.PaymentMethod.card:type_name -> obiente.cloud.billing.v1.CardDetails
-	49, // 12: obiente.cloud.billing.v1.PaymentMethod.created_at:type_name -> google.protobuf.Timestamp
-	49, // 13: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.api_key_created_at:type_name -> google.protobuf.Timestamp
-	49, // 14: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.current_period_end:type_name -> google.protobuf.Timestamp
-	49, // 15: obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse.canceled_at:type_name -> google.protobuf.Timestamp
-	37, // 16: obiente.cloud.billing.v1.ListSubscriptionsResponse.subscriptions:type_name -> obiente.cloud.billing.v1.Subscription
-	49, // 17: obiente.cloud.billing.v1.Subscription.current_period_start:type_name -> google.protobuf.Timestamp
-	49, // 18: obiente.cloud.billing.v1.Subscription.current_period_end:type_name -> google.protobuf.Timestamp
-	49, // 19: obiente.cloud.billing.v1.Subscription.canceled_at:type_name -> google.protobuf.Timestamp
-	49, // 20: obiente.cloud.billing.v1.Subscription.created:type_name -> google.protobuf.Timestamp
-	37, // 21: obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse.subscription:type_name -> obiente.cloud.billing.v1.Subscription
-	37, // 22: obiente.cloud.billing.v1.CancelSubscriptionResponse.subscription:type_name -> obiente.cloud.billing.v1.Subscription
-	46, // 23: obiente.cloud.billing.v1.PayBillResponse.bill:type_name -> obiente.cloud.billing.v1.MonthlyBill
-	46, // 24: obiente.cloud.billing.v1.ListBillsResponse.bills:type_name -> obiente.cloud.billing.v1.MonthlyBill
-	49, // 25: obiente.cloud.billing.v1.MonthlyBill.billing_period_start:type_name -> google.protobuf.Timestamp
-	49, // 26: obiente.cloud.billing.v1.MonthlyBill.billing_period_end:type_name -> google.protobuf.Timestamp
-	49, // 27: obiente.cloud.billing.v1.MonthlyBill.paid_at:type_name -> google.protobuf.Timestamp
-	49, // 28: obiente.cloud.billing.v1.MonthlyBill.due_date:type_name -> google.protobuf.Timestamp
-	49, // 29: obiente.cloud.billing.v1.MonthlyBill.created_at:type_name -> google.protobuf.Timestamp
-	49, // 30: obiente.cloud.billing.v1.MonthlyBill.updated_at:type_name -> google.protobuf.Timestamp
-	46, // 31: obiente.cloud.billing.v1.GenerateCurrentBillResponse.bill:type_name -> obiente.cloud.billing.v1.MonthlyBill
-	0,  // 32: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:input_type -> obiente.cloud.billing.v1.CreateCheckoutSessionRequest
-	2,  // 33: obiente.cloud.billing.v1.BillingService.CreatePaymentIntent:input_type -> obiente.cloud.billing.v1.CreatePaymentIntentRequest
-	4,  // 34: obiente.cloud.billing.v1.BillingService.CreatePortalSession:input_type -> obiente.cloud.billing.v1.CreatePortalSessionRequest
-	14, // 35: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:input_type -> obiente.cloud.billing.v1.CreateSetupIntentRequest
-	6,  // 36: obiente.cloud.billing.v1.BillingService.GetBillingAccount:input_type -> obiente.cloud.billing.v1.GetBillingAccountRequest
-	8,  // 37: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:input_type -> obiente.cloud.billing.v1.UpdateBillingAccountRequest
-	10, // 38: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:input_type -> obiente.cloud.billing.v1.ListPaymentMethodsRequest
-	16, // 39: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:input_type -> obiente.cloud.billing.v1.AttachPaymentMethodRequest
-	18, // 40: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:input_type -> obiente.cloud.billing.v1.DetachPaymentMethodRequest
-	20, // 41: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:input_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
-	12, // 42: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:input_type -> obiente.cloud.billing.v1.GetPaymentStatusRequest
-	22, // 43: obiente.cloud.billing.v1.BillingService.ListInvoices:input_type -> obiente.cloud.billing.v1.ListInvoicesRequest
-	29, // 44: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:input_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest
-	31, // 45: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:input_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest
-	33, // 46: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:input_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest
-	35, // 47: obiente.cloud.billing.v1.BillingService.ListSubscriptions:input_type -> obiente.cloud.billing.v1.ListSubscriptionsRequest
-	38, // 48: obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod:input_type -> obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodRequest
-	40, // 49: obiente.cloud.billing.v1.BillingService.CancelSubscription:input_type -> obiente.cloud.billing.v1.CancelSubscriptionRequest
-	42, // 50: obiente.cloud.billing.v1.BillingService.PayBill:input_type -> obiente.cloud.billing.v1.PayBillRequest
-	44, // 51: obiente.cloud.billing.v1.BillingService.ListBills:input_type -> obiente.cloud.billing.v1.ListBillsRequest
-	47, // 52: obiente.cloud.billing.v1.BillingService.GenerateCurrentBill:input_type -> obiente.cloud.billing.v1.GenerateCurrentBillRequest
-	1,  // 53: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:output_type -> obiente.cloud.billing.v1.CreateCheckoutSessionResponse
-	3,  // 54: obiente.cloud.billing.v1.BillingService.CreatePaymentIntent:output_type -> obiente.cloud.billing.v1.CreatePaymentIntentResponse
-	5,  // 55: obiente.cloud.billing.v1.BillingService.CreatePortalSession:output_type -> obiente.cloud.billing.v1.CreatePortalSessionResponse
-	15, // 56: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:output_type -> obiente.cloud.billing.v1.CreateSetupIntentResponse
-	7,  // 57: obiente.cloud.billing.v1.BillingService.GetBillingAccount:output_type -> obiente.cloud.billing.v1.GetBillingAccountResponse
-	9,  // 58: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:output_type -> obiente.cloud.billing.v1.UpdateBillingAccountResponse
-	11, // 59: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:output_type -> obiente.cloud.billing.v1.ListPaymentMethodsResponse
-	17, // 60: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:output_type -> obiente.cloud.billing.v1.AttachPaymentMethodResponse
-	19, // 61: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:output_type -> obiente.cloud.billing.v1.DetachPaymentMethodResponse
-	21, // 62: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:output_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
-	13, // 63: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:output_type -> obiente.cloud.billing.v1.GetPaymentStatusResponse
-	23, // 64: obiente.cloud.billing.v1.BillingService.ListInvoices:output_type -> obiente.cloud.billing.v1.ListInvoicesResponse
-	30, // 65: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:output_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse
-	32, // 66: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:output_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse
-	34, // 67: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:output_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse
-	36, // 68: obiente.cloud.billing.v1.BillingService.ListSubscriptions:output_type -> obiente.cloud.billing.v1.ListSubscriptionsResponse
-	39, // 69: obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod:output_type -> obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse
-	41, // 70: obiente.cloud.billing.v1.BillingService.CancelSubscription:output_type -> obiente.cloud.billing.v1.CancelSubscriptionResponse
-	43, // 71: obiente.cloud.billing.v1.BillingService.PayBill:output_type -> obiente.cloud.billing.v1.PayBillResponse
-	45, // 72: obiente.cloud.billing.v1.BillingService.ListBills:output_type -> obiente.cloud.billing.v1.ListBillsResponse
-	48, // 73: obiente.cloud.billing.v1.BillingService.GenerateCurrentBill:output_type -> obiente.cloud.billing.v1.GenerateCurrentBillResponse
-	53, // [53:74] is the sub-list for method output_type
-	32, // [32:53] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	49, // 8: obiente.cloud.billing.v1.Invoice.paid_at:type_name -> google.protobuf.Timestamp
+	28, // 9: obiente.cloud.billing.v1.BillingAccount.address:type_name -> obiente.cloud.billing.v1.Address
+	49, // 10: obiente.cloud.billing.v1.BillingAccount.created_at:type_name -> google.protobuf.Timestamp
+	49, // 11: obiente.cloud.billing.v1.BillingAccount.updated_at:type_name -> google.protobuf.Timestamp
+	27, // 12: obiente.cloud.billing.v1.PaymentMethod.card:type_name -> obiente.cloud.billing.v1.CardDetails
+	49, // 13: obiente.cloud.billing.v1.PaymentMethod.created_at:type_name -> google.protobuf.Timestamp
+	49, // 14: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.api_key_created_at:type_name -> google.protobuf.Timestamp
+	49, // 15: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.current_period_end:type_name -> google.protobuf.Timestamp
+	49, // 16: obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse.canceled_at:type_name -> google.protobuf.Timestamp
+	37, // 17: obiente.cloud.billing.v1.ListSubscriptionsResponse.subscriptions:type_name -> obiente.cloud.billing.v1.Subscription
+	49, // 18: obiente.cloud.billing.v1.Subscription.current_period_start:type_name -> google.protobuf.Timestamp
+	49, // 19: obiente.cloud.billing.v1.Subscription.current_period_end:type_name -> google.protobuf.Timestamp
+	49, // 20: obiente.cloud.billing.v1.Subscription.canceled_at:type_name -> google.protobuf.Timestamp
+	49, // 21: obiente.cloud.billing.v1.Subscription.created:type_name -> google.protobuf.Timestamp
+	37, // 22: obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse.subscription:type_name -> obiente.cloud.billing.v1.Subscription
+	37, // 23: obiente.cloud.billing.v1.CancelSubscriptionResponse.subscription:type_name -> obiente.cloud.billing.v1.Subscription
+	46, // 24: obiente.cloud.billing.v1.PayBillResponse.bill:type_name -> obiente.cloud.billing.v1.MonthlyBill
+	46, // 25: obiente.cloud.billing.v1.ListBillsResponse.bills:type_name -> obiente.cloud.billing.v1.MonthlyBill
+	49, // 26: obiente.cloud.billing.v1.MonthlyBill.billing_period_start:type_name -> google.protobuf.Timestamp
+	49, // 27: obiente.cloud.billing.v1.MonthlyBill.billing_period_end:type_name -> google.protobuf.Timestamp
+	49, // 28: obiente.cloud.billing.v1.MonthlyBill.paid_at:type_name -> google.protobuf.Timestamp
+	49, // 29: obiente.cloud.billing.v1.MonthlyBill.due_date:type_name -> google.protobuf.Timestamp
+	49, // 30: obiente.cloud.billing.v1.MonthlyBill.created_at:type_name -> google.protobuf.Timestamp
+	49, // 31: obiente.cloud.billing.v1.MonthlyBill.updated_at:type_name -> google.protobuf.Timestamp
+	46, // 32: obiente.cloud.billing.v1.GenerateCurrentBillResponse.bill:type_name -> obiente.cloud.billing.v1.MonthlyBill
+	0,  // 33: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:input_type -> obiente.cloud.billing.v1.CreateCheckoutSessionRequest
+	2,  // 34: obiente.cloud.billing.v1.BillingService.CreatePaymentIntent:input_type -> obiente.cloud.billing.v1.CreatePaymentIntentRequest
+	4,  // 35: obiente.cloud.billing.v1.BillingService.CreatePortalSession:input_type -> obiente.cloud.billing.v1.CreatePortalSessionRequest
+	14, // 36: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:input_type -> obiente.cloud.billing.v1.CreateSetupIntentRequest
+	6,  // 37: obiente.cloud.billing.v1.BillingService.GetBillingAccount:input_type -> obiente.cloud.billing.v1.GetBillingAccountRequest
+	8,  // 38: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:input_type -> obiente.cloud.billing.v1.UpdateBillingAccountRequest
+	10, // 39: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:input_type -> obiente.cloud.billing.v1.ListPaymentMethodsRequest
+	16, // 40: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:input_type -> obiente.cloud.billing.v1.AttachPaymentMethodRequest
+	18, // 41: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:input_type -> obiente.cloud.billing.v1.DetachPaymentMethodRequest
+	20, // 42: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:input_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
+	12, // 43: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:input_type -> obiente.cloud.billing.v1.GetPaymentStatusRequest
+	22, // 44: obiente.cloud.billing.v1.BillingService.ListInvoices:input_type -> obiente.cloud.billing.v1.ListInvoicesRequest
+	29, // 45: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:input_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest
+	31, // 46: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:input_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest
+	33, // 47: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:input_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest
+	35, // 48: obiente.cloud.billing.v1.BillingService.ListSubscriptions:input_type -> obiente.cloud.billing.v1.ListSubscriptionsRequest
+	38, // 49: obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod:input_type -> obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodRequest
+	40, // 50: obiente.cloud.billing.v1.BillingService.CancelSubscription:input_type -> obiente.cloud.billing.v1.CancelSubscriptionRequest
+	42, // 51: obiente.cloud.billing.v1.BillingService.PayBill:input_type -> obiente.cloud.billing.v1.PayBillRequest
+	44, // 52: obiente.cloud.billing.v1.BillingService.ListBills:input_type -> obiente.cloud.billing.v1.ListBillsRequest
+	47, // 53: obiente.cloud.billing.v1.BillingService.GenerateCurrentBill:input_type -> obiente.cloud.billing.v1.GenerateCurrentBillRequest
+	1,  // 54: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:output_type -> obiente.cloud.billing.v1.CreateCheckoutSessionResponse
+	3,  // 55: obiente.cloud.billing.v1.BillingService.CreatePaymentIntent:output_type -> obiente.cloud.billing.v1.CreatePaymentIntentResponse
+	5,  // 56: obiente.cloud.billing.v1.BillingService.CreatePortalSession:output_type -> obiente.cloud.billing.v1.CreatePortalSessionResponse
+	15, // 57: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:output_type -> obiente.cloud.billing.v1.CreateSetupIntentResponse
+	7,  // 58: obiente.cloud.billing.v1.BillingService.GetBillingAccount:output_type -> obiente.cloud.billing.v1.GetBillingAccountResponse
+	9,  // 59: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:output_type -> obiente.cloud.billing.v1.UpdateBillingAccountResponse
+	11, // 60: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:output_type -> obiente.cloud.billing.v1.ListPaymentMethodsResponse
+	17, // 61: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:output_type -> obiente.cloud.billing.v1.AttachPaymentMethodResponse
+	19, // 62: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:output_type -> obiente.cloud.billing.v1.DetachPaymentMethodResponse
+	21, // 63: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:output_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
+	13, // 64: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:output_type -> obiente.cloud.billing.v1.GetPaymentStatusResponse
+	23, // 65: obiente.cloud.billing.v1.BillingService.ListInvoices:output_type -> obiente.cloud.billing.v1.ListInvoicesResponse
+	30, // 66: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:output_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse
+	32, // 67: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:output_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse
+	34, // 68: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:output_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse
+	36, // 69: obiente.cloud.billing.v1.BillingService.ListSubscriptions:output_type -> obiente.cloud.billing.v1.ListSubscriptionsResponse
+	39, // 70: obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod:output_type -> obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse
+	41, // 71: obiente.cloud.billing.v1.BillingService.CancelSubscription:output_type -> obiente.cloud.billing.v1.CancelSubscriptionResponse
+	43, // 72: obiente.cloud.billing.v1.BillingService.PayBill:output_type -> obiente.cloud.billing.v1.PayBillResponse
+	45, // 73: obiente.cloud.billing.v1.BillingService.ListBills:output_type -> obiente.cloud.billing.v1.ListBillsResponse
+	48, // 74: obiente.cloud.billing.v1.BillingService.GenerateCurrentBill:output_type -> obiente.cloud.billing.v1.GenerateCurrentBillResponse
+	54, // [54:75] is the sub-list for method output_type
+	33, // [33:54] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_billing_v1_billing_service_proto_init() }

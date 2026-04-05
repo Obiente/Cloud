@@ -58,7 +58,7 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, req *connect.Reques
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -147,7 +147,7 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, req *connect.Request[
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -231,7 +231,7 @@ func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -294,7 +294,7 @@ func (s *Service) GetBillingAccount(ctx context.Context, req *connect.Request[bi
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -326,6 +326,7 @@ func (s *Service) GetBillingAccount(ctx context.Context, req *connect.Request[bi
 	}
 
 	protoAccount := s.billingAccountToProto(&billingAccount)
+	s.enrichBillingAccountFromStripe(ctx, protoAccount)
 
 	return connect.NewResponse(&billingv1.GetBillingAccountResponse{
 		Account: protoAccount,
@@ -336,7 +337,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -394,7 +395,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 		if billingDate < 1 || billingDate > 31 {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("billing_date must be between 1 and 31"))
 		}
-		
+
 		// Prevent changing billing date if there are any unpaid (PENDING) bills
 		// This prevents users from "cheesing" the billing date to avoid payment
 		var pendingBillCount int64
@@ -403,12 +404,12 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 			Count(&pendingBillCount).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check pending bills: %w", err))
 		}
-		
+
 		if pendingBillCount > 0 {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, 
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
 				fmt.Errorf("cannot change billing date: you have %d unpaid bill(s). Please pay all pending bills before changing your billing date", pendingBillCount))
 		}
-		
+
 		billingAccount.BillingDate = &billingDate
 	}
 
@@ -421,15 +422,15 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 	// Update Stripe customer if customer ID exists
 	if billingAccount.StripeCustomerID != nil && *billingAccount.StripeCustomerID != "" {
 		customerParams := &stripego.CustomerParams{}
-		
+
 		if billingAccount.BillingEmail != nil && *billingAccount.BillingEmail != "" {
 			customerParams.Email = stripego.String(*billingAccount.BillingEmail)
 		}
-		
+
 		if billingAccount.CompanyName != nil && *billingAccount.CompanyName != "" {
 			customerParams.Name = stripego.String(*billingAccount.CompanyName)
 		}
-		
+
 		if billingAccount.Address != nil && *billingAccount.Address != "" {
 			var address billingv1.Address
 			if err := json.Unmarshal([]byte(*billingAccount.Address), &address); err == nil {
@@ -455,7 +456,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 				customerParams.Address = addrParams
 			}
 		}
-		
+
 		if billingAccount.TaxID != nil && *billingAccount.TaxID != "" {
 			// Stripe tax IDs are managed separately via TaxID API
 			// For now, we'll store it in metadata
@@ -464,7 +465,7 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 			}
 			customerParams.Metadata["tax_id"] = *billingAccount.TaxID
 		}
-		
+
 		if _, err := s.stripeClient.UpdateCustomer(ctx, *billingAccount.StripeCustomerID, customerParams); err != nil {
 			log.Printf("[Billing] Failed to update Stripe customer: %v", err)
 			// Don't fail the request, just log the error
@@ -482,7 +483,7 @@ func (s *Service) CreateSetupIntent(ctx context.Context, req *connect.Request[bi
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -564,7 +565,7 @@ func (s *Service) ListPaymentMethods(ctx context.Context, req *connect.Request[b
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -639,6 +640,9 @@ func (s *Service) ListPaymentMethods(ctx context.Context, req *connect.Request[b
 				protoPM.Card.Name = &pm.BillingDetails.Name
 			}
 		}
+		if pm.Created > 0 {
+			protoPM.CreatedAt = timestamppb.New(time.Unix(pm.Created, 0))
+		}
 
 		protoMethods = append(protoMethods, protoPM)
 	}
@@ -652,7 +656,7 @@ func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -723,6 +727,9 @@ func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[
 			protoPM.Card.Name = &pm.BillingDetails.Name
 		}
 	}
+	if pm.Created > 0 {
+		protoPM.CreatedAt = timestamppb.New(time.Unix(pm.Created, 0))
+	}
 
 	return connect.NewResponse(&billingv1.AttachPaymentMethodResponse{
 		PaymentMethod: protoPM,
@@ -733,7 +740,7 @@ func (s *Service) DetachPaymentMethod(ctx context.Context, req *connect.Request[
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -813,7 +820,7 @@ func (s *Service) SetDefaultPaymentMethod(ctx context.Context, req *connect.Requ
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -893,7 +900,7 @@ func (s *Service) GetPaymentStatus(ctx context.Context, req *connect.Request[bil
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	paymentIntentID := strings.TrimSpace(req.Msg.GetPaymentIntentId())
 	if paymentIntentID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("payment_intent_id is required"))
@@ -925,7 +932,7 @@ func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billing
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -990,36 +997,7 @@ func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billing
 	// Convert Stripe invoices to proto
 	invoices := make([]*billingv1.Invoice, 0, len(stripeInvoices))
 	for _, inv := range stripeInvoices {
-		protoInvoice := &billingv1.Invoice{
-			Id:         inv.ID,
-			Number:     inv.Number,
-			Status:     string(inv.Status),
-			AmountDue:  inv.AmountDue,
-			AmountPaid: inv.AmountPaid,
-			Currency:   strings.ToUpper(string(inv.Currency)),
-		}
-
-		if inv.Created > 0 {
-			protoInvoice.Date = timestamppb.New(time.Unix(inv.Created, 0))
-		}
-
-		if inv.DueDate > 0 {
-			protoInvoice.DueDate = timestamppb.New(time.Unix(inv.DueDate, 0))
-		}
-
-		if inv.InvoicePDF != "" {
-			protoInvoice.InvoicePdf = &inv.InvoicePDF
-		}
-
-		if inv.HostedInvoiceURL != "" {
-			protoInvoice.HostedInvoiceUrl = &inv.HostedInvoiceURL
-		}
-
-		if inv.Description != "" {
-			protoInvoice.Description = &inv.Description
-		}
-
-		invoices = append(invoices, protoInvoice)
+		invoices = append(invoices, stripe.InvoiceToProto(inv))
 	}
 
 	return connect.NewResponse(&billingv1.ListInvoicesResponse{
@@ -1079,7 +1057,7 @@ func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, r
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1180,7 +1158,7 @@ func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *c
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1242,7 +1220,7 @@ func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *c
 
 	return connect.NewResponse(&billingv1.GetDNSDelegationSubscriptionStatusResponse{
 		HasActiveSubscription: hasSubscription,
-		StripeSubscriptionId:   subscriptionID,
+		StripeSubscriptionId:  subscriptionID,
 		HasApiKey:             hasAPIKey,
 		ApiKeyCreatedAt:       apiKeyCreatedAt,
 		CancelAtPeriodEnd:     cancelAtPeriodEnd,
@@ -1255,7 +1233,7 @@ func (s *Service) CancelDNSDelegationSubscription(ctx context.Context, req *conn
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1312,7 +1290,7 @@ func (s *Service) ListSubscriptions(ctx context.Context, req *connect.Request[bi
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1365,55 +1343,9 @@ func (s *Service) ListSubscriptions(ctx context.Context, req *connect.Request[bi
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list subscriptions: %w", err))
 	}
 
-	// Convert to proto
 	protoSubscriptions := make([]*billingv1.Subscription, 0, len(stripeSubscriptions))
 	for _, sub := range stripeSubscriptions {
-		amount := int64(0)
-		currency := "usd"
-		interval := ""
-		intervalCount := int32(1)
-		description := ""
-
-		if len(sub.Items.Data) > 0 {
-			item := sub.Items.Data[0]
-			if item.Price != nil {
-				amount = item.Price.UnitAmount
-				currency = string(item.Price.Currency)
-				if item.Price.Recurring != nil {
-					interval = string(item.Price.Recurring.Interval)
-					intervalCount = int32(item.Price.Recurring.IntervalCount)
-				}
-				if item.Price.Nickname != "" {
-					description = item.Price.Nickname
-				} else if item.Price.Product != nil {
-					description = item.Price.Product.Name
-				}
-			}
-		}
-
-		protoSub := &billingv1.Subscription{
-			Id:                sub.ID,
-			Status:            string(sub.Status),
-			Amount:            amount,
-			Currency:          currency,
-			Interval:          interval,
-			IntervalCount:     intervalCount,
-			Description:       description,
-			CancelAtPeriodEnd: sub.CancelAtPeriodEnd,
-		}
-
-		// Stripe subscription period fields
-		// Note: These fields may need to be accessed differently in Stripe Go SDK v83
-		// For now, we'll leave them unset and they can be populated from webhooks or when we fix field access
-		// TODO: Fix field access once we confirm the correct field names in Stripe Go SDK v83
-		if sub.CanceledAt > 0 {
-			protoSub.CanceledAt = timestamppb.New(time.Unix(sub.CanceledAt, 0))
-		}
-		if sub.Created > 0 {
-			protoSub.Created = timestamppb.New(time.Unix(sub.Created, 0))
-		}
-
-		protoSubscriptions = append(protoSubscriptions, protoSub)
+		protoSubscriptions = append(protoSubscriptions, stripeSubscriptionToProto(sub))
 	}
 
 	return connect.NewResponse(&billingv1.ListSubscriptionsResponse{
@@ -1425,7 +1357,7 @@ func (s *Service) UpdateSubscriptionPaymentMethod(ctx context.Context, req *conn
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1517,54 +1449,10 @@ func (s *Service) UpdateSubscriptionPaymentMethod(ctx context.Context, req *conn
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update subscription payment method: %w", err))
 	}
 
-	// Convert to proto
-	amount := int64(0)
-	currency := "usd"
-	interval := ""
-	intervalCount := int32(1)
-	description := ""
-
-	if len(updatedSub.Items.Data) > 0 {
-		item := updatedSub.Items.Data[0]
-		if item.Price != nil {
-			amount = item.Price.UnitAmount
-			currency = string(item.Price.Currency)
-			if item.Price.Recurring != nil {
-				interval = string(item.Price.Recurring.Interval)
-				intervalCount = int32(item.Price.Recurring.IntervalCount)
-			}
-			if item.Price.Nickname != "" {
-				description = item.Price.Nickname
-			} else if item.Price.Product != nil {
-				description = item.Price.Product.Name
-			}
-		}
-	}
-
-	protoSub := &billingv1.Subscription{
-		Id:                updatedSub.ID,
-		Status:            string(updatedSub.Status),
-		Amount:            amount,
-		Currency:          currency,
-		Interval:          interval,
-		IntervalCount:     intervalCount,
-		Description:       description,
-		CancelAtPeriodEnd: updatedSub.CancelAtPeriodEnd,
-	}
-
-	// Stripe subscription period fields
-	// Note: These fields may need to be accessed differently in Stripe Go SDK v83
-	// For now, we'll leave them unset and they can be populated from webhooks or when we fix field access
-	// TODO: Fix field access once we confirm the correct field names in Stripe Go SDK v83
-	if updatedSub.CanceledAt > 0 {
-		protoSub.CanceledAt = timestamppb.New(time.Unix(updatedSub.CanceledAt, 0))
-	}
-	if updatedSub.Created > 0 {
-		protoSub.Created = timestamppb.New(time.Unix(updatedSub.Created, 0))
-	}
+	protoSub := stripeSubscriptionToProto(updatedSub)
 
 	return connect.NewResponse(&billingv1.UpdateSubscriptionPaymentMethodResponse{
-		Success:     true,
+		Success:      true,
 		Subscription: protoSub,
 	}), nil
 }
@@ -1573,7 +1461,7 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1642,47 +1530,7 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel subscription: %w", err))
 	}
 
-	// Convert to proto
-	amount := int64(0)
-	currency := "usd"
-	interval := ""
-	intervalCount := int32(1)
-	description := ""
-
-	if len(canceledSub.Items.Data) > 0 {
-		item := canceledSub.Items.Data[0]
-		if item.Price != nil {
-			amount = item.Price.UnitAmount
-			currency = string(item.Price.Currency)
-			if item.Price.Recurring != nil {
-				interval = string(item.Price.Recurring.Interval)
-				intervalCount = int32(item.Price.Recurring.IntervalCount)
-			}
-			if item.Price.Nickname != "" {
-				description = item.Price.Nickname
-			} else if item.Price.Product != nil {
-				description = item.Price.Product.Name
-			}
-		}
-	}
-
-	protoSub := &billingv1.Subscription{
-		Id:                canceledSub.ID,
-		Status:            string(canceledSub.Status),
-		Amount:            amount,
-		Currency:          currency,
-		Interval:          interval,
-		IntervalCount:     intervalCount,
-		Description:       description,
-		CancelAtPeriodEnd: canceledSub.CancelAtPeriodEnd,
-	}
-
-	if canceledSub.CanceledAt > 0 {
-		protoSub.CanceledAt = timestamppb.New(time.Unix(canceledSub.CanceledAt, 0))
-	}
-	if canceledSub.Created > 0 {
-		protoSub.Created = timestamppb.New(time.Unix(canceledSub.Created, 0))
-	}
+	protoSub := stripeSubscriptionToProto(canceledSub)
 
 	var message string
 	if canceledSub.CancelAtPeriodEnd {
@@ -1692,8 +1540,8 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 	}
 
 	return connect.NewResponse(&billingv1.CancelSubscriptionResponse{
-		Success:     true,
-		Message:     message,
+		Success:      true,
+		Message:      message,
 		Subscription: protoSub,
 	}), nil
 }
@@ -1702,7 +1550,7 @@ func (s *Service) PayBill(ctx context.Context, req *connect.Request[billingv1.Pa
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1747,7 +1595,7 @@ func (s *Service) ListBills(ctx context.Context, req *connect.Request[billingv1.
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1791,8 +1639,8 @@ func (s *Service) ListBills(ctx context.Context, req *connect.Request[billingv1.
 	}
 
 	return connect.NewResponse(&billingv1.ListBillsResponse{
-		Bills:    protoBills,
-		HasMore:  hasMore,
+		Bills:   protoBills,
+		HasMore: hasMore,
 	}), nil
 }
 
@@ -1800,7 +1648,7 @@ func (s *Service) GenerateCurrentBill(ctx context.Context, req *connect.Request[
 	if err := s.checkBillingEnabled(); err != nil {
 		return nil, err
 	}
-	
+
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1823,7 +1671,7 @@ func (s *Service) GenerateCurrentBill(ctx context.Context, req *connect.Request[
 	}
 
 	protoBill := monthlyBillToProto(bill)
-	
+
 	var message string
 	if alreadyExists {
 		message = "Bill already exists for the current period"
@@ -1832,17 +1680,17 @@ func (s *Service) GenerateCurrentBill(ctx context.Context, req *connect.Request[
 	}
 
 	return connect.NewResponse(&billingv1.GenerateCurrentBillResponse{
-		Success:      true,
-		Message:      message,
-		Bill:         protoBill,
+		Success:       true,
+		Message:       message,
+		Bill:          protoBill,
 		AlreadyExists: alreadyExists,
 	}), nil
 }
 
 func monthlyBillToProto(bill *database.MonthlyBill) *billingv1.MonthlyBill {
 	proto := &billingv1.MonthlyBill{
-		Id:                bill.ID,
-		OrganizationId:    bill.OrganizationID,
+		Id:                 bill.ID,
+		OrganizationId:     bill.OrganizationID,
 		BillingPeriodStart: timestamppb.New(bill.BillingPeriodStart),
 		BillingPeriodEnd:   timestamppb.New(bill.BillingPeriodEnd),
 		AmountCents:        bill.AmountCents,
