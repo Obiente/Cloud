@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -156,11 +158,24 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get connection info: %w", err))
 	}
 
+	username := conn.Username
+	if requestedUsername := strings.TrimSpace(req.Msg.GetUsername()); requestedUsername != "" && requestedUsername != conn.Username {
+		return nil, connect.NewError(
+			connect.CodeUnimplemented,
+			fmt.Errorf("password reset currently supports only the primary database user %q", conn.Username),
+		)
+	}
+
 	// Generate new password
 	newPassword := generateRandomPassword(32)
 
-	// TODO: Actually reset the password in the database.
-	// For now, update the connection record and encrypt when available.
+	resetCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := s.applyPrimaryDatabasePassword(resetCtx, req.Msg.GetDatabaseId(), databasesv1.DatabaseType(dbInstance.Type), username, newPassword); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to reset password in database engine: %w", err))
+	}
+
+	// Persist the new password only after the database engine accepted it.
 	encryptedPassword := newPassword
 	if s.secretManager != nil {
 		if encrypted, encErr := s.secretManager.EncryptPassword(newPassword); encErr == nil {
@@ -176,11 +191,6 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update password: %w", err))
 	}
 
-	username := conn.Username
-	if req.Msg.Username != nil && *req.Msg.Username != "" {
-		username = *req.Msg.Username
-	}
-
 	res := connect.NewResponse(&databasesv1.ResetDatabasePasswordResponse{
 		DatabaseId:  req.Msg.GetDatabaseId(),
 		Username:    username,
@@ -188,4 +198,37 @@ func (s *Service) ResetDatabasePassword(ctx context.Context, req *connect.Reques
 		Message:     "Password has been reset. Please save this password now - it will not be shown again.",
 	})
 	return res, nil
+}
+
+func (s *Service) applyPrimaryDatabasePassword(ctx context.Context, databaseID string, dbType databasesv1.DatabaseType, username, newPassword string) error {
+	switch dbType {
+	case databasesv1.DatabaseType_POSTGRESQL:
+		db, _, err := s.openDirectConnection(ctx, databaseID, databaseID)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		statement := fmt.Sprintf(
+			"ALTER USER %s WITH PASSWORD %s",
+			quoteIdentifier(username, databasesv1.DatabaseType_POSTGRESQL),
+			quoteSQLLiteral(newPassword),
+		)
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("postgres password update failed: %w", err)
+		}
+		return nil
+	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
+		return fmt.Errorf("password reset is not implemented yet for %s databases", dbType.String())
+	case databasesv1.DatabaseType_MONGODB:
+		return fmt.Errorf("password reset is not implemented yet for mongodb databases")
+	case databasesv1.DatabaseType_REDIS:
+		return fmt.Errorf("password reset is not implemented yet for redis databases")
+	default:
+		return fmt.Errorf("unsupported database type %d", dbType)
+	}
+}
+
+func quoteSQLLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
