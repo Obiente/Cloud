@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
@@ -364,8 +365,8 @@ func (rm *RollbackMonitor) sendRollbackInAppNotification(ctx context.Context, de
 	actionLabel := "View Deployment"
 	metadata := map[string]string{
 		"deployment_id": deploymentID,
-		"service_name":   serviceName,
-		"reason":         reason,
+		"service_name":  serviceName,
+		"reason":        reason,
 	}
 
 	// Use the helper function from notifications service
@@ -396,12 +397,12 @@ func createNotificationForOrganization(ctx context.Context, orgID string, notifi
 	// Get organization members
 	var members []database.OrganizationMember
 	query := database.DB.Where("organization_id = ? AND status = ?", orgID, "active")
-	
+
 	// Filter by roles if specified
 	if len(roles) > 0 {
 		query = query.Where("role IN ?", roles)
 	}
-	
+
 	if err := query.Find(&members).Error; err != nil {
 		return fmt.Errorf("get organization members: %w", err)
 	}
@@ -414,7 +415,7 @@ func createNotificationForOrganization(ctx context.Context, orgID string, notifi
 		}
 
 		notification := &database.Notification{
-			ID:             fmt.Sprintf("notif-%d", time.Now().UnixNano()),
+			ID:             fmt.Sprintf("notif-%s", uuid.NewString()),
 			UserID:         member.UserID,
 			OrganizationID: &orgID,
 			Type:           notificationTypeToString(notificationType),

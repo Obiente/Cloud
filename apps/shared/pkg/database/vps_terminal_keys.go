@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 	"gorm.io/gorm"
 )
@@ -58,7 +59,7 @@ func CreateVPSTerminalKey(vpsID, orgID string) (*VPSTerminalKey, error) {
 	}
 
 	// Generate ID
-	keyID := fmt.Sprintf("term-%d", time.Now().UnixNano())
+	keyID := fmt.Sprintf("term-%s", uuid.NewString())
 
 	// Create key record
 	terminalKey := &VPSTerminalKey{
@@ -125,4 +126,3 @@ func RotateVPSTerminalKey(vpsID string, orgID string) (*VPSTerminalKey, error) {
 
 	return &existingKey, nil
 }
-

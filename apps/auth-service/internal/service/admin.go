@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
@@ -21,7 +21,7 @@ import (
 
 // generateID generates a unique ID with a prefix
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString())
 }
 
 // AdminService implements AdminServiceHandler for role and permission management

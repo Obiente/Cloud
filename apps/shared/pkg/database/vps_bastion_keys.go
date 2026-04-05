@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 	"gorm.io/gorm"
 )
@@ -58,7 +59,7 @@ func CreateVPSBastionKey(vpsID, orgID string) (*VPSBastionKey, error) {
 	}
 
 	// Generate ID
-	keyID := fmt.Sprintf("bastion-%d", time.Now().UnixNano())
+	keyID := fmt.Sprintf("bastion-%s", uuid.NewString())
 
 	// Create key record
 	bastionKey := &VPSBastionKey{
@@ -125,4 +126,3 @@ func RotateVPSBastionKey(vpsID string, orgID string) (*VPSBastionKey, error) {
 
 	return &existingKey, nil
 }
-

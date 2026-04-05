@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -2329,7 +2330,7 @@ func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadmi
 	}
 
 	plan := &database.OrganizationPlan{
-		ID:                      fmt.Sprintf("plan-%d", time.Now().UnixNano()),
+		ID:                      generateID("plan"),
 		Name:                    req.Msg.GetName(),
 		CPUCores:                int(req.Msg.GetCpuCores()),
 		MemoryBytes:             req.Msg.GetMemoryBytes(),
@@ -3055,7 +3056,7 @@ func convertNodeToProto(node *database.NodeMetadata) *superadminv1.NodeInfo {
 
 // generateID generates a unique ID with a prefix
 func generateID(prefix string) string {
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	return fmt.Sprintf("%s-%s", prefix, uuid.NewString())
 }
 
 // ListSuperadminPermissions returns only superadmin-only permissions

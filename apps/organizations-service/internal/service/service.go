@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
@@ -1485,7 +1486,7 @@ func ensurePersonalOrg(userID string) {
 	_ = sharedorganizations.EnsurePlanAssigned(org.ID)
 }
 
-func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()) }
+func generateID(prefix string) string { return fmt.Sprintf("%s-%s", prefix, uuid.NewString()) }
 
 // organizationToProto converts a database Organization to a proto Organization, including plan info
 func organizationToProto(org *database.Organization) *organizationsv1.Organization {
