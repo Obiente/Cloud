@@ -1030,8 +1030,6 @@ const scheduleReconnect = () => {
     if (!streaming.value || props.gameServerStatus !== 3) {
       return;
     }
-      `[GameServerMetrics] Attempting to reconnect stream (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
-    );
     await startStreaming();
   }, delay);
 };

@@ -295,11 +295,6 @@ const handleScroll = (event?: Event) => {
 
 // Load older logs using the since parameter
 const loadOlderLogs = async () => {
-    isLoadingOlderLogs: isLoadingOlderLogs.value,
-    hasLoadedAllLogs: hasLoadedAllLogs.value,
-    logsLength: logs.value.length
-  });
-  
   if (
     isLoadingOlderLogs.value ||
     hasLoadedAllLogs.value ||
@@ -455,8 +450,6 @@ const scheduleReconnect = () => {
     if (!isFollowing.value) {
       return;
     }
-      `Attempting to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
-    );
     error.value = `Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
     await startFollowing();
   }, delay);

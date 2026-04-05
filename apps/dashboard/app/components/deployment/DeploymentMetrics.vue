@@ -349,11 +349,6 @@
   const selectedTimeframe = computed({
     get: () => {
       const value = preferencesStore.metricsPreferences?.timeframe;
-        value,
-        metricsPreferences: preferencesStore.metricsPreferences,
-        hydrated: preferencesStore.hydrated,
-        isClient: import.meta.client,
-      });
       // Return default value if undefined to ensure select always has a valid value
       return value ?? "24h";
     },
@@ -374,13 +369,6 @@
   watch(
     () => preferencesStore.metricsPreferences,
     async (newMetrics, oldMetrics) => {
-        new: newMetrics,
-        old: oldMetrics,
-        newTimeframe: newMetrics?.timeframe,
-        oldTimeframe: oldMetrics?.timeframe,
-        hydrated: preferencesStore.hydrated,
-      });
-      
       // When store hydrates and timeframe is restored from storage, ensure proper initialization
       // Only handle hydration case (when oldMetrics is undefined/null) to avoid duplicate calls
       // when user changes timeframe (which is handled by the setter)

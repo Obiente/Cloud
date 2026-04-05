@@ -549,10 +549,6 @@ const loadIntegrations = async (
           }
         : undefined,
     }));
-
-    // Log for debugging
-      `[SettingsIntegrations] Loaded ${integrations.value.length} GitHub integration(s)`
-    );
   } catch (err: unknown) {
     console.error("Failed to load GitHub integrations:", err);
     error.value =

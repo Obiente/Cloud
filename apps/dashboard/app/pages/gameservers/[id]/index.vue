@@ -873,17 +873,7 @@ const isVanillaServer = computed(() => {
   
   const serverType = (gameServer.value.envVars.TYPE || "").toUpperCase().trim();
   const isVanilla = serverType === "VANILLA" || serverType === "";
-  
-  // Debug logging (remove after fixing)
-  if (process.env.NODE_ENV === 'development') {
-      serverType,
-      envVars: gameServer.value.envVars,
-      isVanilla,
-      hasEnvVars: !!gameServer.value?.envVars,
-      envVarsKeys: gameServer.value?.envVars ? Object.keys(gameServer.value.envVars) : [],
-      gameServer: gameServer.value
-    });
-  }
+
   return isVanilla;
 });
 
@@ -904,13 +894,6 @@ const tabs = computed<TabItem[]>(() => {
     // Only show mods/plugins tab for non-vanilla servers
     // Explicitly check isVanillaServer to ensure reactivity
     const vanilla = isVanillaServer.value;
-    if (process.env.NODE_ENV === 'development') {
-        isMinecraft: isMinecraft.value,
-        isVanillaServer: vanilla,
-        willShowModsTab: !vanilla,
-        gameServer: gameServer.value
-      });
-    }
     if (!vanilla) {
       baseTabs.push(
         { id: "mods", label: modsPluginsTabLabel.value, icon: PuzzlePieceIcon }

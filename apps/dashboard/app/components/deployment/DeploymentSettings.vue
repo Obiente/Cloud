@@ -926,17 +926,8 @@
       ) {
         // Integration ID will be set via handleIntegrationIdChange when picker emits it
         // If it's still empty after selection, we'll need to wait for the picker to emit it
-          "[DeploymentSettings] GitHub repo selected, waiting for integration ID..."
-        );
       }
       markConfigDirty();
-        "[DeploymentSettings] GitHub repo selected:",
-        repoFullName,
-        "URL:",
-        config.repositoryUrl,
-        "Integration ID:",
-        githubIntegrationId.value
-      );
     } else {
       selectedGitHubRepo.value = "";
       config.repositoryUrl = "";
@@ -1014,12 +1005,6 @@
     }
     
     markConfigDirty();
-
-      repositoryUrl: config.repositoryUrl,
-      selectedGitHubRepo: selectedGitHubRepo.value,
-      repositorySource: repositorySource.value,
-      branch: config.branch,
-    });
   };
 
   watch(selectedGitHubRepo, (repo) => {
@@ -1427,15 +1412,6 @@
         // Include it even if empty - send null so backend can clear it
         updates.githubIntegrationId = trimmed || null;
       }
-
-        repositoryUrl: updates.repositoryUrl,
-        branch: updates.branch,
-        githubIntegrationId: updates.githubIntegrationId,
-        selectedGitHubRepo: selectedGitHubRepo.value,
-        configRepositoryUrl: config.repositoryUrl,
-        githubIntegrationIdValue: githubIntegrationId.value,
-        allUpdates: updates,
-      });
 
       await deploymentActions.updateDeployment(
         String(route.params.id),

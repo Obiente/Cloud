@@ -76,15 +76,6 @@ export function useMultiSelect(options: MultiSelectOptions) {
     event: MouseEvent,
     onSelectionChange?: (selectedPaths: string[]) => void
   ) {
-      path: node.path,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
-      visibleNodesCount: visibleNodes.value.length,
-      selectedNodesCount: selectedNodes.value.size,
-      lastSelectedIndex: lastSelectedIndex.value,
-    });
-
     // Don't allow selecting root
     if (node.path === "/") {
       return;
@@ -109,9 +100,6 @@ export function useMultiSelect(options: MultiSelectOptions) {
       }
       lastSelectedIndex.value = nodeIndex;
     } else if (event.shiftKey && lastSelectedIndex.value !== null) {
-        start: Math.min(lastSelectedIndex.value, nodeIndex),
-        end: Math.max(lastSelectedIndex.value, nodeIndex),
-      });
       // Shift+Click: Select range
       const start = Math.min(lastSelectedIndex.value, nodeIndex);
       const end = Math.max(lastSelectedIndex.value, nodeIndex);
@@ -129,11 +117,6 @@ export function useMultiSelect(options: MultiSelectOptions) {
       addNodeWithDescendants(node);
       lastSelectedIndex.value = nodeIndex;
     }
-
-      selectedCount: selectedNodes.value.size,
-      selectedPaths: Array.from(selectedNodes.value),
-      lastSelectedIndex: lastSelectedIndex.value,
-    });
 
     // Notify parent of selection change
     if (onSelectionChange) {
@@ -196,4 +179,3 @@ export function useMultiSelect(options: MultiSelectOptions) {
     removeNodeWithDescendants,
   };
 }
-

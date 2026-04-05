@@ -1320,8 +1320,6 @@
 
     // Prevent concurrent loads of the same file
     if (isLoadingFile.value && currentFilePath.value === node.path) {
-        "[handleLoadFile] Already loading this file, skipping duplicate request"
-      );
       return;
     }
 
@@ -1385,8 +1383,6 @@
 
       // Verify this request is still valid (file hasn't changed during load)
       if (currentFilePath.value !== requestPath) {
-          "[handleLoadFile] File changed during load, discarding stale response"
-        );
         return;
       }
 
@@ -1951,17 +1947,7 @@
 
   // Handle node selection
   function handleNodeSelect(node: ExplorerNode, event: MouseEvent) {
-      path: node.path,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey,
-    });
-
     multiSelect.handleNodeClick(node, event, (selectedPaths) => {
-        selectedPaths,
-        selectedCount: selectedPaths.length,
-      });
-
       // Update selectedPath to the last selected if single selection
       if (
         selectedPaths.length === 1 &&
