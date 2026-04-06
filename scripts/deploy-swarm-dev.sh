@@ -147,19 +147,19 @@ elif [ "$PULL_IMAGES" = "true" ]; then
 
   if ! pull_images_in_parallel "${PULL_TARGETS[@]}"; then
     echo ""
-    echo "❌ Failed to pull the following images:"
+    echo "⚠️  Failed to pull the following images:"
     for service in "${PARALLEL_PULL_FAILURES[@]}"; do
       echo "   - ${service}"
     done
     echo ""
-    echo "Make sure you're authenticated to ghcr.io:"
-    echo "   docker login ghcr.io"
+    echo "Continuing deployment with cached/local images."
+    echo "Services that use these images may keep their existing version or fail"
+    echo "to schedule if no local image is available."
     echo ""
     echo "Or use -b or --build to build locally"
-    exit 1
   fi
   
-  echo "✅ Image pull complete!"
+  echo "✅ Image pull step complete!"
 else
   echo "ℹ️  Skipping image build/pull (use -b/--build to build locally or -p/--pull to pull from registry)"
   echo "   Using existing images if available"

@@ -46,6 +46,7 @@ STACK_NAME="${STACK_NAME:-obiente}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.swarm.yml}"
 BUILD_LOCAL="${BUILD_LOCAL:-false}"
 DEPLOY_DASHBOARD="${DEPLOY_DASHBOARD:-true}"
+RESOLVE_IMAGE_MODE="never"
 
 # Define all microservice images
 REGISTRY="${REGISTRY:-ghcr.io/obiente}"
@@ -163,19 +164,24 @@ elif [ "$PULL_IMAGES" = "true" ]; then
 
   if ! pull_images_in_parallel "${PULL_TARGETS[@]}"; then
     echo ""
-    echo "❌ Failed to pull the following images:"
+    echo "⚠️  Failed to pull the following images:"
     for service in "${PARALLEL_PULL_FAILURES[@]}"; do
       echo "   - ${service}"
     done
     echo ""
-    echo "Make sure you're authenticated to ghcr.io:"
-    echo "   docker login ghcr.io"
+    echo "Continuing deployment with cached image resolution."
+    echo "Services that use these images may keep their existing version or fail"
+    echo "to schedule on nodes that do not already have the image cached."
     echo ""
-    echo "Or set BUILD_LOCAL=true to build locally"
-    exit 1
+    echo "To fully fix this, either:"
+    echo "   1. Publish the missing image to ghcr.io"
+    echo "   2. Or set BUILD_LOCAL=true to build locally"
+    RESOLVE_IMAGE_MODE="never"
+  else
+    RESOLVE_IMAGE_MODE="always"
   fi
-  
-  echo "✅ Image pull complete!"
+
+  echo "✅ Image pull step complete!"
 else
   echo "ℹ️  Skipping image pull (use -p or --pull to pull images)"
 fi
@@ -406,12 +412,7 @@ echo "✅ Config cleanup complete"
 # This ensures proper DNS configuration and service name resolution
 
 # Deploy the main stack with environment variables loaded from .env
-# Use --resolve-image always to force pulling latest images if PULL_IMAGES is true
-if [ "$PULL_IMAGES" = "true" ]; then
-  docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
-else
-  docker stack deploy --resolve-image never -c "$MERGED_COMPOSE" "$STACK_NAME"
-fi
+docker stack deploy --resolve-image "$RESOLVE_IMAGE_MODE" -c "$MERGED_COMPOSE" "$STACK_NAME"
 rm -f "$MERGED_COMPOSE"
 
 echo ""
@@ -443,11 +444,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   envsubst < "$TEMP_DASHBOARD_COMPOSE" > "$TEMP_DASHBOARD_COMPOSE_FINAL"
   
   # Deploy dashboard service in the same stack (not a separate stack)
-  if [ "$PULL_IMAGES" = "true" ]; then
-    docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
-  else
-    docker stack deploy --resolve-image never -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
-  fi
+  docker stack deploy --resolve-image "$RESOLVE_IMAGE_MODE" -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
   rm -f "$TEMP_DASHBOARD_COMPOSE" "$TEMP_DASHBOARD_COMPOSE_FINAL"
   
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
