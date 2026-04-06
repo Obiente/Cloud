@@ -75,6 +75,19 @@ elif [ -f "${REPO_ROOT}/.env.example" ]; then
   echo "   Copy .env.example to .env and configure it: cp .env.example .env"
 fi
 
+DOMAIN="${DOMAIN:-localhost}"
+export DOMAIN
+
+if [ -z "${DASHBOARD_URL:-}" ]; then
+  DASHBOARD_URL="$(derive_dashboard_url "$DOMAIN")"
+  export DASHBOARD_URL
+fi
+
+if [ -z "${API_URL:-}" ]; then
+  API_URL="$(derive_api_url "$DOMAIN")"
+  export API_URL
+fi
+
 # Check if required directories exist on this node
 REQUIRED_DIRS=(
   "/var/lib/obiente"

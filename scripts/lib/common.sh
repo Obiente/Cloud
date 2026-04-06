@@ -151,3 +151,37 @@ pull_images_in_parallel() {
     return 1
   fi
 }
+
+infer_public_scheme() {
+  local domain="${1:-localhost}"
+
+  case "$domain" in
+    localhost|*.localhost|127.0.0.1|0.0.0.0)
+      printf 'http'
+      ;;
+    *)
+      printf 'https'
+      ;;
+  esac
+}
+
+derive_dashboard_url() {
+  local domain="${1:-localhost}"
+  local scheme
+
+  scheme="$(infer_public_scheme "$domain")"
+  printf '%s://%s' "$scheme" "$domain"
+}
+
+derive_api_url() {
+  local domain="${1:-localhost}"
+  local scheme
+
+  scheme="$(infer_public_scheme "$domain")"
+  if [ "$domain" = "localhost" ]; then
+    printf '%s://api.localhost' "$scheme"
+    return
+  fi
+
+  printf '%s://api.%s' "$scheme" "$domain"
+}

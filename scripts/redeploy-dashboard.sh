@@ -26,6 +26,16 @@ fi
 DOMAIN="${1:-${DOMAIN:-localhost}}"
 export DOMAIN="$DOMAIN"
 
+if [ -z "${DASHBOARD_URL:-}" ]; then
+  DASHBOARD_URL="$(derive_dashboard_url "$DOMAIN")"
+  export DASHBOARD_URL
+fi
+
+if [ -z "${API_URL:-}" ]; then
+  API_URL="$(derive_api_url "$DOMAIN")"
+  export API_URL
+fi
+
 echo "🚀 Redeploying dashboard with DOMAIN=$DOMAIN..."
 
 # Merge docker-compose.base.yml with docker-compose.dashboard.yml
