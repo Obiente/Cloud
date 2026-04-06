@@ -21,6 +21,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Log in to ECR Public
+        run: |
+          aws ecr-public get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin public.ecr.aws
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -38,22 +43,36 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Format: "dockerhub-source|ecr-fallback|target"
-          # ecr-fallback is empty for images not available on ECR Public
+          # Format: "ecr-primary|dockerhub-fallback|target"
+          # ECR Public is primary (authenticated = no rate limit); Docker Hub is fallback
+          # dockerhub-fallback is empty for images not available on Docker Hub as library images
           images=(
             "docker.io/moby/buildkit:buildx-stable-1||${LOCAL_REGISTRY}/dockerhub/moby/buildkit:buildx-stable-1"
-            "docker.io/library/golang:1.25-alpine|public.ecr.aws/docker/library/golang:1.25-alpine|${LOCAL_REGISTRY}/dockerhub/library/golang:1.25-alpine"
-            "docker.io/library/alpine:latest|public.ecr.aws/docker/library/alpine:latest|${LOCAL_REGISTRY}/dockerhub/library/alpine:latest"
-            "docker.io/library/node:22-alpine|public.ecr.aws/docker/library/node:22-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:22-alpine"
-            "docker.io/library/node:20-alpine|public.ecr.aws/docker/library/node:20-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:20-alpine"
-            "docker.io/library/rust:1.75-alpine|public.ecr.aws/docker/library/rust:1.75-alpine|${LOCAL_REGISTRY}/dockerhub/library/rust:1.75-alpine"
+            "public.ecr.aws/docker/library/golang:1.25-alpine|docker.io/library/golang:1.25-alpine|${LOCAL_REGISTRY}/dockerhub/library/golang:1.25-alpine"
+            "public.ecr.aws/docker/library/alpine:latest|docker.io/library/alpine:latest|${LOCAL_REGISTRY}/dockerhub/library/alpine:latest"
+            "public.ecr.aws/docker/library/node:22-alpine|docker.io/library/node:22-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:22-alpine"
+            "public.ecr.aws/docker/library/node:20-alpine|docker.io/library/node:20-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:20-alpine"
+            "public.ecr.aws/docker/library/rust:1.75-alpine|docker.io/library/rust:1.75-alpine|${LOCAL_REGISTRY}/dockerhub/library/rust:1.75-alpine"
           )
 
-          sync_image() {
+          try_sync() {
             local source_ref="$1"
             local target_ref="$2"
-            echo "  Trying ${source_ref} -> ${target_ref}"
-            docker buildx imagetools create --tag "${target_ref}" "${source_ref}"
+            local max_attempts=3
+            local attempt=1
+            local delay=30
+
+            while [[ $attempt -le $max_attempts ]]; do
+              echo "  Trying ${source_ref} -> ${target_ref} (attempt ${attempt}/${max_attempts})"
+              if docker buildx imagetools create --tag "${target_ref}" "${source_ref}"; then
+                return 0
+              fi
+              echo "  Attempt ${attempt} failed. Waiting ${delay}s..."
+              sleep "$delay"
+              delay=$(( delay * 2 ))
+              attempt=$(( attempt + 1 ))
+            done
+            return 1
           }
 
           sync_with_fallback() {
@@ -61,19 +80,19 @@ jobs:
             local fallback_ref="$2"
             local target_ref="$3"
 
-            if sync_image "${primary_ref}" "${target_ref}"; then
+            if try_sync "${primary_ref}" "${target_ref}"; then
               echo "Synced from primary: ${primary_ref}"
             elif [[ -n "${fallback_ref}" ]]; then
-              echo "Primary failed (rate limited?), falling back to ECR: ${fallback_ref}"
-              sync_image "${fallback_ref}" "${target_ref}"
+              echo "Primary failed, falling back to: ${fallback_ref}"
+              try_sync "${fallback_ref}" "${target_ref}"
               echo "Synced from fallback: ${fallback_ref}"
             else
-              echo "ERROR: Primary failed and no fallback available for ${primary_ref}"
+              echo "ERROR: All sources failed for ${primary_ref}"
               return 1
             fi
 
             if ! docker buildx imagetools inspect "${target_ref}" >/dev/null; then
-              echo "Verification warning: inspect failed for ${target_ref}, but the mirror step completed."
+              echo "Verification warning: inspect failed for ${target_ref}"
             fi
           }
 
