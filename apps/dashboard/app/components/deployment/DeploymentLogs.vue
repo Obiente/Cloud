@@ -32,7 +32,7 @@
             :class="{ 'text-primary': isFollowing }"
           >
             <ArrowPathIcon
-              class="h-4 w-4 mr-1"
+              class="h-3.5 w-3.5"
               :class="{ 'animate-spin': isFollowing }"
             />
             {{ isFollowing ? "Following" : "Follow" }}
@@ -43,7 +43,7 @@
           <OuiMenu>
             <template #trigger>
               <OuiButton variant="ghost" size="sm">
-                <EllipsisVerticalIcon class="h-4 w-4" />
+                <EllipsisVerticalIcon class="h-3.5 w-3.5" />
               </OuiButton>
             </template>
             <template #default>
@@ -229,7 +229,7 @@ const startStream = async () => {
     }
     
     const stream = await client.streamDeploymentLogs(
-      request,
+      request as StreamDeploymentLogsRequest,
       { signal: streamController.signal }
     );
 
@@ -254,7 +254,7 @@ const startStream = async () => {
   } catch (error: unknown) {
     // Suppress all abort-related errors - they're intentional when switching services
     const isAbortError = 
-      error.name === "AbortError" || 
+      (error as any).name === "AbortError" || 
       (error as Error).message?.toLowerCase().includes("aborted") ||
       (error as Error).message?.toLowerCase().includes("canceled") ||
       (error as Error).message?.toLowerCase().includes("cancelled") ||
@@ -276,7 +276,7 @@ const startStream = async () => {
       (error as Error).message?.toLowerCase().includes("endstreamresponse") ||
       (error as Error).message?.toLowerCase().includes("invalid utf-8") ||
       (error as Error).message?.toLowerCase().includes("marshal message") ||
-      error.code === "unknown";
+      (error as any).code === "unknown";
 
     // Only show error if it's not a benign error after successful streaming,
     // or if it's a real error before receiving any logs

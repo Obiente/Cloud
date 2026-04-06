@@ -11,28 +11,16 @@
     />
 
     <!-- Quick Info Bar -->
-    <OuiCard variant="outline">
-      <OuiCardBody>
-        <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
-          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-            <div class="h-8 w-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
-              <ServerStackIcon class="h-4 w-4 text-accent-primary" />
-            </div>
-            <OuiStack gap="none" class="min-w-0">
-              <OuiText size="sm" weight="medium" class="font-mono" truncate>
-                {{ connectionDomain }}{{ gameServer.port ? ':' + gameServer.port : '' }}
-              </OuiText>
-              <OuiText size="xs" color="tertiary">{{ gameServer.gameType !== undefined ? getGameTypeLabel(gameServer.gameType) : 'Unknown' }}</OuiText>
-            </OuiStack>
-          </OuiFlex>
-          <OuiFlex gap="xs" align="center" class="shrink-0">
-            <OuiBadge variant="secondary" size="xs">{{ gameServer.cpuCores || '—' }} vCPU</OuiBadge>
-            <OuiBadge variant="secondary" size="xs"><OuiByte :value="getMemoryBytesValue(gameServer.memoryBytes)" /></OuiBadge>
-            <OuiBadge v-if="estimatedMonthlyCost > 0" variant="primary" size="xs">{{ formatCurrency(estimatedMonthlyCost) }}/mo</OuiBadge>
-          </OuiFlex>
-        </OuiFlex>
-      </OuiCardBody>
-    </OuiCard>
+    <UiQuickInfoBar
+      :icon="ServerStackIcon"
+      :primary="`${connectionDomain}${gameServer.port ? ':' + gameServer.port : ''}`"
+      :secondary="gameServer.gameType !== undefined ? getGameTypeLabel(gameServer.gameType) : 'Unknown'"
+      mono
+    >
+      <OuiBadge variant="secondary" size="xs">{{ gameServer.cpuCores || '—' }} vCPU</OuiBadge>
+      <OuiBadge variant="secondary" size="xs"><OuiByte :value="getMemoryBytesValue(gameServer.memoryBytes)" /></OuiBadge>
+      <OuiBadge v-if="estimatedMonthlyCost > 0" variant="primary" size="xs">{{ formatCurrency(estimatedMonthlyCost) }}/mo</OuiBadge>
+    </UiQuickInfoBar>
 
     <!-- Connection + Details -->
     <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="sm">
@@ -40,49 +28,28 @@
       <OuiCard v-if="gameServer.status === 'RUNNING' && gameServer.port" variant="outline" status="success">
         <OuiCardBody>
           <OuiStack gap="md">
-            <OuiFlex align="center" gap="xs">
-              <GlobeAltIcon class="h-3.5 w-3.5 text-success" />
-              <OuiText size="sm" weight="semibold">Connection</OuiText>
-            </OuiFlex>
+            <UiSectionHeader :icon="GlobeAltIcon" color="success">Connection</UiSectionHeader>
 
             <OuiStack gap="sm">
               <!-- SRV Records -->
               <template v-if="hasSRVRecords">
-                <div
+                <UiCopyField
                   v-for="(srv, index) in srvDomains"
                   :key="index"
-                  class="group rounded-lg border border-border-default px-3 py-2.5"
-                >
-                  <OuiFlex align="center" justify="between" gap="sm">
-                    <OuiStack gap="xs" class="min-w-0">
-                      <OuiText size="xs" color="tertiary">{{ srv.label }}</OuiText>
-                      <OuiText size="sm" weight="medium" class="font-mono break-all">{{ srv.domain }}</OuiText>
-                    </OuiStack>
-                    <button
-                      class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      @click="copyToClipboard(srv.domain)"
-                    >
-                      <ClipboardIcon class="h-3.5 w-3.5" />
-                    </button>
-                  </OuiFlex>
-                </div>
+                  :label="srv.label"
+                  :value="srv.domain"
+                  variant="field"
+                  break-all
+                />
               </template>
 
               <!-- Direct Connect -->
-              <div class="group rounded-lg border border-border-default px-3 py-2.5">
-                <OuiFlex align="center" justify="between" gap="sm">
-                  <OuiStack gap="xs" class="min-w-0">
-                    <OuiText size="xs" color="tertiary">Direct</OuiText>
-                    <OuiText size="sm" weight="medium" class="font-mono break-all">{{ connectionDomain }}:{{ gameServer.port }}</OuiText>
-                  </OuiStack>
-                  <button
-                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    @click="copyToClipboard(connectionDomain + ':' + gameServer.port)"
-                  >
-                    <ClipboardIcon class="h-3.5 w-3.5" />
-                  </button>
-                </OuiFlex>
-              </div>
+              <UiCopyField
+                label="Direct"
+                :value="`${connectionDomain}:${gameServer.port}`"
+                variant="field"
+                break-all
+              />
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
@@ -92,40 +59,26 @@
       <OuiCard variant="outline">
         <OuiCardBody>
           <OuiStack gap="md">
-            <OuiFlex align="center" gap="xs">
-              <CubeIcon class="h-3.5 w-3.5 text-accent-primary" />
-              <OuiText size="sm" weight="semibold">Details</OuiText>
-            </OuiFlex>
+            <UiSectionHeader :icon="CubeIcon" color="primary">Details</UiSectionHeader>
 
-            <div class="grid grid-cols-2 gap-3">
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">Game</OuiText>
-                <OuiText size="sm" weight="medium">{{ gameServer.gameType !== undefined ? getGameTypeLabel(gameServer.gameType) : '—' }}</OuiText>
-              </OuiStack>
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">vCPU</OuiText>
-                <OuiText size="sm" weight="medium">{{ gameServer.cpuCores || '—' }}</OuiText>
-              </OuiStack>
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">Memory</OuiText>
+            <UiKeyValueGrid :items="[
+              { label: 'Game', value: gameServer.gameType !== undefined ? getGameTypeLabel(gameServer.gameType) : '—' },
+              { label: 'vCPU', value: String(gameServer.cpuCores || '—') },
+              { label: 'Memory' },
+              { label: 'Port', value: String(gameServer.port || '—'), mono: true },
+              { label: 'Cost', value: `${formatCurrency(estimatedMonthlyCost)}/mo` },
+              { label: 'Created' },
+            ]">
+              <template #value-memory>
                 <OuiText size="sm" weight="medium"><OuiByte :value="getMemoryBytesValue(gameServer.memoryBytes)" /></OuiText>
-              </OuiStack>
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">Port</OuiText>
-                <OuiText size="sm" weight="medium" class="font-mono">{{ gameServer.port || '—' }}</OuiText>
-              </OuiStack>
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">Cost</OuiText>
-                <OuiText size="sm" weight="medium">{{ formatCurrency(estimatedMonthlyCost) }}/mo</OuiText>
-              </OuiStack>
-              <OuiStack gap="xs">
-                <OuiText size="xs" color="tertiary">Created</OuiText>
+              </template>
+              <template #value-created>
                 <OuiText v-if="gameServer.createdAt" size="sm" weight="medium">
                   <OuiRelativeTime :value="date(gameServer.createdAt)" :style="'short'" />
                 </OuiText>
                 <OuiText v-else size="sm" color="tertiary">—</OuiText>
-              </OuiStack>
-            </div>
+              </template>
+            </UiKeyValueGrid>
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
@@ -140,7 +93,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import {
-  ClipboardIcon,
   ServerStackIcon,
   GlobeAltIcon,
   CubeIcon,
@@ -152,7 +104,6 @@ import OuiByte from "~/components/oui/Byte.vue";
 import UsageStatistics from "~/components/shared/UsageStatistics.vue";
 import CostBreakdown from "~/components/shared/CostBreakdown.vue";
 import LiveMetrics from "~/components/shared/LiveMetrics.vue";
-import { useToast } from "~/composables/useToast";
 import {
   getGameServerConnectionDomain,
   getGameServerSrvDomains,
@@ -170,7 +121,6 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const { toast } = useToast();
 
 // Computed properties
 const estimatedMonthlyCost = computed(() => {
@@ -279,13 +229,4 @@ const getStatusBadgeVariant = (status: string): "success" | "warning" | "danger"
   return statusMap[status] || "secondary";
 };
 
-const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
-  } catch (error) {
-    console.error("Failed to copy:", error);
-    toast.error("Failed to copy to clipboard");
-  }
-};
 </script>

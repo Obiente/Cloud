@@ -21,10 +21,10 @@
         <OuiText size="xs" weight="medium">
           {{ formatPermissionName(permission.id) }}
         </OuiText>
-        <OuiText size="xs" color="secondary">
+        <OuiText size="xs" color="tertiary">
           {{ permission.description || "No description available" }}
         </OuiText>
-        <OuiText size="xs" color="secondary" class="font-mono">
+        <OuiText size="xs" color="tertiary" class="font-mono">
           {{ permission.id }}
         </OuiText>
       </OuiStack>
@@ -59,7 +59,7 @@
             {{ wildcardPermission ? `All ${node.name.toLowerCase()} permissions` : node.name }}
           </OuiText>
         </OuiFlex>
-        <OuiText v-if="!wildcardPermission && (hasChildren || node.permissions.length > 0)" size="xs" color="secondary" class="flex-shrink-0">
+        <OuiText v-if="!wildcardPermission && (hasChildren || node.permissions.length > 0)" size="xs" color="tertiary" class="flex-shrink-0">
           {{ selectionCount }}/{{ totalCount }}
         </OuiText>
       </OuiFlex>
@@ -87,10 +87,10 @@
           <OuiText size="xs" weight="medium">
             {{ formatPermissionName(permission.id) }}
           </OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             {{ permission.description || "No description available" }}
           </OuiText>
-          <OuiText size="xs" color="secondary" class="font-mono">
+          <OuiText size="xs" color="tertiary" class="font-mono">
             {{ permission.id }}
           </OuiText>
         </OuiStack>

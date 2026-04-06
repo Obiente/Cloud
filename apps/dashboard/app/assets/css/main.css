@@ -1,37 +1,32 @@
 @import "tailwindcss";
 
 @import "./tailwind/index.css";
-/* Layout Components */
+
+/* ── Sidebar transitions ── */
 .sidebar-overlay-enter-active,
 .sidebar-overlay-leave-active {
   @apply transition-opacity duration-200 ease-out;
 }
-
 .sidebar-overlay-enter-from,
 .sidebar-overlay-leave-to {
   @apply opacity-0;
 }
-
 .sidebar-panel-enter-active {
   @apply transition-transform duration-300 ease-out;
 }
-
 .sidebar-panel-leave-active {
-  @apply transition-transform duration-250 ease-in;
+  @apply transition-transform duration-200 ease-in;
 }
-
 .sidebar-panel-enter-from,
 .sidebar-panel-leave-to {
   @apply -translate-x-full;
 }
-
 .sidebar-panel-enter-to,
 .sidebar-panel-leave-from {
   @apply translate-x-0;
 }
 
-/* Main content styles moved to Tailwind classes directly in templates */
-
+/* ── Design tokens ── */
 :root {
   --oui-spacing-base: 1;
   --oui-sizing-base: 1;
@@ -40,203 +35,256 @@
   --oui-elevation-base: 1;
 }
 
-/* Modern Dark Theme (default) - Dark with subtle purple lean for Obiente branding */
+/* ── Dark Purple (default) ── */
 :root,
 :root[data-theme="dark-purple"] {
-  /* Modern dark theme with subtle purple tints - balanced and vibrant */
-  --oui-background: #0f0e15; /* balanced dark with subtle purple undertone */
-  --oui-foreground: #f5f3ff; /* crisp off-white with lavender tint */
-  --oui-surface-base: #171521; /* gentle step up from background */
-  --oui-surface-raised: #1d1a29; /* slightly lifted panel */
-  --oui-surface-overlay: #242030; /* overlays/menus - balanced contrast */
-  --oui-surface-muted: #2d2642; /* muted blocks, chips */
+  --oui-background: #0b0a10;
+  --oui-foreground: #eeedf5;
+  --oui-surface-base: #13111c;
+  --oui-surface-raised: #191724;
+  --oui-surface-overlay: #201e2d;
+  --oui-surface-muted: #272339;
 
-  --oui-text-primary: #f5f3ff;
-  --oui-text-secondary: #c4b5fd; /* vibrant light lavender */
-  --oui-text-tertiary: #a78bfa; /* medium purple */
-  --oui-text-disabled: #6b5b95; /* muted purple-grey */
+  --oui-text-primary: #eae7f3;
+  --oui-text-secondary: #958db8;
+  --oui-text-tertiary: #6a6189;
+  --oui-text-disabled: #453e5e;
 
-  --oui-border-default: #3d3552; /* defined purple border */
-  --oui-border-muted: #2d2642; /* subdued border */
-  --oui-border-strong: #4c3f6b; /* stronger accents */
+  --oui-border-default: #262240;
+  --oui-border-muted: #1e1b30;
+  --oui-border-strong: #352f54;
+  --oui-border-hover: #3d3660;
 
-  /* Modern purple accents for Obiente branding */
-  --oui-accent-primary: #8b5cf6; /* vibrant purple */
-  --oui-accent-secondary: #a78bfa; /* lighter purple */
-  --oui-accent-success: #22c55e; /* green */
-  --oui-accent-warning: #f59e0b; /* amber */
-  --oui-accent-danger: #f43f5e; /* red */
-  --oui-accent-info: #6366f1; /* indigo */
+  --oui-accent-primary: #8b5cf6;
+  --oui-accent-secondary: #a78bfa;
+  --oui-accent-success: #22c55e;
+  --oui-accent-warning: #f59e0b;
+  --oui-accent-danger: #f43f5e;
+  --oui-accent-info: #6366f1;
 
-  --oui-interactive-hover: #1d1a29; /* hover lifts */
-  --oui-interactive-active: #242030; /* active press */
-  --oui-interactive-disabled: #2d2642; /* disabled controls */
-  --oui-interactive-focus: #8b5cf6; /* purple focus ring */
+  --oui-interactive-hover: #1a1826;
+  --oui-interactive-active: #201e2d;
+  --oui-interactive-disabled: #272339;
+  --oui-interactive-focus: #8b5cf6;
 }
 
-/* Extra Dark Theme (minimal dark mode - very muted) */
+/* ── Extra Dark ── */
 :root[data-theme="extra-dark"] {
-  --oui-background: #0a0a0a; /* pure black */
-  --oui-foreground: #fafafa; /* pure white */
-  --oui-surface-base: #111111; /* dark grey base */
-  --oui-surface-raised: #1a1a1a; /* slightly lifted panel */
-  --oui-surface-overlay: #222222; /* overlays/menus */
-  --oui-surface-muted: #2a2a2a; /* muted blocks, chips */
+  --oui-background: #09090b;
+  --oui-foreground: #fafafa;
+  --oui-surface-base: #111113;
+  --oui-surface-raised: #19191c;
+  --oui-surface-overlay: #202023;
+  --oui-surface-muted: #27272a;
 
   --oui-text-primary: #fafafa;
-  --oui-text-secondary: #b3b3b3; /* light grey */
-  --oui-text-tertiary: #808080; /* medium grey */
-  --oui-text-disabled: #4a4a4a; /* dark grey */
+  --oui-text-secondary: #a1a1aa;
+  --oui-text-tertiary: #71717a;
+  --oui-text-disabled: #3f3f46;
 
-  --oui-border-default: #333333; /* subtle grey border */
-  --oui-border-muted: #262626; /* very subdued border */
-  --oui-border-strong: #404040; /* stronger accents */
+  --oui-border-default: #27272a;
+  --oui-border-muted: #1e1e21;
+  --oui-border-strong: #3f3f46;
 
-  /* Minimal accents - toned down with subtle color hints */
-  --oui-accent-primary: #d1d5db; /* muted grey-white */
-  --oui-accent-secondary: #7c7c8c; /* muted grey with subtle purple hint */
-  --oui-accent-success: #6b7c6b; /* muted grey with subtle green hint */
-  --oui-accent-warning: #8b7d6b; /* muted brown-grey with subtle amber hint */
-  --oui-accent-danger: #8b5a5a; /* muted grey with subtle red hint */
-  --oui-accent-info: #5b6b7c; /* muted grey with subtle blue hint */
+  --oui-accent-primary: #e4e4e7;
+  --oui-accent-secondary: #71717a;
+  --oui-accent-success: #4ade80;
+  --oui-accent-warning: #fbbf24;
+  --oui-accent-danger: #f87171;
+  --oui-accent-info: #60a5fa;
 
-  --oui-interactive-hover: #1f1f1f; /* hover lifts */
-  --oui-interactive-active: #262626; /* active press */
-  --oui-interactive-disabled: #2a2a2a; /* disabled controls */
-  --oui-interactive-focus: #9ca3af; /* muted grey focus ring */
+  --oui-interactive-hover: #19191c;
+  --oui-interactive-active: #202023;
+  --oui-interactive-disabled: #27272a;
+  --oui-interactive-focus: #a1a1aa;
 }
 
-/* Extra Dark theme: Make text dark on light primary buttons */
 :root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"],
 :root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"] * {
-  color: #0a0a0a !important; /* dark text on light buttons */
+  color: #09090b !important;
 }
 
-/* Dark Theme (normal dark mode with more life) */
+/* ── Dark ── */
 :root[data-theme="dark"] {
-  --oui-background: #0f0f0f; /* near-black */
-  --oui-foreground: #f5f5f5; /* off-white */
-  --oui-surface-base: #1a1a1a; /* dark grey base */
-  --oui-surface-raised: #242424; /* slightly lifted panel */
-  --oui-surface-overlay: #2d2d2d; /* overlays/menus */
-  --oui-surface-muted: #363636; /* muted blocks, chips */
+  --oui-background: #0a0a0c;
+  --oui-foreground: #f4f4f5;
+  --oui-surface-base: #141416;
+  --oui-surface-raised: #1c1c1f;
+  --oui-surface-overlay: #242428;
+  --oui-surface-muted: #2c2c31;
 
-  --oui-text-primary: #f5f5f5;
-  --oui-text-secondary: #d4d4d4; /* light grey */
-  --oui-text-tertiary: #a3a3a3; /* medium grey */
-  --oui-text-disabled: #525252; /* dark grey */
+  --oui-text-primary: #f4f4f5;
+  --oui-text-secondary: #a1a1aa;
+  --oui-text-tertiary: #71717a;
+  --oui-text-disabled: #52525b;
 
-  --oui-border-default: #404040; /* subtle grey border */
-  --oui-border-muted: #2d2d2d; /* very subdued border */
-  --oui-border-strong: #525252; /* stronger accents */
+  --oui-border-default: #2c2c31;
+  --oui-border-muted: #212125;
+  --oui-border-strong: #3f3f46;
 
-  /* Accents with more color and life */
-  --oui-accent-primary: #c084fc; /* neon vibrant purple */
-  --oui-accent-secondary: #8b5cf6; /* purple */
-  --oui-accent-success: #10b981; /* green */
-  --oui-accent-warning: #f59e0b; /* amber */
-  --oui-accent-danger: #ef4444; /* red */
-  --oui-accent-info: #06b6d4; /* cyan */
+  --oui-accent-primary: #c084fc;
+  --oui-accent-secondary: #8b5cf6;
+  --oui-accent-success: #10b981;
+  --oui-accent-warning: #f59e0b;
+  --oui-accent-danger: #ef4444;
+  --oui-accent-info: #06b6d4;
 
-  --oui-interactive-hover: #262626; /* hover lifts */
-  --oui-interactive-active: #2d2d2d; /* active press */
-  --oui-interactive-disabled: #363636; /* disabled controls */
-  --oui-interactive-focus: #c084fc; /* neon vibrant purple focus ring */
+  --oui-interactive-hover: #1c1c1f;
+  --oui-interactive-active: #242428;
+  --oui-interactive-disabled: #2c2c31;
+  --oui-interactive-focus: #c084fc;
 }
 
-/* Ensure buttons use correct accent colors - override Tailwind bg-* classes */
-/* Use !important and high specificity to override any Tailwind generated classes */
-.oui-btn-base[data-variant="solid"][data-color="primary"],
-.oui-btn-base.bg-primary[data-variant="solid"],
-.oui-btn-base.bg-primary,
-button.oui-btn-base.bg-primary,
-button[data-variant="solid"][data-color="primary"],
-[data-variant="solid"][data-color="primary"].oui-btn-base,
-[data-variant="solid"][data-color="primary"].bg-primary,
-.bg-primary.oui-btn-base {
-  background-color: var(--oui-accent-primary) !important;
+/* ── App shell ── */
+.app-shell {
+  background: var(--oui-background);
 }
 
-.oui-btn-base[data-variant="solid"][data-color="secondary"],
-.oui-btn-base.bg-secondary[data-variant="solid"],
-.oui-btn-base.bg-secondary,
-button.oui-btn-base.bg-secondary,
-button[data-variant="solid"][data-color="secondary"],
-[data-variant="solid"][data-color="secondary"].oui-btn-base,
-.bg-secondary.oui-btn-base {
-  background-color: var(--oui-accent-secondary) !important;
+/* ── Sidebar ── */
+.app-sidebar-surface {
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-muted);
 }
 
-.oui-btn-base[data-variant="solid"][data-color="success"],
-.oui-btn-base.bg-success[data-variant="solid"],
-.oui-btn-base.bg-success,
-button.oui-btn-base.bg-success,
-button[data-variant="solid"][data-color="success"],
-[data-variant="solid"][data-color="success"].oui-btn-base,
-.bg-success.oui-btn-base {
-  background-color: var(--oui-accent-success) !important;
+.app-sidebar-header {
+  border-bottom: 1px solid var(--oui-border-muted);
 }
 
-.oui-btn-base[data-variant="solid"][data-color="warning"],
-.oui-btn-base.bg-warning[data-variant="solid"],
-.oui-btn-base.bg-warning,
-button.oui-btn-base.bg-warning,
-button[data-variant="solid"][data-color="warning"],
-[data-variant="solid"][data-color="warning"].oui-btn-base,
-.bg-warning.oui-btn-base {
-  background-color: var(--oui-accent-warning) !important;
+.app-sidebar-scroll {
+  scrollbar-gutter: stable;
+}
+.app-sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.app-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--oui-border-default);
+  border-radius: 4px;
 }
 
-.oui-btn-base[data-variant="solid"][data-color="danger"],
-.oui-btn-base.bg-danger[data-variant="solid"],
-.oui-btn-base.bg-danger,
-button.oui-btn-base.bg-danger,
-button[data-variant="solid"][data-color="danger"],
-[data-variant="solid"][data-color="danger"].oui-btn-base,
-.bg-danger.oui-btn-base {
-  background-color: var(--oui-accent-danger) !important;
+.app-sidebar-section-label {
+  letter-spacing: 0.06em;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--oui-text-tertiary);
 }
 
-.oui-btn-base[data-variant="solid"][data-color="info"],
-.oui-btn-base.bg-info[data-variant="solid"],
-.oui-btn-base.bg-info,
-button.oui-btn-base.bg-info,
-button[data-variant="solid"][data-color="info"],
-[data-variant="solid"][data-color="info"].oui-btn-base,
-.bg-info.oui-btn-base {
-  background-color: var(--oui-accent-info) !important;
+.app-sidebar-footer {
+  border-top: 1px solid var(--oui-border-muted);
 }
 
-/* Also override hover states */
-.oui-btn-base[data-variant="solid"][data-color="primary"]:hover,
-.oui-btn-base.bg-primary:hover,
-button.oui-btn-base.bg-primary:hover,
-.bg-primary.oui-btn-base:hover {
-  background-color: color-mix(in srgb, var(--oui-accent-primary) 90%, transparent) !important;
+/* ── Nav links ── */
+.app-nav-link {
+  position: relative;
+  border-radius: 0.5rem;
+  transition: background-color 100ms ease, color 100ms ease;
 }
 
-/* Ensure badges use correct accent colors */
-.oui-badge-tone-solid.oui-badge-primary {
-  background-color: var(--oui-accent-primary) !important;
-  border-color: color-mix(in srgb, var(--oui-accent-primary) 70%, transparent) !important;
+.app-nav-link:hover {
+  background: var(--oui-interactive-hover);
 }
 
-.oui-badge-tone-solid.oui-badge-success {
-  background-color: var(--oui-accent-success) !important;
-  border-color: color-mix(in srgb, var(--oui-accent-success) 70%, transparent) !important;
+.app-nav-link-active {
+  background: color-mix(in srgb, var(--oui-accent-primary) 8%, transparent);
+  color: var(--oui-accent-primary);
 }
 
-.oui-badge-tone-solid.oui-badge-warning {
-  background-color: var(--oui-accent-warning) !important;
-  border-color: color-mix(in srgb, var(--oui-accent-warning) 70%, transparent) !important;
+.app-nav-link-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 1.25rem;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--oui-accent-primary);
 }
 
-.oui-badge-tone-solid.oui-badge-danger {
-  background-color: var(--oui-accent-danger) !important;
-  border-color: color-mix(in srgb, var(--oui-accent-danger) 70%, transparent) !important;
+.app-nav-link-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
 }
 
-/* Fix text color for solid badges in extra-dark theme (light background needs dark text) */
+/* ── Top bar ── */
+.app-topbar {
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-muted);
+  border-radius: 0.75rem;
+}
+
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+/* ── Main content frame ── */
+.app-main-frame {
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-muted);
+}
+
+.app-main-scroll {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Cards & panels ── */
+.app-stat-card {
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-default);
+  border-radius: 0.75rem;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.app-stat-card:hover {
+  border-color: var(--oui-border-strong);
+  background: var(--oui-surface-raised);
+}
+
+.app-resource-card {
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-default);
+  border-radius: 0.75rem;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.app-resource-card:hover {
+  border-color: var(--oui-border-strong);
+  background: var(--oui-surface-raised);
+}
+
+.app-resource-metric {
+  background: var(--oui-surface-raised);
+  border: 1px solid var(--oui-border-muted);
+  border-radius: 0.375rem;
+}
+
+/* ── Button color overrides ── */
+[data-variant="solid"][data-color="primary"] { background-color: var(--oui-accent-primary) !important; }
+[data-variant="solid"][data-color="secondary"] { background-color: var(--oui-accent-secondary) !important; }
+[data-variant="solid"][data-color="success"] { background-color: var(--oui-accent-success) !important; }
+[data-variant="solid"][data-color="warning"] { background-color: var(--oui-accent-warning) !important; }
+[data-variant="solid"][data-color="danger"] { background-color: var(--oui-accent-danger) !important; }
+[data-variant="solid"][data-color="info"] { background-color: var(--oui-accent-info) !important; }
+
+[data-variant="solid"][data-color="primary"]:hover {
+  background-color: color-mix(in srgb, var(--oui-accent-primary) 85%, white) !important;
+}
+
+/* ── Badge color overrides ── */
+.oui-badge-tone-solid.oui-badge-primary { background-color: var(--oui-accent-primary) !important; }
+.oui-badge-tone-solid.oui-badge-success { background-color: var(--oui-accent-success) !important; }
+.oui-badge-tone-solid.oui-badge-warning { background-color: var(--oui-accent-warning) !important; }
+.oui-badge-tone-solid.oui-badge-danger { background-color: var(--oui-accent-danger) !important; }
+
 :root[data-theme="extra-dark"] .oui-badge-tone-solid.oui-badge-primary {
-  color: #0a0a0a !important; /* dark text on light background */
+  color: #09090b !important;
 }

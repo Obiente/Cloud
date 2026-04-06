@@ -30,15 +30,15 @@
         </OuiBadge>
         <OuiButton v-if="!loading && deployment && deployment.status === DeploymentStatus.RUNNING" variant="ghost"
           size="sm" icon-only @click.stop="handleStop" title="Stop">
-          <StopIcon class="h-4 w-4" />
+          <StopIcon class="h-3.5 w-3.5" />
         </OuiButton>
         <OuiButton v-if="!loading && deployment && deployment.status === DeploymentStatus.STOPPED" variant="ghost"
           size="sm" icon-only @click.stop="handleStart" title="Start">
-          <PlayIcon class="h-4 w-4" />
+          <PlayIcon class="h-3.5 w-3.5" />
         </OuiButton>
         <OuiButton v-if="!loading && deployment" variant="ghost" size="sm" icon-only @click.stop="handleRedeploy"
           title="Redeploy">
-          <ArrowPathIcon class="h-4 w-4" />
+          <ArrowPathIcon class="h-3.5 w-3.5" />
         </OuiButton>
       </OuiFlex>
     </template>
@@ -79,8 +79,7 @@
           <OuiBox p="sm" rounded="lg" bg="surface-muted"
             class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
             <OuiStack gap="xs">
-              <OuiText size="xs" weight="bold" transform="uppercase" color="secondary"
-                class="tracking-wider opacity-50">
+              <OuiText size="xs" color="tertiary">
                 Build Time
               </OuiText>
               <OuiSkeleton :width="randomTextWidthByType('value')" height="1.5rem" variant="text" />
@@ -90,8 +89,7 @@
           <OuiBox p="sm" rounded="lg" bg="surface-muted"
             class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
             <OuiStack gap="xs">
-              <OuiText size="xs" weight="bold" transform="uppercase" color="secondary"
-                class="tracking-wider opacity-50">
+              <OuiText size="xs" color="tertiary">
                 Bundle Size
               </OuiText>
               <OuiSkeleton :width="randomTextWidthByType('value')" height="1.5rem" variant="text" />
@@ -107,7 +105,7 @@
             <OuiBox p="xs" rounded="lg" bg="surface-muted" class="bg-surface-muted/50 ring-1 ring-border-muted">
               <CodeBracketIcon class="h-4 w-4 text-primary" />
             </OuiBox>
-            <OuiText size="sm" weight="medium" color="primary">
+            <OuiText size="sm" weight="medium">
               {{ typeLabel }}
             </OuiText>
           </OuiFlex>
@@ -122,7 +120,7 @@
             class="bg-surface-muted/30 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <Icon name="uil:github" class="h-4 w-4 text-secondary shrink-0" />
-              <OuiText size="xs" color="secondary" truncate >
+              <OuiText size="xs" color="tertiary" truncate >
                 {{ cleanRepositoryName(deployment.repositoryUrl) }}
               </OuiText>
             </OuiFlex>
@@ -138,10 +136,10 @@
         <OuiGrid :cols="{ sm: 2 }" gap="sm">
           <OuiBox p="sm" rounded="lg" bg="surface-muted" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="xs">
-              <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+              <OuiText size="xs" color="tertiary">
                 Build Time
               </OuiText>
-              <OuiText size="lg" weight="bold" color="primary">
+              <OuiText size="sm" weight="semibold">
                 {{ formatBuildTime(deployment?.buildTime ?? 0) }}
               </OuiText>
             </OuiStack>
@@ -149,10 +147,10 @@
 
           <OuiBox p="sm" rounded="lg" bg="surface-muted" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="xs">
-              <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+              <OuiText size="xs" color="tertiary">
                 Bundle Size
               </OuiText>
-              <OuiText size="lg" weight="bold" color="primary">
+              <OuiText size="sm" weight="semibold">
                 <OuiByte :value="deployment.size ?? 0" unit-display="short" />
               </OuiText>
             </OuiStack>
@@ -163,9 +161,9 @@
 
     <template #info>
       <!-- Build Progress Status -->
-      <OuiBox v-if="showProgress" p="md" rounded="xl" class="border backdrop-blur-sm" :class="progressClass">
+      <OuiBox v-if="showProgress" p="md" rounded="lg" class="border" :class="progressClass">
         <OuiStack gap="sm">
-          <OuiFlex align="center" gap="sm" class="text-xs font-bold uppercase tracking-wider"
+          <OuiFlex align="center" gap="sm" class="text-xs font-semibold"
             :class="progressTextClass">
             <Cog6ToothIcon v-if="!isProgressFailed" class="h-4 w-4 animate-spin" />
             <ExclamationTriangleIcon v-else class="h-4 w-4 text-danger" />
@@ -310,52 +308,42 @@ const STATUS_META = {
   [DeploymentStatus.RUNNING]: {
     badge: "success" as const,
     label: "Running",
-    cardClass: "hover:ring-1 hover:ring-success/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-success/20 before:via-success/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-success to-success/70",
+    cardClass: "",
+    barClass: "bg-success",
     iconClass: "text-success",
-    progressClass: "border-success/30 bg-success/10 text-success",
+    progressClass: "border-success/20 bg-success/5 text-success",
   },
   [DeploymentStatus.STOPPED]: {
     badge: "danger" as const,
     label: "Stopped",
-    cardClass: "hover:ring-1 hover:ring-danger/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-danger to-danger/60",
+    cardClass: "",
+    barClass: "bg-danger",
     iconClass: "text-danger",
-    progressClass: "border-danger/30 bg-danger/10 text-danger",
+    progressClass: "border-danger/20 bg-danger/5 text-danger",
   },
   [DeploymentStatus.BUILDING]: {
     badge: "warning" as const,
     label: "Building",
-    cardClass: "hover:ring-1 hover:ring-warning/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+    cardClass: "",
+    barClass: "bg-warning animate-pulse",
     iconClass: "text-warning",
-    progressClass: "border-warning/30 bg-warning/10 text-warning",
+    progressClass: "border-warning/20 bg-warning/5 text-warning",
   },
   [DeploymentStatus.DEPLOYING]: {
     badge: "warning" as const,
     label: "Deploying",
-    cardClass: "hover:ring-1 hover:ring-warning/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+    cardClass: "",
+    barClass: "bg-warning animate-pulse",
     iconClass: "text-warning",
-    progressClass: "border-warning/30 bg-warning/10 text-warning",
+    progressClass: "border-warning/20 bg-warning/5 text-warning",
   },
   [DeploymentStatus.FAILED]: {
     badge: "danger" as const,
     label: "Failed",
-    cardClass: "hover:ring-1 hover:ring-danger/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-danger to-danger/60",
+    cardClass: "",
+    barClass: "bg-danger",
     iconClass: "text-danger",
-    progressClass: "border-danger/30 bg-danger/10 text-danger",
+    progressClass: "border-danger/20 bg-danger/5 text-danger",
   },
 } as const;
 

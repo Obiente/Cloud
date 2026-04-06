@@ -14,7 +14,7 @@
             </OuiButton>
             <OuiText tag="h1" size="3xl" weight="extrabold">VPS Details</OuiText>
           </OuiFlex>
-          <OuiText color="muted">View detailed information and manage this VPS instance.</OuiText>
+          <OuiText color="tertiary">View detailed information and manage this VPS instance.</OuiText>
         </OuiStack>
         <OuiFlex gap="sm" align="center">
           <OuiButton
@@ -39,17 +39,17 @@
                 <OuiText size="xl" weight="bold">
                   {{ vps?.name || vps?.id || "Loading..." }}
                 </OuiText>
-                <OuiText v-if="vps?.description" color="muted" size="sm">
+                <OuiText v-if="vps?.description" color="tertiary" size="sm">
                   {{ vps.description }}
                 </OuiText>
-                <OuiText v-if="vps?.id" color="muted" size="xs" class="font-mono">
+                <OuiText v-if="vps?.id" color="tertiary" size="xs" class="font-mono">
                   {{ vps.id }}
                 </OuiText>
               </OuiStack>
 
               <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" class="border-t border-border-muted pt-4">
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Status</OuiText>
                   <SuperadminStatusBadge
                     :status="vps?.status"
                     :status-map="vpsStatusMap"
@@ -57,7 +57,7 @@
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Organization</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Organization</OuiText>
                   <NuxtLink
                     v-if="vps?.organizationId"
                     :to="`/superadmin/organizations?organizationId=${vps.organizationId}`"
@@ -65,11 +65,11 @@
                   >
                     {{ organizationName || vps.organizationId }}
                   </NuxtLink>
-                  <OuiText v-else color="muted" size="sm">—</OuiText>
+                  <OuiText v-else color="tertiary" size="sm">—</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="createdBy">
-                  <OuiText size="sm" weight="medium" color="muted">Created By</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Created By</OuiText>
                   <NuxtLink
                     v-if="createdBy.id"
                     :to="`/superadmin/users/${createdBy.id}`"
@@ -87,40 +87,40 @@
                       </OuiText>
                     </OuiFlex>
                   </NuxtLink>
-                  <OuiText v-else color="muted" size="sm">—</OuiText>
+                  <OuiText v-else color="tertiary" size="sm">—</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Region</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Region</OuiText>
                   <OuiText>{{ vps?.region || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Node</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Node</OuiText>
                   <OuiText class="font-mono">{{ vps?.nodeId || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Instance ID</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Instance ID</OuiText>
                   <OuiText class="font-mono">{{ vps?.instanceId || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="vps?.createdAt">
-                  <OuiText size="sm" weight="medium" color="muted">Created</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Created</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="vps.createdAt" />
                   </OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="vps?.updatedAt">
-                  <OuiText size="sm" weight="medium" color="muted">Last Updated</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Last Updated</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="vps.updatedAt" />
                   </OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="vps?.lastStartedAt">
-                  <OuiText size="sm" weight="medium" color="muted">Last Started</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Last Started</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="vps.lastStartedAt" />
                   </OuiText>
@@ -138,27 +138,27 @@
           <OuiCardBody class="p-6">
             <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">Size</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">Size</OuiText>
                 <OuiText>{{ vps?.size || "—" }}</OuiText>
               </OuiStack>
 
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">CPU Cores</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">CPU Cores</OuiText>
                 <OuiText>{{ vps?.cpuCores || 0 }} cores</OuiText>
               </OuiStack>
 
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">Memory</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">Memory</OuiText>
                 <OuiText>{{ formatMemory(vps?.memoryBytes) }}</OuiText>
               </OuiStack>
 
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">Disk</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">Disk</OuiText>
                 <OuiText>{{ formatDisk(vps?.diskBytes) }}</OuiText>
               </OuiStack>
 
               <OuiStack gap="xs" class="col-span-1 md:col-span-2">
-                <OuiText size="sm" weight="medium" color="muted">Image</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">Image</OuiText>
                 <OuiText>{{ formatImage(vps?.image, vps?.imageId) }}</OuiText>
               </OuiStack>
             </OuiGrid>
@@ -176,7 +176,7 @@
           <OuiCardBody class="p-6">
             <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">IPv4 Addresses</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">IPv4 Addresses</OuiText>
                 <OuiStack gap="xs">
                   <OuiText
                     v-for="ip in vps?.ipv4Addresses"
@@ -186,14 +186,14 @@
                   >
                     {{ ip }}
                   </OuiText>
-                  <OuiText v-if="!vps?.ipv4Addresses?.length" color="muted" size="sm">
+                  <OuiText v-if="!vps?.ipv4Addresses?.length" color="tertiary" size="sm">
                     No IPv4 addresses
                   </OuiText>
                 </OuiStack>
               </OuiStack>
 
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="muted">IPv6 Addresses</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">IPv6 Addresses</OuiText>
                 <OuiStack gap="xs">
                   <OuiText
                     v-for="ip in vps?.ipv6Addresses"
@@ -203,27 +203,27 @@
                   >
                     {{ ip }}
                   </OuiText>
-                  <OuiText v-if="!vps?.ipv6Addresses?.length" color="muted" size="sm">
+                  <OuiText v-if="!vps?.ipv6Addresses?.length" color="tertiary" size="sm">
                     No IPv6 addresses
                   </OuiText>
                 </OuiStack>
               </OuiStack>
 
               <OuiStack gap="xs" v-if="vps?.sshAlias">
-                <OuiText size="sm" weight="medium" color="muted">SSH Alias</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">SSH Alias</OuiText>
                 <OuiText class="font-mono">{{ vps.sshAlias }}</OuiText>
-                <OuiText size="xs" color="muted">
+                <OuiText size="xs" color="tertiary">
                   Use this alias for SSH connections
                 </OuiText>
               </OuiStack>
 
               <OuiStack gap="xs" v-if="vps?.sshKeyId">
-                <OuiText size="sm" weight="medium" color="muted">SSH Key ID</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">SSH Key ID</OuiText>
                 <OuiText class="font-mono">{{ vps.sshKeyId }}</OuiText>
               </OuiStack>
 
               <OuiStack gap="xs" v-if="hasMetadata" class="col-span-1 md:col-span-2">
-                <OuiText size="sm" weight="medium" color="muted">Metadata</OuiText>
+                <OuiText size="sm" weight="medium" color="tertiary">Metadata</OuiText>
                 <OuiGrid :cols="{ sm: 1, md: 2 }" gap="xs">
                   <OuiText
                     v-for="(value, key) in parsedMetadata"
@@ -246,7 +246,7 @@
           </OuiCardHeader>
           <OuiCardBody class="p-6">
             <OuiStack gap="md">
-              <OuiText size="sm" color="muted">
+              <OuiText size="sm" color="tertiary">
                 Perform administrative actions on this VPS instance. Use with caution.
               </OuiText>
               <OuiFlex gap="sm" wrap="wrap">
@@ -309,7 +309,7 @@
     <!-- Resize Dialog -->
     <OuiDialog v-model:open="resizeDialogOpen" title="Resize VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Change the VPS instance size. CPU, memory, and disk will be updated.
         </OuiText>
         <OuiSelect
@@ -322,10 +322,10 @@
           <template #item="{ item }">
             <OuiStack gap="xs">
               <OuiText weight="medium">{{ item.label }}</OuiText>
-              <OuiText v-if="item.value !== 'custom'" size="xs" color="secondary">
+              <OuiText v-if="item.value !== 'custom'" size="xs" color="tertiary">
                 {{ item.cpuCores }} CPU · {{ formatMemory(item.memoryBytes) }} RAM · {{ formatDisk(item.diskBytes) }} Storage
               </OuiText>
-              <OuiText v-else size="xs" color="secondary">
+              <OuiText v-else size="xs" color="tertiary">
                 Configure custom CPU, memory, and disk sizes
               </OuiText>
             </OuiStack>
@@ -383,7 +383,7 @@
     <!-- Suspend Dialog -->
     <OuiDialog v-model:open="suspendDialogOpen" title="Suspend VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Suspend this VPS instance. The VPS will be marked as suspended and normal operations will be prevented.
         </OuiText>
         <OuiInput
@@ -409,7 +409,7 @@
     <!-- CloudInit Dialog -->
     <OuiDialog v-model:open="cloudInitDialogOpen" title="Update CloudInit Configuration" size="lg">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Update the cloud-init configuration for this VPS. Changes will take effect on the next reboot.
         </OuiText>
         <OuiTextarea
@@ -436,7 +436,7 @@
     <!-- Force Stop Dialog -->
     <OuiDialog v-model:open="forceStopDialogOpen" title="Force Stop VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Forcefully stop this VPS instance. This action cannot be undone.
         </OuiText>
       </OuiStack>
@@ -457,7 +457,7 @@
     <!-- Force Delete Dialog -->
     <OuiDialog v-model:open="forceDeleteDialogOpen" title="Force Delete VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Permanently delete this VPS instance. This action cannot be undone and will remove all data.
         </OuiText>
       </OuiStack>
@@ -777,7 +777,7 @@ async function handleResize() {
       request.customDiskBytes = BigInt(Math.round(diskGB * 1024 * 1024 * 1024));
     }
 
-    await client.superadminResizeVPS(request);
+    await client.superadminResizeVPS(request as SuperadminResizeVPSRequest);
     toast.success("VPS resized successfully");
     resizeDialogOpen.value = false;
     await loadVPS(); // Refresh VPS data

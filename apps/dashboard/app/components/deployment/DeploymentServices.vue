@@ -35,9 +35,9 @@
     <OuiCard v-if="!isLoading && services.length === 0" variant="outline">
       <OuiCardBody>
         <OuiStack gap="md" align="center" class="py-8">
-          <div class="h-12 w-12 rounded-xl bg-surface-muted flex items-center justify-center">
+          <UiIconContainer size="lg">
             <CubeIcon class="h-6 w-6 text-secondary" />
-          </div>
+          </UiIconContainer>
           <OuiStack gap="xs" align="center">
             <OuiText size="sm" weight="semibold">No services found</OuiText>
             <OuiText size="xs" color="tertiary">This deployment may not be a compose deployment.</OuiText>

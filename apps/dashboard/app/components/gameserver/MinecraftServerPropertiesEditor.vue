@@ -5,10 +5,10 @@
         <OuiCardHeader>
           <OuiFlex justify="between" align="center">
             <div>
-              <OuiText as="h2" size="lg" weight="semibold">
+              <OuiText as="h2" size="sm" weight="semibold">
                 Server Properties
               </OuiText>
-              <OuiText size="sm" color="secondary" class="mt-1">
+              <OuiText size="sm" color="tertiary" class="mt-1">
                 Configure your Minecraft server settings
               </OuiText>
             </div>
@@ -18,7 +18,7 @@
               :loading="isSaving"
               @click="handleSave"
             >
-              <CheckCircleIcon class="h-4 w-4 mr-2" />
+              <CheckCircleIcon class="h-3.5 w-3.5" />
               Save Changes
             </OuiButton>
           </OuiFlex>

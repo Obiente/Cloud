@@ -15,7 +15,7 @@
           </OuiButton>
         </OuiFlex>
 
-        <OuiText size="xs" color="secondary">
+        <OuiText size="xs" color="tertiary">
           Add custom domains to your deployment. You'll need to verify ownership via DNS TXT record.
         </OuiText>
 
@@ -68,7 +68,7 @@
               >
                 <OuiStack gap="sm">
                   <OuiText size="sm" weight="semibold">Verify Domain Ownership</OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Add the following TXT record to your DNS provider to verify ownership:
                   </OuiText>
                   
@@ -104,7 +104,7 @@
                     </div>
                   </div>
 
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     After adding the record, wait a few minutes for DNS propagation, then click "Verify" above.
                   </OuiText>
                 </OuiStack>
@@ -122,7 +122,7 @@
                       Domain Verified
                     </OuiText>
                   </OuiFlex>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Configure a CNAME record in your DNS provider:
                   </OuiText>
                   
@@ -158,7 +158,7 @@
                     </div>
                   </div>
 
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     SSL certificates will be issued automatically via Let's Encrypt once DNS is configured.
                   </OuiText>
                 </OuiStack>
@@ -181,7 +181,7 @@
         <!-- Empty State -->
         <div v-else class="text-center py-8">
           <Icon name="uil:globe" class="h-12 w-12 text-secondary mx-auto mb-4" />
-          <OuiText size="sm" color="secondary">
+          <OuiText size="sm" color="tertiary">
             No custom domains configured. Add one to get started.
           </OuiText>
         </div>

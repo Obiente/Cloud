@@ -98,7 +98,7 @@
           >
             <div v-if="isSearchingState" class="flex items-center justify-center py-8" role="status" aria-live="polite">
               <ArrowPathIcon class="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
-              <OuiText size="sm" color="secondary" class="ml-2">Searching...</OuiText>
+              <OuiText size="sm" color="tertiary" class="ml-2">Searching...</OuiText>
             </div>
 
             <div v-else-if="searchErrorState" class="flex flex-col items-center justify-center py-8" role="alert">
@@ -108,7 +108,7 @@
 
             <div v-else-if="searchResultsArray.length === 0" class="flex flex-col items-center justify-center py-8" role="status">
               <MagnifyingGlassIcon class="h-8 w-8 text-text-tertiary mb-2" aria-hidden="true" />
-              <OuiText id="search-results-description" size="sm" color="secondary">
+              <OuiText id="search-results-description" size="sm" color="tertiary">
                 No files found matching "{{ searchQueryModel }}"
               </OuiText>
             </div>
@@ -150,7 +150,7 @@
                   <OuiText size="sm" weight="medium" class="truncate">
                     {{ result.name }}
                   </OuiText>
-                  <OuiText size="xs" color="secondary" class="truncate">
+                  <OuiText size="xs" color="tertiary" class="truncate">
                     {{ result.path }}
                   </OuiText>
                 </div>

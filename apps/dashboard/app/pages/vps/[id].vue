@@ -156,29 +156,17 @@
           <template #overview>
             <OuiStack gap="md">
               <!-- Quick Info Bar -->
-              <OuiCard variant="outline">
-                <OuiCardBody>
-                  <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
-                    <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                      <div class="h-8 w-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
-                        <ServerStackIcon class="h-4 w-4 text-accent-primary" />
-                      </div>
-                      <OuiStack gap="none" class="min-w-0">
-                        <OuiText size="sm" weight="medium" class="font-mono" truncate>
-                          {{ vps.ipv4Addresses?.[0] || vps.name }}
-                        </OuiText>
-                        <OuiText size="xs" color="tertiary">{{ imageLabel }} · {{ vps.region || 'Unknown region' }}</OuiText>
-                      </OuiStack>
-                    </OuiFlex>
-                    <OuiFlex gap="xs" align="center" class="shrink-0">
-                      <OuiBadge variant="secondary" size="xs">{{ vps.cpuCores || '—' }} vCPU</OuiBadge>
-                      <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.memoryBytes" /></OuiBadge>
-                      <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.diskBytes" /> disk</OuiBadge>
-                      <OuiBadge v-if="vps.size" variant="primary" size="xs">{{ vps.size }}</OuiBadge>
-                    </OuiFlex>
-                  </OuiFlex>
-                </OuiCardBody>
-              </OuiCard>
+              <UiQuickInfoBar
+                :icon="ServerStackIcon"
+                :primary="vps.ipv4Addresses?.[0] || vps.name"
+                :secondary="`${imageLabel} · ${vps.region || 'Unknown region'}`"
+                mono
+              >
+                <OuiBadge variant="secondary" size="xs">{{ vps.cpuCores || '—' }} vCPU</OuiBadge>
+                <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.memoryBytes" /></OuiBadge>
+                <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.diskBytes" /> disk</OuiBadge>
+                <OuiBadge v-if="vps.size" variant="primary" size="xs">{{ vps.size }}</OuiBadge>
+              </UiQuickInfoBar>
 
               <!-- Details + Network Grid -->
               <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="sm">
@@ -186,47 +174,28 @@
                 <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <OuiFlex align="center" gap="xs">
-                        <CpuChipIcon class="h-3.5 w-3.5 text-accent-primary" />
-                        <OuiText size="sm" weight="semibold">Details</OuiText>
-                      </OuiFlex>
+                      <UiSectionHeader :icon="CpuChipIcon" color="primary">Details</UiSectionHeader>
 
-                      <div class="grid grid-cols-2 gap-3">
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">CPU</OuiText>
-                          <OuiText size="sm" weight="medium">{{ vps.cpuCores || '—' }} cores</OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">Memory</OuiText>
+                      <UiKeyValueGrid :items="[
+                        { label: 'CPU', value: `${vps.cpuCores || '—'} cores` },
+                        { label: 'OS', value: imageLabel },
+                        { label: 'Memory' },
+                        { label: 'Storage' },
+                        { label: 'Region', value: vps.region || '—' },
+                        { label: 'Size', value: vps.size || '—' },
+                        { label: 'VM ID', value: vps.instanceId, mono: true, hidden: !vps.instanceId },
+                        { label: 'Created' },
+                      ]">
+                        <template #value-memory>
                           <OuiText size="sm" weight="medium"><OuiByte :value="vps.memoryBytes" /></OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">Storage</OuiText>
+                        </template>
+                        <template #value-storage>
                           <OuiText size="sm" weight="medium"><OuiByte :value="vps.diskBytes" /></OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">OS</OuiText>
-                          <OuiText size="sm" weight="medium">{{ imageLabel }}</OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">Region</OuiText>
-                          <OuiText size="sm" weight="medium">{{ vps.region || '—' }}</OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">Size</OuiText>
-                          <OuiText size="sm" weight="medium">{{ vps.size || '—' }}</OuiText>
-                        </OuiStack>
-                        <OuiStack v-if="vps.instanceId" gap="xs">
-                          <OuiText size="xs" color="tertiary">VM ID</OuiText>
-                          <OuiText size="xs" weight="medium" class="font-mono">{{ vps.instanceId }}</OuiText>
-                        </OuiStack>
-                        <OuiStack gap="xs">
-                          <OuiText size="xs" color="tertiary">Created</OuiText>
-                          <OuiText size="sm" weight="medium">
-                            <OuiRelativeTime :value="vps.createdAt ? date(vps.createdAt) : undefined" :style="'short'" />
-                          </OuiText>
-                        </OuiStack>
-                      </div>
+                        </template>
+                        <template #value-created>
+                          <OuiRelativeTime :value="vps.createdAt ? date(vps.createdAt) : undefined" :style="'short'" />
+                        </template>
+                      </UiKeyValueGrid>
                     </OuiStack>
                   </OuiCardBody>
                 </OuiCard>
@@ -235,30 +204,18 @@
                 <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <OuiFlex align="center" gap="xs">
-                        <GlobeAltIcon class="h-3.5 w-3.5 text-accent-info" />
-                        <OuiText size="sm" weight="semibold">Network</OuiText>
-                      </OuiFlex>
+                      <UiSectionHeader :icon="GlobeAltIcon" color="info">Network</UiSectionHeader>
 
                       <OuiStack gap="sm">
                         <!-- IPv4 -->
                         <div v-if="vps.ipv4Addresses?.length" class="space-y-1.5">
                           <OuiText size="xs" color="tertiary">IPv4</OuiText>
-                          <div
+                          <UiCopyField
                             v-for="(ip, idx) in vps.ipv4Addresses"
                             :key="'v4-' + idx"
-                            class="group rounded-lg border border-border-default px-3 py-2"
-                          >
-                            <OuiFlex align="center" justify="between" gap="sm">
-                              <OuiText size="sm" weight="medium" class="font-mono">{{ ip }}</OuiText>
-                              <button
-                                class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                @click="copyToClipboard(ip)"
-                              >
-                                <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
-                              </button>
-                            </OuiFlex>
-                          </div>
+                            :value="ip"
+                            variant="field"
+                          />
                         </div>
                         <OuiFlex v-else align="center" gap="xs">
                           <OuiText size="xs" color="tertiary">IPv4 · None assigned</OuiText>
@@ -267,21 +224,13 @@
                         <!-- IPv6 -->
                         <div v-if="vps.ipv6Addresses?.length" class="space-y-1.5">
                           <OuiText size="xs" color="tertiary">IPv6</OuiText>
-                          <div
+                          <UiCopyField
                             v-for="(ip, idx) in vps.ipv6Addresses"
                             :key="'v6-' + idx"
-                            class="group rounded-lg border border-border-default px-3 py-2"
-                          >
-                            <OuiFlex align="center" justify="between" gap="sm">
-                              <OuiText size="sm" weight="medium" class="font-mono break-all">{{ ip }}</OuiText>
-                              <button
-                                class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                @click="copyToClipboard(ip)"
-                              >
-                                <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
-                              </button>
-                            </OuiFlex>
-                          </div>
+                            :value="ip"
+                            variant="field"
+                            break-all
+                          />
                         </div>
                         <OuiFlex v-else align="center" gap="xs">
                           <OuiText size="xs" color="tertiary">IPv6 · None assigned</OuiText>
@@ -309,40 +258,11 @@
               <OuiCard v-if="vps.status === VPSStatus.RUNNING" variant="outline" status="success">
                 <OuiCardBody>
                   <OuiStack gap="md">
-                    <OuiFlex align="center" gap="xs">
-                      <CommandLineIcon class="h-3.5 w-3.5 text-success" />
-                      <OuiText size="sm" weight="semibold">SSH Access</OuiText>
-                    </OuiFlex>
+                    <UiSectionHeader :icon="CommandLineIcon" color="success">SSH Access</UiSectionHeader>
 
                     <template v-if="sshInfo">
-                      <div class="group rounded-lg border border-border-default overflow-hidden">
-                        <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
-                          <OuiText size="xs" weight="medium">SSH Command</OuiText>
-                          <button
-                            class="p-1 rounded text-tertiary hover:text-primary transition-colors"
-                            @click="copySSHCommand"
-                          >
-                            <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
-                          </button>
-                        </OuiFlex>
-                        <div class="px-3 py-2.5">
-                          <code class="text-xs font-mono break-all text-secondary">{{ sshInfo.sshProxyCommand }}</code>
-                        </div>
-                      </div>
-                      <div v-if="sshInfo.connectionInstructions" class="group rounded-lg border border-border-default overflow-hidden">
-                        <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
-                          <OuiText size="xs" weight="medium">Instructions</OuiText>
-                          <button
-                            class="p-1 rounded text-tertiary hover:text-primary transition-colors"
-                            @click="copyConnectionInstructions"
-                          >
-                            <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
-                          </button>
-                        </OuiFlex>
-                        <div class="px-3 py-2.5">
-                          <code class="text-xs font-mono whitespace-pre-wrap break-all text-secondary">{{ sshInfo.connectionInstructions }}</code>
-                        </div>
-                      </div>
+                      <UiCodeBlock label="SSH Command" :value="sshInfo.sshProxyCommand" break-all />
+                      <UiCodeBlock v-if="sshInfo.connectionInstructions" label="Instructions" :value="sshInfo.connectionInstructions" pre-wrap />
                     </template>
                     <template v-else-if="sshInfoLoading">
                       <OuiSkeleton width="24rem" height="1rem" variant="text" />
@@ -2730,35 +2650,6 @@
     },
     { immediate: true }
   );
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard");
-    } catch (err) {
-      toast.error("Failed to copy to clipboard");
-    }
-  };
-
-  const copySSHCommand = async () => {
-    if (!sshInfo.value?.sshProxyCommand) return;
-    try {
-      await navigator.clipboard.writeText(sshInfo.value.sshProxyCommand);
-      toast.success("SSH command copied to clipboard");
-    } catch (err) {
-      toast.error("Failed to copy SSH command");
-    }
-  };
-
-  const copyConnectionInstructions = async () => {
-    if (!sshInfo.value?.connectionInstructions) return;
-    try {
-      await navigator.clipboard.writeText(sshInfo.value.connectionInstructions);
-      toast.success("Connection instructions copied to clipboard");
-    } catch (err) {
-      toast.error("Failed to copy connection instructions");
-    }
-  };
 
   // Status helpers
   const statusLabel = computed(() => {

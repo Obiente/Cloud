@@ -24,12 +24,12 @@
             <OuiText as="h1" size="6xl" weight="bold" color="primary">
               {{ error.statusCode || "Error" }}
             </OuiText>
-            <OuiText size="xl" color="secondary" weight="medium">
+            <OuiText size="xl" color="tertiary" weight="medium">
               {{ errorTitle }}
             </OuiText>
           </OuiStack>
 
-          <OuiText size="md" color="muted" class="max-w-md">
+          <OuiText size="md" color="tertiary" class="max-w-md">
             {{ errorMessage }}
           </OuiText>
         </OuiStack>
@@ -43,7 +43,7 @@
           <OuiCardHeader>
             <OuiFlex align="center" gap="sm">
               <CodeBracketIcon class="h-5 w-5 text-muted" />
-              <OuiText size="sm" weight="semibold" color="muted">
+              <OuiText size="sm" weight="semibold" color="tertiary">
                 Error Details
               </OuiText>
             </OuiFlex>
@@ -59,7 +59,7 @@
               <OuiText
                 v-if="error.stack"
                 size="xs"
-                color="muted"
+                color="tertiary"
                 class="mt-2 whitespace-pre-wrap"
               >
                 {{ error.stack }}
@@ -90,7 +90,7 @@
         </OuiFlex>
 
         <!-- Support Link -->
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Need help?
           <NuxtLink
             to="/support"

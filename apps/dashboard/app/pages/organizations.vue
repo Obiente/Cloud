@@ -322,7 +322,7 @@
       name.value = "";
       slug.value = "";
     } catch (e: unknown) {
-      error.value = e?.message || "Error creating organization";
+      error.value = (e as any)?.message || "Error creating organization";
     }
   }
 
@@ -425,7 +425,7 @@
       myInvitations.value = res.invites || [];
     } catch (error: unknown) {
       const { toast } = useToast();
-      toast.error(error?.message || "Failed to load invitations");
+      toast.error((error as any)?.message || "Failed to load invitations");
     } finally {
       loadingInvitations.value = false;
     }
@@ -465,7 +465,7 @@
       }
     } catch (error: unknown) {
       const { toast } = useToast();
-      toast.error(error?.message || "Failed to accept invitation");
+      toast.error((error as any)?.message || "Failed to accept invitation");
     } finally {
       processingInvite.value = null;
     }
@@ -489,7 +489,7 @@
       myInvitations.value = myInvitations.value.filter(i => i.id !== invite.id);
     } catch (error: unknown) {
       const { toast } = useToast();
-      toast.error(error?.message || "Failed to decline invitation");
+      toast.error((error as any)?.message || "Failed to decline invitation");
     } finally {
       processingInvite.value = null;
       decliningInvite.value = false;
@@ -1137,7 +1137,7 @@
           <OuiFlex align="center" justify="between">
             <OuiStack gap="xs">
               <OuiText size="xl" weight="semibold">Organizations</OuiText>
-              <OuiText color="muted">Create and manage your teams.</OuiText>
+              <OuiText color="tertiary">Create and manage your teams.</OuiText>
             </OuiStack>
             <OuiButton variant="ghost" @click="refreshAll">Refresh</OuiButton>
           </OuiFlex>
@@ -1162,7 +1162,7 @@
                 >
                   {{ roleLabel(currentMemberRecord.role) }}
                 </OuiBadge>
-                <OuiText v-else color="muted" size="sm">
+                <OuiText v-else color="tertiary" size="sm">
                   You are not a member of this organization.
                 </OuiText>
               </OuiStack>
@@ -1175,7 +1175,7 @@
                 <OuiFlex align="center" justify="between">
                   <OuiStack gap="xs">
                     <OuiText size="lg" weight="semibold">Current Plan: {{ currentOrganization.planInfo.planName }}</OuiText>
-                    <OuiText size="sm" color="muted" v-if="currentOrganization.planInfo.description">
+                    <OuiText size="sm" color="tertiary" v-if="currentOrganization.planInfo.description">
                       {{ currentOrganization.planInfo.description }}
                     </OuiText>
                   </OuiStack>
@@ -1183,42 +1183,42 @@
               </OuiCardHeader>
               <OuiCardBody>
                 <OuiStack gap="md">
-                  <OuiText size="sm" color="muted">
+                  <OuiText size="sm" color="tertiary">
                     Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
                   </OuiText>
                   <OuiGrid cols="1" cols-md="2" cols-lg="6" gap="md">
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">CPU Cores</OuiText>
+                      <OuiText size="xs" color="tertiary">CPU Cores</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ currentOrganization.planInfo.cpuCores || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Memory</OuiText>
+                      <OuiText size="xs" color="tertiary">Memory</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ formatBytes(Number(currentOrganization.planInfo.memoryBytes || 0)) || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Max Deployments</OuiText>
+                      <OuiText size="xs" color="tertiary">Max Deployments</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Max VPS Instances</OuiText>
+                      <OuiText size="xs" color="tertiary">Max VPS Instances</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ currentOrganization.planInfo.maxVpsInstances || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Bandwidth/Month</OuiText>
+                      <OuiText size="xs" color="tertiary">Bandwidth/Month</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ formatBytes(Number(currentOrganization.planInfo.bandwidthBytesMonth || 0)) || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Storage</OuiText>
+                      <OuiText size="xs" color="tertiary">Storage</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ formatBytes(Number(currentOrganization.planInfo.storageBytes || 0)) || 'Unlimited' }}
                       </OuiText>
@@ -1272,29 +1272,29 @@
               <OuiText size="2xl" weight="semibold">{{
                 memberStats.total
               }}</OuiText>
-              <OuiText color="muted" size="sm">Active members</OuiText>
+              <OuiText color="tertiary" size="sm">Active members</OuiText>
             </OuiStack>
             <OuiGrid cols="2" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="lg" weight="semibold">{{ memberStats.owners }}</OuiText>
-                <OuiText color="muted" size="sm">Owners</OuiText>
+                <OuiText color="tertiary" size="sm">Owners</OuiText>
               </OuiStack>
               <OuiStack gap="xs">
                 <OuiText size="lg" weight="semibold">{{ memberStats.admins }}</OuiText>
-                <OuiText color="muted" size="sm">Admins</OuiText>
+                <OuiText color="tertiary" size="sm">Admins</OuiText>
               </OuiStack>
               <OuiStack gap="xs">
                 <OuiText size="lg" weight="semibold">{{ memberStats.members }}</OuiText>
-                <OuiText color="muted" size="sm">Members</OuiText>
+                <OuiText color="tertiary" size="sm">Members</OuiText>
               </OuiStack>
               <OuiStack gap="xs">
                 <OuiText size="lg" weight="semibold">{{ memberStats.viewers }}</OuiText>
-                <OuiText color="muted" size="sm">Viewers</OuiText>
+                <OuiText color="tertiary" size="sm">Viewers</OuiText>
               </OuiStack>
             </OuiGrid>
             <OuiStack gap="xs">
               <OuiText size="lg" weight="semibold">{{ memberStats.pending }}</OuiText>
-              <OuiText color="muted" size="sm">Pending invites</OuiText>
+              <OuiText color="tertiary" size="sm">Pending invites</OuiText>
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
@@ -1310,7 +1310,7 @@
             <OuiFlex align="center" justify="between" class="mb-4">
               <OuiStack gap="xs">
                 <OuiText size="lg" weight="semibold">Members</OuiText>
-                <OuiText color="muted" size="sm">
+                <OuiText color="tertiary" size="sm">
                   Manage member roles and ownership.
                 </OuiText>
               </OuiStack>
@@ -1361,7 +1361,7 @@
                               member.user?.id
                             }}
                           </OuiText>
-                          <OuiText color="muted" size="xs">
+                          <OuiText color="tertiary" size="xs">
                             {{
                               member.user?.preferredUsername || member.user?.id
                             }}
@@ -1468,7 +1468,7 @@
               <OuiFlex align="center" justify="between" class="mb-4">
                 <OuiStack gap="xs">
                   <OuiText size="lg" weight="semibold">My Invitations</OuiText>
-                  <OuiText color="muted" size="sm">
+                  <OuiText color="tertiary" size="sm">
                     Accept or decline invitations to join organizations.
                   </OuiText>
                 </OuiStack>
@@ -1484,11 +1484,11 @@
               </OuiFlex>
 
               <div v-if="loadingInvitations" class="text-center py-8">
-                <OuiText color="muted">Loading invitations...</OuiText>
+                <OuiText color="tertiary">Loading invitations...</OuiText>
               </div>
 
               <div v-else-if="myInvitations.length === 0" class="text-center py-8">
-                <OuiText color="muted">You have no pending invitations.</OuiText>
+                <OuiText color="tertiary">You have no pending invitations.</OuiText>
               </div>
 
               <OuiStack v-else gap="md">
@@ -1501,10 +1501,10 @@
                     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
                       <OuiStack gap="xs" class="flex-1 min-w-0">
                         <OuiText size="lg" weight="semibold">{{ invite.organizationName }}</OuiText>
-                        <OuiText color="muted" size="sm">
+                        <OuiText color="tertiary" size="sm">
                           You've been invited to join as <span class="uppercase font-medium">{{ invite.role }}</span>
                         </OuiText>
-                        <OuiText color="muted" size="xs">
+                        <OuiText color="tertiary" size="xs">
                           Invited <OuiDate :value="invite.invitedAt" />
                         </OuiText>
                       </OuiStack>
@@ -1534,7 +1534,7 @@
           <template #roles>
             <OuiStack gap="md">
               <OuiText size="lg" weight="semibold">Roles</OuiText>
-              <OuiText color="muted" size="sm">
+              <OuiText color="tertiary" size="sm">
                 System roles appear first. Any custom roles you create follow
                 below.
               </OuiText>
@@ -1549,7 +1549,7 @@
                           class="h-4 w-4 text-text-muted"
                         />
                       </OuiFlex>
-                      <OuiText color="muted" size="sm">
+                      <OuiText color="tertiary" size="sm">
                         {{
                           item.disabled ? "Reserved system role" : "Assignable"
                         }}
@@ -1598,7 +1598,7 @@
     <OuiDialog v-model:open="addPaymentMethodDialogOpen" title="Add Payment Method">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Add a new payment method to your account. You can use this for future purchases.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -1609,7 +1609,7 @@
         
         <!-- Payment Element Container -->
         <div v-if="paymentElementLoading" class="min-h-[200px] flex items-center justify-center">
-          <OuiText size="sm" color="muted">Loading payment form...</OuiText>
+          <OuiText size="sm" color="tertiary">Loading payment form...</OuiText>
         </div>
         <div 
           ref="paymentElementContainer" 
@@ -1637,7 +1637,7 @@
     <OuiDialog v-model:open="addCreditsDialogOpen" title="Purchase Credits">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Purchase credits for your organization. You will be redirected to Stripe Checkout to complete the payment.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -1654,7 +1654,7 @@
               placeholder="0.50"
               :error="addCreditsAmount && parseFloat(addCreditsAmount) < 0.50 ? 'Minimum amount is $0.50 USD' : undefined"
             />
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Minimum purchase amount is $0.50 USD
             </OuiText>
           </OuiStack>

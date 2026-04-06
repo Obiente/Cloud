@@ -55,13 +55,13 @@
         v-if="loading"
         class="flex items-center justify-center h-full"
       >
-        <OuiText color="secondary">Loading archive contents...</OuiText>
+        <OuiText color="tertiary">Loading archive contents...</OuiText>
       </div>
       <div
         v-else-if="contents.length === 0"
         class="flex items-center justify-center h-full"
       >
-        <OuiText color="secondary">Folder is empty</OuiText>
+        <OuiText color="tertiary">Folder is empty</OuiText>
       </div>
       <div v-else class="space-y-1">
         <div
@@ -89,7 +89,7 @@
           <OuiText
             v-if="!entry.isDirectory"
             size="xs"
-            color="secondary"
+            color="tertiary"
             class="flex-shrink-0"
           >
             {{ formatFileSize(entry.size) }}

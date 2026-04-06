@@ -14,8 +14,8 @@
       <OuiFlex v-if="showMobileToggle" justify="between" align="center" class="mb-2">
         <OuiText
           size="xs"
+          color="tertiary"
           weight="semibold"
-          class="uppercase tracking-[0.08em] text-[11px]"
           >Sources</OuiText
         >
         <OuiButton
@@ -25,15 +25,15 @@
           @click="$emit('toggle-mobile')"
           :aria-expanded="showMobileSidebar"
         >
-          <XMarkIcon v-if="showMobileSidebar" class="h-4 w-4" />
+          <XMarkIcon v-if="showMobileSidebar" class="h-3.5 w-3.5" />
           <span v-else class="text-xs">Show</span>
         </OuiButton>
       </OuiFlex>
       <OuiText
         v-else
         size="xs"
+        color="tertiary"
         weight="semibold"
-        class="uppercase tracking-[0.08em] text-[11px]"
         >Sources</OuiText
       >
     </div>
@@ -159,7 +159,7 @@
               >
                 Error loading files
               </OuiText>
-              <OuiText size="xs" color="secondary" class="wrap-break-word">
+              <OuiText size="xs" color="tertiary" class="wrap-break-word">
                 {{ parseError ? parseError(errorMessage) : errorMessage }}
               </OuiText>
             </div>
@@ -181,7 +181,7 @@
             class="tree-empty"
           >
             <ArrowPathIcon class="h-5 w-5 animate-spin" />
-            <OuiText size="sm" color="secondary">Loading files…</OuiText>
+            <OuiText size="sm" color="tertiary">Loading files…</OuiText>
           </OuiFlex>
         </template>
         <template v-else-if="root.children.length === 0">
@@ -191,7 +191,7 @@
             gap="sm"
             class="tree-empty"
           >
-            <OuiText size="sm" color="secondary">No files found</OuiText>
+            <OuiText size="sm" color="tertiary">No files found</OuiText>
           </OuiFlex>
         </template>
         <template v-else>

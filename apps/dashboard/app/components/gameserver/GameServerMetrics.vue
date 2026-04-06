@@ -1,17 +1,15 @@
 <template>
   <OuiStack gap="xl">
     <!-- Usage Summary Cards -->
-    <OuiGrid :cols="{ sm: 1, md: 2, lg: 5 }" gap="lg">
-      <OuiCard>
+    <OuiGrid :cols="{ sm: 2, md: 3, lg: 5 }" gap="sm">
+      <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="xs">
-              <OuiText size="sm" color="muted">Current Month Usage</OuiText>
-              <OuiText size="2xl" weight="bold">
+          <OuiStack gap="xs">
+            <OuiText size="xs" color="tertiary">Current Month</OuiText>
+            <OuiText size="xl" weight="semibold">
                 {{ formatCurrency(usageData?.current?.estimatedCostCents || 0) }}
               </OuiText>
-            </OuiStack>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Est:
               {{ formatCurrency(usageData?.estimatedMonthly?.estimatedCostCents || 0) }}
             </OuiText>
@@ -19,16 +17,14 @@
         </OuiCardBody>
       </OuiCard>
 
-      <OuiCard>
+      <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="xs">
-              <OuiText size="sm" color="muted">CPU Hours</OuiText>
-              <OuiText size="2xl" weight="bold">
+          <OuiStack gap="xs">
+            <OuiText size="xs" color="tertiary">CPU Hours</OuiText>
+            <OuiText size="xl" weight="semibold">
                 {{ formatCoreSecondsToHours(usageData?.current?.cpuCoreSeconds ?? 0) }}
               </OuiText>
-            </OuiStack>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Est:
               {{ formatCoreSecondsToHours(usageData?.estimatedMonthly?.cpuCoreSeconds ?? 0) }}
             </OuiText>
@@ -36,16 +32,14 @@
         </OuiCardBody>
       </OuiCard>
 
-      <OuiCard>
+      <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="xs">
-              <OuiText size="sm" color="muted">Memory (GB avg)</OuiText>
-              <OuiText size="2xl" weight="bold">
+          <OuiStack gap="xs">
+            <OuiText size="xs" color="tertiary">Memory (GB avg)</OuiText>
+            <OuiText size="xl" weight="semibold">
                 {{ formatMemoryByteSecondsToGB(usageData?.current?.memoryByteSeconds ?? 0) }}
               </OuiText>
-            </OuiStack>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Est:
               {{ formatMemoryByteSecondsToGB(usageData?.estimatedMonthly?.memoryByteSeconds ?? 0) }}
             </OuiText>
@@ -53,16 +47,16 @@
         </OuiCardBody>
       </OuiCard>
 
-      <OuiCard>
+      <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="xs">
-              <OuiText size="sm" color="muted">Network (GB)</OuiText>
-              <OuiText size="2xl" weight="bold">
-                {{ formatBandwidthToGB(usageData?.current?.bandwidthRxBytes ?? 0, usageData?.current?.bandwidthTxBytes ?? 0) }}
-              </OuiText>
-            </OuiStack>
-            <OuiText size="xs" color="muted">
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="xs">
+            <OuiText size="xs" color="tertiary">Network (GB)</OuiText>
+            <OuiText size="xl" weight="semibold">
+              {{ formatBandwidthToGB(usageData?.current?.bandwidthRxBytes ?? 0, usageData?.current?.bandwidthTxBytes ?? 0) }}
+            </OuiText>
+            <OuiText size="xs" color="tertiary">
               Rx: {{ formatBytesToGB(usageData?.current?.bandwidthRxBytes ?? 0) }} GB
               Tx: {{ formatBytesToGB(usageData?.current?.bandwidthTxBytes ?? 0) }} GB
             </OuiText>
@@ -70,19 +64,14 @@
         </OuiCardBody>
       </OuiCard>
 
-      <OuiCard>
+      <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="xs">
-              <OuiText size="sm" color="muted">Storage Usage</OuiText>
-              <OuiFlex align="center" gap="sm">
-                <CubeIcon class="h-5 w-5 text-secondary" />
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="getStorageBytesValue(usageData?.current?.storageBytes)" unit-display="short" />
-                </OuiText>
-              </OuiFlex>
-            </OuiStack>
-            <OuiText size="xs" color="muted">
+          <OuiStack gap="xs">
+            <OuiText size="xs" color="tertiary">Storage Usage</OuiText>
+            <OuiText size="xl" weight="semibold">
+              <OuiByte :value="getStorageBytesValue(usageData?.current?.storageBytes)" unit-display="short" />
+            </OuiText>
+            <OuiText size="xs" color="tertiary">
               Image + Volumes + Disk
             </OuiText>
           </OuiStack>
@@ -91,108 +80,99 @@
     </OuiGrid>
 
     <!-- Cost Breakdown -->
-    <OuiCard>
-      <OuiCardBody>
-        <OuiStack gap="lg">
-          <OuiText size="xl" weight="bold">Cost Breakdown</OuiText>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Current Cost Breakdown -->
-            <OuiCard variant="outline">
-              <OuiCardBody>
-                <OuiStack gap="md">
-                  <OuiText size="md" weight="semibold">Current Month Usage</OuiText>
-                  
+    <OuiGrid :cols="{ sm: 1, md: 2 }" gap="sm">
+      <!-- Current Cost Breakdown -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Current Month</OuiText>
                   <OuiStack gap="sm">
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">CPU</OuiText>
+                      <OuiText size="sm" color="tertiary">CPU</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.current.cpu) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Memory</OuiText>
+                      <OuiText size="sm" color="tertiary">Memory</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.current.memory) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Bandwidth</OuiText>
+                      <OuiText size="sm" color="tertiary">Bandwidth</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.current.bandwidth) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Storage</OuiText>
+                      <OuiText size="sm" color="tertiary">Storage</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.current.storage) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center pt-2 border-t-2 border-border-default">
                       <OuiText size="sm" weight="semibold">Total</OuiText>
-                      <OuiText size="lg" weight="bold">
+                      <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.current.total) }}
                       </OuiText>
                     </div>
                   </OuiStack>
-                </OuiStack>
-              </OuiCardBody>
-            </OuiCard>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
 
-            <!-- Estimated Cost Breakdown -->
-            <OuiCard variant="outline">
-              <OuiCardBody>
-                <OuiStack gap="md">
-                  <OuiText size="md" weight="semibold">Estimated Monthly</OuiText>
+      <!-- Estimated Cost Breakdown -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Estimated Monthly</OuiText>
                   
                   <OuiStack gap="sm">
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">CPU</OuiText>
+                      <OuiText size="sm" color="tertiary">CPU</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.estimated.cpu) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Memory</OuiText>
+                      <OuiText size="sm" color="tertiary">Memory</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.estimated.memory) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Bandwidth</OuiText>
+                      <OuiText size="sm" color="tertiary">Bandwidth</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.estimated.bandwidth) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b border-border-default">
-                      <OuiText size="sm" color="muted">Storage</OuiText>
+                      <OuiText size="sm" color="tertiary">Storage</OuiText>
                       <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.estimated.storage) }}
                       </OuiText>
                     </div>
                     <div class="flex justify-between items-center pt-2 border-t-2 border-border-default">
                       <OuiText size="sm" weight="semibold">Total</OuiText>
-                      <OuiText size="lg" weight="bold">
+                      <OuiText size="sm" weight="semibold">
                         {{ formatCurrency(costBreakdown.estimated.total) }}
                       </OuiText>
                     </div>
                   </OuiStack>
-                </OuiStack>
-              </OuiCardBody>
-            </OuiCard>
-          </div>
-        </OuiStack>
-      </OuiCardBody>
-    </OuiCard>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+    </OuiGrid>
 
     <!-- Real-time Metrics Charts -->
     <OuiStack gap="lg">
       <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
-        <OuiText size="xl" weight="bold">Real-time Metrics</OuiText>
+        <OuiText size="sm" weight="semibold">Real-time Metrics</OuiText>
         <OuiFlex gap="sm" align="center" wrap="wrap">
           <!-- Timeframe Selector -->
           <OuiFlex gap="xs" align="center">
-            <OuiText size="sm" color="muted">Timeframe:</OuiText>
+            <OuiText size="xs" color="tertiary">Timeframe:</OuiText>
             <OuiSelect
               v-model="selectedTimeframe"
               :items="timeframeOptions"
@@ -229,19 +209,19 @@
         </OuiFlex>
       </OuiFlex>
 
-      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="sm">
         <!-- CPU Usage Chart -->
-        <OuiCard>
+        <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold">CPU Usage</OuiText>
+              <OuiText size="sm" weight="semibold">CPU Usage</OuiText>
               <div class="relative" style="width: 100%; height: 300px">
                 <div ref="cpuChartRef" style="width: 100%; height: 100%"></div>
                 <div
                   v-if="!hasMetricsData"
                   class="absolute inset-0 flex items-center justify-center bg-surface-subtle/50 rounded"
                 >
-                  <OuiText size="sm" color="muted">{{ emptyStateMessage }}</OuiText>
+                  <OuiText size="sm" color="tertiary">{{ emptyStateMessage }}</OuiText>
                 </div>
               </div>
             </OuiStack>
@@ -249,17 +229,17 @@
         </OuiCard>
 
         <!-- Memory Usage Chart -->
-        <OuiCard>
+        <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold">Memory Usage</OuiText>
+              <OuiText size="sm" weight="semibold">Memory Usage</OuiText>
               <div class="relative" style="width: 100%; height: 300px">
                 <div ref="memoryChartRef" style="width: 100%; height: 100%"></div>
                 <div
                   v-if="!hasMetricsData"
                   class="absolute inset-0 flex items-center justify-center bg-surface-subtle/50 rounded"
                 >
-                  <OuiText size="sm" color="muted">{{ emptyStateMessage }}</OuiText>
+                  <OuiText size="sm" color="tertiary">{{ emptyStateMessage }}</OuiText>
                 </div>
               </div>
             </OuiStack>
@@ -267,17 +247,17 @@
         </OuiCard>
 
         <!-- Network I/O Chart -->
-        <OuiCard>
+        <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold">Network I/O</OuiText>
+              <OuiText size="sm" weight="semibold">Network I/O</OuiText>
               <div class="relative" style="width: 100%; height: 300px">
                 <div ref="networkChartRef" style="width: 100%; height: 100%"></div>
                 <div
                   v-if="!hasMetricsData"
                   class="absolute inset-0 flex items-center justify-center bg-surface-subtle/50 rounded"
                 >
-                  <OuiText size="sm" color="muted">{{ emptyStateMessage }}</OuiText>
+                  <OuiText size="sm" color="tertiary">{{ emptyStateMessage }}</OuiText>
                 </div>
               </div>
             </OuiStack>
@@ -285,17 +265,17 @@
         </OuiCard>
 
         <!-- Disk I/O Chart -->
-        <OuiCard>
+        <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold">Disk I/O</OuiText>
+              <OuiText size="sm" weight="semibold">Disk I/O</OuiText>
               <div class="relative" style="width: 100%; height: 300px">
                 <div ref="diskChartRef" style="width: 100%; height: 100%"></div>
                 <div
                   v-if="!hasMetricsData"
                   class="absolute inset-0 flex items-center justify-center bg-surface-subtle/50 rounded"
                 >
-                  <OuiText size="sm" color="muted">{{ emptyStateMessage }}</OuiText>
+                  <OuiText size="sm" color="tertiary">{{ emptyStateMessage }}</OuiText>
                 </div>
               </div>
             </OuiStack>
@@ -1093,7 +1073,7 @@ const startStreaming = async () => {
       scheduleReconnect();
     }
   } catch (err: unknown) {
-    if (err.name === "AbortError" || streamController?.signal.aborted) {
+    if ((err as any).name === "AbortError" || streamController?.signal.aborted) {
       // User intentionally cancelled
       streaming.value = false;
       streamController = null;
@@ -1108,7 +1088,7 @@ const startStreaming = async () => {
       (err as Error).message?.toLowerCase().includes("endstreamresponse") ||
       (err as Error).message?.toLowerCase().includes("unimplemented") ||
       (err as Error).message?.toLowerCase().includes("not fully implemented") ||
-      err.code === "unknown";
+      (err as any).code === "unknown";
 
     if (!isMissingTrailerError) {
       console.error("[GameServerMetrics] Failed to stream metrics:", err);
@@ -1123,8 +1103,8 @@ const startStreaming = async () => {
         (err as Error).message?.toLowerCase().includes("502") ||
         (err as Error).message?.toLowerCase().includes("503") ||
         (err as Error).message?.toLowerCase().includes("504") ||
-        err.code === "ECONNREFUSED" ||
-        err.code === "ETIMEDOUT";
+        (err as any).code === "ECONNREFUSED" ||
+        (err as any).code === "ETIMEDOUT";
       
       if (isNetworkError) {
         console.warn("[GameServerMetrics] Network error detected - backend service may be unavailable");

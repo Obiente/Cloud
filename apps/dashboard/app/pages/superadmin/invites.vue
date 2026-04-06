@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Pending Invites</OuiText>
-        <OuiText color="muted">Follow up with outstanding invitations.</OuiText>
+        <OuiText color="tertiary">Follow up with outstanding invitations.</OuiText>
       </OuiStack>
       <OuiFlex gap="sm" wrap="wrap">
         <div class="w-72 max-w-full">

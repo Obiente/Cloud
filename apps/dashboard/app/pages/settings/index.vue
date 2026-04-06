@@ -1,42 +1,26 @@
 <template>
-    <OuiContainer size="full" py="xl">
-      <OuiStack gap="xl">
+    <OuiContainer size="full" p="none">
+      <OuiStack gap="lg">
         <!-- Header -->
-        <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-          <OuiStack gap="xs" class="min-w-0">
-            <OuiFlex align="center" gap="md">
-              <OuiBox
-                p="sm"
-                rounded="xl"
-                bg="accent-primary"
-                class="bg-primary/10 ring-1 ring-primary/20"
-              >
-                <Cog6ToothIcon class="w-6 h-6 text-primary" />
-              </OuiBox>
-              <OuiText as="h1" size="2xl" weight="bold" truncate>
-                Settings
-              </OuiText>
-            </OuiFlex>
-            <OuiText size="sm" color="secondary">
-              Manage your account preferences and integrations
-            </OuiText>
-          </OuiStack>
-        </OuiFlex>
+        <OuiStack gap="xs">
+          <OuiText as="h1" size="xl" weight="semibold">Settings</OuiText>
+          <OuiText size="sm" color="tertiary">
+            Manage your account preferences and integrations.
+          </OuiText>
+        </OuiStack>
 
         <!-- Tabbed Content -->
-        <OuiCard variant="default">
-          <OuiTabs v-model="activeTab" :tabs="tabs">
-            <template #account>
-              <SettingsAccount />
-            </template>
-            <template #integrations>
-              <SettingsIntegrations />
-            </template>
-            <template #preferences>
-              <SettingsPreferences />
-            </template>
-          </OuiTabs>
-        </OuiCard>
+        <OuiTabs v-model="activeTab" :tabs="tabs">
+          <template #account>
+            <SettingsAccount />
+          </template>
+          <template #integrations>
+            <SettingsIntegrations />
+          </template>
+          <template #preferences>
+            <SettingsPreferences />
+          </template>
+        </OuiTabs>
       </OuiStack>
     </OuiContainer>
 </template>

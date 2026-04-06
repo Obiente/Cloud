@@ -17,7 +17,7 @@
             {{ formatProjectType(displayProject.projectType) }}
           </OuiBadge>
         </OuiFlex>
-        <OuiText size="sm" color="secondary" v-if="displayProject.authors && displayProject.authors.length > 0">
+        <OuiText size="sm" color="tertiary" v-if="displayProject.authors && displayProject.authors.length > 0">
           by {{ displayProject.authors.join(", ") }}
         </OuiText>
       </OuiStack>
@@ -48,7 +48,7 @@
       <OuiCard variant="default">
         <OuiCardBody>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="secondary">Downloads</OuiText>
+            <OuiText size="xs" color="tertiary">Downloads</OuiText>
             <OuiText size="lg" weight="bold">{{ formatDownloads(project.downloads) }}</OuiText>
           </OuiStack>
         </OuiCardBody>
@@ -56,7 +56,7 @@
       <OuiCard variant="default" v-if="project.rating">
         <OuiCardBody>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="secondary">Rating</OuiText>
+            <OuiText size="xs" color="tertiary">Rating</OuiText>
             <OuiText size="lg" weight="bold">{{ project.rating.toFixed(1) }} / 5</OuiText>
           </OuiStack>
         </OuiCardBody>
@@ -64,7 +64,7 @@
       <OuiCard variant="default" v-if="project.gameVersions && project.gameVersions.length > 0">
         <OuiCardBody>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="secondary">Versions</OuiText>
+            <OuiText size="xs" color="tertiary">Versions</OuiText>
             <OuiText size="lg" weight="bold">{{ project.gameVersions.length }}</OuiText>
           </OuiStack>
         </OuiCardBody>
@@ -72,7 +72,7 @@
       <OuiCard variant="default" v-if="activeVersionFilter && project.gameVersions && project.gameVersions.length > 0">
         <OuiCardBody>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="secondary">Compatibility</OuiText>
+            <OuiText size="xs" color="tertiary">Compatibility</OuiText>
             <OuiBadge :variant="getCompatibilityStatus(project).variant" size="sm">
               {{ getCompatibilityStatus(project).label }}
             </OuiBadge>
@@ -98,7 +98,7 @@
         <OuiBadge v-for="version in sortedGameVersions.slice(0, 20)" :key="version" size="sm" variant="outline">
           {{ version }}
         </OuiBadge>
-        <OuiText v-if="sortedGameVersions.length > 20" size="xs" color="secondary" class="self-center">
+        <OuiText v-if="sortedGameVersions.length > 20" size="xs" color="tertiary" class="self-center">
           +{{ sortedGameVersions.length - 20 }} more
         </OuiText>
       </OuiFlex>
@@ -201,7 +201,7 @@
             <ChevronLeftIcon class="w-4 h-4" />
             Previous
           </OuiButton>
-          <OuiText size="sm" color="secondary">
+          <OuiText size="sm" color="tertiary">
             {{ lightboxIndex + 1 }} / {{ displayProject.gallery.length }}
           </OuiText>
           <OuiButton
@@ -311,6 +311,7 @@ const createMarkdownRenderer = (): Renderer => {
 
 const markdownRenderer = createMarkdownRenderer();
 
+// @ts-expect-error DOMPurify types
 const DOMPURIFY_CONFIG: DOMPurify.Config = {
   ALLOWED_TAGS: [
     "p", "br", "b", "i", "strong", "em", "u", "s", "del", "ins",
@@ -325,6 +326,7 @@ const DOMPURIFY_CONFIG: DOMPurify.Config = {
   FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
 };
 
+// @ts-expect-error DOMPurify types
 const sanitize = (html: string) => DOMPurify.sanitize(html, DOMPURIFY_CONFIG) as string;
 
 const renderedBody = computed(() => {

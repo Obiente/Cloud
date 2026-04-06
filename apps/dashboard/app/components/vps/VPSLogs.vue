@@ -9,7 +9,7 @@
           @click="clearLogs"
           class="gap-2"
         >
-          <TrashIcon class="h-4 w-4" />
+          <TrashIcon class="h-3.5 w-3.5" />
           Clear
         </OuiButton>
       </OuiFlex>

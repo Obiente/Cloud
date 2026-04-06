@@ -47,7 +47,7 @@
           v-if="source.type === 'container' && containers.length > 0"
           class="w-full sm:w-auto"
         >
-          <OuiText size="xs" color="muted" class="hidden sm:inline"
+          <OuiText size="xs" color="tertiary" class="hidden sm:inline"
             >Container:</OuiText
           >
           <OuiSelect
@@ -384,7 +384,7 @@
               v-if="!selectedPath"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
-              <OuiText size="sm" color="secondary"
+              <OuiText size="sm" color="tertiary"
                 >Select a file to view its contents</OuiText
               >
             </div>
@@ -404,7 +404,7 @@
                   <OuiText size="lg" weight="semibold" color="danger">
                     Unable to View File
                   </OuiText>
-                  <OuiText size="sm" color="secondary">
+                  <OuiText size="sm" color="tertiary">
                     {{ fileError }}
                   </OuiText>
                 </div>
@@ -488,7 +488,7 @@
                   </div>
                   <div class="flex flex-col gap-2">
                     <OuiText size="lg" weight="semibold"> Binary File </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       This file type cannot be previewed.
                       <template v-if="fileMetadata?.mimeType">
                         <br />
@@ -552,7 +552,7 @@
               v-else-if="!selectedPath || !currentNode"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
-              <OuiText size="sm" color="secondary"
+              <OuiText size="sm" color="tertiary"
                 >Select a file to view its contents</OuiText
               >
             </div>
@@ -1534,7 +1534,7 @@
       fileError.value = null; // Clear error on success
     } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
-      if (err?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
+      if ((err as any)?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         return;
       }
 

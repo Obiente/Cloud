@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Usage</OuiText>
-        <OuiText color="muted">Current month resource consumption across organizations.</OuiText>
+        <OuiText color="tertiary">Current month resource consumption across organizations.</OuiText>
       </OuiStack>
       <OuiFlex gap="sm" wrap="wrap">
         <div class="w-72 max-w-full">

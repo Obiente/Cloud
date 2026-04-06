@@ -1,7 +1,7 @@
 <template>
     <OuiStack gap="md">
       <OuiFlex justify="between" align="center">
-        <OuiText as="h3" size="md" weight="semibold">
+        <OuiText as="h3" size="sm" weight="semibold">
           Interactive Terminal
         </OuiText>
         <OuiFlex gap="sm">
@@ -35,7 +35,7 @@
         </OuiFlex>
       </OuiFlex>
 
-      <OuiText size="sm" color="secondary">
+      <OuiText size="sm" color="tertiary">
         Access an interactive terminal session to run commands directly in your
         container.
       </OuiText>

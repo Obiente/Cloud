@@ -54,10 +54,7 @@
         <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiFlex align="center" gap="sm">
-                <ServerStackIcon class="h-4 w-4 text-accent-secondary" />
-                <OuiText size="sm" weight="semibold">Infrastructure</OuiText>
-              </OuiFlex>
+              <UiSectionHeader :icon="ServerStackIcon" color="secondary" size="md">Infrastructure</UiSectionHeader>
 
               <OuiStack gap="none" class="divide-y divide-border-default">
                 <!-- Port -->
@@ -135,10 +132,7 @@
         <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiFlex align="center" gap="sm">
-                <CodeBracketSquareIcon class="h-4 w-4 text-accent-primary" />
-                <OuiText size="sm" weight="semibold">Source</OuiText>
-              </OuiFlex>
+              <UiSectionHeader :icon="CodeBracketSquareIcon" color="primary" size="md">Source</UiSectionHeader>
 
               <!-- Repository Info - prominent display -->
               <template v-if="deployment.repositoryUrl">

@@ -2,7 +2,7 @@
   <OuiStack gap="xl">
     <OuiStack gap="xs">
       <OuiText tag="h1" size="3xl" weight="extrabold">VPS Management</OuiText>
-      <OuiText color="muted">
+      <OuiText color="tertiary">
         Manage VPS instances, size catalog, and public IP addresses across every organization.
       </OuiText>
     </OuiStack>

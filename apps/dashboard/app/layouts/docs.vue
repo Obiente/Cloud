@@ -1,7 +1,8 @@
 <template>
-  <div class="bg-surface-base min-h-screen">
-    <!-- Header -->
-    <header class="sticky top-0 z-30 border-b border-border-muted bg-surface-base/95 backdrop-blur-sm">
+  <div class="bg-surface-base h-screen flex flex-col overflow-hidden">
+    <header
+      class="sticky top-0 z-30 border-b border-border-muted bg-surface-base/95 backdrop-blur-sm"
+    >
       <OuiContainer size="full" py="md">
         <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
           <OuiFlex align="center" gap="md">
@@ -12,12 +13,14 @@
                 <OuiText size="lg" weight="bold" color="primary">O</OuiText>
               </OuiBox>
               <OuiStack gap="none" class="leading-tight">
-                <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
-                <OuiText size="xs" color="secondary">Documentation</OuiText>
+                <OuiText size="xl" weight="bold" color="primary"
+                  >Obiente</OuiText
+                >
+                <OuiText size="xs" color="tertiary">Documentation</OuiText>
               </OuiStack>
             </NuxtLink>
           </OuiFlex>
-          
+
           <OuiFlex align="center" gap="sm" wrap="wrap">
             <OuiButton
               variant="ghost"
@@ -44,11 +47,7 @@
               >
                 Sign Up
               </OuiButton>
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                @click="user.popupLogin()"
-              >
+              <OuiButton variant="ghost" size="sm" @click="user.popupLogin()">
                 Sign In
               </OuiButton>
             </template>
@@ -57,31 +56,33 @@
       </OuiContainer>
     </header>
 
-    <!-- Main Content -->
-    <main class="min-h-[calc(100vh-4rem)] flex">
-      <!-- Desktop Sidebar -->
-      <div class="hidden lg:block lg:w-64 lg:shrink-0">
-        <div class="sticky top-[4rem] h-[calc(100vh-4rem)] bg-surface-base border-r border-border-muted">
+    <main class="flex-1 min-h-0 flex overflow-hidden">
+      <div
+        class="hidden lg:block lg:w-64 lg:shrink-0 lg:min-h-0 bg-surface-base border-r border-border-muted"
+      >
+        <div class="h-full">
           <DocsSidebar />
         </div>
       </div>
 
-      <!-- Mobile Sidebar Toggle -->
       <div class="lg:hidden border-b border-border-muted">
         <OuiContainer size="full" py="sm">
-          <OuiButton
-            variant="ghost"
-            size="sm"
-            @click="isMobileSidebarOpen = !isMobileSidebarOpen"
-            class="gap-2"
-          >
-            <Bars3Icon class="h-4 w-4" />
-            {{ isMobileSidebarOpen ? 'Hide' : 'Show' }} Navigation
-          </OuiButton>
+          <OuiFlex align="center" gap="sm" wrap="wrap">
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              @click="isMobileSidebarOpen = !isMobileSidebarOpen"
+              class="gap-2"
+              :aria-expanded="isMobileSidebarOpen"
+              aria-controls="docs-mobile-sidebar"
+            >
+              <Bars3Icon class="h-4 w-4" />
+              {{ isMobileSidebarOpen ? "Hide" : "Show" }} Navigation
+            </OuiButton>
+          </OuiFlex>
         </OuiContainer>
       </div>
 
-      <!-- Mobile Sidebar Overlay -->
       <Transition name="fade">
         <div
           v-if="isMobileSidebarOpen"
@@ -90,41 +91,109 @@
         />
       </Transition>
 
-      <!-- Mobile Sidebar -->
       <Transition name="slide">
         <aside
           v-if="isMobileSidebarOpen"
+          id="docs-mobile-sidebar"
           class="lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] border-r border-border-muted bg-surface-base shadow-2xl overflow-y-auto"
-          style="top: 4rem;"
+          style="top: 4rem"
         >
           <DocsSidebar @navigate="isMobileSidebarOpen = false" />
         </aside>
       </Transition>
 
-      <!-- Content Area -->
-      <div class="flex-1 min-w-0 flex flex-col">
+      <div class="flex-1 min-w-0 min-h-0 flex flex-col">
         <div class="flex-1 overflow-y-auto">
           <OuiContainer size="full" py="xl">
-            <slot />
+            <OuiStack gap="lg">
+              <OuiFlex
+                v-if="currentDoc"
+                align="center"
+                justify="between"
+                wrap="wrap"
+                gap="sm"
+                class="border-b border-border-muted pb-4"
+              >
+                <OuiStack gap="xs">
+                  <OuiText size="xs" transform="uppercase" color="tertiary">
+                    Documentation
+                  </OuiText>
+                  <OuiText size="sm" color="tertiary">
+                    {{ currentDoc.label }}
+                  </OuiText>
+                </OuiStack>
+                <OuiFlex gap="sm" wrap="wrap">
+                  <OuiButton
+                    v-if="previousDoc"
+                    variant="ghost"
+                    size="sm"
+                    @click="navigateTo(previousDoc.path)"
+                  >
+                    <ChevronLeftIcon class="h-4 w-4" />
+                    {{ previousDoc.label }}
+                  </OuiButton>
+                  <OuiButton
+                    v-if="nextDoc"
+                    variant="ghost"
+                    size="sm"
+                    @click="navigateTo(nextDoc.path)"
+                  >
+                    {{ nextDoc.label }}
+                    <ChevronRightIcon class="h-4 w-4" />
+                  </OuiButton>
+                </OuiFlex>
+              </OuiFlex>
+
+              <slot />
+            </OuiStack>
           </OuiContainer>
         </div>
-        
-        <!-- Footer -->
+
         <footer class="border-t border-border-muted bg-surface-subtle shrink-0">
-          <OuiContainer size="full" py="xl">
-            <OuiStack gap="md" align="center">
+          <OuiContainer size="full" py="md">
+            <OuiStack gap="sm" align="center">
+              <OuiFlex
+                v-if="previousDoc || nextDoc"
+                align="center"
+                gap="sm"
+                wrap="wrap"
+                justify="center"
+              >
+                <NuxtLink
+                  v-if="previousDoc"
+                  :to="previousDoc.path"
+                  class="text-sm text-secondary hover:text-primary transition-colors"
+                >
+                  Previous: {{ previousDoc.label }}
+                </NuxtLink>
+                <OuiText
+                  v-if="previousDoc && nextDoc"
+                  size="sm"
+                  color="tertiary"
+                >
+                  •
+                </OuiText>
+                <NuxtLink
+                  v-if="nextDoc"
+                  :to="nextDoc.path"
+                  class="text-sm text-secondary hover:text-primary transition-colors"
+                >
+                  Next: {{ nextDoc.label }}
+                </NuxtLink>
+              </OuiFlex>
+
               <OuiFlex align="center" gap="sm" wrap="wrap" justify="center">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   © {{ new Date().getFullYear() }} Obiente Cloud
                 </OuiText>
-                <OuiText size="sm" color="secondary">•</OuiText>
-                <NuxtLink to="/support" class="text-sm text-secondary hover:text-primary transition-colors">
+                <OuiText size="xs" color="tertiary">•</OuiText>
+                <NuxtLink
+                  to="/support"
+                  class="text-xs text-secondary hover:text-primary transition-colors"
+                >
                   Support
                 </NuxtLink>
               </OuiFlex>
-              <OuiText size="xs" color="secondary" class="text-center max-w-2xl">
-                This documentation is publicly accessible. Sign in to access your dashboard and manage your resources.
-              </OuiText>
             </OuiStack>
           </OuiContainer>
         </footer>
@@ -134,16 +203,33 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeftIcon, Bars3Icon } from "@heroicons/vue/24/outline";
+import { computed, ref, watch } from "vue";
+import type DocsSidebar from "~/components/docs/DocsSidebar.vue";
+import {
+  ArrowLeftIcon,
+  Bars3Icon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "@heroicons/vue/24/outline";
+import { getDocsCurrentItem, getDocsNeighbors } from "~/utils/docsNavigation";
 
-// Use auth composable but don't require authentication
 const user = useAuth();
-
+const route = useRoute();
 const isMobileSidebarOpen = ref(false);
+
+const currentDoc = computed(() => getDocsCurrentItem(route.path));
+const previousDoc = computed(() => getDocsNeighbors(route.path).previous);
+const nextDoc = computed(() => getDocsNeighbors(route.path).next);
+
+watch(
+  () => route.path,
+  () => {
+    isMobileSidebarOpen.value = false;
+  }
+);
 </script>
 
 <style scoped>
-/* Fade transition for overlay */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
@@ -154,18 +240,13 @@ const isMobileSidebarOpen = ref(false);
   opacity: 0;
 }
 
-/* Slide transition for sidebar */
 .slide-enter-active,
 .slide-leave-active {
   transition: transform 0.3s ease;
 }
 
-.slide-enter-from {
-  transform: translateX(-100%);
-}
-
+.slide-enter-from,
 .slide-leave-to {
   transform: translateX(-100%);
 }
 </style>
-

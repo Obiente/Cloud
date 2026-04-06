@@ -74,7 +74,7 @@
     <!-- Resize Dialog -->
     <OuiDialog v-model:open="resizeDialogOpen" title="Resize VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Change the VPS instance size. CPU, memory, and disk will be updated.
         </OuiText>
         <OuiSelect
@@ -87,7 +87,7 @@
           <template #item="{ item }">
             <OuiStack gap="xs">
               <OuiText weight="medium">{{ item.label }}</OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 {{ item.cpuCores }} CPU · {{ formatMemory(item.memoryBytes) }} RAM · {{ formatDisk(item.diskBytes) }} Storage
               </OuiText>
             </OuiStack>
@@ -113,7 +113,7 @@
     <!-- Suspend Dialog -->
     <OuiDialog v-model:open="suspendDialogOpen" title="Suspend VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Suspend this VPS instance. The VPS will be marked as suspended and normal operations will be prevented.
         </OuiText>
         <OuiInput
@@ -139,7 +139,7 @@
     <!-- CloudInit Dialog -->
     <OuiDialog v-model:open="cloudInitDialogOpen" title="Update CloudInit Configuration" size="lg">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Update the cloud-init configuration for this VPS. Changes will take effect on the next reboot.
         </OuiText>
         <OuiTextarea
@@ -167,7 +167,7 @@
     <!-- Force Stop Dialog -->
     <OuiDialog v-model:open="forceStopDialogOpen" title="Force Stop VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Force stop this VPS instance immediately. This will perform a hard shutdown.
         </OuiText>
       </OuiStack>
@@ -188,7 +188,7 @@
     <!-- Force Delete Dialog -->
     <OuiDialog v-model:open="forceDeleteDialogOpen" title="Force Delete VPS">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Permanently delete this VPS instance. This action cannot be undone.
         </OuiText>
         <OuiCheckbox v-model="forceDeleteForm.hardDelete" label="Hard delete (permanently remove from Proxmox)" />
@@ -462,7 +462,7 @@ const fetchInstances = async (page: number = 1) => {
     pagination.value = response.pagination;
     currentPage.value = page;
   } catch (error: unknown) {
-    toast.error(`Failed to load VPS instances: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to load VPS instances: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;
   }
@@ -518,7 +518,7 @@ const openResizeDialog = async (row: any) => {
         diskBytes: s.diskBytes,
       }));
   } catch (error: unknown) {
-    toast.error(`Failed to load sizes: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to load sizes: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     loadingSizes.value = false;
   }
@@ -539,7 +539,7 @@ const handleResize = async () => {
     resizeDialogOpen.value = false;
     await fetchInstances(currentPage.value);
   } catch (error: unknown) {
-    toast.error(`Failed to resize VPS: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to resize VPS: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isResizing.value = false;
   }
@@ -570,7 +570,7 @@ const handleSuspend = async () => {
     suspendDialogOpen.value = false;
     await fetchInstances(currentPage.value);
   } catch (error: unknown) {
-    toast.error(`Failed to suspend VPS: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to suspend VPS: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isSuspending.value = false;
   }
@@ -587,7 +587,7 @@ const handleUnsuspend = async (row: any) => {
     toast.success(response.message || "VPS unsuspended successfully");
     await fetchInstances(currentPage.value);
   } catch (error: unknown) {
-    toast.error(`Failed to unsuspend VPS: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to unsuspend VPS: ${(error as any)?.message || "Unknown error"}`);
   }
 };
 
@@ -636,7 +636,7 @@ const handleForceStop = async () => {
     forceStopDialogOpen.value = false;
     await fetchInstances(currentPage.value);
   } catch (error: unknown) {
-    toast.error(`Failed to force stop VPS: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to force stop VPS: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isForceStopping.value = false;
   }
@@ -667,7 +667,7 @@ const handleForceDelete = async () => {
     forceDeleteDialogOpen.value = false;
     await fetchInstances(currentPage.value);
   } catch (error: unknown) {
-    toast.error(`Failed to delete VPS: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to delete VPS: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isForceDeleting.value = false;
   }

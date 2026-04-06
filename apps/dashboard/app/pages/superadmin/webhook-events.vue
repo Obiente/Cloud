@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Stripe Webhook Events</OuiText>
-        <OuiText color="muted">
+        <OuiText color="tertiary">
           View all Stripe webhook events and their associated organizations.
         </OuiText>
       </OuiStack>
@@ -46,7 +46,7 @@
           <OuiText
             size="sm"
             weight="medium"
-            color="secondary"
+            color="tertiary"
             transform="uppercase"
             class="tracking-wide"
             >{{ metric.label }}</OuiText
@@ -76,7 +76,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-0">
         <div v-if="isLoading" class="text-center py-8">
-          <OuiText color="muted">Loading events...</OuiText>
+          <OuiText color="tertiary">Loading events...</OuiText>
         </div>
         <OuiTable
           v-else
@@ -139,7 +139,7 @@
       </OuiCardBody>
       <OuiCardFooter v-if="totalCount > limit" class="px-6 py-4 border-t border-border-muted">
         <OuiFlex align="center" justify="between">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Showing {{ events.length }} of {{ totalCount }} events
           </OuiText>
           <OuiFlex gap="sm">

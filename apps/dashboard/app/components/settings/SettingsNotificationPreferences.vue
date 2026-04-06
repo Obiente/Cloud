@@ -1,17 +1,16 @@
 <template>
-  <div class="p-6">
-    <OuiStack gap="lg">
+  <OuiStack gap="lg">
       <OuiStack gap="xs">
         <OuiText as="h2" size="lg" weight="semibold"
           >Notification Preferences</OuiText
         >
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Configure how and when you receive notifications for each type
         </OuiText>
       </OuiStack>
 
       <div v-if="loading" class="flex items-center justify-center py-8">
-        <OuiText size="sm" color="secondary">Loading preferences...</OuiText>
+        <OuiText size="sm" color="tertiary">Loading preferences...</OuiText>
       </div>
 
       <div v-else-if="error" class="rounded-lg bg-error/10 p-4">
@@ -19,7 +18,7 @@
       </div>
 
       <div v-else-if="notificationTypes.length === 0" class="py-8">
-        <OuiText size="sm" color="secondary"
+        <OuiText size="sm" color="tertiary"
           >No notification types available</OuiText
         >
       </div>
@@ -34,7 +33,7 @@
             <OuiStack gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="semibold">{{ type.name }}</OuiText>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{ type.description }}
                 </OuiText>
               </OuiStack>
@@ -44,7 +43,7 @@
                 <OuiFlex justify="between" align="center">
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="medium">Email Notifications</OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Receive email notifications for this type
                     </OuiText>
                   </OuiStack>
@@ -60,7 +59,7 @@
                 <OuiFlex justify="between" align="center">
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="medium">In-App Notifications</OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Show notifications in the app
                     </OuiText>
                   </OuiStack>
@@ -123,7 +122,6 @@
         </OuiFlex>
       </OuiStack>
     </OuiStack>
-  </div>
 </template>
 
 <script setup lang="ts">

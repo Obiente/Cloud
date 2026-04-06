@@ -1,24 +1,15 @@
 <template>
-  <div class="p-6">
-    <OuiStack gap="lg">
-      <OuiText as="h2" size="lg" weight="semibold">Preferences</OuiText>
-
+  <OuiStack gap="lg">
+      <!-- Display Preferences -->
       <OuiCard variant="outline">
         <OuiCardBody>
           <OuiStack gap="md">
-            <OuiText size="sm" color="secondary">
-              User preferences and display settings
-            </OuiText>
+            <OuiText size="sm" weight="semibold">Display</OuiText>
 
-            <!-- Environment Variables View Mode -->
             <OuiFlex justify="between" align="center">
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium"
-                  >Environment Variables View</OuiText
-                >
-                <OuiText size="xs" color="secondary">
-                  Choose how to view environment variables by default
-                </OuiText>
+                <OuiText size="sm" weight="medium">Environment Variables View</OuiText>
+                <OuiText size="xs" color="tertiary">Default view mode for environment variables</OuiText>
               </OuiStack>
               <OuiRadioGroup
                 v-model="envVarsViewMode"
@@ -36,10 +27,7 @@
       <OuiCard variant="outline">
         <OuiCardBody>
           <OuiStack gap="md">
-            <OuiText size="sm" weight="semibold">Editor Preferences</OuiText>
-            <OuiText size="xs" color="secondary">
-              Customize the file editor appearance and behavior
-            </OuiText>
+            <OuiText size="sm" weight="semibold">Editor</OuiText>
 
             <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <!-- Word Wrap -->
@@ -94,7 +82,7 @@
               <OuiFlex justify="between" align="center">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium">Insert Spaces</OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Use spaces instead of tabs
                   </OuiText>
                 </OuiStack>
@@ -105,7 +93,7 @@
               <OuiFlex justify="between" align="center">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium">Minimap</OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Show code minimap on the right
                   </OuiText>
                 </OuiStack>
@@ -134,7 +122,6 @@
       <!-- Notification Preferences -->
       <SettingsNotificationPreferences />
     </OuiStack>
-  </div>
 </template>
 
 <script setup lang="ts">

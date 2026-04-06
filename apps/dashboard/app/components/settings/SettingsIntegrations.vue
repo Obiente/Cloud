@@ -1,293 +1,92 @@
 <template>
-  <div class="p-6">
-    <OuiStack gap="lg">
-      <!-- Header -->
-      <OuiStack gap="xs">
-        <OuiText as="h2" size="xl" weight="bold">Connected Accounts</OuiText>
-        <OuiText size="sm" color="secondary">
-          Manage GitHub connections for your account and organizations
-        </OuiText>
-      </OuiStack>
-
-      <OuiCard
-        v-if="successMessage && !error"
-        variant="outline"
-        class="border-success"
-      >
-        <OuiCardBody>
-          <OuiText size="sm" weight="medium" color="success">
-            {{ successMessage }}
-          </OuiText>
-        </OuiCardBody>
-      </OuiCard>
+  <OuiStack gap="lg">
+      <!-- Success Message -->
+      <OuiAlert v-if="successMessage && !error" variant="success">
+        <OuiText size="sm">{{ successMessage }}</OuiText>
+      </OuiAlert>
 
       <!-- Loading State -->
       <OuiCard v-if="isLoading" variant="outline">
         <OuiCardBody>
-          <OuiFlex align="center" gap="md">
-            <div
-              class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"
-            />
-            <OuiText size="sm" color="secondary"
-              >Loading connected accounts...</OuiText
-            >
+          <OuiFlex align="center" gap="sm">
+            <div class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <OuiText size="sm" color="tertiary">Loading connected accounts...</OuiText>
           </OuiFlex>
         </OuiCardBody>
       </OuiCard>
 
       <!-- Error State -->
-      <OuiCard
-        v-else-if="error && !isLoading"
-        variant="outline"
-        class="border-danger"
-      >
-        <OuiCardBody>
-          <OuiStack gap="sm">
-            <OuiText size="sm" weight="medium" color="danger">
-              Error Loading Accounts
-            </OuiText>
-            <OuiText size="xs" color="secondary">{{ error }}</OuiText>
-            <OuiButton size="sm" variant="ghost" @click="loadIntegrations">
-              Retry
-            </OuiButton>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+      <OuiAlert v-else-if="error && !isLoading" variant="danger">
+        <OuiFlex align="center" justify="between">
+          <OuiText size="sm">{{ error }}</OuiText>
+          <OuiButton size="xs" variant="ghost" @click="loadIntegrations">Retry</OuiButton>
+        </OuiFlex>
+      </OuiAlert>
 
-      <!-- Connected Accounts List -->
-      <div v-else-if="integrations.length > 0">
-        <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="semibold"
-            >Active Connections</OuiText
-          >
-
-          <!-- Single account - no nested cards to avoid whitespace -->
-          <OuiCard
-            v-if="integrations.length === 1 && integrations[0]"
-            variant="outline"
-            class="border-default"
-          >
-            <OuiCardBody>
-              <template v-if="integrations[0]">
-                <OuiFlex justify="between" align="center" gap="md">
-                  <OuiFlex align="center" gap="md" class="flex-1">
-                    <img
-                      :src="`https://avatars.githubusercontent.com/${integrations[0].username}`"
-                      :alt="integrations[0].username"
-                      class="h-12 w-12 rounded-full border border-default"
-                      @error="handleAvatarError"
-                    />
-                    <OuiStack gap="xs" class="flex-1">
-                      <OuiStack gap="xs">
-                        <OuiFlex align="center" gap="sm" wrap="wrap">
-                          <OuiText
-                            size="sm"
-                            weight="semibold"
-                            class="text-text-primary"
-                          >
-                            @{{ integrations[0].username }}
-                          </OuiText>
-                          <OuiBox
-                            v-if="integrations[0].isUser"
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-primary/10 text-primary text-xs font-medium"
-                          >
-                            Personal
-                          </OuiBox>
-                          <OuiBox
-                            v-else
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-secondary/10 text-secondary text-xs font-medium"
-                          >
-                            Organization
-                          </OuiBox>
-                          <OuiBox
-                            v-if="
-                              !integrations[0].isUser &&
-                              integrations[0].organizationName
-                            "
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-text-secondary/10 text-text-secondary text-xs font-medium"
-                          >
-                            {{ integrations[0].organizationName }}
-                          </OuiBox>
-                        </OuiFlex>
-                        <OuiFlex align="center" gap="xs" wrap="wrap">
-                          <OuiText size="xs" color="secondary">
-                            Connected
-                            <OuiRelativeTime
-                              v-if="integrations[0].connectedAt"
-                              :value="
-                                new Date(
-                                  (integrations[0].connectedAt.seconds || 0) *
-                                    1000
-                                )
-                              "
-                              :style="'short'"
-                            />
-                          </OuiText>
-                          <template v-if="integrations[0].scope">
-                            <span class="text-text-tertiary">•</span>
-                            <OuiText size="xs" color="secondary">
-                              Scopes: {{ formatScopes(integrations[0].scope) }}
-                            </OuiText>
-                          </template>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiStack>
+      <!-- Connected Accounts -->
+      <template v-else-if="integrations.length > 0">
+        <OuiCard v-for="integration in integrations" :key="integration.id" variant="outline">
+          <OuiCardBody>
+            <OuiFlex justify="between" align="center" gap="md">
+              <OuiFlex align="center" gap="sm" class="flex-1 min-w-0">
+                <img
+                  :src="`https://avatars.githubusercontent.com/${integration.username}`"
+                  :alt="integration.username"
+                  class="h-8 w-8 rounded-full border border-default shrink-0"
+                  @error="handleAvatarError"
+                />
+                <OuiStack gap="none" class="min-w-0">
+                  <OuiFlex align="center" gap="sm" wrap="wrap">
+                    <OuiText size="sm" weight="medium">@{{ integration.username }}</OuiText>
+                    <OuiBadge :variant="integration.isUser ? 'primary' : 'secondary'" size="xs">
+                      {{ integration.isUser ? 'Personal' : 'Organization' }}
+                    </OuiBadge>
+                    <OuiBadge v-if="!integration.isUser && integration.organizationName" variant="secondary" size="xs">
+                      {{ integration.organizationName }}
+                    </OuiBadge>
                   </OuiFlex>
-                  <OuiButton
-                    @click="disconnectIntegration(integrations[0])"
-                    :disabled="isDisconnecting"
-                    variant="ghost"
-                    size="sm"
-                    color="danger"
-                  >
-                    Disconnect
-                  </OuiButton>
-                </OuiFlex>
-              </template>
-            </OuiCardBody>
-          </OuiCard>
-
-          <!-- Multiple accounts - use list layout -->
-          <OuiStack v-else gap="sm">
-            <OuiCard
-              v-for="integration in integrations"
-              :key="integration.id"
-              variant="outline"
-              class="border-default"
-            >
-              <OuiCardBody>
-                <OuiFlex justify="between" align="center" gap="md">
-                  <OuiFlex align="center" gap="md" class="flex-1">
-                    <img
-                      :src="`https://avatars.githubusercontent.com/${integration.username}`"
-                      :alt="integration.username"
-                      class="h-10 w-10 rounded-full border border-default"
-                      @error="handleAvatarError"
-                    />
-                    <OuiStack gap="xs" class="flex-1">
-                      <OuiStack gap="xs">
-                        <OuiFlex align="center" gap="sm" wrap="wrap">
-                          <OuiText
-                            size="sm"
-                            weight="semibold"
-                            class="text-text-primary"
-                          >
-                            @{{ integration.username }}
-                          </OuiText>
-                          <OuiBox
-                            v-if="integration.isUser"
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-primary/10 text-primary text-xs font-medium"
-                          >
-                            Personal
-                          </OuiBox>
-                          <OuiBox
-                            v-else
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-secondary/10 text-secondary text-xs font-medium"
-                          >
-                            Organization
-                          </OuiBox>
-                          <OuiBox
-                            v-if="
-                              !integration.isUser &&
-                              integration.organizationName
-                            "
-                            px="xs"
-                            py="xs"
-                            rounded="sm"
-                            class="bg-text-secondary/10 text-text-secondary text-xs font-medium"
-                          >
-                            {{ integration.organizationName }}
-                          </OuiBox>
-                        </OuiFlex>
-                        <OuiFlex align="center" gap="xs" wrap="wrap">
-                          <OuiText size="xs" color="secondary">
-                            Connected
-                            <OuiRelativeTime
-                              v-if="integration.connectedAt"
-                              :value="
-                                new Date(
-                                  (integration.connectedAt.seconds || 0) * 1000
-                                )
-                              "
-                              :style="'short'"
-                            />
-                          </OuiText>
-                          <template v-if="integration.scope">
-                            <span class="text-text-tertiary">•</span>
-                            <OuiText size="xs" color="secondary">
-                              Scopes: {{ formatScopes(integration.scope) }}
-                            </OuiText>
-                          </template>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiStack>
-                  </OuiFlex>
-                  <OuiButton
-                    @click="disconnectIntegration(integration)"
-                    :disabled="isDisconnecting"
-                    variant="ghost"
-                    size="sm"
-                    color="danger"
-                  >
-                    Disconnect
-                  </OuiButton>
-                </OuiFlex>
-              </OuiCardBody>
-            </OuiCard>
-          </OuiStack>
-        </OuiStack>
-      </div>
+                  <OuiText size="xs" color="tertiary">
+                    Connected <OuiRelativeTime v-if="integration.connectedAt" :value="new Date((integration.connectedAt.seconds || 0) * 1000)" :style="'short'" />
+                    <template v-if="integration.scope"> · {{ formatScopes(integration.scope) }}</template>
+                  </OuiText>
+                </OuiStack>
+              </OuiFlex>
+              <OuiButton
+                @click="disconnectIntegration(integration)"
+                :disabled="isDisconnecting"
+                variant="ghost"
+                size="xs"
+                color="danger"
+              >
+                Disconnect
+              </OuiButton>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
+      </template>
 
       <!-- Empty State -->
       <OuiCard v-else variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md" align="center" class="py-8">
-            <Icon name="uil:github" class="h-12 w-12 text-text-secondary" />
+          <OuiStack gap="sm" align="center" class="py-6">
+            <Icon name="uil:github" class="h-10 w-10 text-text-tertiary" />
             <OuiStack gap="xs" align="center">
-              <OuiText size="lg" weight="semibold"
-                >No connected accounts</OuiText
-              >
-              <OuiText size="sm" color="secondary" class="text-center max-w-md">
-                Connect your GitHub account or an organization account to enable
-                repository imports and deployments
+              <OuiText size="sm" weight="medium">No connected accounts</OuiText>
+              <OuiText size="xs" color="tertiary" class="text-center max-w-sm">
+                Connect your GitHub account to enable repository imports and deployments.
               </OuiText>
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Connect New Account -->
+      <!-- Connect Account -->
       <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="lg">
-            <OuiStack gap="xs">
-              <OuiText as="h3" size="lg" weight="semibold"
-                >Connect GitHub Account</OuiText
-              >
-              <OuiText size="sm" color="secondary">
-                Connect a GitHub account or organization to enable repository
-                imports and deployments. You can connect multiple accounts.
-              </OuiText>
-            </OuiStack>
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Connect GitHub</OuiText>
 
-            <!-- Account Type Selection -->
-            <OuiStack gap="md">
-              <OuiText size="sm" weight="medium">Connect as:</OuiText>
+            <OuiStack gap="sm">
               <OuiRadioGroup
                 v-model="connectionType"
                 :options="[
@@ -296,130 +95,56 @@
                 ]"
               />
 
-              <!-- Organization Selector -->
-              <OuiStack v-if="connectionType === 'organization'" gap="sm">
-                <OuiText size="sm" weight="medium"
-                  >Select Obiente Organization:</OuiText
-                >
+              <OuiStack v-if="connectionType === 'organization'" gap="xs">
                 <OuiSelect
                   v-model="selectedOrgId"
                   :items="organizationOptions"
                   placeholder="Select an organization"
                 />
-                <OuiText size="xs" color="secondary">
-                  This will link a GitHub organization to your selected Obiente
-                  cloud organization.
-                </OuiText>
               </OuiStack>
 
-              <!-- Check if already connected -->
-              <OuiCard
-                v-if="
-                  connectionType === 'user' &&
-                  integrations.some((i) => i.isUser)
-                "
-                variant="outline"
-                class="bg-warning/5 border-warning/20"
+              <OuiAlert
+                v-if="connectionType === 'user' && integrations.some((i) => i.isUser)"
+                variant="warning"
               >
-                <OuiCardBody>
-                  <OuiStack gap="xs">
-                    <OuiText size="sm" weight="medium" color="warning">
-                      Personal account already connected
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">
-                      Your personal GitHub account ({{
-                        integrations.find((i) => i.isUser)?.username
-                      }}) is already connected. Clicking "Connect GitHub" will
-                      update the existing connection.
-                    </OuiText>
-                  </OuiStack>
-                </OuiCardBody>
-              </OuiCard>
+                <OuiText size="xs">
+                  Personal account already connected ({{ integrations.find((i) => i.isUser)?.username }}). This will update the existing connection.
+                </OuiText>
+              </OuiAlert>
 
-              <OuiCard
-                v-if="
-                  connectionType === 'organization' &&
-                  selectedOrgId &&
-                  integrations.some(
-                    (i) => !i.isUser && i.organizationId === selectedOrgId
-                  )
-                "
-                variant="outline"
-                class="bg-warning/5 border-warning/20"
+              <OuiAlert
+                v-if="connectionType === 'organization' && selectedOrgId && integrations.some((i) => !i.isUser && i.organizationId === selectedOrgId)"
+                variant="warning"
               >
-                <OuiCardBody>
-                  <OuiStack gap="xs">
-                    <OuiText size="sm" weight="medium" color="warning">
-                      Organization already connected
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">
-                      This organization already has a GitHub integration ({{
-                        integrations.find(
-                          (i) => !i.isUser && i.organizationId === selectedOrgId
-                        )?.username
-                      }}). Clicking "Connect GitHub" will update the existing
-                      connection.
-                    </OuiText>
-                  </OuiStack>
-                </OuiCardBody>
-              </OuiCard>
+                <OuiText size="xs">
+                  This organization already has a connection ({{ integrations.find((i) => !i.isUser && i.organizationId === selectedOrgId)?.username }}). This will update it.
+                </OuiText>
+              </OuiAlert>
 
-              <OuiFlex gap="sm" align="center">
-                <OuiButton
-                  @click="connectGitHub"
-                  :disabled="
-                    isConnecting ||
-                    (connectionType === 'organization' && !selectedOrgId)
-                  "
-                  variant="solid"
-                >
-                  {{ isConnecting ? "Connecting..." : "Connect GitHub" }}
-                </OuiButton>
-              </OuiFlex>
+              <OuiButton
+                @click="connectGitHub"
+                :disabled="isConnecting || (connectionType === 'organization' && !selectedOrgId)"
+                variant="solid"
+                size="sm"
+              >
+                {{ isConnecting ? "Connecting..." : "Connect GitHub" }}
+              </OuiButton>
             </OuiStack>
-
-            <!-- Connection Info -->
-            <OuiStack gap="sm">
-              <OuiText
-                size="xs"
-                weight="semibold"
-                transform="uppercase"
-                color="secondary"
-              >
-                Benefits
-              </OuiText>
-              <ul
-                class="list-disc list-inside space-y-1 text-sm text-text-secondary"
-              >
-                <li>Import repositories directly from GitHub</li>
-                <li>Auto-detect branches and load docker-compose.yml files</li>
-                <li>Automatic deployments on push (coming soon)</li>
-                <li>Access to private repositories</li>
-              </ul>
-            </OuiStack>
-
-            <!-- Error is shown in dedicated error card above -->
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Other integrations placeholder -->
+      <!-- GitLab placeholder -->
       <OuiCard variant="outline" class="opacity-50">
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiFlex align="center" gap="sm">
-              <Icon name="uil:gitlab" class="h-6 w-6" />
-              <OuiText as="h2" size="lg" weight="semibold">GitLab</OuiText>
-            </OuiFlex>
-            <OuiText size="sm" color="secondary">
-              Coming soon - Connect your GitLab account for repository
-              integration
-            </OuiText>
-          </OuiStack>
+          <OuiFlex align="center" gap="sm">
+            <Icon name="uil:gitlab" class="h-5 w-5" />
+            <OuiText size="sm" weight="medium">GitLab</OuiText>
+            <OuiBadge variant="secondary" size="xs">Coming soon</OuiBadge>
+          </OuiFlex>
         </OuiCardBody>
       </OuiCard>
     </OuiStack>
-  </div>
 </template>
 
 <script setup lang="ts">

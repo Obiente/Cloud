@@ -2,8 +2,8 @@
     <OuiStack gap="md">
       <OuiFlex justify="between" align="center">
         <OuiStack gap="none">
-          <OuiText as="h3" size="md" weight="semibold">Docker Compose</OuiText>
-          <OuiText size="sm" color="secondary">
+          <OuiText as="h3" size="sm" weight="semibold">Docker Compose</OuiText>
+          <OuiText size="sm" color="tertiary">
             Edit your docker-compose.yml configuration. Changes will be applied
             on the next deployment.
           </OuiText>
@@ -23,7 +23,7 @@
       </OuiFlex>
 
       <div v-if="isLoading && !composeYaml" class="flex justify-center py-8">
-        <OuiText color="secondary">Loading compose file...</OuiText>
+        <OuiText color="tertiary">Loading compose file...</OuiText>
       </div>
 
       <div v-else class="relative">
@@ -74,7 +74,7 @@
             </div>
             <!-- Show warnings even when there are errors -->
             <div v-if="warningList.length > 0" class="mt-2 pt-2 border-t border-border-default">
-              <OuiText size="xs" color="secondary" weight="medium" class="mb-1">
+              <OuiText size="xs" color="tertiary" weight="medium" class="mb-1">
                 Also {{ warningList.length }} warning(s):
               </OuiText>
               <OuiStack gap="xs">
@@ -260,7 +260,7 @@ services:
         const newErrors = res.validationErrors.map((err) => ({
           line: err.line || 1,
           column: err.column || 1,
-          message: (err as Error).message || "",
+          message: (err as any).message || "",
           severity: (err.severity || "error") as "error" | "warning",
           startLine: err.startLine || err.line || 1,
           endLine: err.endLine || err.line || 1,
@@ -324,7 +324,7 @@ services:
         const newErrors = res.validationErrors.map((err) => ({
           line: err.line || 1,
           column: err.column || 1,
-          message: (err as Error).message || "",
+          message: (err as any).message || "",
           severity: (err.severity || "error") as "error" | "warning",
           startLine: err.startLine || err.line || 1,
           endLine: err.endLine || err.line || 1,

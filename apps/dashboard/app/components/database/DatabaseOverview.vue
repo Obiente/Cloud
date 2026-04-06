@@ -16,87 +16,24 @@
     </OuiCard>
 
     <!-- Quick Connect Bar -->
-    <OuiCard variant="outline">
-      <OuiCardBody>
-        <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
-          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-            <div class="h-8 w-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
-              <ServerStackIcon class="h-4 w-4 text-accent-primary" />
-            </div>
-            <OuiStack gap="none" class="min-w-0">
-              <OuiText size="sm" weight="medium" truncate class="font-mono">
-                {{ database.host || 'N/A' }}:{{ database.port }}
-              </OuiText>
-              <OuiText size="xs" color="tertiary">{{ getTypeLabel(database.type) }} · {{ database.name || 'N/A' }}</OuiText>
-            </OuiStack>
-          </OuiFlex>
-          <OuiFlex gap="xs" class="shrink-0">
-            <OuiBadge :variant="statusMeta.variant" size="xs">
-              <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1" :class="statusMeta.dotClass" />
-              {{ statusMeta.label }}
-            </OuiBadge>
-          </OuiFlex>
-        </OuiFlex>
-      </OuiCardBody>
-    </OuiCard>
+    <UiQuickInfoBar
+      :icon="ServerStackIcon"
+      :primary="`${database.host || 'N/A'}:${database.port}`"
+      :secondary="`${getTypeLabel(database.type)} · ${database.name || 'N/A'}`"
+      mono
+    >
+      <OuiBadge :variant="statusMeta.variant" size="xs">
+        <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1" :class="statusMeta.dotClass" />
+        {{ statusMeta.label }}
+      </OuiBadge>
+    </UiQuickInfoBar>
 
     <!-- Resource Cards -->
     <OuiGrid :cols="{ sm: 2, md: 4 }" gap="sm">
-      <OuiCard variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="sm">
-            <OuiFlex align="center" gap="xs">
-              <CpuChipIcon class="h-3.5 w-3.5 text-accent-primary" />
-              <OuiText size="xs" color="tertiary">CPU Cores</OuiText>
-            </OuiFlex>
-            <OuiText size="xl" weight="semibold">
-              {{ database.cpuCores }}
-            </OuiText>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
-
-      <OuiCard variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="sm">
-            <OuiFlex align="center" gap="xs">
-              <CircleStackIcon class="h-3.5 w-3.5 text-accent-info" />
-              <OuiText size="xs" color="tertiary">Memory</OuiText>
-            </OuiFlex>
-            <OuiText size="xl" weight="semibold">
-              {{ formatBytes(database.memoryBytes) }}
-            </OuiText>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
-
-      <OuiCard variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="sm">
-            <OuiFlex align="center" gap="xs">
-              <ArchiveBoxIcon class="h-3.5 w-3.5 text-success" />
-              <OuiText size="xs" color="tertiary">Storage</OuiText>
-            </OuiFlex>
-            <OuiText size="xl" weight="semibold">
-              {{ formatBytes(database.diskBytes) }}
-            </OuiText>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
-
-      <OuiCard variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="sm">
-            <OuiFlex align="center" gap="xs">
-              <ClockIcon class="h-3.5 w-3.5 text-accent-secondary" />
-              <OuiText size="xs" color="tertiary">Created</OuiText>
-            </OuiFlex>
-            <OuiText size="sm" weight="semibold">
-              {{ formatDate(database.createdAt) }}
-            </OuiText>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+      <UiStatCard label="CPU Cores" :icon="CpuChipIcon" color="primary" :value="String(database.cpuCores)" />
+      <UiStatCard label="Memory" :icon="CircleStackIcon" color="info" :value="formatBytes(database.memoryBytes)" />
+      <UiStatCard label="Storage" :icon="ArchiveBoxIcon" color="success" :value="formatBytes(database.diskBytes)" />
+      <UiStatCard label="Created" :icon="ClockIcon" color="secondary" :value="formatDate(database.createdAt)" value-size="sm" />
     </OuiGrid>
 
     <!-- Usage & Billing -->
@@ -150,10 +87,6 @@ async function loadUsage() {
 onMounted(() => {
   loadUsage();
 });
-const hostCopied = ref(false);
-const portCopied = ref(false);
-const usernameCopied = ref(false);
-
 function getTypeLabel(type: number): string {
   const types: Record<number, string> = {
     [DatabaseType.POSTGRESQL]: "PostgreSQL",

@@ -759,14 +759,14 @@ export function useBuildProgress(options: BuildProgressOptions) {
         }
       }
     } catch (err: unknown) {
-      if (err.name === "AbortError") {
+      if ((err as any).name === "AbortError") {
         return;
       }
       // Suppress benign stream errors
       const isBenignError =
         (err as Error).message?.toLowerCase().includes("missing trailer") ||
         (err as Error).message?.toLowerCase().includes("trailer") ||
-        err.code === "unknown";
+        (err as any).code === "unknown";
 
       if (!isBenignError) {
         console.error("Failed to stream build logs for progress:", err);

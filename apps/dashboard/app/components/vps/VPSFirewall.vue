@@ -1,39 +1,37 @@
 <template>
   <OuiStack gap="lg">
     <!-- Firewall Options -->
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex justify="between" align="center">
-          <OuiText as="h2" class="oui-card-title">Firewall Settings</OuiText>
-          <OuiButton
-            v-if="!editingOptions"
-            variant="outline"
-            size="sm"
-            @click="editingOptions = true"
-            class="gap-2"
-          >
-            <PencilIcon class="h-4 w-4" />
-            Edit Settings
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
-        <OuiStack v-if="!editingOptions" gap="sm">
-          <OuiFlex justify="between">
-            <OuiText color="secondary">Firewall Enabled</OuiText>
+        <OuiStack gap="md">
+          <OuiFlex justify="between" align="center">
+            <OuiText size="sm" weight="semibold">Firewall Settings</OuiText>
+            <OuiButton
+              v-if="!editingOptions"
+              variant="outline"
+              size="xs"
+              @click="editingOptions = true"
+            >
+              <PencilIcon class="h-3.5 w-3.5" />
+              Edit
+            </OuiButton>
+          </OuiFlex>
+          <OuiStack v-if="!editingOptions" gap="none" class="divide-y divide-border-default">
+            <OuiFlex justify="between" align="center" class="py-2">
+              <OuiText size="xs" color="tertiary">Firewall Enabled</OuiText>
             <OuiBadge :color="firewallOptions?.enable ? 'success' : 'secondary'">
               {{ firewallOptions?.enable ? "Enabled" : "Disabled" }}
             </OuiBadge>
-          </OuiFlex>
-          <OuiFlex justify="between" v-if="firewallOptions?.policyIn">
-            <OuiText color="secondary">Default Inbound Policy</OuiText>
-            <OuiText weight="medium">{{ firewallOptions.policyIn }}</OuiText>
-          </OuiFlex>
-          <OuiFlex justify="between" v-if="firewallOptions?.policyOut">
-            <OuiText color="secondary">Default Outbound Policy</OuiText>
-            <OuiText weight="medium">{{ firewallOptions.policyOut }}</OuiText>
-          </OuiFlex>
-        </OuiStack>
+            </OuiFlex>
+            <OuiFlex justify="between" align="center" class="py-2" v-if="firewallOptions?.policyIn">
+              <OuiText size="xs" color="tertiary">Default Inbound Policy</OuiText>
+              <OuiText size="sm" weight="medium">{{ firewallOptions.policyIn }}</OuiText>
+            </OuiFlex>
+            <OuiFlex justify="between" align="center" class="py-2" v-if="firewallOptions?.policyOut">
+              <OuiText size="xs" color="tertiary">Default Outbound Policy</OuiText>
+              <OuiText size="sm" weight="medium">{{ firewallOptions.policyOut }}</OuiText>
+            </OuiFlex>
+          </OuiStack>
 
         <!-- Edit Options Form -->
         <OuiStack v-else gap="md">
@@ -52,7 +50,7 @@
           />
           <OuiFlex gap="sm">
             <OuiButton @click="saveOptions" :disabled="savingOptions" class="gap-2">
-              <CheckIcon class="h-4 w-4" />
+              <CheckIcon class="h-3.5 w-3.5" />
               Save
             </OuiButton>
             <OuiButton variant="outline" @click="cancelEditOptions">
@@ -64,17 +62,16 @@
     </OuiCard>
 
     <!-- Firewall Rules -->
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex justify="between" align="center">
-          <OuiText as="h2" class="oui-card-title">Firewall Rules</OuiText>
-          <OuiButton @click="openCreateDialog" class="gap-2" size="sm">
-            <PlusIcon class="h-4 w-4" />
-            Add Rule
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiFlex justify="between" align="center">
+            <OuiText size="sm" weight="semibold">Firewall Rules</OuiText>
+            <OuiButton @click="openCreateDialog" size="xs">
+              <PlusIcon class="h-3.5 w-3.5" />
+              Add Rule
+            </OuiButton>
+          </OuiFlex>
         <!-- Loading State -->
         <OuiTable
           v-if="loadingRules"
@@ -109,7 +106,7 @@
             <OuiText size="sm" skeleton skeleton-width="6rem" skeleton-height="1rem" />
           </template>
           <template #skeleton-comment>
-            <OuiText size="sm" color="secondary" skeleton skeleton-width="12rem" skeleton-height="1rem" />
+            <OuiText size="sm" color="tertiary" skeleton skeleton-width="12rem" skeleton-height="1rem" />
           </template>
           <template #skeleton-enable>
             <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="4.5rem" skeleton-height="0.875rem" />
@@ -127,7 +124,7 @@
           <ExclamationCircleIcon class="h-12 w-12 text-danger mx-auto mb-4" />
           <OuiText color="danger" class="mb-2">{{ rulesError }}</OuiText>
           <OuiButton variant="outline" @click="loadRules" class="gap-2">
-            <ArrowPathIcon class="h-4 w-4" />
+            <ArrowPathIcon class="h-3.5 w-3.5" />
             Retry
           </OuiButton>
         </div>
@@ -135,9 +132,9 @@
         <!-- Empty State -->
         <div v-else-if="rules.length === 0" class="text-center py-8">
           <ShieldExclamationIcon class="h-12 w-12 text-secondary mx-auto mb-4" />
-          <OuiText color="secondary" class="mb-4">No firewall rules configured</OuiText>
+          <OuiText color="tertiary" class="mb-4">No firewall rules configured</OuiText>
           <OuiButton @click="openCreateDialog" variant="outline" class="gap-2">
-            <PlusIcon class="h-4 w-4" />
+            <PlusIcon class="h-3.5 w-3.5" />
             Add First Rule
           </OuiButton>
         </div>
@@ -164,7 +161,7 @@
             </OuiBadge>
           </template>
           <template #cell-direction="{ value }">
-            <OuiBadge color="secondary" size="sm">
+            <OuiBadge color="tertiary" size="sm">
               {{ value === FirewallDirection.IN ? "In" : "Out" }}
             </OuiBadge>
           </template>
@@ -186,7 +183,7 @@
             <OuiText size="sm">{{ value || "—" }}</OuiText>
           </template>
           <template #cell-comment="{ value }">
-            <OuiText size="sm" color="secondary">{{ value || "—" }}</OuiText>
+            <OuiText size="sm" color="tertiary">{{ value || "—" }}</OuiText>
           </template>
           <template #cell-enable="{ value }">
             <OuiBadge :color="value ? 'success' : 'secondary'" size="sm">

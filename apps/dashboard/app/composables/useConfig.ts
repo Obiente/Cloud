@@ -61,7 +61,7 @@ export const useConfig = () => {
       } catch (err: unknown) {
         // On server-side, if internal API fails, try public API as fallback
         if (import.meta.server && config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
-          console.warn(`[Config] Internal API (${apiHost}) failed, trying public API as fallback:`, err?.code || (err as Error | undefined)?.message);
+          console.warn(`[Config] Internal API (${apiHost}) failed, trying public API as fallback:`, (err as any)?.code || (err as Error | undefined)?.message);
           const { createConnectTransport } = await import("@connectrpc/connect-node");
           const fallbackTransport = createConnectTransport({
             baseUrl: config.public.apiHost,

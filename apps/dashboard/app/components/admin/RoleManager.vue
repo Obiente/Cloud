@@ -40,13 +40,13 @@
               :default-expanded="false"
             />
             <OuiFlex v-else-if="!permissionsCatalog" justify="center" py="lg">
-              <OuiText color="secondary">Loading permissions...</OuiText>
+              <OuiText color="tertiary">Loading permissions...</OuiText>
             </OuiFlex>
             <OuiFlex v-else-if="permissionsError" justify="center" py="lg">
               <OuiText color="danger">Failed to load permissions: {{ permissionsError }}</OuiText>
             </OuiFlex>
             <OuiFlex v-else justify="center" py="lg">
-              <OuiText color="secondary">No permissions available</OuiText>
+              <OuiText color="tertiary">No permissions available</OuiText>
             </OuiFlex>
           </OuiStack>
           
@@ -91,7 +91,7 @@
               <OuiText size="sm" weight="semibold">
                 {{ r.name }}
               </OuiText>
-              <OuiText v-if="showDescription && r.description" size="xs" color="secondary">
+              <OuiText v-if="showDescription && r.description" size="xs" color="tertiary">
                 {{ r.description }}
               </OuiText>
               <OuiFlex gap="xs" wrap="wrap" align="center">
@@ -107,14 +107,14 @@
                 <OuiText
                   v-if="getPermissionCount(r.permissionsJson) > getPermissionBadges(r.permissionsJson).length"
                   size="xs"
-                  color="secondary"
+                  color="tertiary"
                 >
                   +{{ getPermissionCount(r.permissionsJson) - getPermissionBadges(r.permissionsJson).length }} more
                 </OuiText>
                 <OuiText
                   v-if="getPermissionCount(r.permissionsJson) === 0"
                   size="xs"
-                  color="secondary"
+                  color="tertiary"
                 >
                   No permissions
                 </OuiText>
@@ -139,7 +139,7 @@
             </OuiFlex>
           </OuiFlex>
           <OuiFlex v-if="!roles || roles.length === 0" justify="center" py="lg">
-            <OuiText color="secondary">No roles found</OuiText>
+            <OuiText color="tertiary">No roles found</OuiText>
           </OuiFlex>
         </OuiStack>
       </OuiCardBody>
@@ -342,7 +342,7 @@ async function saveRole() {
     if (editingRole.value) {
       // Update existing role
       roleData.id = editingRole.value.id;
-      await props.onUpdateRole(roleData);
+      await props.onUpdateRole(roleData as typeof roleData & { id: string });
       const message = "Role updated successfully";
       if (props.onSuccess) {
         props.onSuccess(message);
@@ -365,7 +365,7 @@ async function saveRole() {
     }
     await props.onRefreshRoles();
   } catch (e: unknown) {
-    error.value = e?.message || "Error";
+    error.value = (e as any)?.message || "Error";
     if (props.onError) {
       props.onError(error.value);
     } else {
@@ -390,7 +390,7 @@ async function removeRole(id: string) {
     }
     await props.onRefreshRoles();
   } catch (e: unknown) {
-    const errorMsg = e?.message || "Error";
+    const errorMsg = (e as any)?.message || "Error";
     if (props.onError) {
       props.onError(errorMsg);
     } else {

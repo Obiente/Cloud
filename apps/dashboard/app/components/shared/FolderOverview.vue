@@ -8,32 +8,32 @@
   >
     <div v-if="loading" class="flex items-center justify-center h-full">
       <ArrowPathIcon class="h-6 w-6 animate-spin text-primary" />
-      <OuiText size="sm" color="secondary" class="ml-2">Loading folder contents...</OuiText>
+      <OuiText size="sm" color="tertiary" class="ml-2">Loading folder contents...</OuiText>
     </div>
 
     <div v-else-if="!node || !node.children || node.children.length === 0" class="flex flex-col items-center justify-center h-full text-center">
       <FolderIcon class="h-16 w-16 text-text-tertiary mb-4" />
       <OuiText size="lg" weight="semibold" class="mb-2">Folder is empty</OuiText>
-      <OuiText size="sm" color="secondary">This folder doesn't contain any files or subdirectories</OuiText>
+      <OuiText size="sm" color="tertiary">This folder doesn't contain any files or subdirectories</OuiText>
     </div>
 
     <div v-else class="space-y-4" :class="{ 'bg-accent-primary/5 border-2 border-accent-primary rounded-lg p-4': isDraggingOverRoot }">
       <!-- Folder Statistics -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div class="bg-surface-elevated rounded-lg p-4 border border-border-default">
-          <OuiText size="xs" color="secondary" class="mb-1">Total Size</OuiText>
-          <OuiText size="xl" weight="bold">{{ formatFileSize(totalSize) }}</OuiText>
-          <OuiText v-if="node.hasMore" size="xs" color="secondary" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mb-1">Total Size</OuiText>
+          <OuiText size="xl" weight="semibold">{{ formatFileSize(totalSize) }}</OuiText>
+          <OuiText v-if="node.hasMore" size="xs" color="tertiary" class="mt-1">
             (partial)
           </OuiText>
         </div>
         <div class="bg-surface-elevated rounded-lg p-4 border border-border-default">
-          <OuiText size="xs" color="secondary" class="mb-1">Files</OuiText>
-          <OuiText size="xl" weight="bold">{{ fileCount }}</OuiText>
+          <OuiText size="xs" color="tertiary" class="mb-1">Files</OuiText>
+          <OuiText size="xl" weight="semibold">{{ fileCount }}</OuiText>
         </div>
         <div class="bg-surface-elevated rounded-lg p-4 border border-border-default">
-          <OuiText size="xs" color="secondary" class="mb-1">Folders</OuiText>
-          <OuiText size="xl" weight="bold">{{ folderCount }}</OuiText>
+          <OuiText size="xs" color="tertiary" class="mb-1">Folders</OuiText>
+          <OuiText size="xl" weight="semibold">{{ folderCount }}</OuiText>
         </div>
       </div>
 
@@ -83,18 +83,18 @@
                     ({{ child.uploadProgress.fileCount }} file{{ child.uploadProgress.fileCount > 1 ? 's' : '' }})
                   </span>
                 </OuiText>
-                <OuiText v-if="child.type === 'symlink' && child.symlinkTarget && !child.uploadProgress?.isUploading" size="xs" color="secondary" class="truncate">
+                <OuiText v-if="child.type === 'symlink' && child.symlinkTarget && !child.uploadProgress?.isUploading" size="xs" color="tertiary" class="truncate">
                   → {{ child.symlinkTarget }}
                 </OuiText>
               </div>
               <div v-if="!child.uploadProgress?.isUploading" class="flex items-center gap-4 flex-shrink-0">
-                <OuiText v-if="child.size !== undefined && child.size !== null" size="xs" color="secondary" class="min-w-[4rem] text-right">
+                <OuiText v-if="child.size !== undefined && child.size !== null" size="xs" color="tertiary" class="min-w-[4rem] text-right">
                   {{ formatFileSize(child.size) }}
                 </OuiText>
-                <OuiText v-else-if="child.type === 'directory'" size="xs" color="secondary" class="min-w-[4rem] text-right">
+                <OuiText v-else-if="child.type === 'directory'" size="xs" color="tertiary" class="min-w-[4rem] text-right">
                   —
                 </OuiText>
-                <OuiText v-if="child.modifiedTime" size="xs" color="secondary" class="min-w-[10rem] text-right hidden sm:block">
+                <OuiText v-if="child.modifiedTime" size="xs" color="tertiary" class="min-w-[10rem] text-right hidden sm:block">
                   {{ formatDate(child.modifiedTime) }}
                 </OuiText>
               </div>
@@ -156,7 +156,7 @@
         >
           <OuiFlex align="center" justify="center" gap="sm">
             <ArrowPathIcon v-if="node.isLoading" class="h-4 w-4 animate-spin" />
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               {{ node.isLoading ? "Loading..." : "Load more" }}
             </OuiText>
           </OuiFlex>

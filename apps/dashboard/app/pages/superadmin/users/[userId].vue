@@ -14,7 +14,7 @@
             </OuiButton>
             <OuiText tag="h1" size="3xl" weight="extrabold">User Details</OuiText>
           </OuiFlex>
-          <OuiText color="muted">View detailed information about this user.</OuiText>
+          <OuiText color="tertiary">View detailed information about this user.</OuiText>
         </OuiStack>
       </OuiFlex>
 
@@ -36,10 +36,10 @@
                   <OuiText size="xl" weight="bold">
                     {{ user?.name || user?.email || user?.id || "Loading..." }}
                   </OuiText>
-                  <OuiText v-if="user?.email" color="muted" size="sm">
+                  <OuiText v-if="user?.email" color="tertiary" size="sm">
                     {{ user.email }}
                   </OuiText>
-                  <OuiText v-if="user?.id" color="muted" size="xs" class="font-mono">
+                  <OuiText v-if="user?.id" color="tertiary" size="xs" class="font-mono">
                     {{ user.id }}
                   </OuiText>
                 </OuiStack>
@@ -47,22 +47,22 @@
 
               <OuiStack gap="md" class="border-t border-border-muted pt-4">
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Email</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Email</OuiText>
                   <OuiText>{{ user?.email || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Username</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Username</OuiText>
                   <OuiText>{{ user?.preferredUsername || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Locale</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Locale</OuiText>
                   <OuiText>{{ user?.locale || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Email Verified</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Email Verified</OuiText>
                   <OuiBadge
                     :variant="user?.emailVerified ? 'success' : 'secondary'"
                     :tone="user?.emailVerified ? 'solid' : 'soft'"
@@ -72,7 +72,7 @@
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Roles</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Roles</OuiText>
                   <OuiFlex gap="xs" wrap="wrap">
                     <OuiBadge
                       v-for="role in user?.roles"
@@ -83,21 +83,21 @@
                     >
                       {{ role }}
                     </OuiBadge>
-                    <OuiText v-if="!user?.roles?.length" color="muted" size="sm">
+                    <OuiText v-if="!user?.roles?.length" color="tertiary" size="sm">
                       No roles assigned
                     </OuiText>
                   </OuiFlex>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="user?.createdAt">
-                  <OuiText size="sm" weight="medium" color="muted">Created</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Created</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="user.createdAt" />
                   </OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="user?.updatedAt">
-                  <OuiText size="sm" weight="medium" color="muted">Last Updated</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Last Updated</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="user.updatedAt" />
                   </OuiText>
@@ -128,7 +128,7 @@
                 >
                   {{ row.organizationName }}
                 </NuxtLink>
-                <OuiText color="muted" size="xs" class="font-mono">
+                <OuiText color="tertiary" size="xs" class="font-mono">
                   {{ row.organizationId }}
                 </OuiText>
               </template>

@@ -1,15 +1,8 @@
 <template>
-  <OuiCard>
-    <OuiCardHeader>
-      <OuiStack gap="xs">
-        <OuiText as="h2" class="oui-card-title">Network Leases</OuiText>
-        <OuiText color="secondary" size="sm">
-          View DHCP leases and MAC addresses for this VPS instance
-        </OuiText>
-      </OuiStack>
-    </OuiCardHeader>
+  <OuiCard variant="outline">
     <OuiCardBody>
       <OuiStack gap="md">
+        <OuiText size="sm" weight="semibold">Network Leases</OuiText>
         <!-- Loading State -->
         <div v-if="loading" class="space-y-3">
           <OuiBox
@@ -43,7 +36,7 @@
         <!-- Empty State -->
         <div v-else-if="leases.length === 0" class="py-8">
           <OuiStack gap="md" align="center">
-            <OuiText color="secondary" class="text-center">
+            <OuiText color="tertiary" class="text-center">
               No active DHCP leases assigned to this VPS instance.
             </OuiText>
           </OuiStack>
@@ -64,7 +57,7 @@
                 <OuiStack gap="sm" class="flex-1">
                   <!-- IP Address -->
                   <OuiStack gap="xs">
-                    <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">
+                    <OuiText size="xs" color="tertiary">
                       IP Address
                     </OuiText>
                     <OuiFlex align="center" gap="sm">
@@ -85,7 +78,7 @@
 
                   <!-- MAC Address -->
                   <OuiStack gap="xs">
-                    <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">
+                    <OuiText size="xs" color="tertiary">
                       MAC Address
                     </OuiText>
                     <OuiFlex align="center" gap="sm">
@@ -115,10 +108,10 @@
 
               <!-- Expiry Information -->
               <OuiStack gap="xs" v-if="lease.expiresAt">
-                <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">
+                <OuiText size="xs" color="tertiary">
                   Lease Expiration
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   <OuiRelativeTime
                     :value="date(lease.expiresAt)"
                     :style="'short'"

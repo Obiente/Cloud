@@ -9,20 +9,20 @@
         <OuiStack gap="md">
           <OuiFlex justify="between" align="center">
             <OuiStack gap="none">
-              <OuiText as="h3" size="md" weight="semibold">Routing Rules</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText as="h3" size="sm" weight="semibold">Routing Rules</OuiText>
+              <OuiText size="sm" color="tertiary">
                 Configure how traffic is routed to your deployment. You can route
                 multiple services on different ports to different domains.
               </OuiText>
             </OuiStack>
             <OuiButton size="sm" @click="addRule">
-              <PlusIcon class="h-4 w-4 mr-2" />
+              <PlusIcon class="h-3.5 w-3.5" />
               Add Rule
             </OuiButton>
           </OuiFlex>
 
     <OuiFlex v-if="isLoading" justify="center" class="py-8">
-      <OuiText color="secondary">Loading routing rules...</OuiText>
+      <OuiText color="tertiary">Loading routing rules...</OuiText>
     </OuiFlex>
 
     <OuiFlex
@@ -33,7 +33,7 @@
       class="py-12"
     >
       <OuiStack gap="md" align="center">
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           No routing rules configured. Add your first rule to get started.
         </OuiText>
         <OuiButton size="sm" @click="addRule">Add First Rule</OuiButton>
@@ -59,7 +59,7 @@
                 color="danger"
                 @click="removeRule(index)"
               >
-                <TrashIcon class="h-4 w-4" />
+                <TrashIcon class="h-3.5 w-3.5" />
               </OuiButton>
             </OuiFlex>
 

@@ -59,7 +59,7 @@
               <OuiText size="sm" weight="semibold">
                 User: {{ b.userId }}
               </OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 Role: {{ b.roleName }}
               </OuiText>
             </OuiStack>
@@ -73,7 +73,7 @@
             </OuiButton>
           </OuiFlex>
           <OuiFlex v-if="!bindingItems || bindingItems.length === 0" justify="center" py="lg">
-            <OuiText color="secondary">No bindings found</OuiText>
+            <OuiText color="tertiary">No bindings found</OuiText>
           </OuiFlex>
         </OuiStack>
       </OuiCardBody>
@@ -180,7 +180,7 @@ async function createBinding() {
     roleId.value = "";
     await refreshBindings();
   } catch (e: unknown) {
-    error.value = e?.message || "Error";
+    error.value = (e as any)?.message || "Error";
     toast.error(error.value);
   } finally {
     creating.value = false;
@@ -196,7 +196,7 @@ async function removeBinding(id: string) {
     toast.success("Role binding removed successfully");
     await refreshBindings();
   } catch (e: unknown) {
-    error.value = e?.message || "Error";
+    error.value = (e as any)?.message || "Error";
     toast.error(error.value);
   }
 }

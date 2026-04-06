@@ -14,7 +14,7 @@
 
     <OuiStack gap="xs">
       <OuiFlex v-if="permissionTree.length === 0" justify="center" py="sm">
-        <OuiText size="xs" color="secondary">No permissions found</OuiText>
+        <OuiText size="xs" color="tertiary">No permissions found</OuiText>
       </OuiFlex>
       <PermissionTreeNode
         v-for="node in permissionTree"

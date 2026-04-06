@@ -244,31 +244,24 @@ watch(() => props.organizationId, () => {
 
 <template>
   <OuiStack gap="lg">
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex align="center" justify="between">
-          <OuiStack gap="xs">
-            <OuiText size="lg" weight="semibold">SSH Keys</OuiText>
-            <OuiText color="muted" size="sm">
-              Manage organization-wide SSH keys. These keys will be available to all VPS instances in this organization.
-            </OuiText>
-          </OuiStack>
-          <OuiButton
-            color="primary"
-            size="sm"
-            @click="openAddSSHKeyDialog"
-            :disabled="!organizationId"
-          >
-            <PlusIcon class="h-4 w-4 mr-1" />
-            Add SSH Key
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
         <OuiStack gap="md">
+          <OuiFlex align="center" justify="between">
+            <OuiText size="sm" weight="semibold">SSH Keys</OuiText>
+            <OuiButton
+              color="primary"
+              size="xs"
+              @click="openAddSSHKeyDialog"
+              :disabled="!organizationId"
+            >
+              <PlusIcon class="h-3.5 w-3.5" />
+              Add SSH Key
+            </OuiButton>
+          </OuiFlex>
           <!-- Loading State -->
           <div v-if="sshKeysLoading" class="text-center py-8">
-            <OuiText color="muted">Loading SSH keys...</OuiText>
+            <OuiText color="tertiary">Loading SSH keys...</OuiText>
           </div>
 
           <!-- Error State -->
@@ -287,11 +280,11 @@ watch(() => props.organizationId, () => {
           <div v-else-if="sshKeys.length === 0" class="text-center py-8">
             <KeyIcon class="h-12 w-12 mx-auto text-text-muted mb-4" />
             <OuiText size="lg" weight="medium" class="mb-2">No SSH keys</OuiText>
-            <OuiText color="muted" size="sm" class="mb-4">
+            <OuiText color="tertiary" size="sm" class="mb-4">
               Add an organization-wide SSH key to enable access to all VPS instances.
             </OuiText>
             <OuiButton color="primary" size="sm" @click="openAddSSHKeyDialog">
-              <PlusIcon class="h-4 w-4 mr-1" />
+              <PlusIcon class="h-3.5 w-3.5" />
               Add SSH Key
             </OuiButton>
           </div>
@@ -319,13 +312,13 @@ watch(() => props.organizationId, () => {
                     </OuiButton>
                     <OuiBadge variant="primary" size="sm">Organization-wide</OuiBadge>
                   </OuiFlex>
-                  <OuiText size="xs" color="muted" class="font-mono break-all">
+                  <OuiText size="xs" color="tertiary" class="font-mono break-all">
                     {{ key.fingerprint }}
                   </OuiText>
-                  <OuiText size="xs" color="muted" class="font-mono break-all">
+                  <OuiText size="xs" color="tertiary" class="font-mono break-all">
                     {{ key.publicKey }}
                   </OuiText>
-                  <OuiText size="xs" color="muted">
+                  <OuiText size="xs" color="tertiary">
                     Added {{ formatSSHKeyDate(key.createdAt) }}
                   </OuiText>
                 </OuiStack>
@@ -335,7 +328,7 @@ watch(() => props.organizationId, () => {
                   @click="removeSSHKey(key.id)"
                   :disabled="removingSSHKey === key.id"
                 >
-                  <TrashIcon class="h-4 w-4" />
+                  <TrashIcon class="h-3.5 w-3.5" />
                 </OuiButton>
               </OuiFlex>
             </OuiBox>
@@ -347,7 +340,7 @@ watch(() => props.organizationId, () => {
     <!-- Edit SSH Key Dialog -->
     <OuiDialog v-model:open="editSSHKeyDialogOpen" title="Edit SSH Key Name">
       <OuiStack gap="md">
-        <OuiText color="muted" size="sm">
+        <OuiText color="tertiary" size="sm">
           Update the name for this SSH key. The name will be synced to Proxmox.
         </OuiText>
 
@@ -387,7 +380,7 @@ watch(() => props.organizationId, () => {
     <!-- Add SSH Key Dialog -->
     <OuiDialog v-model:open="addSSHKeyDialogOpen" title="Add SSH Key">
       <OuiStack gap="md">
-        <OuiText color="muted" size="sm">
+        <OuiText color="tertiary" size="sm">
           Add an organization-wide SSH key. This key will be available to all VPS instances in this organization.
         </OuiText>
 
@@ -408,7 +401,7 @@ watch(() => props.organizationId, () => {
             :rows="4"
             :disabled="addingSSHKey"
           />
-          <OuiText size="xs" color="muted">
+          <OuiText size="xs" color="tertiary">
             Paste your SSH public key here (starts with ssh-rsa, ssh-ed25519, etc.)
           </OuiText>
         </OuiStack>

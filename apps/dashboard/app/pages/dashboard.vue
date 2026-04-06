@@ -1,163 +1,79 @@
 <template>
-  <OuiContainer size="full" py="sm" class="md:py-8">
-    <OuiStack gap="md" class="md:gap-8">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
       <!-- Page Header -->
-      <OuiFlex
-        justify="between"
-        align="center"
-        wrap="wrap"
-        gap="md"
-        class="md:gap-6"
-      >
-        <OuiStack gap="xs" class="flex-1 min-w-0">
-          <OuiText
-            as="h1"
-            size="2xl"
-            weight="bold"
-            color="primary"
-            class="md:text-3xl"
-            >Dashboard</OuiText
-          >
-          <OuiText
-            size="sm"
-            color="secondary"
-            class="hidden sm:block md:text-base"
-            >Comprehensive overview of your cloud infrastructure, usage metrics,
-            and resource health.</OuiText
-          >
+      <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
+        <OuiStack gap="xs">
+          <OuiText as="h1" size="xl" weight="semibold">Dashboard</OuiText>
+          <OuiText size="sm" color="tertiary" class="hidden sm:block">
+            Overview of your infrastructure and usage.
+          </OuiText>
         </OuiStack>
 
-        <OuiFlex
-          gap="xs"
-          align="center"
-          wrap="wrap"
-          class="w-full sm:w-auto md:gap-2"
+        <OuiButton
+          variant="ghost"
+          size="sm"
+          @click="retryLoad"
+          class="gap-1.5"
         >
-          <OuiButton
-            variant="ghost"
-            size="sm"
-            @click="retryLoad"
-            class="gap-2 flex-1 sm:flex-initial"
-          >
-            <ArrowPathIcon
-              class="h-4 w-4"
-              :class="{ 'animate-spin': isLoading }"
-            />
-            <OuiText as="span" size="sm" class="hidden sm:inline">Refresh</OuiText>
-          </OuiButton>
-          <OuiButton
-            color="primary"
-            size="sm"
-            class="gap-2 shadow-md flex-1 sm:flex-initial"
-            @click="navigateTo('/deployments')"
-          >
-            <RocketLaunchIcon class="h-4 w-4" />
-            <OuiText as="span" size="sm" class="hidden sm:inline">New Deployment</OuiText>
-            <OuiText as="span" size="sm" class="sm:hidden">New</OuiText>
-          </OuiButton>
-        </OuiFlex>
+          <ArrowPathIcon
+            class="h-4 w-4"
+            :class="{ 'animate-spin': isLoading }"
+          />
+          Refresh
+        </OuiButton>
       </OuiFlex>
 
-      <!-- Enhanced KPI Overview -->
-      <OuiGrid
-        :cols="{ sm: 2, md: 3, lg: 5 }"
-        gap="xs"
-        class="sm:gap-2 md:gap-4"
-      >
-        <OuiCard
+      <!-- KPI Cards -->
+      <OuiGrid :cols="{ sm: 2, md: 3, lg: 5 }" gap="sm">
+        <OuiBox
           v-for="card in kpiCards"
           :key="card.label"
-          variant="default"
-          hoverable
-          class="cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          p="md"
+          class="app-stat-card cursor-pointer"
           @click="card.href && navigateTo(card.href)"
         >
-          <OuiCardBody>
-            <OuiFlex
-              align="center"
-              justify="between"
-              gap="sm"
-              class="relative md:gap-4"
-            >
-              <OuiStack gap="xs" class="flex-1 min-w-0">
-                <OuiSkeleton
-                  v-if="isLoading"
-                  width="3rem"
-                  height="1.5rem"
-                  variant="text"
-                />
-                <OuiFlex
-                  v-else
-                  align="baseline"
-                  gap="xs"
-                  wrap="wrap"
-                  class="md:gap-2"
-                >
-                  <OuiText
-                    as="h3"
-                    size="lg"
-                    sizeMobile="md"
-                    weight="bold"
-                    color="primary"
-                    class="leading-tight md:text-xl lg:text-2xl"
-                  >
-                    {{ card.value }}
-                  </OuiText>
-                  <OuiText
-                    v-if="card.subtitle"
-                    size="xs"
-                    color="secondary"
-                    class="leading-tight hidden sm:inline md:text-sm"
-                  >
-                    {{ card.subtitle }}
-                  </OuiText>
-                </OuiFlex>
-                <OuiText
-                  size="xs"
-                  weight="medium"
-                  color="secondary"
-                  class="line-clamp-1"
-                >
-                  {{ card.label }}
-                </OuiText>
-              </OuiStack>
-              <OuiBox
-                p="xs"
-                rounded="lg"
-                :class="[card.iconBg, 'sm:p-2 md:p-4']"
-                class="flex items-center justify-center shrink-0"
-              >
-                <component
-                  :is="card.icon"
-                  class="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7"
-                  :class="card.iconColor"
-                />
-              </OuiBox>
+          <OuiStack gap="xs" class="min-w-0">
+            <OuiFlex align="center" justify="between">
+              <OuiText size="xs" color="tertiary" weight="medium">
+                {{ card.label }}
+              </OuiText>
+              <component
+                :is="card.icon"
+                class="h-3.5 w-3.5"
+                :class="card.iconColor"
+              />
             </OuiFlex>
-          </OuiCardBody>
-        </OuiCard>
+            <OuiSkeleton
+              v-if="isLoading"
+              width="3rem"
+              height="1.5rem"
+              variant="text"
+            />
+            <OuiText
+              v-else
+              as="h3"
+              size="xl"
+              weight="semibold"
+              color="primary"
+            >
+              {{ card.value }}
+            </OuiText>
+          </OuiStack>
+        </OuiBox>
       </OuiGrid>
 
-      <!-- Usage Metrics Section -->
-      <OuiCard>
+      <!-- Resource Usage -->
+      <OuiCard class="app-panel">
         <OuiCardHeader>
-          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
-            <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText as="h2" class="oui-card-title">Resource Usage</OuiText>
-              <OuiText
-                size="xs"
-                color="secondary"
-                class="hidden sm:block md:text-sm"
-              >
-                Current month usage and estimated costs
+          <OuiFlex align="center" justify="between" gap="md">
+            <OuiStack gap="xs">
+              <OuiText as="h2" size="sm" weight="semibold">Resource Usage</OuiText>
+              <OuiText size="xs" color="tertiary" class="hidden sm:block">
+                Current month usage against quota
               </OuiText>
             </OuiStack>
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="w-full sm:w-auto"
-              @click="navigateTo('/billing')"
-            >
+            <OuiButton variant="ghost" size="sm" @click="navigateTo('/billing')">
               View Details
             </OuiButton>
           </OuiFlex>
@@ -187,7 +103,7 @@
                   <OuiText size="sm" weight="medium" color="primary"
                     >CPU</OuiText
                   >
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{
                       formatCPUUsage(Number(usageData.current.cpuCoreSeconds))
                     }}
@@ -202,7 +118,7 @@
                     :style="{ width: `${cpuUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.cpuCoreSeconds),
@@ -218,7 +134,7 @@
                   <OuiText size="sm" weight="medium" color="primary"
                     >Memory</OuiText
                   >
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{
                       formatBytes(
                         Number(usageData.current.memoryByteSeconds) / 3600
@@ -235,7 +151,7 @@
                     :style="{ width: `${memoryUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.memoryByteSeconds),
@@ -251,7 +167,7 @@
                   <OuiText size="sm" weight="medium" color="primary"
                     >Bandwidth</OuiText
                   >
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{
                       formatBytes(
                         Number(usageData.current.bandwidthRxBytes) +
@@ -269,7 +185,7 @@
                     :style="{ width: `${bandwidthUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.bandwidthRxBytes) +
@@ -286,7 +202,7 @@
                   <OuiText size="sm" weight="medium" color="primary"
                     >Storage</OuiText
                   >
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{ formatBytes(Number(usageData.current.storageBytes)) }}
                   </OuiText>
                 </OuiFlex>
@@ -299,7 +215,7 @@
                     :style="{ width: `${storageUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.storageBytes),
@@ -310,263 +226,155 @@
               </OuiStack>
             </OuiGrid>
           </template>
-          <OuiText v-else size="sm" color="secondary" class="text-center py-4">
+          <OuiText v-else size="sm" color="tertiary" class="text-center py-4">
             Usage data unavailable
           </OuiText>
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Cost Breakdown & Health Row -->
-      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg" class="md:gap-8">
+      <!-- Cost Breakdown & Health -->
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
         <!-- Cost Breakdown -->
-        <OuiCard>
+        <OuiCard class="app-panel">
           <OuiCardHeader>
-            <OuiFlex align="center" justify="between">
-              <OuiStack gap="xs" class="flex-1 min-w-0">
-                <OuiText as="h2" class="oui-card-title">Cost Breakdown</OuiText>
-                <OuiText size="xs" color="secondary" class="hidden sm:block">
-                  Estimated monthly costs by resource
-                </OuiText>
-              </OuiStack>
-            </OuiFlex>
+            <OuiStack gap="xs">
+              <OuiText as="h2" size="sm" weight="semibold">Cost Breakdown</OuiText>
+              <OuiText size="xs" color="tertiary">
+                Estimated monthly costs
+              </OuiText>
+            </OuiStack>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoadingUsage">
-              <OuiStack gap="md">
-                <OuiSkeleton
-                  width="100%"
-                  height="3rem"
-                  variant="rectangle"
-                  rounded
-                />
-                <OuiSkeleton
-                  width="100%"
-                  height="3rem"
-                  variant="rectangle"
-                  rounded
-                />
-                <OuiSkeleton
-                  width="100%"
-                  height="3rem"
-                  variant="rectangle"
-                  rounded
-                />
+              <OuiStack gap="sm">
+                <OuiSkeleton width="100%" height="2.5rem" variant="rectangle" rounded />
+                <OuiSkeleton width="100%" height="2.5rem" variant="rectangle" rounded />
+                <OuiSkeleton width="100%" height="2.5rem" variant="rectangle" rounded />
               </OuiStack>
             </template>
             <template v-else-if="usageData && usageData.estimatedMonthly">
               <OuiStack gap="md">
-                <OuiFlex
-                  align="center"
-                  justify="between"
-                  class="pb-3 border-b border-border-muted"
-                >
+                <OuiFlex align="center" justify="between" class="pb-3 border-b border-border-muted">
                   <OuiStack gap="xs">
-                    <OuiText size="sm" color="secondary"
-                      >Total Estimated</OuiText
-                    >
-                    <OuiText size="2xl" weight="bold" color="primary">
-                      {{
-                        formatCurrency(
-                          Number(
-                            usageData.estimatedMonthly.estimatedCostCents
-                          ) / 100
-                        )
-                      }}
+                    <OuiText size="xs" color="tertiary">Total Estimated</OuiText>
+                    <OuiText size="xl" weight="semibold" color="primary">
+                      {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
                     </OuiText>
                   </OuiStack>
-                  <OuiBadge variant="secondary">
-                    {{ usageData.month }}
-                  </OuiBadge>
+                  <OuiBadge variant="secondary" size="sm">{{ usageData.month }}</OuiBadge>
                 </OuiFlex>
-                <OuiStack gap="sm">
+                <OuiStack gap="xs">
                   <OuiBox
                     v-for="cost in costBreakdown"
                     :key="cost.label"
                     p="sm"
                     rounded="lg"
-                    class="bg-surface-muted/40 ring-1 ring-border-muted"
+                    class="app-resource-metric"
                   >
-                    <OuiFlex align="center" justify="between" gap="md">
-                      <OuiFlex align="center" gap="sm" class="flex-1">
-                        <OuiBox
-                          class="w-3 h-3 rounded-full"
-                          :class="cost.color"
-                        />
-                        <OuiText size="sm" weight="medium" color="primary">
-                          {{ cost.label }}
-                        </OuiText>
+                    <OuiFlex align="center" justify="between" gap="sm">
+                      <OuiFlex align="center" gap="xs">
+                        <OuiBox as="span" rounded="full" class="w-2 h-2" :class="cost.color" />
+                        <OuiText size="sm" color="primary">{{ cost.label }}</OuiText>
                       </OuiFlex>
-                      <OuiText size="sm" weight="semibold" color="primary">
-                        {{ cost.value }}
-                      </OuiText>
+                      <OuiText size="sm" weight="medium" color="primary">{{ cost.value }}</OuiText>
                     </OuiFlex>
                   </OuiBox>
                 </OuiStack>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  class="self-start mt-2"
-                  @click="navigateTo('/billing')"
-                >
-                  View billing details →
-                </OuiButton>
               </OuiStack>
             </template>
-            <OuiText
-              v-else
-              size="sm"
-              color="secondary"
-              class="text-center py-4"
-            >
+            <OuiText v-else size="sm" color="tertiary" class="text-center py-4">
               Cost data unavailable
             </OuiText>
           </OuiCardBody>
         </OuiCard>
 
-        <!-- Enhanced Health & Alerts -->
-        <OuiCard>
+        <!-- Deployment Health -->
+        <OuiCard class="app-panel">
           <OuiCardHeader>
-            <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
-              <OuiStack gap="xs" class="flex-1 min-w-0">
-                <OuiText as="h2" class="oui-card-title"
-                  >Deployment Health</OuiText
-                >
-                <OuiText size="xs" color="secondary" class="hidden sm:block">
-                  Status overview of all deployments
-                </OuiText>
+            <OuiFlex align="center" justify="between" gap="sm">
+              <OuiStack gap="xs">
+                <OuiText as="h2" size="sm" weight="semibold">Deployment Health</OuiText>
+                <OuiText size="xs" color="tertiary">Status overview</OuiText>
               </OuiStack>
               <OuiBadge
                 :variant="allHealthy ? 'success' : 'warning'"
-                class="shrink-0"
-                >{{ allHealthy ? "All Healthy" : "Issues Detected" }}</OuiBadge
-              >
+                size="sm"
+              >{{ allHealthy ? "All Healthy" : "Issues Detected" }}</OuiBadge>
             </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoading">
-              <OuiStack gap="sm">
+              <OuiStack gap="xs">
                 <OuiSkeleton width="80%" height="1rem" variant="text" />
                 <OuiSkeleton width="70%" height="1rem" variant="text" />
-                <OuiSkeleton width="60%" height="1rem" variant="text" />
               </OuiStack>
             </template>
             <template v-else>
-              <OuiGrid cols="2" gap="xs" class="mb-4 md:gap-2">
+              <OuiGrid :cols="{ sm: 2, md: 4 }" gap="xs" class="mb-4">
                 <OuiBox
                   p="sm"
                   rounded="lg"
-                  class="bg-success/10 ring-1 ring-success/20 cursor-pointer hover:bg-success/15 hover:ring-success/30 transition-all md:p-4"
+                  class="app-resource-metric text-center cursor-pointer"
                   @click="navigateTo(runningDeploymentsUrl)"
                 >
-                  <OuiStack align="center" gap="xs">
-                    <OuiText
-                      size="xl"
-                      weight="bold"
-                      class="text-success md:text-2xl"
-                    >
-                      {{ runningCount }}
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">Running</OuiText>
-                  </OuiStack>
+                  <OuiText size="lg" weight="semibold" class="text-success">{{ runningCount }}</OuiText>
+                  <OuiText size="xs" color="tertiary">Running</OuiText>
                 </OuiBox>
                 <OuiBox
                   p="sm"
                   rounded="lg"
-                  class="bg-warning/10 ring-1 ring-warning/20 cursor-pointer hover:bg-warning/15 hover:ring-warning/30 transition-all md:p-4"
+                  class="app-resource-metric text-center cursor-pointer"
                   @click="navigateTo(buildingDeploymentsUrl)"
                 >
-                  <OuiStack align="center" gap="xs">
-                    <OuiText
-                      size="xl"
-                      weight="bold"
-                      class="text-warning md:text-2xl"
-                    >
-                      {{ buildingCount }}
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">Building</OuiText>
-                  </OuiStack>
+                  <OuiText size="lg" weight="semibold" class="text-warning">{{ buildingCount }}</OuiText>
+                  <OuiText size="xs" color="tertiary">Building</OuiText>
                 </OuiBox>
                 <OuiBox
                   p="sm"
                   rounded="lg"
-                  class="bg-secondary/10 ring-1 ring-secondary/20 cursor-pointer hover:bg-secondary/15 hover:ring-secondary/30 transition-all md:p-4"
+                  class="app-resource-metric text-center cursor-pointer"
                   @click="navigateTo(stoppedDeploymentsUrl)"
                 >
-                  <OuiStack align="center" gap="xs">
-                    <OuiText
-                      size="xl"
-                      weight="bold"
-                      class="text-secondary md:text-2xl"
-                    >
-                      {{ stoppedCount }}
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">Stopped</OuiText>
-                  </OuiStack>
+                  <OuiText size="lg" weight="semibold" class="text-secondary">{{ stoppedCount }}</OuiText>
+                  <OuiText size="xs" color="tertiary">Stopped</OuiText>
                 </OuiBox>
                 <OuiBox
                   p="sm"
                   rounded="lg"
-                  class="bg-danger/10 ring-1 ring-danger/20 cursor-pointer hover:bg-danger/15 hover:ring-danger/30 transition-all md:p-4"
+                  class="app-resource-metric text-center cursor-pointer"
                   @click="navigateTo(errorDeploymentsUrl)"
                 >
-                  <OuiStack align="center" gap="xs">
-                    <OuiText
-                      size="xl"
-                      weight="bold"
-                      class="text-danger md:text-2xl"
-                    >
-                      {{ errorCount }}
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">Errors</OuiText>
-                  </OuiStack>
+                  <OuiText size="lg" weight="semibold" class="text-danger">{{ errorCount }}</OuiText>
+                  <OuiText size="xs" color="tertiary">Errors</OuiText>
                 </OuiBox>
               </OuiGrid>
-              <OuiStack v-if="attentionDeployments.length > 0" gap="sm">
-                <OuiText size="sm" weight="medium" color="primary" class="mb-2">
-                  Requires Attention
+
+              <OuiStack v-if="attentionDeployments.length > 0" gap="xs">
+                <OuiText size="xs" weight="medium" color="tertiary">
+                  Needs Attention
                 </OuiText>
                 <OuiBox
                   v-for="d in attentionDeployments.slice(0, 3)"
                   :key="d.id"
                   p="sm"
                   rounded="lg"
-                  class="ring-1 ring-border-muted bg-surface-muted/40 cursor-pointer hover:bg-surface-muted transition-colors"
+                  class="app-resource-metric cursor-pointer hover:bg-surface-muted transition-colors"
                   @click="navigateTo(`/deployments/${d.id}`)"
                 >
-                  <OuiFlex justify="between" align="center" gap="md">
-                    <OuiStack gap="xs" class="min-w-0 flex-1">
-                      <OuiText size="sm" weight="medium" class="truncate">{{
-                        d.name
-                      }}</OuiText>
-                      <OuiText size="xs" color="secondary" class="truncate">{{
-                        d.domain
-                      }}</OuiText>
+                  <OuiFlex align="center" justify="between" gap="sm">
+                    <OuiStack gap="xs" class="min-w-0">
+                      <OuiText size="sm" weight="medium" truncate>{{ d.name }}</OuiText>
+                      <OuiText size="xs" color="tertiary" truncate>{{ d.domain }}</OuiText>
                     </OuiStack>
-                    <OuiBadge :variant="statusVariant(d.status)">{{
-                      d.status
-                    }}</OuiBadge>
+                    <OuiBadge :variant="statusVariant(d.status)" size="sm">{{ d.status }}</OuiBadge>
                   </OuiFlex>
                 </OuiBox>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  class="self-start mt-2"
-                  @click="navigateTo('/deployments')"
-                >
-                  View all deployments →
-                </OuiButton>
               </OuiStack>
-              <OuiBox
-                v-else
-                p="md"
-                rounded="lg"
-                class="bg-success/5 border border-success/20"
-              >
-                <OuiFlex align="center" gap="sm">
-                  <CheckCircleIcon class="h-5 w-5 text-success" />
-                  <OuiText size="sm" color="secondary"
-                    >All deployments are running smoothly</OuiText
-                  >
+
+              <OuiBox v-else p="sm" rounded="lg" class="app-resource-metric">
+                <OuiFlex align="center" gap="xs">
+                  <CheckCircleIcon class="h-4 w-4 text-success shrink-0" />
+                  <OuiText size="sm" color="tertiary">All deployments running smoothly</OuiText>
                 </OuiFlex>
               </OuiBox>
             </template>
@@ -575,123 +383,71 @@
       </OuiGrid>
 
       <!-- Recent Deployments -->
-      <OuiCard>
+      <OuiCard class="app-panel">
         <OuiCardHeader>
-          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
-            <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText as="h2" class="oui-card-title"
-                >Recent Deployments</OuiText
-              >
-              <OuiText size="xs" color="secondary" class="hidden sm:block">
-                Latest {{ recentDeployments.length }} deployments across your
-                environments
+          <OuiFlex align="center" justify="between" gap="sm">
+            <OuiStack gap="xs">
+              <OuiText as="h2" size="sm" weight="semibold">Recent Deployments</OuiText>
+              <OuiText size="xs" color="tertiary">
+                Latest {{ recentDeployments.length }} deployments
               </OuiText>
             </OuiStack>
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="w-full sm:w-auto"
-              @click="navigateTo('/deployments')"
-            >
-              View All →
+            <OuiButton variant="ghost" size="sm" @click="navigateTo('/deployments')">
+              View All
             </OuiButton>
           </OuiFlex>
         </OuiCardHeader>
         <OuiCardBody>
-          <OuiStack v-if="isLoading" gap="md">
-            <OuiBox
-              v-for="i in 5"
-              :key="i"
-              p="md"
-              rounded="lg"
-              border="1"
-              borderColor="muted"
-            >
-              <OuiFlex justify="between" align="center" gap="md">
-                <OuiStack gap="xs" class="flex-1">
-                  <OuiSkeleton width="8rem" height="1rem" variant="text" />
-                  <OuiSkeleton width="12rem" height="0.75rem" variant="text" />
-                </OuiStack>
-                <OuiSkeleton
-                  width="4rem"
-                  height="1.5rem"
-                  variant="rectangle"
-                  rounded
-                />
-              </OuiFlex>
-            </OuiBox>
+          <OuiStack v-if="isLoading" gap="sm">
+            <OuiFlex v-for="i in 5" :key="i" align="center" justify="between" gap="md" class="p-3">
+              <OuiStack gap="xs" grow>
+                <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                <OuiSkeleton width="12rem" height="0.75rem" variant="text" />
+              </OuiStack>
+              <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
+            </OuiFlex>
           </OuiStack>
 
-          <OuiStack
-            v-else-if="recentDeployments.length === 0"
-            gap="sm"
-            align="center"
-            class="py-12 text-center"
-          >
-            <OuiBox p="md" rounded="xl" class="bg-surface-muted text-muted">
-              <RocketLaunchIcon class="h-10 w-10" />
-            </OuiBox>
-            <OuiText as="h3" weight="medium" color="primary"
-              >No deployments yet</OuiText
-            >
-            <OuiText size="xs" color="secondary"
-              >Deploy your first application to see it listed here.</OuiText
-            >
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="mt-2"
-              @click="navigateTo('/deployments')"
-              >Create Deployment</OuiButton
-            >
+          <OuiStack v-else-if="recentDeployments.length === 0" align="center" gap="sm" class="py-10">
+            <RocketLaunchIcon class="h-8 w-8 text-tertiary" />
+            <OuiText weight="medium" color="primary">No deployments yet</OuiText>
+            <OuiText size="xs" color="tertiary">Deploy your first application to get started.</OuiText>
+            <OuiButton variant="ghost" size="sm" @click="navigateTo('/deployments')">
+              Create Deployment
+            </OuiButton>
           </OuiStack>
 
-          <OuiStack v-else gap="md">
-            <OuiBox
+          <OuiStack v-else gap="none" divider>
+            <OuiFlex
               v-for="deployment in recentDeployments"
               :key="deployment.id"
-              p="sm"
-              rounded="lg"
-              border="1"
-              borderColor="muted"
-              class="cursor-pointer transition-all duration-150 hover:border-default hover:bg-surface-muted hover:shadow-sm md:p-4"
+              align="center"
+              justify="between"
+              gap="md"
+              class="px-1 py-3 cursor-pointer hover:bg-surface-raised transition-colors"
               @click="navigateTo(`/deployments/${deployment.id}`)"
             >
-              <OuiFlex justify="between" align="start" gap="md">
-                <OuiStack gap="xs" class="flex-1 min-w-0">
-                  <OuiFlex align="center" gap="sm" wrap="wrap">
-                    <OuiText
-                      as="h3"
-                      weight="medium"
-                      color="primary"
-                      class="truncate"
-                      >{{ deployment.name }}</OuiText
-                    >
-                    <OuiBadge variant="secondary" size="sm">
-                      {{ deployment.environment }}
-                    </OuiBadge>
-                  </OuiFlex>
-                  <OuiText size="sm" color="secondary" class="truncate">{{
-                    deployment.domain
-                  }}</OuiText>
-                  <OuiFlex align="center" gap="sm" wrap="wrap" class="mt-1">
-                    <OuiText size="xs" color="secondary">
-                      <OuiRelativeTime
-                        :value="deployment.updatedAt"
-                        :style="'short'"
-                      />
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">•</OuiText>
-                    <OuiText size="xs" color="secondary">
-                      {{ deployment.type || "Unknown" }}
-                    </OuiText>
-                  </OuiFlex>
-                </OuiStack>
-                <OuiBadge :variant="statusVariant(deployment.status)">{{
-                  deployment.status
-                }}</OuiBadge>
-              </OuiFlex>
-            </OuiBox>
+              <OuiStack gap="xs" grow class="min-w-0">
+                <OuiFlex align="center" gap="xs">
+                  <OuiText size="sm" weight="medium" color="primary" truncate>
+                    {{ deployment.name }}
+                  </OuiText>
+                  <OuiBadge variant="secondary" size="xs">
+                    {{ deployment.environment }}
+                  </OuiBadge>
+                </OuiFlex>
+                <OuiFlex align="center" gap="xs">
+                  <OuiText size="xs" color="tertiary" truncate>{{ deployment.domain }}</OuiText>
+                  <OuiText as="span" size="xs" color="tertiary">·</OuiText>
+                  <OuiText size="xs" color="tertiary">
+                    <OuiRelativeTime :value="deployment.updatedAt" :style="'short'" />
+                  </OuiText>
+                </OuiFlex>
+              </OuiStack>
+              <OuiBadge :variant="statusVariant(deployment.status)" size="sm">
+                {{ deployment.status }}
+              </OuiBadge>
+            </OuiFlex>
           </OuiStack>
         </OuiCardBody>
       </OuiCard>

@@ -29,7 +29,7 @@
           @click.stop="handleRestart"
           title="Restart"
         >
-          <ArrowPathIcon class="h-4 w-4" />
+          <ArrowPathIcon class="h-3.5 w-3.5" />
         </OuiButton>
 
         <OuiButton
@@ -40,7 +40,7 @@
           @click.stop="handleDelete"
           title="Delete"
         >
-          <TrashIcon class="h-4 w-4" />
+          <TrashIcon class="h-3.5 w-3.5" />
         </OuiButton>
       </OuiFlex>
     </template>
@@ -48,33 +48,33 @@
     <template #resources>
       <!-- Skeleton -->
       <OuiGrid v-if="loading" :cols="{ sm: 2 }" gap="sm">
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric opacity-30">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider opacity-50">
+            <OuiText size="xs" color="tertiary">
               CPU Cores
             </OuiText>
             <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
           </OuiStack>
         </OuiBox>
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric opacity-30">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider opacity-50">
+            <OuiText size="xs" color="tertiary">
               Memory
             </OuiText>
             <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
           </OuiStack>
         </OuiBox>
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric opacity-30">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider opacity-50">
+            <OuiText size="xs" color="tertiary">
               Storage
             </OuiText>
             <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
           </OuiStack>
         </OuiBox>
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric opacity-30">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider opacity-50">
+            <OuiText size="xs" color="tertiary">
               Port
             </OuiText>
             <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
@@ -84,45 +84,45 @@
 
       <!-- Actual Content -->
       <OuiGrid v-else-if="database" :cols="{ sm: 2 }" gap="sm">
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+            <OuiText size="xs" color="tertiary">
               CPU Cores
             </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+            <OuiText size="sm" weight="semibold">
               {{ database.cpuCores }}
             </OuiText>
           </OuiStack>
         </OuiBox>
 
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+            <OuiText size="xs" color="tertiary">
               Memory
             </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+            <OuiText size="sm" weight="semibold">
               {{ formatBytes(database.memoryBytes) }}
             </OuiText>
           </OuiStack>
         </OuiBox>
 
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+            <OuiText size="xs" color="tertiary">
               Storage
             </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+            <OuiText size="sm" weight="semibold">
               {{ formatBytes(database.diskBytes) }}
             </OuiText>
           </OuiStack>
         </OuiBox>
 
-        <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+        <OuiBox p="sm" rounded="lg" class="app-resource-metric">
           <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+            <OuiText size="xs" color="tertiary">
               Port
             </OuiText>
-            <OuiText size="lg" weight="bold" color="primary" class="font-mono">
+            <OuiText size="sm" weight="semibold" class="font-mono">
               {{ database.port || 'N/A' }}
             </OuiText>
           </OuiStack>
@@ -132,8 +132,8 @@
 
     <template #info>
       <!-- Connection Hostname Info -->
-      <OuiStack v-if="!loading && database?.host" gap="sm" p="md" rounded="xl" class="bg-surface-muted/30 border border-border-muted/50">
-        <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
+      <OuiStack v-if="!loading && database?.host" gap="sm" p="md" rounded="xl" class="app-resource-metric">
+        <OuiText size="xs" color="tertiary">
           Connection Hostname
         </OuiText>
           <OuiCode :code="database.host" class="flex-1 min-w-0" />
@@ -196,19 +196,18 @@ const statusMeta = computed(() => {
       badge: "secondary" as const,
       cardClass: "",
       barClass: "bg-secondary",
-      beforeGradient: "",
       iconClass: "",
     };
   }
 
   const status = props.database.status;
   const colors: Record<number, { label: string; badge: string; bar: string; card: string }> = {
-    [DatabaseStatus.CREATING]: { label: "Creating", badge: "warning", bar: "bg-warning", card: "hover:ring-warning/20" },
-    [DatabaseStatus.RUNNING]: { label: "Running", badge: "success", bar: "bg-success", card: "hover:ring-success/20" },
+    [DatabaseStatus.CREATING]: { label: "Creating", badge: "warning", bar: "bg-warning", card: "" },
+    [DatabaseStatus.RUNNING]: { label: "Running", badge: "success", bar: "bg-success", card: "" },
     [DatabaseStatus.STOPPED]: { label: "Stopped", badge: "secondary", bar: "bg-secondary", card: "" },
-    [DatabaseStatus.FAILED]: { label: "Failed", badge: "danger", bar: "bg-danger", card: "hover:ring-danger/20" },
-    [DatabaseStatus.BACKING_UP]: { label: "Backing Up", badge: "warning", bar: "bg-warning", card: "hover:ring-warning/20" },
-    [DatabaseStatus.RESTORING]: { label: "Restoring", badge: "warning", bar: "bg-warning", card: "hover:ring-warning/20" },
+    [DatabaseStatus.FAILED]: { label: "Failed", badge: "danger", bar: "bg-danger", card: "" },
+    [DatabaseStatus.BACKING_UP]: { label: "Backing Up", badge: "warning", bar: "bg-warning", card: "" },
+    [DatabaseStatus.RESTORING]: { label: "Restoring", badge: "warning", bar: "bg-warning", card: "" },
     [DatabaseStatus.STOPPING]: { label: "Stopping", badge: "warning", bar: "bg-warning", card: "" },
     [DatabaseStatus.DELETING]: { label: "Deleting", badge: "danger", bar: "bg-danger", card: "" },
     [DatabaseStatus.SLEEPING]: { label: "Sleeping", badge: "secondary", bar: "bg-secondary", card: "" },
@@ -221,7 +220,6 @@ const statusMeta = computed(() => {
     badge: meta.badge as "success" | "danger" | "warning" | "secondary",
     cardClass: meta.card,
     barClass: meta.bar,
-    beforeGradient: "",
     iconClass: "",
   };
 });

@@ -1,6 +1,6 @@
 <template>
-  <OuiContainer>
-    <OuiStack gap="xl">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
       <!-- Access Error State -->
       <OuiCard v-if="accessError" variant="outline" class="border-danger/20">
         <OuiCardBody>
@@ -26,194 +26,87 @@
         <!-- Header -->
         <OuiCard variant="outline" class="border-border-default/50">
           <OuiCardBody>
-            <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-              <OuiStack gap="md" class="flex-1 min-w-0">
-                <OuiFlex align="center" gap="md" wrap="wrap">
-                  <OuiBox
-                    p="sm"
-                    rounded="xl"
-                    bg="accent-primary"
-                    class="bg-primary/10 ring-1 ring-primary/20 shrink-0"
-                  >
-                    <CubeIcon class="w-6 h-6 text-primary" />
-                  </OuiBox>
-                  <OuiStack gap="none" class="min-w-0 flex-1">
-                    <OuiFlex align="center" gap="md">
-                      <OuiText as="h1" size="2xl" weight="bold" truncate>
-                        {{ gameServer.name || "Loading..." }}
-                      </OuiText>
-                      <OuiBadge v-if="gameServer.status" :variant="statusMeta.badge" size="xs">
-                        <span
-                          class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
-                          :class="statusMeta.dotClass"
-                        />
-                        <OuiText
-                          as="span"
-                          size="xs"
-                          weight="semibold"
-                          transform="uppercase"
-                          >{{ statusMeta.label }}</OuiText
-                        >
-                      </OuiBadge>
-                    </OuiFlex>
-                    <OuiText size="sm" color="secondary" class="hidden sm:inline">
-                      <span v-if="gameServer.gameType !== undefined">{{ getGameTypeLabel(gameServer.gameType) }} • </span>
-                      Last updated
-                      <OuiRelativeTime
-                        :value="gameServer.updatedAt ? date(gameServer.updatedAt) : undefined"
-                        :style="'short'"
-                      />
-                    </OuiText>
-                  </OuiStack>
-
-                  <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
-                    <OuiButton
-                      variant="ghost"
-                      color="secondary"
-                      size="sm"
-                      @click="refreshAll"
-                      :loading="isRefreshing"
-                      class="gap-2"
-                    >
-                      <ArrowPathIcon
-                        class="h-4 w-4"
-                        :class="{ 'animate-spin': isRefreshing }"
-                      />
-                      <OuiText as="span" size="xs" weight="medium">Refresh</OuiText>
-                    </OuiButton>
-                     <OuiButton
-                      variant="outline"
-                      color="danger"
-                      size="sm"
-                      class="gap-2"
-                      @click="showDeleteDialog = true"
-                    >
-                      <TrashIcon class="h-4 w-4" />
-                      <OuiText as="span" size="xs" weight="medium">Delete</OuiText>
-                    </OuiButton>
-                    <OuiButton
-                      variant="outline"
-                      color="secondary"
-                      size="sm"
-                      class="gap-2"
-                      :disabled="isActionDisabled(gameServer.status)"
-                      @click="restartServer"
-                    >
-                      <ArrowPathIcon class="h-4 w-4" />
-                      <OuiText as="span" size="xs" weight="medium">Restart</OuiText>
-                    </OuiButton>
-                    <OuiButton
-                      :color="gameServer.status === 'RUNNING' ? 'danger' : 'success'"
-                      variant="solid"
-                      size="sm"
-                      class="gap-2"
-                      :loading="isStarting || isStopping || isRestarting"
-                      :disabled="isActionDisabled(gameServer.status)"
-                      @click="toggleServerStatus"
-                    >
-                      <template v-if="gameServer.status === 'RUNNING'">
-                        <StopIcon class="h-4 w-4" />
-                        <OuiText as="span" size="xs" weight="medium">Stop</OuiText>
-                      </template>
-                      <template v-else-if="gameServer.status === 'STOPPED' || gameServer.status === 'FAILED'">
-                        <PlayIcon class="h-4 w-4" />
-                        <OuiText as="span" size="xs" weight="medium">Start</OuiText>
-                      </template>
-                      <template v-else-if="gameServer.status === 'STARTING'">
-                        <PlayIcon class="h-4 w-4 animate-pulse" />
-                        <OuiText as="span" size="xs" weight="medium">Starting...</OuiText>
-                      </template>
-                      <template v-else-if="gameServer.status === 'STOPPING'">
-                        <StopIcon class="h-4 w-4 animate-pulse" />
-                        <OuiText as="span" size="xs" weight="medium">Stopping...</OuiText>
-                      </template>
-                      <template v-else-if="gameServer.status === 'RESTARTING'">
-                        <ArrowPathIcon class="h-4 w-4 animate-spin" />
-                        <OuiText as="span" size="xs" weight="medium">Restarting...</OuiText>
-                      </template>
-                      <template v-else>
-                        <PlayIcon class="h-4 w-4" />
-                        <OuiText as="span" size="xs" weight="medium">Start</OuiText>
-                      </template>
-                    </OuiButton>
-
-                  </OuiFlex>
+            <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+              <OuiStack gap="xs" class="flex-1 min-w-0">
+                <OuiFlex align="center" gap="sm" wrap="wrap">
+                  <OuiText as="h1" size="lg" weight="semibold" truncate>
+                    {{ gameServer.name || "Loading..." }}
+                  </OuiText>
+                  <OuiBadge v-if="gameServer.status" :variant="statusMeta.badge" size="xs">
+                    <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1" :class="statusMeta.dotClass" />
+                    {{ statusMeta.label }}
+                  </OuiBadge>
                 </OuiFlex>
+                <OuiText size="xs" color="tertiary">
+                  <span v-if="gameServer.gameType !== undefined">{{ getGameTypeLabel(gameServer.gameType) }} · </span>
+                  Last updated
+                  <OuiRelativeTime
+                    :value="gameServer.updatedAt ? date(gameServer.updatedAt) : undefined"
+                    :style="'short'"
+                  />
+                </OuiText>
               </OuiStack>
+
+              <OuiFlex gap="xs" wrap="wrap" class="shrink-0">
+                <OuiButton variant="ghost" size="sm" @click="refreshAll" :loading="isRefreshing" class="gap-1.5">
+                  <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+                  <span class="hidden sm:inline">Refresh</span>
+                </OuiButton>
+                <OuiButton variant="outline" color="danger" size="sm" class="gap-1.5" @click="showDeleteDialog = true">
+                  <TrashIcon class="h-3.5 w-3.5" />
+                  <span class="hidden sm:inline">Delete</span>
+                </OuiButton>
+                <OuiButton
+                  variant="outline"
+                  size="sm"
+                  class="gap-1.5"
+                  :disabled="isActionDisabled(gameServer.status)"
+                  @click="restartServer"
+                >
+                  <ArrowPathIcon class="h-3.5 w-3.5" />
+                  <span class="hidden sm:inline">Restart</span>
+                </OuiButton>
+                <OuiButton
+                  :color="gameServer.status === 'RUNNING' ? 'danger' : 'success'"
+                  variant="solid"
+                  size="sm"
+                  class="gap-1.5"
+                  :loading="isStarting || isStopping || isRestarting"
+                  :disabled="isActionDisabled(gameServer.status)"
+                  @click="toggleServerStatus"
+                >
+                  <template v-if="gameServer.status === 'RUNNING'">
+                    <StopIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Stop</span>
+                  </template>
+                  <template v-else-if="gameServer.status === 'STOPPED' || gameServer.status === 'FAILED'">
+                    <PlayIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Start</span>
+                  </template>
+                  <template v-else-if="gameServer.status === 'STARTING'">
+                    <PlayIcon class="h-3.5 w-3.5 animate-pulse" />
+                    <span class="hidden sm:inline">Starting...</span>
+                  </template>
+                  <template v-else-if="gameServer.status === 'STOPPING'">
+                    <StopIcon class="h-3.5 w-3.5 animate-pulse" />
+                    <span class="hidden sm:inline">Stopping...</span>
+                  </template>
+                  <template v-else-if="gameServer.status === 'RESTARTING'">
+                    <ArrowPathIcon class="h-3.5 w-3.5 animate-spin" />
+                    <span class="hidden sm:inline">Restarting...</span>
+                  </template>
+                  <template v-else>
+                    <PlayIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Start</span>
+                  </template>
+                </OuiButton>
+              </OuiFlex>
             </OuiFlex>
           </OuiCardBody>
         </OuiCard>
 
-        <!-- Overview Cards -->
-        <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
-          <OuiCard variant="default">
-            <OuiCardBody>
-              <OuiStack gap="sm">
-                <OuiFlex align="center" gap="sm">
-                  <CpuChipIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="sm" color="secondary">vCPU Cores (Max)</OuiText>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold" color="primary">
-                  {{ gameServer.cpuCores || "N/A" }}
-                </OuiText>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-
-          <OuiCard variant="default">
-            <OuiCardBody>
-              <OuiStack gap="sm">
-                <OuiFlex align="center" gap="sm">
-                  <CircleStackIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="sm" color="secondary">Memory (Max)</OuiText>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold" color="primary">
-                  <OuiByte :value="getMemoryBytesValue(gameServer.memoryBytes)" />
-                </OuiText>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-
-          <OuiCard variant="default">
-            <OuiCardBody>
-              <OuiStack gap="sm">
-                <OuiFlex align="center" gap="sm">
-                  <ServerIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="sm" color="secondary">Port</OuiText>
-                </OuiFlex>
-                <OuiStack gap="xs">
-                  <OuiText size="2xl" weight="bold" color="primary">
-                    {{ gameServer.port || "N/A" }}
-                  </OuiText>
-                  <OuiText
-                    v-if="(gameServer.extraPorts?.length || 0) > 0"
-                    size="xs"
-                    color="secondary"
-                  >
-                    Extra: {{ gameServer.extraPorts.join(", ") }}
-                  </OuiText>
-                </OuiStack>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-
-          <OuiCard variant="default">
-            <OuiCardBody>
-              <OuiStack gap="sm">
-                <OuiFlex align="center" gap="sm">
-                  <ChartBarIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="sm" color="secondary">Monthly Cost</OuiText>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold" color="primary">
-                  {{ formatCurrency(estimatedMonthlyCost) }}
-                </OuiText>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-        </OuiGrid>
-
         <!-- Tabs -->
-        <OuiStack gap="md">
+        <OuiStack gap="sm">
           <OuiTabs v-model="activeTab" :tabs="tabs" :key="`tabs-${tabs.length}-${tabs.map(t => t.id).join('-')}`" />
           <OuiCard variant="default">
             <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true" :key="`tabs-content-${tabs.length}-${tabs.map(t => t.id).join('-')}`">
@@ -576,7 +469,7 @@
             <OuiText as="h3" size="xl" weight="semibold" color="primary">
               Game server not found
             </OuiText>
-            <OuiText color="secondary">
+            <OuiText color="tertiary">
               The game server you are looking for does not exist or you do not have access.
             </OuiText>
           </OuiStack>
@@ -620,7 +513,7 @@
 
     <!-- Delete Confirmation Dialog -->
     <OuiDialog v-model:open="showDeleteDialog" title="Delete Game Server">
-      <OuiText color="secondary">
+      <OuiText color="tertiary">
         Are you sure you want to delete the game server
         <OuiText as="span" weight="semibold" color="primary">{{ gameServer?.name }}</OuiText>?
         This action cannot be undone.
@@ -733,8 +626,8 @@ const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchE
       return res.gameServer;
     } catch (err: unknown) {
       // Check if it's a permission denied or not found error
-      if (err && (err.code === "permission_denied" || err.code === "not_found")) {
-        accessError.value = err;
+      if (err && ((err as any).code === "permission_denied" || (err as any).code === "not_found")) {
+        accessError.value = err as Error;
         return null;
       }
       // Re-throw other errors
@@ -1148,13 +1041,13 @@ const startStreaming = async () => {
     }
   } catch (err: unknown) {
     // Handle abort errors silently
-    if (err?.name === "AbortError" || err?.code === "aborted") {
+    if ((err as any)?.name === "AbortError" || (err as any)?.code === "aborted") {
       return;
     }
     
     // Suppress common stream errors that are expected/non-critical
     const errorMessage = (err as Error | undefined)?.message?.toLowerCase() || "";
-    const errorCode = err?.code || "";
+    const errorCode = (err as any)?.code || "";
     const isExpectedError =
       errorMessage.includes("missing trailer") ||
       errorMessage.includes("trailer") ||

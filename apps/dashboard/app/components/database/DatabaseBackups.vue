@@ -1,26 +1,19 @@
 <template>
   <OuiStack gap="lg">
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex justify="between" align="center">
-          <OuiStack gap="xs">
-            <OuiCardTitle>Backups</OuiCardTitle>
-            <OuiCardDescription>
-              Manage database backups and restorations
-            </OuiCardDescription>
-          </OuiStack>
-          <OuiButton @click="showCreateDialog = true">
-            <PlusIcon class="h-4 w-4" />
-            Create Backup
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
         <OuiStack gap="md">
+          <OuiFlex justify="between" align="center">
+            <OuiText size="sm" weight="semibold">Backups</OuiText>
+            <OuiButton size="xs" @click="showCreateDialog = true">
+              <PlusIcon class="h-3.5 w-3.5" />
+              Create Backup
+            </OuiButton>
+          </OuiFlex>
           <!-- Loading State -->
           <OuiStack v-if="loading" align="center" gap="md" class="py-10">
             <OuiSpinner size="lg" />
-            <OuiText color="secondary">Loading backups...</OuiText>
+            <OuiText color="tertiary">Loading backups...</OuiText>
           </OuiStack>
 
           <!-- Backups List -->
@@ -69,7 +62,7 @@
 
           <!-- Empty State -->
           <OuiStack v-else align="center" gap="md" class="py-10">
-            <OuiText color="secondary">No backups found</OuiText>
+            <OuiText color="tertiary">No backups found</OuiText>
           </OuiStack>
         </OuiStack>
       </OuiCardBody>

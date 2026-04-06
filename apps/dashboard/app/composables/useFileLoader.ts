@@ -211,7 +211,7 @@ export function useFileLoader(
       fileError.value = null;
     } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
-      if (err?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
+      if ((err as any)?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         console.log("[useFileLoader] Request was aborted");
         return;
       }

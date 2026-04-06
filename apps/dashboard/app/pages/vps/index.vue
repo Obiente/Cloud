@@ -1,31 +1,22 @@
 <template>
-  <OuiContainer size="full">
-    <OuiStack gap="xl">
-      <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-        <OuiStack gap="sm" class="max-w-xl">
-          <OuiFlex align="center" gap="md">
-            <OuiBox
-              p="sm"
-              rounded="xl"
-              bg="accent-primary"
-              class="bg-success/10 ring-1 ring-success/20"
-            >
-              <ServerIcon class="w-6 h-6 text-success" />
-            </OuiBox>
-            <OuiText as="h1" size="3xl" weight="bold"> VPS Instances </OuiText>
-          </OuiFlex>
-          <OuiText color="secondary" size="md">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
+      <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+        <OuiStack gap="xs">
+          <OuiText as="h1" size="xl" weight="semibold">VPS Instances</OuiText>
+          <OuiText color="tertiary" size="sm">
             Provision and manage virtual private servers with full root access.
           </OuiText>
         </OuiStack>
 
         <OuiButton
           color="primary"
-          class="gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          size="sm"
+          class="gap-1.5"
           @click="showCreateDialog = true"
         >
-          <PlusIcon class="h-4 w-4" />
-          <OuiText as="span" size="sm" weight="medium">New VPS</OuiText>
+          <PlusIcon class="h-3.5 w-3.5" />
+          New VPS
         </OuiButton>
       </OuiFlex>
 
@@ -38,7 +29,7 @@
       />
 
       <!-- Filters -->
-      <OuiCard variant="default" class="backdrop-blur-sm border border-border-muted/60">
+      <OuiCard variant="default">
         <OuiCardBody>
           <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
             <OuiInput
@@ -67,44 +58,8 @@
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Empty State -->
-      <OuiStack
-        v-if="filteredVPS.length === 0 && !isLoading"
-        align="center"
-        gap="lg"
-        class="text-center py-20"
-      >
-        <OuiBox
-          class="inline-flex items-center justify-center w-20 h-20 rounded-xl bg-surface-muted/50 ring-1 ring-border-muted"
-        >
-          <ServerIcon class="h-10 w-10 text-secondary" />
-        </OuiBox>
-        <OuiStack align="center" gap="sm">
-          <OuiText as="h3" size="xl" weight="semibold" color="primary">
-            No VPS instances found
-          </OuiText>
-          <OuiBox class="max-w-md">
-            <OuiText color="secondary">
-              {{
-                searchQuery || statusFilter || regionFilter
-                  ? "Try adjusting your filters to see more results."
-                  : "Get started by creating your first VPS instance."
-              }}
-            </OuiText>
-          </OuiBox>
-          <OuiButton
-            v-if="!searchQuery && !statusFilter && !regionFilter"
-            color="primary"
-            @click="showCreateDialog = true"
-          >
-            <PlusIcon class="h-4 w-4" />
-            Create VPS Instance
-          </OuiButton>
-        </OuiStack>
-      </OuiStack>
-
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="isLoading && !vpsInstances" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-if="isLoading && !vpsInstances" :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <VPSCard
           v-for="i in 6"
           :key="i"
@@ -112,8 +67,28 @@
         />
       </OuiGrid>
 
+      <!-- Empty State -->
+      <SharedEmptyState
+        v-else-if="filteredVPS.length === 0"
+        :icon="ServerIcon"
+        title="No VPS instances found"
+        :description="searchQuery || statusFilter || regionFilter
+          ? 'Try adjusting your filters to see more results.'
+          : 'Get started by creating your first VPS instance.'"
+      >
+        <OuiButton
+          color="primary"
+          size="sm"
+          class="gap-1.5"
+          @click="showCreateDialog = true"
+        >
+          <PlusIcon class="h-3.5 w-3.5" />
+          Create VPS Instance
+        </OuiButton>
+      </SharedEmptyState>
+
       <!-- VPS Grid -->
-      <OuiGrid v-if="filteredVPS.length > 0" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <VPSCard
           v-for="vps in filteredVPS"
           :key="vps.id"

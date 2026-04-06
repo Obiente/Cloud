@@ -5,10 +5,10 @@
         <OuiCardHeader>
           <OuiFlex justify="between" align="center">
             <div>
-              <OuiText as="h2" size="lg" weight="semibold">
+              <OuiText as="h2" size="sm" weight="semibold">
                 {{ title }}
               </OuiText>
-              <OuiText size="sm" color="secondary" class="mt-1">
+              <OuiText size="sm" color="tertiary" class="mt-1">
                 {{ description }}
               </OuiText>
             </div>
@@ -59,7 +59,7 @@
 
             <!-- List Table -->
             <div v-if="whitelist.length === 0" class="text-center py-12">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 {{ emptyMessage }}
               </OuiText>
             </div>
@@ -68,17 +68,17 @@
                 <thead>
                   <tr class="border-b border-border-default">
                     <th class="text-left py-3 px-4">
-                      <OuiText size="xs" weight="semibold" color="muted">
+                      <OuiText size="xs" weight="semibold" color="tertiary">
                         Player Name
                       </OuiText>
                     </th>
                     <th class="text-left py-3 px-4">
-                      <OuiText size="xs" weight="semibold" color="muted">
+                      <OuiText size="xs" weight="semibold" color="tertiary">
                         UUID
                       </OuiText>
                     </th>
                     <th class="text-right py-3 px-4">
-                      <OuiText size="xs" weight="semibold" color="muted">
+                      <OuiText size="xs" weight="semibold" color="tertiary">
                         Actions
                       </OuiText>
                     </th>
@@ -112,7 +112,7 @@
                           <OuiText
                             v-if="playerData.get(player.uuid || player.name || '')?.name && player.name"
                             size="xs"
-                            color="muted"
+                            color="tertiary"
                           >
                             {{ player.name }}
                           </OuiText>
@@ -120,7 +120,7 @@
                       </OuiFlex>
                     </td>
                     <td class="py-3 px-4">
-                      <OuiText size="xs" color="muted" class="font-mono">
+                      <OuiText size="xs" color="tertiary" class="font-mono">
                         {{ player.uuid || "—" }}
                       </OuiText>
                     </td>

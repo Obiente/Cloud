@@ -15,7 +15,7 @@
     >
       <div class="flex flex-col h-full min-h-0" role="list" aria-label="Notifications list">
         <!-- Header with filters and actions -->
-        <div class="bg-surface-base border-b border-border-muted px-4 md:px-6 pt-4 pb-3 flex-shrink-0">
+        <div class="bg-surface-base border-b border-border-muted px-4 md:px-6 pt-4 pb-3 shrink-0">
           <OuiStack gap="sm">
             <!-- Filter tabs -->
             <OuiFlex
@@ -29,7 +29,7 @@
                 :color="activeFilter === filter.key ? 'primary' : 'neutral'"
                 size="sm"
                 @click="activeFilter = filter.key"
-                class="whitespace-nowrap flex-shrink-0"
+                class="whitespace-nowrap shrink-0"
               >
                 {{ filter.label }}
                 <OuiBox
@@ -77,7 +77,7 @@
           <div v-if="isLoading && filteredItems.length === 0" class="py-12">
             <OuiStack gap="md" align="center">
               <OuiSpinner size="lg" />
-              <OuiText color="secondary" size="md">Loading notifications...</OuiText>
+              <OuiText color="tertiary" size="md">Loading notifications...</OuiText>
             </OuiStack>
           </div>
 
@@ -93,10 +93,10 @@
                 <BellIcon class="w-8 h-8 text-foreground-muted" />
               </div>
               <OuiStack gap="xs" align="center">
-                <OuiText size="lg" weight="medium" color="primary">
+                <OuiText size="sm" weight="semibold">
                   {{ activeFilter === 'all' ? "You're all caught up!" : `No ${filterLabels[activeFilter]} notifications` }}
                 </OuiText>
-                <OuiText size="md" color="secondary" class="max-w-sm">
+                <OuiText size="sm" color="tertiary" class="max-w-sm">
                   {{ activeFilter === 'all' 
                     ? "You don't have any notifications right now. We'll notify you when something important happens." 
                     : `You don't have any ${filterLabels[activeFilter]} notifications.` }}
@@ -110,7 +110,7 @@
             <template v-for="(group, groupIndex) in groupedNotifications" :key="group.date">
               <!-- Date group header -->
               <div v-if="group.date" class="py-2">
-                <OuiText size="xs" weight="semibold" color="secondary" class="uppercase tracking-wide">
+                <OuiText size="xs" weight="semibold" color="tertiary" class="uppercase tracking-wide">
                   {{ group.date }}
                 </OuiText>
               </div>
@@ -132,7 +132,7 @@
                     <OuiFlex gap="md" class="min-w-0" align="start">
                       <!-- Notification Icon -->
                       <div
-                        class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                        class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm"
                         :class="getIconClasses(n)"
                         :aria-hidden="true"
                       >
@@ -147,14 +147,14 @@
                               size="lg"
                               :weight="n.read ? 'medium' : 'semibold'"
                               :color="n.read ? 'secondary' : 'primary'"
-                              class="leading-tight break-words"
+                              class="leading-tight wrap-break-word"
                             >
                               {{ n.title }}
                             </OuiText>
                             <OuiText
                               size="sm"
-                              color="secondary"
-                              class="break-words leading-relaxed whitespace-pre-line"
+                              color="tertiary"
+                              class="wrap-break-word leading-relaxed whitespace-pre-line"
                             >
                               {{ n.message }}
                             </OuiText>
@@ -187,7 +187,7 @@
                           size="xs"
                           @click.stop="handleActionClick(n)"
                           :aria-label="`${n.actionLabel} for ${n.title}`"
-                          class="!p-1.5"
+                          class="p-1.5!"
                         >
                           <ArrowRightIcon class="w-4 h-4" />
                         </OuiButton>
@@ -218,7 +218,7 @@
                         </OuiButton>
                       </OuiFlex>
 
-                      <OuiText size="xs" color="muted" class="flex-shrink-0">
+                      <OuiText size="xs" color="tertiary" class="shrink-0">
                         <OuiRelativeTime :value="n.timestamp" :style="'short'" />
                       </OuiText>
                     </OuiFlex>

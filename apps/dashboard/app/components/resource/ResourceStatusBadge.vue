@@ -1,17 +1,10 @@
 <template>
-  <OuiBadge :variant="badge" size="xs" class="md:size-sm">
+  <OuiBadge :variant="badge" size="xs">
     <span
-      class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
+      class="inline-flex h-1.5 w-1.5 rounded-full mr-1"
       :class="dotClass"
     />
-    <OuiText
-      as="span"
-      size="xs"
-      weight="semibold"
-      transform="uppercase"
-    >
-      {{ label }}
-    </OuiText>
+    {{ label }}
   </OuiBadge>
 </template>
 

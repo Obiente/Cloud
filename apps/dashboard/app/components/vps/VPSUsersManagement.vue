@@ -1,29 +1,21 @@
 <template>
   <OuiStack gap="lg">
     <!-- Users List -->
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex justify="between" align="center">
-          <OuiStack gap="xs">
-            <OuiText as="h2" class="oui-card-title">Users</OuiText>
-            <OuiText color="secondary" size="sm">
-              Manage users on this VPS instance. Users are configured via
-              cloud-init and will be applied on the next reboot.
-            </OuiText>
-          </OuiStack>
-          <OuiButton
-            variant="solid"
-            size="sm"
-            @click="openCreateUserDialog"
-            :disabled="!vps?.instanceId"
-            class="gap-2"
-          >
-            <PlusIcon class="h-4 w-4" />
-            Add User
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiFlex justify="between" align="center">
+            <OuiText size="sm" weight="semibold">Users</OuiText>
+            <OuiButton
+              variant="solid"
+              size="xs"
+              @click="openCreateUserDialog"
+              :disabled="!vps?.instanceId"
+            >
+              <PlusIcon class="h-3.5 w-3.5" />
+              Add User
+            </OuiButton>
+          </OuiFlex>
         <div v-if="loading" class="space-y-3">
           <OuiBox
             v-for="i in 3"
@@ -61,12 +53,12 @@
                   disabled
                   class="gap-1"
                 >
-                  <TrashIcon class="h-4 w-4" />
+                  <TrashIcon class="h-3.5 w-3.5" />
                   Delete
                 </OuiButton>
               </OuiFlex>
               <OuiStack gap="xs">
-                <OuiText size="xs" weight="medium" color="secondary"
+                <OuiText size="xs" weight="medium" color="tertiary"
                   >SSH Keys</OuiText
                 >
                 <OuiBox p="sm" rounded="md" class="bg-surface-muted">
@@ -79,16 +71,16 @@
         <div v-else-if="error" class="py-8 text-center">
           <OuiText color="danger">{{ error }}</OuiText>
           <OuiButton variant="outline" @click="loadUsers" class="mt-4 gap-2">
-            <ArrowPathIcon class="h-4 w-4" />
+            <ArrowPathIcon class="h-3.5 w-3.5" />
             Retry
           </OuiButton>
         </div>
         <div v-else-if="users.length === 0" class="py-8 text-center">
           <UserIcon class="h-12 w-12 text-secondary mx-auto mb-4" />
-          <OuiText color="secondary" class="mb-4"
+          <OuiText color="tertiary" class="mb-4"
             >No custom users configured</OuiText
           >
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             The root user is always available. Add custom users to grant access
             to specific accounts.
           </OuiText>
@@ -122,11 +114,11 @@
                   <OuiText
                     v-if="user.groups && user.groups.length > 0"
                     size="xs"
-                    color="secondary"
+                    color="tertiary"
                   >
                     Groups: {{ user.groups.join(", ") }}
                   </OuiText>
-                  <OuiText v-if="user.shell" size="xs" color="secondary">
+                  <OuiText v-if="user.shell" size="xs" color="tertiary">
                     Shell: {{ user.shell }}
                   </OuiText>
                 </OuiStack>
@@ -138,7 +130,7 @@
                   :disabled="deletingUser === user.name"
                   class="gap-1"
                 >
-                  <TrashIcon class="h-4 w-4" />
+                  <TrashIcon class="h-3.5 w-3.5" />
                   Delete
                 </OuiButton>
               </OuiFlex>
@@ -150,7 +142,7 @@
                   user.sshAuthorizedKeys && user.sshAuthorizedKeys.length > 0
                 "
               >
-                <OuiText size="xs" weight="medium" color="secondary"
+                <OuiText size="xs" weight="medium" color="tertiary"
                   >SSH Keys</OuiText
                 >
                 <OuiStack gap="xs">
@@ -177,7 +169,7 @@
                   </OuiBox>
                 </OuiStack>
               </OuiStack>
-              <OuiText v-else size="xs" color="muted"
+              <OuiText v-else size="xs" color="tertiary"
                 >No SSH keys configured</OuiText
               >
 
@@ -189,7 +181,7 @@
                   @click="openManageSSHKeysDialog(user)"
                   class="gap-1"
                 >
-                  <KeyIcon class="h-4 w-4" />
+                  <KeyIcon class="h-3.5 w-3.5" />
                   Manage SSH Keys
                 </OuiButton>
                 <OuiButton
@@ -199,7 +191,7 @@
                   @click="openResetPasswordDialog(user)"
                   class="gap-1"
                 >
-                  <KeyIcon class="h-4 w-4" />
+                  <KeyIcon class="h-3.5 w-3.5" />
                   {{ user.hasPassword ? "Reset Password" : "Set Password" }}
                 </OuiButton>
               </OuiFlex>
@@ -218,7 +210,7 @@
             <OuiText as="h2" class="oui-card-title">Root User</OuiText>
             <OuiBadge variant="primary" size="xs">System</OuiBadge>
           </OuiFlex>
-          <OuiText color="secondary" size="sm">
+          <OuiText color="tertiary" size="sm">
             The root user is always available and has full system access. SSH
             keys can be managed in SSH Settings.
           </OuiText>
@@ -266,7 +258,7 @@
         />
         <OuiStack gap="xs">
           <OuiText size="sm" weight="medium">SSH Keys</OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             Select SSH keys from your organization to assign to this user
           </OuiText>
           <OuiBox
@@ -275,7 +267,7 @@
             rounded="md"
             class="bg-surface-muted/40 ring-1 ring-border-muted"
           >
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               No SSH keys available. Add SSH keys in SSH Settings.
             </OuiText>
           </OuiBox>
@@ -300,7 +292,7 @@
               "
             >
               <OuiFlex align="center" gap="xs">
-                <KeyIcon class="h-4 w-4 text-secondary" />
+                <KeyIcon class="h-3.5 w-3.5 text-secondary" />
                 <OuiText size="sm">{{ key.name }}</OuiText>
                 <OuiBadge v-if="!key.vpsId" variant="primary" size="xs">
                   Org-wide
@@ -333,11 +325,11 @@
       size="md"
     >
       <OuiStack gap="md" v-if="selectedUser">
-        <OuiText color="secondary" size="sm">
+        <OuiText color="tertiary" size="sm">
           Select SSH keys from your organization to assign to this user.
         </OuiText>
         <OuiStack gap="xs" v-if="availableSSHKeys.length === 0">
-          <OuiText size="sm" color="muted"
+          <OuiText size="sm" color="tertiary"
             >No SSH keys available. Add SSH keys in SSH Settings.</OuiText
           >
         </OuiStack>
@@ -349,7 +341,7 @@
             @update:model-value="(checked) => toggleUserSSHKey(key.id, checked)"
           >
             <OuiFlex align="center" gap="xs">
-              <KeyIcon class="h-4 w-4 text-secondary" />
+              <KeyIcon class="h-3.5 w-3.5 text-secondary" />
               <OuiText size="sm">{{ key.name }}</OuiText>
               <OuiBadge v-if="!key.vpsId" variant="primary" size="xs"
                 >Org-wide</OuiBadge
@@ -394,7 +386,7 @@
           placeholder="Enter new password"
           required
         />
-        <OuiText size="xs" color="secondary">
+        <OuiText size="xs" color="tertiary">
           The password will be applied on the next reboot via cloud-init.
         </OuiText>
       </OuiStack>

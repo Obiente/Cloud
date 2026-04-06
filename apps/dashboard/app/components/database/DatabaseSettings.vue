@@ -1,10 +1,10 @@
 <template>
-  <OuiStack gap="lg" p="lg" md:p="xl">
+  <OuiStack gap="lg">
     <form @submit.prevent="handleSave">
       <OuiStack gap="lg">
         <!-- Basic Settings -->
         <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="bold">Basic Settings</OuiText>
+          <OuiText as="h3" size="sm" weight="semibold">Basic Settings</OuiText>
           
           <OuiStack gap="md">
             <OuiFormField label="Database Name" required>
@@ -28,7 +28,7 @@
 
         <!-- Resource Settings -->
         <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="bold">Resources</OuiText>
+          <OuiText as="h3" size="sm" weight="semibold">Resources</OuiText>
           
           <OuiStack gap="md">
             <OuiFormField label="CPU Cores">
@@ -40,7 +40,7 @@
                 :disabled="true"
                 placeholder="Number of CPU cores"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Modify through recreating the database
               </OuiText>
             </OuiFormField>
@@ -54,7 +54,7 @@
                 :disabled="true"
                 placeholder="Amount in GB"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Modify through recreating the database
               </OuiText>
             </OuiFormField>
@@ -68,7 +68,7 @@
                 :disabled="true"
                 placeholder="Amount in GB"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Modify through recreating the database
               </OuiText>
             </OuiFormField>
@@ -77,7 +77,7 @@
 
         <!-- Connection Settings -->
         <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="bold">Connection Settings</OuiText>
+          <OuiText as="h3" size="sm" weight="semibold">Connection Settings</OuiText>
           
           <OuiStack gap="md">
             <OuiFormField label="Connection Username">
@@ -86,7 +86,7 @@
                 placeholder="Username"
                 :disabled="true"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Set during database creation
               </OuiText>
             </OuiFormField>
@@ -97,7 +97,7 @@
                 placeholder="Hostname"
                 :disabled="true"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Auto-generated for routing
               </OuiText>
             </OuiFormField>
@@ -109,7 +109,7 @@
                 placeholder="Port"
                 :disabled="true"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Standard port for database type
               </OuiText>
             </OuiFormField>
@@ -118,7 +118,7 @@
 
         <!-- Auto-Sleep Settings -->
         <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="bold">Auto-Sleep</OuiText>
+          <OuiText as="h3" size="sm" weight="semibold">Auto-Sleep</OuiText>
 
           <OuiStack gap="md">
             <OuiFormField label="Enable Auto-Sleep">
@@ -127,7 +127,7 @@
                 label="Automatically sleep database after inactivity"
                 :disabled="isSaving"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 The database will stop when idle to save resources. It will start automatically when a connection is made.
               </OuiText>
             </OuiFormField>
@@ -145,7 +145,7 @@
                 placeholder="Minutes of inactivity"
                 :disabled="isSaving"
               />
-              <OuiText size="xs" color="secondary" class="mt-1">
+              <OuiText size="xs" color="tertiary" class="mt-1">
                 Minimum 5 minutes. The database will sleep after this many minutes without connections.
               </OuiText>
             </OuiFormField>
@@ -154,7 +154,7 @@
 
         <!-- Backup & Recovery Settings -->
         <OuiStack gap="md">
-          <OuiText as="h3" size="lg" weight="bold">Backup & Recovery</OuiText>
+          <OuiText as="h3" size="sm" weight="semibold">Backup & Recovery</OuiText>
 
           <OuiAlert variant="info">
             <OuiText size="sm">
@@ -165,7 +165,7 @@
 
         <!-- Actions -->
         <OuiFlex gap="md" wrap="wrap" justify="between" align="center">
-          <OuiText size="sm" color="secondary">
+          <OuiText size="sm" color="tertiary">
             {{ unsavedChanges ? '⚠ You have unsaved changes' : 'All changes saved' }}
           </OuiText>
           <OuiFlex gap="sm">
@@ -288,7 +288,7 @@ async function handleSave() {
       organizationId: organizationId.value || "",
       databaseId: props.database.id,
       ...updates,
-    }));
+    } as any));
 
     toast.success("Settings saved successfully");
     originalFormData.value = { ...formData.value };

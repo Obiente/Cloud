@@ -67,7 +67,7 @@
             class="shrink-0 whitespace-nowrap px-2 py-1 rounded-full border border-border-muted bg-surface-muted/40"
           >
             <PuzzlePieceIcon class="w-3 h-3 text-secondary" />
-            <OuiText size="xs" color="secondary">{{ activeLoaderFilter }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ activeLoaderFilter }}</OuiText>
           </OuiFlex>
           <OuiBadge
             v-if="activeVersionFilter"
@@ -131,7 +131,7 @@
           align="center"
           class="w-full pt-3 border-t border-border-muted/50"
         >
-          <OuiText size="xs" weight="semibold" color="secondary" class="whitespace-nowrap">
+          <OuiText size="xs" weight="semibold" color="tertiary" class="whitespace-nowrap">
             Categories
           </OuiText>
           <OuiFlex wrap="nowrap" gap="xs" class="flex-1 overflow-x-auto pb-1 min-w-0">
@@ -205,7 +205,7 @@
                       {{ typeLabel }}
                     </OuiBadge>
                   </OuiFlex>
-                  <OuiText size="sm" color="secondary" :lineClamp="2">
+                  <OuiText size="sm" color="tertiary" :lineClamp="2">
                     {{ project.description || "No description provided." }}
                   </OuiText>
                 </OuiStack>
@@ -280,13 +280,13 @@
 
               <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
                 <OuiStack gap="xs">
-                  <OuiText size="xs" color="secondary">Downloads</OuiText>
+                  <OuiText size="xs" color="tertiary">Downloads</OuiText>
                   <OuiText size="sm" weight="semibold" color="primary">
                     {{ formatDownloads(project.downloads) }}
                   </OuiText>
                 </OuiStack>
                 <OuiStack gap="xs" v-if="activeVersionFilter && project.gameVersions && project.gameVersions.length > 0">
-                  <OuiText size="xs" color="secondary">Compatibility</OuiText>
+                  <OuiText size="xs" color="tertiary">Compatibility</OuiText>
                   <OuiFlex gap="xs" align="center">
                     <OuiBadge
                       size="xs"
@@ -294,7 +294,7 @@
                     >
                       {{ getCompatibilityStatus(project).label }}
                     </OuiBadge>
-                    <OuiText v-if="getCompatibilityStatus(project).range" size="xs" color="secondary">
+                    <OuiText v-if="getCompatibilityStatus(project).range" size="xs" color="tertiary">
                       {{ getCompatibilityStatus(project).range }}
                     </OuiText>
                   </OuiFlex>
@@ -404,7 +404,7 @@
           <FolderIcon class="w-8 h-8 text-secondary" />
         </OuiBox>
         <OuiText size="lg" weight="semibold">No results yet</OuiText>
-        <OuiText color="secondary">
+        <OuiText color="tertiary">
           Try adjusting your search or disabling some filters.
         </OuiText>
       </OuiFlex>
@@ -434,10 +434,10 @@
             }))"
             placeholder="Select a version"
           />
-          <OuiText v-if="isVersionsLoading" size="xs" color="secondary">
+          <OuiText v-if="isVersionsLoading" size="xs" color="tertiary">
             Loading versions…
           </OuiText>
-          <OuiText v-else-if="versionOptions.length === 0" size="xs" color="secondary">
+          <OuiText v-else-if="versionOptions.length === 0" size="xs" color="tertiary">
             No versions available for this project.
           </OuiText>
         </OuiStack>

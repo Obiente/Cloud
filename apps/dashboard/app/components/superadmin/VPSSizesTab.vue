@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h2" size="2xl" weight="extrabold">VPS Size Catalog</OuiText>
-        <OuiText color="muted">Manage VPS instance sizes and minimum payment requirements.</OuiText>
+        <OuiText color="tertiary">Manage VPS instance sizes and minimum payment requirements.</OuiText>
       </OuiStack>
       <OuiButton @click="openCreateDialog">
         <PlusIcon class="h-4 w-4" />
@@ -84,7 +84,7 @@
               placeholder="e.g., small, medium, custom-1" 
               :disabled="!!editingSize"
             />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Unique identifier for this size. Cannot be changed after creation.
             </OuiText>
           </OuiField>
@@ -99,14 +99,14 @@
 
           <OuiField label="Region">
             <OuiInput v-model="sizeForm.region" placeholder="Leave empty for all regions" />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Leave empty to make this size available in all regions, or specify a region ID (e.g., us-east-1).
             </OuiText>
           </OuiField>
 
           <OuiField label="Available">
             <OuiSwitch v-model="sizeForm.available" />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Whether this size is available for new VPS instances.
             </OuiText>
           </OuiField>
@@ -123,21 +123,21 @@
 
           <OuiField label="Memory (GB)" required>
             <OuiInput v-model="sizeForm.memoryGB" type="number" min="0.1" step="0.1" placeholder="1" />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Memory in gigabytes (will be converted to bytes)
             </OuiText>
           </OuiField>
 
           <OuiField label="Disk Space (GB)" required>
             <OuiInput v-model="sizeForm.diskGB" type="number" min="1" placeholder="10" />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Disk space in gigabytes (will be converted to bytes)
             </OuiText>
           </OuiField>
 
           <OuiField label="Bandwidth per Month (GB)">
             <OuiInput v-model="sizeForm.bandwidthGB" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Monthly bandwidth limit in gigabytes. Set to 0 for unlimited (will be converted to bytes).
             </OuiText>
           </OuiField>
@@ -156,7 +156,7 @@
               min="0"
               placeholder="0.00"
             />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Minimum total payment (in USD) required for organizations to create VPS instances of this size. Set to 0 for no requirement. This helps ensure payment security before allowing larger VPS instances.
             </OuiText>
           </OuiField>
@@ -251,7 +251,7 @@ const fetchSizes = async () => {
     const response = await client.listVPSSizes({ includeUnavailable: true });
     sizes.value = response.sizes || [];
   } catch (error: unknown) {
-    toast.error(`Failed to load sizes: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to load sizes: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;
   }
@@ -371,7 +371,7 @@ const saveSize = async () => {
     closeSizeDialog();
     await fetchSizes();
   } catch (error: unknown) {
-    toast.error(`Failed to save size: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to save size: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isSaving.value = false;
   }
@@ -393,7 +393,7 @@ const confirmDelete = async () => {
     sizeToDelete.value = null;
     await fetchSizes();
   } catch (error: unknown) {
-    toast.error(`Failed to delete size: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to delete size: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isDeleting.value = false;
   }

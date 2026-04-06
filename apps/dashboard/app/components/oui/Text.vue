@@ -46,6 +46,7 @@
     color?:
       | "primary"
       | "secondary"
+      | "tertiary"
       | "muted"
       | "accent"
       | "success"
@@ -176,6 +177,7 @@
     const colorClasses = {
       primary: "text-primary",
       secondary: "text-secondary",
+      tertiary: "text-text-tertiary",
       muted: "text-muted",
       accent: "text-accent-primary",
       success: "text-success",

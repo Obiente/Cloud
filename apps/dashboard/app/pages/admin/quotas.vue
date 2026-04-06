@@ -117,7 +117,7 @@ async function save() {
     });
     message.value = "Saved";
   } catch (e: unknown) {
-    error.value = e?.message || "Error";
+    error.value = (e as any)?.message || "Error";
   }
 }
 </script>

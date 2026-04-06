@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Organizations & Teams
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Manage your organizations, team members, roles, and permissions
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Organizations are workspaces that group resources, deployments, and team members
         </OuiText>
       </OuiCardHeader>
@@ -31,7 +31,7 @@
                 <OuiText size="sm" weight="medium" color="primary">
                   Personal Organization
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   When you sign up, you automatically receive a "Personal" organization. This 
                   is your default workspace where you can start creating resources immediately. 
                   You're the Owner of this organization.
@@ -46,20 +46,20 @@
                 Creating Additional Organizations
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Navigate to Organizations in the sidebar
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Click "Create Organization" or use the organization switcher in the sidebar header
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. Enter organization name and slug (URL-friendly identifier)
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Configure initial settings and invite team members
                 </OuiText>
               </OuiStack>
-              <OuiText size="sm" color="secondary" class="mt-2">
+              <OuiText size="sm" color="tertiary" class="mt-2">
                 Create additional organizations to separate projects, teams, or environments. 
                 Each organization has its own resources, billing, and team members.
               </OuiText>
@@ -99,7 +99,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Owner</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Full access to all resources and settings. Can manage billing, delete the organization, 
                   and assign roles to other members.
                 </OuiText>
@@ -109,7 +109,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Admin</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Can manage all resources and projects within the organization. Can create, update, 
                   and delete deployments, game servers, and other resources. Cannot delete the organization.
                 </OuiText>
@@ -119,7 +119,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Member</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Can view and create resources. Can update resources they have access to. Cannot 
                   delete resources or manage organization settings.
                 </OuiText>
@@ -129,7 +129,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Viewer</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Read-only access. Can view resources, metrics, and logs but cannot create, update, 
                   or delete anything.
                 </OuiText>
@@ -155,9 +155,9 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Deployments</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• deployments.read</OuiText>
-                  <OuiText size="xs" color="secondary">• deployments.create</OuiText>
-                  <OuiText size="xs" color="secondary">• deployments.manage</OuiText>
+                  <OuiText size="xs" color="tertiary">• deployments.read</OuiText>
+                  <OuiText size="xs" color="tertiary">• deployments.create</OuiText>
+                  <OuiText size="xs" color="tertiary">• deployments.manage</OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiBox>
@@ -166,16 +166,16 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Game Servers</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• gameservers.read</OuiText>
-                  <OuiText size="xs" color="secondary">• gameservers.create</OuiText>
-                  <OuiText size="xs" color="secondary">• gameservers.manage</OuiText>
+                  <OuiText size="xs" color="tertiary">• gameservers.read</OuiText>
+                  <OuiText size="xs" color="tertiary">• gameservers.create</OuiText>
+                  <OuiText size="xs" color="tertiary">• gameservers.manage</OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiBox>
           </OuiGrid>
 
           <OuiBox p="md" rounded="lg" class="bg-info/10 border border-info/20">
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               Permissions can be assigned organization-wide or scoped to specific resources. 
               For example, a user might have "deployments.read" for all deployments but 
               "deployments.manage" only for specific deployments in a project.
@@ -199,7 +199,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Resource Quotas</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Set limits on CPU core-seconds, memory byte-seconds, bandwidth bytes, and storage 
                   bytes per month. Quotas help prevent unexpected costs.
                 </OuiText>
@@ -209,7 +209,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Billing</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Track usage and costs per organization. View detailed billing breakdowns, 
                   usage metrics, and estimated costs.
                 </OuiText>
@@ -219,7 +219,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Member Management</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Invite team members, assign roles, and manage permissions. View member activity 
                   and manage access to resources.
                 </OuiText>
@@ -229,7 +229,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Custom Roles</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Create custom roles with specific permissions. Assign roles organization-wide 
                   or scoped to specific resources using role bindings.
                 </OuiText>

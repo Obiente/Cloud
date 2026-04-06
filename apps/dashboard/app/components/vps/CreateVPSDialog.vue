@@ -55,10 +55,10 @@
           <template #item="{ item }">
             <OuiStack gap="xs">
               <OuiText weight="medium">{{ item.label }}</OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 {{ item.description }}
               </OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 {{ item.cpuCores }} CPU ·
                 {{ formatMemory(item.memoryBytes) }} RAM ·
                 {{ formatDisk(item.diskBytes) }} Storage
@@ -120,7 +120,7 @@
                 Add User
               </OuiButton>
             </OuiFlex>
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               Create additional users with custom passwords and SSH keys
             </OuiText>
             <OuiStack gap="sm" v-if="form.cloudInit.users.length > 0">
@@ -157,7 +157,7 @@
                     <!-- SSH Keys Selection -->
                     <OuiStack gap="xs">
                       <OuiText size="sm" weight="medium">SSH Keys</OuiText>
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Select SSH keys from your organization to assign to this user
                       </OuiText>
                       <OuiBox
@@ -166,7 +166,7 @@
                         rounded="md"
                         class="bg-surface-muted/40 ring-1 ring-border-muted"
                       >
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           No SSH keys available. Add SSH keys in your organization settings.
                         </OuiText>
                       </OuiBox>
@@ -273,7 +273,7 @@
             <OuiText size="sm" weight="semibold">{{
               selectedSize.label
             }}</OuiText>
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               {{ selectedSize.catalogDescription }}
             </OuiText>
           </OuiStack>
@@ -285,18 +285,18 @@
         <OuiCardBody>
           <OuiStack gap="sm">
             <OuiText size="sm" weight="semibold">Resource Limits</OuiText>
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               These limits define the maximum resources your VPS can use. You'll
               be charged based on actual usage (pay-as-you-go).
             </OuiText>
             <OuiGrid :cols="{ sm: 2 }" gap="sm">
-              <OuiText size="xs" color="secondary">CPU Cores</OuiText>
+              <OuiText size="xs" color="tertiary">CPU Cores</OuiText>
               <OuiText size="xs">{{ selectedSize.cpuCores }}</OuiText>
-              <OuiText size="xs" color="secondary">Memory</OuiText>
+              <OuiText size="xs" color="tertiary">Memory</OuiText>
               <OuiText size="xs">{{
                 formatMemory(selectedSize.memoryBytes)
               }}</OuiText>
-              <OuiText size="xs" color="secondary">Storage</OuiText>
+              <OuiText size="xs" color="tertiary">Storage</OuiText>
               <OuiText size="xs">{{
                 formatDisk(selectedSize.diskBytes)
               }}</OuiText>
@@ -342,7 +342,7 @@
           <OuiText size="sm" weight="semibold" color="warning">
             ⚠️ Important: Save This Password
           </OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             This password will only be shown once. If you lose it, you can reset
             it from the VPS settings, but you'll need to reboot the VPS for the
             new password to take effect.
@@ -366,7 +366,7 @@
             </OuiButton>
           </OuiFlex>
         </OuiBox>
-        <OuiText size="xs" color="secondary">
+        <OuiText size="xs" color="tertiary">
           Use this password to log in as root via SSH. We recommend using SSH
           keys instead for better security.
         </OuiText>

@@ -5,7 +5,7 @@
       <OuiCardBody>
         <OuiStack gap="lg">
           <OuiFlex justify="between" align="center">
-            <OuiText as="h3" size="md" weight="semibold"
+            <OuiText as="h3" size="sm" weight="semibold"
               >General Settings</OuiText
             >
             <OuiButton
@@ -49,7 +49,7 @@
       <OuiCardBody>
         <OuiStack gap="lg">
           <OuiFlex justify="between" align="center">
-            <OuiText as="h3" size="md" weight="semibold"
+            <OuiText as="h3" size="sm" weight="semibold"
               >Deployment Settings</OuiText
             >
             <OuiButton
@@ -92,7 +92,7 @@
                     size="sm"
                     @click="handleChangeRepository"
                   >
-                    <PencilIcon class="h-4 w-4 mr-1" />
+                    <PencilIcon class="h-3.5 w-3.5" />
                     Change
                   </OuiButton>
                 </OuiFlex>
@@ -115,7 +115,7 @@
                     name="uil:code-branch"
                     class="h-4 w-4 text-secondary shrink-0"
                   />
-                  <OuiText size="sm" color="secondary">
+                  <OuiText size="sm" color="tertiary">
                     Branch: <span class="font-mono">{{ config.branch }}</span>
                   </OuiText>
                 </OuiFlex>
@@ -158,7 +158,7 @@
                       size="sm"
                       @click="navigateToGitHubSettings"
                     >
-                      <LinkIcon class="h-4 w-4 mr-1" />
+                      <LinkIcon class="h-3.5 w-3.5" />
                       Connect Account
                     </OuiButton>
                   </OuiFlex>
@@ -183,7 +183,7 @@
                     {{ githubRepoError }}
                   </OuiText>
 
-                  <OuiText v-if="!isGitHubConnected" size="xs" color="secondary">
+                  <OuiText v-if="!isGitHubConnected" size="xs" color="tertiary">
                     Connect your GitHub account to select repositories directly.
                   </OuiText>
                 </OuiStack>
@@ -309,7 +309,7 @@
               <OuiStack gap="md">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="semibold">Nginx Configuration</OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Static deployments use nginx for serving files. SSL/HTTPS is handled by Traefik.
                   </OuiText>
                 </OuiStack>
@@ -323,7 +323,7 @@
                     Reset to Default
                   </OuiButton>
                 </OuiFlex>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   Customize your nginx configuration. Leave empty to use the default configuration optimized for static sites and SPAs.
                 </OuiText>
                 <textarea
@@ -445,19 +445,19 @@
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiStack gap="xs">
-            <OuiText as="h3" size="lg" weight="semibold" color="danger">
+            <OuiText as="h3" size="sm" weight="semibold" color="danger">
               Danger Zone
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               Irreversible and destructive actions
             </OuiText>
           </OuiStack>
           <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
             <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText size="sm" weight="medium" color="primary">
+              <OuiText size="sm" weight="medium">
                 Delete Deployment
               </OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 Once you delete a deployment, there is no going back. This will
                 permanently remove the deployment and all associated data.
               </OuiText>
@@ -469,7 +469,7 @@
               @click="handleDelete"
               class="gap-2 shrink-0"
             >
-              <TrashIcon class="h-4 w-4" />
+              <TrashIcon class="h-3.5 w-3.5" />
               <OuiText as="span" size="xs" weight="medium"
                 >Delete Deployment</OuiText
               >
@@ -1410,7 +1410,7 @@
       ) {
         const trimmed = githubIntegrationId.value.trim();
         // Include it even if empty - send null so backend can clear it
-        updates.githubIntegrationId = trimmed || null;
+        updates.githubIntegrationId = trimmed || undefined;
       }
 
       await deploymentActions.updateDeployment(

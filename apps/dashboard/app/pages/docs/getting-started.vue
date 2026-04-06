@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Getting Started
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Welcome to Obiente Cloud - Get started with deploying and managing your applications
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Welcome to Obiente Cloud</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Get started with deploying and managing your applications
         </OuiText>
       </OuiCardHeader>
@@ -30,7 +30,7 @@
                 <OuiText size="sm" weight="medium" color="primary">
                   Quick Start
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   When you sign up, you automatically receive a "Personal" organization. You 
                   can belong to multiple organizations and switch between them using the 
                   organization switcher in the sidebar header. Create additional organizations 
@@ -55,7 +55,7 @@
                 <BuildingOfficeIcon class="h-5 w-5 text-primary" />
                 <OuiText size="sm" weight="semibold" color="primary">Organizations</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Organizations are workspaces that group your resources, deployments, and team members. 
                 You can switch between organizations using the switcher in the sidebar header. Each 
                 organization has separate billing, quotas, and permissions.
@@ -69,7 +69,7 @@
                 <RocketLaunchIcon class="h-5 w-5 text-success" />
                 <OuiText size="sm" weight="semibold" color="primary">Deployments</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Deployments are your applications and services running on Obiente Cloud. They support 
                 multiple build strategies (Railpack, Nixpacks, Dockerfile, Docker Compose) and can be 
                 configured with different environments (production, staging, development).
@@ -83,7 +83,7 @@
                 <CubeIcon class="h-5 w-5 text-warning" />
                 <OuiText size="sm" weight="semibold" color="primary">Game Servers</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Dedicated Docker containers for hosting multiplayer game sessions. Features pay-as-you-go 
                 pricing where you only pay when servers are running. Supports Minecraft, Valheim, Rust, 
                 CS2, and many other game types.
@@ -97,7 +97,7 @@
                 <CreditCardIcon class="h-5 w-5 text-secondary" />
                 <OuiText size="sm" weight="semibold" color="primary">Pay-as-You-Go Pricing</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Only pay for actual resource usage. CPU core-seconds, memory byte-seconds, bandwidth, 
                 and storage are tracked and billed based on real usage. Perfect for variable workloads 
                 and resources that may be idle.
@@ -121,7 +121,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">1. Your Personal Organization</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   When you sign up, you automatically receive a "Personal" organization. This 
                   organization is ready to use immediately - you can start creating deployments, 
                   game servers, and other resources right away. You can create additional 
@@ -134,7 +134,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">2. Create Your First Deployment</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Navigate to Deployments and click "New Deployment". Enter a name, select an environment, 
                   and optionally add groups/labels. You'll be redirected to configure the repository URL, 
                   build settings, and environment variables.
@@ -145,7 +145,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">3. Configure and Deploy</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Configure your deployment settings, including repository URL, build commands, environment 
                   variables, and resource limits. Once configured, deploy and monitor the build process 
                   in real-time through the build logs.
@@ -156,7 +156,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">4. Monitor and Manage</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Use the dashboard to monitor your deployments, view metrics, check logs, and manage 
                   resources. The dashboard shows real-time metrics, cost breakdowns, and deployment health.
                 </OuiText>

@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Plans</OuiText>
-        <OuiText color="muted">Manage resource limitation plans for organizations.</OuiText>
+        <OuiText color="tertiary">Manage resource limitation plans for organizations.</OuiText>
       </OuiStack>
       <OuiButton @click="openCreateDialog">
         <PlusIcon class="h-4 w-4" />
@@ -101,7 +101,7 @@
               min="0"
               placeholder="0.00"
             />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Organizations automatically upgrade to this plan when they pay this amount or more (in cents).
             </OuiText>
           </OuiField>
@@ -114,7 +114,7 @@
               min="0"
               placeholder="0.00"
             />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Monthly free credits (in cents) automatically granted to organizations on this plan. Set to 0 for no free credits.
             </OuiText>
           </OuiField>
@@ -126,7 +126,7 @@
               min="0"
               placeholder="0"
             />
-            <OuiText size="xs" color="muted" class="mt-1">
+            <OuiText size="xs" color="tertiary" class="mt-1">
               Number of trial days for Stripe subscriptions. Set to 0 for no trial period.
             </OuiText>
           </OuiField>
@@ -139,32 +139,32 @@
           
           <OuiField label="CPU Cores" required>
             <OuiInput v-model="planForm.cpuCores" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
           <OuiField label="Memory (bytes)" required>
             <OuiInput v-model="planForm.memoryBytes" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
           <OuiField label="Max Deployments" required>
             <OuiInput v-model="planForm.deploymentsMax" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
           <OuiField label="Max VPS Instances" required>
             <OuiInput v-model="planForm.maxVpsInstances" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
           <OuiField label="Bandwidth per Month (bytes)" required>
             <OuiInput v-model="planForm.bandwidthBytesMonth" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
           <OuiField label="Storage (bytes)" required>
             <OuiInput v-model="planForm.storageBytes" type="number" min="0" placeholder="0" />
-            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+            <OuiText size="xs" color="tertiary" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
         </OuiStack>
       </OuiStack>
@@ -338,7 +338,7 @@ const savePlan = async () => {
       if (monthlyFreeCreditsCents !== undefined) updateRequest.monthlyFreeCreditsCents = BigInt(monthlyFreeCreditsCents);
       if (trialDays !== undefined) updateRequest.trialDays = trialDays;
 
-      await client.updatePlan(updateRequest);
+      await client.updatePlan(updateRequest as UpdatePlanRequest);
       toast.success("Plan updated successfully");
     } else {
       await client.createPlan({

@@ -1,31 +1,45 @@
 <template>
-  <OuiBox as="nav" class="flex flex-col h-full min-h-0 bg-surface-base" :class="$attrs.class">
-    <!-- Header - Fixed at top -->
-    <OuiBox as="header" class="shrink-0 p-6 border-b border-border-muted">
+  <OuiBox
+    as="nav"
+    class="app-sidebar-surface flex flex-col h-full min-h-0 rounded-xl"
+    :class="$attrs.class"
+  >
+    <!-- Header -->
+    <OuiBox as="header" class="app-sidebar-header shrink-0 px-4 py-4">
       <OuiFlex align="center" justify="between">
-        <OuiFlex align="start" gap="md">
-          <ObienteLogo size="md" class="mt-1" />
+        <OuiFlex align="center" gap="sm">
+          <ObienteLogo size="md" />
           <OuiStack gap="none" class="leading-tight">
-            <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
+            <OuiText size="sm" weight="semibold" color="primary"
+              >Obiente</OuiText
+            >
             <OuiText
               v-if="props.currentOrganization"
-              size="sm"
-              color="secondary"
+              size="xs"
+              color="tertiary"
+              class="max-w-[10rem] truncate"
             >
               {{ props.currentOrganization.name }}
             </OuiText>
           </OuiStack>
         </OuiFlex>
 
-        <OuiBox class="ml-2 shrink-0">
-          <OrgSwitcher :collection="organization" :multiple="false" @change="(v:any)=>emit('organization-change', v)" @create="emit('new-organization')" />
+        <OuiBox class="shrink-0">
+          <OrgSwitcher
+            :collection="organization"
+            :multiple="false"
+            @change="(v:any)=>emit('organization-change', v)"
+            @create="emit('new-organization')"
+          />
         </OuiBox>
       </OuiFlex>
     </OuiBox>
 
-    <!-- Navigation - Scrollable middle section -->
-    <OuiBox class="flex-1 min-h-0 overflow-y-auto sidebar-scrollable">
-      <nav class="px-6 pt-6 pb-20 space-y-2">
+    <!-- Navigation -->
+    <OuiBox
+      class="app-sidebar-scroll flex-1 min-h-0 overflow-y-auto sidebar-scrollable"
+    >
+      <nav class="px-3 py-3 space-y-0.5">
         <AppNavigationLink
           to="/dashboard"
           label="Dashboard"
@@ -99,8 +113,14 @@
 
         <!-- Admin -->
         <template v-if="hasAnyAdminPermission">
-          <div class="mt-4">
-            <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">Admin</OuiText>
+          <div class="pt-4 pb-1.5">
+            <OuiText
+              size="xs"
+              transform="uppercase"
+              class="app-sidebar-section-label px-3"
+              color="tertiary"
+              >Admin</OuiText
+            >
           </div>
           <AppNavigationLink
             v-if="hasAdminPagePermission('/audit-logs')"
@@ -132,8 +152,13 @@
           />
         </template>
         <template v-if="props.showSuperAdmin">
-          <div class="mt-4">
-            <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">
+          <div class="pt-4 pb-1.5">
+            <OuiText
+              size="xs"
+              transform="uppercase"
+              class="app-sidebar-section-label px-3"
+              color="tertiary"
+            >
               Superadmin
             </OuiText>
           </div>
@@ -259,14 +284,13 @@
           />
         </template>
       </nav>
+      <!-- Bottom spacer -->
+      <div class="h-16"></div>
     </OuiBox>
 
-    <!-- Footer - Fixed at bottom -->
-    <OuiBox as="footer" class="shrink-0 border-t border-border-muted bg-surface-subtle">
-      <!-- User section -->
-      <OuiBox class="px-4 py-4">
-        <AppUserProfile />
-      </OuiBox>
+    <!-- Footer -->
+    <OuiBox as="footer" class="app-sidebar-footer shrink-0 px-3 py-3">
+      <AppUserProfile />
     </OuiBox>
   </OuiBox>
 </template>
@@ -295,7 +319,7 @@ import {
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";
-import { computed } from 'vue';
+import { computed } from "vue";
 import ObienteLogo from "./ObienteLogo.vue";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { OrganizationService } from "@obiente/proto";
@@ -361,7 +385,7 @@ function matchesPermission(perm: string, required: string): boolean {
   // Special case: "*" matches everything
   if (perm === "*") return true;
   if (required === "*") return true;
-  
+
   if (perm === required) return true;
   if (perm.endsWith(".*")) {
     const prefix = perm.slice(0, -2);
@@ -401,20 +425,22 @@ const hasAnyAdminPermission = computed(() => {
   if (superAdmin.isFullSuperadmin.value) {
     return true;
   }
-  
+
   // Check if user has wildcard permission (from GetMyPermissions for superadmins)
   if (hasPermission("*")) {
     return true;
   }
-  
-  return hasPermission("admin.*") ||
+
+  return (
+    hasPermission("admin.*") ||
     hasPermission("admin.roles.read") ||
     hasPermission("admin.roles.*") ||
     hasPermission("admin.bindings.read") ||
     hasPermission("admin.bindings.*") ||
     hasPermission("admin.quotas.update") ||
     hasPermission("admin.quotas.*") ||
-    hasPermission("organization.*");
+    hasPermission("organization.*")
+  );
 });
 
 // Map pages to required permissions
@@ -442,10 +468,10 @@ const pagePermissions: Record<string, string> = {
 const hasPagePermission = (path: string): boolean => {
   if (!props.showSuperAdmin) return false;
   if (superAdmin.isFullSuperadmin.value) return true;
-  
+
   const requiredPerm = pagePermissions[path];
   if (!requiredPerm) return false;
-  
+
   return superAdmin.hasPermission(requiredPerm);
 };
 

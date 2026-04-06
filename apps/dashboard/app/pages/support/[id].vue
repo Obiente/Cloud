@@ -17,7 +17,7 @@
         <OuiCardBody>
           <OuiStack align="center" gap="md" class="py-16">
             <OuiSpinner size="lg" />
-            <OuiText color="secondary">Loading ticket...</OuiText>
+            <OuiText color="tertiary">Loading ticket...</OuiText>
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
@@ -30,7 +30,7 @@
             <OuiText color="danger" size="lg" weight="semibold" class="mb-2">
               Failed to load ticket
             </OuiText>
-            <OuiText color="secondary" class="mb-4">{{ error }}</OuiText>
+            <OuiText color="tertiary" class="mb-4">{{ error }}</OuiText>
             <OuiButton @click="refreshTicket()" variant="outline" class="gap-2">
               <ArrowPathIcon class="h-4 w-4" />
               Try Again
@@ -100,7 +100,7 @@
               <OuiCardBody>
                 <OuiStack spacing="lg">
                   <div>
-                    <OuiText size="sm" weight="semibold" color="secondary" class="mb-2">
+                    <OuiText size="sm" weight="semibold" color="tertiary" class="mb-2">
                       Description
                     </OuiText>
                     <OuiText class="whitespace-pre-wrap">{{ ticket.description }}</OuiText>
@@ -115,7 +115,7 @@
                 <OuiFlex justify="between" align="center">
                   <OuiStack gap="xs">
                     <OuiHeading size="lg">Comments</OuiHeading>
-                    <OuiText v-if="comments && comments.length > 0" size="sm" color="secondary">
+                    <OuiText v-if="comments && comments.length > 0" size="sm" color="tertiary">
                       {{ comments.length }} comment{{ comments.length !== 1 ? 's' : '' }}
                     </OuiText>
                   </OuiStack>
@@ -126,14 +126,14 @@
                   <!-- Comments List -->
                   <div v-if="commentsPending" class="text-center py-8">
                     <OuiSpinner />
-                    <OuiText color="secondary" class="mt-2">Loading comments...</OuiText>
+                    <OuiText color="tertiary" class="mt-2">Loading comments...</OuiText>
                   </div>
                   <div v-else-if="!comments?.length" class="text-center py-12">
                     <ChatBubbleLeftRightIcon class="h-12 w-12 text-muted mx-auto mb-4 opacity-50" />
                     <OuiText size="lg" weight="semibold" color="primary" class="mb-2">
                       No comments yet
                     </OuiText>
-                    <OuiText color="secondary">
+                    <OuiText color="tertiary">
                       Be the first to add a comment
                     </OuiText>
                   </div>
@@ -168,7 +168,7 @@
                                 <LockClosedIcon class="h-3 w-3 mr-1" />
                                 Internal
                               </OuiBadge>
-                              <OuiText size="xs" weight="medium" color="secondary">
+                              <OuiText size="xs" weight="medium" color="tertiary">
                                 <OuiRelativeTime :value="comment.createdAt ? new Date(Number(comment.createdAt.seconds) * 1000) : undefined" />
                               </OuiText>
                             </OuiFlex>
@@ -226,7 +226,7 @@
               <OuiCardBody>
                 <OuiStack spacing="md">
                   <div>
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-1">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
                       Status
                     </OuiText>
                     <div class="flex justify-center">
@@ -240,7 +240,7 @@
                     </div>
                   </div>
                   <div>
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-1">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
                       Priority
                     </OuiText>
                     <div class="flex justify-center">
@@ -254,7 +254,7 @@
                     </div>
                   </div>
                   <div>
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-1">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
                       Category
                     </OuiText>
                     <div class="flex justify-center">
@@ -268,36 +268,36 @@
                     </div>
                   </div>
                   <div class="border-t border-border-muted pt-3">
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-2">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
                       Details
                     </OuiText>
                     <OuiStack spacing="xs">
                       <OuiFlex justify="between" align="center">
-                        <OuiText size="xs" color="secondary">Created</OuiText>
+                        <OuiText size="xs" color="tertiary">Created</OuiText>
                         <OuiText size="xs" weight="medium">
                           <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
                         </OuiText>
                       </OuiFlex>
                       <OuiFlex v-if="ticket.createdByName || ticket.createdByEmail" justify="between" align="center">
-                        <OuiText size="xs" color="secondary">Created by</OuiText>
+                        <OuiText size="xs" color="tertiary">Created by</OuiText>
                         <OuiText size="xs" weight="medium">
                           {{ ticket.createdByName || ticket.createdByEmail || ticket.createdBy || 'Unknown User' }}
                         </OuiText>
                       </OuiFlex>
                       <OuiFlex v-if="ticket.assignedToName || ticket.assignedToEmail" justify="between" align="center">
-                        <OuiText size="xs" color="secondary">Assigned to</OuiText>
+                        <OuiText size="xs" color="tertiary">Assigned to</OuiText>
                         <OuiText size="xs" weight="medium">
                           {{ ticket.assignedToName || ticket.assignedToEmail || ticket.assignedTo || 'Unassigned' }}
                         </OuiText>
                       </OuiFlex>
                       <OuiFlex v-if="ticket.resolvedAt" justify="between" align="center">
-                        <OuiText size="xs" color="secondary">Resolved</OuiText>
+                        <OuiText size="xs" color="tertiary">Resolved</OuiText>
                         <OuiText size="xs" weight="medium">
                           <OuiRelativeTime :value="ticket.resolvedAt ? new Date(Number(ticket.resolvedAt.seconds) * 1000) : undefined" />
                         </OuiText>
                       </OuiFlex>
                       <OuiFlex justify="between" align="center">
-                        <OuiText size="xs" color="secondary">Comments</OuiText>
+                        <OuiText size="xs" color="tertiary">Comments</OuiText>
                         <OuiText size="xs" weight="medium">
                           {{ ticket.commentCount || 0 }}
                         </OuiText>
@@ -316,7 +316,7 @@
               <OuiCardBody>
                 <OuiStack spacing="md">
                   <div>
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-2">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
                       Update Status
                     </OuiText>
                     <OuiSelect
@@ -327,7 +327,7 @@
                     />
                   </div>
                   <div>
-                    <OuiText size="xs" weight="semibold" color="secondary" class="mb-2">
+                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
                       Update Priority
                     </OuiText>
                     <OuiSelect

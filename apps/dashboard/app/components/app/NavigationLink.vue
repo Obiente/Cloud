@@ -1,24 +1,22 @@
 <template>
   <NuxtLink
     :to="to"
-    class="w-full px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer group block"
+    class="app-nav-link w-full px-3 py-1.5 rounded-lg text-[0.8125rem] font-medium transition-colors cursor-pointer group flex items-center gap-2.5"
     :class="[
-      isActive
-        ? 'bg-primary/10 text-primary border border-primary/20'
-        : 'text-secondary hover:bg-hover hover:text-primary',
+      isActive ? 'app-nav-link-active text-primary' : 'text-secondary hover:text-primary',
     ]"
     @click="handleClick"
   >
-    <OuiFlex align="center" gap="md">
+    <OuiBox as="span" :shrink="false" class="app-nav-link-icon">
       <component
         :is="icon"
-        class="w-5 h-5 shrink-0 transition-colors"
+        class="h-4 w-4 shrink-0 transition-colors"
         :class="[
-          isActive ? 'text-primary' : 'text-secondary group-hover:text-primary',
+          isActive ? 'text-primary' : 'text-tertiary group-hover:text-secondary',
         ]"
       />
-      <OuiText class="flex-1 min-w-0">{{ label }}</OuiText>
-    </OuiFlex>
+    </OuiBox>
+    <OuiText as="span" size="sm" truncate class="flex-1">{{ label }}</OuiText>
   </NuxtLink>
 </template>
 

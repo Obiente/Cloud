@@ -1,21 +1,13 @@
 <template>
-  <div class="p-6">
-    <OuiStack gap="lg">
-      <OuiText as="h2" size="lg" weight="semibold">Account Settings</OuiText>
-      
-      <!-- Account Information -->
+  <OuiStack gap="lg">
+      <!-- Profile Information -->
       <OuiCard variant="outline">
         <OuiCardBody>
           <OuiStack gap="lg">
-            <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium">Profile Information</OuiText>
-              <OuiText size="xs" color="secondary">
-                Update your account profile information
-              </OuiText>
-            </OuiStack>
+            <OuiText size="sm" weight="semibold">Profile Information</OuiText>
 
             <!-- Loading State -->
-            <OuiText v-if="!auth.user" size="sm" color="secondary">
+            <OuiText v-if="!auth.user" size="sm" color="tertiary">
               Loading account information...
             </OuiText>
 
@@ -25,7 +17,6 @@
                 v-model="formData.preferred_username"
                 label="Username"
                 placeholder="Enter username"
-                helper-text="Your preferred username"
                 :error="errors.preferred_username"
               />
 
@@ -50,7 +41,6 @@
                 v-model="formData.name"
                 label="Display Name"
                 placeholder="Enter display name"
-                helper-text="This is how your name will appear to others"
                 :error="errors.name"
               />
 
@@ -63,58 +53,28 @@
               />
 
               <!-- Read-only fields -->
-              <div class="pt-2 border-t border-border-muted">
-                <OuiStack gap="sm">
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" weight="semibold" transform="uppercase" color="secondary" class="tracking-wide">
-                      Email
-                    </OuiText>
-                    <OuiFlex align="center" gap="sm" wrap="wrap">
-                      <OuiText size="sm" weight="medium">
-                        {{ auth.user.email || "—" }}
-                      </OuiText>
-                      <OuiBox
-                        v-if="auth.user.email_verified !== undefined"
-                        px="xs"
-                        py="xs"
-                        rounded="sm"
-                        :class="auth.user.email_verified 
-                          ? 'bg-success/10 text-success' 
-                          : 'bg-warning/10 text-warning'"
-                        class="text-xs font-medium"
-                      >
-                        {{ auth.user.email_verified ? "Verified" : "Not verified" }}
-                      </OuiBox>
-                    </OuiFlex>
-                    <OuiFlex v-if="auth.user" gap="sm" align="center" wrap="wrap" class="pt-1">
-                      <OuiButton
-                        variant="ghost"
-                        size="sm"
-                        @click="openManagementConsole"
-                        :disabled="!managementUrl"
-                      >
-                        <ArrowTopRightOnSquareIcon class="h-3 w-3 mr-1" />
-                        Update Email
-                      </OuiButton>
-                      <OuiText size="xs" color="secondary">
-                        Opens in a new window
-                      </OuiText>
-                    </OuiFlex>
-                  </OuiStack>
-
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" weight="semibold" transform="uppercase" color="secondary" class="tracking-wide">
-                      User ID
-                    </OuiText>
-                    <OuiText size="xs" color="secondary" class="font-mono break-all">
-                      {{ auth.user.sub }}
-                    </OuiText>
-                  </OuiStack>
-                </OuiStack>
-              </div>
+              <OuiStack gap="none" class="divide-y divide-border-default pt-4 border-t border-border-muted">
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2">
+                  <OuiText size="xs" color="tertiary">Email</OuiText>
+                  <OuiFlex align="center" gap="sm">
+                    <OuiText size="sm" weight="medium">{{ auth.user.email || "—" }}</OuiText>
+                    <OuiBadge
+                      v-if="auth.user.email_verified !== undefined"
+                      :variant="auth.user.email_verified ? 'success' : 'warning'"
+                      size="xs"
+                    >
+                      {{ auth.user.email_verified ? "Verified" : "Not verified" }}
+                    </OuiBadge>
+                  </OuiFlex>
+                </OuiFlex>
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2">
+                  <OuiText size="xs" color="tertiary">User ID</OuiText>
+                  <OuiText size="xs" color="tertiary" class="font-mono">{{ auth.user.sub }}</OuiText>
+                </OuiFlex>
+              </OuiStack>
 
               <!-- Action Buttons -->
-              <OuiFlex gap="sm" align="center" class="pt-2 border-t border-border-muted">
+              <OuiFlex gap="sm" align="center" class="pt-4 border-t border-border-muted">
                 <OuiButton
                   variant="solid"
                   @click="saveProfile"
@@ -140,36 +100,27 @@
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Security Information -->
+      <!-- Security -->
       <OuiCard variant="outline">
         <OuiCardBody>
-          <OuiStack gap="md">
+          <OuiFlex v-if="auth.user" align="center" justify="between" gap="sm">
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium">Security & Authentication</OuiText>
-              <OuiText size="xs" color="secondary">
-                Change your password, manage two-factor authentication, and configure security settings
-              </OuiText>
+              <OuiText size="sm" weight="semibold">Security</OuiText>
+              <OuiText size="xs" color="tertiary">Password, two-factor authentication, and sessions</OuiText>
             </OuiStack>
-
-            <OuiFlex v-if="auth.user" gap="sm" align="center" wrap="wrap">
-              <OuiButton
-                variant="solid"
-                @click="openManagementConsole"
-                class="w-full sm:w-auto"
-                :disabled="!managementUrl"
-              >
-                <ArrowTopRightOnSquareIcon class="h-4 w-4 mr-2" />
-                Manage Security Settings
-              </OuiButton>
-              <OuiText size="xs" color="secondary">
-                Opens in a new window
-              </OuiText>
-            </OuiFlex>
-          </OuiStack>
+            <OuiButton
+              variant="outline"
+              size="sm"
+              @click="openManagementConsole"
+              :disabled="!managementUrl"
+            >
+              <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5" />
+              Manage
+            </OuiButton>
+          </OuiFlex>
         </OuiCardBody>
       </OuiCard>
-    </OuiStack>
-  </div>
+  </OuiStack>
 </template>
 
 <script setup lang="ts">
@@ -297,7 +248,7 @@ const saveProfile = async () => {
     saveError.value = (err as Error).message || "Failed to update profile. Please try again.";
     
     // Handle validation errors
-    if (err.code === "invalid_argument" || (err as Error).message?.includes("validation")) {
+    if ((err as any).code === "invalid_argument" || (err as Error).message?.includes("validation")) {
       // Could parse error details here if available
     }
   } finally {

@@ -5,13 +5,13 @@
       <OuiCardBody>
         <OuiStack gap="lg">
           <OuiFlex justify="between" align="center">
-            <OuiText as="h3" size="md" weight="semibold">Custom Domains</OuiText>
+            <OuiText as="h3" size="sm" weight="semibold">Custom Domains</OuiText>
             <OuiButton @click="showAddDomain = true" size="sm" variant="solid">
               Add Domain
             </OuiButton>
           </OuiFlex>
 
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             Add custom domains to your game server's HTTP routes. You'll need to verify
             ownership via DNS TXT record before using the domain in a routing rule.
           </OuiText>
@@ -49,7 +49,7 @@
                 >
                   <OuiStack gap="sm">
                     <OuiText size="sm" weight="semibold">Verify Domain Ownership</OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Add the following TXT record to your DNS provider to verify ownership:
                     </OuiText>
 
@@ -85,7 +85,7 @@
                       </div>
                     </div>
 
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       After adding the record, wait a few minutes for DNS propagation, then click "Verify" above.
                     </OuiText>
                   </OuiStack>
@@ -101,7 +101,7 @@
                       <Icon name="uil:check-circle" class="h-4 w-4 text-success" />
                       <OuiText size="sm" weight="semibold" color="success">Domain Verified</OuiText>
                     </OuiFlex>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Configure a CNAME record in your DNS provider:
                     </OuiText>
                     <div class="bg-background-default rounded p-3 font-mono text-xs border border-border-default">
@@ -125,7 +125,7 @@
                         </OuiButton>
                       </div>
                     </div>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       SSL certificates will be issued automatically via Let's Encrypt once DNS is configured.
                     </OuiText>
                   </OuiStack>
@@ -148,7 +148,7 @@
           <!-- Empty State -->
           <div v-else class="text-center py-8">
             <Icon name="uil:globe" class="h-12 w-12 text-secondary mx-auto mb-4" />
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               No custom domains configured. Add one to get started.
             </OuiText>
           </div>
@@ -162,20 +162,20 @@
         <OuiStack gap="md">
           <OuiFlex justify="between" align="center">
             <OuiStack gap="none">
-              <OuiText as="h3" size="md" weight="semibold">HTTP Routing Rules</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText as="h3" size="sm" weight="semibold">HTTP Routing Rules</OuiText>
+              <OuiText size="sm" color="tertiary">
                 Route HTTP traffic to specific ports on your game server. Requires the game server
                 to have an HTTP-capable service running on the configured port.
               </OuiText>
             </OuiStack>
             <OuiButton size="sm" @click="addRule">
-              <PlusIcon class="h-4 w-4 mr-2" />
+              <PlusIcon class="h-3.5 w-3.5" />
               Add Rule
             </OuiButton>
           </OuiFlex>
 
           <OuiFlex v-if="isLoadingRoutes" justify="center" class="py-8">
-            <OuiText color="secondary">Loading routing rules...</OuiText>
+            <OuiText color="tertiary">Loading routing rules...</OuiText>
           </OuiFlex>
 
           <OuiFlex
@@ -186,7 +186,7 @@
             class="py-12"
           >
             <OuiStack gap="md" align="center">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 No HTTP routing rules configured. Add a rule to expose HTTP services.
               </OuiText>
               <OuiButton size="sm" @click="addRule">Add First Rule</OuiButton>
@@ -211,17 +211,17 @@
                       </OuiBadge>
                       <OuiBadge v-if="route.sslEnabled" variant="success" size="xs">SSL</OuiBadge>
                     </OuiFlex>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Port {{ route.targetPort }}
                       <span v-if="route.pathPrefix"> • {{ route.pathPrefix }}</span>
                     </OuiText>
                   </OuiStack>
                   <OuiFlex gap="sm">
                     <OuiButton variant="ghost" size="sm" @click="startEditRule(route)">
-                      <PencilIcon class="h-4 w-4" />
+                      <PencilIcon class="h-3.5 w-3.5" />
                     </OuiButton>
                     <OuiButton variant="ghost" size="sm" color="danger" @click="deleteRoute(route.id)">
-                      <TrashIcon class="h-4 w-4" />
+                      <TrashIcon class="h-3.5 w-3.5" />
                     </OuiButton>
                   </OuiFlex>
                 </OuiFlex>

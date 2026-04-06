@@ -33,7 +33,7 @@
       </OuiFlex>
     </OuiFlex>
 
-    <OuiText size="sm" color="secondary">
+    <OuiText size="sm" color="tertiary">
       Access an interactive terminal session to run commands directly on your
       VPS.
     </OuiText>
@@ -43,7 +43,7 @@
         <div ref="terminalContainer" class="terminal-content" />
         <div v-if="showSpinner" class="terminal-overlay">
           <div class="terminal-spinner" aria-hidden="true"></div>
-          <OuiText size="sm" color="secondary" class="spinner-text">
+          <OuiText size="sm" color="tertiary" class="spinner-text">
             Connecting to terminal...
           </OuiText>
         </div>

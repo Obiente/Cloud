@@ -22,68 +22,17 @@
             <OuiText size="sm" weight="semibold">Connection Details</OuiText>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-border-default rounded-lg overflow-hidden border border-border-default">
-              <!-- Host -->
-              <div class="bg-surface-base px-4 py-3 group">
-                <OuiFlex justify="between" align="start">
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" color="tertiary">Host</OuiText>
-                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.host }}</OuiText>
-                  </OuiStack>
-                  <button
-                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                    @click="copyToClipboard(connectionInfo.host, 'Host')"
-                  >
-                    <ClipboardIcon class="h-3.5 w-3.5" />
-                  </button>
-                </OuiFlex>
+              <div class="bg-surface-base px-4 py-3">
+                <UiCopyField label="Host" :value="connectionInfo.host" />
               </div>
-
-              <!-- Port -->
-              <div class="bg-surface-base px-4 py-3 group">
-                <OuiFlex justify="between" align="start">
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" color="tertiary">Port</OuiText>
-                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.port }}</OuiText>
-                  </OuiStack>
-                  <button
-                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                    @click="copyToClipboard(String(connectionInfo.port), 'Port')"
-                  >
-                    <ClipboardIcon class="h-3.5 w-3.5" />
-                  </button>
-                </OuiFlex>
+              <div class="bg-surface-base px-4 py-3">
+                <UiCopyField label="Port" :value="String(connectionInfo.port)" />
               </div>
-
-              <!-- Database Name -->
-              <div class="bg-surface-base px-4 py-3 group">
-                <OuiFlex justify="between" align="start">
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" color="tertiary">Database Name</OuiText>
-                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.databaseName }}</OuiText>
-                  </OuiStack>
-                  <button
-                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                    @click="copyToClipboard(connectionInfo.databaseName, 'Database name')"
-                  >
-                    <ClipboardIcon class="h-3.5 w-3.5" />
-                  </button>
-                </OuiFlex>
+              <div class="bg-surface-base px-4 py-3">
+                <UiCopyField label="Database Name" :value="connectionInfo.databaseName" />
               </div>
-
-              <!-- Username -->
-              <div class="bg-surface-base px-4 py-3 group">
-                <OuiFlex justify="between" align="start">
-                  <OuiStack gap="xs">
-                    <OuiText size="xs" color="tertiary">Username</OuiText>
-                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.username }}</OuiText>
-                  </OuiStack>
-                  <button
-                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                    @click="copyToClipboard(connectionInfo.username, 'Username')"
-                  >
-                    <ClipboardIcon class="h-3.5 w-3.5" />
-                  </button>
-                </OuiFlex>
+              <div class="bg-surface-base px-4 py-3">
+                <UiCopyField label="Username" :value="connectionInfo.username" />
               </div>
             </div>
           </OuiStack>
@@ -114,22 +63,13 @@
             <OuiText size="sm" weight="semibold">Connection Strings</OuiText>
 
             <OuiStack gap="sm">
-              <template v-for="cs in connectionStrings" :key="cs.label">
-                <div class="group rounded-lg border border-border-default overflow-hidden">
-                  <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
-                    <OuiText size="xs" weight="medium">{{ cs.label }}</OuiText>
-                    <button
-                      class="p-1 rounded text-tertiary hover:text-primary transition-colors"
-                      @click="copyToClipboard(cs.value, cs.label + ' connection string')"
-                    >
-                      <ClipboardIcon class="h-3.5 w-3.5" />
-                    </button>
-                  </OuiFlex>
-                  <div class="px-3 py-2.5">
-                    <OuiText size="xs" class="font-mono break-all text-secondary">{{ cs.value }}</OuiText>
-                  </div>
-                </div>
-              </template>
+              <UiCodeBlock
+                v-for="cs in connectionStrings"
+                :key="cs.label"
+                :label="cs.label"
+                :value="cs.value"
+                break-all
+              />
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
@@ -160,7 +100,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { ClipboardIcon, ShieldCheckIcon } from "@heroicons/vue/24/outline";
+import { ShieldCheckIcon } from "@heroicons/vue/24/outline";
 import { DatabaseService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
@@ -188,15 +128,6 @@ const connectionStrings = computed(() => {
   if (connectionInfo.value.redisUrl) strings.push({ label: 'Redis', value: connectionInfo.value.redisUrl });
   return strings;
 });
-
-async function copyToClipboard(text: string, label: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard`);
-  } catch (err) {
-    toast.error("Failed to copy to clipboard");
-  }
-}
 
 async function loadConnectionInfo() {
   loading.value = true;

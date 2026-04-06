@@ -5,7 +5,7 @@
       <OuiCardHeader>
         <OuiFlex justify="between" align="center" class="w-full">
           <OuiFlex align="center" gap="md">
-            <OuiText as="h3" size="lg" weight="semibold">Query Editor</OuiText>
+            <OuiText as="h3" size="sm" weight="semibold">Query Editor</OuiText>
             <!-- Query Tabs -->
             <div class="flex items-center gap-1 ml-2">
               <button
@@ -49,7 +49,7 @@
                 size="sm"
                 @click="showSnippets = !showSnippets; showHistory = false"
               >
-                <SparklesIcon class="h-4 w-4" />
+                <SparklesIcon class="h-3.5 w-3.5" />
                 Snippets
               </OuiButton>
               <Transition name="dropdown">
@@ -58,7 +58,7 @@
                   class="absolute right-0 top-full mt-1 w-64 bg-surface-overlay border border-border-default rounded-lg shadow-xl z-50 overflow-hidden"
                 >
                   <div class="px-3 py-2 border-b border-border-default bg-surface-base">
-                    <OuiText size="xs" weight="semibold" color="secondary">Quick Insert</OuiText>
+                    <OuiText size="xs" weight="semibold" color="tertiary">Quick Insert</OuiText>
                   </div>
                   <div class="max-h-64 overflow-y-auto">
                     <button
@@ -68,7 +68,7 @@
                       @click="insertSnippet(snippet.code)"
                     >
                       <OuiText size="xs" weight="medium">{{ snippet.label }}</OuiText>
-                      <OuiText size="xs" color="secondary" class="font-mono mt-0.5 truncate">{{ snippet.preview }}</OuiText>
+                      <OuiText size="xs" color="tertiary" class="font-mono mt-0.5 truncate">{{ snippet.preview }}</OuiText>
                     </button>
                   </div>
                 </div>
@@ -83,9 +83,9 @@
                 size="sm"
                 @click="showHistory = !showHistory; showSnippets = false"
               >
-                <ClockIcon class="h-4 w-4" />
+                <ClockIcon class="h-3.5 w-3.5" />
                 History
-                <OuiBadge color="secondary" size="xs" class="ml-1">{{ queryHistory.length }}</OuiBadge>
+                <OuiBadge color="tertiary" size="xs" class="ml-1">{{ queryHistory.length }}</OuiBadge>
               </OuiButton>
               <Transition name="dropdown">
                 <div
@@ -93,7 +93,7 @@
                   class="absolute right-0 top-full mt-1 w-96 bg-surface-overlay border border-border-default rounded-lg shadow-xl z-50 overflow-hidden"
                 >
                   <div class="px-3 py-2 border-b border-border-default bg-surface-base flex items-center justify-between">
-                    <OuiText size="xs" weight="semibold" color="secondary">Query History</OuiText>
+                    <OuiText size="xs" weight="semibold" color="tertiary">Query History</OuiText>
                     <button
                       class="text-xs text-secondary hover:text-danger transition-colors"
                       @click="clearHistory"
@@ -129,7 +129,7 @@
             >
               <div class="flex flex-col items-center gap-3">
                 <div class="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                <OuiText size="sm" color="secondary">Loading editor...</OuiText>
+                <OuiText size="sm" color="tertiary">Loading editor...</OuiText>
               </div>
             </div>
           </Transition>
@@ -154,7 +154,7 @@
         <div class="flex items-center justify-between px-4 py-2.5 bg-surface-base">
           <OuiFlex gap="md" align="center">
             <OuiFlex gap="xs" align="center">
-              <OuiText color="secondary" size="xs">Limit:</OuiText>
+              <OuiText color="tertiary" size="xs">Limit:</OuiText>
               <select
                 v-model="maxRows"
                 class="text-xs bg-surface-overlay border border-border-default rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -171,7 +171,7 @@
               <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Ctrl</kbd>
               <span class="text-[10px]">+</span>
               <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Enter</kbd>
-              <OuiText size="xs" color="secondary" class="ml-1">Execute</OuiText>
+              <OuiText size="xs" color="tertiary" class="ml-1">Execute</OuiText>
             </OuiFlex>
           </OuiFlex>
 
@@ -183,7 +183,7 @@
               size="sm"
               @click="exportResults('csv')"
             >
-              <ArrowDownTrayIcon class="h-4 w-4" />
+              <ArrowDownTrayIcon class="h-3.5 w-3.5" />
               CSV
             </OuiButton>
             <OuiButton
@@ -193,7 +193,7 @@
               size="sm"
               @click="exportResults('json')"
             >
-              <ArrowDownTrayIcon class="h-4 w-4" />
+              <ArrowDownTrayIcon class="h-3.5 w-3.5" />
               JSON
             </OuiButton>
             <OuiButton
@@ -203,7 +203,7 @@
               :disabled="!activeTab.content.trim()"
               @click="executeCurrentQuery()"
             >
-              <PlayIcon class="h-4 w-4" />
+              <PlayIcon class="h-3.5 w-3.5" />
               Run Query
             </OuiButton>
           </OuiFlex>
@@ -236,7 +236,7 @@
             </template>
           </OuiFlex>
           <OuiFlex v-if="activeTab.results" gap="sm" align="center">
-            <OuiBadge color="secondary" size="sm">
+            <OuiBadge color="tertiary" size="sm">
               <ClockIcon class="h-3 w-3 mr-1" />
               {{ activeTab.results.executionTimeMs }}ms
             </OuiBadge>
@@ -335,14 +335,14 @@
           <!-- Empty state -->
           <div v-if="sortedRows.length === 0" class="py-12 text-center">
             <TableCellsIcon class="h-12 w-12 mx-auto text-secondary/30 mb-3" />
-            <OuiText color="secondary">No rows returned</OuiText>
+            <OuiText color="tertiary">No rows returned</OuiText>
           </div>
         </div>
 
         <!-- Truncation warning -->
         <OuiAlert v-if="activeTab.results?.truncated" color="warning" class="m-4 mt-0">
           <div class="flex items-center gap-2">
-            <ExclamationTriangleIcon class="h-4 w-4" />
+            <ExclamationTriangleIcon class="h-3.5 w-3.5" />
             <OuiText size="sm">Results truncated to {{ formatNumber(parseInt(maxRows)) }} rows. Increase the limit or add filters to see more data.</OuiText>
           </div>
         </OuiAlert>
@@ -353,8 +353,8 @@
     <OuiDialog v-model:open="cellDetailOpen" title="Cell Value" size="lg">
       <div v-if="cellDetail" class="space-y-4">
         <div class="flex items-center gap-2 text-sm">
-          <OuiBadge color="secondary">{{ cellDetail.column.name }}</OuiBadge>
-          <OuiText color="secondary" size="xs">{{ cellDetail.column.dataType }}</OuiText>
+          <OuiBadge color="tertiary">{{ cellDetail.column.name }}</OuiBadge>
+          <OuiText color="tertiary" size="xs">{{ cellDetail.column.dataType }}</OuiText>
         </div>
         <div class="relative">
           <pre
@@ -365,14 +365,14 @@
             @click="copyCellValue"
             title="Copy to clipboard"
           >
-            <ClipboardIcon class="h-4 w-4" />
+            <ClipboardIcon class="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
       <template #footer>
         <OuiButton variant="ghost" @click="cellDetailOpen = false">Close</OuiButton>
         <OuiButton color="primary" @click="copyCellValue">
-          <ClipboardIcon class="h-4 w-4" />
+          <ClipboardIcon class="h-3.5 w-3.5" />
           Copy Value
         </OuiButton>
       </template>

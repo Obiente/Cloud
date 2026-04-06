@@ -33,7 +33,7 @@
             >
               <OuiFlex align="center" justify="center" gap="md">
                 <MagnifyingGlassIcon class="h-12 w-12 text-muted" />
-                <OuiText size="xl" weight="semibold" color="muted">
+                <OuiText size="xl" weight="semibold" color="tertiary">
                   Page Not Found
                 </OuiText>
               </OuiFlex>
@@ -46,7 +46,7 @@
           <OuiText as="h2" size="3xl" weight="bold" color="primary">
             Oops! This page doesn't exist
           </OuiText>
-          <OuiText size="md" color="secondary" class="max-w-md">
+          <OuiText size="md" color="tertiary" class="max-w-md">
             The page you're looking for might have been moved, deleted, or doesn't
             exist. Let's get you back on track.
           </OuiText>
@@ -55,7 +55,7 @@
         <!-- Quick Links -->
         <OuiCard variant="outline" class="max-w-md w-full">
           <OuiCardHeader>
-            <OuiText size="sm" weight="semibold" color="muted">
+            <OuiText size="sm" weight="semibold" color="tertiary">
               Quick Links
             </OuiText>
           </OuiCardHeader>
@@ -136,7 +136,7 @@
         <!-- Logo -->
         <OuiFlex align="center" justify="center" gap="sm" class="mt-8">
           <ObienteLogo size="sm" />
-          <OuiText size="sm" color="muted">Obiente Cloud</OuiText>
+          <OuiText size="sm" color="tertiary">Obiente Cloud</OuiText>
         </OuiFlex>
       </OuiStack>
     </OuiContainer>

@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Game Server Management
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Deploy and manage game servers for your multiplayer games with pay-as-you-go pricing
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Game Servers provide dedicated infrastructure for hosting multiplayer game sessions
         </OuiText>
       </OuiCardHeader>
@@ -30,30 +30,30 @@
                 Creating a New Game Server
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Navigate to Game Servers in the sidebar and click "New Game Server"
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Enter a name and select a game type (Minecraft, Valheim, Rust, CS2, etc.)
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. Configure resources:
                 </OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="sm" color="secondary">• Memory (default: 2GB)</OuiText>
-                  <OuiText size="sm" color="secondary">• CPU cores (default: 1 core)</OuiText>
-                  <OuiText size="sm" color="secondary">• Port (auto-assigned if not specified)</OuiText>
+                  <OuiText size="sm" color="tertiary">• Memory (default: 2GB)</OuiText>
+                  <OuiText size="sm" color="tertiary">• CPU cores (default: 1 core)</OuiText>
+                  <OuiText size="sm" color="tertiary">• Port (auto-assigned if not specified)</OuiText>
                 </OuiStack>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Optionally configure:
                 </OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="sm" color="secondary">• Custom Docker image</OuiText>
-                  <OuiText size="sm" color="secondary">• Custom start command</OuiText>
-                  <OuiText size="sm" color="secondary">• Environment variables</OuiText>
-                  <OuiText size="sm" color="secondary">• Server version (for versioned games like Minecraft)</OuiText>
+                  <OuiText size="sm" color="tertiary">• Custom Docker image</OuiText>
+                  <OuiText size="sm" color="tertiary">• Custom start command</OuiText>
+                  <OuiText size="sm" color="tertiary">• Environment variables</OuiText>
+                  <OuiText size="sm" color="tertiary">• Server version (for versioned games like Minecraft)</OuiText>
                 </OuiStack>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   5. The container is created immediately, then start the server when ready
                 </OuiText>
               </OuiStack>
@@ -87,38 +87,38 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiText size="sm" weight="semibold" color="primary">Minecraft</OuiText>
             <OuiStack gap="xs" class="mt-1">
-              <OuiText size="xs" color="secondary">• Minecraft Java Edition</OuiText>
-              <OuiText size="xs" color="secondary">• Minecraft Bedrock Edition</OuiText>
-              <OuiText size="xs" color="secondary">• Supports version selection</OuiText>
+              <OuiText size="xs" color="tertiary">• Minecraft Java Edition</OuiText>
+              <OuiText size="xs" color="tertiary">• Minecraft Bedrock Edition</OuiText>
+              <OuiText size="xs" color="tertiary">• Supports version selection</OuiText>
             </OuiStack>
           </OuiBox>
 
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiText size="sm" weight="semibold" color="primary">Survival Games</OuiText>
             <OuiStack gap="xs" class="mt-1">
-              <OuiText size="xs" color="secondary">• Valheim</OuiText>
-              <OuiText size="xs" color="secondary">• Rust</OuiText>
-              <OuiText size="xs" color="secondary">• ARK: Survival Evolved</OuiText>
-              <OuiText size="xs" color="secondary">• 7 Days to Die</OuiText>
-              <OuiText size="xs" color="secondary">• Conan Exiles</OuiText>
+              <OuiText size="xs" color="tertiary">• Valheim</OuiText>
+              <OuiText size="xs" color="tertiary">• Rust</OuiText>
+              <OuiText size="xs" color="tertiary">• ARK: Survival Evolved</OuiText>
+              <OuiText size="xs" color="tertiary">• 7 Days to Die</OuiText>
+              <OuiText size="xs" color="tertiary">• Conan Exiles</OuiText>
             </OuiStack>
           </OuiBox>
 
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiText size="sm" weight="semibold" color="primary">FPS Games</OuiText>
             <OuiStack gap="xs" class="mt-1">
-              <OuiText size="xs" color="secondary">• Counter-Strike 2 (CS2)</OuiText>
-              <OuiText size="xs" color="secondary">• Team Fortress 2 (TF2)</OuiText>
+              <OuiText size="xs" color="tertiary">• Counter-Strike 2 (CS2)</OuiText>
+              <OuiText size="xs" color="tertiary">• Team Fortress 2 (TF2)</OuiText>
             </OuiStack>
           </OuiBox>
 
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiText size="sm" weight="semibold" color="primary">Other Games</OuiText>
             <OuiStack gap="xs" class="mt-1">
-              <OuiText size="xs" color="secondary">• Terraria</OuiText>
-              <OuiText size="xs" color="secondary">• Factorio</OuiText>
-              <OuiText size="xs" color="secondary">• Space Engineers</OuiText>
-              <OuiText size="xs" color="secondary">• Custom Docker images</OuiText>
+              <OuiText size="xs" color="tertiary">• Terraria</OuiText>
+              <OuiText size="xs" color="tertiary">• Factorio</OuiText>
+              <OuiText size="xs" color="tertiary">• Space Engineers</OuiText>
+              <OuiText size="xs" color="tertiary">• Custom Docker images</OuiText>
             </OuiStack>
           </OuiBox>
         </OuiGrid>
@@ -134,7 +134,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">File Management</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Browse, upload, edit, and delete files directly through the dashboard. Manage 
                 server configuration files, mods, plugins, and world data without SSH access.
               </OuiText>
@@ -144,7 +144,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Interactive Terminal</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Access a full terminal session directly in your browser. Send console commands, 
                 view real-time output, and manage your server interactively. If the server is stopped, 
                 type "start" to start it.
@@ -155,7 +155,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Real-time Metrics</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Monitor CPU usage percentage, memory usage (current and limit), network traffic, 
                 disk I/O, and player count in real-time. View historical metrics for analysis.
               </OuiText>
@@ -165,7 +165,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Logs</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 View server logs with real-time streaming. Logs include console output, player 
                 activity, errors, and other server events. Logs support ANSI color codes.
               </OuiText>
@@ -175,7 +175,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Console Commands</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Send commands to running game servers directly from the dashboard. Execute 
                 server commands, manage players, and configure server settings remotely.
               </OuiText>
@@ -185,7 +185,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Player Tracking</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Track player count and max players for supported game types. Monitor server 
                 population and activity metrics for capacity planning.
               </OuiText>
@@ -195,7 +195,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Persistent Storage</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Game server data is stored in persistent volumes. World data, configurations, 
                 and mods persist across server restarts and updates.
               </OuiText>
@@ -205,7 +205,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Usage Tracking</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Track CPU core-seconds, memory byte-seconds, bandwidth, and storage usage. 
                 View usage metrics and estimated costs for billing purposes.
               </OuiText>
@@ -225,49 +225,49 @@
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-secondary" />
               <OuiText size="sm" weight="medium" color="primary">CREATED</OuiText>
-              <OuiText size="sm" color="secondary">• Server created but not started</OuiText>
+              <OuiText size="sm" color="tertiary">• Server created but not started</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-warning" />
               <OuiText size="sm" weight="medium" color="primary">STARTING</OuiText>
-              <OuiText size="sm" color="secondary">• Server container is starting</OuiText>
+              <OuiText size="sm" color="tertiary">• Server container is starting</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-success" />
               <OuiText size="sm" weight="medium" color="primary">RUNNING</OuiText>
-              <OuiText size="sm" color="secondary">• Server is running and accepting players</OuiText>
+              <OuiText size="sm" color="tertiary">• Server is running and accepting players</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-warning" />
               <OuiText size="sm" weight="medium" color="primary">STOPPING</OuiText>
-              <OuiText size="sm" color="secondary">• Server is shutting down</OuiText>
+              <OuiText size="sm" color="tertiary">• Server is shutting down</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-secondary" />
               <OuiText size="sm" weight="medium" color="primary">STOPPED</OuiText>
-              <OuiText size="sm" color="secondary">• Server has been stopped</OuiText>
+              <OuiText size="sm" color="tertiary">• Server has been stopped</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-warning" />
               <OuiText size="sm" weight="medium" color="primary">RESTARTING</OuiText>
-              <OuiText size="sm" color="secondary">• Server is restarting</OuiText>
+              <OuiText size="sm" color="tertiary">• Server is restarting</OuiText>
             </OuiFlex>
           </OuiBox>
           <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-danger" />
               <OuiText size="sm" weight="medium" color="primary">FAILED</OuiText>
-              <OuiText size="sm" color="secondary">• Server failed to start or crashed</OuiText>
+              <OuiText size="sm" color="tertiary">• Server failed to start or crashed</OuiText>
             </OuiFlex>
           </OuiBox>
         </OuiStack>
@@ -287,7 +287,7 @@
           <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Cost Savings Example</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Traditional hosting providers charge $20-40/month even when your server is empty. 
                 With Obiente Cloud, if your server runs 8 hours per day (240 hours/month), you pay 
                 only for those 240 hours instead of 730 hours (24/7). This can save you 60-70% on 

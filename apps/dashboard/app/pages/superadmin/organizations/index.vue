@@ -67,7 +67,7 @@
     <OuiDialog v-model:open="manageCreditsDialogOpen" :title="manageCreditsAction === 'add' ? 'Add Credits' : 'Remove Credits'">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Current balance: <OuiCurrency :value="manageCreditsCurrentBalance" />
           </OuiText>
         </OuiStack>
@@ -135,12 +135,12 @@
     <OuiDialog v-model:open="setPlanDialogOpen" title="Set Plan">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">Organization</OuiText>
+          <OuiText size="sm" color="tertiary">Organization</OuiText>
           <OuiText size="sm" weight="medium">{{ selectedOrgName }}</OuiText>
         </OuiStack>
 
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">Current Plan</OuiText>
+          <OuiText size="sm" color="tertiary">Current Plan</OuiText>
           <OuiBadge :variant="selectedOrgCurrentPlan ? 'primary' : 'secondary'" size="sm">
             {{ prettyPlan(selectedOrgCurrentPlan) || 'None' }}
           </OuiBadge>
@@ -156,17 +156,17 @@
 
         <template v-if="selectedPlanInfo">
           <OuiStack gap="sm" class="rounded-lg border border-border-muted p-3 bg-surface-muted/50">
-            <OuiText size="xs" weight="medium" color="muted" class="uppercase tracking-wide">Plan Resources</OuiText>
+            <OuiText size="xs" weight="medium" color="tertiary" class="uppercase tracking-wide">Plan Resources</OuiText>
             <div class="grid grid-cols-2 gap-x-4 gap-y-1">
-              <OuiText size="sm" color="secondary">CPU</OuiText>
+              <OuiText size="sm" color="tertiary">CPU</OuiText>
               <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.cpuCores || '∞' }} cores</OuiText>
-              <OuiText size="sm" color="secondary">Memory</OuiText>
+              <OuiText size="sm" color="tertiary">Memory</OuiText>
               <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.memoryBytes ? formatBytes(Number(selectedPlanInfo.memoryBytes)) : '∞' }}</OuiText>
-              <OuiText size="sm" color="secondary">Deployments</OuiText>
+              <OuiText size="sm" color="tertiary">Deployments</OuiText>
               <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.deploymentsMax || '∞' }}</OuiText>
-              <OuiText size="sm" color="secondary">VPS Instances</OuiText>
+              <OuiText size="sm" color="tertiary">VPS Instances</OuiText>
               <OuiText size="sm" class="font-mono text-right">{{ selectedPlanInfo.maxVpsInstances || '∞' }}</OuiText>
-              <OuiText size="sm" color="secondary">Monthly Credits</OuiText>
+              <OuiText size="sm" color="tertiary">Monthly Credits</OuiText>
               <OuiText size="sm" class="font-mono text-right"><OuiCurrency :value="Number(selectedPlanInfo.monthlyFreeCreditsCents || 0)" /></OuiText>
             </div>
           </OuiStack>
@@ -214,9 +214,9 @@ const orgClient = useConnectClient(OrganizationService);
 const saClient = useConnectClient(SuperadminService);
 const isLoading = ref(false);
 const setPlanDialogOpen = ref(false);
-const selectedPlanId = ref(null);
+const selectedPlanId = ref<string | null>(null);
 const setPlanLoading = ref(false);
-const selectedOrgId = ref(null);
+const selectedOrgId = ref<string | null>(null);
 
 const selectedOrgName = computed(() => {
   if (!selectedOrgId.value) return '';
@@ -476,7 +476,7 @@ const getOrgActions = (row: OrganizationOverview): Action[] => {
     {
       key: "credits",
       label: "Credits",
-      onClick: () => openManageCredits(row.id, row.credits ?? BigInt(0)),
+      onClick: () => openManageCredits(row.id, (row as any).credits ?? BigInt(0)),
     },
     {
       key: "members",

@@ -14,90 +14,51 @@
 
         <OuiGrid :cols="{ sm: 2, lg: 4 }" gap="sm">
           <!-- CPU -->
-          <div class="rounded-lg border border-border-default p-3">
-            <OuiStack gap="sm">
-              <OuiFlex align="center" gap="xs">
-                <CpuChipIcon class="h-3 w-3 text-accent-primary" />
-                <OuiText size="xs" color="tertiary">CPU</OuiText>
-              </OuiFlex>
-              <OuiText size="lg" weight="semibold">
-                {{ formatCPUUsage(Number(usageData.current.cpuCoreSeconds)) }}
-              </OuiText>
-              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
-                <div class="h-full rounded-full bg-accent-primary/60" style="width: 40%" />
-              </div>
-              <OuiText size="xs" color="tertiary">
-                {{ formatCurrency((usageData.current.cpuCostCents ? Number(usageData.current.cpuCostCents) : 0) / 100) }}
-              </OuiText>
-            </OuiStack>
-          </div>
+          <UiStatCard
+            label="CPU"
+            :icon="CpuChipIcon"
+            color="primary"
+            :value="formatCPUUsage(Number(usageData.current.cpuCoreSeconds))"
+            :bar="40"
+            :subtitle="formatCurrency((usageData.current.cpuCostCents ? Number(usageData.current.cpuCostCents) : 0) / 100)"
+            value-size="lg"
+          />
 
           <!-- Memory -->
-          <div class="rounded-lg border border-border-default p-3">
-            <OuiStack gap="sm">
-              <OuiFlex align="center" gap="xs">
-                <CircleStackIcon class="h-3 w-3 text-accent-info" />
-                <OuiText size="xs" color="tertiary">Memory</OuiText>
-              </OuiFlex>
-              <OuiText size="lg" weight="semibold">
-                <OuiByte :value="Number(usageData.current.memoryByteSeconds) / 3600" unit-display="short" />/hr
-              </OuiText>
-              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
-                <div class="h-full rounded-full bg-accent-info/60" style="width: 55%" />
-              </div>
-              <OuiText size="xs" color="tertiary">
-                {{ formatUptime(Number(usageData.current.uptimeSeconds)) }} uptime
-              </OuiText>
-            </OuiStack>
-          </div>
+          <UiStatCard
+            label="Memory"
+            :icon="CircleStackIcon"
+            color="info"
+            :bar="55"
+            :subtitle="formatUptime(Number(usageData.current.uptimeSeconds)) + ' uptime'"
+            value-size="lg"
+          >
+            <OuiByte :value="Number(usageData.current.memoryByteSeconds) / 3600" unit-display="short" />/hr
+          </UiStatCard>
 
           <!-- Bandwidth -->
-          <div class="rounded-lg border border-border-default p-3">
-            <OuiStack gap="sm">
-              <OuiFlex align="center" gap="xs">
-                <ArrowsRightLeftIcon class="h-3 w-3 text-success" />
-                <OuiText size="xs" color="tertiary">Bandwidth</OuiText>
-              </OuiFlex>
-              <OuiText size="lg" weight="semibold">
-                <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" base="decimal" />
-              </OuiText>
-              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
-                <div class="h-full rounded-full bg-success/60" style="width: 30%" />
-              </div>
-              <OuiText size="xs" color="tertiary">
-                <template v-if="usageData.current.requestCount !== undefined && Number(usageData.current.requestCount) > 0">
-                  {{ formatNumber(Number(usageData.current.requestCount)) }} requests
-                </template>
-                <template v-else>
-                  Total transfer
-                </template>
-              </OuiText>
-            </OuiStack>
-          </div>
+          <UiStatCard
+            label="Bandwidth"
+            :icon="ArrowsRightLeftIcon"
+            color="success"
+            :bar="30"
+            :subtitle="usageData.current.requestCount !== undefined && Number(usageData.current.requestCount) > 0 ? formatNumber(Number(usageData.current.requestCount)) + ' requests' : 'Total transfer'"
+            value-size="lg"
+          >
+            <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" base="decimal" />
+          </UiStatCard>
 
           <!-- Storage -->
-          <div class="rounded-lg border border-border-default p-3">
-            <OuiStack gap="sm">
-              <OuiFlex align="center" gap="xs">
-                <ArchiveBoxIcon class="h-3 w-3 text-accent-secondary" />
-                <OuiText size="xs" color="tertiary">Storage</OuiText>
-              </OuiFlex>
-              <OuiText size="lg" weight="semibold">
-                <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
-              </OuiText>
-              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
-                <div class="h-full rounded-full bg-accent-secondary/60" style="width: 25%" />
-              </div>
-              <OuiText size="xs" color="tertiary">
-                <template v-if="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0">
-                  {{ formatNumber(Number(usageData.current.errorCount)) }} errors
-                </template>
-                <template v-else>
-                  Disk usage
-                </template>
-              </OuiText>
-            </OuiStack>
-          </div>
+          <UiStatCard
+            label="Storage"
+            :icon="ArchiveBoxIcon"
+            color="secondary"
+            :bar="25"
+            :subtitle="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0 ? formatNumber(Number(usageData.current.errorCount)) + ' errors' : 'Disk usage'"
+            value-size="lg"
+          >
+            <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
+          </UiStatCard>
         </OuiGrid>
       </OuiStack>
     </OuiCardBody>

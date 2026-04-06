@@ -7,7 +7,7 @@
           <OuiStack gap="lg">
             <!-- Basic Binding Info -->
             <OuiStack gap="md">
-              <OuiText size="sm" weight="semibold" transform="uppercase" class="tracking-wide" color="secondary">
+              <OuiText size="sm" weight="semibold" transform="uppercase" class="tracking-wide" color="tertiary">
                 Basic Information
               </OuiText>
               <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
@@ -32,7 +32,7 @@
                     placeholder="Search for a role..."
                     :disabled="!canCreateBindings"
                   />
-                  <OuiText v-if="selectedRolePermissions.length > 0" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-if="selectedRolePermissions.length > 0" size="xs" color="tertiary" class="mt-1">
                     {{ selectedRolePermissions.length }} permission{{ selectedRolePermissions.length !== 1 ? 's' : '' }}
                   </OuiText>
                 </OuiStack>
@@ -43,10 +43,10 @@
             <OuiStack gap="md">
               <OuiFlex justify="between" align="center">
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="semibold" transform="uppercase" class="tracking-wide" color="secondary">
+                  <OuiText size="sm" weight="semibold" transform="uppercase" class="tracking-wide" color="tertiary">
                     Resource Scoping (Optional)
                   </OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Leave empty for organization-wide access, or scope to specific resources
                   </OuiText>
                 </OuiStack>
@@ -69,16 +69,16 @@
                     placeholder="Select resource type..."
                     :disabled="!canCreateBindings"
                   />
-                  <OuiText v-if="resourceType === 'deployment'" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-if="resourceType === 'deployment'" size="xs" color="tertiary" class="mt-1">
                     Grant access to a specific deployment
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'environment'" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'environment'" size="xs" color="tertiary" class="mt-1">
                     Grant access to all deployments in selected environment(s)
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'vps'" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'vps'" size="xs" color="tertiary" class="mt-1">
                     Grant access to a specific VPS instance
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'gameserver'" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'gameserver'" size="xs" color="tertiary" class="mt-1">
                     Grant access to a specific game server
                   </OuiText>
                 </OuiStack>
@@ -121,16 +121,16 @@
                     placeholder="Enter resource ID or * for all"
                     :disabled="!canCreateBindings"
                   />
-                  <OuiText v-if="resourceType === 'deployment' && deploymentId" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-if="resourceType === 'deployment' && deploymentId" size="xs" color="tertiary" class="mt-1">
                     Selected: {{ getDeploymentName(deploymentId) }}
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'vps' && vpsId" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'vps' && vpsId" size="xs" color="tertiary" class="mt-1">
                     Selected: {{ getVPSName(vpsId) }}
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'gameserver' && gameserverId" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'gameserver' && gameserverId" size="xs" color="tertiary" class="mt-1">
                     Selected: {{ getGameServerName(gameserverId) }}
                   </OuiText>
-                  <OuiText v-else-if="resourceType === 'environment' && Array.isArray(resourceIds) && resourceIds.length > 0" size="xs" color="secondary" class="mt-1">
+                  <OuiText v-else-if="resourceType === 'environment' && Array.isArray(resourceIds) && resourceIds.length > 0" size="xs" color="tertiary" class="mt-1">
                     {{ resourceIds.length }} environment{{ resourceIds.length !== 1 ? 's' : '' }} selected
                   </OuiText>
                 </OuiStack>
@@ -142,7 +142,7 @@
               <OuiCardBody>
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="semibold">Binding Preview</OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{ bindingPreview }}
                   </OuiText>
                 </OuiStack>
@@ -186,7 +186,7 @@
               </OuiButton>
             </OuiFlex>
             <OuiFlex v-if="!bindingItems || bindingItems.length === 0" justify="center" py="lg">
-              <OuiText color="secondary" size="sm">No bindings found</OuiText>
+              <OuiText color="tertiary" size="sm">No bindings found</OuiText>
             </OuiFlex>
           </OuiStack>
         </OuiStack>
@@ -777,7 +777,7 @@ async function removeBinding(id: string) {
     await refreshBindings();
   } catch (e: unknown) {
     console.error("Failed to delete role binding:", e);
-    alert(e?.message || "Failed to delete role binding");
+    alert((e as any)?.message || "Failed to delete role binding");
   }
 }
 </script>

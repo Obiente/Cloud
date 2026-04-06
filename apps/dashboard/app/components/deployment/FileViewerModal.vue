@@ -1,7 +1,7 @@
 <template>
   <OuiDialog v-model:open="isOpen" :title="fileName" size="4xl">
     <OuiFlex v-if="isLoading" justify="center" class="py-8">
-      <OuiText color="secondary">Loading file...</OuiText>
+      <OuiText color="tertiary">Loading file...</OuiText>
     </OuiFlex>
 
     <div v-else-if="error" class="p-4">
@@ -12,9 +12,9 @@
       <!-- Toolbar -->
       <OuiFlex justify="between" align="center" class="mb-4 pb-2 border-b border-border-default">
         <OuiFlex gap="sm" align="center">
-          <OuiText size="xs" color="secondary">{{ filePath }}</OuiText>
-          <OuiText size="xs" color="secondary">•</OuiText>
-          <OuiText size="xs" color="secondary">{{ formatSize(fileSize) }}</OuiText>
+          <OuiText size="xs" color="tertiary">{{ filePath }}</OuiText>
+          <OuiText size="xs" color="tertiary">•</OuiText>
+          <OuiText size="xs" color="tertiary">{{ formatSize(fileSize) }}</OuiText>
         </OuiFlex>
         <OuiFlex gap="sm">
           <OuiButton variant="ghost" size="sm" @click="copyContent">

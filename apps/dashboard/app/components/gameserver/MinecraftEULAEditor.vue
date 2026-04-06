@@ -5,10 +5,10 @@
         <OuiCardHeader>
           <OuiFlex justify="between" align="center">
             <div>
-              <OuiText as="h2" size="lg" weight="semibold">
+              <OuiText as="h2" size="sm" weight="semibold">
                 Minecraft EULA
               </OuiText>
-              <OuiText size="sm" color="secondary" class="mt-1">
+              <OuiText size="sm" color="tertiary" class="mt-1">
                 End User License Agreement
               </OuiText>
             </div>
@@ -63,7 +63,7 @@
             </OuiFlex>
 
             <div class="pt-4 border-t border-border-default">
-              <OuiText size="xs" color="muted">
+              <OuiText size="xs" color="tertiary">
                 By accepting the EULA, you agree to Mojang's terms of service.
                 The EULA file will be updated automatically.
               </OuiText>

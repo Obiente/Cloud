@@ -11,7 +11,7 @@
               <ObienteLogo size="md" />
               <OuiStack gap="none" class="leading-tight">
                 <OuiText size="lg" weight="bold" color="primary">Self-Hosted DNS</OuiText>
-                <OuiText size="xs" color="secondary">Obiente Cloud</OuiText>
+                <OuiText size="xs" color="tertiary">Obiente Cloud</OuiText>
               </OuiStack>
             </div>
 
@@ -57,7 +57,7 @@
       <footer class="border-t border-border-muted bg-surface-base py-6">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div class="flex items-center justify-between">
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Self-Hosted DNS Delegation Dashboard
             </OuiText>
             <OuiFlex gap="md">
@@ -80,7 +80,7 @@
           <LockClosedIcon class="h-16 w-16 text-muted" />
           <OuiStack gap="xs">
             <OuiText size="2xl" weight="bold">Authentication Required</OuiText>
-            <OuiText color="muted">Please sign in to access the self-hosted DNS dashboard.</OuiText>
+            <OuiText color="tertiary">Please sign in to access the self-hosted DNS dashboard.</OuiText>
           </OuiStack>
           <OuiFlex v-if="!user.isLoading" gap="md" align="center" justify="center">
             <OuiButton 
@@ -99,7 +99,7 @@
           </OuiFlex>
           <OuiStack v-else gap="sm" align="center">
             <ArrowPathIcon class="h-6 w-6 text-muted animate-spin" />
-            <OuiText size="sm" color="muted">Loading...</OuiText>
+            <OuiText size="sm" color="tertiary">Loading...</OuiText>
           </OuiStack>
           <OuiButton
             v-if="!user.isLoading"

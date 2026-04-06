@@ -1,51 +1,47 @@
 <template>
-  <OuiContainer as="header" class="bg-surface-base outline-border-muted px-3 md:px-6 py-3 md:py-4 min-w-0 overflow-hidden">
-    <OuiFlex align="center" justify="between" wrap="wrap" gap="sm" class="min-w-0">
+  <OuiContainer as="header" class="app-topbar px-4 py-2.5 min-w-0 overflow-hidden">
+    <OuiFlex align="center" justify="between" gap="sm" class="min-w-0">
       <!-- Page title -->
-      <OuiFlex align="center" gap="sm" class="flex-1 min-w-0 md:gap-4 overflow-hidden">
+      <OuiFlex align="center" gap="sm" class="flex-1 min-w-0 overflow-hidden">
         <slot name="leading" />
 
-        <OuiStack gap="xs" class="min-w-0 flex-1">
-          <OuiText as="h1" size="xl" weight="bold" color="primary" class="truncate md:text-2xl">
+        <OuiStack gap="none" class="min-w-0 flex-1">
+          <OuiText as="h1" size="sm" weight="semibold" color="primary" class="truncate">
             <slot name="title">
               {{ title }}
             </slot>
           </OuiText>
-          <OuiText v-if="subtitle" size="xs" color="secondary" class="hidden sm:block md:text-sm">
+          <OuiText v-if="subtitle" size="xs" color="tertiary" class="hidden sm:block">
             {{ subtitle }}
           </OuiText>
         </OuiStack>
       </OuiFlex>
 
       <!-- Actions -->
-      <OuiFlex align="center" gap="sm" class="shrink-0 md:gap-4">
-        <!-- Theme Switcher -->
+      <OuiFlex align="center" gap="xs" class="app-topbar-actions shrink-0">
         <OuiThemeSwitcher />
 
-        <!-- Notifications -->
         <OuiButton
           ref="notificationButtonRef"
           variant="ghost"
           size="sm"
           title="Notifications"
-          class="!p-2 relative"
+          class="p-2! relative"
           @click="handleNotificationsClick"
         >
-          <BellIcon class="w-5 h-5" />
-          <!-- Notification badge -->
-          <OuiBox
+          <BellIcon class="w-4.5 h-4.5" />
+          <OuiText
             v-if="notificationCount > 0"
-            class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-foreground text-xs font-medium rounded-full"
+            as="span"
+            size="3xs"
+            weight="medium"
+            color="white"
+            class="absolute -top-0.5 -right-0.5 min-w-[1.125rem] h-[1.125rem] bg-danger rounded-full flex items-center justify-center px-1"
           >
-            <OuiFlex align="center" justify="center" class="h-full">
-              <OuiText size="xs" weight="medium" color="primary">
-                {{ notificationCount > 99 ? "99+" : notificationCount }}
-              </OuiText>
-            </OuiFlex>
-          </OuiBox>
+            {{ notificationCount > 99 ? "99+" : notificationCount }}
+          </OuiText>
         </OuiButton>
 
-        <!-- Additional actions slot -->
         <slot name="actions" />
       </OuiFlex>
     </OuiFlex>

@@ -11,19 +11,19 @@
   >
     <template #subtitle>
       <OuiStack gap="xs">
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           {{ gameTypeLabel }}
         </OuiText>
         <OuiFlex v-if="!loading && gameServer?.port" align="center" gap="xs">
           <ServerIcon class="h-3 w-3 text-secondary" />
-          <OuiText size="xs" color="secondary"
+          <OuiText size="xs" color="tertiary"
             >Port: {{ gameServer?.port }}</OuiText
           >
         </OuiFlex>
         <OuiText
           v-if="!loading && (gameServer?.extraPorts?.length || 0) > 0"
           size="xs"
-          color="secondary"
+          color="tertiary"
         >
           Extra ports: {{ gameServer?.extraPorts?.join(", ") }}
         </OuiText>
@@ -185,28 +185,22 @@
       RUNNING: {
         badge: "success" as const,
         label: "Running",
-        cardClass: "hover:ring-1 hover:ring-success/30",
-        beforeGradient:
-          "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-success/20 before:via-success/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-        barClass: "bg-gradient-to-r from-success to-success/70",
+        cardClass: "",
+        barClass: "bg-success",
         iconClass: "text-success",
       },
       STOPPED: {
         badge: "danger" as const,
         label: "Stopped",
-        cardClass: "hover:ring-1 hover:ring-danger/30",
-        beforeGradient:
-          "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-        barClass: "bg-gradient-to-r from-danger to-danger/60",
+        cardClass: "",
+        barClass: "bg-danger",
         iconClass: "text-danger",
       },
       CREATED: {
         badge: "warning" as const,
         label: "Created",
-        cardClass: "hover:ring-1 hover:ring-warning/30",
-        beforeGradient:
-          "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-        barClass: "bg-gradient-to-r from-warning to-warning/60",
+        cardClass: "",
+        barClass: "bg-warning",
         iconClass: "text-warning",
       },
     };

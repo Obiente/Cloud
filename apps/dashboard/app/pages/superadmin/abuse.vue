@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Abuse Detection</OuiText>
-        <OuiText color="muted">
+        <OuiText color="tertiary">
           Monitor suspicious organizations and activities for potential abuse.
         </OuiText>
       </OuiStack>
@@ -26,7 +26,7 @@
           <OuiText
             size="sm"
             weight="medium"
-            color="secondary"
+            color="tertiary"
             transform="uppercase"
             class="tracking-wide"
             >{{ metric.label }}</OuiText
@@ -45,7 +45,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-0">
         <div v-if="isLoading" class="text-center py-8">
-          <OuiText color="muted">Loading...</OuiText>
+          <OuiText color="tertiary">Loading...</OuiText>
         </div>
         <OuiTable
           v-else
@@ -84,7 +84,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-0">
         <div v-if="isLoading" class="text-center py-8">
-          <OuiText color="muted">Loading...</OuiText>
+          <OuiText color="tertiary">Loading...</OuiText>
         </div>
         <OuiTable
           v-else

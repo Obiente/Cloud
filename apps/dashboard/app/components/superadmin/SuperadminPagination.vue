@@ -5,7 +5,7 @@
     justify="between"
     class="px-6 py-4 border-t border-border-muted"
   >
-    <OuiText color="muted" size="sm">
+    <OuiText color="tertiary" size="sm">
       Page {{ pagination.page }} of {{ pagination.totalPages }}
       <span v-if="pagination.total !== undefined">
         ({{ pagination.total }} total)

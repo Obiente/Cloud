@@ -30,7 +30,7 @@
     </template>
 
     <template #cell-mac="{ row }">
-      <OuiText class="font-mono text-sm" color="secondary">
+      <OuiText class="font-mono text-sm" color="tertiary">
         {{ row.mac }}
       </OuiText>
     </template>
@@ -42,7 +42,7 @@
     </template>
 
     <template #cell-organization="{ row }">
-      <OuiText color="secondary" size="sm">
+      <OuiText color="tertiary" size="sm">
         {{ row.organizationName || "N/A" }}
       </OuiText>
     </template>
@@ -196,7 +196,7 @@ const fetchLeases = async () => {
 
     leases.value = allLeases;
   } catch (error: unknown) {
-    toast.error(`Failed to load leases: ${error?.message || "Unknown error"}`);
+    toast.error(`Failed to load leases: ${(error as any)?.message || "Unknown error"}`);
   } finally {
     isLoading.value = false;
   }

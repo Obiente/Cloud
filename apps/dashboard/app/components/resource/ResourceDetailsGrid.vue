@@ -1,5 +1,5 @@
 <template>
-  <OuiGrid :cols="finalCols" gap="lg">
+  <OuiGrid :cols="finalCols" gap="sm">
     <slot />
   </OuiGrid>
 </template>

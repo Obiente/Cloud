@@ -14,7 +14,7 @@
             </OuiButton>
             <OuiText tag="h1" size="3xl" weight="extrabold">Organization Details</OuiText>
           </OuiFlex>
-          <OuiText color="muted">View detailed information about this organization.</OuiText>
+          <OuiText color="tertiary">View detailed information about this organization.</OuiText>
         </OuiStack>
       </OuiFlex>
 
@@ -30,24 +30,24 @@
                 <OuiText size="xl" weight="bold">
                   {{ organization?.name || "Loading..." }}
                 </OuiText>
-                <OuiText v-if="organization?.slug" color="muted" size="sm">
+                <OuiText v-if="organization?.slug" color="tertiary" size="sm">
                   {{ organization.slug }}
                 </OuiText>
-                <OuiText v-if="organization?.id" color="muted" size="xs" class="font-mono">
+                <OuiText v-if="organization?.id" color="tertiary" size="xs" class="font-mono">
                   {{ organization.id }}
                 </OuiText>
               </OuiStack>
 
               <OuiStack gap="md" class="border-t border-border-muted pt-4">
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Plan</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Plan</OuiText>
                   <OuiBadge variant="secondary" tone="soft" size="sm">
                     {{ prettyPlan(organization?.plan) }}
                   </OuiBadge>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Status</OuiText>
                   <OuiBadge
                     :variant="organization?.status === 'active' ? 'success' : organization?.status === 'suspended' ? 'warning' : 'danger'"
                     :tone="organization?.status === 'active' ? 'solid' : 'soft'"
@@ -58,44 +58,44 @@
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Domain</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Domain</OuiText>
                   <OuiText>{{ organization?.domain || "—" }}</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Credits</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Credits</OuiText>
                   <OuiText size="sm" weight="semibold">
                     <OuiCurrency :value="Number(organization?.credits || 0)" />
                   </OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="muted">Total Paid</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Total Paid</OuiText>
                   <OuiText size="sm">
                     <OuiCurrency :value="Number(organization?.totalPaidCents || 0)" />
                   </OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="organization?.planInfo">
-                  <OuiText size="sm" weight="medium" color="muted">Plan Details</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Plan Details</OuiText>
                   <OuiStack gap="xs">
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       CPU: {{ organization.planInfo.cpuCores || 'Unlimited' }} cores
                     </OuiText>
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       Memory: {{ formatBytes(Number(organization.planInfo.memoryBytes || 0)) }}
                     </OuiText>
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       Max Deployments: {{ organization.planInfo.deploymentsMax || 'Unlimited' }}
                     </OuiText>
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       Max VPS: {{ organization.planInfo.maxVpsInstances || 'Unlimited' }}
                     </OuiText>
                   </OuiStack>
                 </OuiStack>
 
                 <OuiStack gap="xs" v-if="organization?.createdAt">
-                  <OuiText size="sm" weight="medium" color="muted">Created</OuiText>
+                  <OuiText size="sm" weight="medium" color="tertiary">Created</OuiText>
                   <OuiText size="sm">
                     <OuiDate :value="organization.createdAt" />
                   </OuiText>
@@ -135,7 +135,7 @@
                     <OuiText v-else weight="medium">
                       {{ row.user?.name || row.user?.email || row.user?.id || "Unknown" }}
                     </OuiText>
-                    <OuiText v-if="row.user?.email" color="muted" size="xs">
+                    <OuiText v-if="row.user?.email" color="tertiary" size="xs">
                       {{ row.user.email }}
                     </OuiText>
                   </OuiStack>

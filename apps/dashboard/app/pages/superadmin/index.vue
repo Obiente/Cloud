@@ -5,7 +5,7 @@
         <OuiText tag="h1" size="3xl" weight="extrabold"
           >Superadmin Overview</OuiText
         >
-        <OuiText color="muted"
+        <OuiText color="tertiary"
           >System-wide visibility across organizations, deployments, and
           usage.</OuiText
         >
@@ -21,7 +21,7 @@
             <OuiText
               size="sm"
               weight="medium"
-              color="secondary"
+              color="tertiary"
               transform="uppercase"
               class="tracking-wide"
               >{{ metric.label }}</OuiText
@@ -29,7 +29,7 @@
             <OuiText size="3xl" weight="semibold" color="primary">{{
               metric.value
             }}</OuiText>
-            <OuiText size="xs" color="muted">{{ metric.help }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ metric.help }}</OuiText>
           </OuiStack>
         </OuiCard>
       </OuiGrid>
@@ -43,8 +43,8 @@
           <OuiStack gap="md">
             <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="secondary">API Commit</OuiText>
-                <OuiText v-if="overview?.apiCommitMessage" size="sm" color="muted" class="max-w-md">
+                <OuiText size="sm" weight="medium" color="tertiary">API Commit</OuiText>
+                <OuiText v-if="overview?.apiCommitMessage" size="sm" color="tertiary" class="max-w-md">
                   {{ overview.apiCommitMessage }}
                 </OuiText>
                 <OuiText size="md" class="font-mono">
@@ -52,8 +52,8 @@
                 </OuiText>
               </OuiStack>
               <OuiStack gap="xs">
-                <OuiText size="sm" weight="medium" color="secondary">Dashboard Commit</OuiText>
-                <OuiText v-if="overview?.dashboardCommitMessage" size="sm" color="muted" class="max-w-md">
+                <OuiText size="sm" weight="medium" color="tertiary">Dashboard Commit</OuiText>
+                <OuiText v-if="overview?.dashboardCommitMessage" size="sm" color="tertiary" class="max-w-md">
                   {{ overview.dashboardCommitMessage }}
                 </OuiText>
                 <OuiText size="md" class="font-mono">
@@ -73,7 +73,7 @@
                 <OuiText tag="h2" size="xl" weight="bold"
                   >Organizations</OuiText
                 >
-                <OuiText color="muted" size="sm"
+                <OuiText color="tertiary" size="sm"
                   >{{ filteredOrganizations.length }} of
                   {{ organizations.length }} organizations</OuiText
                 >
@@ -142,7 +142,7 @@
                   <OuiText tag="h3" size="lg" weight="semibold"
                     >Pending Invites</OuiText
                   >
-                  <OuiText color="muted" size="sm"
+                  <OuiText color="tertiary" size="sm"
                     >{{ filteredInvites.length }} of
                     {{ invites.length }} invites</OuiText
                   >
@@ -198,7 +198,7 @@
                   <OuiText tag="h3" size="lg" weight="semibold"
                     >Recent Deployments</OuiText
                   >
-                  <OuiText color="muted" size="sm"
+                  <OuiText color="tertiary" size="sm"
                     >{{ filteredDeployments.length }} of
                     {{ deployments.length }} deployments</OuiText
                   >
@@ -266,7 +266,7 @@
                 <OuiText tag="h2" size="xl" weight="bold"
                   >Current Month Usage</OuiText
                 >
-                <OuiText color="muted" size="sm"
+                <OuiText color="tertiary" size="sm"
                   >{{ filteredUsages.length }} of
                   {{ usages.length }} organizations</OuiText
                 >

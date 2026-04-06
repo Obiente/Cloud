@@ -47,7 +47,7 @@ export default defineNuxtPlugin({
           } catch (err: unknown) {
             // If internal API fails and we have a fallback, try public API
             if (config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
-              console.warn(`[Server Transport] Internal API (${apiHost}) failed (${err?.code || (err as Error | undefined)?.message}), trying public API as fallback`);
+              console.warn(`[Server Transport] Internal API (${apiHost}) failed (${(err as any)?.code || (err as any)?.message}), trying public API as fallback`);
               apiHost = config.public.apiHost;
               publicTransport = createConnectTransport({
                 baseUrl: apiHost,

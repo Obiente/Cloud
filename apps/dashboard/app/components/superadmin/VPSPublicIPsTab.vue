@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h2" size="2xl" weight="extrabold">Public IP Addresses</OuiText>
-        <OuiText color="muted">Manage public IP addresses and assign them to VPS instances.</OuiText>
+        <OuiText color="tertiary">Manage public IP addresses and assign them to VPS instances.</OuiText>
       </OuiStack>
       <OuiButton @click="openCreateDialog">
         <PlusIcon class="h-4 w-4" />
@@ -24,25 +24,25 @@
           <template #cell-vps="{ row }">
             <OuiStack v-if="row.vpsId" gap="xs">
               <OuiText weight="medium">{{ row.vpsName || row.vpsId }}</OuiText>
-              <OuiText v-if="row.organizationName" size="xs" color="muted">
+              <OuiText v-if="row.organizationName" size="xs" color="tertiary">
                 {{ row.organizationName }}
               </OuiText>
             </OuiStack>
-            <OuiText v-else size="sm" color="muted">Unassigned</OuiText>
+            <OuiText v-else size="sm" color="tertiary">Unassigned</OuiText>
           </template>
           <template #cell-cost="{ value }">
             <OuiFlex gap="xs" align="center">
               <OuiCurrency :value="value" />
-              <OuiText size="xs" color="muted">/month</OuiText>
+              <OuiText size="xs" color="tertiary">/month</OuiText>
             </OuiFlex>
           </template>
           <template #cell-assignedAt="{ value }">
             <OuiDate v-if="value" :value="value" />
-            <OuiText v-else size="sm" color="muted">—</OuiText>
+            <OuiText v-else size="sm" color="tertiary">—</OuiText>
           </template>
           <template #cell-createdAt="{ value }">
             <OuiDate v-if="value" :value="value" />
-            <OuiText v-else size="sm" color="muted">—</OuiText>
+            <OuiText v-else size="sm" color="tertiary">—</OuiText>
           </template>
           <template #cell-actions="{ row }">
             <OuiFlex gap="sm" justify="end">
@@ -83,7 +83,7 @@
     <!-- Create IP Dialog -->
     <OuiDialog v-model:open="createDialogOpen" title="Create Public IP">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Add a new public IP address to the pool. You can assign it to a VPS instance later.
         </OuiText>
         <OuiField label="IP Address" required>
@@ -91,7 +91,7 @@
             v-model="ipForm.ipAddress" 
             placeholder="e.g., 203.0.113.1 or 2001:db8::1" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             IPv4 or IPv6 address
           </OuiText>
         </OuiField>
@@ -103,7 +103,7 @@
             step="0.01" 
             placeholder="0.00" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             Monthly flat rate cost for this IP address
           </OuiText>
         </OuiField>
@@ -112,7 +112,7 @@
             v-model="ipForm.gateway" 
             placeholder="e.g., 203.0.113.1" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             Gateway IP for this public IP. If not set, will default to IP with last octet set to .1
           </OuiText>
         </OuiField>
@@ -121,7 +121,7 @@
             v-model="ipForm.netmask" 
             placeholder="e.g., 24 or 255.255.255.0" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             Netmask or CIDR notation (e.g., "24" for /24 or "255.255.255.0"). Defaults to "24" if not set.
           </OuiText>
         </OuiField>
@@ -139,7 +139,7 @@
     <!-- Edit Cost Dialog -->
     <OuiDialog v-model:open="editDialogOpen" :title="`Edit IP ${editingIP?.ipAddress || ''}`">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Update the monthly cost, gateway, and netmask for this IP address.
         </OuiText>
         <OuiField label="Monthly Cost (USD)" required>
@@ -156,7 +156,7 @@
             v-model="editForm.gateway" 
             placeholder="e.g., 203.0.113.1" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             Gateway IP for this public IP. If not set, will default to IP with last octet set to .1
           </OuiText>
         </OuiField>
@@ -165,7 +165,7 @@
             v-model="editForm.netmask" 
             placeholder="e.g., 24 or 255.255.255.0" 
           />
-          <OuiText size="xs" color="muted" class="mt-1">
+          <OuiText size="xs" color="tertiary" class="mt-1">
             Netmask or CIDR notation (e.g., "24" for /24 or "255.255.255.0"). Defaults to "24" if not set.
           </OuiText>
         </OuiField>
@@ -183,7 +183,7 @@
     <!-- Assign IP Dialog -->
     <OuiDialog v-model:open="assignDialogOpen" :title="`Assign IP ${assigningIP?.ipAddress || ''}`">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Assign this public IP address to a VPS instance.
         </OuiText>
         <OuiField label="VPS Instance" required>
@@ -209,7 +209,7 @@
     <!-- Unassign IP Dialog -->
     <OuiDialog v-model:open="unassignDialogOpen" :title="`Unassign IP ${unassigningIP?.ipAddress || ''}`">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Unassign this public IP address from the VPS instance. The IP will be available for reassignment.
         </OuiText>
         <OuiText size="sm" v-if="unassigningIP?.vpsName">
@@ -229,7 +229,7 @@
     <!-- Delete IP Dialog -->
     <OuiDialog v-model:open="deleteDialogOpen" :title="`Delete IP ${ipToDelete?.ipAddress || ''}`">
       <OuiStack gap="lg">
-        <OuiText size="sm" color="muted">
+        <OuiText size="sm" color="tertiary">
           Are you sure you want to delete this public IP address? This action cannot be undone.
         </OuiText>
         <OuiText size="sm" v-if="ipToDelete?.vpsId" color="warning">

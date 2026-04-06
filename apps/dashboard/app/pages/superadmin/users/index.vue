@@ -50,7 +50,7 @@
                 >
                   {{ role }}
                 </OuiBadge>
-                <OuiText v-if="!row.roles?.length" color="muted" size="sm">
+                <OuiText v-if="!row.roles?.length" color="tertiary" size="sm">
                   —
                 </OuiText>
               </OuiFlex>
@@ -66,7 +66,7 @@
                 >
                   {{ org.organizationName || org.organizationId }}
                 </OuiBadge>
-                <OuiText v-if="!row.organizations?.length" color="muted" size="sm">
+                <OuiText v-if="!row.organizations?.length" color="tertiary" size="sm">
                   —
                 </OuiText>
               </OuiFlex>

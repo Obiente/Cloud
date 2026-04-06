@@ -102,7 +102,7 @@
                           >
                         </OuiBadge>
                       </OuiFlex>
-                      <OuiText size="xs" color="secondary" class="md:text-sm">
+                      <OuiText size="xs" color="tertiary" class="md:text-sm">
                         {{ getTypeLabel(database.type) }} • Port {{ database.port || 'N/A' }}
                       </OuiText>
                     </OuiStack>

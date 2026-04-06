@@ -3,7 +3,7 @@
     <div v-if="isLoading" class="h-full flex items-center justify-center">
       <OuiStack gap="md" align="center">
         <OuiSpinner size="lg" />
-        <OuiText size="sm" color="secondary">Loading file...</OuiText>
+        <OuiText size="sm" color="tertiary">Loading file...</OuiText>
       </OuiStack>
     </div>
     <div v-else-if="error" class="h-full flex items-center justify-center p-8">
@@ -14,7 +14,7 @@
         <OuiText size="lg" weight="semibold" color="danger">
           Unable to Load File
         </OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           {{ error }}
         </OuiText>
         <OuiButton variant="outline" size="sm" @click="loadFile">

@@ -5,7 +5,7 @@
         <OuiText tag="h1" size="3xl" weight="extrabold"
           >Invoice Management</OuiText
         >
-        <OuiText color="muted">
+        <OuiText color="tertiary">
           View and manage all invoices across organizations.
         </OuiText>
       </OuiStack>
@@ -57,7 +57,7 @@
           <OuiText
             size="sm"
             weight="medium"
-            color="secondary"
+            color="tertiary"
             transform="uppercase"
             class="tracking-wide"
             >{{ metric.label }}</OuiText
@@ -87,7 +87,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-0">
         <div v-if="isLoading" class="text-center py-8">
-          <OuiText color="muted">Loading invoices...</OuiText>
+          <OuiText color="tertiary">Loading invoices...</OuiText>
         </div>
         <OuiTable
           v-else

@@ -35,7 +35,7 @@
 
     <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
 
-    <OuiText v-if="isConnected && !error" size="xs" color="secondary">
+    <OuiText v-if="isConnected && !error" size="xs" color="tertiary">
       Press Enter to send commands to the VPS
     </OuiText>
   </OuiStack>

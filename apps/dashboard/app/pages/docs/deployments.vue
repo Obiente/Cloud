@@ -4,63 +4,79 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Managing Deployments
       </OuiText>
-      <OuiText color="secondary" size="lg">
-        Deploy and manage your applications with multiple build strategies and runtime types
+      <OuiText color="tertiary" size="lg">
+        Deploy applications from repositories, Dockerfiles, images, and Compose
+        stacks
       </OuiText>
     </OuiStack>
 
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
-        <OuiText size="sm" color="secondary">
-          Deployments allow you to run applications, services, and static sites on Obiente Cloud
+        <OuiText size="sm" color="tertiary">
+          Deployments let you run applications, services, and static sites on
+          Obiente Cloud
         </OuiText>
       </OuiCardHeader>
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiText>
-            Deployments are your applications and services running on Obiente Cloud. You can deploy 
-            from Git repositories using various build strategies, or deploy Docker containers directly. 
-            Each deployment can be configured with different environments (production, staging, development) 
-            and organized using groups/labels.
+            Deployments are the main application unit in Obiente Cloud. You can
+            build from GitHub, deploy directly from Docker-oriented sources, and
+            manage routing, logs, metrics, files, services, and environment
+            variables from one place.
           </OuiText>
 
-          <OuiBox p="md" rounded="lg" class="bg-success/10 border border-success/20">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-success/10 border border-success/20"
+          >
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">
-                Creating a New Deployment
+                Recommended deployment flow
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
-                  1. Navigate to Deployments in the sidebar and click "New Deployment"
+                <OuiText size="sm" color="tertiary">
+                  1. Create or select the deployment from the Deployments page.
                 </OuiText>
-                <OuiText size="sm" color="secondary">
-                  2. Enter a deployment name and select an environment (Production, Staging, or Development)
+                <OuiText size="sm" color="tertiary">
+                  2. Connect GitHub first if you want repository browsing and
+                  auto-deploys.
                 </OuiText>
-                <OuiText size="sm" color="secondary">
-                  3. Optionally add groups/labels for organization (e.g., "frontend", "backend", "api")
+                <OuiText size="sm" color="tertiary">
+                  3. Pick the repository, branch, or container source.
                 </OuiText>
-                <OuiText size="sm" color="secondary">
-                  4. You'll be redirected to the deployment details page to configure:
+                <OuiText size="sm" color="tertiary">
+                  4. Review the detected build strategy and adjust it only if
+                  detection is wrong.
                 </OuiText>
-                <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="sm" color="secondary">• Repository URL and branch</OuiText>
-                  <OuiText size="sm" color="secondary">• Build strategy (auto-detected from your code)</OuiText>
-                  <OuiText size="sm" color="secondary">• Build commands and configuration</OuiText>
-                  <OuiText size="sm" color="secondary">• Environment variables</OuiText>
-                  <OuiText size="sm" color="secondary">• Resource limits</OuiText>
-                </OuiStack>
-                <OuiText size="sm" color="secondary">
-                  5. Deploy and monitor the build process in real-time
+                <OuiText size="sm" color="tertiary">
+                  5. Configure env vars, resource sizing, and routing.
+                </OuiText>
+                <OuiText size="sm" color="tertiary">
+                  6. Start the deployment and use Builds, Logs, and Metrics to
+                  validate it.
                 </OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
 
-          <OuiAccordion
-            :items="deploymentAccordionItems"
-            multiple
-          >
+          <OuiBox p="md" rounded="lg" class="bg-info/10 border border-info/20">
+            <OuiStack gap="sm">
+              <OuiText size="sm" weight="semibold" color="primary">
+                Compose-specific note
+              </OuiText>
+              <OuiText size="sm" color="tertiary">
+                In Docker Compose deployments, internal services should talk to
+                each other by Compose service name. External managed resources
+                such as Obiente databases should use the managed hostname shown
+                in their connection details.
+              </OuiText>
+            </OuiStack>
+          </OuiBox>
+
+          <OuiAccordion :items="deploymentAccordionItems" multiple>
             <template #trigger="{ item }">
               <OuiFlex align="center" gap="sm">
                 <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
@@ -78,88 +94,138 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Deployment Features</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Comprehensive tools for managing your deployments
         </OuiText>
       </OuiCardHeader>
       <OuiCardBody>
         <OuiGrid cols="1" cols-md="2" gap="md">
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Build History</OuiText>
-              <OuiText size="sm" color="secondary">
-                Track all builds and deployments with detailed build logs. View build status, 
-                duration, and artifacts for each deployment.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Build History</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Track every build with detailed logs, build status, durations,
+                and deployment outcomes.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Real-time Metrics</OuiText>
-              <OuiText size="sm" color="secondary">
-                Monitor CPU, memory, network, and disk usage in real-time. View historical 
-                metrics and track resource consumption over time.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Real-time Metrics</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Monitor CPU, memory, network, and disk usage in real-time. View
+                historical metrics and track resource consumption over time.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Logs & Terminal</OuiText>
-              <OuiText size="sm" color="secondary">
-                View application logs with ANSI color support and real-time streaming. Access 
-                an interactive terminal for debugging and manual operations.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Logs & Terminal</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                View application logs with real-time streaming and open an
+                interactive terminal for live debugging.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">File Management</OuiText>
-              <OuiText size="sm" color="secondary">
-                Browse, upload, edit, and delete files directly through the dashboard. Edit 
-                configuration files and manage application assets without SSH access.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >File Management</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Browse, upload, edit, and delete files directly through the
+                dashboard. Edit configuration files and manage application
+                assets without SSH access.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Environment Variables</OuiText>
-              <OuiText size="sm" color="secondary">
-                Manage environment variables securely. Set different variables per environment 
-                (production, staging, development) and update them without redeploying.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Environment Variables</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Manage environment variables securely and keep repository,
+                runtime, and secret configuration in one place.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Docker Compose Support</OuiText>
-              <OuiText size="sm" color="secondary">
-                Deploy multi-container applications using Docker Compose. Configure services, 
-                networks, and volumes directly from the dashboard or from a repository.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Docker Compose Support</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Deploy multi-container applications using Docker Compose, with
+                service-level logs and routing support.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Custom Domains & Routing</OuiText>
-              <OuiText size="sm" color="secondary">
-                Configure custom domains and routing rules. Set up path-based routing and 
-                manage DNS settings directly from the dashboard.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Custom Domains & Routing</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                Configure default `my.obiente.cloud` hostnames, add custom
+                domains, and manage path-based routing.
               </OuiText>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Service Management</OuiText>
-              <OuiText size="sm" color="secondary">
-                For Docker Compose deployments, manage individual services, view service logs, 
-                restart services independently, and monitor service health.
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Service Management</OuiText
+              >
+              <OuiText size="sm" color="tertiary">
+                For Docker Compose deployments, manage individual services, view
+                service logs, restart services independently, and monitor
+                service health.
               </OuiText>
             </OuiStack>
           </OuiBox>
@@ -173,46 +239,94 @@
       </OuiCardHeader>
       <OuiCardBody>
         <OuiStack gap="sm">
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-secondary" />
-              <OuiText size="sm" weight="medium" color="primary">CREATED</OuiText>
-              <OuiText size="sm" color="secondary">• Deployment created but not yet built</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >CREATED</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Deployment created but not yet built</OuiText
+              >
             </OuiFlex>
           </OuiBox>
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-warning" />
-              <OuiText size="sm" weight="medium" color="primary">BUILDING</OuiText>
-              <OuiText size="sm" color="secondary">• Build is in progress</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >BUILDING</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Build is in progress</OuiText
+              >
             </OuiFlex>
           </OuiBox>
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-warning" />
-              <OuiText size="sm" weight="medium" color="primary">DEPLOYING</OuiText>
-              <OuiText size="sm" color="secondary">• Build complete, deploying containers</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >DEPLOYING</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Build complete, deploying containers</OuiText
+              >
             </OuiFlex>
           </OuiBox>
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-success" />
-              <OuiText size="sm" weight="medium" color="primary">RUNNING</OuiText>
-              <OuiText size="sm" color="secondary">• Deployment is live and running</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >RUNNING</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Deployment is live and running</OuiText
+              >
             </OuiFlex>
           </OuiBox>
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-secondary" />
-              <OuiText size="sm" weight="medium" color="primary">STOPPED</OuiText>
-              <OuiText size="sm" color="secondary">• Deployment has been stopped</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >STOPPED</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Deployment has been stopped</OuiText
+              >
             </OuiFlex>
           </OuiBox>
-          <OuiBox p="sm" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiFlex align="center" gap="sm">
               <OuiBox class="w-2 h-2 rounded-full bg-danger" />
-              <OuiText size="sm" weight="medium" color="primary">FAILED</OuiText>
-              <OuiText size="sm" color="secondary">• Build or deployment failed</OuiText>
+              <OuiText size="sm" weight="medium" color="primary"
+                >FAILED</OuiText
+              >
+              <OuiText size="sm" color="tertiary"
+                >• Build or deployment failed</OuiText
+              >
             </OuiFlex>
           </OuiBox>
         </OuiStack>

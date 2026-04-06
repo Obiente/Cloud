@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Income Overview</OuiText>
-        <OuiText color="muted">
+        <OuiText color="tertiary">
           View billing analytics, revenue trends, and top customers.
         </OuiText>
       </OuiStack>
@@ -46,7 +46,7 @@
           <OuiText
             size="sm"
             weight="medium"
-            color="secondary"
+            color="tertiary"
             transform="uppercase"
             class="tracking-wide"
             >{{ metric.label }}</OuiText
@@ -66,19 +66,19 @@
       <OuiCardBody class="p-6">
         <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
           <div>
-            <OuiText size="sm" color="muted">Success Rate</OuiText>
+            <OuiText size="sm" color="tertiary">Success Rate</OuiText>
             <OuiText size="2xl" weight="semibold">
               {{ paymentMetrics.successRate?.toFixed(1) || 0 }}%
             </OuiText>
           </div>
           <div>
-            <OuiText size="sm" color="muted">Successful Payments</OuiText>
+            <OuiText size="sm" color="tertiary">Successful Payments</OuiText>
             <OuiText size="2xl" weight="semibold">
               {{ paymentMetrics.successfulPayments || 0 }}
             </OuiText>
           </div>
           <div>
-            <OuiText size="sm" color="muted">Average Payment</OuiText>
+            <OuiText size="sm" color="tertiary">Average Payment</OuiText>
             <OuiText size="2xl" weight="semibold">
               {{ formatCurrency(paymentMetrics.averagePaymentAmount || 0) }}
             </OuiText>
@@ -94,7 +94,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-6">
         <div v-if="monthlyIncome.length === 0" class="text-center py-8">
-          <OuiText color="muted">No monthly data available</OuiText>
+          <OuiText color="tertiary">No monthly data available</OuiText>
         </div>
         <OuiTable
           v-else

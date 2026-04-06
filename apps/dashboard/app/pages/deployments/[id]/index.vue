@@ -1,6 +1,6 @@
 <template>
-  <OuiContainer size="full" py="sm" class="md:py-6">
-    <OuiStack gap="md" class="md:gap-xl">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
       <!-- Access Error State -->
       <OuiCard v-if="accessError" variant="outline" class="border-danger/20">
         <OuiCardBody>
@@ -26,24 +26,17 @@
         <!-- Loading Skeleton -->
         <template v-if="pending && !deploymentData">
           <OuiCard variant="outline" class="border-border-default/50">
-            <OuiCardBody class="p-3 md:p-6">
-              <OuiStack gap="md" class="md:gap-lg">
-                <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
-                  <OuiStack gap="sm" class="flex-1 min-w-0">
-                    <OuiFlex align="center" gap="sm">
-                      <OuiSkeleton width="3rem" height="3rem" variant="rectangle" :rounded="true" class="rounded-lg" />
-                      <OuiStack gap="xs" class="flex-1">
-                        <OuiSkeleton width="20rem" height="2rem" variant="text" />
-                        <OuiSkeleton width="12rem" height="1rem" variant="text" />
-                      </OuiStack>
-                    </OuiFlex>
-                  </OuiStack>
-                  <OuiFlex gap="sm">
-                    <OuiSkeleton width="6rem" height="2rem" variant="rectangle" rounded />
-                    <OuiSkeleton width="6rem" height="2rem" variant="rectangle" rounded />
-                  </OuiFlex>
+            <OuiCardBody>
+              <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+                <OuiStack gap="sm" class="flex-1 min-w-0">
+                  <OuiSkeleton width="16rem" height="1.5rem" variant="text" />
+                  <OuiSkeleton width="10rem" height="0.875rem" variant="text" />
+                </OuiStack>
+                <OuiFlex gap="xs">
+                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
                 </OuiFlex>
-              </OuiStack>
+              </OuiFlex>
             </OuiCardBody>
           </OuiCard>
           <OuiCard variant="outline" class="border-border-default/50">
@@ -60,247 +53,101 @@
         <!-- Header -->
         <Transition name="fade" mode="out-in">
           <OuiCard v-if="!pending && deployment" variant="outline" class="border-border-default/50">
-            <OuiCardBody class="p-3 md:p-6">
-              <OuiFlex
-                justify="between"
-                align="start"
-                wrap="wrap"
-                gap="md"
-                class="md:gap-lg md:items-center"
-              >
-                <OuiStack gap="sm" class="flex-1 min-w-0 md:gap-md">
-                  <OuiFlex align="center" gap="sm" wrap="wrap" class="md:gap-md">
-                    <OuiBox
-                      p="xs"
-                      rounded="lg"
-                      bg="accent-primary"
-                      class="bg-primary/10 ring-1 ring-primary/20 shrink-0  md:p-sm md:rounded-xl"
-                    >
-                      <RocketLaunchIcon
-                        class="w-6 h-6 md:w-8 md:h-8 text-primary"
-                      />
-                    </OuiBox>
-                    <OuiStack gap="xs" class="min-w-0 flex-1 md:gap-none">
-                      <OuiFlex
-                        align="center"
-                        justify="between"
-                        gap="md"
-                        wrap="wrap"
-                        class="md:justify-start"
-                      >
-                        <OuiText
-                          as="h1"
-                          size="xl"
-                          weight="bold"
-                          truncate
-                          class="md:text-2xl"
-                        >
-                          {{ deployment.name }}
-                        </OuiText>
-                      <OuiBadge :variant="statusMeta.badge" size="xs">
-                        <span
-                          class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
-                          :class="statusMeta.dotClass"
-                        />
-                        <OuiText
-                          as="span"
-                          size="xs"
-                          weight="semibold"
-                          transform="uppercase"
-                          >{{ statusMeta.label }}</OuiText
-                        >
-                      </OuiBadge>
-
-                      <OuiBadge
-                        v-if="containerStats.totalCount > 0"
-                        :variant="
-                          containerStats.runningCount === containerStats.totalCount
-                            ? 'success'
-                            : containerStats.runningCount > 0
+            <OuiCardBody>
+              <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+                <OuiStack gap="xs" class="flex-1 min-w-0">
+                  <OuiFlex align="center" gap="sm" wrap="wrap">
+                    <OuiText as="h1" size="lg" weight="semibold" truncate>{{ deployment.name }}</OuiText>
+                    <OuiBadge :variant="statusMeta.badge" size="xs">
+                      <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1" :class="statusMeta.dotClass" />
+                      {{ statusMeta.label }}
+                    </OuiBadge>
+                    <OuiBadge
+                      v-if="containerStats.totalCount > 0"
+                      :variant="
+                        containerStats.runningCount === containerStats.totalCount
+                          ? 'success'
+                          : containerStats.runningCount > 0
                             ? 'warning'
-                            : 'secondary' 
-                        "
-                        size="xs"
-                        class="md:size-sm"
-                      >
-                        <OuiText as="span" size="xs" weight="medium">
-                          {{ containerStats.runningCount }}/{{
-                            containerStats.totalCount
-                          }}
-                          {{
-                            containerStats.runningCount === containerStats.totalCount
-                              ? 'running'
-                              : containerStats.runningCount > 0
-                              ? 'running'
-                              : 'stopped'
-                          }}
-                        </OuiText>
-                      </OuiBadge>
-                    </OuiFlex>
-                    <OuiText size="xs" color="secondary" class="md:text-sm">
-                      Last deployed
-                      <OuiRelativeTime
-                        :value="
-                          deployment.lastDeployedAt
-                            ? date(deployment.lastDeployedAt)
-                            : undefined
-                        "
-                        :style="'short'"
-                      />
-                    </OuiText>
-                  </OuiStack>
-                </OuiFlex>
-              </OuiStack>
+                            : 'secondary'
+                      "
+                      size="xs"
+                    >
+                      {{ containerStats.runningCount }}/{{ containerStats.totalCount }} running
+                    </OuiBadge>
+                  </OuiFlex>
+                  <OuiText size="xs" color="tertiary">
+                    Last deployed
+                    <OuiRelativeTime
+                      :value="deployment.lastDeployedAt ? date(deployment.lastDeployedAt) : undefined"
+                      :style="'short'"
+                    />
+                  </OuiText>
+                </OuiStack>
 
-              <OuiFlex
-                gap="xs"
-                wrap="wrap"
-                class="w-full md:w-auto shrink-0 md:gap-sm md:flex-nowrap"
-              >
-                <OuiButton
-                  variant="ghost"
-                  color="secondary"
-                  size="sm"
-                  @click="refreshAll"
-                  :loading="isRefreshing"
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                >
-                  <ArrowPathIcon
-                    class="h-4 w-4"
-                    :class="{ 'animate-spin': isRefreshing }"
-                  />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Refresh</OuiText
+                <OuiFlex gap="xs" wrap="wrap" class="shrink-0">
+                  <OuiButton variant="ghost" size="sm" @click="refreshAll" :loading="isRefreshing" class="gap-1.5">
+                    <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+                    <span class="hidden sm:inline">Refresh</span>
+                  </OuiButton>
+                  <OuiButton variant="ghost" size="sm" @click="openDomain" :disabled="!deployment.domain" class="gap-1.5">
+                    <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Open</span>
+                  </OuiButton>
+                  <OuiButton
+                    variant="outline"
+                    size="sm"
+                    @click="redeploy"
+                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    class="gap-1.5"
                   >
-                </OuiButton>
-                <OuiButton
-                  variant="ghost"
-                  color="success"
-                  size="sm"
-                  @click="openDomain"
-                  :disabled="!deployment.domain"
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                >
-                  <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Open</OuiText
+                    <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING }" />
+                    <span class="hidden sm:inline">Redeploy</span>
+                  </OuiButton>
+                  <OuiButton
+                    v-if="hasRunningContainers"
+                    variant="outline"
+                    size="sm"
+                    @click="restart"
+                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    class="gap-1.5"
+                    title="Restart without rebuilding"
                   >
-                </OuiButton>
-                <OuiButton
-                  variant="outline"
-                  color="warning"
-                  size="sm"
-                  @click="redeploy"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                >
-                  <ArrowPathIcon
-                    class="h-4 w-4"
-                    :class="{
-                      'animate-spin':
-                        deployment.status === DeploymentStatusEnum.BUILDING ||
-                        deployment.status === DeploymentStatusEnum.DEPLOYING,
-                    }"
-                  />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Redeploy</OuiText
+                    <ArrowPathIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Restart</span>
+                  </OuiButton>
+                  <OuiButton
+                    v-if="hasRunningContainers"
+                    variant="solid"
+                    color="danger"
+                    size="sm"
+                    @click="stop"
+                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    class="gap-1.5"
                   >
-                </OuiButton>
-                <OuiButton
-                  v-if="hasRunningContainers"
-                  variant="outline"
-                  color="primary"
-                  size="sm"
-                  @click="restart"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                  title="Restart (restart without rebuilding)"
-                >
-                  <ArrowPathIcon class="h-4 w-4" />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Restart</OuiText
+                    <StopIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Stop</span>
+                  </OuiButton>
+                  <OuiButton
+                    v-else-if="!hasRunningContainers && (containerStats.totalCount > 0 || deployment.status === DeploymentStatusEnum.STOPPED)"
+                    variant="solid"
+                    color="success"
+                    size="sm"
+                    @click="start"
+                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    class="gap-1.5"
                   >
-                </OuiButton>
-                <OuiButton
-                  v-if="hasRunningContainers"
-                  variant="solid"
-                  color="danger"
-                  size="sm"
-                  @click="stop"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                >
-                  <StopIcon class="h-4 w-4" />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Stop</OuiText
-                  >
-                </OuiButton>
-                <OuiButton
-                  v-else-if="
-                    !hasRunningContainers &&
-                    (containerStats.totalCount > 0 ||
-                      deployment.status === DeploymentStatusEnum.STOPPED)
-                  "
-                  variant="solid"
-                  color="success"
-                  size="sm"
-                  @click="start"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-                >
-                  <PlayIcon class="h-4 w-4" />
-                  <OuiText
-                    as="span"
-                    size="xs"
-                    weight="medium"
-                    class="hidden sm:inline"
-                    >Start</OuiText
-                  >
-                </OuiButton>
+                    <PlayIcon class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">Start</span>
+                  </OuiButton>
+                </OuiFlex>
               </OuiFlex>
-            </OuiFlex>
-          </OuiCardBody>
-        </OuiCard>
+            </OuiCardBody>
+          </OuiCard>
         </Transition>
 
         <!-- Tabbed Content -->
-        <OuiStack gap="sm" class="md:gap-md">
+        <OuiStack gap="sm">
           <OuiTabs v-model="activeTab" :tabs="tabs" />
           <OuiCard variant="default">
             <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
@@ -329,15 +176,6 @@
               </template>
               <template #routing>
                 <DeploymentRouting :deployment="deployment" />
-              </template>
-              <template #build-logs>
-                <DeploymentBuildLogs
-                  :key="`build-logs-${id}`"
-                  ref="buildLogsRef"
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                  :auto-start="isBuildingOrDeploying"
-                />
               </template>
               <template #logs>
                 <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
@@ -372,13 +210,6 @@
                 <DeploymentEnvVars
                   :deployment="deployment"
                   @save="handleEnvSave"
-                />
-              </template>
-              <template #audit-logs>
-                <AuditLogs
-                  :organization-id="orgId"
-                  resource-type="deployment"
-                  :resource-id="id"
                 />
               </template>
             </OuiTabs>
@@ -421,7 +252,6 @@
     ChartBarIcon,
     CubeIcon,
     ClockIcon,
-    ClipboardDocumentListIcon,
   } from "@heroicons/vue/24/outline";
   import {
     DeploymentService,
@@ -446,14 +276,12 @@
   const DeploymentBuilds = defineAsyncComponent(() => import("~/components/deployment/DeploymentBuilds.vue"));
   const DeploymentMetrics = defineAsyncComponent(() => import("~/components/deployment/DeploymentMetrics.vue"));
   const DeploymentRouting = defineAsyncComponent(() => import("~/components/deployment/DeploymentRouting.vue"));
-  const DeploymentBuildLogs = defineAsyncComponent(() => import("~/components/deployment/DeploymentBuildLogs.vue"));
   const DeploymentLogs = defineAsyncComponent(() => import("~/components/deployment/DeploymentLogs.vue"));
   const DeploymentTerminal = defineAsyncComponent(() => import("~/components/deployment/DeploymentTerminal.vue"));
   const DeploymentFiles = defineAsyncComponent(() => import("~/components/deployment/DeploymentFiles.vue"));
   const DeploymentCompose = defineAsyncComponent(() => import("~/components/deployment/DeploymentCompose.vue"));
   const DeploymentServices = defineAsyncComponent(() => import("~/components/deployment/DeploymentServices.vue"));
   const DeploymentEnvVars = defineAsyncComponent(() => import("~/components/deployment/DeploymentEnvVars.vue"));
-  const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLogs.vue"));
 
   definePageMeta({
     layout: "default",
@@ -615,19 +443,17 @@
   const tabs = computed<TabItem[]>(() => {
     const baseTabs: TabItem[] = [
       { id: "overview", label: "Overview", icon: RocketLaunchIcon },
-      { id: "settings", label: "Settings", icon: Cog6ToothIcon },
+      { id: "logs", label: "Logs", icon: DocumentTextIcon },
       { id: "builds", label: "Builds", icon: ClockIcon },
       { id: "metrics", label: "Metrics", icon: ChartBarIcon },
-      { id: "routing", label: "Routing", icon: GlobeAltIcon },
-      { id: "build-logs", label: "Build Logs", icon: Cog6ToothIcon },
-      { id: "logs", label: "Logs", icon: DocumentTextIcon },
       { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+      { id: "routing", label: "Routing", icon: GlobeAltIcon },
       { id: "files", label: "Files", icon: FolderIcon },
     ];
 
-    // Show compose tab only for PLAIN_COMPOSE without repository (manual compose editing)
-    // Hide for repo-based compose (compose from repository)
     const dep = deployment.value;
+
+    // Show compose tab only for PLAIN_COMPOSE without repository
     const isPlainComposeWithoutRepo =
       dep?.buildStrategy === BuildStrategy.PLAIN_COMPOSE && !dep?.repositoryUrl;
 
@@ -635,7 +461,7 @@
       baseTabs.push({ id: "compose", label: "Compose", icon: CodeBracketIcon });
     }
 
-    // Show services tab for compose deployments (both PLAIN_COMPOSE and COMPOSE_REPO)
+    // Show services tab for compose deployments
     const isComposeDeployment =
       dep?.buildStrategy === BuildStrategy.PLAIN_COMPOSE ||
       dep?.buildStrategy === BuildStrategy.COMPOSE_REPO;
@@ -645,11 +471,7 @@
     }
 
     baseTabs.push({ id: "env", label: "Environment", icon: VariableIcon });
-    baseTabs.push({
-      id: "audit-logs",
-      label: "Audit Logs",
-      icon: ClipboardDocumentListIcon,
-    });
+    baseTabs.push({ id: "settings", label: "Settings", icon: Cog6ToothIcon });
 
     return baseTabs;
   });
@@ -815,12 +637,6 @@
     }
   }
 
-  const buildLogsRef = ref<{
-    startStream: () => void;
-    stopStream: () => void;
-    clearLogs: () => void;
-  } | null>(null);
-
   const metricsRef = ref<{
     refreshUsage?: () => Promise<void>;
   } | null>(null);
@@ -930,14 +746,8 @@
   async function redeploy() {
     if (!localDeployment.value) return;
 
-    // Switch to build logs tab and start streaming
-    activeTab.value = "build-logs";
-
-    // Wait a tick for the component to mount, then start streaming
-    await nextTick();
-    if (buildLogsRef.value) {
-      buildLogsRef.value.startStream();
-    }
+    // Switch to builds tab to monitor progress
+    activeTab.value = "builds";
 
     // Trigger the redeployment
     await deploymentActions.redeployDeployment(id.value, localDeployment.value);

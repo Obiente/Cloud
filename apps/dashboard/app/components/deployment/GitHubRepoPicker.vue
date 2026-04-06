@@ -27,14 +27,14 @@
     <OuiText
       v-else-if="availableIntegrations.length === 0"
       size="xs"
-      color="secondary"
+      color="tertiary"
     >
       No GitHub accounts available. Please connect a GitHub account in Settings.
     </OuiText>
     <OuiText
       v-else-if="availableIntegrations.length === 1"
       size="xs"
-      color="secondary"
+      color="tertiary"
     >
       Using account: {{ availableIntegrations[0]?.username }} 
       {{ availableIntegrations[0]?.isUser ? '(Personal)' : `(${availableIntegrations[0]?.obienteOrgName || 'Organization'})` }}

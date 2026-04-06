@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Self-Hosting Obiente Cloud
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Deploy and manage your own Obiente Cloud instance with DNS delegation support
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Self-host Obiente Cloud on your own infrastructure while using the main DNS service
         </OuiText>
       </OuiCardHeader>
@@ -31,19 +31,19 @@
                 Key Benefits
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Full control over your infrastructure and data
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Use <code class="text-xs bg-surface-subtle px-1 py-0.5 rounded">my.obiente.cloud</code> DNS without exposing port 53
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Automatic DNS record synchronization
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Secure API key authentication for DNS delegation
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Simple $2/month subscription for DNS delegation
                 </OuiText>
               </OuiStack>
@@ -63,19 +63,19 @@
             Before self-hosting Obiente Cloud, ensure you have:
           </OuiText>
           <OuiStack gap="xs" class="pl-4">
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               • Docker and Docker Compose installed
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               • A server with sufficient resources (minimum 2GB RAM, 2 CPU cores recommended)
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               • Domain name configured (optional, for custom domains)
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               • An Obiente Cloud account with an organization
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               • DNS delegation subscription ($2/month) - Subscribe via the dashboard
             </OuiText>
           </OuiStack>
@@ -86,7 +86,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Quick Start</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Get your self-hosted instance up and running in minutes
         </OuiText>
       </OuiCardHeader>
@@ -98,19 +98,19 @@
                 Step 1: Subscribe to DNS Delegation
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Navigate to <NuxtLink to="/billing" class="text-primary hover:underline">Billing</NuxtLink> or <NuxtLink to="/self-host" class="text-primary hover:underline">Self-Hosted DNS</NuxtLink> in the dashboard
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Select your organization
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. Click "Subscribe ($2/month)" in the DNS Delegation section
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Complete the Stripe checkout process
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   5. Your API key will be automatically created when the subscription becomes active
                 </OuiText>
               </OuiStack>
@@ -123,16 +123,16 @@
                 Step 2: Retrieve Your API Key
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Navigate to <NuxtLink to="/self-host" class="text-primary hover:underline">Self-Hosted DNS</NuxtLink> in the dashboard
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Select your organization
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. If you don't see an API key yet, click "Create API Key"
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Save the API key securely - it will not be shown again!
                 </OuiText>
               </OuiStack>
@@ -145,16 +145,16 @@
                 Step 3: Configure Your Self-Hosted Instance
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Clone the Obiente Cloud repository
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Configure environment variables for DNS delegation
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. Start your services with Docker Compose
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Verify DNS records are being pushed
                 </OuiText>
               </OuiStack>
@@ -167,7 +167,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Configuration</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Configure your self-hosted instance for DNS delegation
         </OuiText>
       </OuiCardHeader>
@@ -226,7 +226,7 @@ DNS_DELEGATION_TTL="300s"</code></pre>
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">DNS Delegation</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           How DNS delegation works for self-hosted instances
         </OuiText>
       </OuiCardHeader>
@@ -244,19 +244,19 @@ DNS_DELEGATION_TTL="300s"</code></pre>
                 How It Works
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Your self-hosted API periodically pushes DNS records to the production API
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Production API stores these records with a TTL (time-to-live)
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. Production DNS server queries delegated records when local lookup fails
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   4. Records automatically expire if not refreshed within TTL
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   5. DNS queries resolve correctly using the delegated records
                 </OuiText>
               </OuiStack>
@@ -266,19 +266,19 @@ DNS_DELEGATION_TTL="300s"</code></pre>
           <OuiStack gap="sm">
             <OuiText size="sm" weight="medium">Benefits</OuiText>
             <OuiStack gap="xs" class="pl-4">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 • No need to expose DNS port 53 on your host
               </OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 • No nameserver configuration required
               </OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 • Automatic record expiration prevents stale DNS entries
               </OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 • Secure API key authentication
               </OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 • Unified DNS resolution across all deployments
               </OuiText>
             </OuiStack>
@@ -295,7 +295,7 @@ DNS_DELEGATION_TTL="300s"</code></pre>
         <OuiStack gap="md">
           <OuiStack gap="md">
             <OuiText size="sm" weight="medium">Verify DNS Records Are Being Pushed</OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               Check your API logs to verify DNS records are being pushed:
             </OuiText>
             <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
@@ -308,7 +308,7 @@ DNS_DELEGATION_TTL="300s"</code></pre>
 
           <OuiStack gap="md">
             <OuiText size="sm" weight="medium">Test DNS Resolution</OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               Verify that your deployments resolve correctly via production DNS:
             </OuiText>
             <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
@@ -354,10 +354,10 @@ dig deploy-123.my.obiente.cloud
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">API Key Security</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">• Never commit API keys to version control</OuiText>
-                <OuiText size="sm" color="secondary">• Use environment variables or secrets management</OuiText>
-                <OuiText size="sm" color="secondary">• Rotate API keys periodically</OuiText>
-                <OuiText size="sm" color="secondary">• Revoke compromised keys immediately</OuiText>
+                <OuiText size="sm" color="tertiary">• Never commit API keys to version control</OuiText>
+                <OuiText size="sm" color="tertiary">• Use environment variables or secrets management</OuiText>
+                <OuiText size="sm" color="tertiary">• Rotate API keys periodically</OuiText>
+                <OuiText size="sm" color="tertiary">• Revoke compromised keys immediately</OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -366,10 +366,10 @@ dig deploy-123.my.obiente.cloud
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">TTL Configuration</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">• Default TTL: 300 seconds (5 minutes)</OuiText>
-                <OuiText size="sm" color="secondary">• Push interval must be less than TTL</OuiText>
-                <OuiText size="sm" color="secondary">• Recommended: Push interval < TTL / 2</OuiText>
-                <OuiText size="sm" color="secondary">• Shorter TTL = faster expiration but more frequent pushes</OuiText>
+                <OuiText size="sm" color="tertiary">• Default TTL: 300 seconds (5 minutes)</OuiText>
+                <OuiText size="sm" color="tertiary">• Push interval must be less than TTL</OuiText>
+                <OuiText size="sm" color="tertiary">• Recommended: Push interval < TTL / 2</OuiText>
+                <OuiText size="sm" color="tertiary">• Shorter TTL = faster expiration but more frequent pushes</OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -378,10 +378,10 @@ dig deploy-123.my.obiente.cloud
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Monitoring</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">• Monitor API logs for DNS pusher activity</OuiText>
-                <OuiText size="sm" color="secondary">• Set up alerts for DNS push failures</OuiText>
-                <OuiText size="sm" color="secondary">• Verify DNS resolution periodically</OuiText>
-                <OuiText size="sm" color="secondary">• Keep subscription active to maintain DNS delegation</OuiText>
+                <OuiText size="sm" color="tertiary">• Monitor API logs for DNS pusher activity</OuiText>
+                <OuiText size="sm" color="tertiary">• Set up alerts for DNS push failures</OuiText>
+                <OuiText size="sm" color="tertiary">• Verify DNS resolution periodically</OuiText>
+                <OuiText size="sm" color="tertiary">• Keep subscription active to maintain DNS delegation</OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>

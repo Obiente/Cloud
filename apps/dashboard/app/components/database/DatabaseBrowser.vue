@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <OuiStack v-if="schemaLoading" align="center" gap="md" style="padding: 2.5rem 0">
       <OuiSpinner size="lg" />
-      <OuiText color="secondary">Loading schema...</OuiText>
+      <OuiText color="tertiary">Loading schema...</OuiText>
     </OuiStack>
 
     <!-- Error State -->
@@ -22,7 +22,7 @@
       >
         <div style="padding: 0.75rem">
           <OuiFlex justify="between" align="center" style="margin-bottom: 0.75rem">
-            <OuiText size="xs" weight="semibold" transform="uppercase" color="secondary">
+            <OuiText size="xs" weight="semibold" transform="uppercase" color="tertiary">
               Schema
             </OuiText>
             <OuiFlex gap="xs">
@@ -51,7 +51,7 @@
           <OuiCollapsible v-model:open="showTables" style="margin-bottom: 0.75rem">
             <template #trigger>
               <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
-                <OuiText size="xs" weight="semibold" color="secondary">
+                <OuiText size="xs" weight="semibold" color="tertiary">
                   Tables ({{ filteredTables.length }})
                 </OuiText>
               </OuiFlex>
@@ -71,7 +71,7 @@
                   />
                   <TableCellsIcon class="w-3.5 h-3.5 shrink-0 text-secondary" />
                   <span class="flex-1 truncate">{{ table.name }}</span>
-                  <OuiText size="xs" color="secondary">{{ Number(table.rowCount) }}</OuiText>
+                  <OuiText size="xs" color="tertiary">{{ Number(table.rowCount) }}</OuiText>
                 </button>
 
                 <!-- Expanded columns -->
@@ -81,7 +81,7 @@
                     <span v-else-if="isForeignKey(table, col.name)" class="text-info font-bold" title="Foreign Key">FK</span>
                     <span v-else class="w-4" />
                     <span class="truncate">{{ col.name }}</span>
-                    <OuiText size="xs" color="secondary" class="ml-auto">{{ col.dataType }}</OuiText>
+                    <OuiText size="xs" color="tertiary" class="ml-auto">{{ col.dataType }}</OuiText>
                     <span v-if="col.isNullable" class="text-[9px] text-secondary" title="Nullable">?</span>
                   </OuiFlex>
                 </div>
@@ -133,7 +133,7 @@
           <OuiCollapsible v-if="schemaViews.length > 0" v-model:open="showViews" style="margin-bottom: 0.75rem">
             <template #trigger>
               <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
-                <OuiText size="xs" weight="semibold" color="secondary">
+                <OuiText size="xs" weight="semibold" color="tertiary">
                   Views ({{ schemaViews.length }})
                 </OuiText>
               </OuiFlex>
@@ -154,7 +154,7 @@
           <OuiCollapsible v-if="schemaFunctions.length > 0" v-model:open="showFunctions">
             <template #trigger>
               <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
-                <OuiText size="xs" weight="semibold" color="secondary">
+                <OuiText size="xs" weight="semibold" color="tertiary">
                   Functions ({{ schemaFunctions.length }})
                 </OuiText>
               </OuiFlex>
@@ -218,7 +218,7 @@
                       <PlusIcon style="width: 0.875rem; height: 0.875rem" />
                       Add Row
                     </OuiButton>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       {{ dataResponse?.totalRows ?? 0 }} total rows
                     </OuiText>
                   </div>
@@ -290,7 +290,7 @@
                   <!-- Loading -->
                   <OuiStack v-if="dataLoading" align="center" gap="sm" style="padding: 2rem">
                     <OuiSpinner />
-                    <OuiText color="secondary" size="xs">Loading data...</OuiText>
+                    <OuiText color="tertiary" size="xs">Loading data...</OuiText>
                   </OuiStack>
                 </div>
 
@@ -305,7 +305,7 @@
                     <OuiButton variant="ghost" size="sm" :disabled="dataPage <= 1" @click="dataPage--; loadTableData()">
                       Previous
                     </OuiButton>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Page {{ dataPage }} of {{ Math.ceil(dataResponse.totalRows / dataPerPage) }}
                     </OuiText>
                     <OuiButton variant="ghost" size="sm" :disabled="dataPage >= Math.ceil(dataResponse.totalRows / dataPerPage)" @click="dataPage++; loadTableData()">
@@ -313,7 +313,7 @@
                     </OuiButton>
                   </OuiFlex>
                   <OuiFlex gap="sm" align="center">
-                    <OuiText size="xs" color="secondary">Per page:</OuiText>
+                    <OuiText size="xs" color="tertiary">Per page:</OuiText>
                     <OuiSelect
                       v-model="dataPerPage"
                       :items="perPageOptions"
@@ -347,7 +347,7 @@
                       <OuiText weight="medium">{{ value }}</OuiText>
                     </template>
                     <template #cell-dataType="{ value }">
-                      <OuiText color="secondary" style="font-family: monospace">{{ value }}</OuiText>
+                      <OuiText color="tertiary" style="font-family: monospace">{{ value }}</OuiText>
                     </template>
                     <template #cell-isNullable="{ value }">
                       <OuiBadge :color="value ? 'secondary' : 'warning'" size="xs">
@@ -355,7 +355,7 @@
                       </OuiBadge>
                     </template>
                     <template #cell-defaultValue="{ value }">
-                      <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                      <OuiText color="tertiary">{{ value || '—' }}</OuiText>
                     </template>
                     <template #cell-isPrimaryKey="{ value }">
                       <OuiBadge v-if="value" color="primary" size="xs">PK</OuiBadge>
@@ -403,10 +403,10 @@
                       <OuiText weight="medium">{{ value }}</OuiText>
                     </template>
                     <template #cell-columnNames="{ value }">
-                      <OuiText color="secondary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
+                      <OuiText color="tertiary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
                     </template>
                     <template #cell-type="{ value }">
-                      <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                      <OuiText color="tertiary">{{ value || '—' }}</OuiText>
                     </template>
                     <template #cell-isUnique="{ value }">
                       <OuiBadge v-if="value" color="info" size="xs">Yes</OuiBadge>
@@ -429,7 +429,7 @@
                       </OuiButton>
                     </template>
                   </OuiTable>
-                  <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                  <OuiText v-else color="tertiary" size="sm" style="padding: 1rem; text-align: center">
                     No indexes found
                   </OuiText>
                 </div>
@@ -450,7 +450,7 @@
                     <OuiText weight="medium">{{ value }}</OuiText>
                   </template>
                   <template #cell-fromColumns="{ value }">
-                    <OuiText color="secondary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
+                    <OuiText color="tertiary" style="font-family: monospace">{{ value.join(', ') }}</OuiText>
                   </template>
                   <template #cell-toTable="{ row }">
                     <OuiText style="font-family: monospace">
@@ -458,13 +458,13 @@
                     </OuiText>
                   </template>
                   <template #cell-onDelete="{ value }">
-                    <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                    <OuiText color="tertiary">{{ value || '—' }}</OuiText>
                   </template>
                   <template #cell-onUpdate="{ value }">
-                    <OuiText color="secondary">{{ value || '—' }}</OuiText>
+                    <OuiText color="tertiary">{{ value || '—' }}</OuiText>
                   </template>
                 </OuiTable>
-                <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                <OuiText v-else color="tertiary" size="sm" style="padding: 1rem; text-align: center">
                   No foreign keys found
                 </OuiText>
               </div>
@@ -486,13 +486,13 @@
                 <div style="flex: 1; overflow: auto; padding: 1rem">
                   <OuiStack v-if="loadingDDL" align="center" gap="sm" style="padding: 2rem">
                     <OuiSpinner />
-                    <OuiText color="secondary" size="xs">Loading DDL...</OuiText>
+                    <OuiText color="tertiary" size="xs">Loading DDL...</OuiText>
                   </OuiStack>
                   <pre
                     v-else-if="tableDDL"
                     style="font-size: 0.75rem; font-family: monospace; background: var(--oui-surface-base); border: 1px solid var(--oui-border-default); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; white-space: pre-wrap"
                   >{{ tableDDL }}</pre>
-                  <OuiText v-else color="secondary" size="sm" style="padding: 1rem; text-align: center">
+                  <OuiText v-else color="tertiary" size="sm" style="padding: 1rem; text-align: center">
                     No DDL available
                   </OuiText>
                 </div>
@@ -504,7 +504,7 @@
         <!-- No table selected -->
         <OuiStack v-else align="center" justify="center" style="flex: 1; padding: 4rem 0">
           <TableCellsIcon style="width: 3rem; height: 3rem; color: var(--oui-text-muted)" />
-          <OuiText color="secondary" size="sm">Select a table to browse</OuiText>
+          <OuiText color="tertiary" size="sm">Select a table to browse</OuiText>
         </OuiStack>
       </div>
     </div>

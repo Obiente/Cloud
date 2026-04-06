@@ -7,7 +7,7 @@
           <OuiText as="h1" size="3xl" weight="bold" color="primary">
             Global Audit Logs
           </OuiText>
-          <OuiText color="secondary">
+          <OuiText color="tertiary">
             View all audit logs across all resources and organizations. Only accessible to superadmins.
           </OuiText>
         </OuiStack>

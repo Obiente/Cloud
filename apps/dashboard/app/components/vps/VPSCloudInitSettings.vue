@@ -1,18 +1,9 @@
 <template>
   <OuiStack gap="lg">
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiStack gap="xs">
-          <OuiText as="h2" class="oui-card-title"
-            >Cloud-Init Configuration</OuiText
-          >
-          <OuiText color="secondary" size="sm">
-            View and edit cloud-init settings for this VPS instance. Changes
-            will be applied on the next reboot.
-          </OuiText>
-        </OuiStack>
-      </OuiCardHeader>
+    <OuiCard variant="outline">
       <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiText size="sm" weight="semibold">Cloud-Init Configuration</OuiText>
         <OuiStack v-if="loading" gap="lg" class="py-4">
           <!-- System Configuration Skeleton -->
           <OuiStack gap="md">
@@ -189,7 +180,7 @@
                 <OuiText size="sm" weight="semibold"
                   >Raw Cloud-Init YAML</OuiText
                 >
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{
                     showActualUserData
                       ? "Current cloud-init config"
@@ -256,14 +247,14 @@
       <OuiCardBody>
         <OuiStack gap="xs">
           <OuiText size="sm" weight="semibold">Important Notes</OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             • Cloud-init configuration changes will only take effect after the
             VPS is rebooted.
           </OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             • User management should be done in the Users tab.
           </OuiText>
-          <OuiText size="xs" color="secondary">
+          <OuiText size="xs" color="tertiary">
             • SSH keys are managed separately in the SSH Settings tab.
           </OuiText>
         </OuiStack>

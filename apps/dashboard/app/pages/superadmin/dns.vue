@@ -5,7 +5,7 @@
         <OuiText tag="h1" size="3xl" weight="extrabold">
           {{ hasDelegatedDNS ? "Delegated DNS Management" : "DNS Management" }}
         </OuiText>
-        <OuiText color="muted" size="sm">
+        <OuiText color="tertiary" size="sm">
           <span v-if="hasDelegatedDNS">
             View and manage your delegated DNS records. Your organization is using DNS delegation to push DNS records to the production DNS server.
           </span>
@@ -46,7 +46,7 @@
           <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
             <OuiStack gap="xs">
               <OuiText tag="h2" size="xl" weight="bold">Your Delegated DNS Records</OuiText>
-              <OuiText color="muted" size="sm">
+              <OuiText color="tertiary" size="sm">
                 {{ filteredDelegatedRecords.length }} of {{ delegatedDNSRecords.length }} records
               </OuiText>
             </OuiStack>
@@ -118,10 +118,10 @@
               <OuiText size="sm">{{ value }}s</OuiText>
             </template>
             <template #cell-expiresAt="{ value }">
-              <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+              <OuiText size="xs" color="tertiary">{{ formatDate(value) }}</OuiText>
             </template>
             <template #cell-lastUpdated="{ value }">
-              <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+              <OuiText size="xs" color="tertiary">{{ formatDate(value) }}</OuiText>
             </template>
           </OuiTable>
         </OuiCardBody>
@@ -180,7 +180,7 @@
                   <OuiText size="sm" weight="medium">
                     {{ queryResult.domain }} ({{ queryResult.recordType }})
                   </OuiText>
-                  <OuiText size="xs" color="muted">
+                  <OuiText size="xs" color="tertiary">
                     TTL: {{ queryResult.ttl }}s
                   </OuiText>
                 </OuiFlex>
@@ -193,7 +193,7 @@
                   "
                 >
                   <OuiStack gap="xs">
-                    <OuiText size="xs" color="muted" weight="medium"
+                    <OuiText size="xs" color="tertiary" weight="medium"
                       >Records:</OuiText
                     >
                     <div
@@ -206,7 +206,7 @@
                   </OuiStack>
                 </div>
                 <div v-else>
-                  <OuiText size="sm" color="muted">No records found</OuiText>
+                  <OuiText size="sm" color="tertiary">No records found</OuiText>
                 </div>
               </OuiStack>
             </OuiCard>
@@ -222,7 +222,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-6">
         <div v-if="dnsConfigLoading" class="text-center py-8">
-          <OuiText color="muted">Loading configuration...</OuiText>
+          <OuiText color="tertiary">Loading configuration...</OuiText>
         </div>
         <div v-else-if="dnsConfig">
           <OuiStack gap="lg">
@@ -265,7 +265,7 @@
                 <div>
                   <OuiText
                     size="xs"
-                    color="muted"
+                    color="tertiary"
                     transform="uppercase"
                     class="tracking-wide"
                     >DNS Port</OuiText
@@ -277,7 +277,7 @@
                 <div>
                   <OuiText
                     size="xs"
-                    color="muted"
+                    color="tertiary"
                     transform="uppercase"
                     class="tracking-wide"
                     >Cache TTL</OuiText
@@ -308,7 +308,7 @@
           </OuiStack>
         </div>
         <div v-else class="text-center py-8">
-          <OuiText color="muted">Failed to load DNS configuration</OuiText>
+          <OuiText color="tertiary">Failed to load DNS configuration</OuiText>
         </div>
       </OuiCardBody>
     </OuiCard>
@@ -332,7 +332,7 @@
       </OuiCardHeader>
       <OuiCardBody class="p-6">
         <OuiStack gap="md">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Create API keys for DNS delegation. These keys allow self-hosted
             Obiente Cloud instances to push DNS records to the production DNS
             server. The Obiente Cloud Team can create keys for any organization without
@@ -349,10 +349,10 @@
           <OuiStack gap="sm">
             <OuiText size="sm" weight="medium">API Keys</OuiText>
             <div v-if="apiKeysLoading" class="text-center py-4">
-              <OuiText color="muted" size="sm">Loading API keys...</OuiText>
+              <OuiText color="tertiary" size="sm">Loading API keys...</OuiText>
             </div>
             <div v-else-if="apiKeys.length === 0" class="text-center py-4">
-              <OuiText color="muted" size="sm">No API keys found. Create one to get started.</OuiText>
+              <OuiText color="tertiary" size="sm">No API keys found. Create one to get started.</OuiText>
             </div>
             <div v-else>
               <OuiTable
@@ -372,10 +372,10 @@
                   <code class="text-xs">{{ value || '—' }}</code>
                 </template>
                 <template #cell-created_at="{ value }">
-                  <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+                  <OuiText size="xs" color="tertiary">{{ formatDate(value) }}</OuiText>
                 </template>
                 <template #cell-revoked_at="{ value }">
-                  <OuiText size="xs" color="muted" v-if="value">{{ formatDate(value) }}</OuiText>
+                  <OuiText size="xs" color="tertiary" v-if="value">{{ formatDate(value) }}</OuiText>
                   <span v-else class="text-text-tertiary text-xs">—</span>
                 </template>
                 <template #cell-actions="{ row }">
@@ -404,7 +404,7 @@
         <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
           <OuiStack gap="xs">
             <OuiText tag="h2" size="xl" weight="bold">DNS Records</OuiText>
-            <OuiText color="muted" size="sm">
+            <OuiText color="tertiary" size="sm">
               {{ filteredRecords.length }} of {{ dnsRecords.length }} records
             </OuiText>
           </OuiStack>
@@ -548,7 +548,7 @@
         <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
           <OuiStack gap="xs">
             <OuiText tag="h2" size="xl" weight="bold">Delegated DNS Records</OuiText>
-            <OuiText color="muted" size="sm">
+            <OuiText color="tertiary" size="sm">
               {{ filteredDelegatedRecords.length }} of {{ delegatedDNSRecords.length }} records
             </OuiText>
           </OuiStack>
@@ -635,10 +635,10 @@
             <code class="text-xs">{{ value || '—' }}</code>
           </template>
           <template #cell-expiresAt="{ value }">
-            <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ formatDate(value) }}</OuiText>
           </template>
           <template #cell-lastUpdated="{ value }">
-            <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ formatDate(value) }}</OuiText>
           </template>
         </OuiTable>
       </OuiCardBody>
@@ -652,7 +652,7 @@
     >
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Create a new API key for DNS delegation. This key can be used by
             self-hosted instances to push DNS records to the production DNS
             server.

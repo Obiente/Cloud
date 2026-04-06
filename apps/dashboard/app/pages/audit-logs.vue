@@ -7,7 +7,7 @@
           <OuiText as="h1" size="3xl" weight="bold" color="primary">
             Audit Logs
           </OuiText>
-          <OuiText color="secondary">
+          <OuiText color="tertiary">
             View audit logs for your organization. Accessible to organization Admins and Owners.
           </OuiText>
         </OuiStack>

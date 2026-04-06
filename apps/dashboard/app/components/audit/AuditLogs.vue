@@ -4,7 +4,7 @@
     <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
       <OuiText as="h3" size="lg" weight="bold">Audit Logs</OuiText>
       <OuiFlex gap="sm" align="center" wrap="wrap">
-        <OuiText v-if="!isLoading" size="sm" color="secondary">
+        <OuiText v-if="!isLoading" size="sm" color="tertiary">
           {{ totalCount }} log{{ totalCount !== 1 ? 's' : '' }}
         </OuiText>
         <OuiButton
@@ -92,13 +92,13 @@
           <template #skeleton-user>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium" skeleton skeleton-width="10rem" skeleton-height="1rem" />
-              <OuiText size="xs" color="secondary" class="font-mono" skeleton skeleton-width="8rem" skeleton-height="0.875rem" />
+              <OuiText size="xs" color="tertiary" class="font-mono" skeleton skeleton-width="8rem" skeleton-height="0.875rem" />
             </OuiStack>
           </template>
           <template #skeleton-resource>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium" skeleton skeleton-width="6rem" skeleton-height="1rem" />
-              <OuiText size="xs" color="secondary" class="font-mono" skeleton skeleton-width="12rem" skeleton-height="0.875rem" />
+              <OuiText size="xs" color="tertiary" class="font-mono" skeleton skeleton-width="12rem" skeleton-height="0.875rem" />
             </OuiStack>
           </template>
           <template #skeleton-status>
@@ -123,7 +123,7 @@
     <div v-else-if="auditLogs.length === 0" class="flex flex-col items-center justify-center py-12">
       <DocumentTextIcon class="h-12 w-12 text-secondary mb-4" />
       <OuiText size="md" weight="medium" class="mb-2">No audit logs found</OuiText>
-      <OuiText size="sm" color="secondary" class="text-center max-w-md">
+      <OuiText size="sm" color="tertiary" class="text-center max-w-md">
         Audit logs will appear here once actions are performed.
       </OuiText>
     </div>
@@ -151,18 +151,18 @@
           <template #cell-user="{ row }">
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">{{ row.userName || row.userEmail || row.userId }}</OuiText>
-              <OuiText size="xs" color="secondary" class="font-mono">{{ row.userId }}</OuiText>
+              <OuiText size="xs" color="tertiary" class="font-mono">{{ row.userId }}</OuiText>
             </OuiStack>
           </template>
 
           <template #cell-resource="{ row }">
             <OuiStack gap="xs" v-if="row.resourceType">
               <OuiText size="sm" weight="medium">{{ row.resourceType }}</OuiText>
-              <OuiText v-if="row.resourceId" size="xs" color="secondary" class="font-mono">
+              <OuiText v-if="row.resourceId" size="xs" color="tertiary" class="font-mono">
                 {{ row.resourceId }}
               </OuiText>
             </OuiStack>
-            <OuiText v-else size="sm" color="muted">—</OuiText>
+            <OuiText v-else size="sm" color="tertiary">—</OuiText>
           </template>
 
           <template #cell-status="{ row }">
@@ -215,11 +215,11 @@
       <OuiStack gap="md" v-if="selectedLog">
         <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">ID</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">ID</OuiText>
             <OuiText size="sm" class="font-mono">{{ selectedLog.id }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Time</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Time</OuiText>
             <OuiText size="sm">
               <OuiRelativeTime
                 :value="selectedLog.createdAt ? date(selectedLog.createdAt) : undefined"
@@ -228,46 +228,46 @@
             </OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">User</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">User</OuiText>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">{{ selectedLog.userName || selectedLog.userEmail || selectedLog.userId }}</OuiText>
-              <OuiText size="xs" color="secondary" class="font-mono">{{ selectedLog.userId }}</OuiText>
+              <OuiText size="xs" color="tertiary" class="font-mono">{{ selectedLog.userId }}</OuiText>
             </OuiStack>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">IP Address</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">IP Address</OuiText>
             <OuiText size="sm" class="font-mono">{{ selectedLog.ipAddress }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Service</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Service</OuiText>
             <OuiText size="sm" class="font-mono">{{ selectedLog.service }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Action</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Action</OuiText>
             <OuiText size="sm">{{ selectedLog.action }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs" v-if="selectedLog.resourceType">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Resource Type</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Resource Type</OuiText>
             <OuiText size="sm">{{ selectedLog.resourceType }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs" v-if="selectedLog.resourceId">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Resource ID</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Resource ID</OuiText>
             <OuiText size="sm" class="font-mono">{{ selectedLog.resourceId }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Status</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Status</OuiText>
             <OuiBadge :variant="getStatusVariant(selectedLog.responseStatus)" size="sm">
               {{ selectedLog.responseStatus }}
             </OuiBadge>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Duration</OuiText>
+            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Duration</OuiText>
             <OuiDuration :value="selectedLog.durationMs" />
           </OuiStack>
         </OuiGrid>
 
         <OuiStack gap="xs" v-if="selectedLog.errorMessage">
-          <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Error</OuiText>
+          <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Error</OuiText>
           <OuiCard variant="outline" class="border-danger/20 bg-danger/5">
             <OuiCardBody class="p-3">
               <OuiText size="sm" color="danger">{{ selectedLog.errorMessage }}</OuiText>
@@ -276,7 +276,7 @@
         </OuiStack>
 
         <OuiStack gap="xs">
-          <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Request Data</OuiText>
+          <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Request Data</OuiText>
           <OuiCard variant="outline">
             <OuiCardBody class="p-3">
               <OuiCode :code="formatRequestData(selectedLog.requestData)" language="json" />

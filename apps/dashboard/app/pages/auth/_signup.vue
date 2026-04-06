@@ -6,7 +6,7 @@
         <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
           <OuiText size="3xl" weight="bold" color="primary">Create Account</OuiText>
-          <OuiText size="md" color="secondary">Sign up to get started with Obiente Cloud</OuiText>
+          <OuiText size="md" color="tertiary">Sign up to get started with Obiente Cloud</OuiText>
         </OuiStack>
       </OuiStack>
 
@@ -142,7 +142,7 @@
                     v-model="acceptedTerms"
                     :disabled="loading"
                   >
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       I agree to the
                       <NuxtLink
                         to="/terms"
@@ -189,13 +189,13 @@
             <!-- Divider -->
             <OuiFlex align="center" gap="md" class="my-4">
               <div class="flex-1 h-px bg-border-muted"></div>
-              <OuiText size="sm" color="secondary">OR</OuiText>
+              <OuiText size="sm" color="tertiary">OR</OuiText>
               <div class="flex-1 h-px bg-border-muted"></div>
             </OuiFlex>
 
             <!-- Sign In Link -->
             <OuiStack gap="sm" align="center">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Already have an account?
               </OuiText>
               <NuxtLink
@@ -211,7 +211,7 @@
 
       <!-- Footer -->
       <OuiStack gap="xs" align="center" class="mt-8">
-        <OuiText size="xs" color="muted" class="text-center">
+        <OuiText size="xs" color="tertiary" class="text-center">
           By creating an account, you agree to our Terms of Service and Privacy Policy
         </OuiText>
       </OuiStack>
@@ -345,7 +345,7 @@ const handleSignup = async () => {
   } catch (err: unknown) {
     console.error("Signup error:", err);
     error.value =
-      err.data?.message ||
+      (err as any).data?.message ||
       (err as Error).message ||
       "An error occurred. Please try again.";
   } finally {

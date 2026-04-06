@@ -6,7 +6,7 @@
         <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
           <OuiText size="3xl" weight="bold" color="primary">Welcome Back</OuiText>
-          <OuiText size="md" color="secondary">Sign in to your account to continue</OuiText>
+          <OuiText size="md" color="tertiary">Sign in to your account to continue</OuiText>
         </OuiStack>
       </OuiStack>
 
@@ -111,13 +111,13 @@
             <!-- Divider -->
             <OuiFlex align="center" gap="md" class="my-4">
               <div class="flex-1 h-px bg-border-muted"></div>
-              <OuiText size="sm" color="secondary">OR</OuiText>
+              <OuiText size="sm" color="tertiary">OR</OuiText>
               <div class="flex-1 h-px bg-border-muted"></div>
             </OuiFlex>
 
             <!-- Sign Up Link -->
             <OuiStack gap="sm" align="center">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Don't have an account?
               </OuiText>
               <button
@@ -133,7 +133,7 @@
 
       <!-- Footer -->
       <OuiStack gap="xs" align="center" class="mt-8">
-        <OuiText size="xs" color="muted" class="text-center">
+        <OuiText size="xs" color="tertiary" class="text-center">
           By signing in, you agree to our Terms of Service and Privacy Policy
         </OuiText>
       </OuiStack>
@@ -240,7 +240,7 @@ const handleLogin = async () => {
   } catch (err: unknown) {
     console.error("Login error:", err);
     error.value =
-      err.data?.message ||
+      (err as any).data?.message ||
       (err as Error).message ||
       "An error occurred. Please try again.";
   } finally {

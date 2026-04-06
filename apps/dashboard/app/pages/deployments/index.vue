@@ -1,32 +1,22 @@
 <template>
-  <OuiContainer size="full">
-    <OuiStack gap="xl">
-      <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-        <OuiStack gap="sm" class="max-w-xl">
-          <OuiFlex align="center" gap="md">
-            <OuiBox
-              p="sm"
-              rounded="xl"
-              bg="accent-primary"
-              class="bg-primary/10 ring-1 ring-primary/20"
-            >
-              <RocketLaunchIcon class="w-6 h-6 text-primary" />
-            </OuiBox>
-            <OuiText as="h1" size="3xl" weight="bold"> Deployments </OuiText>
-          </OuiFlex>
-          <OuiText color="secondary" size="md">
-            Manage and monitor your web application deployments with real-time
-            insights.
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
+      <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+        <OuiStack gap="xs">
+          <OuiText as="h1" size="xl" weight="semibold">Deployments</OuiText>
+          <OuiText color="tertiary" size="sm">
+            Manage and monitor your web application deployments.
           </OuiText>
         </OuiStack>
 
         <OuiButton
           color="primary"
-          class="gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          size="sm"
+          class="gap-1.5"
           @click="showCreateDialog = true"
         >
-          <PlusIcon class="h-4 w-4" />
-          <OuiText as="span" size="sm" weight="medium">New Deployment</OuiText>
+          <PlusIcon class="h-3.5 w-3.5" />
+          New Deployment
         </OuiButton>
       </OuiFlex>
 
@@ -38,10 +28,7 @@
         hint="Please try refreshing the page. If the problem persists, contact support."
       />
 
-      <OuiCard
-        variant="default"
-        class="backdrop-blur-sm border border-border-muted/60"
-      >
+      <OuiCard variant="default">
         <OuiCardBody>
           <OuiGrid :cols="{ sm: 1, md: 4 }" gap="md">
             <OuiInput
@@ -78,7 +65,7 @@
       </OuiCard>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="pending && !deployments" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-if="pending && !deployments" :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <DeploymentCard
           v-for="i in 6"
           :key="i"
@@ -87,44 +74,26 @@
       </OuiGrid>
 
       <!-- Empty State -->
-      <OuiStack
+      <SharedEmptyState
         v-else-if="filteredDeployments.length === 0"
-        align="center"
-        gap="lg"
-        class="text-center py-20"
+        :icon="RocketLaunchIcon"
+        title="No deployments found"
+        :description="searchQuery || statusFilter || environmentFilter || groupFilter
+          ? 'Try adjusting your filters to see more results.'
+          : 'Get started by creating your first deployment.'"
       >
-        <OuiBox
-          class="inline-flex items-center justify-center w-20 h-20 rounded-xl bg-surface-muted/50 ring-1 ring-border-muted"
-        >
-          <RocketLaunchIcon class="h-10 w-10 text-secondary" />
-        </OuiBox>
-        <OuiStack align="center" gap="sm">
-          <OuiText as="h3" size="xl" weight="semibold" color="primary">
-            No deployments found
-          </OuiText>
-          <OuiBox class="max-w-md">
-            <OuiText color="secondary">
-              {{
-                searchQuery || statusFilter || environmentFilter || groupFilter
-                  ? "Try adjusting your filters to see more results."
-                  : "Get started by creating your first deployment."
-              }}
-            </OuiText>
-          </OuiBox>
-        </OuiStack>
         <OuiButton
           color="primary"
-          class="gap-2 shadow-lg shadow-primary/20"
+          size="sm"
+          class="gap-1.5"
           @click="showCreateDialog = true"
         >
-          <PlusIcon class="h-4 w-4" />
-          <OuiText as="span" size="sm" weight="medium"
-            >Create Your First Deployment</OuiText
-          >
+          <PlusIcon class="h-3.5 w-3.5" />
+          Create Deployment
         </OuiButton>
-      </OuiStack>
+      </SharedEmptyState>
 
-      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <DeploymentCard
           v-for="deployment in filteredDeployments"
           :key="deployment.id"
@@ -172,23 +141,21 @@
               helper-text="Press Enter or click outside to add a group/label"
             />
 
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               The deployment type will be automatically detected when you connect your repository. You can configure the repository and other settings after creating the deployment.
             </OuiText>
           </OuiStack>
         </form>
         <template #footer>
-          <OuiFlex justify="end" align="center" gap="md">
+          <OuiFlex justify="end" gap="sm">
             <OuiButton variant="ghost" @click="showCreateDialog = false">
               Cancel
             </OuiButton>
             <OuiButton
               color="primary"
               @click="createDeployment"
-              class="gap-2 shadow-lg shadow-primary/20"
             >
-              <RocketLaunchIcon class="h-4 w-4" />
-              <OuiText as="span" size="sm" weight="medium">Deploy Now</OuiText>
+              Create Deployment
             </OuiButton>
           </OuiFlex>
         </template>

@@ -72,7 +72,7 @@
                 <OuiText
                   v-if="api.acceptedFiles.length === 0"
                   size="xs"
-                  color="secondary"
+                  color="tertiary"
                 >
                   {{ maxFileSizeLabel }}
                 </OuiText>
@@ -94,7 +94,7 @@
             <OuiText size="xs" weight="semibold">
               Selected Files ({{ api.acceptedFiles.length }})
             </OuiText>
-            <OuiText size="xs" color="secondary">
+            <OuiText size="xs" color="tertiary">
               {{ api.acceptedFiles.length }} / {{ maxFiles }} files
             </OuiText>
           </OuiFlex>
@@ -163,7 +163,7 @@
                             </OuiButton>
                           </FileUpload.ItemDeleteTrigger>
                         </OuiFlex>
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           <FileUpload.ItemSizeText />
                         </OuiText>
                       </OuiStack>
@@ -197,10 +197,10 @@
                   >Overall Progress</OuiText
                 >
                 <OuiStack align="end" gap="xs">
-                  <OuiText size="sm" weight="semibold" color="primary"
+                  <OuiText size="sm" weight="semibold"
                     >{{ overallProgress }}%</OuiText
                   >
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{ formatSpeed(smoothedNetworkSpeed) }}
                     <template
                       v-if="
@@ -253,7 +253,7 @@
                       </OuiText>
                       <OuiText
                         size="xs"
-                        color="secondary"
+                        color="tertiary"
                         style="flex-shrink: 0; white-space: nowrap"
                       >
                         {{ formatBytes(progress.bytesUploaded) }} /
@@ -305,7 +305,7 @@
                   v-for="error in rejection.errors"
                   :key="error.code"
                 >
-                  {{ (error as Error).message }}
+                  {{ (error as any).message }}
                 </OuiText>
               </OuiStack>
             </OuiCard>
@@ -827,7 +827,7 @@
     } catch (error: unknown) {
       toast.dismiss(toastId);
       if (!uploadCancelled.value) {
-        toast.error("Upload Failed", error?.message || "An error occurred during upload");
+        toast.error("Upload Failed", (error as any)?.message || "An error occurred during upload");
       } else {
         toast.info("Upload Cancelled", "Upload was stopped");
       }

@@ -1,32 +1,22 @@
 <template>
-  <OuiContainer size="full">
-    <OuiStack gap="xl">
-      <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-        <OuiStack gap="sm" class="max-w-xl">
-          <OuiFlex align="center" gap="md">
-            <OuiBox
-              p="sm"
-              rounded="xl"
-              bg="accent-primary"
-              class="bg-primary/10 ring-1 ring-primary/20"
-            >
-              <CubeIcon class="w-6 h-6 text-primary" />
-            </OuiBox>
-            <OuiText as="h1" size="3xl" weight="bold"> Game Servers </OuiText>
-          </OuiFlex>
-          <OuiText color="secondary" size="md">
-            Manage and monitor your game server instances with pay-as-you-go pricing.
-            Low costs when idle or offline.
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
+      <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+        <OuiStack gap="xs">
+          <OuiText as="h1" size="xl" weight="semibold">Game Servers</OuiText>
+          <OuiText color="tertiary" size="sm">
+            Manage and monitor your game server instances. Pay-as-you-go pricing.
           </OuiText>
         </OuiStack>
 
         <OuiButton
           color="primary"
-          class="gap-2 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+          size="sm"
+          class="gap-1.5"
           @click="showCreateDialog = true"
         >
-          <PlusIcon class="h-4 w-4" />
-          <OuiText as="span" size="sm" weight="medium">New Game Server</OuiText>
+          <PlusIcon class="h-3.5 w-3.5" />
+          New Game Server
         </OuiButton>
       </OuiFlex>
 
@@ -38,10 +28,7 @@
         hint="Please try refreshing the page. If the problem persists, contact support."
       />
 
-      <OuiCard
-        variant="default"
-        class="backdrop-blur-sm border border-border-muted/60"
-      >
+      <OuiCard variant="default">
         <OuiCardBody>
           <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
             <OuiInput
@@ -70,7 +57,7 @@
       </OuiCard>
 
       <!-- Loading State with Skeleton Cards -->
-      <OuiGrid v-if="pending && !gameServersData" :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-if="pending && !gameServersData" :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <GameServerCard
           v-for="i in 6"
           :key="i"
@@ -79,44 +66,26 @@
       </OuiGrid>
 
       <!-- Empty State -->
-      <OuiStack
+      <SharedEmptyState
         v-else-if="filteredGameServers.length === 0"
-        align="center"
-        gap="lg"
-        class="text-center py-20"
+        :icon="CubeIcon"
+        title="No game servers found"
+        :description="searchQuery || statusFilter || gameTypeFilter
+          ? 'Try adjusting your filters to see more results.'
+          : 'Get started by creating your first game server.'"
       >
-        <OuiBox
-          class="inline-flex items-center justify-center w-20 h-20 rounded-xl bg-surface-muted/50 ring-1 ring-border-muted"
-        >
-          <CubeIcon class="h-10 w-10 text-secondary" />
-        </OuiBox>
-        <OuiStack align="center" gap="sm">
-          <OuiText as="h3" size="xl" weight="semibold" color="primary">
-            No game servers found
-          </OuiText>
-          <OuiBox class="max-w-md">
-            <OuiText color="secondary">
-              {{
-                searchQuery || statusFilter || gameTypeFilter
-                  ? "Try adjusting your filters to see more results."
-                  : "Get started by creating your first game server."
-              }}
-            </OuiText>
-          </OuiBox>
-        </OuiStack>
         <OuiButton
           color="primary"
-          class="gap-2 shadow-lg shadow-primary/20"
+          size="sm"
+          class="gap-1.5"
           @click="showCreateDialog = true"
         >
-          <PlusIcon class="h-4 w-4" />
-          <OuiText as="span" size="sm" weight="medium"
-            >Create Your First Game Server</OuiText
-          >
+          <PlusIcon class="h-3.5 w-3.5" />
+          Create Game Server
         </OuiButton>
-      </OuiStack>
+      </SharedEmptyState>
 
-      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="lg">
+      <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
         <GameServerCard
           v-for="gameServer in filteredGameServers"
           :key="gameServer.id"
@@ -179,11 +148,11 @@
           />
 
           <OuiStack gap="md">
-            <OuiText size="sm" weight="semibold" color="primary">
+            <OuiText size="sm" weight="semibold">
               Network Configuration
             </OuiText>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
               <OuiInput
                 v-model="newGameServer.portStr"
                 label="Primary Port (Optional)"
@@ -205,7 +174,7 @@
                 placeholder="0"
                 hint="Allocate 0 to 2 extra ports (TCP + UDP)"
               />
-            </div>
+            </OuiGrid>
           </OuiStack>
 
           <OuiInput
@@ -230,10 +199,8 @@
             color="primary"
             :loading="isCreating"
             @click="createGameServer"
-            class="gap-2 shadow-lg shadow-primary/20"
           >
-            <CubeIcon class="h-4 w-4" />
-            <OuiText as="span" size="sm" weight="medium">Create Server</OuiText>
+            Create Server
           </OuiButton>
         </OuiFlex>
       </template>
@@ -618,7 +585,7 @@ const createGameServer = async () => {
       request.description = newGameServer.value.description;
     }
 
-    const response = await client.createGameServer(request);
+    const response = await client.createGameServer(request as CreateGameServerRequest);
     
     if (!response.gameServer) {
       throw new Error("No game server returned from API");
@@ -656,7 +623,7 @@ const createGameServer = async () => {
     router.push(`/gameservers/${gameServer.id}`);
   } catch (error: unknown) {
     console.error("Failed to create game server:", error);
-    createError.value = error;
+    createError.value = error as Error;
     toast.error("Failed to create game server");
   } finally {
     isCreating.value = false;

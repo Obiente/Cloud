@@ -5,7 +5,7 @@
         <OuiText as="h3" size="md" weight="semibold">
           Game Server Logs
         </OuiText>
-        <OuiText size="xs" color="muted">
+        <OuiText size="xs" color="tertiary">
           Real-time logs from your game server
         </OuiText>
       </OuiStack>
@@ -30,7 +30,7 @@
           :disabled="isLoading"
         >
           <ArrowPathIcon
-            class="h-4 w-4 mr-1"
+            class="h-3.5 w-3.5"
             :class="{
               'animate-spin': isLoading || (isFollowing && !isConnected),
             }"
@@ -86,14 +86,14 @@
     <div v-if="isLoadingOlderLogs" class="logs-loading-indicator">
       <OuiFlex align="center" justify="center" gap="sm">
         <ArrowPathIcon class="h-4 w-4 animate-spin" />
-        <OuiText size="xs" color="muted">Loading older logs...</OuiText>
+        <OuiText size="xs" color="tertiary">Loading older logs...</OuiText>
       </OuiFlex>
     </div>
 
     <!-- Search indicator -->
     <div v-if="searchQuery && !isSearching" class="logs-search-indicator">
       <OuiFlex align="center" justify="between" gap="sm">
-        <OuiText size="xs" color="muted">
+        <OuiText size="xs" color="tertiary">
           Showing {{ logs.length }} result{{ logs.length !== 1 ? 's' : '' }} for "{{ searchQuery }}"
         </OuiText>
         <OuiButton
@@ -108,7 +108,7 @@
 
     <!-- No more logs indicator -->
     <div v-if="hasLoadedAllLogs && logs.length > 0" class="logs-end-indicator">
-      <OuiText size="xs" color="muted" align="center">
+      <OuiText size="xs" color="tertiary" align="center">
         No more logs available
       </OuiText>
     </div>
@@ -375,7 +375,7 @@ const loadOlderLogs = async () => {
       }
     } catch (err: unknown) {
       // Handle abort errors silently (user might have scrolled away)
-      if (err?.name === "AbortError" || err?.code === "aborted") {
+      if ((err as any)?.name === "AbortError" || (err as any)?.code === "aborted") {
         return;
       }
       throw err;
@@ -542,7 +542,7 @@ const startFollowing = async () => {
         }
       } catch (err: unknown) {
         // Handle abort errors silently
-        if (err?.name !== "AbortError" && err?.code !== "aborted") {
+        if ((err as any)?.name !== "AbortError" && (err as any)?.code !== "aborted") {
           console.warn("Failed to fetch initial logs:", err);
         }
       }
@@ -630,7 +630,7 @@ const startFollowing = async () => {
     }
   } catch (err: unknown) {
     const isAbortError =
-      err.name === "AbortError" ||
+      (err as any).name === "AbortError" ||
       (err as Error).message?.toLowerCase().includes("aborted") ||
       (err as Error).message?.toLowerCase().includes("canceled") ||
       (err as Error).message?.toLowerCase().includes("cancelled");
@@ -646,7 +646,7 @@ const startFollowing = async () => {
       (err as Error).message?.toLowerCase().includes("endstreamresponse") ||
       (err as Error).message?.toLowerCase().includes("unimplemented") ||
       (err as Error).message?.toLowerCase().includes("not fully implemented") ||
-      err.code === "unknown";
+      (err as any).code === "unknown";
 
     if (!isBenignError) {
       console.error("Failed to stream logs:", err);
@@ -754,7 +754,7 @@ const handleSearch = async () => {
     }
   } catch (err: unknown) {
     // Handle abort errors silently
-    if (err?.name !== "AbortError" && err?.code !== "aborted") {
+    if ((err as any)?.name !== "AbortError" && (err as any)?.code !== "aborted") {
       console.error("Failed to search logs:", err);
       error.value = (err as Error).message || "Failed to search logs";
     }

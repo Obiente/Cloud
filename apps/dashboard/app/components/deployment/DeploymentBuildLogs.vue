@@ -16,7 +16,7 @@
                   {{ getBuildStatusLabel(latestBuild.status) }}
                 </OuiBadge>
               </OuiFlex>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="tertiary">
                 <OuiRelativeTime
                   :value="latestBuild.startedAt ? date(latestBuild.startedAt) : undefined"
                   :style="'short'"
@@ -53,7 +53,7 @@
             <OuiBadge v-if="isStreaming" color="info" size="sm">
               <span class="animate-pulse">●</span> Live
             </OuiBadge>
-            <OuiBadge v-else-if="latestBuild" color="secondary" size="sm">
+            <OuiBadge v-else-if="latestBuild" color="tertiary" size="sm">
               Historical
             </OuiBadge>
           </OuiFlex>
@@ -78,7 +78,7 @@
         </template>
         <template #footer>
           <div class="oui-logs-controls">
-            <OuiText size="xs" color="secondary" class="logs-count">
+            <OuiText size="xs" color="tertiary" class="logs-count">
               {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}
             </OuiText>
           </div>
@@ -238,9 +238,9 @@ const startStream = async () => {
       (error as Error).message?.toLowerCase().includes("trailer") ||
       (error as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
       (error as Error).message?.toLowerCase().includes("endstreamresponse") ||
-      error.code === "unknown";
+      (error as any).code === "unknown";
 
-    if (error.name === "AbortError") {
+    if ((error as any).name === "AbortError") {
       // User intentionally cancelled - no error needed
       return;
     }

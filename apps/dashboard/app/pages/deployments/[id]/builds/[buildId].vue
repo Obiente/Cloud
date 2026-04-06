@@ -18,7 +18,7 @@
                     Build #{{ buildNumber }} Logs
                   </OuiText>
                 </OuiFlex>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Deployment: {{ deploymentId }}
                 </OuiText>
               </OuiStack>
@@ -35,7 +35,7 @@
                   />
                   {{ getBuildStatusLabel(build.status) }}
                 </OuiBadge>
-                <OuiText size="xs" color="secondary" v-if="build?.startedAt">
+                <OuiText size="xs" color="tertiary" v-if="build?.startedAt">
                   <OuiRelativeTime
                     :value="build.startedAt ? date(build.startedAt) : undefined"
                     :style="'short'"
@@ -47,15 +47,15 @@
             <!-- Build Info -->
             <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="sm" v-if="build">
               <div v-if="build.branch">
-                <OuiText size="xs" color="muted" class="mb-1">Branch</OuiText>
+                <OuiText size="xs" color="tertiary" class="mb-1">Branch</OuiText>
                 <OuiText size="sm" weight="medium" class="font-mono">{{ build.branch }}</OuiText>
               </div>
               <div v-if="build.buildTime > 0">
-                <OuiText size="xs" color="muted" class="mb-1">Duration</OuiText>
+                <OuiText size="xs" color="tertiary" class="mb-1">Duration</OuiText>
                 <OuiText size="sm" weight="medium">{{ formatBuildTime(build.buildTime) }}</OuiText>
               </div>
               <div v-if="build.size">
-                <OuiText size="xs" color="muted" class="mb-1">Size</OuiText>
+                <OuiText size="xs" color="tertiary" class="mb-1">Size</OuiText>
                 <OuiText size="sm" weight="medium">{{ build.size }}</OuiText>
               </div>
             </OuiGrid>
@@ -78,7 +78,7 @@
           >
             <template #footer>
               <OuiFlex justify="between" align="center" class="pt-4 border-t border-border-default">
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   {{ logs.length }} log line{{ logs.length !== 1 ? 's' : '' }}
                 </OuiText>
                 <OuiButton

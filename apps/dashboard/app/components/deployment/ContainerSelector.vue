@@ -1,6 +1,6 @@
 <template>
   <OuiFlex align="center" gap="sm">
-    <OuiText v-if="showLabel" size="sm" color="muted">{{ label }}:</OuiText>
+    <OuiText v-if="showLabel" size="sm" color="tertiary">{{ label }}:</OuiText>
     <OuiSelect
       v-model="selectedValue"
       :items="containerOptions"
@@ -10,8 +10,8 @@
       @update:model-value="handleChange"
     />
     <OuiFlex v-if="showSelectedInfo && selectedContainer" align="center" gap="sm" wrap="wrap">
-      <OuiText size="sm" color="muted">{{ selectedInfoText }}</OuiText>
-      <OuiText size="sm" color="muted">{{ getContainerName(selectedContainer) }}</OuiText>
+      <OuiText size="sm" color="tertiary">{{ selectedInfoText }}</OuiText>
+      <OuiText size="sm" color="tertiary">{{ getContainerName(selectedContainer) }}</OuiText>
       <OuiBadge
         :variant="getStatusVariant(selectedContainer.status)"
         size="xs"

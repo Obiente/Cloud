@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-surface-base min-h-screen overflow-hidden">
+  <div class="app-shell bg-background min-h-screen overflow-hidden">
     <!-- Mobile Sidebar Overlay -->
     <Transition name="sidebar-overlay">
       <OuiBox
@@ -26,11 +26,9 @@
         as="aside"
         :id="mobileSidebarId"
         class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[80vw] flex-col xl:hidden"
-        role="navigation"
-        aria-label="Primary navigation"
       >
         <AppSidebar
-          class="sidebar-drawer relative h-full border-r border-border-muted bg-surface-base shadow-2xl"
+          class="sidebar-drawer relative h-full shadow-2xl"
           :organization-options="organizationOptions"
           :current-organization="currentOrganization"
           :show-super-admin="showSuperAdmin"
@@ -52,10 +50,10 @@
     </Transition>
 
     <!-- Authenticated View -->
-    <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
+    <OuiFlex v-if="user.user && user.isAuthenticated" class="min-h-screen">
       <!-- Desktop Sidebar -->
-      <div class="hidden xl:block xl:w-64 xl:shrink-0">
-        <div class="sticky top-0 h-screen bg-surface-base">
+      <OuiBox class="hidden xl:block xl:w-60 xl:shrink-0 xl:pl-3 xl:py-3">
+        <OuiBox position="sticky" class="top-0 h-[calc(100vh-1.5rem)]">
           <AppSidebar
             class="w-full h-full relative z-0"
             :organization-options="organizationOptions"
@@ -65,15 +63,15 @@
             @organization-change="switchOrganization"
             @new-organization="$router.push('/organizations')"
           />
-        </div>
-      </div>
+        </OuiBox>
+      </OuiBox>
 
       <!-- Main Frame -->
-      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <OuiStack class="grow min-w-0 overflow-hidden xl:px-3 xl:py-3" gap="none">
         <!-- Header -->
-        <div class="sticky top-0 z-30 min-w-0">
+        <OuiBox position="sticky" class="top-0 z-30 min-w-0 px-2 pt-2 pb-2 xl:px-0 xl:pt-0 xl:pb-2">
           <AppHeader
-            class="w-full xl:shadow-sm min-w-0"
+            class="w-full min-w-0"
             :notification-count="unreadCount"
             @notifications-click="isNotificationsOpen = !isNotificationsOpen"
           >
@@ -94,17 +92,17 @@
               <slot name="title">Dashboard</slot>
             </template>
           </AppHeader>
-        </div>
+        </OuiBox>
 
-        <!-- Framed Main Content -->
+        <!-- Main Content -->
         <main
-          class="flex-1 bg-background overflow-hidden m-0 xl:m-2 xl:ml-0 rounded-none xl:rounded-3xl border-0 xl:border border-muted p-2 xl:p-6 relative min-w-0"
+          class="app-main-frame flex-1 overflow-hidden mt-2 mx-2 mb-2 xl:m-0 rounded-xl p-0 relative min-w-0"
         >
-          <div class="absolute inset-0 overflow-hidden rounded-none xl:rounded-xl min-w-0">
-            <div class="h-full w-full overflow-y-auto overflow-x-hidden p-2 xl:p-6 min-w-0">
+          <OuiBox position="absolute" overflow="hidden" rounded="xl" class="inset-0 min-w-0">
+            <OuiBox class="app-main-scroll h-full w-full overflow-y-auto overflow-x-hidden p-4 xl:p-5 min-w-0">
               <slot />
-            </div>
-          </div>
+            </OuiBox>
+          </OuiBox>
         </main>
 
         <!-- Notifications -->
@@ -120,53 +118,52 @@
 
         <!-- Toast Notifications -->
         <OuiToaster :toaster="toaster" />
-      </div>
-    </div>
+      </OuiStack>
+    </OuiFlex>
 
     <!-- Unauthenticated View -->
-    <div
+    <OuiFlex
       v-else
-      class="flex min-h-screen items-center justify-center bg-surface-base"
+      align="center"
+      justify="center"
+      class="min-h-screen bg-background px-6"
     >
-      <div class="text-center">
-        <OuiStack gap="lg" align="center">
-          <LockClosedIcon class="h-16 w-16 text-muted" />
-          <OuiStack gap="xs">
-            <OuiText size="2xl" weight="bold">Authentication Required</OuiText>
-            <OuiText color="muted">Please sign in to access the dashboard.</OuiText>
-          </OuiStack>
-          <OuiFlex v-if="!user.isLoading" gap="md" align="center" justify="center">
-            <OuiButton 
-              size="lg"
-              variant="outline"
-              @click="user.popupSignup()"
-            >
-              Sign Up
-            </OuiButton>
-            <OuiButton 
-              size="lg"
-              @click="user.popupLogin()"
-            >
-              Sign In
-            </OuiButton>
-          </OuiFlex>
-          <OuiStack v-else gap="sm" align="center">
-            <ArrowPathIcon class="h-6 w-6 text-muted animate-spin" />
-            <OuiText size="sm" color="muted">Loading...</OuiText>
-          </OuiStack>
-          <OuiButton
-            v-if="!user.isLoading"
-            variant="ghost"
-            size="md"
-            @click="navigateTo('/')"
-            class="mt-4"
-          >
-            <HomeIcon class="h-4 w-4 mr-2" />
-            Go back home
-          </OuiButton>
+      <OuiStack gap="lg" align="center" class="max-w-sm w-full text-center">
+        <OuiStack gap="xs" align="center">
+          <LockClosedIcon class="h-10 w-10 text-tertiary mx-auto" />
+          <OuiText size="xl" weight="semibold">Sign in to continue</OuiText>
+          <OuiText size="sm" color="tertiary">Access your cloud infrastructure dashboard.</OuiText>
         </OuiStack>
-      </div>
-    </div>
+        <OuiFlex v-if="!user.isLoading" gap="sm" align="center" justify="center">
+          <OuiButton 
+            size="md"
+            variant="outline"
+            @click="user.popupSignup()"
+          >
+            Sign Up
+          </OuiButton>
+          <OuiButton 
+            size="md"
+            color="primary"
+            @click="user.popupLogin()"
+          >
+            Sign In
+          </OuiButton>
+        </OuiFlex>
+        <OuiFlex v-else justify="center">
+          <ArrowPathIcon class="h-5 w-5 text-secondary animate-spin" />
+        </OuiFlex>
+        <OuiButton
+          v-if="!user.isLoading"
+          variant="ghost"
+          size="sm"
+          @click="navigateTo('/')"
+        >
+          <HomeIcon class="h-4 w-4 mr-1.5" />
+          Back to home
+        </OuiButton>
+      </OuiStack>
+    </OuiFlex>
   </div>
 </template>
 <style>

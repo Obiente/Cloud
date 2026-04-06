@@ -78,7 +78,7 @@
         v-if="showProgress"
         p="md"
         rounded="xl"
-        class="border backdrop-blur-sm"
+        class="border"
         :class="progressClass"
       >
         <OuiStack gap="sm">
@@ -122,7 +122,7 @@
       
       <!-- IP Addresses Skeleton -->
       <OuiStack v-else-if="loading" gap="xs">
-        <OuiText size="xs" weight="medium" color="secondary" class="opacity-50">IP Addresses</OuiText>
+        <OuiText size="xs" weight="medium" color="tertiary" class="opacity-50">IP Addresses</OuiText>
         <OuiFlex gap="xs" wrap="wrap">
           <OuiBadge variant="secondary" size="xs" class="opacity-30">
             <OuiSkeleton :width="skeletonVariations.shortWidth" height="0.875rem" variant="text" class="bg-transparent" />
@@ -135,7 +135,7 @@
       
       <!-- IP Addresses Actual -->
       <OuiStack v-else-if="ipAddresses.length > 0" gap="xs">
-        <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
+        <OuiText size="xs" weight="medium" color="tertiary">IP Addresses</OuiText>
         <OuiFlex gap="xs" wrap="wrap">
           <OuiBadge
             v-for="ip in ipAddresses.slice(0, 2)"
@@ -334,89 +334,72 @@
     [VPSStatus.RUNNING]: {
       badge: "success",
       label: "Running",
-      cardClass: "hover:ring-1 hover:ring-success/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-success/20 before:via-success/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-success to-success/70",
+      cardClass: "",
+      barClass: "bg-success",
       icon: ServerIcon,
       iconClass: "text-success",
     },
     [VPSStatus.STOPPED]: {
       badge: "danger",
       label: "Stopped",
-      cardClass: "hover:ring-1 hover:ring-danger/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-danger to-danger/60",
+      cardClass: "",
+      barClass: "bg-danger",
       icon: StopIcon,
       iconClass: "text-danger",
     },
     [VPSStatus.CREATING]: {
       badge: "warning",
       label: "Creating",
-      cardClass: "hover:ring-1 hover:ring-warning/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      cardClass: "",
+      barClass: "bg-warning animate-pulse",
       icon: ServerIcon,
       iconClass: "text-warning",
     },
     [VPSStatus.STARTING]: {
       badge: "warning",
       label: "Starting",
-      cardClass: "hover:ring-1 hover:ring-warning/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      cardClass: "",
+      barClass: "bg-warning animate-pulse",
       icon: PlayIcon,
       iconClass: "text-warning",
     },
     [VPSStatus.STOPPING]: {
       badge: "warning",
       label: "Stopping",
-      cardClass: "hover:ring-1 hover:ring-warning/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      cardClass: "",
+      barClass: "bg-warning animate-pulse",
       icon: StopIcon,
       iconClass: "text-warning",
     },
     [VPSStatus.REBOOTING]: {
       badge: "warning",
       label: "Rebooting",
-      cardClass: "hover:ring-1 hover:ring-warning/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      cardClass: "",
+      barClass: "bg-warning animate-pulse",
       icon: ArrowPathIcon,
       iconClass: "text-warning",
     },
     [VPSStatus.FAILED]: {
       badge: "danger",
       label: "Failed",
-      cardClass: "hover:ring-1 hover:ring-danger/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-danger to-danger/60",
+      cardClass: "",
+      barClass: "bg-danger",
       icon: ServerIcon,
       iconClass: "text-danger",
     },
     [VPSStatus.DELETING]: {
       badge: "warning",
       label: "Deleting",
-      cardClass: "hover:ring-1 hover:ring-warning/30",
-      beforeGradient:
-        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      cardClass: "",
+      barClass: "bg-warning animate-pulse",
       icon: TrashIcon,
       iconClass: "text-warning",
     },
     [VPSStatus.DELETED]: {
       badge: "secondary",
       label: "Deleted",
-      cardClass: "hover:ring-1 hover:ring-secondary/30 opacity-60",
-      beforeGradient: "",
-      barClass: "bg-gradient-to-r from-secondary to-secondary/60",
+      cardClass: "opacity-60",
+      barClass: "bg-secondary",
       icon: ServerIcon,
       iconClass: "text-secondary",
     },

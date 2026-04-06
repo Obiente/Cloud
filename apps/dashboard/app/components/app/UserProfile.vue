@@ -1,47 +1,43 @@
 <template>
-  <OuiContainer
-    class="absolute bottom-0 left-0 right-0 p-6 border-t border-border-muted bg-surface-base"
-  >
-    <OuiFlex align="center" gap="md">
-      <!-- Avatar -->
-      <OuiBox class="relative">
-        <OuiBox class="w-8 h-8 bg-surface-muted rounded-full">
-          <OuiFlex align="center" justify="center" class="h-full">
-            <UserIcon class="w-5 h-5 text-text-secondary" />
-          </OuiFlex>
-        </OuiBox>
-        <!-- Online status indicator -->
-        <OuiBox
-          class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success border-2 border-surface-base rounded-full"
-        />
+  <OuiFlex align="center" gap="sm" class="px-2 py-2 rounded-lg">
+    <!-- Avatar -->
+    <OuiBox position="relative" :shrink="false">
+      <OuiBox rounded="full" class="h-8 w-8 bg-surface-muted flex items-center justify-center">
+        <UserIcon class="w-4 h-4 text-secondary" />
       </OuiBox>
+      <OuiBox
+        as="span"
+        position="absolute"
+        rounded="full"
+        class="-bottom-0.5 -right-0.5 h-2.5 w-2.5 border-2 border-surface-base bg-success"
+      />
+    </OuiBox>
 
-      <!-- User info -->
-      <OuiStack gap="none" class="flex-1 min-w-0">
-        <OuiText size="sm" weight="medium" color="primary" truncate>
-          {{ auth.user?.name || auth.user?.preferred_username }}
-        </OuiText>
-        <OuiText size="xs" color="secondary" truncate>
-          {{
-            auth.user?.name
-              ? `@${auth.user.preferred_username}`
-              : auth.user?.email
-          }}
-        </OuiText>
-      </OuiStack>
+    <!-- User info -->
+    <OuiStack gap="none" grow class="min-w-0">
+      <OuiText size="sm" weight="medium" color="primary" truncate>
+        {{ auth.user?.name || auth.user?.preferred_username }}
+      </OuiText>
+      <OuiText size="xs" color="tertiary" truncate>
+        {{
+          auth.user?.name
+            ? `@${auth.user.preferred_username}`
+            : auth.user?.email
+        }}
+      </OuiText>
+    </OuiStack>
 
-      <!-- Logout button -->
-      <OuiButton
-        variant="ghost"
-        size="sm"
-        @click="auth.logout()"
-        title="Logout"
-        class="!p-1.5 hover:bg-danger/10 hover:text-danger"
-      >
-        <ArrowRightOnRectangleIcon class="w-4 h-4" />
-      </OuiButton>
-    </OuiFlex>
-  </OuiContainer>
+    <!-- Logout -->
+    <OuiButton
+      variant="ghost"
+      size="sm"
+      @click="auth.logout()"
+      title="Logout"
+      class="p-1.5! hover:text-danger"
+    >
+      <ArrowRightOnRectangleIcon class="w-4 h-4" />
+    </OuiButton>
+  </OuiFlex>
 </template>
 
 <script setup lang="ts">

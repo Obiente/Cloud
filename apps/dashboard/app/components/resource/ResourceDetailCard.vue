@@ -1,21 +1,14 @@
 <template>
   <OuiCard variant="default">
     <OuiCardBody>
-      <OuiStack gap="sm">
-        <OuiFlex align="center" gap="sm">
-          <component
-            v-if="icon"
-            :is="icon"
-            class="h-5 w-5 text-secondary"
-          />
-          <OuiText size="sm" color="secondary">
-            {{ label }}
-          </OuiText>
-        </OuiFlex>
-        <OuiText size="2xl" weight="bold" color="primary">
+      <OuiStack gap="xs">
+        <OuiText size="xs" color="tertiary" weight="medium">
+          {{ label }}
+        </OuiText>
+        <OuiText size="xl" weight="semibold">
           <slot />
         </OuiText>
-        <OuiText v-if="description" size="xs" color="secondary" class="mt-1">
+        <OuiText v-if="description" size="xs" color="tertiary">
           {{ description }}
         </OuiText>
       </OuiStack>

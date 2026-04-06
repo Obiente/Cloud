@@ -3,7 +3,7 @@
     <OuiCard variant="default">
       <OuiCardBody>
         <OuiStack gap="lg">
-          <OuiText as="h2" size="lg" weight="semibold" color="primary">
+          <OuiText as="h2" size="sm" weight="semibold">
             Game Server Settings
           </OuiText>
 
@@ -29,7 +29,7 @@
 
               <!-- Resource Configuration -->
               <OuiStack gap="md">
-                <OuiText size="sm" weight="semibold" color="primary">
+                <OuiText size="sm" weight="semibold">
                   Resource Configuration
                 </OuiText>
 
@@ -77,17 +77,17 @@
                   />
                 </div>
 
-                <OuiText v-if="allocatedExtraPortsLabel" size="xs" color="secondary">
+                <OuiText v-if="allocatedExtraPortsLabel" size="xs" color="tertiary">
                   Current extra ports: {{ allocatedExtraPortsLabel }}
                 </OuiText>
-                <OuiText size="xs" color="secondary">
+                <OuiText size="xs" color="tertiary">
                   Changing port allocation may require a server restart to fully apply.
                 </OuiText>
               </OuiStack>
 
               <!-- Game-Specific Settings -->
               <OuiStack v-if="gameSpecificSettings.length > 0" gap="md">
-                <OuiText size="sm" weight="semibold" color="primary">
+                <OuiText size="sm" weight="semibold">
                   Game-Specific Settings
                 </OuiText>
                 <OuiCard variant="outline" class="bg-surface-subtle/30">
@@ -125,7 +125,7 @@
 
               <!-- Docker Configuration -->
               <OuiStack gap="md">
-                <OuiText size="sm" weight="semibold" color="primary">
+                <OuiText size="sm" weight="semibold">
                   Docker Configuration
                 </OuiText>
 
@@ -142,7 +142,7 @@
               <!-- Environment Variables -->
               <OuiStack gap="md">
                 <OuiFlex justify="between" align="center">
-                  <OuiText size="sm" weight="semibold" color="primary">
+                  <OuiText size="sm" weight="semibold">
                     Environment Variables
                   </OuiText>
                   <OuiButton
@@ -156,7 +156,7 @@
                 </OuiFlex>
 
                 <div v-if="envVars.length === 0" class="text-center py-4">
-                  <OuiText size="sm" color="secondary">
+                  <OuiText size="sm" color="tertiary">
                     No environment variables configured
                   </OuiText>
                 </div>
@@ -186,7 +186,7 @@
                       @click="removeEnvVar(index)"
                       :disabled="isSaving"
                     >
-                      <TrashIcon class="h-4 w-4" />
+                      <TrashIcon class="h-3.5 w-3.5" />
                     </OuiButton>
                   </div>
                 </div>
@@ -221,35 +221,32 @@
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiStack gap="sm">
-            <OuiText as="h3" size="md" weight="semibold" color="danger">
+            <OuiText as="h3" size="sm" weight="semibold" color="danger">
               Danger Zone
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               Irreversible and destructive actions
             </OuiText>
           </OuiStack>
 
-          <OuiCard variant="outline" class="border-danger/30">
-            <OuiCardBody>
-              <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+          <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
                 <OuiStack gap="xs">
-                  <OuiText size="sm" weight="medium" color="primary">
+                  <OuiText size="sm" weight="medium">
                     Delete Game Server
                   </OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     Permanently delete this game server and all its data. This action cannot be undone.
                   </OuiText>
                 </OuiStack>
                 <OuiButton
                   variant="outline"
                   color="danger"
+                  size="sm"
                   @click="$emit('delete')"
                 >
                   Delete Server
                 </OuiButton>
               </OuiFlex>
-            </OuiCardBody>
-          </OuiCard>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>

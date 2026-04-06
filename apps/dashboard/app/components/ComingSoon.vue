@@ -16,7 +16,7 @@
         <OuiText as="h1" size="4xl" weight="bold" color="primary" align="center">
           {{ title }}
         </OuiText>
-        <OuiText size="lg" color="secondary" align="center">
+        <OuiText size="lg" color="tertiary" align="center">
           {{ description }}
         </OuiText>
       </OuiStack>
@@ -35,7 +35,7 @@
 
       <!-- Additional Info -->
       <OuiBox class="max-w-xl">
-        <OuiText size="sm" color="muted" align="center">
+        <OuiText size="sm" color="tertiary" align="center">
           {{ additionalInfo }}
         </OuiText>
       </OuiBox>

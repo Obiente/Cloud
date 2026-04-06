@@ -3,10 +3,7 @@
     <OuiCardBody>
       <OuiStack gap="md">
         <OuiFlex justify="between" align="center">
-          <OuiFlex align="center" gap="sm">
-            <BanknotesIcon class="h-4 w-4 text-success" />
-            <OuiText size="sm" weight="semibold">Cost Estimate</OuiText>
-          </OuiFlex>
+          <UiSectionHeader :icon="BanknotesIcon" color="success">Cost Estimate</UiSectionHeader>
           <OuiText size="xs" color="tertiary">
             Current: {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
           </OuiText>

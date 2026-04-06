@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         VPS Instances
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Provision and manage virtual private servers with full root access
       </OuiText>
     </OuiStack>
@@ -29,7 +29,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Instance Sizes</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Choose from various instance sizes with different CPU, RAM, and storage configurations 
                   to match your workload requirements.
                 </OuiText>
@@ -39,7 +39,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Operating Systems</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Select from various Linux distributions including Ubuntu 22.04/24.04, Debian 12/13, 
                   Rocky Linux 9, and AlmaLinux 9.
                 </OuiText>
@@ -49,7 +49,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Pay-as-You-Go</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Pay for actual CPU and memory usage, not idle time. More cost-effective than 
                   traditional VPS providers that charge full price regardless of utilization.
                 </OuiText>
@@ -59,7 +59,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Full Control</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Full root access, SSH access via proxy, web terminal, and the ability to install 
                   any software or configure the system as needed.
                 </OuiText>
@@ -109,7 +109,7 @@
                 <OuiText size="sm" weight="medium" color="primary">
                   Resource Limits
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The instance size you select sets the maximum resources (CPU, RAM, storage) your VPS 
                   can use. Billing is pay-as-you-go based on actual usage, not the maximum limits.
                 </OuiText>
@@ -133,7 +133,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Web Terminal</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Access your VPS directly from the browser using the built-in web terminal. This provides 
                 a full terminal experience without requiring SSH client configuration.
               </OuiText>
@@ -143,7 +143,7 @@
           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">SSH Proxy</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Connect via SSH through a jump host proxy. This allows you to access your VPS without 
                 requiring a dedicated public IP address, reducing costs. Use the connection instructions 
                 provided in the VPS details page.
@@ -168,7 +168,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Lifecycle Operations</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Start, stop, and reboot your VPS instances as needed. Status changes are reflected 
                   immediately in the dashboard.
                 </OuiText>
@@ -178,7 +178,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Monitoring</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   View real-time metrics including CPU usage, memory consumption, disk I/O, and network 
                   traffic for your VPS instances.
                 </OuiText>
@@ -188,7 +188,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Updates</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Update VPS instance name, description, and metadata. Instance size changes require 
                   recreating the VPS.
                 </OuiText>
@@ -198,7 +198,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Deletion</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Delete VPS instances when no longer needed. Deletion is permanent and cannot be undone, 
                   so ensure you have backups of important data.
                 </OuiText>
@@ -224,7 +224,7 @@
               <OuiBox class="w-2 h-2 rounded-full bg-warning mt-2 shrink-0" />
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Creating</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The VPS is being provisioned. This process typically takes a few minutes.
                 </OuiText>
               </OuiStack>
@@ -234,7 +234,7 @@
               <OuiBox class="w-2 h-2 rounded-full bg-info mt-2 shrink-0" />
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Starting</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The VPS is booting up and will be available shortly.
                 </OuiText>
               </OuiStack>
@@ -244,7 +244,7 @@
               <OuiBox class="w-2 h-2 rounded-full bg-success mt-2 shrink-0" />
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Running</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The VPS is running and accessible. You can connect via web terminal or SSH.
                 </OuiText>
               </OuiStack>
@@ -254,7 +254,7 @@
               <OuiBox class="w-2 h-2 rounded-full bg-secondary mt-2 shrink-0" />
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Stopped</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The VPS is stopped and not consuming resources. You can start it when needed.
                 </OuiText>
               </OuiStack>
@@ -264,7 +264,7 @@
               <OuiBox class="w-2 h-2 rounded-full bg-danger mt-2 shrink-0" />
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium">Failed</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   The VPS provisioning or operation failed. Check the error message for details.
                 </OuiText>
               </OuiStack>

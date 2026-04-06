@@ -1216,19 +1216,19 @@
 </script>
 
 <template>
-  <OuiStack gap="lg">
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiFlex align="center" justify="between">
-          <OuiStack gap="xs">
-            <OuiText size="xl" weight="semibold">Billing & Usage</OuiText>
-            <OuiText color="muted">Manage billing, payment methods, and view usage for your organization.</OuiText>
-          </OuiStack>
-        </OuiFlex>
-      </OuiCardHeader>
-      <OuiCardBody>
-        <OuiStack gap="lg">
-          <!-- Organization Selector -->
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
+      <!-- Page Header -->
+      <OuiStack gap="xs">
+        <OuiText as="h1" size="xl" weight="semibold">Billing & Usage</OuiText>
+        <OuiText color="tertiary" size="sm">
+          Manage billing, payment methods, and view usage for your organization.
+        </OuiText>
+      </OuiStack>
+
+      <!-- Organization Selector -->
+      <OuiCard>
+        <OuiCardBody>
           <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="md">
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Select Organization</OuiText>
@@ -1245,81 +1245,100 @@
               </OuiBadge>
             </OuiStack>
           </OuiGrid>
+        </OuiCardBody>
+      </OuiCard>
 
           <template v-if="!selectedOrg">
-            <OuiBox p="xl" class="text-center">
-              <OuiStack gap="md" align="center">
-                <CreditCardIcon class="h-12 w-12 text-muted" />
-                <OuiText size="lg" weight="semibold">Select an Organization</OuiText>
-                <OuiText size="sm" color="muted">
-                  Please select an organization to view billing and usage information.
+            <OuiStack
+              align="center"
+              gap="lg"
+              class="text-center py-16"
+            >
+              <OuiBox class="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-surface-muted">
+                <CreditCardIcon class="h-7 w-7 text-tertiary" />
+              </OuiBox>
+              <OuiStack align="center" gap="sm">
+                <OuiText as="h3" size="xl" weight="semibold" color="primary">Select an Organization</OuiText>
+                <OuiText size="sm" color="tertiary">
+                  Choose an organization above to view billing and usage information.
                 </OuiText>
               </OuiStack>
-            </OuiBox>
+            </OuiStack>
           </template>
 
           <template v-else>
-            <!-- Plan Information -->
-            <OuiCard v-if="currentOrganization?.planInfo" variant="outline">
-              <OuiCardHeader>
-                <OuiFlex align="center" justify="between">
+            <!-- Quick Summary -->
+            <OuiGrid :cols="{ sm: 1, md: 3 }" gap="sm">
+              <OuiCard variant="outline">
+                <OuiCardBody>
+                  <OuiFlex justify="between" align="start">
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="tertiary">Credits Balance</OuiText>
+                      <OuiText size="xl" weight="semibold">{{ formatCurrency(creditsBalance) }}</OuiText>
+                    </OuiStack>
+                    <OuiButton 
+                      v-if="currentUserCanManageBilling"
+                      variant="outline" 
+                      size="xs" 
+                      @click="addCreditsDialogOpen = true"
+                    >
+                      <PlusIcon class="h-3.5 w-3.5" />
+                    </OuiButton>
+                  </OuiFlex>
+                </OuiCardBody>
+              </OuiCard>
+              <OuiCard variant="outline">
+                <OuiCardBody>
                   <OuiStack gap="xs">
-                    <OuiText size="lg" weight="semibold">Current Plan: {{ currentOrganization.planInfo.planName }}</OuiText>
-                    <OuiText size="sm" color="muted" v-if="currentOrganization.planInfo.description">
-                      {{ currentOrganization.planInfo.description }}
+                    <OuiText size="xs" color="tertiary">Monthly Estimate</OuiText>
+                    <OuiText size="xl" weight="semibold">
+                      {{ safeUsage?.estimatedMonthly?.estimatedCostCents 
+                        ? formatCurrency(safeUsage.estimatedMonthly.estimatedCostCents)
+                        : '$0.00' }}
                     </OuiText>
                   </OuiStack>
-                </OuiFlex>
-              </OuiCardHeader>
+                </OuiCardBody>
+              </OuiCard>
+              <OuiCard v-if="currentOrganization?.planInfo" variant="outline">
+                <OuiCardBody>
+                  <OuiStack gap="xs">
+                    <OuiText size="xs" color="tertiary">Current Plan</OuiText>
+                    <OuiText size="xl" weight="semibold">{{ currentOrganization.planInfo.planName }}</OuiText>
+                  </OuiStack>
+                </OuiCardBody>
+              </OuiCard>
+            </OuiGrid>
+
+            <!-- Plan Details -->
+            <OuiCard v-if="currentOrganization?.planInfo" variant="outline">
               <OuiCardBody>
-                <OuiStack gap="md">
-                  <OuiText size="sm" color="muted">
-                    Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
-                  </OuiText>
-                  <OuiGrid :cols="{ sm: 1, md: 2, lg: 5 }" gap="md">
-                    <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">CPU Cores</OuiText>
-                      <OuiText size="sm" weight="medium">
-                        {{ currentOrganization.planInfo.cpuCores || 'Unlimited' }}
-                      </OuiText>
+                <OuiStack gap="sm">
+                  <OuiText size="sm" weight="semibold">Plan Limits</OuiText>
+                  <OuiGrid :cols="{ sm: 2, md: 3, lg: 5 }" gap="sm">
+                    <OuiStack gap="none" class="py-1">
+                      <OuiText size="xs" color="tertiary">CPU Cores</OuiText>
+                      <OuiText size="sm" weight="medium">{{ currentOrganization.planInfo.cpuCores || 'Unlimited' }}</OuiText>
                     </OuiStack>
-                    <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Memory</OuiText>
-                      <OuiText size="sm" weight="medium">
-                        {{ formatBytes(Number(currentOrganization.planInfo.memoryBytes || 0)) || 'Unlimited' }}
-                      </OuiText>
+                    <OuiStack gap="none" class="py-1">
+                      <OuiText size="xs" color="tertiary">Memory</OuiText>
+                      <OuiText size="sm" weight="medium">{{ formatBytes(Number(currentOrganization.planInfo.memoryBytes || 0)) || 'Unlimited' }}</OuiText>
                     </OuiStack>
-                    <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Max Deployments</OuiText>
-                      <OuiText size="sm" weight="medium">
-                        {{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}
-                      </OuiText>
+                    <OuiStack gap="none" class="py-1">
+                      <OuiText size="xs" color="tertiary">Max Deployments</OuiText>
+                      <OuiText size="sm" weight="medium">{{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}</OuiText>
                     </OuiStack>
-                    <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Bandwidth/Month</OuiText>
-                      <OuiText size="sm" weight="medium">
-                        {{ formatBytes(Number(currentOrganization.planInfo.bandwidthBytesMonth || 0)) || 'Unlimited' }}
-                      </OuiText>
+                    <OuiStack gap="none" class="py-1">
+                      <OuiText size="xs" color="tertiary">Bandwidth/Month</OuiText>
+                      <OuiText size="sm" weight="medium">{{ formatBytes(Number(currentOrganization.planInfo.bandwidthBytesMonth || 0)) || 'Unlimited' }}</OuiText>
                     </OuiStack>
-                    <OuiStack gap="xs">
-                      <OuiText size="xs" color="muted">Storage</OuiText>
-                      <OuiText size="sm" weight="medium">
-                        {{ formatBytes(Number(currentOrganization.planInfo.storageBytes || 0)) || 'Unlimited' }}
-                      </OuiText>
+                    <OuiStack gap="none" class="py-1">
+                      <OuiText size="xs" color="tertiary">Storage</OuiText>
+                      <OuiText size="sm" weight="medium">{{ formatBytes(Number(currentOrganization.planInfo.storageBytes || 0)) || 'Unlimited' }}</OuiText>
                     </OuiStack>
                   </OuiGrid>
-                  <OuiAlert v-if="currentOrganization.planInfo.minimumPaymentCents > 0" variant="info">
-                    <OuiText size="sm">
-                      <strong>Auto-Upgrade:</strong> Organizations that pay at least 
-                      {{ formatCurrency(Number(currentOrganization.planInfo.minimumPaymentCents)) }} 
-                      will automatically be upgraded to this plan.
-                    </OuiText>
-                  </OuiAlert>
                   <OuiAlert v-if="currentOrganization.planInfo.monthlyFreeCreditsCents > 0" variant="success">
                     <OuiText size="sm">
-                      <strong>Monthly Free Credits:</strong> This plan includes 
-                      {{ formatCurrency(Number(currentOrganization.planInfo.monthlyFreeCreditsCents)) }} 
-                      in free credits automatically added to your account on the 1st of each month.
+                      Includes {{ formatCurrency(Number(currentOrganization.planInfo.monthlyFreeCreditsCents)) }} free credits monthly.
                     </OuiText>
                   </OuiAlert>
                 </OuiStack>
@@ -1328,7 +1347,7 @@
 
             <!-- Current Usage -->
             <OuiStack gap="lg">
-              <OuiText size="2xl" weight="bold">Current Usage</OuiText>
+              <OuiText as="h2" size="lg" weight="semibold">Current Usage</OuiText>
               <template v-if="isLoadingUsage">
                 <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
                   <!-- vCPU Usage Skeleton -->
@@ -1441,8 +1460,8 @@
                       <OuiStack gap="md">
                         <OuiFlex justify="between" align="start">
                           <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">vCPU Hours</OuiText>
-                            <OuiText size="2xl" weight="bold">
+                            <OuiText size="sm" color="tertiary">vCPU Hours</OuiText>
+                            <OuiText size="xl" weight="semibold">
                               {{ formatCoreSecondsToHours(safeUsageCurrent?.cpuCoreSeconds ?? 0) }}
                             </OuiText>
                           </OuiStack>
@@ -1464,7 +1483,7 @@
                           )" 
                           :max="100" 
                         />
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           <template v-if="Number(safeUsage?.quota?.cpuCoreSecondsMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
@@ -1486,8 +1505,8 @@
                       <OuiStack gap="md">
                         <OuiFlex justify="between" align="start">
                           <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">Memory</OuiText>
-                            <OuiText size="2xl" weight="bold">
+                            <OuiText size="sm" color="tertiary">Memory</OuiText>
+                            <OuiText size="xl" weight="semibold">
                               {{ formatBytes(Number(safeUsageCurrent?.memoryByteSeconds ?? 0) / 3600) }}/hr avg
                             </OuiText>
                           </OuiStack>
@@ -1517,7 +1536,7 @@
                           )" 
                           :max="100" 
                         />
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           <template v-if="Number(safeUsage?.quota?.memoryByteSecondsMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
@@ -1539,8 +1558,8 @@
                       <OuiStack gap="md">
                         <OuiFlex justify="between" align="start">
                           <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">Bandwidth</OuiText>
-                            <OuiText size="2xl" weight="bold">
+                            <OuiText size="sm" color="tertiary">Bandwidth</OuiText>
+                            <OuiText size="xl" weight="semibold">
                               {{ formatBytes(Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0)) }}
                             </OuiText>
                           </OuiStack>
@@ -1570,7 +1589,7 @@
                           )" 
                           :max="100" 
                         />
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           <template v-if="Number(safeUsage?.quota?.bandwidthBytesMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
@@ -1592,8 +1611,8 @@
                       <OuiStack gap="md">
                         <OuiFlex justify="between" align="start">
                           <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">Storage (GB)</OuiText>
-                            <OuiText size="2xl" weight="bold">
+                            <OuiText size="sm" color="tertiary">Storage (GB)</OuiText>
+                            <OuiText size="xl" weight="semibold">
                               {{ formatBytesToGB(safeUsageCurrent?.storageBytes ?? 0) }}
                             </OuiText>
                           </OuiStack>
@@ -1623,7 +1642,7 @@
                           )" 
                           :max="100" 
                         />
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           <template v-if="Number(safeUsage?.quota?.storageBytes || 0) === 0">
                             Unlimited allocation
                           </template>
@@ -1646,11 +1665,11 @@
                     <OuiStack gap="lg">
                       <OuiFlex justify="between" align="start">
                         <OuiStack gap="xs">
-                          <OuiText size="sm" color="muted">Credits Balance</OuiText>
-                          <OuiText size="3xl" weight="bold">
+                          <OuiText size="sm" color="tertiary">Credits Balance</OuiText>
+                          <OuiText size="xl" weight="semibold">
                             {{ formatCurrency(creditsBalance) }}
                           </OuiText>
-                          <OuiText size="sm" color="muted">
+                          <OuiText size="sm" color="tertiary">
                             Available credits for your organization
                           </OuiText>
                         </OuiStack>
@@ -1675,13 +1694,13 @@
                       <OuiText size="xl" weight="semibold">Current Month Estimate</OuiText>
                       <OuiFlex justify="between" align="center">
                         <OuiStack gap="xs">
-                          <OuiText size="sm" color="muted">{{ currentMonth }}</OuiText>
-                          <OuiText size="3xl" weight="bold">
+                          <OuiText size="sm" color="tertiary">{{ currentMonth }}</OuiText>
+                          <OuiText size="xl" weight="semibold">
                             {{ safeUsage?.estimatedMonthly?.estimatedCostCents 
                               ? formatCurrency(safeUsage.estimatedMonthly.estimatedCostCents)
                               : '$0.00' }}
                           </OuiText>
-                          <OuiText size="sm" color="muted">
+                          <OuiText size="sm" color="tertiary">
                             Based on current usage patterns
                           </OuiText>
                         </OuiStack>
@@ -1697,7 +1716,7 @@
                 <OuiBox p="xl" class="text-center">
                   <OuiStack gap="md" align="center">
                     <OuiText size="lg" weight="semibold">No Usage Data</OuiText>
-                    <OuiText size="sm" color="muted">
+                    <OuiText size="sm" color="tertiary">
                       Usage data is not available for this organization.
                     </OuiText>
                   </OuiStack>
@@ -1708,7 +1727,7 @@
             <!-- Payment Methods -->
             <OuiStack gap="lg">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Payment Methods</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Payment Methods</OuiText>
                 <OuiFlex gap="sm">
                   <OuiButton 
                     variant="outline" 
@@ -1756,7 +1775,7 @@
                       <OuiStack gap="sm" align="center">
                         <CreditCardIcon class="h-12 w-12 text-muted" />
                         <OuiText size="lg" weight="semibold">No Payment Methods</OuiText>
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           Add credits to create a Stripe customer account and add payment methods.
                         </OuiText>
                       </OuiStack>
@@ -1765,7 +1784,7 @@
                       <OuiStack gap="sm" align="center">
                         <CreditCardIcon class="h-12 w-12 text-muted" />
                         <OuiText size="lg" weight="semibold">No Payment Methods</OuiText>
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           Add a payment method to make purchases easier.
                         </OuiText>
                       </OuiStack>
@@ -1793,10 +1812,10 @@
                                     Default
                                   </OuiBadge>
                                 </OuiFlex>
-                                <OuiText size="xs" color="muted" v-if="pm.card">
+                                <OuiText size="xs" color="tertiary" v-if="pm.card">
                                   Expires {{ pm.card.expMonth }}/{{ pm.card.expYear }}
                                 </OuiText>
-                                <OuiText size="xs" color="muted" v-if="pm.createdAt">
+                                <OuiText size="xs" color="tertiary" v-if="pm.createdAt">
                                   Added {{ formatInvoiceDate(pm.createdAt) }}
                                 </OuiText>
                               </OuiStack>
@@ -1831,7 +1850,7 @@
             <!-- Billing Information -->
             <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Billing Information</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Billing Information</OuiText>
                 <OuiButton 
                   variant="outline" 
                   size="sm"
@@ -1855,7 +1874,7 @@
                     </template>
                     <template v-else-if="!billingAccount?.stripeCustomerId">
                       <OuiStack gap="sm" align="center">
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           Add credits to create a Stripe customer account and set billing information.
                         </OuiText>
                       </OuiStack>
@@ -1863,29 +1882,29 @@
                     <template v-else>
                       <OuiStack gap="sm">
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Account Status</OuiText>
+                          <OuiText size="sm" color="tertiary">Account Status</OuiText>
                           <OuiBadge :variant="billingAccount.status === 'PAST_DUE' ? 'warning' : 'success'">
                             {{ billingAccount.status || "ACTIVE" }}
                           </OuiBadge>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Stripe Customer</OuiText>
+                          <OuiText size="sm" color="tertiary">Stripe Customer</OuiText>
                           <OuiText size="sm" weight="medium" class="font-mono">{{ billingAccount.stripeCustomerId }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Billing Email</OuiText>
+                          <OuiText size="sm" color="tertiary">Billing Email</OuiText>
                           <OuiText size="sm" weight="medium">{{ billingAccount.billingEmail || "Not set" }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Company Name</OuiText>
+                          <OuiText size="sm" color="tertiary">Company Name</OuiText>
                           <OuiText size="sm" weight="medium">{{ billingAccount.companyName || "Not set" }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Tax ID</OuiText>
+                          <OuiText size="sm" color="tertiary">Tax ID</OuiText>
                           <OuiText size="sm" weight="medium">{{ billingAccount.taxId || "Not set" }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between" v-if="billingAccount.address">
-                          <OuiText size="sm" color="muted">Billing Address</OuiText>
+                          <OuiText size="sm" color="tertiary">Billing Address</OuiText>
                           <OuiText size="sm" weight="medium">
                             {{ billingAccount.address.line1 }}{{ billingAccount.address.line2 ? `, ${billingAccount.address.line2}` : "" }}<br/>
                             {{ billingAccount.address.city }}{{ billingAccount.address.state ? `, ${billingAccount.address.state}` : "" }} {{ billingAccount.address.postalCode }}<br/>
@@ -1893,21 +1912,21 @@
                           </OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between" v-else>
-                          <OuiText size="sm" color="muted">Billing Address</OuiText>
+                          <OuiText size="sm" color="tertiary">Billing Address</OuiText>
                           <OuiText size="sm" weight="medium">Not set</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Billing Date</OuiText>
+                          <OuiText size="sm" color="tertiary">Billing Date</OuiText>
                           <OuiText size="sm" weight="medium">
                             {{ billingAccount.billingDate ? `Day ${billingAccount.billingDate} of each month` : "Not set (defaults to org creation day)" }}
                           </OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Created</OuiText>
+                          <OuiText size="sm" color="tertiary">Created</OuiText>
                           <OuiText size="sm" weight="medium">{{ formatInvoiceDate(billingAccount.createdAt) || "—" }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between">
-                          <OuiText size="sm" color="muted">Last Updated</OuiText>
+                          <OuiText size="sm" color="tertiary">Last Updated</OuiText>
                           <OuiText size="sm" weight="medium">{{ formatInvoiceDate(billingAccount.updatedAt) || "—" }}</OuiText>
                         </OuiFlex>
                       </OuiStack>
@@ -1920,7 +1939,7 @@
             <!-- Monthly Bills -->
             <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Monthly Bills</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Monthly Bills</OuiText>
                 <OuiFlex gap="sm">
                   <OuiButton 
                     variant="outline" 
@@ -1953,7 +1972,7 @@
                     <template #empty>
                       <OuiStack gap="sm" align="center" class="py-8">
                         <DocumentTextIcon class="h-8 w-8 text-muted" />
-                        <OuiText size="sm" color="muted" align="center">
+                        <OuiText size="sm" color="tertiary" align="center">
                           No monthly bills yet. Bills will appear here after your first billing cycle, or you can generate your current bill early.
                         </OuiText>
                       </OuiStack>
@@ -1962,7 +1981,7 @@
                       <OuiText size="sm" weight="medium" class="truncate" :title="row.id">{{ row.id }}</OuiText>
                     </template>
                     <template #cell-period="{ row }">
-                      <OuiText size="sm" color="muted">
+                      <OuiText size="sm" color="tertiary">
                         {{ formatBillDate(row.billingPeriodStart) }} - {{ formatBillDate(row.billingPeriodEnd) }}
                       </OuiText>
                     </template>
@@ -1972,7 +1991,7 @@
                       </OuiText>
                     </template>
                     <template #cell-dueDate="{ row }">
-                      <OuiText size="sm" color="muted">
+                      <OuiText size="sm" color="tertiary">
                         {{ formatBillDate(row.dueDate) }}
                       </OuiText>
                     </template>
@@ -1992,7 +2011,7 @@
                         >
                           {{ payBillLoading ? "Processing..." : "Pay Now" }}
                         </OuiButton>
-                        <OuiText v-else size="xs" color="muted">
+                        <OuiText v-else size="xs" color="tertiary">
                           {{ row.status === 'PAID' ? 'Paid' : '—' }}
                         </OuiText>
                       </OuiFlex>
@@ -2005,7 +2024,7 @@
             <!-- Subscriptions -->
             <OuiStack gap="lg" v-if="currentUserCanManageBilling">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Subscriptions</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Subscriptions</OuiText>
                 <OuiButton 
                   variant="outline" 
                   size="sm"
@@ -2021,19 +2040,19 @@
                   <OuiStack gap="md">
                     <template v-if="!billingAccount?.stripeCustomerId">
                       <OuiStack gap="sm" align="center">
-                        <OuiText size="sm" color="muted">
+                        <OuiText size="sm" color="tertiary">
                           Add credits to create a Stripe customer account and view subscriptions.
                         </OuiText>
                       </OuiStack>
                     </template>
                     <template v-else-if="subscriptionsLoading">
                       <OuiStack gap="sm" align="center">
-                        <OuiText size="sm" color="muted">Loading subscriptions...</OuiText>
+                        <OuiText size="sm" color="tertiary">Loading subscriptions...</OuiText>
                       </OuiStack>
                     </template>
                     <template v-else-if="subscriptions.length === 0">
                       <OuiStack gap="sm" align="center">
-                        <OuiText size="sm" color="muted">No subscriptions found.</OuiText>
+                        <OuiText size="sm" color="tertiary">No subscriptions found.</OuiText>
                       </OuiStack>
                     </template>
                     <template v-else>
@@ -2050,28 +2069,28 @@
                             <OuiFlex justify="between" align="start">
                               <OuiStack gap="xs">
                                 <OuiText size="sm" weight="semibold">{{ sub.description || "Subscription" }}</OuiText>
-                                <OuiText size="xs" color="muted">ID: {{ sub.id }}</OuiText>
+                                <OuiText size="xs" color="tertiary">ID: {{ sub.id }}</OuiText>
                               </OuiStack>
                               <OuiBadge :variant="sub.status === 'active' ? 'success' : sub.status === 'canceled' ? 'danger' : 'warning'">
                                 {{ sub.status }}
                               </OuiBadge>
                             </OuiFlex>
                             <OuiFlex justify="between">
-                              <OuiText size="sm" color="muted">Amount</OuiText>
+                              <OuiText size="sm" color="tertiary">Amount</OuiText>
                               <OuiText size="sm" weight="medium">
                                 {{ formatCurrency(sub.amount || 0) }} {{ sub.currency?.toUpperCase() || 'USD' }}
                                 <span v-if="sub.interval">/ {{ formatSubscriptionInterval(sub) }}</span>
                               </OuiText>
                             </OuiFlex>
                             <OuiFlex justify="between" v-if="sub.currentPeriodStart">
-                              <OuiText size="sm" color="muted">Current Period</OuiText>
+                              <OuiText size="sm" color="tertiary">Current Period</OuiText>
                               <OuiText size="sm">
                                 {{ formatInvoiceDate(sub.currentPeriodStart) }} -
                                 {{ sub.currentPeriodEnd ? formatInvoiceDate(sub.currentPeriodEnd) : 'N/A' }}
                               </OuiText>
                             </OuiFlex>
                             <OuiFlex justify="between" v-if="sub.cancelAtPeriodEnd">
-                              <OuiText size="sm" color="muted">Status</OuiText>
+                              <OuiText size="sm" color="tertiary">Status</OuiText>
                               <OuiText size="sm" color="warning">Will cancel at period end</OuiText>
                             </OuiFlex>
                             <OuiFlex gap="sm" v-if="sub.status === 'active'">
@@ -2105,7 +2124,7 @@
             <!-- Invoices -->
             <OuiStack gap="lg">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Invoices</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Invoices</OuiText>
                 <OuiButton 
                   variant="outline" 
                   size="sm"
@@ -2127,7 +2146,7 @@
                     <template #empty>
                       <OuiStack gap="sm" align="center" class="py-8">
                         <DocumentTextIcon class="h-8 w-8 text-muted" />
-                        <OuiText size="sm" color="muted" align="center">
+                        <OuiText size="sm" color="tertiary" align="center">
                           <template v-if="!billingAccount?.stripeCustomerId">
                             No invoices available. Add credits to create a Stripe customer account.
                           </template>
@@ -2140,22 +2159,22 @@
                     <template #cell-invoice="{ row }">
                       <OuiStack gap="xs">
                         <OuiText size="sm" weight="medium">{{ row.number || `#${row.id.substring(0, 8).toUpperCase()}` }}</OuiText>
-                        <OuiText size="xs" color="muted" v-if="row.description">
+                        <OuiText size="xs" color="tertiary" v-if="row.description">
                           {{ row.description }}
                         </OuiText>
-                        <OuiText size="xs" color="muted" v-if="row.amountPaid || row.amountRemaining">
+                        <OuiText size="xs" color="tertiary" v-if="row.amountPaid || row.amountRemaining">
                           Paid {{ formatCurrency(row.amountPaid ?? 0) }}
                           <span v-if="row.amountRemaining !== undefined">
                             • Remaining {{ formatCurrency(row.amountRemaining ?? 0) }}
                           </span>
                         </OuiText>
-                        <OuiText size="xs" color="muted" v-if="row.paidAt">
+                        <OuiText size="xs" color="tertiary" v-if="row.paidAt">
                           Paid on {{ formatInvoiceDate(row.paidAt) }}
                         </OuiText>
                       </OuiStack>
                     </template>
                     <template #cell-date="{ row }">
-                      <OuiText size="sm" color="muted">
+                      <OuiText size="sm" color="tertiary">
                         {{ formatInvoiceDate(row.date) }}
                       </OuiText>
                     </template>
@@ -2167,10 +2186,10 @@
                             {{ row.currency.toUpperCase() }}
                           </span>
                         </OuiText>
-                        <OuiText size="xs" color="muted" v-if="row.subtotal !== undefined">
+                        <OuiText size="xs" color="tertiary" v-if="row.subtotal !== undefined">
                           Subtotal {{ formatCurrency(row.subtotal ?? 0) }}
                         </OuiText>
-                        <OuiText size="xs" color="muted">
+                        <OuiText size="xs" color="tertiary">
                           Due {{ formatCurrency(row.amountDue ?? 0) }}
                         </OuiText>
                       </OuiStack>
@@ -2179,7 +2198,7 @@
                       <OuiBadge v-if="row.status && row.status.trim()" :variant="getInvoiceStatusVariant(row.status)">
                         {{ row.status.charAt(0).toUpperCase() + row.status.slice(1) }}
                       </OuiBadge>
-                      <OuiText v-else size="sm" color="muted">—</OuiText>
+                      <OuiText v-else size="sm" color="tertiary">—</OuiText>
                     </template>
                     <template #cell-actions="{ row }">
                       <OuiFlex gap="sm">
@@ -2201,14 +2220,14 @@
                           <ArrowDownTrayIcon class="h-4 w-4 mr-1" />
                           PDF
                         </OuiButton>
-                        <OuiText v-if="!row.hostedInvoiceUrl && !row.invoicePdf" size="xs" color="muted">
+                        <OuiText v-if="!row.hostedInvoiceUrl && !row.invoicePdf" size="xs" color="tertiary">
                           No actions
                         </OuiText>
                       </OuiFlex>
                     </template>
                   </OuiTable>
                   <OuiBox v-if="hasMoreInvoices" p="md" borderTop="1" borderColor="muted">
-                    <OuiText size="sm" color="muted" align="center">
+                    <OuiText size="sm" color="tertiary" align="center">
                       More invoices available. Visit the Stripe Customer Portal to view all invoices.
                     </OuiText>
                   </OuiBox>
@@ -2219,7 +2238,7 @@
             <!-- Transaction History -->
             <OuiStack gap="lg">
               <OuiFlex justify="between" align="center">
-                <OuiText size="2xl" weight="bold">Transaction History</OuiText>
+                <OuiText as="h2" size="lg" weight="semibold">Transaction History</OuiText>
               </OuiFlex>
 
               <OuiCard>
@@ -2244,13 +2263,13 @@
                             Paid via Credits
                           </OuiBadge>
                         </OuiFlex>
-                        <OuiText v-if="row.note" size="xs" color="muted" class="truncate">
+                        <OuiText v-if="row.note" size="xs" color="tertiary" class="truncate">
                           {{ row.note }}
                         </OuiText>
                       </OuiStack>
                     </template>
                     <template #cell-date="{ row }">
-                      <OuiText size="sm" color="muted">{{ row.date }}</OuiText>
+                      <OuiText size="sm" color="tertiary">{{ row.date }}</OuiText>
                     </template>
                     <template #cell-amount="{ row }">
                       <OuiText size="sm" weight="medium">{{ row.amount }}</OuiText>
@@ -2259,7 +2278,7 @@
                       <OuiBadge :variant="row.statusVariant || 'success'">{{ row.status }}</OuiBadge>
                     </template>
                     <template #cell-balance="{ row }">
-                      <OuiText size="sm" color="muted">
+                      <OuiText size="sm" color="tertiary">
                         {{ formatCurrency(row.balanceAfter ?? 0) }}
                       </OuiText>
                     </template>
@@ -2268,15 +2287,12 @@
               </OuiCard>
             </OuiStack>
           </template>
-        </OuiStack>
-      </OuiCardBody>
-    </OuiCard>
 
     <!-- Add Payment Method Dialog -->
     <OuiDialog v-model:open="addPaymentMethodDialogOpen" title="Add Payment Method">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Add a new payment method to your account. You can use this for future purchases.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -2287,7 +2303,7 @@
         
         <!-- Payment Element Container -->
         <div v-if="paymentElementLoading" class="min-h-[200px] flex items-center justify-center">
-          <OuiText size="sm" color="muted">Loading payment form...</OuiText>
+          <OuiText size="sm" color="tertiary">Loading payment form...</OuiText>
         </div>
         <div 
           ref="paymentElementContainer" 
@@ -2315,7 +2331,7 @@
     <OuiDialog v-model:open="removePaymentMethodDialogOpen" title="Remove Payment Method">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Are you sure you want to remove this payment method? This action cannot be undone.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -2340,7 +2356,7 @@
     <OuiDialog v-model:open="addCreditsDialogOpen" title="Purchase Credits">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             <template v-if="paymentMethods.find(pm => pm.isDefault)">
               Purchase credits using your default payment method. If 3D Secure authentication is required, you'll be prompted to complete it.
             </template>
@@ -2362,7 +2378,7 @@
               placeholder="0.50"
               :error="addCreditsAmount && parseFloat(addCreditsAmount) < 0.50 ? 'Minimum amount is $0.50 USD' : undefined"
             />
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Minimum purchase amount is $0.50 USD
             </OuiText>
           </OuiStack>
@@ -2387,7 +2403,7 @@
     <OuiDialog v-model:open="editBillingInfoDialogOpen" title="Edit Billing Information">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Update your billing information. This will be synced to your Stripe customer account.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -2428,7 +2444,7 @@
               max="31"
               placeholder="1-31 (defaults to org creation day)"
             />
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               The day of each month when your organization will be billed. Defaults to the day your organization was created.
             </OuiText>
           </OuiStack>
@@ -2505,7 +2521,7 @@
     <OuiDialog v-model:open="cancelSubscriptionDialogOpen" title="Cancel Subscription">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Are you sure you want to cancel this subscription? The subscription will remain active until the end of the current billing period, and you will continue to have access until then.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -2531,7 +2547,7 @@
     <OuiDialog v-model:open="updateSubscriptionPaymentDialogOpen" title="Update Subscription Payment Method">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Select a payment method to use for this subscription.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
@@ -2556,7 +2572,7 @@
                   <OuiText size="sm" weight="medium">
                     {{ pm.card ? `${formatCardBrand(pm.card.brand)} •••• ${pm.card.last4}` : pm.type }}
                   </OuiText>
-                  <OuiText size="xs" color="muted" v-if="pm.card">
+                  <OuiText size="xs" color="tertiary" v-if="pm.card">
                     Expires {{ pm.card.expMonth }}/{{ pm.card.expYear }}
                   </OuiText>
                 </OuiStack>
@@ -2576,4 +2592,5 @@
       </OuiStack>
     </OuiDialog>
   </OuiStack>
+  </OuiContainer>
 </template>

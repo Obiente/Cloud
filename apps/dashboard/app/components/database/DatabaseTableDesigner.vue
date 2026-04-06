@@ -49,8 +49,8 @@
                 <span v-else style="color: var(--oui-text-secondary); font-style: italic">Unnamed column</span>
               </OuiText>
               <OuiBadge v-if="col.isPrimaryKey" color="primary" size="xs">PK</OuiBadge>
-              <OuiBadge v-if="col.foreignKey" color="secondary" size="xs">FK</OuiBadge>
-              <OuiText size="xs" color="secondary" style="font-family: monospace">{{ col.dataType }}</OuiText>
+              <OuiBadge v-if="col.foreignKey" color="tertiary" size="xs">FK</OuiBadge>
+              <OuiText size="xs" color="tertiary" style="font-family: monospace">{{ col.dataType }}</OuiText>
               <OuiButton
                 variant="ghost"
                 size="sm"
@@ -178,7 +178,7 @@
           v-if="columns.length === 0"
           style="border: 1px dashed var(--oui-border-default); border-radius: 0.5rem; padding: 2rem; text-align: center"
         >
-          <OuiText color="secondary" size="sm">Add at least one column</OuiText>
+          <OuiText color="tertiary" size="sm">Add at least one column</OuiText>
         </div>
       </div>
 

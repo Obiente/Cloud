@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Dashboard Overview
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Understanding your dashboard metrics and KPIs
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Dashboard Overview</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Comprehensive overview of your cloud infrastructure, usage metrics, and resource health
         </OuiText>
       </OuiCardHeader>
@@ -60,7 +60,7 @@
                 <OuiText size="sm" weight="medium" color="primary">
                   Data Refresh
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Dashboard data refreshes automatically every 30 seconds. Metrics are collected 
                   in real-time from your running resources and aggregated for display.
                 </OuiText>

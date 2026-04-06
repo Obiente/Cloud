@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Invitations</OuiText>
-        <OuiText color="muted">Accept or decline invitations to join organizations.</OuiText>
+        <OuiText color="tertiary">Accept or decline invitations to join organizations.</OuiText>
       </OuiStack>
       <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
         <span class="flex items-center gap-2">
@@ -15,13 +15,13 @@
 
     <OuiCard v-if="isLoading" class="border border-border-muted rounded-xl">
       <OuiCardBody class="p-8 text-center">
-        <OuiText color="muted">Loading invitations...</OuiText>
+        <OuiText color="tertiary">Loading invitations...</OuiText>
       </OuiCardBody>
     </OuiCard>
 
     <OuiCard v-else-if="invites.length === 0" class="border border-border-muted rounded-xl">
       <OuiCardBody class="p-8 text-center">
-        <OuiText color="muted">You have no pending invitations.</OuiText>
+        <OuiText color="tertiary">You have no pending invitations.</OuiText>
       </OuiCardBody>
     </OuiCard>
 
@@ -35,10 +35,10 @@
           <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
             <OuiStack gap="xs" class="flex-1 min-w-0">
               <OuiText size="lg" weight="semibold">{{ invite.organizationName }}</OuiText>
-              <OuiText color="muted" size="sm">
+              <OuiText color="tertiary" size="sm">
                 You've been invited to join as <span class="uppercase font-medium">{{ invite.role }}</span>
               </OuiText>
-              <OuiText color="muted" size="xs">
+              <OuiText color="tertiary" size="xs">
                 Invited {{ formatDate(invite.invitedAt) }}
               </OuiText>
             </OuiStack>

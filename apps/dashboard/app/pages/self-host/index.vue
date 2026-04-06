@@ -1,24 +1,13 @@
 <template>
   <OuiStack gap="2xl">
     <!-- Page Header -->
-    <OuiStack gap="md">
-      <OuiStack gap="xs">
-        <OuiFlex align="center" gap="md">
-          <OuiBox class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-            <ServerIcon class="h-6 w-6 text-primary" />
-          </OuiBox>
-          <OuiStack gap="none">
-            <OuiText tag="h1" size="3xl" weight="extrabold">Self-Hosted DNS Delegation</OuiText>
-            <OuiText size="sm" color="muted">
-              Manage DNS delegation for your self-hosted Obiente Cloud instance
-            </OuiText>
-          </OuiStack>
-        </OuiFlex>
-        <OuiText size="sm" color="muted" class="mt-2">
-          Use the main <OuiCode code="my.obiente.cloud" language="text" padding="xs" inline /> DNS 
-          service without exposing DNS port 53 locally.
-        </OuiText>
-      </OuiStack>
+    <OuiStack gap="xs">
+      <OuiText tag="h1" size="xl" weight="semibold">Self-Hosted DNS Delegation</OuiText>
+      <OuiText size="sm" color="tertiary">
+        Manage DNS delegation for your self-hosted Obiente Cloud instance.
+        Use the main <OuiCode code="my.obiente.cloud" language="text" padding="xs" inline /> DNS 
+        service without exposing DNS port 53 locally.
+      </OuiText>
     </OuiStack>
 
     <!-- Organization Selector -->
@@ -26,7 +15,7 @@
       <OuiCardHeader>
         <OuiStack gap="xs">
           <OuiText tag="h2" size="lg" weight="semibold">Organization</OuiText>
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             DNS delegation is managed per organization. Select the organization that owns your self-hosted instance.
           </OuiText>
         </OuiStack>
@@ -49,7 +38,7 @@
             </OuiBox>
             <OuiStack gap="xs" align="center">
               <OuiText size="xl" weight="semibold">Select an Organization</OuiText>
-              <OuiText size="sm" color="muted" align="center" class="max-w-md">
+              <OuiText size="sm" color="tertiary" align="center" class="max-w-md">
                 Please select an organization to manage DNS delegation.
               </OuiText>
             </OuiStack>
@@ -68,7 +57,7 @@
                 <CreditCardIcon class="h-5 w-5 text-muted" />
                 <OuiText tag="h2" size="xl" weight="bold">Subscription</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="muted">
+              <OuiText size="sm" color="tertiary">
                 DNS delegation requires an active subscription ($2/month)
               </OuiText>
             </OuiStack>
@@ -120,7 +109,7 @@
               <OuiCard variant="outline">
                 <OuiCardBody>
                   <OuiStack gap="sm">
-                    <OuiText size="sm" color="muted" weight="medium">Status</OuiText>
+                    <OuiText size="sm" color="tertiary" weight="medium">Status</OuiText>
                     <OuiBadge 
                       v-if="hasActiveSubscription" 
                       variant="success"
@@ -142,14 +131,14 @@
               <OuiCard variant="outline">
                 <OuiCardBody>
                   <OuiStack gap="sm">
-                    <OuiText size="sm" color="muted" weight="medium">Price</OuiText>
+                    <OuiText size="sm" color="tertiary" weight="medium">Price</OuiText>
                     <OuiText size="lg" weight="bold">$2.00/month</OuiText>
                   </OuiStack>
                 </OuiCardBody>
               </OuiCard>
             </OuiGrid>
 
-            <OuiText size="sm" color="muted" v-if="!hasActiveSubscription">
+            <OuiText size="sm" color="tertiary" v-if="!hasActiveSubscription">
               Subscribe to enable DNS delegation. Once subscribed, you'll be able to create API keys 
               for pushing DNS records from your self-hosted instances.
             </OuiText>
@@ -166,7 +155,7 @@
                 <KeyIcon class="h-5 w-5 text-muted" />
                 <OuiText tag="h2" size="xl" weight="bold">API Key</OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="muted">
+              <OuiText size="sm" color="tertiary">
                 API key for pushing DNS records from your self-hosted API
               </OuiText>
             </OuiStack>
@@ -209,7 +198,7 @@
             <template v-if="loadingAPIKey">
               <OuiStack gap="sm" align="center" class="py-8">
                 <ArrowPathIcon class="h-8 w-8 text-muted animate-spin" />
-                <OuiText size="sm" color="muted">Loading API key...</OuiText>
+                <OuiText size="sm" color="tertiary">Loading API key...</OuiText>
               </OuiStack>
             </template>
             
@@ -221,7 +210,7 @@
                       <OuiText size="sm" weight="medium">Your API Key</OuiText>
                       <OuiBadge variant="success" size="sm">Active</OuiBadge>
                     </OuiFlex>
-                    <OuiText size="sm" color="muted" v-if="apiKeyDescription">
+                    <OuiText size="sm" color="tertiary" v-if="apiKeyDescription">
                       Description: {{ apiKeyDescription }}
                     </OuiText>
                     <OuiCode 
@@ -242,7 +231,7 @@
                         </OuiText>
                       </OuiFlex>
                     </OuiBox>
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       Created: {{ apiKeyCreatedAt ? formatDate(apiKeyCreatedAt) : 'Unknown' }}
                     </OuiText>
                   </OuiStack>
@@ -258,13 +247,13 @@
                       <OuiText size="sm" weight="medium">API Key Status</OuiText>
                       <OuiBadge variant="success" size="sm">Active</OuiBadge>
                     </OuiFlex>
-                    <OuiText size="sm" color="muted" v-if="apiKeyDescription">
+                    <OuiText size="sm" color="tertiary" v-if="apiKeyDescription">
                       Description: {{ apiKeyDescription }}
                     </OuiText>
-                    <OuiText size="sm" color="muted" v-else>
+                    <OuiText size="sm" color="tertiary" v-else>
                       Your organization has an active API key.
                     </OuiText>
-                    <OuiText size="xs" color="muted">
+                    <OuiText size="xs" color="tertiary">
                       Created: {{ apiKeyCreatedAt ? formatDate(apiKeyCreatedAt) : 'Unknown' }}
                     </OuiText>
                     <OuiBox 
@@ -294,7 +283,7 @@
                     </OuiBox>
                     <OuiStack gap="xs" align="center">
                       <OuiText size="lg" weight="semibold">No API Key</OuiText>
-                      <OuiText size="sm" color="muted" align="center">
+                      <OuiText size="sm" color="tertiary" align="center">
                         <template v-if="!hasActiveSubscription">
                           Subscribe to DNS delegation to create an API key.
                         </template>
@@ -319,7 +308,7 @@
               <ServerIcon class="h-5 w-5 text-muted" />
               <OuiText tag="h2" size="xl" weight="bold">Configuration</OuiText>
             </OuiFlex>
-            <OuiText size="sm" color="muted">
+            <OuiText size="sm" color="tertiary">
               Use this API key to configure your self-hosted Obiente Cloud API to push DNS records.
             </OuiText>
           </OuiStack>
@@ -348,7 +337,7 @@
 
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold">Testing DNS Resolution</OuiText>
-              <OuiText size="xs" color="muted">
+              <OuiText size="xs" color="tertiary">
                 After configuring your self-hosted API, test DNS resolution:
               </OuiText>
               <OuiCode 
@@ -367,7 +356,7 @@
     <OuiDialog v-model:open="createAPIKeyDialogOpen" title="Create API Key">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Create a new API key for DNS delegation. This will replace any existing API key.
           </OuiText>
           <OuiBox 
@@ -420,7 +409,7 @@
     <OuiDialog v-model:open="cancelSubscriptionDialogOpen" title="Cancel Subscription">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
-          <OuiText size="sm" color="muted">
+          <OuiText size="sm" color="tertiary">
             Are you sure you want to cancel your DNS delegation subscription? Your subscription will remain active until the end of the current billing period, then it will be canceled.
           </OuiText>
           <OuiBox 

@@ -22,7 +22,7 @@
         >
           Estimate Your Monthly Costs
         </OuiText>
-        <OuiText size="lg" color="secondary" class="md:text-xl" style="max-width: 42rem;">
+        <OuiText size="lg" color="tertiary" class="md:text-xl" style="max-width: 42rem;">
           Calculate your monthly costs based on actual usage. Adjust the sliders below to see how much you'll pay. 
           <OuiText as="span" weight="semibold" color="primary">Pay only for what you use</OuiText> - no fixed plans or hidden fees.
         </OuiText>
@@ -43,7 +43,7 @@
                 <OuiText size="sm" weight="semibold" color="primary">
                   Future Pricing Updates
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   As we grow and achieve better economies of scale, we plan to reduce pricing for storage and other resources.
                   We're committed to passing cost savings along to our customers.
                 </OuiText>
@@ -62,7 +62,7 @@
                   Quick Start Scenarios
                 </OuiText>
               </OuiFlex>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Choose a preset scenario or select "Custom" to configure your own resources.
               </OuiText>
               <OuiSegmentGroup
@@ -108,7 +108,7 @@
                   </OuiFlex>
                   <OuiBox class="mt-2 p-3 rounded-lg bg-accent-primary/10 border border-accent-primary/20">
                     <OuiFlex justify="between" align="center">
-                      <OuiText size="sm" color="secondary">24/7 monthly cost:</OuiText>
+                      <OuiText size="sm" color="tertiary">24/7 monthly cost:</OuiText>
                       <OuiText size="sm" weight="bold" color="primary">
                         {{ formatCurrency(memoryCostMonthly) }}
                       </OuiText>
@@ -147,7 +147,7 @@
                   </OuiFlex>
                   <OuiBox class="mt-2 p-3 rounded-lg bg-accent-secondary/10 border border-accent-secondary/20">
                     <OuiFlex justify="between" align="center">
-                      <OuiText size="sm" color="secondary">24/7 monthly cost:</OuiText>
+                      <OuiText size="sm" color="tertiary">24/7 monthly cost:</OuiText>
                       <OuiText size="sm" weight="bold" color="primary">
                         {{ formatCurrency(cpuCostMonthly) }}
                       </OuiText>
@@ -186,7 +186,7 @@
                   </OuiFlex>
                   <OuiBox class="mt-2 p-3 rounded-lg bg-accent-info/10 border border-accent-info/20">
                     <OuiFlex justify="between" align="center">
-                      <OuiText size="sm" color="secondary">Monthly cost:</OuiText>
+                      <OuiText size="sm" color="tertiary">Monthly cost:</OuiText>
                       <OuiText size="sm" weight="bold" color="primary">
                         {{ formatCurrency(bandwidthCostMonthly) }}
                       </OuiText>
@@ -225,12 +225,12 @@
                   </OuiFlex>
                   <OuiBox class="mt-2 p-3 rounded-lg bg-accent-warning/10 border border-accent-warning/20">
                     <OuiFlex justify="between" align="center">
-                      <OuiText size="sm" color="secondary">Monthly cost:</OuiText>
+                      <OuiText size="sm" color="tertiary">Monthly cost:</OuiText>
                       <OuiText size="sm" weight="bold" color="primary">
                         {{ formatCurrency(storageCostMonthly) }}
                       </OuiText>
                     </OuiFlex>
-                    <OuiText size="xs" color="secondary" class="mt-1 opacity-75">
+                    <OuiText size="xs" color="tertiary" class="mt-1 opacity-75">
                       Higher pricing reflects limited capacity
                     </OuiText>
                   </OuiBox>
@@ -247,7 +247,7 @@
                   <OuiText
                     size="sm"
                     weight="semibold"
-                    color="secondary"
+                    color="tertiary"
                     transform="uppercase"
                     class="tracking-wider"
                   >
@@ -258,13 +258,13 @@
                     <OuiCard variant="raised" class="border-2 border-accent-primary">
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">
                             24/7 Maximum
                           </OuiText>
                           <OuiText size="3xl" weight="bold" color="primary">
                             {{ formatCurrency(totalMonthlyCost) }}
                           </OuiText>
-                          <OuiText size="xs" color="secondary">
+                          <OuiText size="xs" color="tertiary">
                             Continuous uptime
                           </OuiText>
                         </OuiStack>
@@ -274,13 +274,13 @@
                     <OuiCard variant="raised" class="border-2 border-accent-success">
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">
                             Realistic Cost
                           </OuiText>
                           <OuiText size="3xl" weight="bold" color="success">
                             {{ formatCurrency(realisticMonthlyCost) }}
                           </OuiText>
-                          <OuiText size="xs" color="secondary">
+                          <OuiText size="xs" color="tertiary">
                             {{ currentScenarioDescription }}
                           </OuiText>
                         </OuiStack>
@@ -341,7 +341,7 @@
                             <span>10% (idle)</span>
                             <span>100% (constant load)</span>
                           </OuiFlex>
-                          <OuiText size="xs" color="secondary" class="opacity-75">
+                          <OuiText size="xs" color="tertiary" class="opacity-75">
                             Most apps average 20-50% CPU; game servers can spike higher during play.
                           </OuiText>
                         </OuiStack>
@@ -367,7 +367,7 @@
                             <span>30% (mostly idle)</span>
                             <span>100% (full allocation)</span>
                           </OuiFlex>
-                          <OuiText size="xs" color="secondary" class="opacity-75">
+                          <OuiText size="xs" color="tertiary" class="opacity-75">
                             Many apps keep 60-85% of RAM active; adjust for your workload.
                           </OuiText>
                         </OuiStack>
@@ -431,7 +431,7 @@
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
                           <CircleStackIcon class="h-4 w-4 text-accent-primary" />
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">Memory</OuiText>
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">Memory</OuiText>
                           <OuiText size="lg" weight="bold" color="primary">{{
                             formatCurrency(realisticMemoryCostMonthly)
                           }}</OuiText>
@@ -442,7 +442,7 @@
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
                           <ServerIcon class="h-4 w-4 text-accent-secondary" />
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">vCPU</OuiText>
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">vCPU</OuiText>
                           <OuiText size="lg" weight="bold" color="primary">{{
                             formatCurrency(realisticCpuCostMonthly)
                           }}</OuiText>
@@ -453,7 +453,7 @@
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
                           <GlobeAltIcon class="h-4 w-4 text-accent-info" />
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">Bandwidth</OuiText>
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">Bandwidth</OuiText>
                           <OuiText size="lg" weight="bold" color="primary">{{
                             formatCurrency(realisticBandwidthCostMonthly)
                           }}</OuiText>
@@ -464,7 +464,7 @@
                       <OuiCardBody class="p-4">
                         <OuiStack gap="xs" align="center">
                           <ArchiveBoxIcon class="h-4 w-4 text-accent-warning" />
-                          <OuiText size="xs" color="secondary" transform="uppercase" class="tracking-wide">Storage</OuiText>
+                          <OuiText size="xs" color="tertiary" transform="uppercase" class="tracking-wide">Storage</OuiText>
                           <OuiText size="lg" weight="bold" color="primary">{{
                             formatCurrency(realisticStorageCostMonthly)
                           }}</OuiText>
@@ -503,7 +503,7 @@
             label="Reduced Pricing Available"
           >
             <OuiStack gap="md">
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 We may offer reduced pricing for qualifying customers,
                 including:
               </OuiText>
@@ -512,7 +512,7 @@
                   <CheckIcon
                     class="h-4 w-4 text-accent-success shrink-0 opacity-60"
                   />
-                  <OuiText size="sm" color="secondary" class="opacity-80">
+                  <OuiText size="sm" color="tertiary" class="opacity-80">
                     <strong>Students</strong> - Educational projects and
                     coursework
                   </OuiText>
@@ -521,7 +521,7 @@
                   <CheckIcon
                     class="h-4 w-4 text-accent-success shrink-0 opacity-60"
                   />
-                  <OuiText size="sm" color="secondary" class="opacity-80">
+                  <OuiText size="sm" color="tertiary" class="opacity-80">
                     <strong>Open-source projects</strong> - Non-commercial
                     open-source initiatives
                   </OuiText>
@@ -530,7 +530,7 @@
                   <CheckIcon
                     class="h-4 w-4 text-accent-success shrink-0 opacity-60"
                   />
-                  <OuiText size="sm" color="secondary" class="opacity-80">
+                  <OuiText size="sm" color="tertiary" class="opacity-80">
                     <strong>Non-profits</strong> - Registered non-profit
                     organizations
                   </OuiText>
@@ -539,7 +539,7 @@
                   <CheckIcon
                     class="h-4 w-4 text-accent-success shrink-0 opacity-60"
                   />
-                  <OuiText size="sm" color="secondary" class="opacity-80">
+                  <OuiText size="sm" color="tertiary" class="opacity-80">
                     <strong>Early-stage startups</strong> - Pre-revenue startups
                     and MVPs
                   </OuiText>
@@ -547,7 +547,7 @@
               </OuiStack>
               <OuiText
                 size="sm"
-                color="secondary"
+                color="tertiary"
                 class="mt-2 opacity-70 italic"
               >
                 Reduced pricing is not available through the dashboard - please

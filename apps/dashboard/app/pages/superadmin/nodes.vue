@@ -92,7 +92,7 @@
         <template v-if="isSwarmNode(editingNode)">
           <OuiStack gap="xs">
             <OuiText size="sm" weight="medium">Node Subdomain</OuiText>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Identifier for this node (e.g., "node1", "us-east-1"). Used for node-specific domains in Swarm deployments.
             </OuiText>
             <OuiInput
@@ -104,7 +104,7 @@
 
           <OuiStack gap="xs">
             <OuiText size="sm" weight="medium">Use Node-Specific Domains</OuiText>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               When enabled, microservices on this node use node-specific subdomains (e.g., "node1-auth-service.domain").
               Only applies to Swarm stack services.
             </OuiText>
@@ -116,7 +116,7 @@
 
           <OuiStack gap="xs" v-if="editNodeForm.useNodeSpecificDomains">
             <OuiText size="sm" weight="medium">Service Domain Pattern</OuiText>
-            <OuiText size="xs" color="muted">
+            <OuiText size="xs" color="tertiary">
               Pattern for constructing node-specific domains.
             </OuiText>
             <OuiSelect
@@ -127,8 +127,8 @@
         </template>
         <template v-else>
           <OuiStack gap="xs">
-            <OuiText size="sm" weight="medium" color="muted">Node Subdomain Configuration</OuiText>
-            <OuiText size="xs" color="muted">
+            <OuiText size="sm" weight="medium" color="tertiary">Node Subdomain Configuration</OuiText>
+            <OuiText size="xs" color="tertiary">
               Node subdomain configuration is only available for Swarm stack services.
               For compose deployments, configure via environment variables in your docker-compose file.
             </OuiText>
@@ -145,7 +145,7 @@
 
         <OuiStack gap="xs">
           <OuiText size="sm" weight="medium">Region</OuiText>
-          <OuiText size="xs" color="muted">
+          <OuiText size="xs" color="tertiary">
             Region identifier for this node (e.g., "us-east-1", "eu-west-1").
           </OuiText>
           <OuiInput
@@ -157,7 +157,7 @@
 
         <OuiStack gap="xs">
           <OuiText size="sm" weight="medium">Max Deployments</OuiText>
-          <OuiText size="xs" color="muted">
+          <OuiText size="xs" color="tertiary">
             Maximum number of deployments allowed on this node.
           </OuiText>
           <OuiInput

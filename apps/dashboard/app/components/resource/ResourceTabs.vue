@@ -1,5 +1,5 @@
 <template>
-  <OuiStack gap="sm" class="md:gap-md">
+  <OuiStack gap="sm">
     <OuiTabs v-model="activeTab" :tabs="tabs" />
     <OuiCard variant="default">
       <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">

@@ -4,7 +4,7 @@
       <OuiText as="h1" size="3xl" weight="bold" color="primary">
         Permissions & Access Control
       </OuiText>
-      <OuiText color="secondary" size="lg">
+      <OuiText color="tertiary" size="lg">
         Understand how permissions work and how to manage access in Obiente Cloud
       </OuiText>
     </OuiStack>
@@ -12,7 +12,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Obiente Cloud uses a flexible role-based access control (RBAC) system
         </OuiText>
       </OuiCardHeader>
@@ -27,7 +27,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">System Roles</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Predefined roles (Owner, Admin, Member, Viewer, None) with hardcoded permissions
                 </OuiText>
               </OuiStack>
@@ -36,7 +36,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Custom Roles</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Organization-specific roles with configurable permissions
                 </OuiText>
               </OuiStack>
@@ -45,7 +45,7 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Role Bindings</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Assign roles to users, optionally scoped to specific resources
                 </OuiText>
               </OuiStack>
@@ -58,7 +58,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">System Roles</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Predefined roles available to all organizations
         </OuiText>
       </OuiCardHeader>
@@ -87,7 +87,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Custom Roles</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Create organization-specific roles with custom permissions
         </OuiText>
       </OuiCardHeader>
@@ -102,11 +102,11 @@
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Creating Custom Roles</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">1. Navigate to <strong>Admin > Roles</strong></OuiText>
-                <OuiText size="sm" color="secondary">2. Click <strong>Create Role</strong></OuiText>
-                <OuiText size="sm" color="secondary">3. Enter role name and description</OuiText>
-                <OuiText size="sm" color="secondary">4. Select permissions from the permission tree</OuiText>
-                <OuiText size="sm" color="secondary">5. Save the role</OuiText>
+                <OuiText size="sm" color="tertiary">1. Navigate to <strong>Admin > Roles</strong></OuiText>
+                <OuiText size="sm" color="tertiary">2. Click <strong>Create Role</strong></OuiText>
+                <OuiText size="sm" color="tertiary">3. Enter role name and description</OuiText>
+                <OuiText size="sm" color="tertiary">4. Select permissions from the permission tree</OuiText>
+                <OuiText size="sm" color="tertiary">5. Save the role</OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -114,17 +114,17 @@
           <OuiBox p="md" rounded="lg" class="bg-success/10 border border-success/20">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Permission Selection</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 When creating a custom role, you can select specific permissions or use wildcards:
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <strong>Specific permissions</strong>: <code class="text-xs">deployment.create</code>, <code class="text-xs">gameservers.read</code>
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <strong>Wildcard permissions</strong>: <code class="text-xs">deployment.*</code> (grants all deployment permissions)
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <strong>Resource wildcards</strong>: <code class="text-xs">*</code> (all permissions, superadmin only)
                 </OuiText>
               </OuiStack>
@@ -132,7 +132,7 @@
           </OuiBox>
 
           <OuiBox p="md" rounded="lg" class="bg-warning/10 border border-warning/20">
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>Note:</strong> You need <code class="text-xs">admin.roles.create</code> or <code class="text-xs">admin.roles.*</code> permission
               to create custom roles. System roles cannot be modified or deleted.
             </OuiText>
@@ -144,7 +144,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Role Bindings</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Assign roles to users with optional resource scoping
         </OuiText>
       </OuiCardHeader>
@@ -159,11 +159,11 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Organization-Wide</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   A binding without resource scoping grants permissions organization-wide. The user
                   has the role's permissions for all resources in the organization.
                 </OuiText>
-                <OuiText size="xs" color="secondary" class="mt-2 italic">
+                <OuiText size="xs" color="tertiary" class="mt-2 italic">
                   Example: User has "Deployment Manager" role → can manage all deployments
                 </OuiText>
               </OuiStack>
@@ -172,11 +172,11 @@
             <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Resource-Scoped</OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   A binding with resource scoping limits permissions to specific resources, resource types,
                   or environments. The user only has permissions for matching resources.
                 </OuiText>
-                <OuiText size="xs" color="secondary" class="mt-2 italic">
+                <OuiText size="xs" color="tertiary" class="mt-2 italic">
                   Example: User has "Production Manager" role binding scoped to "production" environment → has additional production-specific permissions
                 </OuiText>
               </OuiStack>
@@ -187,10 +187,10 @@
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Creating Role Bindings</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">1. Navigate to <strong>Admin > Bindings</strong></OuiText>
-                <OuiText size="sm" color="secondary">2. Select a member and role</OuiText>
-                <OuiText size="sm" color="secondary">3. (Optional) Select resource type and specific resource</OuiText>
-                <OuiText size="sm" color="secondary">4. Click <strong>Bind</strong></OuiText>
+                <OuiText size="sm" color="tertiary">1. Navigate to <strong>Admin > Bindings</strong></OuiText>
+                <OuiText size="sm" color="tertiary">2. Select a member and role</OuiText>
+                <OuiText size="sm" color="tertiary">3. (Optional) Select resource type and specific resource</OuiText>
+                <OuiText size="sm" color="tertiary">4. Click <strong>Bind</strong></OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -199,10 +199,10 @@
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Supported Resource Types</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">• <strong>Deployment</strong>: Scope to specific deployments</OuiText>
-                <OuiText size="sm" color="secondary">• <strong>Environment</strong>: Scope to specific environments (applies to deployments)</OuiText>
-                <OuiText size="sm" color="secondary">• <strong>VPS</strong>: Scope to specific VPS instances</OuiText>
-                <OuiText size="sm" color="secondary">• <strong>Game Server</strong>: Scope to specific game servers</OuiText>
+                <OuiText size="sm" color="tertiary">• <strong>Deployment</strong>: Scope to specific deployments</OuiText>
+                <OuiText size="sm" color="tertiary">• <strong>Environment</strong>: Scope to specific environments (applies to deployments)</OuiText>
+                <OuiText size="sm" color="tertiary">• <strong>VPS</strong>: Scope to specific VPS instances</OuiText>
+                <OuiText size="sm" color="tertiary">• <strong>Game Server</strong>: Scope to specific game servers</OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -213,7 +213,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Permission Format</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Understanding permission strings
         </OuiText>
       </OuiCardHeader>
@@ -228,12 +228,12 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Resource Types</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• <code>deployment</code> - Deployments</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>gameservers</code> - Game servers</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>vps</code> - VPS instances</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>organization</code> - Organization settings</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>admin</code> - Admin operations</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>superadmin</code> - Superadmin operations</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>deployment</code> - Deployments</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>gameservers</code> - Game servers</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>vps</code> - VPS instances</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>organization</code> - Organization settings</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>admin</code> - Admin operations</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>superadmin</code> - Superadmin operations</OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiBox>
@@ -242,12 +242,12 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Actions</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">• <code>read</code> - View/list resources</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>create</code> - Create new resources</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>update</code> - Modify resources</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>delete</code> - Delete resources</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>start</code>, <code>stop</code>, <code>restart</code> - Control resources</OuiText>
-                  <OuiText size="xs" color="secondary">• <code>*</code> - Wildcard (all actions)</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>read</code> - View/list resources</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>create</code> - Create new resources</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>update</code> - Modify resources</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>delete</code> - Delete resources</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>start</code>, <code>stop</code>, <code>restart</code> - Control resources</OuiText>
+                  <OuiText size="xs" color="tertiary">• <code>*</code> - Wildcard (all actions)</OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiBox>
@@ -257,19 +257,19 @@
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Examples</OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <code class="text-xs">deployment.read</code> - View deployments
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <code class="text-xs">deployment.create</code> - Create deployments
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <code class="text-xs">deployment.*</code> - All deployment permissions
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <code class="text-xs">admin.roles.read</code> - View roles
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • <code class="text-xs">admin.bindings.create</code> - Create role bindings
                 </OuiText>
               </OuiStack>
@@ -282,7 +282,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Wildcard Permissions</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Using wildcards to grant all permissions for a resource type
         </OuiText>
       </OuiCardHeader>
@@ -298,16 +298,16 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Resource Wildcards</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     • <code>deployment.*</code> - All deployment permissions
                   </OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     • <code>gameservers.*</code> - All game server permissions
                   </OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     • <code>vps.*</code> - All VPS permissions
                   </OuiText>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     • <code>admin.*</code> - All admin permissions
                   </OuiText>
                 </OuiStack>
@@ -318,11 +318,11 @@
               <OuiStack gap="sm">
                 <OuiText size="sm" weight="semibold" color="primary">Global Wildcard</OuiText>
                 <OuiStack gap="xs" class="pl-4">
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     • <code>*</code> - All permissions (superadmin only)
                   </OuiText>
                 </OuiStack>
-                <OuiText size="xs" color="secondary" class="mt-2">
+                <OuiText size="xs" color="tertiary" class="mt-2">
                   The global wildcard grants access to everything and is only available to superadmins.
                 </OuiText>
               </OuiStack>
@@ -330,7 +330,7 @@
           </OuiGrid>
 
           <OuiBox p="md" rounded="lg" class="bg-warning/10 border border-warning/20">
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>Best Practice:</strong> Use wildcards sparingly. Prefer specific permissions
               unless you truly need all actions for a resource type. This follows the principle of
               least privilege and makes it easier to audit and understand permissions.
@@ -343,7 +343,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">How Permissions Work</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Understanding when and how your permissions are evaluated
         </OuiText>
       </OuiCardHeader>
@@ -355,35 +355,35 @@
           </OuiText>
 
           <OuiStack gap="sm" class="pl-4">
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>1. Your Assigned Role</strong> - The system first checks the role you were assigned
               when you joined the organization (Owner, Admin, Member, Viewer, or a custom role).
             </OuiText>
-            <OuiText size="sm" color="secondary" class="pl-4">
+            <OuiText size="sm" color="tertiary" class="pl-4">
               • System roles (Owner, Admin, Member, Viewer, None) have predefined permissions
             </OuiText>
-            <OuiText size="sm" color="secondary" class="pl-4">
+            <OuiText size="sm" color="tertiary" class="pl-4">
               • Custom roles have the specific permissions that were selected when the role was created
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>2. Your Role Bindings</strong> - The system then checks any additional role bindings
               that were created for you.
             </OuiText>
-            <OuiText size="sm" color="secondary" class="pl-4">
+            <OuiText size="sm" color="tertiary" class="pl-4">
               • These can grant you additional permissions beyond your assigned role
             </OuiText>
-            <OuiText size="sm" color="secondary" class="pl-4">
+            <OuiText size="sm" color="tertiary" class="pl-4">
               • These additional permissions can be scoped to specific resources (like only certain deployments
               or environments)
             </OuiText>
-            <OuiText size="sm" color="secondary" class="pl-4">
+            <OuiText size="sm" color="tertiary" class="pl-4">
               • Note: Role bindings add permissions, they don't remove or limit your base role permissions
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>3. Permission Matching</strong> - The system checks if you have the exact permission
               needed, or if you have a wildcard permission that covers it (like <code class="text-xs">deployment.*</code>).
             </OuiText>
-            <OuiText size="sm" color="secondary">
+            <OuiText size="sm" color="tertiary">
               <strong>4. Access Decision</strong> - Based on the checks above, the system either allows
               or denies your action.
             </OuiText>
@@ -392,7 +392,7 @@
           <OuiBox p="md" rounded="lg" class="bg-info/10 border border-info/20">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Understanding Permission Priority</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 Your assigned role is checked first. If it grants the permission you need, you'll have access
                 organization-wide. Role bindings are then checked, which can add additional permissions that
                 are scoped to specific resources. For example, if you're assigned the "Member" role (which
@@ -401,10 +401,10 @@
                 <code class="text-xs">deployment.delete</code>) only for production deployments, you'll have:
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Your Member role permissions (read, create, update, etc.) everywhere in the organization
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   • Additional permissions from the role binding (like delete) only in production
                 </OuiText>
               </OuiStack>
@@ -414,17 +414,17 @@
           <OuiBox p="md" rounded="lg" class="bg-success/10 border border-success/20">
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">Example: Creating a Deployment</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="sm" color="tertiary">
                 When you try to create a deployment, the system checks:
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   1. Does your assigned role (e.g., "Member") include <code class="text-xs">deployment.create</code>? ✓ Yes
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   2. Are there any role bindings that grant or restrict this permission? Checked
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   3. If you have the permission, access is granted and you can create the deployment
                 </OuiText>
               </OuiStack>
@@ -437,7 +437,7 @@
     <OuiCard>
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Troubleshooting</OuiText>
-        <OuiText size="sm" color="secondary">
+        <OuiText size="sm" color="tertiary">
           Common permission issues and solutions
         </OuiText>
       </OuiCardHeader>
