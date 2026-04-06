@@ -21,10 +21,13 @@ COPY packages ./packages
 COPY apps/dashboard/package.json ./apps/dashboard/
 COPY tools ./tools
 
-# Install dependencies with aggressive caching
-# Use BuildKit cache mounts for pnpm store
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prefer-offline
+# Fetch all packages into virtual store as a Docker layer.
+# No cache mount = store is baked into the image, exported to registry cache (mode=max).
+# On cache hit (lockfile unchanged), this layer restores instantly on any runner.
+RUN pnpm fetch
+
+# Install from virtual store (strictly offline - no network needed)
+RUN pnpm install --frozen-lockfile --offline
 
 # Copy config files needed for builds
 COPY nx.json tsconfig.base.json tsconfig.json ./
@@ -48,8 +51,7 @@ ENV NODE_OPTIONS="--max-old-space-size=8192 --no-warnings" \
 # Build workspace dependencies if needed
 # Skip build-deps if packages are already built (faster)
 # Only build if package.json files changed or if explicitly needed
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    (pnpm --filter "@obiente/dashboard" build-deps 2>/dev/null || echo "build-deps skipped or not needed") || true
+RUN (pnpm --filter "@obiente/dashboard" build-deps 2>/dev/null || echo "build-deps skipped or not needed") || true
 
 # Build stage - reuse everything from deps
 FROM deps AS builder
@@ -61,7 +63,6 @@ FROM deps AS builder
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
     --mount=type=cache,id=vite-cache,target=/app/apps/dashboard/node_modules/.vite \
-    --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     cd apps/dashboard && \
     (test -d .nuxt && test -f .nuxt/nuxt.d.ts && echo "Skipping nuxt prepare (cache hit)" || pnpm exec nuxt prepare) && \
     echo "Starting Nuxt build (client + server)..." && \

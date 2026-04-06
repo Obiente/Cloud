@@ -14,19 +14,20 @@ RUN apk add --no-cache --no-scripts git make
 # Set working directory
 WORKDIR /build
 
-# Enable Go build cache and module cache
+# Pre-download modules into image layer - exported to registry cache,
+# reused on all runners when go.mod/go.sum are unchanged
 ENV GOCACHE=/root/.cache/go-build
-ENV GOMODCACHE=/root/go/pkg/mod
+COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/auth-service/go.mod apps/auth-service/go.sum ./apps/auth-service/
+RUN cd apps/shared && GOWORK=off go mod download && \
+    cd /build/apps/auth-service && GOWORK=off go mod download
 
+# Build - modules already in image layer; only go-build cache is runner-local
 RUN --mount=type=bind,source=.,target=/src,rw \
-    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    sh -c "export GOWORK=off && \
-           cd /src/apps/shared && go mod download && \
-           cd /src/apps/auth-service && go mod download && \
-           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-           GOWORK=off go build -trimpath -ldflags=\"-w -s -extldflags '-static'\" \
-           -o /build/auth-service /src/apps/auth-service"
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    GOWORK=off go build -trimpath -ldflags="-w -s -extldflags '-static'" \
+    -o /build/auth-service /src/apps/auth-service
 
 # Final stage
 FROM ${BASE_REGISTRY}/library/alpine:latest

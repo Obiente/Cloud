@@ -22,17 +22,12 @@ ENV GOMODCACHE=/root/go/pkg/mod
 COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
 COPY apps/databases-service/go.mod apps/databases-service/go.sum ./apps/databases-service/
 
-# Download dependencies for shared module
+# Download dependencies (baked into image layer - exported to registry cache)
 WORKDIR /build/apps/shared
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
+RUN GOWORK=off go mod download
 
-# Download dependencies for service module
 WORKDIR /build/apps/databases-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
+RUN GOWORK=off go mod download
 
 # Copy all source code
 WORKDIR /build
@@ -41,8 +36,7 @@ COPY apps/databases-service/ ./apps/databases-service/
 
 # Build the service from its own module directory
 WORKDIR /build/apps/databases-service
-RUN --mount=type=cache,target=/root/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \

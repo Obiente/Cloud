@@ -14,19 +14,20 @@ RUN apk add --no-cache --no-scripts git make
 # Set working directory
 WORKDIR /build
 
-# Enable Go build cache and module cache
+# Pre-download modules into image layer - exported to registry cache,
+# reused on all runners when go.mod/go.sum are unchanged
 ENV GOCACHE=/root/.cache/go-build
-ENV GOMODCACHE=/root/go/pkg/mod
+COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/notifications-service/go.mod apps/notifications-service/go.sum ./apps/notifications-service/
+RUN cd apps/shared && GOWORK=off go mod download && \
+    cd /build/apps/notifications-service && GOWORK=off go mod download
 
+# Build - modules already in image layer; only go-build cache is runner-local
 RUN --mount=type=bind,source=.,target=/src,rw \
-    --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    sh -c "export GOWORK=off && \
-           cd /src/apps/shared && go mod download && \
-           cd /src/apps/notifications-service && go mod download && \
-           CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-           GOWORK=off go build -trimpath -ldflags=\"-w -s -extldflags '-static'\" \
-           -o /build/notifications-service /src/apps/notifications-service"
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    GOWORK=off go build -trimpath -ldflags="-w -s -extldflags '-static'" \
+    -o /build/notifications-service /src/apps/notifications-service
 
 # Final stage
 FROM ${BASE_REGISTRY}/library/alpine:latest
