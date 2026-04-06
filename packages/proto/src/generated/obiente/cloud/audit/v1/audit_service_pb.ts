@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/audit/v1/audit_service.proto.
  */
 export const file_obiente_cloud_audit_v1_audit_service: GenFile = /*@__PURE__*/
-  fileDesc("CipvYmllbnRlL2Nsb3VkL2F1ZGl0L3YxL2F1ZGl0X3NlcnZpY2UucHJvdG8SFm9iaWVudGUuY2xvdWQuYXVkaXQudjEi1gMKFExpc3RBdWRpdExvZ3NSZXF1ZXN0EhwKD29yZ2FuaXphdGlvbl9pZBgBIAEoCUgAiAEBEhoKDXJlc291cmNlX3R5cGUYAiABKAlIAYgBARIYCgtyZXNvdXJjZV9pZBgDIAEoCUgCiAEBEhQKB3VzZXJfaWQYBCABKAlIA4gBARIUCgdzZXJ2aWNlGAUgASgJSASIAQESEwoGYWN0aW9uGAYgASgJSAWIAQESMwoKc3RhcnRfdGltZRgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBogBARIxCghlbmRfdGltZRgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIB4gBARIWCglwYWdlX3NpemUYCSABKAVICIgBARIXCgpwYWdlX3Rva2VuGAogASgJSAmIAQFCEgoQX29yZ2FuaXphdGlvbl9pZEIQCg5fcmVzb3VyY2VfdHlwZUIOCgxfcmVzb3VyY2VfaWRCCgoIX3VzZXJfaWRCCgoIX3NlcnZpY2VCCQoHX2FjdGlvbkINCgtfc3RhcnRfdGltZUILCglfZW5kX3RpbWVCDAoKX3BhZ2Vfc2l6ZUINCgtfcGFnZV90b2tlbiKAAQoVTGlzdEF1ZGl0TG9nc1Jlc3BvbnNlEjkKCmF1ZGl0X2xvZ3MYASADKAsyJS5vYmllbnRlLmNsb3VkLmF1ZGl0LnYxLkF1ZGl0TG9nRW50cnkSFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJEhMKC3RvdGFsX2NvdW50GAMgASgDIioKEkdldEF1ZGl0TG9nUmVxdWVzdBIUCgxhdWRpdF9sb2dfaWQYASABKAkiTwoTR2V0QXVkaXRMb2dSZXNwb25zZRI4CglhdWRpdF9sb2cYASABKAsyJS5vYmllbnRlLmNsb3VkLmF1ZGl0LnYxLkF1ZGl0TG9nRW50cnki7wMKDUF1ZGl0TG9nRW50cnkSCgoCaWQYASABKAkSDwoHdXNlcl9pZBgCIAEoCRIWCgl1c2VyX25hbWUYDyABKAlIAIgBARIXCgp1c2VyX2VtYWlsGBAgASgJSAGIAQESHAoPb3JnYW5pemF0aW9uX2lkGAMgASgJSAKIAQESDgoGYWN0aW9uGAQgASgJEg8KB3NlcnZpY2UYBSABKAkSGgoNcmVzb3VyY2VfdHlwZRgGIAEoCUgDiAEBEhgKC3Jlc291cmNlX2lkGAcgASgJSASIAQESEgoKaXBfYWRkcmVzcxgIIAEoCRISCgp1c2VyX2FnZW50GAkgASgJEhQKDHJlcXVlc3RfZGF0YRgKIAEoCRIXCg9yZXNwb25zZV9zdGF0dXMYCyABKAUSGgoNZXJyb3JfbWVzc2FnZRgMIAEoCUgFiAEBEhMKC2R1cmF0aW9uX21zGA0gASgDEi4KCmNyZWF0ZWRfYXQYDiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgwKCl91c2VyX25hbWVCDQoLX3VzZXJfZW1haWxCEgoQX29yZ2FuaXphdGlvbl9pZEIQCg5fcmVzb3VyY2VfdHlwZUIOCgxfcmVzb3VyY2VfaWRCEAoOX2Vycm9yX21lc3NhZ2Uy5AEKDEF1ZGl0U2VydmljZRJsCg1MaXN0QXVkaXRMb2dzEiwub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5MaXN0QXVkaXRMb2dzUmVxdWVzdBotLm9iaWVudGUuY2xvdWQuYXVkaXQudjEuTGlzdEF1ZGl0TG9nc1Jlc3BvbnNlEmYKC0dldEF1ZGl0TG9nEioub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5HZXRBdWRpdExvZ1JlcXVlc3QaKy5vYmllbnRlLmNsb3VkLmF1ZGl0LnYxLkdldEF1ZGl0TG9nUmVzcG9uc2VCS1pJZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvYXVkaXQvdjE7YXVkaXR2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("CipvYmllbnRlL2Nsb3VkL2F1ZGl0L3YxL2F1ZGl0X3NlcnZpY2UucHJvdG8SFm9iaWVudGUuY2xvdWQuYXVkaXQudjEiuAQKFExpc3RBdWRpdExvZ3NSZXF1ZXN0EhwKD29yZ2FuaXphdGlvbl9pZBgBIAEoCUgAiAEBEhoKDXJlc291cmNlX3R5cGUYAiABKAlIAYgBARIYCgtyZXNvdXJjZV9pZBgDIAEoCUgCiAEBEhQKB3VzZXJfaWQYBCABKAlIA4gBARIUCgdzZXJ2aWNlGAUgASgJSASIAQESEwoGYWN0aW9uGAYgASgJSAWIAQESMwoKc3RhcnRfdGltZRgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBogBARIxCghlbmRfdGltZRgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIB4gBARIWCglwYWdlX3NpemUYCSABKAVICIgBARIXCgpwYWdlX3Rva2VuGAogASgJSAmIAQESHAoPcmVzcG9uc2Vfc3RhdHVzGAsgASgFSAqIAQESGwoOZXJyb3Jfc3RhdHVzZXMYDCABKAhIC4gBAUISChBfb3JnYW5pemF0aW9uX2lkQhAKDl9yZXNvdXJjZV90eXBlQg4KDF9yZXNvdXJjZV9pZEIKCghfdXNlcl9pZEIKCghfc2VydmljZUIJCgdfYWN0aW9uQg0KC19zdGFydF90aW1lQgsKCV9lbmRfdGltZUIMCgpfcGFnZV9zaXplQg0KC19wYWdlX3Rva2VuQhIKEF9yZXNwb25zZV9zdGF0dXNCEQoPX2Vycm9yX3N0YXR1c2VzIoABChVMaXN0QXVkaXRMb2dzUmVzcG9uc2USOQoKYXVkaXRfbG9ncxgBIAMoCzIlLm9iaWVudGUuY2xvdWQuYXVkaXQudjEuQXVkaXRMb2dFbnRyeRIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkSEwoLdG90YWxfY291bnQYAyABKAMi9QMKH0dldEF1ZGl0TG9nRmlsdGVyT3B0aW9uc1JlcXVlc3QSHAoPb3JnYW5pemF0aW9uX2lkGAEgASgJSACIAQESGgoNcmVzb3VyY2VfdHlwZRgCIAEoCUgBiAEBEhgKC3Jlc291cmNlX2lkGAMgASgJSAKIAQESFAoHdXNlcl9pZBgEIAEoCUgDiAEBEhQKB3NlcnZpY2UYBSABKAlIBIgBARITCgZhY3Rpb24YBiABKAlIBYgBARIzCgpzdGFydF90aW1lGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgGiAEBEjEKCGVuZF90aW1lGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgHiAEBEhwKD3Jlc3BvbnNlX3N0YXR1cxgJIAEoBUgIiAEBEhsKDmVycm9yX3N0YXR1c2VzGAogASgISAmIAQFCEgoQX29yZ2FuaXphdGlvbl9pZEIQCg5fcmVzb3VyY2VfdHlwZUIOCgxfcmVzb3VyY2VfaWRCCgoIX3VzZXJfaWRCCgoIX3NlcnZpY2VCCQoHX2FjdGlvbkINCgtfc3RhcnRfdGltZUILCglfZW5kX3RpbWVCEgoQX3Jlc3BvbnNlX3N0YXR1c0IRCg9fZXJyb3Jfc3RhdHVzZXMicwoSQXVkaXRMb2dVc2VyT3B0aW9uEg8KB3VzZXJfaWQYASABKAkSFgoJdXNlcl9uYW1lGAIgASgJSACIAQESFwoKdXNlcl9lbWFpbBgDIAEoCUgBiAEBQgwKCl91c2VyX25hbWVCDQoLX3VzZXJfZW1haWwimwEKIEdldEF1ZGl0TG9nRmlsdGVyT3B0aW9uc1Jlc3BvbnNlEhAKCHNlcnZpY2VzGAEgAygJEg8KB2FjdGlvbnMYAiADKAkSOQoFdXNlcnMYAyADKAsyKi5vYmllbnRlLmNsb3VkLmF1ZGl0LnYxLkF1ZGl0TG9nVXNlck9wdGlvbhIZChFyZXNwb25zZV9zdGF0dXNlcxgEIAMoBSIqChJHZXRBdWRpdExvZ1JlcXVlc3QSFAoMYXVkaXRfbG9nX2lkGAEgASgJIk8KE0dldEF1ZGl0TG9nUmVzcG9uc2USOAoJYXVkaXRfbG9nGAEgASgLMiUub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5BdWRpdExvZ0VudHJ5Iu8DCg1BdWRpdExvZ0VudHJ5EgoKAmlkGAEgASgJEg8KB3VzZXJfaWQYAiABKAkSFgoJdXNlcl9uYW1lGA8gASgJSACIAQESFwoKdXNlcl9lbWFpbBgQIAEoCUgBiAEBEhwKD29yZ2FuaXphdGlvbl9pZBgDIAEoCUgCiAEBEg4KBmFjdGlvbhgEIAEoCRIPCgdzZXJ2aWNlGAUgASgJEhoKDXJlc291cmNlX3R5cGUYBiABKAlIA4gBARIYCgtyZXNvdXJjZV9pZBgHIAEoCUgEiAEBEhIKCmlwX2FkZHJlc3MYCCABKAkSEgoKdXNlcl9hZ2VudBgJIAEoCRIUCgxyZXF1ZXN0X2RhdGEYCiABKAkSFwoPcmVzcG9uc2Vfc3RhdHVzGAsgASgFEhoKDWVycm9yX21lc3NhZ2UYDCABKAlIBYgBARITCgtkdXJhdGlvbl9tcxgNIAEoAxIuCgpjcmVhdGVkX2F0GA4gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIMCgpfdXNlcl9uYW1lQg0KC191c2VyX2VtYWlsQhIKEF9vcmdhbml6YXRpb25faWRCEAoOX3Jlc291cmNlX3R5cGVCDgoMX3Jlc291cmNlX2lkQhAKDl9lcnJvcl9tZXNzYWdlMvQCCgxBdWRpdFNlcnZpY2USbAoNTGlzdEF1ZGl0TG9ncxIsLm9iaWVudGUuY2xvdWQuYXVkaXQudjEuTGlzdEF1ZGl0TG9nc1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLmF1ZGl0LnYxLkxpc3RBdWRpdExvZ3NSZXNwb25zZRKNAQoYR2V0QXVkaXRMb2dGaWx0ZXJPcHRpb25zEjcub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5HZXRBdWRpdExvZ0ZpbHRlck9wdGlvbnNSZXF1ZXN0Gjgub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5HZXRBdWRpdExvZ0ZpbHRlck9wdGlvbnNSZXNwb25zZRJmCgtHZXRBdWRpdExvZxIqLm9iaWVudGUuY2xvdWQuYXVkaXQudjEuR2V0QXVkaXRMb2dSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC5hdWRpdC52MS5HZXRBdWRpdExvZ1Jlc3BvbnNlQktaSWdpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL2F1ZGl0L3YxO2F1ZGl0djFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * Request/Response messages
@@ -89,6 +89,20 @@ export type ListAuditLogsRequest = Message<"obiente.cloud.audit.v1.ListAuditLogs
    * @generated from field: optional string page_token = 10;
    */
   pageToken?: string;
+
+  /**
+   * Filter by exact response status (optional)
+   *
+   * @generated from field: optional int32 response_status = 11;
+   */
+  responseStatus?: number;
+
+  /**
+   * Filter by any error response status (400+)
+   *
+   * @generated from field: optional bool error_statuses = 12;
+   */
+  errorStatuses?: boolean;
 };
 
 /**
@@ -130,6 +144,127 @@ export const ListAuditLogsResponseSchema: GenMessage<ListAuditLogsResponse> = /*
   messageDesc(file_obiente_cloud_audit_v1_audit_service, 1);
 
 /**
+ * @generated from message obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest
+ */
+export type GetAuditLogFilterOptionsRequest = Message<"obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest"> & {
+  /**
+   * @generated from field: optional string organization_id = 1;
+   */
+  organizationId?: string;
+
+  /**
+   * @generated from field: optional string resource_type = 2;
+   */
+  resourceType?: string;
+
+  /**
+   * @generated from field: optional string resource_id = 3;
+   */
+  resourceId?: string;
+
+  /**
+   * @generated from field: optional string user_id = 4;
+   */
+  userId?: string;
+
+  /**
+   * @generated from field: optional string service = 5;
+   */
+  service?: string;
+
+  /**
+   * @generated from field: optional string action = 6;
+   */
+  action?: string;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp start_time = 7;
+   */
+  startTime?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp end_time = 8;
+   */
+  endTime?: Timestamp;
+
+  /**
+   * @generated from field: optional int32 response_status = 9;
+   */
+  responseStatus?: number;
+
+  /**
+   * @generated from field: optional bool error_statuses = 10;
+   */
+  errorStatuses?: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest.
+ * Use `create(GetAuditLogFilterOptionsRequestSchema)` to create a new message.
+ */
+export const GetAuditLogFilterOptionsRequestSchema: GenMessage<GetAuditLogFilterOptionsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 2);
+
+/**
+ * @generated from message obiente.cloud.audit.v1.AuditLogUserOption
+ */
+export type AuditLogUserOption = Message<"obiente.cloud.audit.v1.AuditLogUserOption"> & {
+  /**
+   * @generated from field: string user_id = 1;
+   */
+  userId: string;
+
+  /**
+   * @generated from field: optional string user_name = 2;
+   */
+  userName?: string;
+
+  /**
+   * @generated from field: optional string user_email = 3;
+   */
+  userEmail?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.audit.v1.AuditLogUserOption.
+ * Use `create(AuditLogUserOptionSchema)` to create a new message.
+ */
+export const AuditLogUserOptionSchema: GenMessage<AuditLogUserOption> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 3);
+
+/**
+ * @generated from message obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse
+ */
+export type GetAuditLogFilterOptionsResponse = Message<"obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse"> & {
+  /**
+   * @generated from field: repeated string services = 1;
+   */
+  services: string[];
+
+  /**
+   * @generated from field: repeated string actions = 2;
+   */
+  actions: string[];
+
+  /**
+   * @generated from field: repeated obiente.cloud.audit.v1.AuditLogUserOption users = 3;
+   */
+  users: AuditLogUserOption[];
+
+  /**
+   * @generated from field: repeated int32 response_statuses = 4;
+   */
+  responseStatuses: number[];
+};
+
+/**
+ * Describes the message obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse.
+ * Use `create(GetAuditLogFilterOptionsResponseSchema)` to create a new message.
+ */
+export const GetAuditLogFilterOptionsResponseSchema: GenMessage<GetAuditLogFilterOptionsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 4);
+
+/**
  * @generated from message obiente.cloud.audit.v1.GetAuditLogRequest
  */
 export type GetAuditLogRequest = Message<"obiente.cloud.audit.v1.GetAuditLogRequest"> & {
@@ -144,7 +279,7 @@ export type GetAuditLogRequest = Message<"obiente.cloud.audit.v1.GetAuditLogRequ
  * Use `create(GetAuditLogRequestSchema)` to create a new message.
  */
 export const GetAuditLogRequestSchema: GenMessage<GetAuditLogRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_audit_v1_audit_service, 2);
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 5);
 
 /**
  * @generated from message obiente.cloud.audit.v1.GetAuditLogResponse
@@ -161,7 +296,7 @@ export type GetAuditLogResponse = Message<"obiente.cloud.audit.v1.GetAuditLogRes
  * Use `create(GetAuditLogResponseSchema)` to create a new message.
  */
 export const GetAuditLogResponseSchema: GenMessage<GetAuditLogResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_audit_v1_audit_service, 3);
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 6);
 
 /**
  * AuditLogEntry represents a single audit log entry
@@ -275,7 +410,7 @@ export type AuditLogEntry = Message<"obiente.cloud.audit.v1.AuditLogEntry"> & {
  * Use `create(AuditLogEntrySchema)` to create a new message.
  */
 export const AuditLogEntrySchema: GenMessage<AuditLogEntry> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_audit_v1_audit_service, 4);
+  messageDesc(file_obiente_cloud_audit_v1_audit_service, 7);
 
 /**
  * @generated from service obiente.cloud.audit.v1.AuditService
@@ -290,6 +425,16 @@ export const AuditService: GenService<{
     methodKind: "unary";
     input: typeof ListAuditLogsRequestSchema;
     output: typeof ListAuditLogsResponseSchema;
+  },
+  /**
+   * Get available filter values for audit logs within the current scope.
+   *
+   * @generated from rpc obiente.cloud.audit.v1.AuditService.GetAuditLogFilterOptions
+   */
+  getAuditLogFilterOptions: {
+    methodKind: "unary";
+    input: typeof GetAuditLogFilterOptionsRequestSchema;
+    output: typeof GetAuditLogFilterOptionsResponseSchema;
   },
   /**
    * Get a specific audit log entry by ID

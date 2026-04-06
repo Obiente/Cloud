@@ -5,7 +5,7 @@
       <OuiText as="h3" size="lg" weight="bold">Audit Logs</OuiText>
       <OuiFlex gap="sm" align="center" wrap="wrap">
         <OuiText v-if="!isLoading" size="sm" color="tertiary">
-          {{ totalCount }} log{{ totalCount !== 1 ? 's' : '' }}
+          {{ totalCount }} log{{ totalCount !== 1 ? "s" : "" }}
         </OuiText>
         <OuiButton
           variant="ghost"
@@ -13,7 +13,10 @@
           @click="refresh"
           :loading="isLoading"
         >
-          <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
+          <ArrowPathIcon
+            class="h-4 w-4"
+            :class="{ 'animate-spin': isLoading }"
+          />
         </OuiButton>
       </OuiFlex>
     </OuiFlex>
@@ -22,7 +25,10 @@
     <OuiCard v-if="hasMultipleFilterOptions" variant="outline">
       <OuiCardBody>
         <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="md">
-          <OuiStack v-if="!props.organizationId && organizationOptions.length > 1" gap="xs">
+          <OuiStack
+            v-if="!props.organizationId && organizationOptions.length > 1"
+            gap="xs"
+          >
             <OuiText size="sm" weight="medium">Organization</OuiText>
             <OuiSelect
               v-model="filters.organizationId"
@@ -31,7 +37,10 @@
               clearable
             />
           </OuiStack>
-          <OuiStack v-if="serviceOptions.length > 1 && props.resourceType !== 'vps'" gap="xs">
+          <OuiStack
+            v-if="serviceOptions.length > 1 && props.resourceType !== 'vps'"
+            gap="xs"
+          >
             <OuiText size="sm" weight="medium">Service</OuiText>
             <OuiSelect
               v-model="filters.service"
@@ -76,33 +85,81 @@
       <OuiCardBody class="p-0">
         <OuiTable
           :columns="columns"
-          :rows="Array(10).fill(null).map((_, i) => ({ id: i }))"
+          :rows="
+            Array(10)
+              .fill(null)
+              .map((_, i) => ({ id: i }))
+          "
           :loading="true"
           empty-text=""
         >
           <!-- Custom skeletons per column type to match actual UI -->
           <template #skeleton-action>
             <OuiFlex align="center" gap="sm">
-              <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="5rem" skeleton-height="0.875rem" />
+              <OuiBadge
+                variant="secondary"
+                size="sm"
+                skeleton
+                skeleton-width="5rem"
+                skeleton-height="0.875rem"
+              />
             </OuiFlex>
           </template>
           <template #skeleton-service>
-            <OuiText size="sm" class="font-mono" skeleton skeleton-width="10rem" skeleton-height="1rem" />
+            <OuiText
+              size="sm"
+              class="font-mono"
+              skeleton
+              skeleton-width="10rem"
+              skeleton-height="1rem"
+            />
           </template>
           <template #skeleton-user>
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium" skeleton skeleton-width="10rem" skeleton-height="1rem" />
-              <OuiText size="xs" color="tertiary" class="font-mono" skeleton skeleton-width="8rem" skeleton-height="0.875rem" />
+              <OuiText
+                size="sm"
+                weight="medium"
+                skeleton
+                skeleton-width="10rem"
+                skeleton-height="1rem"
+              />
+              <OuiText
+                size="xs"
+                color="tertiary"
+                class="font-mono"
+                skeleton
+                skeleton-width="8rem"
+                skeleton-height="0.875rem"
+              />
             </OuiStack>
           </template>
           <template #skeleton-resource>
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium" skeleton skeleton-width="6rem" skeleton-height="1rem" />
-              <OuiText size="xs" color="tertiary" class="font-mono" skeleton skeleton-width="12rem" skeleton-height="0.875rem" />
+              <OuiText
+                size="sm"
+                weight="medium"
+                skeleton
+                skeleton-width="6rem"
+                skeleton-height="1rem"
+              />
+              <OuiText
+                size="xs"
+                color="tertiary"
+                class="font-mono"
+                skeleton
+                skeleton-width="12rem"
+                skeleton-height="0.875rem"
+              />
             </OuiStack>
           </template>
           <template #skeleton-status>
-            <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="3rem" skeleton-height="0.875rem" />
+            <OuiBadge
+              variant="secondary"
+              size="sm"
+              skeleton
+              skeleton-width="3rem"
+              skeleton-height="0.875rem"
+            />
           </template>
           <template #skeleton-duration>
             <OuiSkeleton width="5rem" height="1rem" variant="text" />
@@ -120,9 +177,14 @@
     </OuiCard>
 
     <!-- Empty State -->
-    <div v-else-if="auditLogs.length === 0" class="flex flex-col items-center justify-center py-12">
+    <div
+      v-else-if="auditLogs.length === 0"
+      class="flex flex-col items-center justify-center py-12"
+    >
       <DocumentTextIcon class="h-12 w-12 text-secondary mb-4" />
-      <OuiText size="md" weight="medium" class="mb-2">No audit logs found</OuiText>
+      <OuiText size="md" weight="medium" class="mb-2"
+        >No audit logs found</OuiText
+      >
       <OuiText size="sm" color="tertiary" class="text-center max-w-md">
         Audit logs will appear here once actions are performed.
       </OuiText>
@@ -150,15 +212,26 @@
 
           <template #cell-user="{ row }">
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium">{{ row.userName || row.userEmail || row.userId }}</OuiText>
-              <OuiText size="xs" color="tertiary" class="font-mono">{{ row.userId }}</OuiText>
+              <OuiText size="sm" weight="medium">{{
+                row.userName || row.userEmail || row.userId
+              }}</OuiText>
+              <OuiText size="xs" color="tertiary" class="font-mono">{{
+                row.userId
+              }}</OuiText>
             </OuiStack>
           </template>
 
           <template #cell-resource="{ row }">
             <OuiStack gap="xs" v-if="row.resourceType">
-              <OuiText size="sm" weight="medium">{{ row.resourceType }}</OuiText>
-              <OuiText v-if="row.resourceId" size="xs" color="tertiary" class="font-mono">
+              <OuiText size="sm" weight="medium">{{
+                row.resourceType
+              }}</OuiText>
+              <OuiText
+                v-if="row.resourceId"
+                size="xs"
+                color="tertiary"
+                class="font-mono"
+              >
                 {{ row.resourceId }}
               </OuiText>
             </OuiStack>
@@ -166,10 +239,7 @@
           </template>
 
           <template #cell-status="{ row }">
-            <OuiBadge
-              :variant="getStatusVariant(row.responseStatus)"
-              size="sm"
-            >
+            <OuiBadge :variant="getStatusVariant(row.responseStatus)" size="sm">
               {{ row.responseStatus }}
             </OuiBadge>
           </template>
@@ -201,7 +271,13 @@
     </OuiCard>
 
     <!-- Pagination -->
-    <OuiFlex v-if="auditLogs.length > 0" justify="center" align="center" gap="md" class="py-4">
+    <OuiFlex
+      v-if="auditLogs.length > 0"
+      justify="center"
+      align="center"
+      gap="md"
+      class="py-4"
+    >
       <OuiPagination
         :count="totalCount"
         :page="currentPage"
@@ -215,71 +291,167 @@
       <OuiStack gap="md" v-if="selectedLog">
         <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">ID</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >ID</OuiText
+            >
             <OuiText size="sm" class="font-mono">{{ selectedLog.id }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Time</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Time</OuiText
+            >
             <OuiText size="sm">
               <OuiRelativeTime
-                :value="selectedLog.createdAt ? date(selectedLog.createdAt) : undefined"
+                :value="
+                  selectedLog.createdAt
+                    ? date(selectedLog.createdAt)
+                    : undefined
+                "
                 :style="'long'"
               />
             </OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">User</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >User</OuiText
+            >
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium">{{ selectedLog.userName || selectedLog.userEmail || selectedLog.userId }}</OuiText>
-              <OuiText size="xs" color="tertiary" class="font-mono">{{ selectedLog.userId }}</OuiText>
+              <OuiText size="sm" weight="medium">{{
+                selectedLog.userName ||
+                selectedLog.userEmail ||
+                selectedLog.userId
+              }}</OuiText>
+              <OuiText size="xs" color="tertiary" class="font-mono">{{
+                selectedLog.userId
+              }}</OuiText>
             </OuiStack>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">IP Address</OuiText>
-            <OuiText size="sm" class="font-mono">{{ selectedLog.ipAddress }}</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >IP Address</OuiText
+            >
+            <OuiText size="sm" class="font-mono">{{
+              selectedLog.ipAddress
+            }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Service</OuiText>
-            <OuiText size="sm" class="font-mono">{{ selectedLog.service }}</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Service</OuiText
+            >
+            <OuiText size="sm" class="font-mono">{{
+              selectedLog.service
+            }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Action</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Action</OuiText
+            >
             <OuiText size="sm">{{ selectedLog.action }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs" v-if="selectedLog.resourceType">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Resource Type</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Resource Type</OuiText
+            >
             <OuiText size="sm">{{ selectedLog.resourceType }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs" v-if="selectedLog.resourceId">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Resource ID</OuiText>
-            <OuiText size="sm" class="font-mono">{{ selectedLog.resourceId }}</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Resource ID</OuiText
+            >
+            <OuiText size="sm" class="font-mono">{{
+              selectedLog.resourceId
+            }}</OuiText>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Status</OuiText>
-            <OuiBadge :variant="getStatusVariant(selectedLog.responseStatus)" size="sm">
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Status</OuiText
+            >
+            <OuiBadge
+              :variant="getStatusVariant(selectedLog.responseStatus)"
+              size="sm"
+            >
               {{ selectedLog.responseStatus }}
             </OuiBadge>
           </OuiStack>
           <OuiStack gap="xs">
-            <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Duration</OuiText>
+            <OuiText
+              size="xs"
+              color="tertiary"
+              weight="semibold"
+              transform="uppercase"
+              >Duration</OuiText
+            >
             <OuiDuration :value="selectedLog.durationMs" />
           </OuiStack>
         </OuiGrid>
 
         <OuiStack gap="xs" v-if="selectedLog.errorMessage">
-          <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Error</OuiText>
+          <OuiText
+            size="xs"
+            color="tertiary"
+            weight="semibold"
+            transform="uppercase"
+            >Error</OuiText
+          >
           <OuiCard variant="outline" class="border-danger/20 bg-danger/5">
             <OuiCardBody class="p-3">
-              <OuiText size="sm" color="danger">{{ selectedLog.errorMessage }}</OuiText>
+              <OuiText size="sm" color="danger">{{
+                selectedLog.errorMessage
+              }}</OuiText>
             </OuiCardBody>
           </OuiCard>
         </OuiStack>
 
         <OuiStack gap="xs">
-          <OuiText size="xs" color="tertiary" weight="semibold" transform="uppercase">Request Data</OuiText>
+          <OuiText
+            size="xs"
+            color="tertiary"
+            weight="semibold"
+            transform="uppercase"
+            >Request Data</OuiText
+          >
           <OuiCard variant="outline">
             <OuiCardBody class="p-3">
-              <OuiCode :code="formatRequestData(selectedLog.requestData)" language="json" />
+              <OuiCode
+                :code="formatRequestData(selectedLog.requestData)"
+                language="json"
+              />
             </OuiCardBody>
           </OuiCard>
         </OuiStack>
@@ -295,7 +467,14 @@ import {
   DocumentTextIcon,
   EyeIcon,
 } from "@heroicons/vue/24/outline";
-import { AuditService, OrganizationService, type AuditLogEntry, type ListAuditLogsRequest } from "@obiente/proto";
+import {
+  AuditService,
+  OrganizationService,
+  type AuditLogEntry,
+  type AuditLogUserOption,
+  type GetAuditLogFilterOptionsRequest,
+  type ListAuditLogsRequest,
+} from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { date } from "@obiente/proto/utils";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -323,8 +502,18 @@ const pageSize = ref(50);
 const nextPageToken = ref<string | undefined>(undefined);
 const totalCount = ref<number>(0);
 
-// Separate data for filter options (loaded without filters to show all available values)
-const filterOptionsData = ref<AuditLogEntry[]>([]);
+// Separate data for filter options (loaded as distinct backend facets, not sampled rows)
+const filterOptionsData = ref<{
+  services: string[];
+  actions: string[];
+  users: AuditLogUserOption[];
+  responseStatuses: number[];
+}>({
+  services: [],
+  actions: [],
+  users: [],
+  responseStatuses: [],
+});
 const isLoadingFilterOptions = ref(false);
 
 const filters = ref({
@@ -335,31 +524,60 @@ const filters = ref({
   status: undefined as string | undefined,
 });
 
-// Load filter options from a large unfiltered sample
 const loadFilterOptions = async () => {
   if (isLoadingFilterOptions.value) return;
   isLoadingFilterOptions.value = true;
 
   try {
-    const request: Partial<ListAuditLogsRequest> = {
-      pageSize: 1000, // Load a large sample to get all available filter values
-    };
+    const request: Partial<GetAuditLogFilterOptionsRequest> = {};
 
     // Apply organization filter for filter options (if provided as prop or filter)
-    // This ensures filter options are scoped to the correct organization
     if (props.organizationId) {
       request.organizationId = props.organizationId;
-    } else if (filters.value.organizationId != null && filters.value.organizationId !== "") {
+    } else if (
+      filters.value.organizationId != null &&
+      filters.value.organizationId !== ""
+    ) {
       request.organizationId = filters.value.organizationId;
     }
 
-    // NOTE: Do NOT apply resourceType/resourceId filters when loading filter options
-    // This allows all available filter values to be shown in the dropdowns
-    // The actual audit log list will still be filtered by resourceType/resourceId
-    // but the filter dropdowns will show all available options for better filtering
+    if (props.resourceType) {
+      request.resourceType = props.resourceType;
+    }
+    if (props.resourceId) {
+      request.resourceId = props.resourceId;
+    }
+    if (props.userId) {
+      request.userId = props.userId;
+    } else if (filters.value.userId != null && filters.value.userId !== "") {
+      request.userId = filters.value.userId;
+    }
+    if (filters.value.service != null && filters.value.service !== "") {
+      request.service = filters.value.service;
+    }
+    if (filters.value.action != null && filters.value.action !== "") {
+      request.action = filters.value.action;
+    }
+    if (filters.value.status != null && filters.value.status !== "") {
+      if (filters.value.status === "error") {
+        request.errorStatuses = true;
+      } else {
+        const statusNum = parseInt(filters.value.status, 10);
+        if (!isNaN(statusNum)) {
+          request.responseStatus = statusNum;
+        }
+      }
+    }
 
-    const response = await client.listAuditLogs(request);
-    filterOptionsData.value = response.auditLogs || [];
+    const response = await client.getAuditLogFilterOptions(request);
+    filterOptionsData.value = {
+      services: response.services || [],
+      actions: response.actions || [],
+      users: response.users || [],
+      responseStatuses: (response.responseStatuses || []).map((status) =>
+        Number(status)
+      ),
+    };
   } catch (error) {
     console.error("Failed to load filter options:", error);
   } finally {
@@ -369,81 +587,39 @@ const loadFilterOptions = async () => {
 
 // Dynamic filter options based on all available audit logs (not filtered results)
 const serviceOptions = computed(() => {
-  const services = new Set<string>();
-  filterOptionsData.value.forEach((log) => {
-    if (log.service) {
-      services.add(log.service);
-    }
-  });
-  return Array.from(services)
+  return [...filterOptionsData.value.services]
     .sort()
     .map((service) => ({ label: service, value: service }));
 });
 
 const actionOptions = computed(() => {
-  const actions = new Set<string>();
-  filterOptionsData.value.forEach((log) => {
-    if (log.action) {
-      actions.add(log.action);
-    }
-  });
-  return Array.from(actions)
+  return [...filterOptionsData.value.actions]
     .sort()
     .map((action) => ({ label: action, value: action }));
 });
 
 const userOptions = computed(() => {
-  const users = new Map<string, { name?: string; email?: string }>();
-  filterOptionsData.value.forEach((log) => {
-    if (log.userId) {
-      if (!users.has(log.userId)) {
-        users.set(log.userId, {
-          name: log.userName || undefined,
-          email: log.userEmail || undefined,
-        });
-      } else {
-        // Update if we have better info (name/email)
-        const existing = users.get(log.userId)!;
-        if (!existing.name && log.userName) {
-          existing.name = log.userName;
-        }
-        if (!existing.email && log.userEmail) {
-          existing.email = log.userEmail;
-        }
-      }
-    }
+  return [...filterOptionsData.value.users].map((user) => {
+    const displayName = user.userName || user.userEmail || user.userId;
+    return { label: displayName, value: user.userId };
   });
-  return Array.from(users.entries())
-    .sort(([a], [b]) => {
-      const aInfo = users.get(a)!;
-      const bInfo = users.get(b)!;
-      const aDisplay = aInfo.name || aInfo.email || a;
-      const bDisplay = bInfo.name || bInfo.email || b;
-      return aDisplay.localeCompare(bDisplay);
-    })
-    .map(([userId, info]) => {
-      const displayName = info.name || info.email || userId;
-      return { label: displayName, value: userId };
-    });
 });
 
 const statusOptions = computed(() => {
-  const statuses = new Set<number>();
-  filterOptionsData.value.forEach((log) => {
-    if (log.responseStatus) {
-      statuses.add(log.responseStatus);
-    }
-  });
+  const statuses = new Set<number>(
+    filterOptionsData.value.responseStatuses || []
+  );
   const options = Array.from(statuses)
     .sort((a, b) => a - b)
     .map((status) => {
-      const label = status >= 200 && status < 300 
-        ? `Success (${status})` 
-        : status >= 400 && status < 500
-        ? `Client Error (${status})`
-        : status >= 500
-        ? `Server Error (${status})`
-        : `Status ${status}`;
+      const label =
+        status >= 200 && status < 300
+          ? `Success (${status})`
+          : status >= 400 && status < 500
+          ? `Client Error (${status})`
+          : status >= 500
+          ? `Server Error (${status})`
+          : `Status ${status}`;
       return { label, value: status.toString() };
     });
   // Add common options if not already present
@@ -463,7 +639,7 @@ const isLoadingOrganizations = ref(false);
 const loadOrganizations = async () => {
   // Only load if we're not scoped to a specific organization (global view)
   if (props.organizationId || isLoadingOrganizations.value) return;
-  
+
   isLoadingOrganizations.value = true;
   try {
     const response = await orgClient.listOrganizations({
@@ -488,11 +664,13 @@ const organizationOptions = computed(() => {
 
 // Check if there are multiple filter options (to decide if we should show the filter card)
 const hasMultipleFilterOptions = computed(() => {
-  return (!props.organizationId && organizationOptions.value.length > 1) ||
-         serviceOptions.value.length > 1 ||
-         actionOptions.value.length > 1 ||
-         userOptions.value.length > 1 ||
-         statusOptions.value.length > 1;
+  return (
+    (!props.organizationId && organizationOptions.value.length > 1) ||
+    serviceOptions.value.length > 1 ||
+    actionOptions.value.length > 1 ||
+    userOptions.value.length > 1 ||
+    statusOptions.value.length > 1
+  );
 });
 
 const columns = [
@@ -521,7 +699,10 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
     // Use prop organizationId if provided, otherwise use filter
     if (props.organizationId) {
       request.organizationId = props.organizationId;
-    } else if (filters.value.organizationId != null && filters.value.organizationId !== "") {
+    } else if (
+      filters.value.organizationId != null &&
+      filters.value.organizationId !== ""
+    ) {
       request.organizationId = filters.value.organizationId;
     }
 
@@ -551,6 +732,17 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
       request.userId = filters.value.userId;
     }
 
+    if (filters.value.status != null && filters.value.status !== "") {
+      if (filters.value.status === "error") {
+        request.errorStatuses = true;
+      } else {
+        const statusNum = parseInt(filters.value.status, 10);
+        if (!isNaN(statusNum)) {
+          request.responseStatus = statusNum;
+        }
+      }
+    }
+
     // Convert page number to offset for pageToken
     // Page 1 = no token, Page 2 = offset:50, Page 3 = offset:100, etc.
     if (page > 1) {
@@ -561,22 +753,10 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
     const response = await client.listAuditLogs(request);
 
     let logs = response.auditLogs || [];
-    
+
     // Store the actual total count from the API (convert bigint to number)
     totalCount.value = response.totalCount ? Number(response.totalCount) : 0;
-    
-    // Client-side status filtering (since backend doesn't support it)
-    if (filters.value.status != null && filters.value.status !== "") {
-      if (filters.value.status === "error") {
-        logs = logs.filter((log) => log.responseStatus >= 400);
-      } else {
-        const statusNum = parseInt(filters.value.status, 10);
-        if (!isNaN(statusNum)) {
-          logs = logs.filter((log) => log.responseStatus === statusNum);
-        }
-      }
-    }
-    
+
     auditLogs.value = logs;
     nextPageToken.value = response.nextPageToken || undefined;
   } catch (error) {
@@ -610,10 +790,7 @@ watch(
     // Reset pagination when filters change
     currentPage.value = 1;
     nextPageToken.value = undefined;
-    // Reload filter options when organization filter changes (to update other filter options)
-    if (filters.value.organizationId !== undefined) {
-      loadFilterOptions();
-    }
+    loadFilterOptions();
     loadAuditLogs(1);
   }
 );
@@ -623,7 +800,9 @@ const showDetails = (log: AuditLogEntry) => {
   detailsDialogOpen.value = true;
 };
 
-const getStatusVariant = (status: number): "success" | "danger" | "warning" | "secondary" => {
+const getStatusVariant = (
+  status: number
+): "success" | "danger" | "warning" | "secondary" => {
   if (status >= 200 && status < 300) {
     return "success";
   } else if (status >= 400 && status < 500) {
@@ -652,23 +831,27 @@ const formatRequestData = (data: string): string => {
 };
 
 // Watch props and reload when they change
-        watch(
-          () => [props.organizationId, props.resourceType, props.resourceId, props.userId],
-          () => {
-            // Reload filter options when resource context changes
-            loadFilterOptions();
-            currentPage.value = 1;
-            nextPageToken.value = undefined;
-            loadAuditLogs(1);
-          }
-        );
+watch(
+  () => [
+    props.organizationId,
+    props.resourceType,
+    props.resourceId,
+    props.userId,
+  ],
+  () => {
+    // Reload filter options when resource context changes
+    loadFilterOptions();
+    currentPage.value = 1;
+    nextPageToken.value = undefined;
+    loadAuditLogs(1);
+  }
+);
 
-        onMounted(() => {
-          // Load organizations for filter (if global view)
-          loadOrganizations();
-          // Load filter options first, then load the actual filtered results
-          loadFilterOptions();
-          loadAuditLogs(1);
-        });
+onMounted(() => {
+  // Load organizations for filter (if global view)
+  loadOrganizations();
+  // Load filter options first, then load the actual filtered results
+  loadFilterOptions();
+  loadAuditLogs(1);
+});
 </script>
-

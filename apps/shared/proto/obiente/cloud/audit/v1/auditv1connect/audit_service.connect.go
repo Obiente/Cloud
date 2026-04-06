@@ -36,6 +36,9 @@ const (
 	// AuditServiceListAuditLogsProcedure is the fully-qualified name of the AuditService's
 	// ListAuditLogs RPC.
 	AuditServiceListAuditLogsProcedure = "/obiente.cloud.audit.v1.AuditService/ListAuditLogs"
+	// AuditServiceGetAuditLogFilterOptionsProcedure is the fully-qualified name of the AuditService's
+	// GetAuditLogFilterOptions RPC.
+	AuditServiceGetAuditLogFilterOptionsProcedure = "/obiente.cloud.audit.v1.AuditService/GetAuditLogFilterOptions"
 	// AuditServiceGetAuditLogProcedure is the fully-qualified name of the AuditService's GetAuditLog
 	// RPC.
 	AuditServiceGetAuditLogProcedure = "/obiente.cloud.audit.v1.AuditService/GetAuditLog"
@@ -45,6 +48,8 @@ const (
 type AuditServiceClient interface {
 	// List audit logs with filtering options
 	ListAuditLogs(context.Context, *connect.Request[v1.ListAuditLogsRequest]) (*connect.Response[v1.ListAuditLogsResponse], error)
+	// Get available filter values for audit logs within the current scope.
+	GetAuditLogFilterOptions(context.Context, *connect.Request[v1.GetAuditLogFilterOptionsRequest]) (*connect.Response[v1.GetAuditLogFilterOptionsResponse], error)
 	// Get a specific audit log entry by ID
 	GetAuditLog(context.Context, *connect.Request[v1.GetAuditLogRequest]) (*connect.Response[v1.GetAuditLogResponse], error)
 }
@@ -66,6 +71,12 @@ func NewAuditServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(auditServiceMethods.ByName("ListAuditLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		getAuditLogFilterOptions: connect.NewClient[v1.GetAuditLogFilterOptionsRequest, v1.GetAuditLogFilterOptionsResponse](
+			httpClient,
+			baseURL+AuditServiceGetAuditLogFilterOptionsProcedure,
+			connect.WithSchema(auditServiceMethods.ByName("GetAuditLogFilterOptions")),
+			connect.WithClientOptions(opts...),
+		),
 		getAuditLog: connect.NewClient[v1.GetAuditLogRequest, v1.GetAuditLogResponse](
 			httpClient,
 			baseURL+AuditServiceGetAuditLogProcedure,
@@ -77,13 +88,19 @@ func NewAuditServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // auditServiceClient implements AuditServiceClient.
 type auditServiceClient struct {
-	listAuditLogs *connect.Client[v1.ListAuditLogsRequest, v1.ListAuditLogsResponse]
-	getAuditLog   *connect.Client[v1.GetAuditLogRequest, v1.GetAuditLogResponse]
+	listAuditLogs            *connect.Client[v1.ListAuditLogsRequest, v1.ListAuditLogsResponse]
+	getAuditLogFilterOptions *connect.Client[v1.GetAuditLogFilterOptionsRequest, v1.GetAuditLogFilterOptionsResponse]
+	getAuditLog              *connect.Client[v1.GetAuditLogRequest, v1.GetAuditLogResponse]
 }
 
 // ListAuditLogs calls obiente.cloud.audit.v1.AuditService.ListAuditLogs.
 func (c *auditServiceClient) ListAuditLogs(ctx context.Context, req *connect.Request[v1.ListAuditLogsRequest]) (*connect.Response[v1.ListAuditLogsResponse], error) {
 	return c.listAuditLogs.CallUnary(ctx, req)
+}
+
+// GetAuditLogFilterOptions calls obiente.cloud.audit.v1.AuditService.GetAuditLogFilterOptions.
+func (c *auditServiceClient) GetAuditLogFilterOptions(ctx context.Context, req *connect.Request[v1.GetAuditLogFilterOptionsRequest]) (*connect.Response[v1.GetAuditLogFilterOptionsResponse], error) {
+	return c.getAuditLogFilterOptions.CallUnary(ctx, req)
 }
 
 // GetAuditLog calls obiente.cloud.audit.v1.AuditService.GetAuditLog.
@@ -95,6 +112,8 @@ func (c *auditServiceClient) GetAuditLog(ctx context.Context, req *connect.Reque
 type AuditServiceHandler interface {
 	// List audit logs with filtering options
 	ListAuditLogs(context.Context, *connect.Request[v1.ListAuditLogsRequest]) (*connect.Response[v1.ListAuditLogsResponse], error)
+	// Get available filter values for audit logs within the current scope.
+	GetAuditLogFilterOptions(context.Context, *connect.Request[v1.GetAuditLogFilterOptionsRequest]) (*connect.Response[v1.GetAuditLogFilterOptionsResponse], error)
 	// Get a specific audit log entry by ID
 	GetAuditLog(context.Context, *connect.Request[v1.GetAuditLogRequest]) (*connect.Response[v1.GetAuditLogResponse], error)
 }
@@ -112,6 +131,12 @@ func NewAuditServiceHandler(svc AuditServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(auditServiceMethods.ByName("ListAuditLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	auditServiceGetAuditLogFilterOptionsHandler := connect.NewUnaryHandler(
+		AuditServiceGetAuditLogFilterOptionsProcedure,
+		svc.GetAuditLogFilterOptions,
+		connect.WithSchema(auditServiceMethods.ByName("GetAuditLogFilterOptions")),
+		connect.WithHandlerOptions(opts...),
+	)
 	auditServiceGetAuditLogHandler := connect.NewUnaryHandler(
 		AuditServiceGetAuditLogProcedure,
 		svc.GetAuditLog,
@@ -122,6 +147,8 @@ func NewAuditServiceHandler(svc AuditServiceHandler, opts ...connect.HandlerOpti
 		switch r.URL.Path {
 		case AuditServiceListAuditLogsProcedure:
 			auditServiceListAuditLogsHandler.ServeHTTP(w, r)
+		case AuditServiceGetAuditLogFilterOptionsProcedure:
+			auditServiceGetAuditLogFilterOptionsHandler.ServeHTTP(w, r)
 		case AuditServiceGetAuditLogProcedure:
 			auditServiceGetAuditLogHandler.ServeHTTP(w, r)
 		default:
@@ -135,6 +162,10 @@ type UnimplementedAuditServiceHandler struct{}
 
 func (UnimplementedAuditServiceHandler) ListAuditLogs(context.Context, *connect.Request[v1.ListAuditLogsRequest]) (*connect.Response[v1.ListAuditLogsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.audit.v1.AuditService.ListAuditLogs is not implemented"))
+}
+
+func (UnimplementedAuditServiceHandler) GetAuditLogFilterOptions(context.Context, *connect.Request[v1.GetAuditLogFilterOptionsRequest]) (*connect.Response[v1.GetAuditLogFilterOptionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.audit.v1.AuditService.GetAuditLogFilterOptions is not implemented"))
 }
 
 func (UnimplementedAuditServiceHandler) GetAuditLog(context.Context, *connect.Request[v1.GetAuditLogRequest]) (*connect.Response[v1.GetAuditLogResponse], error) {

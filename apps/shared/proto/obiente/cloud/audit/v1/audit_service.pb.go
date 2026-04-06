@@ -41,8 +41,12 @@ type ListAuditLogsRequest struct {
 	StartTime *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=start_time,json=startTime,proto3,oneof" json:"start_time,omitempty"`
 	EndTime   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=end_time,json=endTime,proto3,oneof" json:"end_time,omitempty"`
 	// Pagination
-	PageSize      *int32  `protobuf:"varint,9,opt,name=page_size,json=pageSize,proto3,oneof" json:"page_size,omitempty"`    // Default: 50, Max: 1000
-	PageToken     *string `protobuf:"bytes,10,opt,name=page_token,json=pageToken,proto3,oneof" json:"page_token,omitempty"` // Token from previous response for pagination
+	PageSize  *int32  `protobuf:"varint,9,opt,name=page_size,json=pageSize,proto3,oneof" json:"page_size,omitempty"`    // Default: 50, Max: 1000
+	PageToken *string `protobuf:"bytes,10,opt,name=page_token,json=pageToken,proto3,oneof" json:"page_token,omitempty"` // Token from previous response for pagination
+	// Filter by exact response status (optional)
+	ResponseStatus *int32 `protobuf:"varint,11,opt,name=response_status,json=responseStatus,proto3,oneof" json:"response_status,omitempty"`
+	// Filter by any error response status (400+)
+	ErrorStatuses *bool `protobuf:"varint,12,opt,name=error_statuses,json=errorStatuses,proto3,oneof" json:"error_statuses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -147,6 +151,20 @@ func (x *ListAuditLogsRequest) GetPageToken() string {
 	return ""
 }
 
+func (x *ListAuditLogsRequest) GetResponseStatus() int32 {
+	if x != nil && x.ResponseStatus != nil {
+		return *x.ResponseStatus
+	}
+	return 0
+}
+
+func (x *ListAuditLogsRequest) GetErrorStatuses() bool {
+	if x != nil && x.ErrorStatuses != nil {
+		return *x.ErrorStatuses
+	}
+	return false
+}
+
 type ListAuditLogsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AuditLogs     []*AuditLogEntry       `protobuf:"bytes,1,rep,name=audit_logs,json=auditLogs,proto3" json:"audit_logs,omitempty"`
@@ -207,6 +225,250 @@ func (x *ListAuditLogsResponse) GetTotalCount() int64 {
 	return 0
 }
 
+type GetAuditLogFilterOptionsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId *string                `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`
+	ResourceType   *string                `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3,oneof" json:"resource_type,omitempty"`
+	ResourceId     *string                `protobuf:"bytes,3,opt,name=resource_id,json=resourceId,proto3,oneof" json:"resource_id,omitempty"`
+	UserId         *string                `protobuf:"bytes,4,opt,name=user_id,json=userId,proto3,oneof" json:"user_id,omitempty"`
+	Service        *string                `protobuf:"bytes,5,opt,name=service,proto3,oneof" json:"service,omitempty"`
+	Action         *string                `protobuf:"bytes,6,opt,name=action,proto3,oneof" json:"action,omitempty"`
+	StartTime      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=start_time,json=startTime,proto3,oneof" json:"start_time,omitempty"`
+	EndTime        *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=end_time,json=endTime,proto3,oneof" json:"end_time,omitempty"`
+	ResponseStatus *int32                 `protobuf:"varint,9,opt,name=response_status,json=responseStatus,proto3,oneof" json:"response_status,omitempty"`
+	ErrorStatuses  *bool                  `protobuf:"varint,10,opt,name=error_statuses,json=errorStatuses,proto3,oneof" json:"error_statuses,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetAuditLogFilterOptionsRequest) Reset() {
+	*x = GetAuditLogFilterOptionsRequest{}
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAuditLogFilterOptionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAuditLogFilterOptionsRequest) ProtoMessage() {}
+
+func (x *GetAuditLogFilterOptionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAuditLogFilterOptionsRequest.ProtoReflect.Descriptor instead.
+func (*GetAuditLogFilterOptionsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetResourceType() string {
+	if x != nil && x.ResourceType != nil {
+		return *x.ResourceType
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetResourceId() string {
+	if x != nil && x.ResourceId != nil {
+		return *x.ResourceId
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetUserId() string {
+	if x != nil && x.UserId != nil {
+		return *x.UserId
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetService() string {
+	if x != nil && x.Service != nil {
+		return *x.Service
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetAction() string {
+	if x != nil && x.Action != nil {
+		return *x.Action
+	}
+	return ""
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetResponseStatus() int32 {
+	if x != nil && x.ResponseStatus != nil {
+		return *x.ResponseStatus
+	}
+	return 0
+}
+
+func (x *GetAuditLogFilterOptionsRequest) GetErrorStatuses() bool {
+	if x != nil && x.ErrorStatuses != nil {
+		return *x.ErrorStatuses
+	}
+	return false
+}
+
+type AuditLogUserOption struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UserName      *string                `protobuf:"bytes,2,opt,name=user_name,json=userName,proto3,oneof" json:"user_name,omitempty"`
+	UserEmail     *string                `protobuf:"bytes,3,opt,name=user_email,json=userEmail,proto3,oneof" json:"user_email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditLogUserOption) Reset() {
+	*x = AuditLogUserOption{}
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditLogUserOption) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditLogUserOption) ProtoMessage() {}
+
+func (x *AuditLogUserOption) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditLogUserOption.ProtoReflect.Descriptor instead.
+func (*AuditLogUserOption) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AuditLogUserOption) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *AuditLogUserOption) GetUserName() string {
+	if x != nil && x.UserName != nil {
+		return *x.UserName
+	}
+	return ""
+}
+
+func (x *AuditLogUserOption) GetUserEmail() string {
+	if x != nil && x.UserEmail != nil {
+		return *x.UserEmail
+	}
+	return ""
+}
+
+type GetAuditLogFilterOptionsResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Services         []string               `protobuf:"bytes,1,rep,name=services,proto3" json:"services,omitempty"`
+	Actions          []string               `protobuf:"bytes,2,rep,name=actions,proto3" json:"actions,omitempty"`
+	Users            []*AuditLogUserOption  `protobuf:"bytes,3,rep,name=users,proto3" json:"users,omitempty"`
+	ResponseStatuses []int32                `protobuf:"varint,4,rep,packed,name=response_statuses,json=responseStatuses,proto3" json:"response_statuses,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetAuditLogFilterOptionsResponse) Reset() {
+	*x = GetAuditLogFilterOptionsResponse{}
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAuditLogFilterOptionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAuditLogFilterOptionsResponse) ProtoMessage() {}
+
+func (x *GetAuditLogFilterOptionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAuditLogFilterOptionsResponse.ProtoReflect.Descriptor instead.
+func (*GetAuditLogFilterOptionsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetAuditLogFilterOptionsResponse) GetServices() []string {
+	if x != nil {
+		return x.Services
+	}
+	return nil
+}
+
+func (x *GetAuditLogFilterOptionsResponse) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+func (x *GetAuditLogFilterOptionsResponse) GetUsers() []*AuditLogUserOption {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
+func (x *GetAuditLogFilterOptionsResponse) GetResponseStatuses() []int32 {
+	if x != nil {
+		return x.ResponseStatuses
+	}
+	return nil
+}
+
 type GetAuditLogRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AuditLogId    string                 `protobuf:"bytes,1,opt,name=audit_log_id,json=auditLogId,proto3" json:"audit_log_id,omitempty"`
@@ -216,7 +478,7 @@ type GetAuditLogRequest struct {
 
 func (x *GetAuditLogRequest) Reset() {
 	*x = GetAuditLogRequest{}
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -228,7 +490,7 @@ func (x *GetAuditLogRequest) String() string {
 func (*GetAuditLogRequest) ProtoMessage() {}
 
 func (x *GetAuditLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,7 +503,7 @@ func (x *GetAuditLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditLogRequest.ProtoReflect.Descriptor instead.
 func (*GetAuditLogRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{2}
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetAuditLogRequest) GetAuditLogId() string {
@@ -260,7 +522,7 @@ type GetAuditLogResponse struct {
 
 func (x *GetAuditLogResponse) Reset() {
 	*x = GetAuditLogResponse{}
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -272,7 +534,7 @@ func (x *GetAuditLogResponse) String() string {
 func (*GetAuditLogResponse) ProtoMessage() {}
 
 func (x *GetAuditLogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -285,7 +547,7 @@ func (x *GetAuditLogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditLogResponse.ProtoReflect.Descriptor instead.
 func (*GetAuditLogResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{3}
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetAuditLogResponse) GetAuditLog() *AuditLogEntry {
@@ -320,7 +582,7 @@ type AuditLogEntry struct {
 
 func (x *AuditLogEntry) Reset() {
 	*x = AuditLogEntry{}
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -332,7 +594,7 @@ func (x *AuditLogEntry) String() string {
 func (*AuditLogEntry) ProtoMessage() {}
 
 func (x *AuditLogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -345,7 +607,7 @@ func (x *AuditLogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditLogEntry.ProtoReflect.Descriptor instead.
 func (*AuditLogEntry) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{4}
+	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AuditLogEntry) GetId() string {
@@ -464,7 +726,7 @@ var File_obiente_cloud_audit_v1_audit_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_audit_v1_audit_service_proto_rawDesc = "" +
 	"\n" +
-	"*obiente/cloud/audit/v1/audit_service.proto\x12\x16obiente.cloud.audit.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc2\x04\n" +
+	"*obiente/cloud/audit/v1/audit_service.proto\x12\x16obiente.cloud.audit.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc3\x05\n" +
 	"\x14ListAuditLogsRequest\x12,\n" +
 	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12(\n" +
 	"\rresource_type\x18\x02 \x01(\tH\x01R\fresourceType\x88\x01\x01\x12$\n" +
@@ -479,7 +741,10 @@ const file_obiente_cloud_audit_v1_audit_service_proto_rawDesc = "" +
 	"\tpage_size\x18\t \x01(\x05H\bR\bpageSize\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"page_token\x18\n" +
-	" \x01(\tH\tR\tpageToken\x88\x01\x01B\x12\n" +
+	" \x01(\tH\tR\tpageToken\x88\x01\x01\x12,\n" +
+	"\x0fresponse_status\x18\v \x01(\x05H\n" +
+	"R\x0eresponseStatus\x88\x01\x01\x12*\n" +
+	"\x0eerror_statuses\x18\f \x01(\bH\vR\rerrorStatuses\x88\x01\x01B\x12\n" +
 	"\x10_organization_idB\x10\n" +
 	"\x0e_resource_typeB\x0e\n" +
 	"\f_resource_idB\n" +
@@ -492,13 +757,54 @@ const file_obiente_cloud_audit_v1_audit_service_proto_rawDesc = "" +
 	"\t_end_timeB\f\n" +
 	"\n" +
 	"_page_sizeB\r\n" +
-	"\v_page_token\"\xa6\x01\n" +
+	"\v_page_tokenB\x12\n" +
+	"\x10_response_statusB\x11\n" +
+	"\x0f_error_statuses\"\xa6\x01\n" +
 	"\x15ListAuditLogsResponse\x12D\n" +
 	"\n" +
 	"audit_logs\x18\x01 \x03(\v2%.obiente.cloud.audit.v1.AuditLogEntryR\tauditLogs\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
 	"\vtotal_count\x18\x03 \x01(\x03R\n" +
-	"totalCount\"6\n" +
+	"totalCount\"\xeb\x04\n" +
+	"\x1fGetAuditLogFilterOptionsRequest\x12,\n" +
+	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12(\n" +
+	"\rresource_type\x18\x02 \x01(\tH\x01R\fresourceType\x88\x01\x01\x12$\n" +
+	"\vresource_id\x18\x03 \x01(\tH\x02R\n" +
+	"resourceId\x88\x01\x01\x12\x1c\n" +
+	"\auser_id\x18\x04 \x01(\tH\x03R\x06userId\x88\x01\x01\x12\x1d\n" +
+	"\aservice\x18\x05 \x01(\tH\x04R\aservice\x88\x01\x01\x12\x1b\n" +
+	"\x06action\x18\x06 \x01(\tH\x05R\x06action\x88\x01\x01\x12>\n" +
+	"\n" +
+	"start_time\x18\a \x01(\v2\x1a.google.protobuf.TimestampH\x06R\tstartTime\x88\x01\x01\x12:\n" +
+	"\bend_time\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\aR\aendTime\x88\x01\x01\x12,\n" +
+	"\x0fresponse_status\x18\t \x01(\x05H\bR\x0eresponseStatus\x88\x01\x01\x12*\n" +
+	"\x0eerror_statuses\x18\n" +
+	" \x01(\bH\tR\rerrorStatuses\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\x10\n" +
+	"\x0e_resource_typeB\x0e\n" +
+	"\f_resource_idB\n" +
+	"\n" +
+	"\b_user_idB\n" +
+	"\n" +
+	"\b_serviceB\t\n" +
+	"\a_actionB\r\n" +
+	"\v_start_timeB\v\n" +
+	"\t_end_timeB\x12\n" +
+	"\x10_response_statusB\x11\n" +
+	"\x0f_error_statuses\"\x90\x01\n" +
+	"\x12AuditLogUserOption\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12 \n" +
+	"\tuser_name\x18\x02 \x01(\tH\x00R\buserName\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"user_email\x18\x03 \x01(\tH\x01R\tuserEmail\x88\x01\x01B\f\n" +
+	"\n" +
+	"_user_nameB\r\n" +
+	"\v_user_email\"\xc7\x01\n" +
+	" GetAuditLogFilterOptionsResponse\x12\x1a\n" +
+	"\bservices\x18\x01 \x03(\tR\bservices\x12\x18\n" +
+	"\aactions\x18\x02 \x03(\tR\aactions\x12@\n" +
+	"\x05users\x18\x03 \x03(\v2*.obiente.cloud.audit.v1.AuditLogUserOptionR\x05users\x12+\n" +
+	"\x11response_statuses\x18\x04 \x03(\x05R\x10responseStatuses\"6\n" +
 	"\x12GetAuditLogRequest\x12 \n" +
 	"\faudit_log_id\x18\x01 \x01(\tR\n" +
 	"auditLogId\"Y\n" +
@@ -534,9 +840,10 @@ const file_obiente_cloud_audit_v1_audit_service_proto_rawDesc = "" +
 	"\x10_organization_idB\x10\n" +
 	"\x0e_resource_typeB\x0e\n" +
 	"\f_resource_idB\x10\n" +
-	"\x0e_error_message2\xe4\x01\n" +
+	"\x0e_error_message2\xf4\x02\n" +
 	"\fAuditService\x12l\n" +
-	"\rListAuditLogs\x12,.obiente.cloud.audit.v1.ListAuditLogsRequest\x1a-.obiente.cloud.audit.v1.ListAuditLogsResponse\x12f\n" +
+	"\rListAuditLogs\x12,.obiente.cloud.audit.v1.ListAuditLogsRequest\x1a-.obiente.cloud.audit.v1.ListAuditLogsResponse\x12\x8d\x01\n" +
+	"\x18GetAuditLogFilterOptions\x127.obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest\x1a8.obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse\x12f\n" +
 	"\vGetAuditLog\x12*.obiente.cloud.audit.v1.GetAuditLogRequest\x1a+.obiente.cloud.audit.v1.GetAuditLogResponseBKZIgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1;auditv1b\x06proto3"
 
 var (
@@ -551,30 +858,38 @@ func file_obiente_cloud_audit_v1_audit_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_audit_v1_audit_service_proto_rawDescData
 }
 
-var file_obiente_cloud_audit_v1_audit_service_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_obiente_cloud_audit_v1_audit_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_obiente_cloud_audit_v1_audit_service_proto_goTypes = []any{
-	(*ListAuditLogsRequest)(nil),  // 0: obiente.cloud.audit.v1.ListAuditLogsRequest
-	(*ListAuditLogsResponse)(nil), // 1: obiente.cloud.audit.v1.ListAuditLogsResponse
-	(*GetAuditLogRequest)(nil),    // 2: obiente.cloud.audit.v1.GetAuditLogRequest
-	(*GetAuditLogResponse)(nil),   // 3: obiente.cloud.audit.v1.GetAuditLogResponse
-	(*AuditLogEntry)(nil),         // 4: obiente.cloud.audit.v1.AuditLogEntry
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(*ListAuditLogsRequest)(nil),             // 0: obiente.cloud.audit.v1.ListAuditLogsRequest
+	(*ListAuditLogsResponse)(nil),            // 1: obiente.cloud.audit.v1.ListAuditLogsResponse
+	(*GetAuditLogFilterOptionsRequest)(nil),  // 2: obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest
+	(*AuditLogUserOption)(nil),               // 3: obiente.cloud.audit.v1.AuditLogUserOption
+	(*GetAuditLogFilterOptionsResponse)(nil), // 4: obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse
+	(*GetAuditLogRequest)(nil),               // 5: obiente.cloud.audit.v1.GetAuditLogRequest
+	(*GetAuditLogResponse)(nil),              // 6: obiente.cloud.audit.v1.GetAuditLogResponse
+	(*AuditLogEntry)(nil),                    // 7: obiente.cloud.audit.v1.AuditLogEntry
+	(*timestamppb.Timestamp)(nil),            // 8: google.protobuf.Timestamp
 }
 var file_obiente_cloud_audit_v1_audit_service_proto_depIdxs = []int32{
-	5, // 0: obiente.cloud.audit.v1.ListAuditLogsRequest.start_time:type_name -> google.protobuf.Timestamp
-	5, // 1: obiente.cloud.audit.v1.ListAuditLogsRequest.end_time:type_name -> google.protobuf.Timestamp
-	4, // 2: obiente.cloud.audit.v1.ListAuditLogsResponse.audit_logs:type_name -> obiente.cloud.audit.v1.AuditLogEntry
-	4, // 3: obiente.cloud.audit.v1.GetAuditLogResponse.audit_log:type_name -> obiente.cloud.audit.v1.AuditLogEntry
-	5, // 4: obiente.cloud.audit.v1.AuditLogEntry.created_at:type_name -> google.protobuf.Timestamp
-	0, // 5: obiente.cloud.audit.v1.AuditService.ListAuditLogs:input_type -> obiente.cloud.audit.v1.ListAuditLogsRequest
-	2, // 6: obiente.cloud.audit.v1.AuditService.GetAuditLog:input_type -> obiente.cloud.audit.v1.GetAuditLogRequest
-	1, // 7: obiente.cloud.audit.v1.AuditService.ListAuditLogs:output_type -> obiente.cloud.audit.v1.ListAuditLogsResponse
-	3, // 8: obiente.cloud.audit.v1.AuditService.GetAuditLog:output_type -> obiente.cloud.audit.v1.GetAuditLogResponse
-	7, // [7:9] is the sub-list for method output_type
-	5, // [5:7] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	8,  // 0: obiente.cloud.audit.v1.ListAuditLogsRequest.start_time:type_name -> google.protobuf.Timestamp
+	8,  // 1: obiente.cloud.audit.v1.ListAuditLogsRequest.end_time:type_name -> google.protobuf.Timestamp
+	7,  // 2: obiente.cloud.audit.v1.ListAuditLogsResponse.audit_logs:type_name -> obiente.cloud.audit.v1.AuditLogEntry
+	8,  // 3: obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest.start_time:type_name -> google.protobuf.Timestamp
+	8,  // 4: obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest.end_time:type_name -> google.protobuf.Timestamp
+	3,  // 5: obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse.users:type_name -> obiente.cloud.audit.v1.AuditLogUserOption
+	7,  // 6: obiente.cloud.audit.v1.GetAuditLogResponse.audit_log:type_name -> obiente.cloud.audit.v1.AuditLogEntry
+	8,  // 7: obiente.cloud.audit.v1.AuditLogEntry.created_at:type_name -> google.protobuf.Timestamp
+	0,  // 8: obiente.cloud.audit.v1.AuditService.ListAuditLogs:input_type -> obiente.cloud.audit.v1.ListAuditLogsRequest
+	2,  // 9: obiente.cloud.audit.v1.AuditService.GetAuditLogFilterOptions:input_type -> obiente.cloud.audit.v1.GetAuditLogFilterOptionsRequest
+	5,  // 10: obiente.cloud.audit.v1.AuditService.GetAuditLog:input_type -> obiente.cloud.audit.v1.GetAuditLogRequest
+	1,  // 11: obiente.cloud.audit.v1.AuditService.ListAuditLogs:output_type -> obiente.cloud.audit.v1.ListAuditLogsResponse
+	4,  // 12: obiente.cloud.audit.v1.AuditService.GetAuditLogFilterOptions:output_type -> obiente.cloud.audit.v1.GetAuditLogFilterOptionsResponse
+	6,  // 13: obiente.cloud.audit.v1.AuditService.GetAuditLog:output_type -> obiente.cloud.audit.v1.GetAuditLogResponse
+	11, // [11:14] is the sub-list for method output_type
+	8,  // [8:11] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_audit_v1_audit_service_proto_init() }
@@ -583,14 +898,16 @@ func file_obiente_cloud_audit_v1_audit_service_proto_init() {
 		return
 	}
 	file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[0].OneofWrappers = []any{}
-	file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[4].OneofWrappers = []any{}
+	file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[2].OneofWrappers = []any{}
+	file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[3].OneofWrappers = []any{}
+	file_obiente_cloud_audit_v1_audit_service_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_audit_v1_audit_service_proto_rawDesc), len(file_obiente_cloud_audit_v1_audit_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -59,16 +60,12 @@ func applyGlobalAuditNoiseFilters(query *gorm.DB, req *auditv1.ListAuditLogsRequ
 	return query
 }
 
-// ListAuditLogs lists audit logs with filtering options
-func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv1.ListAuditLogsRequest]) (*connect.Response[auditv1.ListAuditLogsResponse], error) {
+func authorizeAuditLogRead(ctx context.Context, reqOrgID *string) error {
 	userInfo, err := auth.GetUserFromContext(ctx)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
+		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
 
-	// Check if user has permission to view audit logs
-	// Superadmins and global admins can view all audit logs
-	// Org admins and owners can view audit logs for their organizations
 	isSuperAdminOrAdmin := false
 	for _, role := range userInfo.Roles {
 		if role == auth.RoleSuperAdmin || role == auth.RoleAdmin {
@@ -77,17 +74,87 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 		}
 	}
 
-	// If not superadmin/admin, check if user is org admin/owner for the requested organization
-	if !isSuperAdminOrAdmin {
-		// If OrganizationId is provided, verify the user is admin/owner of that org
-		if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
-			if err := common.AuthorizeOrgAdmin(ctx, *req.Msg.OrganizationId, userInfo); err != nil {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
-			}
-		} else {
-			// If no OrganizationId provided, org admins/owners must specify one
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required for organization admins and owners"))
+	if isSuperAdminOrAdmin {
+		return nil
+	}
+
+	if reqOrgID != nil && *reqOrgID != "" {
+		if err := common.AuthorizeOrgAdmin(ctx, *reqOrgID, userInfo); err != nil {
+			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
 		}
+		return nil
+	}
+
+	return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required for organization admins and owners"))
+}
+
+func applyAuditFilters(query *gorm.DB, organizationID, resourceType, resourceID, userID, service, action *string, startTime, endTime *timestamppb.Timestamp, responseStatus *int32, errorStatuses *bool) *gorm.DB {
+	if query == nil {
+		return nil
+	}
+
+	if organizationID != nil && *organizationID != "" {
+		query = query.Where("organization_id = ?", *organizationID)
+	}
+	if resourceType != nil && *resourceType != "" {
+		query = query.Where("resource_type = ?", *resourceType)
+	}
+	if resourceID != nil && *resourceID != "" {
+		query = query.Where("resource_id = ?", *resourceID)
+	}
+	if userID != nil && *userID != "" {
+		query = query.Where("user_id = ?", *userID)
+	}
+	if service != nil && *service != "" {
+		query = query.Where("service = ?", *service)
+	}
+	if action != nil && *action != "" {
+		query = query.Where("action = ?", *action)
+	}
+	if startTime != nil {
+		query = query.Where("created_at >= ?", startTime.AsTime())
+	}
+	if endTime != nil {
+		query = query.Where("created_at <= ?", endTime.AsTime())
+	}
+	if responseStatus != nil {
+		query = query.Where("response_status = ?", *responseStatus)
+	}
+	if errorStatuses != nil && *errorStatuses {
+		query = query.Where("response_status >= ?", 400)
+	}
+
+	return query
+}
+
+func resolveAuditUserOption(ctx context.Context, userID string) *auditv1.AuditLogUserOption {
+	option := &auditv1.AuditLogUserOption{UserId: userID}
+	if userID == "" || userID == "system" {
+		return option
+	}
+
+	resolver := organizations.GetUserProfileResolver()
+	if resolver == nil || !resolver.IsConfigured() {
+		return option
+	}
+
+	userProfile, err := resolver.Resolve(ctx, userID)
+	if err != nil || userProfile == nil {
+		return option
+	}
+	if userProfile.Name != "" {
+		option.UserName = &userProfile.Name
+	}
+	if userProfile.Email != "" {
+		option.UserEmail = &userProfile.Email
+	}
+	return option
+}
+
+// ListAuditLogs lists audit logs with filtering options
+func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv1.ListAuditLogsRequest]) (*connect.Response[auditv1.ListAuditLogsResponse], error) {
+	if err := authorizeAuditLogRead(ctx, req.Msg.OrganizationId); err != nil {
+		return nil, err
 	}
 
 	// Use MetricsDB (TimescaleDB) for querying audit logs - no fallback to main DB
@@ -115,50 +182,32 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 
 	countQuery = applyGlobalAuditNoiseFilters(countQuery, req.Msg)
 	query = applyGlobalAuditNoiseFilters(query, req.Msg)
-
-	// Apply filters to both queries
-	// Note: If OrganizationId is not provided, all audit logs from all organizations are returned
-	// This allows superadmins/admins to view global audit logs
-	// Org admins/owners must provide OrganizationId (enforced above)
-	if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
-		countQuery = countQuery.Where("organization_id = ?", *req.Msg.OrganizationId)
-		query = query.Where("organization_id = ?", *req.Msg.OrganizationId)
-	}
-
-	if req.Msg.ResourceType != nil && *req.Msg.ResourceType != "" {
-		countQuery = countQuery.Where("resource_type = ?", *req.Msg.ResourceType)
-		query = query.Where("resource_type = ?", *req.Msg.ResourceType)
-	}
-
-	if req.Msg.ResourceId != nil && *req.Msg.ResourceId != "" {
-		countQuery = countQuery.Where("resource_id = ?", *req.Msg.ResourceId)
-		query = query.Where("resource_id = ?", *req.Msg.ResourceId)
-	}
-
-	if req.Msg.UserId != nil && *req.Msg.UserId != "" {
-		countQuery = countQuery.Where("user_id = ?", *req.Msg.UserId)
-		query = query.Where("user_id = ?", *req.Msg.UserId)
-	}
-
-	if req.Msg.Service != nil && *req.Msg.Service != "" {
-		countQuery = countQuery.Where("service = ?", *req.Msg.Service)
-		query = query.Where("service = ?", *req.Msg.Service)
-	}
-
-	if req.Msg.Action != nil && *req.Msg.Action != "" {
-		countQuery = countQuery.Where("action = ?", *req.Msg.Action)
-		query = query.Where("action = ?", *req.Msg.Action)
-	}
-
-	if req.Msg.StartTime != nil {
-		countQuery = countQuery.Where("created_at >= ?", req.Msg.StartTime.AsTime())
-		query = query.Where("created_at >= ?", req.Msg.StartTime.AsTime())
-	}
-
-	if req.Msg.EndTime != nil {
-		countQuery = countQuery.Where("created_at <= ?", req.Msg.EndTime.AsTime())
-		query = query.Where("created_at <= ?", req.Msg.EndTime.AsTime())
-	}
+	countQuery = applyAuditFilters(
+		countQuery,
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		req.Msg.UserId,
+		req.Msg.Service,
+		req.Msg.Action,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		req.Msg.ResponseStatus,
+		req.Msg.ErrorStatuses,
+	)
+	query = applyAuditFilters(
+		query,
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		req.Msg.UserId,
+		req.Msg.Service,
+		req.Msg.Action,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		req.Msg.ResponseStatus,
+		req.Msg.ErrorStatuses,
+	)
 
 	// Count total matching records (before pagination)
 	var totalCount int64
@@ -218,6 +267,140 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 		AuditLogs:     protoLogs,
 		NextPageToken: nextPageToken,
 		TotalCount:    totalCount,
+	}), nil
+}
+
+func (s *Service) GetAuditLogFilterOptions(ctx context.Context, req *connect.Request[auditv1.GetAuditLogFilterOptionsRequest]) (*connect.Response[auditv1.GetAuditLogFilterOptionsResponse], error) {
+	if err := authorizeAuditLogRead(ctx, req.Msg.OrganizationId); err != nil {
+		return nil, err
+	}
+
+	// Use MetricsDB (TimescaleDB) for querying audit logs - no fallback to main DB
+	if database.MetricsDB == nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database (TimescaleDB) not initialized - audit logs require TimescaleDB"))
+	}
+
+	baseQuery := database.MetricsDB.Model(&database.AuditLog{})
+	noiseReq := &auditv1.ListAuditLogsRequest{
+		OrganizationId: req.Msg.OrganizationId,
+	}
+	baseQuery = applyGlobalAuditNoiseFilters(baseQuery, noiseReq)
+
+	serviceQuery := applyAuditFilters(
+		baseQuery.Session(&gorm.Session{}),
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		req.Msg.UserId,
+		nil,
+		req.Msg.Action,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		req.Msg.ResponseStatus,
+		req.Msg.ErrorStatuses,
+	)
+	actionQuery := applyAuditFilters(
+		baseQuery.Session(&gorm.Session{}),
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		req.Msg.UserId,
+		req.Msg.Service,
+		nil,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		req.Msg.ResponseStatus,
+		req.Msg.ErrorStatuses,
+	)
+	userQuery := applyAuditFilters(
+		baseQuery.Session(&gorm.Session{}),
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		nil,
+		req.Msg.Service,
+		req.Msg.Action,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		req.Msg.ResponseStatus,
+		req.Msg.ErrorStatuses,
+	)
+	statusQuery := applyAuditFilters(
+		baseQuery.Session(&gorm.Session{}),
+		req.Msg.OrganizationId,
+		req.Msg.ResourceType,
+		req.Msg.ResourceId,
+		req.Msg.UserId,
+		req.Msg.Service,
+		req.Msg.Action,
+		req.Msg.StartTime,
+		req.Msg.EndTime,
+		nil,
+		nil,
+	)
+
+	var services []string
+	if err := serviceQuery.
+		Distinct("service").
+		Where("service <> ''").
+		Order("service ASC").
+		Pluck("service", &services).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("load audit filter services: %w", err))
+	}
+
+	var actions []string
+	if err := actionQuery.
+		Distinct("action").
+		Where("action <> ''").
+		Order("action ASC").
+		Pluck("action", &actions).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("load audit filter actions: %w", err))
+	}
+
+	var userIDs []string
+	if err := userQuery.
+		Distinct("user_id").
+		Where("user_id <> ''").
+		Order("user_id ASC").
+		Pluck("user_id", &userIDs).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("load audit filter users: %w", err))
+	}
+
+	users := make([]*auditv1.AuditLogUserOption, 0, len(userIDs))
+	for _, userID := range userIDs {
+		users = append(users, resolveAuditUserOption(ctx, userID))
+	}
+	sort.Slice(users, func(i, j int) bool {
+		left := users[i].GetUserName()
+		if left == "" {
+			left = users[i].GetUserEmail()
+		}
+		if left == "" {
+			left = users[i].GetUserId()
+		}
+		right := users[j].GetUserName()
+		if right == "" {
+			right = users[j].GetUserEmail()
+		}
+		if right == "" {
+			right = users[j].GetUserId()
+		}
+		return left < right
+	})
+
+	var responseStatuses []int32
+	if err := statusQuery.
+		Distinct("response_status").
+		Order("response_status ASC").
+		Pluck("response_status", &responseStatuses).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("load audit filter statuses: %w", err))
+	}
+
+	return connect.NewResponse(&auditv1.GetAuditLogFilterOptionsResponse{
+		Services:         services,
+		Actions:          actions,
+		Users:            users,
+		ResponseStatuses: responseStatuses,
 	}), nil
 }
 
