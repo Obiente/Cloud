@@ -472,7 +472,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   while [ $ELAPSED -lt $MAX_WAIT ]; do
     # Check if dashboard service has running and healthy tasks
     # A task is considered ready when it's in "Running" state for at least a few seconds
-    RUNNING_TASKS=$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | grep -c "Running [0-9]" || echo "0")
+    RUNNING_TASKS="$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | awk '/Running [0-9]/{count++} END {print count+0}')"
     
     if [ "$RUNNING_TASKS" -gt 0 ]; then
       # Give Traefik time to pick up the service (default 15s refresh interval)
