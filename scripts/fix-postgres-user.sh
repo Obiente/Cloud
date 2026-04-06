@@ -1,15 +1,45 @@
 #!/bin/bash
 # Fix PostgreSQL user - create obiente_postgres if it doesn't exist
 
-set -e
+set -euo pipefail
 
-# Load .env file if it exists
-if [ -f .env ]; then
-  echo "📝 Loading environment variables from .env file..."
-  # Export variables from .env file (handles comments and empty lines)
-  set -a
-  source .env
-  set +a
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+trim_env_value() {
+  local value="$1"
+  value="${value%$'\r'}"
+  value="${value//$'\n'/}"
+  value="${value//[{}]/}"
+  trim_whitespace "$value"
+}
+
+escape_sql_literal() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+assert_safe_sql_identifier() {
+  local identifier="$1"
+  local label="$2"
+  if [[ ! "$identifier" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "❌ Unsafe ${label}: ${identifier}" >&2
+    echo "   This script only supports simple PostgreSQL identifiers." >&2
+    exit 1
+  fi
+}
+
+run_psql() {
+  local sql="$1"
+  if [ -z "${SUPERUSER_PASSWORD:-}" ]; then
+    docker exec "$CONTAINER_ID" psql -v ON_ERROR_STOP=1 -U "$SUPERUSER" -d postgres -c "$sql"
+  else
+    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -v ON_ERROR_STOP=1 -U "$SUPERUSER" -d postgres -c "$sql"
+  fi
+}
+
+if [ -f "${REPO_ROOT}/.env" ]; then
+  load_env_file "${REPO_ROOT}/.env"
 fi
 
 STACK_NAME="${STACK_NAME:-obiente}"
@@ -25,7 +55,7 @@ if [ -z "$POSTGRES_PASSWORD" ] || [ "$POSTGRES_PASSWORD" = "obiente_postgres" ];
   # Try to get password from service environment
   SERVICE_ENV=$(docker service inspect "$POSTGRES_SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || echo "")
   if echo "$SERVICE_ENV" | grep -q "POSTGRES_PASSWORD"; then
-    ACTUAL_PASSWORD=$(echo "$SERVICE_ENV" | grep "POSTGRES_PASSWORD" | cut -d= -f2- | head -1)
+    ACTUAL_PASSWORD=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "POSTGRES_PASSWORD" | cut -d= -f2- | head -1)")
     if [ -n "$ACTUAL_PASSWORD" ] && [ "$ACTUAL_PASSWORD" != "obiente_postgres" ]; then
       POSTGRES_PASSWORD="$ACTUAL_PASSWORD"
       echo "ℹ️  Using POSTGRES_PASSWORD from service environment"
@@ -56,6 +86,10 @@ fi
 echo "✅ Container: ${CONTAINER_ID:0:12}"
 echo ""
 
+assert_safe_sql_identifier "$POSTGRES_USER" "PostgreSQL username"
+assert_safe_sql_identifier "$POSTGRES_DB" "PostgreSQL database name"
+ESCAPED_POSTGRES_PASSWORD="$(escape_sql_literal "$POSTGRES_PASSWORD")"
+
 # Find the actual superuser in the database
 # PostgreSQL might have been initialized with a custom user, so "postgres" might not exist
 echo "2. Finding PostgreSQL superuser..."
@@ -64,7 +98,7 @@ SUPERUSER_PASSWORD=""
 
 # Try to get the superuser from the service environment
 SERVICE_ENV=$(docker service inspect "$POSTGRES_SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || echo "")
-SERVICE_POSTGRES_USER=$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d= -f2- | head -1 || echo "")
+SERVICE_POSTGRES_USER=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d= -f2- | head -1 || echo "")")
 
 # Try different users to find one that works
 CANDIDATE_USERS=("postgres" "$SERVICE_POSTGRES_USER" "$POSTGRES_USER")
@@ -166,11 +200,7 @@ if [ "$USER_EXISTS" = "1" ]; then
     echo "✅ User can connect successfully"
   else
     echo "⚠️  User exists but cannot connect. Updating password..."
-    if [ -z "$SUPERUSER_PASSWORD" ]; then
-      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
-    else
-      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
-    fi
+    run_psql "ALTER USER ${POSTGRES_USER} WITH PASSWORD '${ESCAPED_POSTGRES_PASSWORD}';" >/dev/null
     echo "✅ Password updated"
   fi
 else
@@ -180,23 +210,11 @@ else
   
   # Create the user using the found superuser
   CREATE_SUCCESS=false
-  
-  if [ -z "$SUPERUSER_PASSWORD" ]; then
-    # Trust authentication
-    if docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
-      CREATE_SUCCESS=true
-    else
-      CREATE_ERROR=$(docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1 || true)
-      echo "   Error: $CREATE_ERROR"
-    fi
+
+  if CREATE_OUTPUT=$(run_psql "CREATE USER ${POSTGRES_USER} WITH PASSWORD '${ESCAPED_POSTGRES_PASSWORD}' CREATEDB;" 2>&1); then
+    CREATE_SUCCESS=true
   else
-    # Password authentication
-    if docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
-      CREATE_SUCCESS=true
-    else
-      CREATE_ERROR=$(docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1 || true)
-      echo "   Error: $CREATE_ERROR"
-    fi
+    echo "   Error: ${CREATE_OUTPUT}"
   fi
   
   if [ "$CREATE_SUCCESS" = true ]; then
@@ -205,13 +223,8 @@ else
     
     # Grant privileges
     echo "5. Granting privileges..."
-    if [ -z "$SUPERUSER_PASSWORD" ]; then
-      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
-      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null || true
-    else
-      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
-      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null || true
-    fi
+    run_psql "GRANT ALL PRIVILEGES ON DATABASE ${POSTGRES_DB} TO ${POSTGRES_USER};" >/dev/null
+    run_psql "ALTER USER ${POSTGRES_USER} WITH SUPERUSER;" >/dev/null
     echo "✅ Privileges granted"
     echo ""
     
@@ -246,4 +259,3 @@ echo "💡 If services still can't connect, restart them:"
 echo "   docker service update --force obiente_auth-service"
 echo "   docker service update --force obiente_audit-service"
 echo "   # ... etc"
-

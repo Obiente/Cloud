@@ -3,7 +3,41 @@
 # Usage: ./scripts/update-postgres-hba.sh [service-name]
 #   service-name: 'postgres' or 'timescaledb' (default: 'postgres')
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+trim_env_value() {
+  local value="$1"
+  value="${value%$'\r'}"
+  value="${value//$'\n'/}"
+  value="${value//[{}]/}"
+  trim_whitespace "$value"
+}
+
+escape_sql_literal() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+assert_safe_sql_identifier() {
+  local identifier="$1"
+  local label="$2"
+  if [[ ! "$identifier" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "❌ Unsafe ${label}: ${identifier}" >&2
+    echo "   This script only supports simple PostgreSQL identifiers." >&2
+    exit 1
+  fi
+}
+
+run_psql() {
+  local sql="$1"
+  if [ -z "${SUPERUSER_PASSWORD:-}" ]; then
+    docker exec "$CONTAINER_ID" psql -v ON_ERROR_STOP=1 -U "$SUPERUSER" -d postgres -c "$sql"
+  else
+    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -v ON_ERROR_STOP=1 -U "$SUPERUSER" -d postgres -c "$sql"
+  fi
+}
 
 STACK_NAME="${STACK_NAME:-obiente}"
 SERVICE_NAME="${1:-postgres}"
@@ -57,25 +91,25 @@ fi
 # Get database user from service environment (check common-database anchor)
 DB_USER=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_USER_ENV}="; then
-  DB_USER=$(echo "$SERVICE_ENV" | grep "^${DB_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_USER=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${DB_USER_ENV}=" | cut -d'=' -f2-)")
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_USER_ENV}="; then
-  DB_USER=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_USER=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${FALLBACK_USER_ENV}=" | cut -d'=' -f2-)")
 fi
 
 # Get database password
 DB_PASSWORD=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_PASSWORD_ENV}="; then
-  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${DB_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_PASSWORD=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${DB_PASSWORD_ENV}=" | cut -d'=' -f2-)")
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_PASSWORD_ENV}="; then
-  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_PASSWORD=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${FALLBACK_PASSWORD_ENV}=" | cut -d'=' -f2-)")
 fi
 
 # Get database name
 DB_NAME=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_NAME_ENV}="; then
-  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${DB_NAME_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_NAME=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${DB_NAME_ENV}=" | cut -d'=' -f2-)")
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_DB_ENV}="; then
-  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_DB_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  DB_NAME=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${FALLBACK_DB_ENV}=" | cut -d'=' -f2-)")
 fi
 
 # Fallback to defaults if not found
@@ -86,9 +120,9 @@ DB_NAME="${DB_NAME:-obiente}"
 # Get allowed hosts from service environment
 ALLOWED_HOSTS=""
 if echo "$SERVICE_ENV" | grep -q "^${ALLOWED_HOSTS_ENV}="; then
-  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${ALLOWED_HOSTS_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  ALLOWED_HOSTS=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${ALLOWED_HOSTS_ENV}=" | cut -d'=' -f2-)")
 elif [ -n "$FALLBACK_ENV" ] && echo "$SERVICE_ENV" | grep -q "^${FALLBACK_ENV}="; then
-  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
+  ALLOWED_HOSTS=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^${FALLBACK_ENV}=" | cut -d'=' -f2-)")
 fi
 
 # Also check current environment (in case set locally)
@@ -105,6 +139,10 @@ echo "   User: $DB_USER"
 echo "   Database: $DB_NAME"
 echo ""
 
+assert_safe_sql_identifier "$DB_USER" "database username"
+assert_safe_sql_identifier "$DB_NAME" "database name"
+ESCAPED_DB_PASSWORD="$(escape_sql_literal "$DB_PASSWORD")"
+
 # Find the actual superuser in the database
 # PostgreSQL might have been initialized with a custom user, so "postgres" might not exist
 echo "🔍 Finding PostgreSQL superuser..."
@@ -112,7 +150,7 @@ SUPERUSER=""
 SUPERUSER_PASSWORD=""
 
 # Get POSTGRES_USER from service environment as a candidate
-SERVICE_POSTGRES_USER=$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs || echo "")
+SERVICE_POSTGRES_USER=$(trim_env_value "$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d'=' -f2- || echo "")")
 
 # Try different users to find one that works
 CANDIDATE_USERS=("postgres" "$SERVICE_POSTGRES_USER" "$DB_USER")
@@ -161,21 +199,12 @@ fi
 if [ "$USER_EXISTS" = "1" ]; then
   echo "   ✅ User '$DB_USER' exists"
   echo "   Updating password..."
-  if [ -z "$SUPERUSER_PASSWORD" ]; then
-    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
-  else
-    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
-  fi
+  run_psql "ALTER USER ${DB_USER} WITH PASSWORD '${ESCAPED_DB_PASSWORD}';" >/dev/null
   echo "   ✅ Password updated"
 else
   echo "   Creating user '$DB_USER'..."
-  if [ -z "$SUPERUSER_PASSWORD" ]; then
-    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
-    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
-  else
-    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
-    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
-  fi
+  run_psql "CREATE USER ${DB_USER} WITH PASSWORD '${ESCAPED_DB_PASSWORD}' CREATEDB SUPERUSER;" >/dev/null
+  run_psql "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" >/dev/null
   echo "   ✅ User '$DB_USER' created"
 fi
 
@@ -295,4 +324,3 @@ docker exec "$CONTAINER_ID" grep -E '^host[[:space:]]+all[[:space:]]+all' "$HBA_
 echo ""
 echo "   To view full file:"
 echo "   docker exec $CONTAINER_ID cat $HBA_TARGET"
-
