@@ -33,8 +33,18 @@
                   <OuiSkeleton width="10rem" height="0.875rem" variant="text" />
                 </OuiStack>
                 <OuiFlex gap="xs">
-                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
-                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                  <OuiSkeleton
+                    width="5rem"
+                    height="2rem"
+                    variant="rectangle"
+                    rounded
+                  />
+                  <OuiSkeleton
+                    width="5rem"
+                    height="2rem"
+                    variant="rectangle"
+                    rounded
+                  />
                 </OuiFlex>
               </OuiFlex>
             </OuiCardBody>
@@ -92,11 +102,7 @@
               :badge="statusBadgeColor"
               :dot-class="statusDotClass"
             />
-            <OuiBadge
-              v-if="vps.instanceId"
-              variant="secondary"
-              size="xs"
-            >
+            <OuiBadge v-if="vps.instanceId" variant="secondary" size="xs">
               VM ID: {{ vps.instanceId }}
             </OuiBadge>
           </template>
@@ -109,8 +115,17 @@
             />
           </template>
           <template #actions>
-            <OuiButton variant="ghost" size="sm" @click="refreshVPS" :loading="isRefreshing" class="gap-1.5">
-              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              @click="refreshVPS"
+              :loading="isRefreshing"
+              class="gap-1.5"
+            >
+              <ArrowPathIcon
+                class="h-3.5 w-3.5"
+                :class="{ 'animate-spin': isRefreshing }"
+              />
               <span class="hidden sm:inline">Refresh</span>
             </OuiButton>
             <OuiButton
@@ -162,10 +177,18 @@
                 :secondary="`${imageLabel} · ${vps.region || 'Unknown region'}`"
                 mono
               >
-                <OuiBadge variant="secondary" size="xs">{{ vps.cpuCores || '—' }} vCPU</OuiBadge>
-                <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.memoryBytes" /></OuiBadge>
-                <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.diskBytes" /> disk</OuiBadge>
-                <OuiBadge v-if="vps.size" variant="primary" size="xs">{{ vps.size }}</OuiBadge>
+                <OuiBadge variant="secondary" size="xs"
+                  >{{ vps.cpuCores || "—" }} vCPU</OuiBadge
+                >
+                <OuiBadge variant="secondary" size="xs"
+                  ><OuiByte :value="vps.memoryBytes"
+                /></OuiBadge>
+                <OuiBadge variant="secondary" size="xs"
+                  ><OuiByte :value="vps.diskBytes" /> disk</OuiBadge
+                >
+                <OuiBadge v-if="vps.size" variant="primary" size="xs">{{
+                  vps.size
+                }}</OuiBadge>
               </UiQuickInfoBar>
 
               <!-- Details + Network Grid -->
@@ -174,26 +197,47 @@
                 <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <UiSectionHeader :icon="CpuChipIcon" color="primary">Details</UiSectionHeader>
+                      <UiSectionHeader :icon="CpuChipIcon" color="primary"
+                        >Details</UiSectionHeader
+                      >
 
-                      <UiKeyValueGrid :items="[
-                        { label: 'CPU', value: `${vps.cpuCores || '—'} cores` },
-                        { label: 'OS', value: imageLabel },
-                        { label: 'Memory' },
-                        { label: 'Storage' },
-                        { label: 'Region', value: vps.region || '—' },
-                        { label: 'Size', value: vps.size || '—' },
-                        { label: 'VM ID', value: vps.instanceId, mono: true, hidden: !vps.instanceId },
-                        { label: 'Created' },
-                      ]">
+                      <UiKeyValueGrid
+                        :items="[
+                          {
+                            label: 'CPU',
+                            value: `${vps.cpuCores || '—'} cores`,
+                          },
+                          { label: 'OS', value: imageLabel },
+                          { label: 'Memory' },
+                          { label: 'Storage' },
+                          { label: 'Region', value: vps.region || '—' },
+                          { label: 'Size', value: vps.size || '—' },
+                          {
+                            label: 'VM ID',
+                            value: vps.instanceId,
+                            mono: true,
+                            hidden: !vps.instanceId,
+                          },
+                          { label: 'Created' },
+                        ]"
+                      >
                         <template #value-memory>
-                          <OuiText size="sm" weight="medium"><OuiByte :value="vps.memoryBytes" /></OuiText>
+                          <OuiText size="sm" weight="medium"
+                            ><OuiByte :value="vps.memoryBytes"
+                          /></OuiText>
                         </template>
                         <template #value-storage>
-                          <OuiText size="sm" weight="medium"><OuiByte :value="vps.diskBytes" /></OuiText>
+                          <OuiText size="sm" weight="medium"
+                            ><OuiByte :value="vps.diskBytes"
+                          /></OuiText>
                         </template>
                         <template #value-created>
-                          <OuiRelativeTime :value="vps.createdAt ? date(vps.createdAt) : undefined" :style="'short'" />
+                          <OuiRelativeTime
+                            :value="
+                              vps.createdAt ? date(vps.createdAt) : undefined
+                            "
+                            :style="'short'"
+                          />
                         </template>
                       </UiKeyValueGrid>
                     </OuiStack>
@@ -204,11 +248,16 @@
                 <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <UiSectionHeader :icon="GlobeAltIcon" color="info">Network</UiSectionHeader>
+                      <UiSectionHeader :icon="GlobeAltIcon" color="info"
+                        >Network</UiSectionHeader
+                      >
 
                       <OuiStack gap="sm">
                         <!-- IPv4 -->
-                        <div v-if="vps.ipv4Addresses?.length" class="space-y-1.5">
+                        <div
+                          v-if="vps.ipv4Addresses?.length"
+                          class="space-y-1.5"
+                        >
                           <OuiText size="xs" color="tertiary">IPv4</OuiText>
                           <UiCopyField
                             v-for="(ip, idx) in vps.ipv4Addresses"
@@ -218,11 +267,16 @@
                           />
                         </div>
                         <OuiFlex v-else align="center" gap="xs">
-                          <OuiText size="xs" color="tertiary">IPv4 · None assigned</OuiText>
+                          <OuiText size="xs" color="tertiary"
+                            >IPv4 · None assigned</OuiText
+                          >
                         </OuiFlex>
 
                         <!-- IPv6 -->
-                        <div v-if="vps.ipv6Addresses?.length" class="space-y-1.5">
+                        <div
+                          v-if="vps.ipv6Addresses?.length"
+                          class="space-y-1.5"
+                        >
                           <OuiText size="xs" color="tertiary">IPv6</OuiText>
                           <UiCopyField
                             v-for="(ip, idx) in vps.ipv6Addresses"
@@ -233,7 +287,9 @@
                           />
                         </div>
                         <OuiFlex v-else align="center" gap="xs">
-                          <OuiText size="xs" color="tertiary">IPv6 · None assigned</OuiText>
+                          <OuiText size="xs" color="tertiary"
+                            >IPv6 · None assigned</OuiText
+                          >
                         </OuiFlex>
                       </OuiStack>
                     </OuiStack>
@@ -255,14 +311,29 @@
               <CostBreakdown v-if="usageData" :usage-data="usageData" />
 
               <!-- Connection Information -->
-              <OuiCard v-if="vps.status === VPSStatus.RUNNING" variant="outline" status="success">
+              <OuiCard
+                v-if="vps.status === VPSStatus.RUNNING"
+                variant="outline"
+                status="success"
+              >
                 <OuiCardBody>
                   <OuiStack gap="md">
-                    <UiSectionHeader :icon="CommandLineIcon" color="success">SSH Access</UiSectionHeader>
+                    <UiSectionHeader :icon="CommandLineIcon" color="success"
+                      >SSH Access</UiSectionHeader
+                    >
 
                     <template v-if="sshInfo">
-                      <UiCodeBlock label="SSH Command" :value="sshInfo.sshProxyCommand" break-all />
-                      <UiCodeBlock v-if="sshInfo.connectionInstructions" label="Instructions" :value="sshInfo.connectionInstructions" pre-wrap />
+                      <UiCodeBlock
+                        label="SSH Command"
+                        :value="sshInfo.sshProxyCommand"
+                        break-all
+                      />
+                      <UiCodeBlock
+                        v-if="sshInfo.connectionInstructions"
+                        label="Instructions"
+                        :value="sshInfo.connectionInstructions"
+                        pre-wrap
+                      />
                     </template>
                     <template v-else-if="sshInfoLoading">
                       <OuiSkeleton width="24rem" height="1rem" variant="text" />
@@ -1639,1388 +1710,1402 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch, nextTick, defineAsyncComponent } from "vue";
-  import { useRoute, useRouter } from "vue-router";
-  import {
-    ArrowPathIcon,
-    CommandLineIcon,
-    PlayIcon,
-    ServerIcon,
-    StopIcon,
-    TrashIcon,
-    InformationCircleIcon,
-    ClipboardDocumentListIcon,
-    DocumentTextIcon,
-    KeyIcon,
-    PencilIcon,
-    CpuChipIcon,
-    CircleStackIcon,
-    ArchiveBoxIcon,
-    ShieldExclamationIcon,
-    UserIcon,
-    CogIcon,
-    PlusIcon,
-    CheckIcon,
-    XMarkIcon,
-    ChartBarIcon,
-    ServerStackIcon,
-    GlobeAltIcon,
-  } from "@heroicons/vue/24/outline";
-  import {
-    VPSService,
-    VPSConfigService,
-    SuperadminService,
-    VPSStatus,
-    VPSImage,
-    type VPSInstance,
-  } from "@obiente/proto";
-  import { useConnectClient } from "~/lib/connect-client";
-  import { useToast } from "~/composables/useToast";
-  import { useOrganizationsStore } from "~/stores/organizations";
-  import { useDialog } from "~/composables/useDialog";
-  import { useSuperAdmin } from "~/composables/useSuperAdmin";
-  import { ConnectError, Code } from "@connectrpc/connect";
-  import OuiByte from "~/components/oui/Byte.vue";
-  import OuiDate from "~/components/oui/Date.vue";
-  import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
-  import ErrorAlert from "~/components/ErrorAlert.vue";
-  import OuiSkeleton from "~/components/oui/Skeleton.vue";
-  import UsageStatistics from "~/components/shared/UsageStatistics.vue";
-  import CostBreakdown from "~/components/shared/CostBreakdown.vue";
-  // Lazy load tab components for better performance
-  const VPSFirewall = defineAsyncComponent(
-    () => import("~/components/vps/VPSFirewall.vue")
-  );
-  const VPSMetrics = defineAsyncComponent(
-    () => import("~/components/vps/VPSMetrics.vue")
-  );
-  const VPSXTermTerminal = defineAsyncComponent(
-    () => import("~/components/vps/VPSXTermTerminal.vue")
-  );
-  const VPSLogs = defineAsyncComponent(
-    () => import("~/components/vps/VPSLogs.vue")
-  );
-  const VPSUsersManagement = defineAsyncComponent(
-    () => import("~/components/vps/VPSUsersManagement.vue")
-  );
-  const VPSCloudInitSettings = defineAsyncComponent(
-    () => import("~/components/vps/VPSCloudInitSettings.vue")
-  );
-  const AuditLogs = defineAsyncComponent(
-    () => import("~/components/audit/AuditLogs.vue")
-  );
-  const VpsLeases = defineAsyncComponent(
-    () => import("~/components/vps/VpsLeases.vue")
-  );
-  const ResourceHeader = defineAsyncComponent(
-    () => import("~/components/resource/ResourceHeader.vue")
-  );
-  const ResourceStatusBadge = defineAsyncComponent(
-    () => import("~/components/resource/ResourceStatusBadge.vue")
-  );
-  const ResourceDetailsGrid = defineAsyncComponent(
-    () => import("~/components/resource/ResourceDetailsGrid.vue")
-  );
-  const ResourceDetailCard = defineAsyncComponent(
-    () => import("~/components/resource/ResourceDetailCard.vue")
-  );
-  const ResourceTabs = defineAsyncComponent(
-    () => import("~/components/resource/ResourceTabs.vue")
-  );
-  import type { TabItem } from "~/components/oui/Tabs.vue";
-  import { date } from "@obiente/proto/utils";
-  import { formatDate } from "~/utils/common";
-  import { useVpsLeases } from "~/composables/useVpsLeases";
+import { computed, ref, watch, nextTick, defineAsyncComponent } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import {
+  ArrowPathIcon,
+  CommandLineIcon,
+  PlayIcon,
+  ServerIcon,
+  StopIcon,
+  TrashIcon,
+  InformationCircleIcon,
+  ClipboardDocumentListIcon,
+  DocumentTextIcon,
+  KeyIcon,
+  PencilIcon,
+  CpuChipIcon,
+  CircleStackIcon,
+  ArchiveBoxIcon,
+  ShieldExclamationIcon,
+  UserIcon,
+  CogIcon,
+  PlusIcon,
+  CheckIcon,
+  XMarkIcon,
+  ChartBarIcon,
+  ServerStackIcon,
+  GlobeAltIcon,
+} from "@heroicons/vue/24/outline";
+import {
+  VPSService,
+  VPSConfigService,
+  SuperadminService,
+  VPSStatus,
+  VPSImage,
+  type VPSInstance,
+} from "@obiente/proto";
+import { useConnectClient } from "~/lib/connect-client";
+import { useToast } from "~/composables/useToast";
+import { useOrganizationsStore } from "~/stores/organizations";
+import { useDialog } from "~/composables/useDialog";
+import { useSuperAdmin } from "~/composables/useSuperAdmin";
+import { ConnectError, Code } from "@connectrpc/connect";
+import OuiByte from "~/components/oui/Byte.vue";
+import OuiDate from "~/components/oui/Date.vue";
+import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+import ErrorAlert from "~/components/ErrorAlert.vue";
+import OuiSkeleton from "~/components/oui/Skeleton.vue";
+import UsageStatistics from "~/components/shared/UsageStatistics.vue";
+import CostBreakdown from "~/components/shared/CostBreakdown.vue";
+// Lazy load tab components for better performance
+const VPSFirewall = defineAsyncComponent(
+  () => import("~/components/vps/VPSFirewall.vue")
+);
+const VPSMetrics = defineAsyncComponent(
+  () => import("~/components/vps/VPSMetrics.vue")
+);
+const VPSXTermTerminal = defineAsyncComponent(
+  () => import("~/components/vps/VPSXTermTerminal.vue")
+);
+const VPSLogs = defineAsyncComponent(
+  () => import("~/components/vps/VPSLogs.vue")
+);
+const VPSUsersManagement = defineAsyncComponent(
+  () => import("~/components/vps/VPSUsersManagement.vue")
+);
+const VPSCloudInitSettings = defineAsyncComponent(
+  () => import("~/components/vps/VPSCloudInitSettings.vue")
+);
+const AuditLogs = defineAsyncComponent(
+  () => import("~/components/audit/AuditLogs.vue")
+);
+const VpsLeases = defineAsyncComponent(
+  () => import("~/components/vps/VpsLeases.vue")
+);
+const ResourceHeader = defineAsyncComponent(
+  () => import("~/components/resource/ResourceHeader.vue")
+);
+const ResourceStatusBadge = defineAsyncComponent(
+  () => import("~/components/resource/ResourceStatusBadge.vue")
+);
+const ResourceDetailsGrid = defineAsyncComponent(
+  () => import("~/components/resource/ResourceDetailsGrid.vue")
+);
+const ResourceDetailCard = defineAsyncComponent(
+  () => import("~/components/resource/ResourceDetailCard.vue")
+);
+const ResourceTabs = defineAsyncComponent(
+  () => import("~/components/resource/ResourceTabs.vue")
+);
+import type { TabItem } from "~/components/oui/Tabs.vue";
+import { date } from "@obiente/proto/utils";
+import { formatDate } from "~/utils/common";
+import { useVpsLeases } from "~/composables/useVpsLeases";
 
-  definePageMeta({
-    layout: "default",
-    middleware: "auth",
-  });
+definePageMeta({
+  layout: "default",
+  middleware: "auth",
+});
 
-  const route = useRoute();
-  const router = useRouter();
-  const { toast } = useToast();
-  const { showAlert, showConfirm } = useDialog();
-  const orgsStore = useOrganizationsStore();
-  const superAdmin = useSuperAdmin();
+const route = useRoute();
+const router = useRouter();
+const { toast } = useToast();
+const { showAlert, showConfirm } = useDialog();
+const orgsStore = useOrganizationsStore();
+const superAdmin = useSuperAdmin();
 
-  const vpsId = computed(() => String(route.params.id));
-  const orgId = computed(() => orgsStore.currentOrgId || "");
-  const isSuperAdmin = computed(() => superAdmin.allowed.value === true);
+const vpsId = computed(() => String(route.params.id));
+const orgId = computed(() => orgsStore.currentOrgId || "");
+const isSuperAdmin = computed(() => superAdmin.allowed.value === true);
 
-  const client = useConnectClient(VPSService);
-  const superadminClient = useConnectClient(SuperadminService);
-  const configClient = useConnectClient(VPSConfigService);
-  const accessError = ref<Error | null>(null);
-  const isActioning = ref(false);
-  const isRefreshing = ref(false);
+const client = useConnectClient(VPSService);
+const superadminClient = useConnectClient(SuperadminService);
+const configClient = useConnectClient(VPSConfigService);
+const accessError = ref<Error | null>(null);
+const isActioning = ref(false);
+const isRefreshing = ref(false);
 
-  // Computed error hint message
-  const errorHint = computed(() => {
-    if (!accessError.value || !(accessError.value instanceof ConnectError)) {
-      return "You don't have permission to view this VPS instance, or it doesn't exist.";
-    }
-
-    if (accessError.value.code === Code.PermissionDenied) {
-      return "You don't have permission to view this VPS instance. Please contact your organization administrator if you believe you should have access.";
-    }
-
-    if (accessError.value.code === Code.NotFound) {
-      return "This VPS instance doesn't exist or may have been deleted.";
-    }
-
+// Computed error hint message
+const errorHint = computed(() => {
+  if (!accessError.value || !(accessError.value instanceof ConnectError)) {
     return "You don't have permission to view this VPS instance, or it doesn't exist.";
-  });
+  }
 
-  // Fetch VPS data
-  const {
-    data: vpsData,
-    pending,
-    error,
-    refresh: refreshVPSData,
-    execute: executeVPSData,
-  } = await useClientFetch(
-    () => `vps-${vpsId.value}-${orgId.value}-${isSuperAdmin.value}`,
-    async () => {
-      try {
-        let res;
-        // Try regular endpoint first if we have an orgId, otherwise use superadmin endpoint
-        if (orgId.value && !isSuperAdmin.value) {
-          // Regular user - must use regular endpoint
-          res = await client.getVPS({
-            organizationId: orgId.value,
-            vpsId: vpsId.value,
-          });
-          accessError.value = null;
-          return res.vps ?? null;
-        } else if (isSuperAdmin.value) {
-          // Superadmin - try regular endpoint first if orgId is set, fallback to superadmin endpoint
-          if (orgId.value) {
-            try {
-              res = await client.getVPS({
-                organizationId: orgId.value,
-                vpsId: vpsId.value,
-              });
-              accessError.value = null;
-              return res.vps ?? null;
-            } catch (regularErr: unknown) {
-              // If regular endpoint fails, use superadmin endpoint
-              if (
-                regularErr instanceof ConnectError &&
-                (regularErr.code === Code.NotFound ||
-                  regularErr.code === Code.PermissionDenied)
-              ) {
-                res = await superadminClient.superadminGetVPS({
-                  vpsId: vpsId.value,
-                });
-                accessError.value = null;
-                // Switch to the VPS's organization for proper context
-                if (
-                  res.vps?.organizationId &&
-                  res.vps.organizationId !== orgId.value
-                ) {
-                  // Use nextTick to avoid triggering watch during fetch
-                  await nextTick();
-                  orgsStore.switchOrganization(res.vps.organizationId);
-                }
-                return res.vps ?? null;
-              }
-              throw regularErr;
-            }
-          } else {
-            // No orgId - use superadmin endpoint
-            res = await superadminClient.superadminGetVPS({
+  if (accessError.value.code === Code.PermissionDenied) {
+    return "You don't have permission to view this VPS instance. Please contact your organization administrator if you believe you should have access.";
+  }
+
+  if (accessError.value.code === Code.NotFound) {
+    return "This VPS instance doesn't exist or may have been deleted.";
+  }
+
+  return "You don't have permission to view this VPS instance, or it doesn't exist.";
+});
+
+// Fetch VPS data
+const {
+  data: vpsData,
+  pending,
+  error,
+  refresh: refreshVPSData,
+  execute: executeVPSData,
+} = await useClientFetch(
+  () => `vps-${vpsId.value}-${orgId.value}-${isSuperAdmin.value}`,
+  async () => {
+    try {
+      let res;
+      // Try regular endpoint first if we have an orgId, otherwise use superadmin endpoint
+      if (orgId.value && !isSuperAdmin.value) {
+        // Regular user - must use regular endpoint
+        res = await client.getVPS({
+          organizationId: orgId.value,
+          vpsId: vpsId.value,
+        });
+        accessError.value = null;
+        return res.vps ?? null;
+      } else if (isSuperAdmin.value) {
+        // Superadmin - try regular endpoint first if orgId is set, fallback to superadmin endpoint
+        if (orgId.value) {
+          try {
+            res = await client.getVPS({
+              organizationId: orgId.value,
               vpsId: vpsId.value,
             });
             accessError.value = null;
-            // Switch to the VPS's organization for proper context
-            if (res.vps?.organizationId) {
-              await nextTick();
-              orgsStore.switchOrganization(res.vps.organizationId);
-            }
             return res.vps ?? null;
+          } catch (regularErr: unknown) {
+            // If regular endpoint fails, use superadmin endpoint
+            if (
+              regularErr instanceof ConnectError &&
+              (regularErr.code === Code.NotFound ||
+                regularErr.code === Code.PermissionDenied)
+            ) {
+              res = await superadminClient.superadminGetVPS({
+                vpsId: vpsId.value,
+              });
+              accessError.value = null;
+              // Switch to the VPS's organization for proper context
+              if (
+                res.vps?.organizationId &&
+                res.vps.organizationId !== orgId.value
+              ) {
+                // Use nextTick to avoid triggering watch during fetch
+                await nextTick();
+                orgsStore.switchOrganization(res.vps.organizationId);
+              }
+              return res.vps ?? null;
+            }
+            throw regularErr;
           }
         } else {
-          // No orgId and not superadmin - error
-          throw new Error("No organization context available");
-        }
-      } catch (err: unknown) {
-        if (err instanceof ConnectError) {
-          if (
-            err.code === Code.NotFound ||
-            err.code === Code.PermissionDenied
-          ) {
-            accessError.value = err;
-            return null;
+          // No orgId - use superadmin endpoint
+          res = await superadminClient.superadminGetVPS({
+            vpsId: vpsId.value,
+          });
+          accessError.value = null;
+          // Switch to the VPS's organization for proper context
+          if (res.vps?.organizationId) {
+            await nextTick();
+            orgsStore.switchOrganization(res.vps.organizationId);
           }
+          return res.vps ?? null;
         }
-        throw err;
-      }
-    },
-    {
-      watch: [vpsId, orgId],
-    }
-  );
-
-  const vps = computed(() => vpsData.value);
-
-  // Fetch VPS usage data
-  const { data: usageData } = await useClientFetch(
-    () => `vps-usage-${vpsId.value}-${orgId.value}`,
-    async () => {
-      if (!vps.value?.id || !orgId.value) return null;
-      try {
-        const month = new Date().toISOString().slice(0, 7); // YYYY-MM
-        const res = await client.getVPSUsage({
-          vpsId: vps.value.id,
-          organizationId: orgId.value,
-          month,
-        });
-        return res;
-      } catch (err) {
-        console.error("Failed to fetch VPS usage:", err);
-        // Don't show error toast for usage - it's optional
-        return null;
-      }
-    },
-    { watch: [() => vps.value?.id, orgId], server: false }
-  );
-
-  // Settings form data
-  const vpsName = ref("");
-  const vpsDescription = ref("");
-
-  // Watch VPS data to update form fields
-  watch(
-    vps,
-    (newVps) => {
-      if (newVps) {
-        vpsName.value = newVps.name || "";
-        vpsDescription.value = newVps.description || "";
-      }
-    },
-    { immediate: true }
-  );
-
-  // Fetch SSH connection info
-  const sshInfo = ref<{
-    sshProxyCommand: string;
-    connectionInstructions: string;
-  } | null>(null);
-  const sshInfoLoading = ref(false);
-  const sshInfoError = ref<string | null>(null);
-
-  const fetchSSHInfo = async () => {
-    if (!vps.value || vps.value.status !== VPSStatus.RUNNING) {
-      sshInfo.value = null;
-      return;
-    }
-
-    sshInfoLoading.value = true;
-    sshInfoError.value = null;
-    try {
-      const res = await client.getVPSProxyInfo({
-        vpsId: vpsId.value,
-      });
-      sshInfo.value = {
-        sshProxyCommand: res.sshProxyCommand || "",
-        connectionInstructions: res.connectionInstructions || "",
-      };
-    } catch (err: unknown) {
-      sshInfoError.value = err instanceof Error ? (err as Error).message : "Unknown error";
-      sshInfo.value = null;
-    } finally {
-      sshInfoLoading.value = false;
-    }
-  };
-
-  // Extract domain and port from SSH proxy command
-  // Format: ssh -p {port} root@{vpsId}@{domain}
-  const sshDomain = computed(() => {
-    if (!sshInfo.value?.sshProxyCommand) {
-      return "localhost";
-    }
-    // Parse: ssh -p {port} root@{vpsId}@{domain}
-    const match = sshInfo.value.sshProxyCommand.match(/@([^@]+)$/);
-    return match ? match[1] : "localhost";
-  });
-
-  const sshPort = computed(() => {
-    if (!sshInfo.value?.sshProxyCommand) {
-      return "2323";
-    }
-    // Parse: ssh -p {port} root@{vpsId}@{domain}
-    const match = sshInfo.value.sshProxyCommand.match(/-p\s+(\d+)/);
-    return match ? match[1] : "2323";
-  });
-
-  // Fetch SSH info when VPS is running
-  watch(
-    () => vps.value?.status,
-    (status) => {
-      if (status === VPSStatus.RUNNING) {
-        fetchSSHInfo();
       } else {
-        sshInfo.value = null;
+        // No orgId and not superadmin - error
+        throw new Error("No organization context available");
       }
-    },
-    { immediate: true }
-  );
-
-  // VPS Leases Management
-  const { leases, loading: leasesLoading, error: leasesError, fetchLeases } = useVpsLeases();
-
-  const fetchVpsLeases = async () => {
-    if (!orgId.value || !vpsId.value) return;
-    await fetchLeases(orgId.value, vpsId.value);
-  };
-
-  // Fetch leases when VPS or org changes
-  watch(
-    [() => vps.value?.id, orgId],
-    () => {
-      if (vps.value?.id && orgId.value) {
-        fetchVpsLeases();
+    } catch (err: unknown) {
+      if (err instanceof ConnectError) {
+        if (err.code === Code.NotFound || err.code === Code.PermissionDenied) {
+          accessError.value = err;
+          return null;
+        }
       }
-    },
-    { immediate: true }
-  );
-
-  // Refresh function with loading state
-  // This keeps existing data visible while refreshing in the background
-  const refreshVPS = async () => {
-    if (isRefreshing.value) return;
-    isRefreshing.value = true;
-    try {
-      // Use execute instead of refresh to avoid setting pending to true
-      // This keeps the existing UI visible while data is being fetched
-      await Promise.all([
-        executeVPSData(),
-        fetchVpsLeases(),
-        fetchSSHInfo(),
-      ]);
-    } finally {
-      isRefreshing.value = false;
+      throw err;
     }
-  };
+  },
+  {
+    watch: [vpsId, orgId],
+  }
+);
 
-  // SSH Keys Management
-  const sshKeys = ref<
-    Array<{
-      id: string;
-      name: string;
-      publicKey: string;
-      fingerprint: string;
-      vpsId?: string;
-      createdAt: { seconds: number | bigint; nanos: number } | undefined;
-    }>
-  >([]);
-  const sshKeysLoading = ref(false);
-  const sshKeysError = ref<string | null>(null);
-  const addSSHKeyDialogOpen = ref(false);
-  const newSSHKeyName = ref("");
-  const newSSHKeyValue = ref("");
-  const addingSSHKey = ref(false);
-  const addSSHKeyError = ref("");
-  const removingSSHKey = ref<string | null>(null);
-  const editSSHKeyDialogOpen = ref(false);
-  const editingSSHKey = ref<string | null>(null);
-  const editingSSHKeyName = ref("");
-  const editingSSHKeyId = ref<string | null>(null);
-  const editingSSHKeyError = ref("");
+const vps = computed(() => vpsData.value);
 
-  // Terminal key management
-  const terminalKey = ref<{
+// Fetch VPS usage data
+const { data: usageData } = await useClientFetch(
+  () => `vps-usage-${vpsId.value}-${orgId.value}`,
+  async () => {
+    if (!vps.value?.id || !orgId.value) return null;
+    try {
+      const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const res = await client.getVPSUsage({
+        vpsId: vps.value.id,
+        organizationId: orgId.value,
+        month,
+      });
+      return res;
+    } catch (err) {
+      console.error("Failed to fetch VPS usage:", err);
+      // Don't show error toast for usage - it's optional
+      return null;
+    }
+  },
+  { watch: [() => vps.value?.id, orgId], server: false }
+);
+
+// Settings form data
+const vpsName = ref("");
+const vpsDescription = ref("");
+
+// Watch VPS data to update form fields
+watch(
+  vps,
+  (newVps) => {
+    if (newVps) {
+      vpsName.value = newVps.name || "";
+      vpsDescription.value = newVps.description || "";
+    }
+  },
+  { immediate: true }
+);
+
+// Fetch SSH connection info
+const sshInfo = ref<{
+  sshProxyCommand: string;
+  connectionInstructions: string;
+} | null>(null);
+const sshInfoLoading = ref(false);
+const sshInfoError = ref<string | null>(null);
+
+const fetchSSHInfo = async () => {
+  if (!vps.value || vps.value.status !== VPSStatus.RUNNING) {
+    sshInfo.value = null;
+    return;
+  }
+
+  sshInfoLoading.value = true;
+  sshInfoError.value = null;
+  try {
+    const res = await client.getVPSProxyInfo({
+      vpsId: vpsId.value,
+    });
+    sshInfo.value = {
+      sshProxyCommand: res.sshProxyCommand || "",
+      connectionInstructions: res.connectionInstructions || "",
+    };
+  } catch (err: unknown) {
+    sshInfoError.value =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    sshInfo.value = null;
+  } finally {
+    sshInfoLoading.value = false;
+  }
+};
+
+// Extract domain and port from SSH proxy command
+// Format: ssh -p {port} root@{vpsId}@{domain}
+const sshDomain = computed(() => {
+  if (!sshInfo.value?.sshProxyCommand) {
+    return "localhost";
+  }
+  // Parse: ssh -p {port} root@{vpsId}@{domain}
+  const match = sshInfo.value.sshProxyCommand.match(/@([^@]+)$/);
+  return match ? match[1] : "localhost";
+});
+
+const sshPort = computed(() => {
+  if (!sshInfo.value?.sshProxyCommand) {
+    return "2323";
+  }
+  // Parse: ssh -p {port} root@{vpsId}@{domain}
+  const match = sshInfo.value.sshProxyCommand.match(/-p\s+(\d+)/);
+  return match ? match[1] : "2323";
+});
+
+// Fetch SSH info when VPS is running
+watch(
+  () => vps.value?.status,
+  (status) => {
+    if (status === VPSStatus.RUNNING) {
+      fetchSSHInfo();
+    } else {
+      sshInfo.value = null;
+    }
+  },
+  { immediate: true }
+);
+
+// VPS Leases Management
+const {
+  leases,
+  loading: leasesLoading,
+  error: leasesError,
+  fetchLeases,
+} = useVpsLeases();
+
+const fetchVpsLeases = async () => {
+  if (!orgId.value || !vpsId.value) return;
+  await fetchLeases(orgId.value, vpsId.value);
+};
+
+// Fetch leases when VPS or org changes
+watch(
+  [() => vps.value?.id, orgId],
+  () => {
+    if (vps.value?.id && orgId.value) {
+      fetchVpsLeases();
+    }
+  },
+  { immediate: true }
+);
+
+// Refresh function with loading state
+// This keeps existing data visible while refreshing in the background
+const refreshVPS = async () => {
+  if (isRefreshing.value) return;
+  isRefreshing.value = true;
+  try {
+    // Use execute instead of refresh to avoid setting pending to true
+    // This keeps the existing UI visible while data is being fetched
+    await Promise.all([executeVPSData(), fetchVpsLeases(), fetchSSHInfo()]);
+  } finally {
+    isRefreshing.value = false;
+  }
+};
+
+// SSH Keys Management
+const sshKeys = ref<
+  Array<{
+    id: string;
+    name: string;
+    publicKey: string;
     fingerprint: string;
-    createdAt: { seconds: number | bigint; nanos: number };
-    updatedAt: { seconds: number | bigint; nanos: number };
-  } | null>(null);
-  const terminalKeyLoading = ref(false);
-  const terminalKeyError = ref<string | null>(null);
-  const rotatingTerminalKey = ref(false);
-  const removingTerminalKey = ref(false);
-  const removeTerminalKeyDialogOpen = ref(false);
+    vpsId?: string;
+    createdAt: { seconds: number | bigint; nanos: number } | undefined;
+  }>
+>([]);
+const sshKeysLoading = ref(false);
+const sshKeysError = ref<string | null>(null);
+const addSSHKeyDialogOpen = ref(false);
+const newSSHKeyName = ref("");
+const newSSHKeyValue = ref("");
+const addingSSHKey = ref(false);
+const addSSHKeyError = ref("");
+const removingSSHKey = ref<string | null>(null);
+const editSSHKeyDialogOpen = ref(false);
+const editingSSHKey = ref<string | null>(null);
+const editingSSHKeyName = ref("");
+const editingSSHKeyId = ref<string | null>(null);
+const editingSSHKeyError = ref("");
 
-  // Bastion key management
-  const bastionKey = ref<{
-    fingerprint: string;
-    createdAt: { seconds: number | bigint; nanos: number };
-    updatedAt: { seconds: number | bigint; nanos: number };
-  } | null>(null);
-  const bastionKeyLoading = ref(false);
-  const bastionKeyError = ref<string | null>(null);
-  const rotatingBastionKey = ref(false);
+// Terminal key management
+const terminalKey = ref<{
+  fingerprint: string;
+  createdAt: { seconds: number | bigint; nanos: number };
+  updatedAt: { seconds: number | bigint; nanos: number };
+} | null>(null);
+const terminalKeyLoading = ref(false);
+const terminalKeyError = ref<string | null>(null);
+const rotatingTerminalKey = ref(false);
+const removingTerminalKey = ref(false);
+const removeTerminalKeyDialogOpen = ref(false);
 
-  // SSH alias management
-  const sshAlias = ref<string | null>(null);
-  const sshAliasLoading = ref(false);
-  const sshAliasError = ref<string | null>(null);
-  const setSSHAliasDialogOpen = ref(false);
-  const removeSSHAliasDialogOpen = ref(false);
-  const newSSHAlias = ref("");
-  const settingSSHAlias = ref(false);
-  const removingSSHAlias = ref(false);
+// Bastion key management
+const bastionKey = ref<{
+  fingerprint: string;
+  createdAt: { seconds: number | bigint; nanos: number };
+  updatedAt: { seconds: number | bigint; nanos: number };
+} | null>(null);
+const bastionKeyLoading = ref(false);
+const bastionKeyError = ref<string | null>(null);
+const rotatingBastionKey = ref(false);
 
-  // Password Reset
-  const resetPasswordDialogOpen = ref(false);
-  const resettingPassword = ref(false);
-  const newPassword = ref<string | null>(null);
-  const resetPasswordMessage = ref<string | null>(null);
-  const passwordRebooted = ref(false);
+// SSH alias management
+const sshAlias = ref<string | null>(null);
+const sshAliasLoading = ref(false);
+const sshAliasError = ref<string | null>(null);
+const setSSHAliasDialogOpen = ref(false);
+const removeSSHAliasDialogOpen = ref(false);
+const newSSHAlias = ref("");
+const settingSSHAlias = ref(false);
+const removingSSHAlias = ref(false);
 
-  // Terminal key functions
-  const fetchTerminalKey = async () => {
-    if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+// Password Reset
+const resetPasswordDialogOpen = ref(false);
+const resettingPassword = ref(false);
+const newPassword = ref<string | null>(null);
+const resetPasswordMessage = ref<string | null>(null);
+const passwordRebooted = ref(false);
+
+// Terminal key functions
+const fetchTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    terminalKey.value = null;
+    terminalKeyLoading.value = false;
+    return;
+  }
+
+  terminalKeyLoading.value = true;
+  terminalKeyError.value = null;
+  try {
+    const res = await configClient.getTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+
+    terminalKey.value = {
+      fingerprint: res.fingerprint,
+      createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
+      updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
+    };
+    terminalKeyLoading.value = false;
+  } catch (err: unknown) {
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
+      // Key doesn't exist - this is fine, just set to null
       terminalKey.value = null;
-      terminalKeyLoading.value = false;
-      return;
+    } else {
+      terminalKeyError.value =
+        err instanceof Error
+          ? (err as Error).message
+          : "Failed to load terminal key status";
     }
+    terminalKeyLoading.value = false;
+  }
+};
 
-    terminalKeyLoading.value = true;
-    terminalKeyError.value = null;
-    try {
-      const res = await configClient.getTerminalKey({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
+// Bastion key functions
+const fetchBastionKey = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    bastionKey.value = null;
+    bastionKeyLoading.value = false;
+    return;
+  }
 
-      terminalKey.value = {
-        fingerprint: res.fingerprint,
-        createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
-        updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
-      };
-      terminalKeyLoading.value = false;
-    } catch (err: unknown) {
-      if (err instanceof ConnectError && err.code === Code.NotFound) {
-        // Key doesn't exist - this is fine, just set to null
-        terminalKey.value = null;
-      } else {
-        terminalKeyError.value =
-          err instanceof Error
-            ? (err as Error).message
-            : "Failed to load terminal key status";
-      }
-      terminalKeyLoading.value = false;
-    }
-  };
+  bastionKeyLoading.value = true;
+  bastionKeyError.value = null;
+  try {
+    const res = await configClient.getBastionKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
 
-  // Bastion key functions
-  const fetchBastionKey = async () => {
-    if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    bastionKey.value = {
+      fingerprint: res.fingerprint,
+      createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
+      updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
+    };
+    bastionKeyLoading.value = false;
+  } catch (err: unknown) {
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
+      // Key doesn't exist - this is fine, just set to null
       bastionKey.value = null;
-      bastionKeyLoading.value = false;
-      return;
+    } else {
+      bastionKeyError.value =
+        err instanceof Error
+          ? (err as Error).message
+          : "Failed to load bastion key status";
     }
+    bastionKeyLoading.value = false;
+  }
+};
 
-    bastionKeyLoading.value = true;
-    bastionKeyError.value = null;
-    try {
-      const res = await configClient.getBastionKey({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
+// SSH alias functions
+const fetchSSHAlias = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    sshAlias.value = null;
+    sshAliasLoading.value = false;
+    return;
+  }
 
-      bastionKey.value = {
-        fingerprint: res.fingerprint,
-        createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
-        updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
-      };
-      bastionKeyLoading.value = false;
-    } catch (err: unknown) {
-      if (err instanceof ConnectError && err.code === Code.NotFound) {
-        // Key doesn't exist - this is fine, just set to null
-        bastionKey.value = null;
-      } else {
-        bastionKeyError.value =
-          err instanceof Error
-            ? (err as Error).message
-            : "Failed to load bastion key status";
-      }
-      bastionKeyLoading.value = false;
-    }
-  };
+  sshAliasLoading.value = true;
+  sshAliasError.value = null;
+  try {
+    const res = await configClient.getSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
 
-  // SSH alias functions
-  const fetchSSHAlias = async () => {
-    if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    sshAlias.value = res.alias || null;
+    sshAliasLoading.value = false;
+  } catch (err: unknown) {
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
       sshAlias.value = null;
-      sshAliasLoading.value = false;
-      return;
+    } else {
+      sshAliasError.value =
+        err instanceof Error
+          ? (err as Error).message
+          : "Failed to load SSH alias";
     }
+    sshAliasLoading.value = false;
+  }
+};
 
-    sshAliasLoading.value = true;
-    sshAliasError.value = null;
-    try {
-      const res = await configClient.getSSHAlias({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
+const isValidSSHAlias = (alias: string): boolean => {
+  if (!alias || alias.length === 0 || alias.length > 63) {
+    return false;
+  }
+  // Check if contains only allowed characters
+  const validPattern = /^[a-zA-Z0-9_-]+$/;
+  if (!validPattern.test(alias)) {
+    return false;
+  }
+  // Cannot start with "vps-"
+  if (alias.length >= 4 && alias.substring(0, 4) === "vps-") {
+    return false;
+  }
+  return true;
+};
 
-      sshAlias.value = res.alias || null;
-      sshAliasLoading.value = false;
-    } catch (err: unknown) {
-      if (err instanceof ConnectError && err.code === Code.NotFound) {
-        sshAlias.value = null;
-      } else {
-        sshAliasError.value =
-          err instanceof Error ? (err as Error).message : "Failed to load SSH alias";
-      }
-      sshAliasLoading.value = false;
-    }
-  };
+const openSetSSHAliasDialog = () => {
+  newSSHAlias.value = sshAlias.value || "";
+  setSSHAliasDialogOpen.value = true;
+};
 
-  const isValidSSHAlias = (alias: string): boolean => {
-    if (!alias || alias.length === 0 || alias.length > 63) {
-      return false;
-    }
-    // Check if contains only allowed characters
-    const validPattern = /^[a-zA-Z0-9_-]+$/;
-    if (!validPattern.test(alias)) {
-      return false;
-    }
-    // Cannot start with "vps-"
-    if (alias.length >= 4 && alias.substring(0, 4) === "vps-") {
-      return false;
-    }
-    return true;
-  };
+const openRemoveSSHAliasDialog = () => {
+  removeSSHAliasDialogOpen.value = true;
+};
 
-  const openSetSSHAliasDialog = () => {
-    newSSHAlias.value = sshAlias.value || "";
-    setSSHAliasDialogOpen.value = true;
-  };
+const setSSHAlias = async () => {
+  if (
+    !orgId.value ||
+    !vpsId.value ||
+    !newSSHAlias.value ||
+    !isValidSSHAlias(newSSHAlias.value)
+  ) {
+    return;
+  }
 
-  const openRemoveSSHAliasDialog = () => {
-    removeSSHAliasDialogOpen.value = true;
-  };
+  settingSSHAlias.value = true;
+  try {
+    const response = await configClient.setSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      alias: newSSHAlias.value,
+    });
 
-  const setSSHAlias = async () => {
-    if (
-      !orgId.value ||
-      !vpsId.value ||
-      !newSSHAlias.value ||
-      !isValidSSHAlias(newSSHAlias.value)
-    ) {
-      return;
-    }
+    toast.success(
+      response.message || `SSH alias '${response.alias}' has been set.`
+    );
+    sshAlias.value = response.alias;
+    setSSHAliasDialogOpen.value = false;
+    newSSHAlias.value = "";
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error ? (err as Error).message : "Failed to set SSH alias";
+    toast.error(errorMsg);
+  } finally {
+    settingSSHAlias.value = false;
+  }
+};
 
-    settingSSHAlias.value = true;
-    try {
-      const response = await configClient.setSSHAlias({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-        alias: newSSHAlias.value,
-      });
+const removeSSHAlias = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
 
-      toast.success(
-        response.message || `SSH alias '${response.alias}' has been set.`
-      );
-      sshAlias.value = response.alias;
-      setSSHAliasDialogOpen.value = false;
-      newSSHAlias.value = "";
-    } catch (err: unknown) {
-      const errorMsg =
-        err instanceof Error ? (err as Error).message : "Failed to set SSH alias";
-      toast.error(errorMsg);
-    } finally {
-      settingSSHAlias.value = false;
-    }
-  };
+  removingSSHAlias.value = true;
+  try {
+    const response = await configClient.removeSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
 
-  const removeSSHAlias = async () => {
-    if (!orgId.value || !vpsId.value) {
-      return;
-    }
+    toast.success(response.message || "SSH alias has been removed.");
+    sshAlias.value = null;
+    removeSSHAliasDialogOpen.value = false;
+  } catch (err: unknown) {
+    const errorMsg =
+      err instanceof Error
+        ? (err as Error).message
+        : "Failed to remove SSH alias";
+    toast.error(errorMsg);
+  } finally {
+    removingSSHAlias.value = false;
+  }
+};
 
-    removingSSHAlias.value = true;
-    try {
-      const response = await configClient.removeSSHAlias({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-
-      toast.success(response.message || "SSH alias has been removed.");
+// Fetch both keys and alias when VPS is loaded
+watch(
+  () => vps.value?.instanceId,
+  async (instanceId) => {
+    if (instanceId) {
+      await Promise.all([
+        fetchTerminalKey(),
+        fetchBastionKey(),
+        fetchSSHAlias(),
+      ]);
+    } else {
+      terminalKey.value = null;
+      bastionKey.value = null;
       sshAlias.value = null;
-      removeSSHAliasDialogOpen.value = false;
-    } catch (err: unknown) {
-      const errorMsg =
-        err instanceof Error ? (err as Error).message : "Failed to remove SSH alias";
-      toast.error(errorMsg);
-    } finally {
-      removingSSHAlias.value = false;
     }
-  };
+  },
+  { immediate: true }
+);
 
-  // Fetch both keys and alias when VPS is loaded
-  watch(
-    () => vps.value?.instanceId,
-    async (instanceId) => {
-      if (instanceId) {
-        await Promise.all([
-          fetchTerminalKey(),
-          fetchBastionKey(),
-          fetchSSHAlias(),
-        ]);
-      } else {
-        terminalKey.value = null;
-        bastionKey.value = null;
-        sshAlias.value = null;
-      }
-    },
-    { immediate: true }
-  );
+const fetchSSHKeys = async () => {
+  if (!orgId.value) {
+    sshKeys.value = [];
+    return;
+  }
 
-  const fetchSSHKeys = async () => {
-    if (!orgId.value) {
-      sshKeys.value = [];
-      return;
+  sshKeysLoading.value = true;
+  sshKeysError.value = null;
+  try {
+    const res = await client.listSSHKeys({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    sshKeys.value = (res.keys || []).map((key) => ({
+      id: key.id || "",
+      name: key.name || "",
+      publicKey: key.publicKey || "",
+      fingerprint: key.fingerprint || "",
+      vpsId: key.vpsId,
+      createdAt: key.createdAt as
+        | { seconds: number | bigint; nanos: number }
+        | undefined,
+    }));
+  } catch (err: unknown) {
+    sshKeysError.value =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    sshKeys.value = [];
+  } finally {
+    sshKeysLoading.value = false;
+  }
+};
+
+const openAddSSHKeyDialog = () => {
+  addSSHKeyDialogOpen.value = true;
+  newSSHKeyName.value = "";
+  newSSHKeyValue.value = "";
+  addSSHKeyError.value = "";
+};
+
+const addSSHKey = async () => {
+  if (!orgId.value || !newSSHKeyName.value || !newSSHKeyValue.value) {
+    return;
+  }
+
+  addingSSHKey.value = true;
+  addSSHKeyError.value = "";
+  try {
+    // Clean the SSH key: remove all newlines and carriage returns
+    // SSH keys should be a single continuous line
+    const cleanedKey = newSSHKeyValue.value
+      .trim()
+      .replace(/\r\n/g, "")
+      .replace(/\n/g, "")
+      .replace(/\r/g, "")
+      .trim();
+
+    await client.addSSHKey({
+      organizationId: orgId.value,
+      name: newSSHKeyName.value.trim(),
+      publicKey: cleanedKey,
+      vpsId: vpsId.value,
+    });
+    toast.success("SSH key added successfully");
+    addSSHKeyDialogOpen.value = false;
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      addSSHKeyError.value = (err as Error).message || "Failed to add SSH key";
+    } else {
+      addSSHKeyError.value =
+        err instanceof Error ? (err as Error).message : "Unknown error";
     }
+    toast.error("Failed to add SSH key", addSSHKeyError.value);
+  } finally {
+    addingSSHKey.value = false;
+  }
+};
 
-    sshKeysLoading.value = true;
-    sshKeysError.value = null;
+const openEditSSHKeyDialog = (key: { id: string; name: string }) => {
+  editingSSHKeyId.value = key.id;
+  editingSSHKeyName.value = key.name;
+  editingSSHKeyError.value = "";
+  editSSHKeyDialogOpen.value = true;
+};
+
+const updateSSHKey = async () => {
+  if (
+    !orgId.value ||
+    !editingSSHKeyId.value ||
+    !editingSSHKeyName.value.trim()
+  ) {
+    return;
+  }
+
+  editingSSHKey.value = editingSSHKeyId.value;
+  editingSSHKeyError.value = "";
+  try {
+    await client.updateSSHKey({
+      organizationId: orgId.value,
+      keyId: editingSSHKeyId.value,
+      name: editingSSHKeyName.value.trim(),
+    });
+    toast.success("SSH key name updated successfully");
+    editSSHKeyDialogOpen.value = false;
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      editingSSHKeyError.value =
+        (err as Error).message || "Failed to update SSH key";
+    } else {
+      editingSSHKeyError.value =
+        err instanceof Error ? (err as Error).message : "Unknown error";
+    }
+    toast.error("Failed to update SSH key", editingSSHKeyError.value);
+  } finally {
+    editingSSHKey.value = null;
+  }
+};
+
+const removeSSHKey = async (keyId: string) => {
+  if (!orgId.value) {
+    return;
+  }
+
+  // Find the key to check if it's org-wide
+  const key = sshKeys.value.find((k) => k.id === keyId);
+  const isOrgWide = key && !key.vpsId;
+
+  let message = "Are you sure you want to remove this SSH key?";
+  if (isOrgWide) {
+    // For org-wide keys, fetch the list of VPS instances that will be affected
     try {
-      const res = await client.listSSHKeys({
+      const vpsRes = await client.listVPS({
         organizationId: orgId.value,
-        vpsId: vpsId.value,
+        page: 1,
+        perPage: 100, // Get up to 100 VPS instances
       });
-      sshKeys.value = (res.keys || []).map((key) => ({
-        id: key.id || "",
-        name: key.name || "",
-        publicKey: key.publicKey || "",
-        fingerprint: key.fingerprint || "",
-        vpsId: key.vpsId,
-        createdAt: key.createdAt as
-          | { seconds: number | bigint; nanos: number }
-          | undefined,
-      }));
-    } catch (err: unknown) {
-      sshKeysError.value = err instanceof Error ? (err as Error).message : "Unknown error";
-      sshKeys.value = [];
-    } finally {
-      sshKeysLoading.value = false;
-    }
-  };
 
-  const openAddSSHKeyDialog = () => {
-    addSSHKeyDialogOpen.value = true;
-    newSSHKeyName.value = "";
-    newSSHKeyValue.value = "";
-    addSSHKeyError.value = "";
-  };
+      // Filter to only VPS instances that are provisioned (have instance_id)
+      const affectedVPSList = (vpsRes.vpsInstances || [])
+        .filter((vps) => vps.instanceId) // Only VPS instances that are provisioned
+        .map((vps) => vps.name || vps.id)
+        .slice(0, 20); // Limit to 20 for display
 
-  const addSSHKey = async () => {
-    if (!orgId.value || !newSSHKeyName.value || !newSSHKeyValue.value) {
-      return;
-    }
-
-    addingSSHKey.value = true;
-    addSSHKeyError.value = "";
-    try {
-      // Clean the SSH key: remove all newlines and carriage returns
-      // SSH keys should be a single continuous line
-      const cleanedKey = newSSHKeyValue.value
-        .trim()
-        .replace(/\r\n/g, "")
-        .replace(/\n/g, "")
-        .replace(/\r/g, "")
-        .trim();
-
-      await client.addSSHKey({
-        organizationId: orgId.value,
-        name: newSSHKeyName.value.trim(),
-        publicKey: cleanedKey,
-        vpsId: vpsId.value,
-      });
-      toast.success("SSH key added successfully");
-      addSSHKeyDialogOpen.value = false;
-      await fetchSSHKeys();
-    } catch (err: unknown) {
-      if (err instanceof ConnectError) {
-        addSSHKeyError.value = (err as Error).message || "Failed to add SSH key";
-      } else {
-        addSSHKeyError.value =
-          err instanceof Error ? (err as Error).message : "Unknown error";
-      }
-      toast.error("Failed to add SSH key", addSSHKeyError.value);
-    } finally {
-      addingSSHKey.value = false;
-    }
-  };
-
-  const openEditSSHKeyDialog = (key: { id: string; name: string }) => {
-    editingSSHKeyId.value = key.id;
-    editingSSHKeyName.value = key.name;
-    editingSSHKeyError.value = "";
-    editSSHKeyDialogOpen.value = true;
-  };
-
-  const updateSSHKey = async () => {
-    if (
-      !orgId.value ||
-      !editingSSHKeyId.value ||
-      !editingSSHKeyName.value.trim()
-    ) {
-      return;
-    }
-
-    editingSSHKey.value = editingSSHKeyId.value;
-    editingSSHKeyError.value = "";
-    try {
-      await client.updateSSHKey({
-        organizationId: orgId.value,
-        keyId: editingSSHKeyId.value,
-        name: editingSSHKeyName.value.trim(),
-      });
-      toast.success("SSH key name updated successfully");
-      editSSHKeyDialogOpen.value = false;
-      await fetchSSHKeys();
-    } catch (err: unknown) {
-      if (err instanceof ConnectError) {
-        editingSSHKeyError.value = (err as Error).message || "Failed to update SSH key";
-      } else {
-        editingSSHKeyError.value =
-          err instanceof Error ? (err as Error).message : "Unknown error";
-      }
-      toast.error("Failed to update SSH key", editingSSHKeyError.value);
-    } finally {
-      editingSSHKey.value = null;
-    }
-  };
-
-  const removeSSHKey = async (keyId: string) => {
-    if (!orgId.value) {
-      return;
-    }
-
-    // Find the key to check if it's org-wide
-    const key = sshKeys.value.find((k) => k.id === keyId);
-    const isOrgWide = key && !key.vpsId;
-
-    let message = "Are you sure you want to remove this SSH key?";
-    if (isOrgWide) {
-      // For org-wide keys, fetch the list of VPS instances that will be affected
-      try {
-        const vpsRes = await client.listVPS({
-          organizationId: orgId.value,
-          page: 1,
-          perPage: 100, // Get up to 100 VPS instances
-        });
-
-        // Filter to only VPS instances that are provisioned (have instance_id)
-        const affectedVPSList = (vpsRes.vpsInstances || [])
-          .filter((vps) => vps.instanceId) // Only VPS instances that are provisioned
-          .map((vps) => vps.name || vps.id)
-          .slice(0, 20); // Limit to 20 for display
-
-        if (affectedVPSList.length > 0) {
-          const vpsCount = vpsRes.pagination?.total || affectedVPSList.length;
-          let vpsListText = affectedVPSList
-            .map((name) => `  • ${name}`)
-            .join("\n");
-          if (vpsCount > affectedVPSList.length) {
-            vpsListText += `\n  ... and ${
-              vpsCount - affectedVPSList.length
-            } more`;
-          }
-          message = `Are you sure you want to remove this organization-wide SSH key?\n\nThis will remove the key from ${vpsCount} VPS instance(s) in this organization:\n\n${vpsListText}`;
-        } else {
-          message =
-            "Are you sure you want to remove this organization-wide SSH key? It will be removed from all VPS instances in this organization.";
+      if (affectedVPSList.length > 0) {
+        const vpsCount = vpsRes.pagination?.total || affectedVPSList.length;
+        let vpsListText = affectedVPSList
+          .map((name) => `  • ${name}`)
+          .join("\n");
+        if (vpsCount > affectedVPSList.length) {
+          vpsListText += `\n  ... and ${
+            vpsCount - affectedVPSList.length
+          } more`;
         }
-      } catch (err) {
-        // If we can't fetch VPS list, show generic message
+        message = `Are you sure you want to remove this organization-wide SSH key?\n\nThis will remove the key from ${vpsCount} VPS instance(s) in this organization:\n\n${vpsListText}`;
+      } else {
         message =
           "Are you sure you want to remove this organization-wide SSH key? It will be removed from all VPS instances in this organization.";
       }
-    } else {
-      message =
-        "Are you sure you want to remove this SSH key? You will no longer be able to use it to access this VPS instance.";
-    }
-
-    const confirmed = await showConfirm({
-      title: "Remove SSH Key",
-      message: message,
-      confirmLabel: "Remove",
-      cancelLabel: "Cancel",
-      variant: "danger",
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    removingSSHKey.value = keyId;
-    try {
-      const res = await client.removeSSHKey({
-        organizationId: orgId.value,
-        keyId: keyId,
-      });
-
-      // Show success message with affected VPS count
-      if (isOrgWide && res.affectedVpsIds && res.affectedVpsIds.length > 0) {
-        toast.success(
-          `SSH key removed successfully from ${res.affectedVpsIds.length} VPS instance(s)`
-        );
-      } else {
-        toast.success("SSH key removed successfully");
-      }
-      await fetchSSHKeys();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to remove SSH key", message);
-    } finally {
-      removingSSHKey.value = null;
-    }
-  };
-
-  const formatSSHKeyDate = (
-    timestamp: { seconds: number | bigint; nanos: number } | undefined
-  ) => {
-    if (!timestamp) return "Unknown";
-    return formatDate(timestamp);
-  };
-
-  // Password Reset Functions
-  const openResetPasswordDialog = () => {
-    resetPasswordDialogOpen.value = true;
-    newPassword.value = null;
-    resetPasswordMessage.value = null;
-    passwordRebooted.value = false;
-  };
-
-  const rotateTerminalKey = async () => {
-    if (!orgId.value || !vpsId.value) {
-      return;
-    }
-
-    rotatingTerminalKey.value = true;
-    try {
-      const response = await configClient.rotateTerminalKey({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-
-      toast.success(
-        "Terminal key rotated successfully. The new key will take effect after reboot."
-      );
-
-      // Refresh terminal key info
-      await fetchTerminalKey();
-
-      // Refresh VPS to ensure UI is up to date
-      await refreshVPS();
-    } catch (err: unknown) {
-      if (err instanceof ConnectError) {
-        if (err.code === Code.NotFound) {
-          // Key doesn't exist - this shouldn't happen with rotate, but handle it
-          toast.error(
-            "Terminal key not found. The key may need to be created first."
-          );
-          terminalKey.value = null;
-        } else {
-          toast.error(`Failed to rotate terminal key: ${(err as Error).message}`);
-        }
-      } else {
-        toast.error(
-          `Failed to rotate terminal key: ${(err as Error).message || "Unknown error"}`
-        );
-      }
-    } finally {
-      rotatingTerminalKey.value = false;
-    }
-  };
-
-  const rotateBastionKey = async () => {
-    if (!orgId.value || !vpsId.value) {
-      return;
-    }
-
-    rotatingBastionKey.value = true;
-    try {
-      const response = await configClient.rotateBastionKey({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-
-      toast.success(
-        "Bastion key rotated successfully. The new key will take effect after reboot."
-      );
-
-      // Refresh bastion key info
-      await fetchBastionKey();
-
-      // Refresh VPS to ensure UI is up to date
-      await refreshVPS();
-    } catch (err: unknown) {
-      if (err instanceof ConnectError) {
-        if (err.code === Code.NotFound) {
-          toast.error(
-            "Bastion key not found. The key may need to be created first."
-          );
-          bastionKey.value = null;
-        } else {
-          toast.error(`Failed to rotate bastion key: ${(err as Error).message}`);
-        }
-      } else {
-        toast.error(
-          `Failed to rotate bastion key: ${(err as Error).message || "Unknown error"}`
-        );
-      }
-    } finally {
-      rotatingBastionKey.value = false;
-    }
-  };
-
-  const openRemoveTerminalKeyDialog = () => {
-    removeTerminalKeyDialogOpen.value = true;
-  };
-
-  const removeTerminalKey = async () => {
-    if (!orgId.value || !vpsId.value) {
-      return;
-    }
-
-    removingTerminalKey.value = true;
-    try {
-      await configClient.removeTerminalKey({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-
-      toast.success(
-        "Terminal key removed. Web terminal access will be disabled after reboot."
-      );
-
-      // Clear terminal key info and refresh
-      terminalKey.value = null;
-      removeTerminalKeyDialogOpen.value = false;
-      await fetchTerminalKey(); // Refresh to confirm removal
-
-      // Refresh VPS to ensure UI is up to date
-      await refreshVPS();
-    } catch (err: unknown) {
-      if (err instanceof ConnectError) {
-        if (err.code === Code.NotFound) {
-          toast.error("Terminal key not found.");
-        } else {
-          toast.error(`Failed to remove terminal key: ${(err as Error).message}`);
-        }
-      } else {
-        toast.error(
-          `Failed to remove terminal key: ${(err as Error).message || "Unknown error"}`
-        );
-      }
-    } finally {
-      removingTerminalKey.value = false;
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!vps.value || !orgId.value) return;
-
-    resettingPassword.value = true;
-    try {
-      const res = await client.resetVPSPassword({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-      newPassword.value = res.rootPassword || null;
-      resetPasswordMessage.value = res.message || null;
-      toast.success(
-        "Password reset successfully",
-        "Please save the new password - it will not be shown again."
-      );
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to reset password", message);
-      resetPasswordDialogOpen.value = false;
-    } finally {
-      resettingPassword.value = false;
-    }
-  };
-
-  const copyNewPassword = async () => {
-    if (!newPassword.value) return;
-    try {
-      await navigator.clipboard.writeText(newPassword.value);
-      toast.success("Password copied to clipboard");
     } catch (err) {
-      toast.error("Failed to copy password");
+      // If we can't fetch VPS list, show generic message
+      message =
+        "Are you sure you want to remove this organization-wide SSH key? It will be removed from all VPS instances in this organization.";
     }
-  };
+  } else {
+    message =
+      "Are you sure you want to remove this SSH key? You will no longer be able to use it to access this VPS instance.";
+  }
 
-  // Fetch SSH keys when organization changes
-  watch(
-    orgId,
-    () => {
-      fetchSSHKeys();
-    },
-    { immediate: true }
-  );
-
-  // Status helpers
-  const statusLabel = computed(() => {
-    if (!vps.value) return "Unknown";
-    const status = vps.value.status;
-    switch (status) {
-      case VPSStatus.CREATING:
-        return "Creating";
-      case VPSStatus.STARTING:
-        return "Starting";
-      case VPSStatus.RUNNING:
-        return "Running";
-      case VPSStatus.STOPPING:
-        return "Stopping";
-      case VPSStatus.STOPPED:
-        return "Stopped";
-      case VPSStatus.REBOOTING:
-        return "Rebooting";
-      case VPSStatus.FAILED:
-        return "Failed";
-      case VPSStatus.DELETING:
-        return "Deleting";
-      case VPSStatus.DELETED:
-        return "Deleted";
-      default:
-        return "Unknown";
-    }
+  const confirmed = await showConfirm({
+    title: "Remove SSH Key",
+    message: message,
+    confirmLabel: "Remove",
+    cancelLabel: "Cancel",
+    variant: "danger",
   });
 
-  const getStatusMeta = (status: number) => {
-    switch (status) {
-      case VPSStatus.RUNNING:
-        return {
-          badge: "success" as const,
-          label: "Running",
-          dotClass: "bg-success",
-        };
-      case VPSStatus.CREATING:
-      case VPSStatus.STARTING:
-      case VPSStatus.REBOOTING:
-        return {
-          badge: "warning" as const,
-          label:
-            status === VPSStatus.CREATING
-              ? "Creating"
-              : status === VPSStatus.STARTING
-              ? "Starting"
-              : "Rebooting",
-          dotClass: "bg-warning",
-        };
-      case VPSStatus.STOPPED:
-      case VPSStatus.STOPPING:
-        return {
-          badge: "secondary" as const,
-          label: status === VPSStatus.STOPPING ? "Stopping" : "Stopped",
-          dotClass: "bg-secondary",
-        };
-      case VPSStatus.FAILED:
-        return {
-          badge: "danger" as const,
-          label: "Failed",
-          dotClass: "bg-danger",
-        };
-      case VPSStatus.DELETING:
-        return {
-          badge: "warning" as const,
-          label: "Deleting",
-          dotClass: "bg-warning",
-        };
-      case VPSStatus.DELETED:
-        return {
-          badge: "secondary" as const,
-          label: "Deleted",
-          dotClass: "bg-secondary",
-        };
-      default:
-        return {
-          badge: "secondary" as const,
-          label: "Unknown",
-          dotClass: "bg-secondary",
-        };
-    }
-  };
+  if (!confirmed) {
+    return;
+  }
 
-  const statusMeta = computed(() => {
-    if (!vps.value) {
+  removingSSHKey.value = keyId;
+  try {
+    const res = await client.removeSSHKey({
+      organizationId: orgId.value,
+      keyId: keyId,
+    });
+
+    // Show success message with affected VPS count
+    if (isOrgWide && res.affectedVpsIds && res.affectedVpsIds.length > 0) {
+      toast.success(
+        `SSH key removed successfully from ${res.affectedVpsIds.length} VPS instance(s)`
+      );
+    } else {
+      toast.success("SSH key removed successfully");
+    }
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to remove SSH key", message);
+  } finally {
+    removingSSHKey.value = null;
+  }
+};
+
+const formatSSHKeyDate = (
+  timestamp: { seconds: number | bigint; nanos: number } | undefined
+) => {
+  if (!timestamp) return "Unknown";
+  return formatDate(timestamp);
+};
+
+// Password Reset Functions
+const openResetPasswordDialog = () => {
+  resetPasswordDialogOpen.value = true;
+  newPassword.value = null;
+  resetPasswordMessage.value = null;
+  passwordRebooted.value = false;
+};
+
+const rotateTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  rotatingTerminalKey.value = true;
+  try {
+    const response = await configClient.rotateTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+
+    toast.success(
+      "Terminal key rotated successfully. The new key will take effect after reboot."
+    );
+
+    // Refresh terminal key info
+    await fetchTerminalKey();
+
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        // Key doesn't exist - this shouldn't happen with rotate, but handle it
+        toast.error(
+          "Terminal key not found. The key may need to be created first."
+        );
+        terminalKey.value = null;
+      } else {
+        toast.error(`Failed to rotate terminal key: ${(err as Error).message}`);
+      }
+    } else {
+      toast.error(
+        `Failed to rotate terminal key: ${
+          (err as Error).message || "Unknown error"
+        }`
+      );
+    }
+  } finally {
+    rotatingTerminalKey.value = false;
+  }
+};
+
+const rotateBastionKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  rotatingBastionKey.value = true;
+  try {
+    const response = await configClient.rotateBastionKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+
+    toast.success(
+      "Bastion key rotated successfully. The new key will take effect after reboot."
+    );
+
+    // Refresh bastion key info
+    await fetchBastionKey();
+
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        toast.error(
+          "Bastion key not found. The key may need to be created first."
+        );
+        bastionKey.value = null;
+      } else {
+        toast.error(`Failed to rotate bastion key: ${(err as Error).message}`);
+      }
+    } else {
+      toast.error(
+        `Failed to rotate bastion key: ${
+          (err as Error).message || "Unknown error"
+        }`
+      );
+    }
+  } finally {
+    rotatingBastionKey.value = false;
+  }
+};
+
+const openRemoveTerminalKeyDialog = () => {
+  removeTerminalKeyDialogOpen.value = true;
+};
+
+const removeTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  removingTerminalKey.value = true;
+  try {
+    await configClient.removeTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+
+    toast.success(
+      "Terminal key removed. Web terminal access will be disabled after reboot."
+    );
+
+    // Clear terminal key info and refresh
+    terminalKey.value = null;
+    removeTerminalKeyDialogOpen.value = false;
+    await fetchTerminalKey(); // Refresh to confirm removal
+
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        toast.error("Terminal key not found.");
+      } else {
+        toast.error(`Failed to remove terminal key: ${(err as Error).message}`);
+      }
+    } else {
+      toast.error(
+        `Failed to remove terminal key: ${
+          (err as Error).message || "Unknown error"
+        }`
+      );
+    }
+  } finally {
+    removingTerminalKey.value = false;
+  }
+};
+
+const handleResetPassword = async () => {
+  if (!vps.value || !orgId.value) return;
+
+  resettingPassword.value = true;
+  try {
+    const res = await client.resetVPSPassword({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    newPassword.value = res.rootPassword || null;
+    resetPasswordMessage.value = res.message || null;
+    toast.success(
+      "Password reset successfully",
+      "Please save the new password - it will not be shown again."
+    );
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to reset password", message);
+    resetPasswordDialogOpen.value = false;
+  } finally {
+    resettingPassword.value = false;
+  }
+};
+
+const copyNewPassword = async () => {
+  if (!newPassword.value) return;
+  try {
+    await navigator.clipboard.writeText(newPassword.value);
+    toast.success("Password copied to clipboard");
+  } catch (err) {
+    toast.error("Failed to copy password");
+  }
+};
+
+// Fetch SSH keys when organization changes
+watch(
+  orgId,
+  () => {
+    fetchSSHKeys();
+  },
+  { immediate: true }
+);
+
+// Status helpers
+const statusLabel = computed(() => {
+  if (!vps.value) return "Unknown";
+  const status = vps.value.status;
+  switch (status) {
+    case VPSStatus.CREATING:
+      return "Creating";
+    case VPSStatus.STARTING:
+      return "Starting";
+    case VPSStatus.RUNNING:
+      return "Running";
+    case VPSStatus.STOPPING:
+      return "Stopping";
+    case VPSStatus.STOPPED:
+      return "Stopped";
+    case VPSStatus.REBOOTING:
+      return "Rebooting";
+    case VPSStatus.FAILED:
+      return "Failed";
+    case VPSStatus.DELETING:
+      return "Deleting";
+    case VPSStatus.DELETED:
+      return "Deleted";
+    default:
+      return "Unknown";
+  }
+});
+
+const getStatusMeta = (status: number) => {
+  switch (status) {
+    case VPSStatus.RUNNING:
+      return {
+        badge: "success" as const,
+        label: "Running",
+        dotClass: "bg-success",
+      };
+    case VPSStatus.CREATING:
+    case VPSStatus.STARTING:
+    case VPSStatus.REBOOTING:
+      return {
+        badge: "warning" as const,
+        label:
+          status === VPSStatus.CREATING
+            ? "Creating"
+            : status === VPSStatus.STARTING
+            ? "Starting"
+            : "Rebooting",
+        dotClass: "bg-warning",
+      };
+    case VPSStatus.STOPPED:
+    case VPSStatus.STOPPING:
+      return {
+        badge: "secondary" as const,
+        label: status === VPSStatus.STOPPING ? "Stopping" : "Stopped",
+        dotClass: "bg-secondary",
+      };
+    case VPSStatus.FAILED:
+      return {
+        badge: "danger" as const,
+        label: "Failed",
+        dotClass: "bg-danger",
+      };
+    case VPSStatus.DELETING:
+      return {
+        badge: "warning" as const,
+        label: "Deleting",
+        dotClass: "bg-warning",
+      };
+    case VPSStatus.DELETED:
+      return {
+        badge: "secondary" as const,
+        label: "Deleted",
+        dotClass: "bg-secondary",
+      };
+    default:
       return {
         badge: "secondary" as const,
         label: "Unknown",
         dotClass: "bg-secondary",
       };
-    }
-    return getStatusMeta(vps.value.status);
+  }
+};
+
+const statusMeta = computed(() => {
+  if (!vps.value) {
+    return {
+      badge: "secondary" as const,
+      label: "Unknown",
+      dotClass: "bg-secondary",
+    };
+  }
+  return getStatusMeta(vps.value.status);
+});
+
+const statusBadgeColor = computed(() => statusMeta.value.badge);
+const statusDotClass = computed(() => statusMeta.value.dotClass);
+
+const imageLabel = computed(() => {
+  if (!vps.value) return "—";
+  const image = vps.value.image;
+  switch (image) {
+    case VPSImage.UBUNTU_22_04:
+      return "Ubuntu 22.04 LTS";
+    case VPSImage.UBUNTU_24_04:
+      return "Ubuntu 24.04 LTS";
+    case VPSImage.DEBIAN_12:
+      return "Debian 12";
+    case VPSImage.DEBIAN_13:
+      return "Debian 13";
+    case VPSImage.ROCKY_LINUX_9:
+      return "Rocky Linux 9";
+    case VPSImage.ALMA_LINUX_9:
+      return "AlmaLinux 9";
+    case VPSImage.CUSTOM:
+      return vps.value.imageId || "Custom Image";
+    default:
+      return "Unknown";
+  }
+});
+
+// Actions
+async function handleStart() {
+  if (!vps.value) return;
+  const confirmed = await showConfirm({
+    title: "Start VPS Instance",
+    message: `Are you sure you want to start "${vps.value.name}"?`,
   });
+  if (!confirmed) return;
 
-  const statusBadgeColor = computed(() => statusMeta.value.badge);
-  const statusDotClass = computed(() => statusMeta.value.dotClass);
+  isActioning.value = true;
+  try {
+    await client.startVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    toast.success("VPS instance started", "The VPS instance is starting up.");
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to start VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
 
-  const imageLabel = computed(() => {
-    if (!vps.value) return "—";
-    const image = vps.value.image;
-    switch (image) {
-      case VPSImage.UBUNTU_22_04:
-        return "Ubuntu 22.04 LTS";
-      case VPSImage.UBUNTU_24_04:
-        return "Ubuntu 24.04 LTS";
-      case VPSImage.DEBIAN_12:
-        return "Debian 12";
-      case VPSImage.DEBIAN_13:
-        return "Debian 13";
-      case VPSImage.ROCKY_LINUX_9:
-        return "Rocky Linux 9";
-      case VPSImage.ALMA_LINUX_9:
-        return "AlmaLinux 9";
-      case VPSImage.CUSTOM:
-        return vps.value.imageId || "Custom Image";
-      default:
-        return "Unknown";
-    }
+async function handleStop() {
+  if (!vps.value) return;
+  const confirmed = await showConfirm({
+    title: "Stop VPS Instance",
+    message: `Are you sure you want to stop "${vps.value.name}"? The instance will be stopped and will not consume resources.`,
   });
+  if (!confirmed) return;
 
-  // Actions
-  async function handleStart() {
-    if (!vps.value) return;
-    const confirmed = await showConfirm({
-      title: "Start VPS Instance",
-      message: `Are you sure you want to start "${vps.value.name}"?`,
+  isActioning.value = true;
+  try {
+    await client.stopVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
     });
-    if (!confirmed) return;
-
-    isActioning.value = true;
-    try {
-      await client.startVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-      toast.success("VPS instance started", "The VPS instance is starting up.");
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to start VPS", message);
-    } finally {
-      isActioning.value = false;
-    }
+    toast.success("VPS instance stopped", "The VPS instance has been stopped.");
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to stop VPS", message);
+  } finally {
+    isActioning.value = false;
   }
+}
 
-  async function handleStop() {
-    if (!vps.value) return;
-    const confirmed = await showConfirm({
-      title: "Stop VPS Instance",
-      message: `Are you sure you want to stop "${vps.value.name}"? The instance will be stopped and will not consume resources.`,
-    });
-    if (!confirmed) return;
-
-    isActioning.value = true;
-    try {
-      await client.stopVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-      toast.success(
-        "VPS instance stopped",
-        "The VPS instance has been stopped."
-      );
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to stop VPS", message);
-    } finally {
-      isActioning.value = false;
-    }
-  }
-
-  async function handleReboot() {
-    if (!vps.value) return;
-    const confirmed = await showConfirm({
-      title: "Reboot VPS Instance",
-      message: `Are you sure you want to reboot "${vps.value.name}"? The instance will restart.`,
-    });
-    if (!confirmed) return;
-
-    await performReboot();
-  }
-
-  async function handleRebootFromDialog() {
-    // Reboot without confirmation (user already confirmed by resetting password)
-    // Don't close dialog or clear password - user needs to confirm they saved it
-    await performReboot();
-    // Mark as rebooted so we can hide the reboot button
-    passwordRebooted.value = true;
-  }
-
-  async function performReboot() {
-    if (!vps.value) return;
-
-    isActioning.value = true;
-    try {
-      await client.rebootVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-      // Only show password-related message if we're in the password reset flow
-      if (newPassword.value) {
-        toast.success(
-          "VPS instance rebooting",
-          "The VPS instance is rebooting. The new password will be active after reboot."
-        );
-      } else {
-        toast.success("VPS instance rebooting");
-      }
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to reboot VPS", message);
-    } finally {
-      isActioning.value = false;
-    }
-  }
-
-  async function handleRename() {
-    if (!vps.value || !vpsName.value.trim() || vpsName.value === vps.value.name)
-      return;
-
-    isActioning.value = true;
-    try {
-      await client.updateVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-        name: vpsName.value.trim(),
-      });
-      toast.success("VPS renamed", "The VPS name has been updated.");
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to rename VPS", message);
-    } finally {
-      isActioning.value = false;
-    }
-  }
-
-  async function handleUpdateDescription() {
-    if (!vps.value || vpsDescription.value === vps.value.description) return;
-
-    isActioning.value = true;
-    try {
-      await client.updateVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-        description: vpsDescription.value.trim() || undefined,
-      });
-      toast.success(
-        "Description updated",
-        "The VPS description has been updated."
-      );
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to update description", message);
-    } finally {
-      isActioning.value = false;
-    }
-  }
-
-  async function handleReinit() {
-    if (!vps.value) return;
-
-    const confirmed = await showConfirm({
-      title: "Reinitialize VPS",
-      message: `Are you sure you want to reinitialize "${vps.value.name}"? This will permanently delete all data on the VPS and reinstall the operating system. The VPS will be reconfigured with the same cloud-init settings. This action cannot be undone.`,
-      confirmLabel: "Reinitialize",
-      cancelLabel: "Cancel",
-      variant: "danger",
-    });
-    if (!confirmed) return;
-
-    isActioning.value = true;
-    try {
-      const res = await client.reinitializeVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-
-      toast.success(
-        "VPS reinitialized",
-        res.message || "The VPS is being reinitialized."
-      );
-
-      // Show password dialog if password was returned
-      if (res.rootPassword) {
-        await showAlert({
-          title: "VPS Reinitialized",
-          message: `The VPS has been reinitialized. Please save this root password as it will not be shown again:\n\n${res.rootPassword}\n\nThe VPS is being provisioned and cloud-init will be reapplied.`,
-        });
-      }
-
-      // Refresh VPS data
-      await refreshVPS();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to reinitialize VPS", message);
-    } finally {
-      isActioning.value = false;
-    }
-  }
-
-  async function handleDelete() {
-    if (!vps.value) return;
-    const confirmed = await showConfirm({
-      title: "Delete VPS Instance",
-      message: `Are you sure you want to delete "${vps.value.name}"? This action cannot be undone. All data on the VPS will be permanently lost.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      variant: "danger",
-    });
-    if (!confirmed) return;
-
-    isActioning.value = true;
-    try {
-      await client.deleteVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-        force: false,
-      });
-      toast.success(
-        "VPS instance deleted",
-        "The VPS instance has been deleted."
-      );
-      // Redirect immediately to prevent any refetch attempts
-      await router.push("/vps");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? (err as Error).message : "Unknown error";
-      toast.error("Failed to delete VPS", message);
-      isActioning.value = false;
-    }
-  }
-
-  // Tabs configuration
-  const tabs = computed<TabItem[]>(() => [
-    { id: "overview", label: "Overview", icon: InformationCircleIcon },
-    { id: "metrics", label: "Metrics", icon: ChartBarIcon },
-    { id: "terminal", label: "Terminal", icon: CommandLineIcon },
-    { id: "logs", label: "Logs", icon: DocumentTextIcon },
-    { id: "firewall", label: "Firewall", icon: ShieldExclamationIcon },
-    { id: "users", label: "Users", icon: UserIcon },
-    { id: "cloud-init", label: "Cloud-Init", icon: CogIcon },
-    { id: "ssh-settings", label: "SSH Settings", icon: KeyIcon },
-    { id: "settings", label: "Settings", icon: CogIcon },
-    { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
-  ]);
-
-  // Get activeTab from ResourceTabs component
-  const tabsRef = ref<{ activeTab: { value: string } } | null>(null);
-  const activeTab = computed({
-    get: () => tabsRef.value?.activeTab.value || "overview",
-    set: (value: string) => {
-      if (tabsRef.value) {
-        tabsRef.value.activeTab.value = value;
-      }
-    },
+async function handleReboot() {
+  if (!vps.value) return;
+  const confirmed = await showConfirm({
+    title: "Reboot VPS Instance",
+    message: `Are you sure you want to reboot "${vps.value.name}"? The instance will restart.`,
   });
+  if (!confirmed) return;
 
-  function openTerminal() {
+  await performReboot();
+}
+
+async function handleRebootFromDialog() {
+  // Reboot without confirmation (user already confirmed by resetting password)
+  // Don't close dialog or clear password - user needs to confirm they saved it
+  await performReboot();
+  // Mark as rebooted so we can hide the reboot button
+  passwordRebooted.value = true;
+}
+
+async function performReboot() {
+  if (!vps.value) return;
+
+  isActioning.value = true;
+  try {
+    await client.rebootVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    // Only show password-related message if we're in the password reset flow
+    if (newPassword.value) {
+      toast.success(
+        "VPS instance rebooting",
+        "The VPS instance is rebooting. The new password will be active after reboot."
+      );
+    } else {
+      toast.success("VPS instance rebooting");
+    }
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to reboot VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleRename() {
+  if (!vps.value || !vpsName.value.trim() || vpsName.value === vps.value.name)
+    return;
+
+  isActioning.value = true;
+  try {
+    await client.updateVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      name: vpsName.value.trim(),
+    });
+    toast.success("VPS renamed", "The VPS name has been updated.");
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to rename VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleUpdateDescription() {
+  if (!vps.value || vpsDescription.value === vps.value.description) return;
+
+  isActioning.value = true;
+  try {
+    await client.updateVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      description: vpsDescription.value.trim() || undefined,
+    });
+    toast.success(
+      "Description updated",
+      "The VPS description has been updated."
+    );
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to update description", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleReinit() {
+  if (!vps.value) return;
+
+  const confirmed = await showConfirm({
+    title: "Reinitialize VPS",
+    message: `Are you sure you want to reinitialize "${vps.value.name}"? This will permanently delete all data on the VPS and reinstall the operating system. The VPS will be reconfigured with the same cloud-init settings. This action cannot be undone.`,
+    confirmLabel: "Reinitialize",
+    cancelLabel: "Cancel",
+    variant: "danger",
+  });
+  if (!confirmed) return;
+
+  isActioning.value = true;
+  try {
+    const res = await client.reinitializeVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+
+    toast.success(
+      "VPS reinitialized",
+      res.message || "The VPS is being reinitialized."
+    );
+
+    // Show password dialog if password was returned
+    if (res.rootPassword) {
+      await showAlert({
+        title: "VPS Reinitialized",
+        message: `The VPS has been reinitialized. Please save this root password as it will not be shown again:\n\n${res.rootPassword}\n\nThe VPS is being provisioned and cloud-init will be reapplied.`,
+      });
+    }
+
+    // Refresh VPS data
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to reinitialize VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleDelete() {
+  if (!vps.value) return;
+  const confirmed = await showConfirm({
+    title: "Delete VPS Instance",
+    message: `Are you sure you want to delete "${vps.value.name}"? This action cannot be undone. All data on the VPS will be permanently lost.`,
+    confirmLabel: "Delete",
+    cancelLabel: "Cancel",
+    variant: "danger",
+  });
+  if (!confirmed) return;
+
+  isActioning.value = true;
+  try {
+    await client.deleteVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      force: false,
+    });
+    toast.success("VPS instance deleted", "The VPS instance has been deleted.");
+    // Redirect immediately to prevent any refetch attempts
+    await router.push("/vps");
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? (err as Error).message : "Unknown error";
+    toast.error("Failed to delete VPS", message);
+    isActioning.value = false;
+  }
+}
+
+// Tabs configuration
+const tabs = computed<TabItem[]>(() => [
+  { id: "overview", label: "Overview", icon: InformationCircleIcon },
+  { id: "metrics", label: "Metrics", icon: ChartBarIcon },
+  { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+  { id: "logs", label: "System", icon: DocumentTextIcon },
+  { id: "firewall", label: "Firewall", icon: ShieldExclamationIcon },
+  { id: "users", label: "Users", icon: UserIcon },
+  { id: "cloud-init", label: "Cloud-Init", icon: CogIcon },
+  { id: "ssh-settings", label: "SSH Settings", icon: KeyIcon },
+  { id: "settings", label: "Settings", icon: CogIcon },
+  { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
+]);
+
+// Get activeTab from ResourceTabs component
+const tabsRef = ref<{ activeTab: { value: string } } | null>(null);
+const activeTab = computed({
+  get: () => tabsRef.value?.activeTab.value || "overview",
+  set: (value: string) => {
     if (tabsRef.value) {
-      tabsRef.value.activeTab.value = "terminal";
+      tabsRef.value.activeTab.value = value;
     }
+  },
+});
+
+function openTerminal() {
+  if (tabsRef.value) {
+    tabsRef.value.activeTab.value = "terminal";
   }
+}
 </script>

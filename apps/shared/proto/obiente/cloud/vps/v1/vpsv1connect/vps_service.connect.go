@@ -106,6 +106,12 @@ const (
 	// VPSServiceStreamVPSLogsProcedure is the fully-qualified name of the VPSService's StreamVPSLogs
 	// RPC.
 	VPSServiceStreamVPSLogsProcedure = "/obiente.cloud.vps.v1.VPSService/StreamVPSLogs"
+	// VPSServiceGetVPSJournalLogsProcedure is the fully-qualified name of the VPSService's
+	// GetVPSJournalLogs RPC.
+	VPSServiceGetVPSJournalLogsProcedure = "/obiente.cloud.vps.v1.VPSService/GetVPSJournalLogs"
+	// VPSServiceListVPSServicesProcedure is the fully-qualified name of the VPSService's
+	// ListVPSServices RPC.
+	VPSServiceListVPSServicesProcedure = "/obiente.cloud.vps.v1.VPSService/ListVPSServices"
 	// VPSServiceImportVPSProcedure is the fully-qualified name of the VPSService's ImportVPS RPC.
 	VPSServiceImportVPSProcedure = "/obiente.cloud.vps.v1.VPSService/ImportVPS"
 	// VPSServiceGetVPSLeasesProcedure is the fully-qualified name of the VPSService's GetVPSLeases RPC.
@@ -180,6 +186,10 @@ type VPSServiceClient interface {
 	ReinitializeVPS(context.Context, *connect.Request[v1.ReinitializeVPSRequest]) (*connect.Response[v1.ReinitializeVPSResponse], error)
 	// Stream VPS provisioning logs
 	StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest]) (*connect.ServerStreamForClient[v1.VPSLogLine], error)
+	// Get journal logs from inside the guest OS
+	GetVPSJournalLogs(context.Context, *connect.Request[v1.GetVPSJournalLogsRequest]) (*connect.Response[v1.GetVPSJournalLogsResponse], error)
+	// List systemd services from inside the guest OS
+	ListVPSServices(context.Context, *connect.Request[v1.ListVPSServicesRequest]) (*connect.Response[v1.ListVPSServicesResponse], error)
 	// Import missing VPS instances from Proxmox that belong to the organization
 	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
 	// any that are missing from the database, ensuring they belong to the requesting organization
@@ -387,6 +397,18 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("StreamVPSLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		getVPSJournalLogs: connect.NewClient[v1.GetVPSJournalLogsRequest, v1.GetVPSJournalLogsResponse](
+			httpClient,
+			baseURL+VPSServiceGetVPSJournalLogsProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("GetVPSJournalLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		listVPSServices: connect.NewClient[v1.ListVPSServicesRequest, v1.ListVPSServicesResponse](
+			httpClient,
+			baseURL+VPSServiceListVPSServicesProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("ListVPSServices")),
+			connect.WithClientOptions(opts...),
+		),
 		importVPS: connect.NewClient[v1.ImportVPSRequest, v1.ImportVPSResponse](
 			httpClient,
 			baseURL+VPSServiceImportVPSProcedure,
@@ -463,6 +485,8 @@ type vPSServiceClient struct {
 	resetVPSPassword      *connect.Client[v1.ResetVPSPasswordRequest, v1.ResetVPSPasswordResponse]
 	reinitializeVPS       *connect.Client[v1.ReinitializeVPSRequest, v1.ReinitializeVPSResponse]
 	streamVPSLogs         *connect.Client[v1.StreamVPSLogsRequest, v1.VPSLogLine]
+	getVPSJournalLogs     *connect.Client[v1.GetVPSJournalLogsRequest, v1.GetVPSJournalLogsResponse]
+	listVPSServices       *connect.Client[v1.ListVPSServicesRequest, v1.ListVPSServicesResponse]
 	importVPS             *connect.Client[v1.ImportVPSRequest, v1.ImportVPSResponse]
 	getVPSLeases          *connect.Client[v1.GetVPSLeasesRequest, v1.GetVPSLeasesResponse]
 	findVPSByLease        *connect.Client[v1.FindVPSByLeaseRequest, v1.FindVPSByLeaseResponse]
@@ -617,6 +641,16 @@ func (c *vPSServiceClient) StreamVPSLogs(ctx context.Context, req *connect.Reque
 	return c.streamVPSLogs.CallServerStream(ctx, req)
 }
 
+// GetVPSJournalLogs calls obiente.cloud.vps.v1.VPSService.GetVPSJournalLogs.
+func (c *vPSServiceClient) GetVPSJournalLogs(ctx context.Context, req *connect.Request[v1.GetVPSJournalLogsRequest]) (*connect.Response[v1.GetVPSJournalLogsResponse], error) {
+	return c.getVPSJournalLogs.CallUnary(ctx, req)
+}
+
+// ListVPSServices calls obiente.cloud.vps.v1.VPSService.ListVPSServices.
+func (c *vPSServiceClient) ListVPSServices(ctx context.Context, req *connect.Request[v1.ListVPSServicesRequest]) (*connect.Response[v1.ListVPSServicesResponse], error) {
+	return c.listVPSServices.CallUnary(ctx, req)
+}
+
 // ImportVPS calls obiente.cloud.vps.v1.VPSService.ImportVPS.
 func (c *vPSServiceClient) ImportVPS(ctx context.Context, req *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error) {
 	return c.importVPS.CallUnary(ctx, req)
@@ -706,6 +740,10 @@ type VPSServiceHandler interface {
 	ReinitializeVPS(context.Context, *connect.Request[v1.ReinitializeVPSRequest]) (*connect.Response[v1.ReinitializeVPSResponse], error)
 	// Stream VPS provisioning logs
 	StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest], *connect.ServerStream[v1.VPSLogLine]) error
+	// Get journal logs from inside the guest OS
+	GetVPSJournalLogs(context.Context, *connect.Request[v1.GetVPSJournalLogsRequest]) (*connect.Response[v1.GetVPSJournalLogsResponse], error)
+	// List systemd services from inside the guest OS
+	ListVPSServices(context.Context, *connect.Request[v1.ListVPSServicesRequest]) (*connect.Response[v1.ListVPSServicesResponse], error)
 	// Import missing VPS instances from Proxmox that belong to the organization
 	// This will scan Proxmox for VMs with Obiente Cloud descriptions and import
 	// any that are missing from the database, ensuring they belong to the requesting organization
@@ -909,6 +947,18 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("StreamVPSLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceGetVPSJournalLogsHandler := connect.NewUnaryHandler(
+		VPSServiceGetVPSJournalLogsProcedure,
+		svc.GetVPSJournalLogs,
+		connect.WithSchema(vPSServiceMethods.ByName("GetVPSJournalLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceListVPSServicesHandler := connect.NewUnaryHandler(
+		VPSServiceListVPSServicesProcedure,
+		svc.ListVPSServices,
+		connect.WithSchema(vPSServiceMethods.ByName("ListVPSServices")),
+		connect.WithHandlerOptions(opts...),
+	)
 	vPSServiceImportVPSHandler := connect.NewUnaryHandler(
 		VPSServiceImportVPSProcedure,
 		svc.ImportVPS,
@@ -1011,6 +1061,10 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceReinitializeVPSHandler.ServeHTTP(w, r)
 		case VPSServiceStreamVPSLogsProcedure:
 			vPSServiceStreamVPSLogsHandler.ServeHTTP(w, r)
+		case VPSServiceGetVPSJournalLogsProcedure:
+			vPSServiceGetVPSJournalLogsHandler.ServeHTTP(w, r)
+		case VPSServiceListVPSServicesProcedure:
+			vPSServiceListVPSServicesHandler.ServeHTTP(w, r)
 		case VPSServiceImportVPSProcedure:
 			vPSServiceImportVPSHandler.ServeHTTP(w, r)
 		case VPSServiceGetVPSLeasesProcedure:
@@ -1148,6 +1202,14 @@ func (UnimplementedVPSServiceHandler) ReinitializeVPS(context.Context, *connect.
 
 func (UnimplementedVPSServiceHandler) StreamVPSLogs(context.Context, *connect.Request[v1.StreamVPSLogsRequest], *connect.ServerStream[v1.VPSLogLine]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.StreamVPSLogs is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) GetVPSJournalLogs(context.Context, *connect.Request[v1.GetVPSJournalLogsRequest]) (*connect.Response[v1.GetVPSJournalLogsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.GetVPSJournalLogs is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) ListVPSServices(context.Context, *connect.Request[v1.ListVPSServicesRequest]) (*connect.Response[v1.ListVPSServicesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ListVPSServices is not implemented"))
 }
 
 func (UnimplementedVPSServiceHandler) ImportVPS(context.Context, *connect.Request[v1.ImportVPSRequest]) (*connect.Response[v1.ImportVPSResponse], error) {

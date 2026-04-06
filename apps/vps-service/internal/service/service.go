@@ -29,16 +29,27 @@ type Service struct {
 	permissionChecker *auth.PermissionChecker
 	quotaChecker      *quota.Checker
 	vpsManager        *orchestrator.VPSManager
+	sshPool           *SSHConnectionPool
 	backgroundCtx     context.Context
 }
 
 func NewService(backgroundCtx context.Context, vpsManager *orchestrator.VPSManager, qc *quota.Checker) *Service {
-	return &Service{
+	svc := &Service{
 		permissionChecker: auth.NewPermissionChecker(),
 		quotaChecker:      qc,
 		vpsManager:        vpsManager,
+		sshPool:           NewSSHConnectionPool(nil),
 		backgroundCtx:     backgroundCtx,
 	}
+	if backgroundCtx != nil {
+		go func() {
+			<-backgroundCtx.Done()
+			if svc.sshPool != nil {
+				_ = svc.sshPool.Close()
+			}
+		}()
+	}
+	return svc
 }
 
 func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {

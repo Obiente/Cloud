@@ -107,6 +107,12 @@ service VPSService {
   
   // Stream VPS provisioning logs
   rpc StreamVPSLogs(StreamVPSLogsRequest) returns (stream VPSLogLine);
+
+  // Get journal logs from inside the guest OS
+  rpc GetVPSJournalLogs(GetVPSJournalLogsRequest) returns (GetVPSJournalLogsResponse);
+
+  // List systemd services from inside the guest OS
+  rpc ListVPSServices(ListVPSServicesRequest) returns (ListVPSServicesResponse);
   
   // Import missing VPS instances from Proxmox that belong to the organization
   // This will scan Proxmox for VMs with Obiente Cloud descriptions and import
@@ -672,6 +678,36 @@ message VPSLogLine {
   bool stderr = 2;                    // Whether this is stderr output
   int32 line_number = 3;               // Sequential line number
   google.protobuf.Timestamp timestamp = 4; // Timestamp when log was written
+}
+
+message GetVPSJournalLogsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  optional string unit = 3; // Optional systemd unit filter, e.g. nginx.service
+  int32 lines = 4; // Number of recent lines to fetch (default: 200, max: 1000)
+}
+
+message GetVPSJournalLogsResponse {
+  repeated VPSLogLine logs = 1;
+}
+
+message ListVPSServicesRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  bool include_inactive = 3; // Include inactive/failed units in addition to active ones
+}
+
+message VPSSystemService {
+  string name = 1;
+  string load_state = 2;
+  string active_state = 3;
+  string sub_state = 4;
+  string description = 5;
+}
+
+message ListVPSServicesResponse {
+  repeated VPSSystemService services = 1;
+  google.protobuf.Timestamp fetched_at = 2;
 }
 
 // Import VPS messages
