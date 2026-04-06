@@ -1,212 +1,163 @@
 <template>
-  <OuiContainer size="full" py="xl">
-    <OuiStack spacing="xl">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
       <!-- Back Button -->
       <OuiButton
         variant="ghost"
-        @click="router.push('/support')"
-        class="self-start gap-2"
         size="sm"
+        class="self-start gap-1.5"
+        @click="router.push('/support')"
       >
-        <ArrowLeftIcon class="h-4 w-4" />
+        <ArrowLeftIcon class="h-3.5 w-3.5" />
         Back to Tickets
       </OuiButton>
 
       <!-- Loading State -->
-      <OuiCard v-if="pending">
+      <OuiCard v-if="pending" variant="outline">
         <OuiCardBody>
-          <OuiStack align="center" gap="md" class="py-16">
+          <OuiFlex align="center" justify="center" class="py-16" gap="md">
             <OuiSpinner size="lg" />
-            <OuiText color="tertiary">Loading ticket...</OuiText>
-          </OuiStack>
+            <OuiText color="tertiary">Loading ticket…</OuiText>
+          </OuiFlex>
         </OuiCardBody>
       </OuiCard>
 
       <!-- Error State -->
-      <OuiCard v-else-if="error">
-        <OuiCardBody>
-          <div class="text-center py-16">
-            <ExclamationCircleIcon class="h-12 w-12 text-danger mx-auto mb-4" />
-            <OuiText color="danger" size="lg" weight="semibold" class="mb-2">
-              Failed to load ticket
-            </OuiText>
-            <OuiText color="tertiary" class="mb-4">{{ error }}</OuiText>
-            <OuiButton @click="refreshTicket()" variant="outline" class="gap-2">
-              <ArrowPathIcon class="h-4 w-4" />
-              Try Again
-            </OuiButton>
-          </div>
-        </OuiCardBody>
-      </OuiCard>
+      <ErrorAlert
+        v-else-if="error"
+        :error="error"
+        title="Failed to load ticket"
+        hint="The ticket may not exist or you may not have permission to view it."
+      />
 
       <!-- Ticket Content -->
       <template v-else-if="ticket">
-        <OuiGrid cols="1" cols-lg="3" gap="xl">
-          <!-- Main Content -->
-          <OuiStack spacing="lg" class="lg:col-span-2">
+        <OuiGrid :cols="{ sm: 1, lg: 3 }" gap="lg">
+
+          <!-- Main Column -->
+          <OuiStack gap="md" class="lg:col-span-2">
+
             <!-- Ticket Header Card -->
-            <OuiCard>
-              <OuiCardHeader>
-                <OuiStack spacing="md">
+            <OuiCard variant="outline">
+              <OuiCardBody>
+                <OuiStack gap="md">
+                  <!-- Title + badges -->
                   <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
-                    <OuiStack spacing="xs" class="flex-1 min-w-0">
-                      <OuiFlex gap="sm" align="center" wrap="wrap">
-                        <OuiHeading size="2xl" class="line-clamp-2">
-                          {{ ticket.subject }}
-                        </OuiHeading>
-                        <OuiBadge
-                          :variant="getCategoryVariant(ticket.category) as any"
-                          tone="soft"
-                          size="sm"
-                          class="shrink-0"
-                        >
-                          {{ getCategoryLabel(ticket.category) }}
-                        </OuiBadge>
-                      </OuiFlex>
-                      <OuiFlex gap="md" align="center" wrap="wrap">
-                        <OuiFlex gap="sm" align="center" class="text-muted">
-                          <ClockIcon class="h-4 w-4" />
-                          <OuiText size="sm">
-                            Created <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
-                          </OuiText>
-                        </OuiFlex>
-                        <OuiFlex v-if="ticket.resolvedAt" gap="sm" align="center" class="text-muted">
-                          <CheckCircleIcon class="h-4 w-4" />
-                          <OuiText size="sm">
-                            Resolved <OuiRelativeTime :value="ticket.resolvedAt ? new Date(Number(ticket.resolvedAt.seconds) * 1000) : undefined" />
-                          </OuiText>
-                        </OuiFlex>
+                    <OuiStack gap="xs" class="flex-1 min-w-0">
+                      <OuiText as="h1" size="lg" weight="semibold" class="leading-snug">{{ ticket.subject }}</OuiText>
+                      <OuiFlex align="center" gap="sm" wrap="wrap">
+                        <OuiText size="xs" color="tertiary">
+                          Opened <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
+                        </OuiText>
+                        <template v-if="ticket.createdByName || ticket.createdByEmail">
+                          <span class="text-border-strong text-xs">·</span>
+                          <OuiText size="xs" color="tertiary">{{ ticket.createdByName || ticket.createdByEmail }}</OuiText>
+                        </template>
+                        <template v-if="ticket.resolvedAt">
+                          <span class="text-border-strong text-xs">·</span>
+                          <OuiFlex align="center" gap="xs">
+                            <CheckCircleIcon class="h-3.5 w-3.5 text-success" />
+                            <OuiText size="xs" color="tertiary">
+                              Resolved <OuiRelativeTime :value="new Date(Number(ticket.resolvedAt.seconds) * 1000)" />
+                            </OuiText>
+                          </OuiFlex>
+                        </template>
                       </OuiFlex>
                     </OuiStack>
                     <OuiFlex gap="xs" wrap="wrap" class="shrink-0">
-                      <OuiBadge
-                        :variant="getStatusColor(ticket.status) as any"
-                        tone="soft"
-                        size="md"
-                      >
-                        {{ getStatusLabel(ticket.status) }}
-                      </OuiBadge>
-                      <OuiBadge
-                        :variant="getPriorityColor(ticket.priority) as any"
-                        tone="soft"
-                        size="md"
-                      >
-                        {{ getPriorityLabel(ticket.priority) }}
-                      </OuiBadge>
+                      <OuiBadge :variant="getStatusColor(ticket.status) as any" size="sm">{{ getStatusLabel(ticket.status) }}</OuiBadge>
+                      <OuiBadge :variant="getPriorityColor(ticket.priority) as any" size="sm">{{ getPriorityLabel(ticket.priority) }}</OuiBadge>
+                      <OuiBadge :variant="getCategoryVariant(ticket.category) as any" size="sm">{{ getCategoryLabel(ticket.category) }}</OuiBadge>
                     </OuiFlex>
                   </OuiFlex>
-                </OuiStack>
-              </OuiCardHeader>
-              <OuiCardBody>
-                <OuiStack spacing="lg">
-                  <div>
-                    <OuiText size="sm" weight="semibold" color="tertiary" class="mb-2">
-                      Description
-                    </OuiText>
-                    <OuiText class="whitespace-pre-wrap">{{ ticket.description }}</OuiText>
+
+                  <!-- Description -->
+                  <div class="border-t border-border-muted pt-4">
+                    <OuiText size="sm" color="tertiary" weight="medium" class="mb-2">Description</OuiText>
+                    <OuiText size="sm" class="whitespace-pre-wrap leading-relaxed">{{ ticket.description }}</OuiText>
                   </div>
                 </OuiStack>
               </OuiCardBody>
             </OuiCard>
 
             <!-- Comments Section -->
-            <OuiCard>
-              <OuiCardHeader>
-                <OuiFlex justify="between" align="center">
-                  <OuiStack gap="xs">
-                    <OuiHeading size="lg">Comments</OuiHeading>
-                    <OuiText v-if="comments && comments.length > 0" size="sm" color="tertiary">
-                      {{ comments.length }} comment{{ comments.length !== 1 ? 's' : '' }}
-                    </OuiText>
-                  </OuiStack>
-                </OuiFlex>
-              </OuiCardHeader>
+            <OuiCard variant="outline">
               <OuiCardBody>
-                <OuiStack spacing="lg">
-                  <!-- Comments List -->
-                  <div v-if="commentsPending" class="text-center py-8">
-                    <OuiSpinner />
-                    <OuiText color="tertiary" class="mt-2">Loading comments...</OuiText>
+                <OuiStack gap="md">
+                  <UiSectionHeader :icon="ChatBubbleLeftRightIcon" color="primary" size="md">
+                    Comments
+                    <template v-if="comments && comments.length > 0">
+                      <OuiBadge variant="secondary" size="xs" class="ml-1">{{ comments.length }}</OuiBadge>
+                    </template>
+                  </UiSectionHeader>
+
+                  <!-- Loading -->
+                  <OuiFlex v-if="commentsPending" align="center" gap="sm" class="py-6">
+                    <OuiSpinner size="sm" />
+                    <OuiText size="sm" color="tertiary">Loading comments…</OuiText>
+                  </OuiFlex>
+
+                  <!-- Empty comments -->
+                  <div v-else-if="!comments?.length" class="text-center py-8">
+                    <ChatBubbleLeftRightIcon class="h-10 w-10 text-tertiary mx-auto mb-3 opacity-40" />
+                    <OuiText size="sm" color="tertiary">No comments yet — be the first to reply.</OuiText>
                   </div>
-                  <div v-else-if="!comments?.length" class="text-center py-12">
-                    <ChatBubbleLeftRightIcon class="h-12 w-12 text-muted mx-auto mb-4 opacity-50" />
-                    <OuiText size="lg" weight="semibold" color="primary" class="mb-2">
-                      No comments yet
-                    </OuiText>
-                    <OuiText color="tertiary">
-                      Be the first to add a comment
-                    </OuiText>
-                  </div>
-                  <OuiStack v-else spacing="md">
-                    <OuiCard
+
+                  <!-- Comment thread -->
+                  <OuiStack v-else gap="none" class="divide-y divide-border-muted">
+                    <div
                       v-for="comment in comments"
                       :key="comment.id"
-                      :variant="comment.internal ? 'outline' : 'default'"
-                      :class="comment.internal ? 'border-warning/30 bg-warning/5' : ''"
+                      class="py-4"
+                      :class="comment.internal ? 'bg-warning/5 -mx-4 px-4 rounded' : ''"
                     >
-                      <OuiCardBody>
-                        <OuiStack spacing="sm">
-                          <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
-                            <OuiFlex gap="sm" align="center" wrap="wrap">
-                              <OuiText size="xs" weight="medium" color="primary">
-                                {{ comment.createdByName || comment.createdByEmail || comment.createdBy || 'Unknown User' }}
-                              </OuiText>
-                              <OuiBadge
-                                v-if="comment.isSuperadmin"
-                                variant="primary"
-                                tone="soft"
-                                size="xs"
-                              >
-                                Support Team
-                              </OuiBadge>
-                              <OuiBadge
-                                v-if="comment.internal"
-                                variant="warning"
-                                tone="soft"
-                                size="xs"
-                              >
-                                <LockClosedIcon class="h-3 w-3 mr-1" />
-                                Internal
-                              </OuiBadge>
-                              <OuiText size="xs" weight="medium" color="tertiary">
-                                <OuiRelativeTime :value="comment.createdAt ? new Date(Number(comment.createdAt.seconds) * 1000) : undefined" />
-                              </OuiText>
+                      <OuiStack gap="xs">
+                        <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
+                          <OuiFlex align="center" gap="sm" wrap="wrap">
+                            <OuiText size="xs" weight="semibold">
+                              {{ comment.createdByName || comment.createdByEmail || comment.createdBy || 'Unknown' }}
+                            </OuiText>
+                            <OuiBadge v-if="comment.isSuperadmin" variant="primary" size="xs">Support Team</OuiBadge>
+                            <OuiFlex v-if="comment.internal" align="center" gap="xs">
+                              <LockClosedIcon class="h-3 w-3 text-warning" />
+                              <OuiText size="xs" color="tertiary" class="text-warning">Internal</OuiText>
                             </OuiFlex>
                           </OuiFlex>
-                          <OuiText class="whitespace-pre-wrap">{{ comment.content }}</OuiText>
-                        </OuiStack>
-                      </OuiCardBody>
-                    </OuiCard>
+                          <OuiText size="xs" color="tertiary">
+                            <OuiRelativeTime :value="comment.createdAt ? new Date(Number(comment.createdAt.seconds) * 1000) : undefined" />
+                          </OuiText>
+                        </OuiFlex>
+                        <OuiText size="sm" class="whitespace-pre-wrap leading-relaxed">{{ comment.content }}</OuiText>
+                      </OuiStack>
+                    </div>
                   </OuiStack>
 
-                  <!-- Add Comment Form -->
-                  <div class="border-t border-border-muted pt-6">
-                    <OuiStack spacing="md">
-                      <OuiText size="sm" weight="semibold" color="primary">
-                        Add a comment
-                      </OuiText>
+                  <!-- Add Comment -->
+                  <div class="border-t border-border-muted pt-4">
+                    <OuiStack gap="sm">
                       <OuiTextarea
                         v-model="newComment"
-                        placeholder="Type your comment here..."
-                        :rows="5"
+                        placeholder="Type your reply…"
+                        :rows="4"
                         class="resize-none"
                       />
-                      <OuiFlex v-if="isSuperAdmin" gap="sm" align="center">
+                      <OuiFlex justify="between" align="center">
                         <OuiCheckbox
+                          v-if="isSuperAdmin"
                           v-model="commentInternal"
-                          label="Internal comment (not visible to user)"
+                          label="Internal note (not visible to user)"
                         />
-                      </OuiFlex>
-                      <OuiFlex justify="end">
+                        <div v-else />
                         <OuiButton
-                          @click="addComment"
                           color="primary"
+                          size="sm"
+                          class="gap-1.5"
                           :disabled="addingComment || !newComment.trim()"
                           :loading="addingComment"
-                          class="gap-2"
+                          @click="addComment"
                         >
-                          <PaperAirplaneIcon class="h-4 w-4" />
-                          {{ addingComment ? 'Adding...' : 'Add Comment' }}
+                          <PaperAirplaneIcon class="h-3.5 w-3.5" />
+                          {{ addingComment ? 'Sending…' : 'Send Reply' }}
                         </OuiButton>
                       </OuiFlex>
                     </OuiStack>
@@ -214,132 +165,82 @@
                 </OuiStack>
               </OuiCardBody>
             </OuiCard>
+
           </OuiStack>
 
           <!-- Sidebar -->
-          <OuiStack spacing="lg" class="lg:col-span-1">
-            <!-- Ticket Info Card -->
-            <OuiCard>
-              <OuiCardHeader>
-                <OuiHeading size="md">Ticket Information</OuiHeading>
-              </OuiCardHeader>
+          <OuiStack gap="md">
+
+            <!-- Ticket Info -->
+            <OuiCard variant="outline">
               <OuiCardBody>
-                <OuiStack spacing="md">
-                  <div>
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
-                      Status
-                    </OuiText>
-                    <div class="flex justify-center">
-                      <OuiBadge
-                        :variant="getStatusColor(ticket.status) as any"
-                        tone="soft"
-                        size="md"
-                      >
-                        {{ getStatusLabel(ticket.status) }}
-                      </OuiBadge>
-                    </div>
-                  </div>
-                  <div>
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
-                      Priority
-                    </OuiText>
-                    <div class="flex justify-center">
-                      <OuiBadge
-                        :variant="getPriorityColor(ticket.priority) as any"
-                        tone="soft"
-                        size="md"
-                      >
-                        {{ getPriorityLabel(ticket.priority) }}
-                      </OuiBadge>
-                    </div>
-                  </div>
-                  <div>
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-1">
-                      Category
-                    </OuiText>
-                    <div class="flex justify-center">
-                      <OuiBadge
-                        :variant="getCategoryVariant(ticket.category) as any"
-                        tone="soft"
-                        size="md"
-                      >
-                        {{ getCategoryLabel(ticket.category) }}
-                      </OuiBadge>
-                    </div>
-                  </div>
-                  <div class="border-t border-border-muted pt-3">
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
-                      Details
-                    </OuiText>
-                    <OuiStack spacing="xs">
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="xs" color="tertiary">Created</OuiText>
-                        <OuiText size="xs" weight="medium">
-                          <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiFlex v-if="ticket.createdByName || ticket.createdByEmail" justify="between" align="center">
-                        <OuiText size="xs" color="tertiary">Created by</OuiText>
-                        <OuiText size="xs" weight="medium">
-                          {{ ticket.createdByName || ticket.createdByEmail || ticket.createdBy || 'Unknown User' }}
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiFlex v-if="ticket.assignedToName || ticket.assignedToEmail" justify="between" align="center">
-                        <OuiText size="xs" color="tertiary">Assigned to</OuiText>
-                        <OuiText size="xs" weight="medium">
-                          {{ ticket.assignedToName || ticket.assignedToEmail || ticket.assignedTo || 'Unassigned' }}
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiFlex v-if="ticket.resolvedAt" justify="between" align="center">
-                        <OuiText size="xs" color="tertiary">Resolved</OuiText>
-                        <OuiText size="xs" weight="medium">
-                          <OuiRelativeTime :value="ticket.resolvedAt ? new Date(Number(ticket.resolvedAt.seconds) * 1000) : undefined" />
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="xs" color="tertiary">Comments</OuiText>
-                        <OuiText size="xs" weight="medium">
-                          {{ ticket.commentCount || 0 }}
-                        </OuiText>
-                      </OuiFlex>
-                    </OuiStack>
-                  </div>
+                <OuiStack gap="md">
+                  <UiSectionHeader :icon="InformationCircleIcon" color="secondary" size="md">Details</UiSectionHeader>
+                  <OuiStack gap="none" class="divide-y divide-border-default">
+                    <OuiFlex justify="between" align="center" class="py-2">
+                      <OuiText size="xs" color="tertiary">Status</OuiText>
+                      <OuiBadge :variant="getStatusColor(ticket.status) as any" size="xs">{{ getStatusLabel(ticket.status) }}</OuiBadge>
+                    </OuiFlex>
+                    <OuiFlex justify="between" align="center" class="py-2">
+                      <OuiText size="xs" color="tertiary">Priority</OuiText>
+                      <OuiBadge :variant="getPriorityColor(ticket.priority) as any" size="xs">{{ getPriorityLabel(ticket.priority) }}</OuiBadge>
+                    </OuiFlex>
+                    <OuiFlex justify="between" align="center" class="py-2">
+                      <OuiText size="xs" color="tertiary">Category</OuiText>
+                      <OuiBadge :variant="getCategoryVariant(ticket.category) as any" size="xs">{{ getCategoryLabel(ticket.category) }}</OuiBadge>
+                    </OuiFlex>
+                    <OuiFlex justify="between" align="start" class="py-2" gap="md">
+                      <OuiText size="xs" color="tertiary" class="shrink-0">Opened</OuiText>
+                      <OuiText size="xs" weight="medium" class="text-right">
+                        <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
+                      </OuiText>
+                    </OuiFlex>
+                    <OuiFlex v-if="ticket.createdByName || ticket.createdByEmail" justify="between" align="start" class="py-2" gap="md">
+                      <OuiText size="xs" color="tertiary" class="shrink-0">Created by</OuiText>
+                      <OuiText size="xs" weight="medium" class="text-right truncate">{{ ticket.createdByName || ticket.createdByEmail }}</OuiText>
+                    </OuiFlex>
+                    <OuiFlex v-if="ticket.assignedToName || ticket.assignedToEmail" justify="between" align="start" class="py-2" gap="md">
+                      <OuiText size="xs" color="tertiary" class="shrink-0">Assigned to</OuiText>
+                      <OuiText size="xs" weight="medium" class="text-right truncate">{{ ticket.assignedToName || ticket.assignedToEmail }}</OuiText>
+                    </OuiFlex>
+                    <OuiFlex v-if="ticket.resolvedAt" justify="between" align="start" class="py-2" gap="md">
+                      <OuiText size="xs" color="tertiary" class="shrink-0">Resolved</OuiText>
+                      <OuiText size="xs" weight="medium" class="text-right">
+                        <OuiRelativeTime :value="new Date(Number(ticket.resolvedAt.seconds) * 1000)" />
+                      </OuiText>
+                    </OuiFlex>
+                    <OuiFlex justify="between" align="center" class="py-2">
+                      <OuiText size="xs" color="tertiary">Comments</OuiText>
+                      <OuiText size="xs" weight="medium">{{ ticket.commentCount || 0 }}</OuiText>
+                    </OuiFlex>
+                  </OuiStack>
                 </OuiStack>
               </OuiCardBody>
             </OuiCard>
 
             <!-- Admin Controls -->
-            <OuiCard v-if="isSuperAdmin">
-              <OuiCardHeader>
-                <OuiHeading size="md">Admin Controls</OuiHeading>
-              </OuiCardHeader>
+            <OuiCard v-if="isSuperAdmin" variant="outline">
               <OuiCardBody>
-                <OuiStack spacing="md">
-                  <div>
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
-                      Update Status
-                    </OuiText>
-                    <OuiSelect
-                      v-model="ticketUpdate.status"
-                      :items="statusOptions"
-                      placeholder="Select status"
-                      @update:model-value="updateTicket"
-                    />
-                  </div>
-                  <div>
-                    <OuiText size="xs" weight="semibold" color="tertiary" class="mb-2">
-                      Update Priority
-                    </OuiText>
-                    <OuiSelect
-                      v-model="ticketUpdate.priority"
-                      :items="priorityOptions"
-                      placeholder="Select priority"
-                      @update:model-value="updateTicket"
-                    />
-                  </div>
+                <OuiStack gap="md">
+                  <UiSectionHeader :icon="WrenchScrewdriverIcon" color="warning" size="md">Admin Controls</UiSectionHeader>
+                  <OuiSelect
+                    v-model="adminStatus"
+                    label="Status"
+                    :items="statusOptions"
+                    placeholder="Select status"
+                    @update:model-value="(v) => updateTicket(v, ticket!.priority)"
+                  />
+                  <OuiSelect
+                    v-model="adminPriority"
+                    label="Priority"
+                    :items="priorityOptions"
+                    placeholder="Select priority"
+                    @update:model-value="(v) => updateTicket(ticket!.status, v)"
+                  />
                 </OuiStack>
               </OuiCardBody>
             </OuiCard>
+
           </OuiStack>
         </OuiGrid>
       </template>
@@ -361,13 +262,12 @@ import {
 import { useConnectClient } from "~/lib/connect-client";
 import {
   ArrowLeftIcon,
-  ArrowPathIcon,
-  ClockIcon,
   CheckCircleIcon,
-  ExclamationCircleIcon,
   ChatBubbleLeftRightIcon,
   LockClosedIcon,
   PaperAirplaneIcon,
+  InformationCircleIcon,
+  WrenchScrewdriverIcon,
 } from "@heroicons/vue/24/outline";
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -434,24 +334,16 @@ const newComment = ref("");
 const commentInternal = ref(false);
 const addingComment = ref(false);
 
-const ticketUpdate = ref({
-  status: computed({
-    get: () => ticket.value?.status,
-    set: async (value) => {
-      if (value !== undefined && ticket.value) {
-        await updateTicket(value, ticket.value.priority);
-      }
-    },
-  }),
-  priority: computed({
-    get: () => ticket.value?.priority,
-    set: async (value) => {
-      if (value !== undefined && ticket.value) {
-        await updateTicket(ticket.value.status, value);
-      }
-    },
-  }),
-});
+// Plain refs for admin controls (initialized from ticket on load)
+const adminStatus = ref<SupportTicketStatus | undefined>(undefined);
+const adminPriority = ref<SupportTicketPriority | undefined>(undefined);
+
+watch(ticket, (t) => {
+  if (t) {
+    adminStatus.value = t.status;
+    adminPriority.value = t.priority;
+  }
+}, { immediate: true });
 
 const statusOptions = [
   { label: "Open", value: SupportTicketStatus.OPEN },

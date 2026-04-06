@@ -17,7 +17,7 @@
       :icon="CircleStackIcon"
       color="info"
       :streaming="isStreaming"
-      :subtitle="latestMetric ? 'Active' : 'Waiting for data'"
+      :subtitle="latestMetric ? 'Active' : undefined"
     >
       <template v-if="latestMetric">
         <OuiByte :value="currentMemoryUsage" unit-display="short" />
@@ -31,7 +31,7 @@
       :icon="ArrowDownTrayIcon"
       color="success"
       :streaming="isStreaming"
-      :subtitle="latestMetric ? 'Total received' : 'Waiting for data'"
+      :subtitle="latestMetric ? 'Total received' : undefined"
     >
       <template v-if="latestMetric">
         <OuiByte :value="currentNetworkRx" unit-display="short" base="decimal" />
@@ -45,7 +45,7 @@
       :icon="ArrowUpTrayIcon"
       color="secondary"
       :streaming="isStreaming"
-      :subtitle="latestMetric ? 'Total sent' : 'Waiting for data'"
+      :subtitle="latestMetric ? 'Total sent' : undefined"
     >
       <template v-if="latestMetric">
         <OuiByte :value="currentNetworkTx" unit-display="short" base="decimal" />

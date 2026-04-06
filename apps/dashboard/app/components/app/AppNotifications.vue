@@ -1,241 +1,222 @@
 <template>
   <ClientOnly>
-    <OuiFloatingPanel
-      v-model="open"
-      title="Notifications"
-      :description="description || `${unreadCount} unread`"
-      :default-position="clientPosition"
-      :persist-rect="true"
-      content-class="max-w-[800px] w-full h-[85vh] max-h-[900px] min-h-[600px] flex flex-col"
-      body-class="flex-1 flex flex-col min-h-0 overflow-hidden p-0"
-      role="dialog"
-      aria-labelledby="notifications-title"
-      aria-describedby="notifications-description"
-      @close="handleClose"
-    >
-      <div class="flex flex-col h-full min-h-0" role="list" aria-label="Notifications list">
-        <!-- Header with filters and actions -->
-        <div class="bg-surface-base border-b border-border-muted px-4 md:px-6 pt-4 pb-3 shrink-0">
-          <OuiStack gap="sm">
-            <!-- Filter tabs -->
-            <OuiFlex
-              gap="xs"
-              class="flex-1 flex-wrap md:flex-nowrap overflow-x-auto min-w-0"
-            >
-              <OuiButton
-                v-for="filter in filters"
-                :key="filter.key"
-                :variant="activeFilter === filter.key ? 'soft' : 'ghost'"
-                :color="activeFilter === filter.key ? 'primary' : 'neutral'"
-                size="sm"
-                @click="activeFilter = filter.key"
-                class="whitespace-nowrap shrink-0"
-              >
-                {{ filter.label }}
-                <OuiBox
-                  v-if="filter.count !== undefined && filter.count > 0"
-                  class="ml-1.5 px-1.5 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-medium min-w-[1.25rem] text-center"
-                >
-                  {{ filter.count > 99 ? '99+' : filter.count }}
-                </OuiBox>
-              </OuiButton>
-            </OuiFlex>
+    <Teleport to="body">
 
-            <!-- Action buttons -->
-            <OuiFlex
-              justify="end"
-              align="center"
-              gap="xs"
-              class="flex-wrap"
-            >
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                @click="markAllRead"
-                :disabled="unreadCount === 0 || isLoading"
-                :loading="isMarkingAllRead"
-              >
-                Mark all read
-              </OuiButton>
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                color="danger"
-                @click="clearAll"
-                :disabled="filteredItems.length === 0 || isLoading"
-                :loading="isClearingAll"
-              >
-                Clear
-              </OuiButton>
-            </OuiFlex>
-          </OuiStack>
-        </div>
+      <!-- Mobile backdrop -->
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        leave-active-class="transition-opacity duration-150"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="open"
+          class="fixed inset-0 z-998 bg-black/50 md:hidden"
+          @click="handleClose"
+        />
+      </Transition>
 
-        <!-- Scrollable content area -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-4 md:px-6">
-          <!-- Loading state -->
-          <div v-if="isLoading && filteredItems.length === 0" class="py-12">
-            <OuiStack gap="md" align="center">
-              <OuiSpinner size="lg" />
-              <OuiText color="tertiary" size="md">Loading notifications...</OuiText>
-            </OuiStack>
+      <!-- Panel -->
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        leave-active-class="transition-all duration-200 ease-in"
+        enter-from-class="opacity-0 translate-y-8 md:translate-y-0 md:scale-95 md:translate-x-2"
+        leave-to-class="opacity-0 translate-y-8 md:translate-y-0 md:scale-95 md:translate-x-2"
+      >
+        <div
+          v-if="open"
+          role="dialog"
+          aria-label="Notifications"
+          class="fixed z-999 flex flex-col overflow-hidden bg-surface-overlay border border-border-default shadow-2xl
+                 bottom-0 left-0 right-0 max-h-[88vh] rounded-t-2xl
+                 md:top-14 md:right-4 md:bottom-auto md:left-auto md:w-[420px] md:h-[calc(100vh-5rem)] md:max-h-[680px] md:rounded-xl md:border"
+        >
+          <!-- Mobile drag handle -->
+          <div class="flex justify-center pt-2.5 pb-1 md:hidden shrink-0">
+            <div class="w-10 h-1 rounded-full bg-border-strong opacity-60" />
           </div>
 
-          <!-- Empty state -->
+          <!-- Header -->
+          <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-default shrink-0">
+            <div class="flex items-center gap-2">
+              <BellIcon class="w-5 h-5 text-text-secondary shrink-0" />
+              <OuiText as="h3" size="md" weight="semibold">Notifications</OuiText>
+              <span
+                v-if="unreadCount > 0"
+                class="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-danger text-white text-[11px] font-bold px-1.5 shrink-0"
+              >{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+            </div>
+            <button
+              class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-surface-muted transition-colors"
+              title="Close"
+              @click="handleClose"
+            >
+              <XMarkIcon class="w-4.5 h-4.5 text-text-secondary" />
+            </button>
+          </div>
+
+          <!-- Critical banner -->
           <div
-            v-else-if="filteredItems.length === 0"
-            class="py-12 text-center"
-            role="status"
-            aria-live="polite"
+            v-if="criticalCount > 0"
+            class="flex items-center gap-2 px-4 py-2.5 bg-danger/10 border-b border-danger/20 shrink-0"
           >
-            <OuiStack gap="md" align="center">
-              <div class="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center">
-                <BellIcon class="w-8 h-8 text-foreground-muted" />
+            <XCircleIcon class="w-4 h-4 text-danger shrink-0" />
+            <OuiText size="sm" weight="medium" class="flex-1 text-danger leading-snug">
+              {{ criticalCount }} critical notification{{ criticalCount !== 1 ? 's' : '' }}
+              {{ criticalCount === 1 ? 'requires' : 'require' }} attention
+            </OuiText>
+            <button
+              v-if="activeFilter !== 'critical'"
+              class="text-sm font-semibold text-danger hover:underline shrink-0"
+              @click="activeFilter = 'critical'"
+            >View</button>
+          </div>
+
+          <!-- Filter + actions bar -->
+          <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-border-muted shrink-0">
+            <div class="flex items-center gap-1 overflow-x-auto min-w-0">
+              <button
+                v-for="f in filters"
+                :key="f.key"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap shrink-0 border"
+                :class="activeFilter === f.key
+                  ? 'bg-primary border-primary text-white'
+                  : 'bg-transparent border-transparent text-text-secondary hover:bg-surface-muted hover:text-text-primary'"
+                @click="activeFilter = f.key"
+              >
+                {{ f.label }}
+                <span
+                  v-if="f.count > 0"
+                  class="text-[11px] font-bold"
+                  :class="activeFilter === f.key ? 'text-white/80' : 'text-text-tertiary'"
+                >{{ f.count > 99 ? '99+' : f.count }}</span>
+              </button>
+            </div>
+            <button
+              v-if="unreadCount > 0"
+              class="text-sm font-medium text-primary whitespace-nowrap shrink-0 hover:opacity-70 transition-opacity disabled:opacity-30"
+              :disabled="isMarkingAllRead"
+              @click="markAllRead"
+            >{{ isMarkingAllRead ? 'Marking…' : 'Mark all read' }}</button>
+          </div>
+
+          <!-- Scrollable content -->
+          <div class="flex-1 min-h-0 overflow-y-auto">
+
+            <!-- Loading -->
+            <div v-if="isLoading && filteredItems.length === 0" class="flex items-center justify-center gap-3 py-20">
+              <OuiSpinner size="md" />
+              <OuiText size="sm" color="tertiary">Loading notifications…</OuiText>
+            </div>
+
+            <!-- Empty -->
+            <div v-else-if="filteredItems.length === 0" class="flex flex-col items-center gap-4 py-20 px-6 text-center">
+              <div class="w-14 h-14 rounded-full bg-surface-muted flex items-center justify-center">
+                <BellIcon class="w-7 h-7 text-text-tertiary" />
               </div>
               <OuiStack gap="xs" align="center">
                 <OuiText size="sm" weight="semibold">
-                  {{ activeFilter === 'all' ? "You're all caught up!" : `No ${filterLabels[activeFilter]} notifications` }}
+                  {{ activeFilter === 'all' ? "You're all caught up!" : `No ${activeFilter} notifications` }}
                 </OuiText>
-                <OuiText size="sm" color="tertiary" class="max-w-sm">
-                  {{ activeFilter === 'all' 
-                    ? "You don't have any notifications right now. We'll notify you when something important happens." 
-                    : `You don't have any ${filterLabels[activeFilter]} notifications.` }}
+                <OuiText size="sm" color="tertiary" class="max-w-[18rem] leading-relaxed">
+                  {{ activeFilter === 'all'
+                    ? "We'll notify you when something important happens."
+                    : `No ${activeFilter} notifications at the moment.` }}
                 </OuiText>
               </OuiStack>
-            </OuiStack>
+            </div>
+
+            <!-- Grouped list -->
+            <div v-else>
+              <template v-for="group in groupedNotifications" :key="group.date">
+
+                <!-- Sticky date header -->
+                <div class="sticky top-0 z-10 px-4 py-1.5 bg-surface-overlay/95 backdrop-blur-sm border-b border-border-muted">
+                  <OuiText size="xs" weight="semibold" color="tertiary" class="uppercase tracking-widest">
+                    {{ group.date }}
+                  </OuiText>
+                </div>
+
+                <!-- Rows -->
+                <div class="divide-y divide-border-muted">
+                  <div
+                    v-for="n in group.items"
+                    :key="n.id"
+                    class="group relative flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-colors border-l-[3px] hover:bg-surface-muted"
+                    :class="n.read ? 'opacity-50 hover:opacity-100' : ''"
+                    :style="{ borderLeftColor: n.read ? 'transparent' : getAccentColor(n) }"
+                    @click="handleNotificationClick(n)"
+                  >
+                    <!-- Icon circle -->
+                    <div
+                      class="shrink-0 mt-0.5 w-8 h-8 rounded-full flex items-center justify-center"
+                      :class="getIconClasses(n)"
+                    >
+                      <component :is="getNotificationIcon(n)" class="w-4 h-4" />
+                    </div>
+
+                    <!-- Text content -->
+                    <div class="flex-1 min-w-0 pr-8">
+                      <OuiText
+                        size="sm"
+                        :weight="n.read ? 'normal' : 'semibold'"
+                        class="leading-snug line-clamp-1"
+                      >{{ n.title }}</OuiText>
+                      <OuiText size="sm" color="tertiary" class="mt-0.5 line-clamp-2 leading-relaxed">
+                        {{ n.message }}
+                      </OuiText>
+                      <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <OuiText size="xs" color="tertiary">
+                          <OuiRelativeTime :value="n.timestamp" />
+                        </OuiText>
+                        <span
+                          v-if="n.actionUrl && n.actionLabel"
+                          class="text-xs font-medium text-primary hover:underline cursor-pointer"
+                          @click.stop="handleActionClick(n)"
+                        >{{ n.actionLabel }} →</span>
+                      </div>
+                    </div>
+
+                    <!-- Hover dismiss -->
+                    <button
+                      class="absolute right-3 top-3.5 flex items-center justify-center w-6 h-6 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-base"
+                      :aria-label="`Dismiss: ${n.title}`"
+                      @click.stop="remove(n.id)"
+                    >
+                      <XMarkIcon class="w-3.5 h-3.5 text-text-tertiary" />
+                    </button>
+                  </div>
+                </div>
+
+              </template>
+            </div>
           </div>
 
-          <!-- Notifications list -->
-          <OuiStack v-else gap="lg" class="py-4">
-            <template v-for="(group, groupIndex) in groupedNotifications" :key="group.date">
-              <!-- Date group header -->
-              <div v-if="group.date" class="py-2">
-                <OuiText size="xs" weight="semibold" color="tertiary" class="uppercase tracking-wide">
-                  {{ group.date }}
-                </OuiText>
-              </div>
+          <!-- Footer -->
+          <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-t border-border-muted shrink-0">
+            <button
+              v-if="items.length > 0"
+              class="text-sm font-medium text-text-tertiary hover:text-danger transition-colors disabled:opacity-40"
+              :disabled="isClearingAll"
+              @click="clearAll"
+            >{{ isClearingAll ? 'Clearing…' : 'Clear all' }}</button>
+            <div v-else />
+            <NuxtLink
+              to="/settings?tab=notifications"
+              class="text-sm font-medium text-text-tertiary hover:text-primary transition-colors"
+              @click="handleClose"
+            >Settings →</NuxtLink>
+          </div>
 
-              <!-- Notifications in this group -->
-              <div class="space-y-3">
-                <article
-                  v-for="n in group.items"
-                  :key="n.id"
-                  :class="getRowClasses(n)"
-                  role="listitem"
-                  :aria-label="`${n.read ? 'Read' : 'Unread'} ${n.type || 'notification'}: ${n.title}`"
-                  tabindex="0"
-                  @click="handleNotificationClick(n)"
-                  @keydown.enter="handleNotificationClick(n)"
-                  @keydown.space.prevent="handleNotificationClick(n)"
-                >
-                  <OuiStack gap="md" class="min-w-0">
-                    <OuiFlex gap="md" class="min-w-0" align="start">
-                      <!-- Notification Icon -->
-                      <div
-                        class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm"
-                        :class="getIconClasses(n)"
-                        :aria-hidden="true"
-                      >
-                        <component :is="getNotificationIcon(n)" class="w-4 h-4" />
-                      </div>
-
-                      <OuiStack gap="sm" class="min-w-0 flex-1">
-                        <!-- Title and time -->
-                        <OuiFlex justify="between" align="start" class="gap-sm flex-wrap">
-                          <OuiStack gap="xs" class="flex-1 min-w-0">
-                            <OuiText
-                              size="lg"
-                              :weight="n.read ? 'medium' : 'semibold'"
-                              :color="n.read ? 'secondary' : 'primary'"
-                              class="leading-tight wrap-break-word"
-                            >
-                              {{ n.title }}
-                            </OuiText>
-                            <OuiText
-                              size="sm"
-                              color="tertiary"
-                              class="wrap-break-word leading-relaxed whitespace-pre-line"
-                            >
-                              {{ n.message }}
-                            </OuiText>
-                          </OuiStack>
-                        </OuiFlex>
-
-                        <!-- Metadata row -->
-                        <OuiFlex
-                          v-if="n.metadata?.details"
-                          gap="md"
-                          wrap="wrap"
-                          class="text-xs text-secondary"
-                        >
-                          <span>{{ n.metadata.details }}</span>
-                        </OuiFlex>
-
-                      </OuiStack>
-                    </OuiFlex>
-
-                    <!-- Secondary actions -->
-                    <OuiFlex
-                      gap="sm"
-                      align="center"
-                      class="flex-wrap border-t border-border-muted pt-3 justify-end"
-                    >
-                      <OuiFlex gap="xs" align="center" class="flex-wrap justify-end">
-                        <OuiButton
-                          v-if="n.actionUrl && n.actionLabel"
-                          variant="ghost"
-                          size="xs"
-                          @click.stop="handleActionClick(n)"
-                          :aria-label="`${n.actionLabel} for ${n.title}`"
-                          class="p-1.5!"
-                        >
-                          <ArrowRightIcon class="w-4 h-4" />
-                        </OuiButton>
-
-                        <OuiButton
-                          variant="ghost"
-                          size="sm"
-                          @click.stop="toggleRead(n.id)"
-                          :aria-label="n.read ? 'Mark as unread' : 'Mark as read'"
-                        >
-                          <component
-                            :is="n.read ? EnvelopeIcon : EnvelopeOpenIcon"
-                            class="w-4 h-4"
-                          />
-                          <span class="sr-only">
-                            {{ n.read ? "Mark as unread" : "Mark as read" }}
-                          </span>
-                        </OuiButton>
-                        <OuiButton
-                          variant="ghost"
-                          size="sm"
-                          color="danger"
-                          @click.stop="remove(n.id)"
-                          :aria-label="`Dismiss notification: ${n.title}`"
-                        >
-                          <XMarkIcon class="w-4 h-4" />
-                          <span class="sr-only">Dismiss</span>
-                        </OuiButton>
-                      </OuiFlex>
-
-                      <OuiText size="xs" color="tertiary" class="shrink-0">
-                        <OuiRelativeTime :value="n.timestamp" :style="'short'" />
-                      </OuiText>
-                    </OuiFlex>
-                  </OuiStack>
-                </article>
-              </div>
-            </template>
-          </OuiStack>
         </div>
-      </div>
-    </OuiFloatingPanel>
+      </Transition>
+
+    </Teleport>
   </ClientOnly>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch, nextTick } from "vue";
-import OuiFloatingPanel from "~/components/oui/FloatingPanel.vue";
+import { computed, ref } from "vue";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiSpinner from "~/components/oui/Spinner.vue";
 import {
@@ -249,9 +230,6 @@ import {
   UserPlusIcon,
   Cog6ToothIcon,
   InformationCircleIcon,
-  ArrowRightIcon,
-  EnvelopeIcon,
-  EnvelopeOpenIcon,
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
 
@@ -272,8 +250,6 @@ interface NotificationItem {
 const props = defineProps<{
   modelValue: boolean;
   items: NotificationItem[];
-  description?: string;
-  anchorElement?: HTMLElement | null;
   isLoading?: boolean;
 }>();
 
@@ -292,7 +268,7 @@ const open = computed({
 const router = useRouter();
 
 // Filter state
-const activeFilter = ref<"all" | "unread" | "read" | "critical">("all");
+const activeFilter = ref<"all" | "unread" | "critical">("all");
 const isMarkingAllRead = ref(false);
 const isClearingAll = ref(false);
 
@@ -300,16 +276,8 @@ const isClearingAll = ref(false);
 const filters = computed(() => [
   { key: "all" as const, label: "All", count: props.items.length },
   { key: "unread" as const, label: "Unread", count: unreadCount.value },
-  { key: "read" as const, label: "Read", count: readCount.value },
   { key: "critical" as const, label: "Critical", count: criticalCount.value },
 ]);
-
-const filterLabels: Record<string, string> = {
-  all: "all",
-  unread: "unread",
-  read: "read",
-  critical: "critical",
-};
 
 // Filtered items
 const filteredItems = computed(() => {
@@ -318,9 +286,6 @@ const filteredItems = computed(() => {
   switch (activeFilter.value) {
     case "unread":
       items = items.filter((n) => !n.read);
-      break;
-    case "read":
-      items = items.filter((n) => n.read);
       break;
     case "critical":
       items = items.filter((n) => n.severity?.toUpperCase() === "CRITICAL");
@@ -391,7 +356,6 @@ const groupedNotifications = computed(() => {
 });
 
 const unreadCount = computed(() => props.items.filter((n) => !n.read).length);
-const readCount = computed(() => props.items.filter((n) => n.read).length);
 const criticalCount = computed(() =>
   props.items.filter((n) => n.severity?.toUpperCase() === "CRITICAL" && !n.read).length
 );
@@ -402,6 +366,10 @@ const handleClose = () => {
 };
 
 const handleNotificationClick = (notification: NotificationItem) => {
+  // Mark as read on click
+  if (!notification.read) {
+    markRead(notification.id);
+  }
   // If notification has an action URL, navigate to it
   if (notification.actionUrl) {
     router.push(notification.actionUrl);
@@ -465,6 +433,24 @@ const getNotificationIcon = (notification: NotificationItem) => {
   }
 };
 
+const getAccentColor = (n: NotificationItem): string => {
+  const severity = n.severity?.toUpperCase();
+  if (severity === "CRITICAL") return "var(--color-danger)";
+  if (severity === "HIGH") return "var(--color-warning)";
+  if (severity === "MEDIUM") return "var(--color-info, var(--color-primary))";
+  const type = n.type?.toUpperCase() || "INFO";
+  switch (type) {
+    case "ERROR": return "var(--color-danger)";
+    case "WARNING":
+    case "QUOTA": return "var(--color-warning)";
+    case "SUCCESS": return "var(--color-success)";
+    case "DEPLOYMENT": return "var(--color-primary)";
+    case "BILLING": return "var(--color-accent, var(--color-primary))";
+    case "INVITE": return "var(--color-info, var(--color-primary))";
+    default: return "var(--color-primary)";
+  }
+};
+
 const notificationVisuals: Record<
   string,
   { iconBg: string; iconColor: string }
@@ -482,106 +468,22 @@ const notificationVisuals: Record<
 
 const getIconClasses = (notification: NotificationItem) => {
   if (notification.read) {
-    return "bg-surface-muted text-foreground-muted";
+    return "bg-surface-muted text-text-tertiary";
   }
   const type = notification.type?.toUpperCase() || "INFO";
   const visual = notificationVisuals[type] ?? notificationVisuals.INFO!;
   return `${visual.iconBg} ${visual.iconColor}`;
 };
 
-const severityAccentClasses: Record<string, string> = {
-  CRITICAL: "border-danger/70 bg-danger/5 shadow-danger/20 shadow-sm",
-  HIGH: "border-warning/60 bg-warning/5",
-  MEDIUM: "border-info/50 bg-info/5",
-};
-
-const typeAccentClasses: Record<string, string> = {
-  SUCCESS: "border-success/50",
-  WARNING: "border-warning/50",
-  ERROR: "border-danger/60",
-  DEPLOYMENT: "border-primary/50",
-  BILLING: "border-accent/50",
-  QUOTA: "border-warning/40",
-  INVITE: "border-info/50",
-  SYSTEM: "border-secondary/40",
-  INFO: "border-border-muted",
-};
-
-const getRowClasses = (notification: NotificationItem) => {
-  const base =
-    "notification-row border rounded-xl p-4 focus-within:ring-2 focus-within:ring-primary/30 transition-colors cursor-pointer";
-  const background = notification.read ? "bg-surface-base" : "bg-surface-muted";
-  const severity = notification.severity?.toUpperCase();
-  const type = notification.type?.toUpperCase() || "INFO";
-  const accent =
-    (severity && severityAccentClasses[severity]) ||
-    typeAccentClasses[type] ||
-    "border-border-muted";
-
-  return `${base} ${background} ${accent}`;
-};
-
 // Calculate default position on the far right
-const defaultPosition = ref<{ x: number; y: number }>({ x: 0, y: 80 });
-const clientPosition = computed(() => {
-  if (import.meta.client) {
-    return defaultPosition.value;
-  }
-  return { x: 0, y: 80 };
-});
+// (no longer needed — panel uses CSS fixed positioning)
 
-// Update position when anchor element changes or on mount
-const updatePosition = () => {
-  if (!import.meta.client) return;
-
-  try {
-    if (window && window.innerWidth) {
-      const panelWidth = 800;
-      const padding = 16;
-      // Position on the far right with padding
-      const xPos = window.innerWidth - panelWidth - padding;
-      
-      // Get Y position from anchor if available, otherwise use default
-      let yPos = 80;
-      const anchor = props.anchorElement;
-      if (anchor) {
-        const rect = anchor.getBoundingClientRect();
-        yPos = rect.bottom + 8;
-      }
-      
-      defaultPosition.value = { x: xPos, y: yPos };
-    }
-  } catch (e) {
-    console.debug("Could not set notification panel position:", e);
-  }
-};
-
-onMounted(() => {
-  if (import.meta.client) {
-    updatePosition();
-  }
-});
-
-watch(
-  () => props.anchorElement,
-  () => {
-    if (import.meta.client) {
-      updatePosition();
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  () => props.modelValue,
-  (isOpen) => {
-    if (isOpen && import.meta.client) {
-      nextTick(() => {
-        updatePosition();
-      });
-    }
-  }
-);
+function markRead(id: string) {
+  emit(
+    "update:items",
+    props.items.map((n) => (n.id === id ? { ...n, read: true } : n))
+  );
+}
 
 async function markAllRead() {
   isMarkingAllRead.value = true;

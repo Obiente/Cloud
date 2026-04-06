@@ -110,7 +110,6 @@
           v-model="isNotificationsOpen"
           :items="Array.from(notifications)"
           :is-loading="isLoading"
-          :anchor-element="notificationButtonElement"
           @update:items="(val) => val.forEach((n) => n.read && markNotificationAsRead(n.id))"
           @clear="clearAllNotifications"
           @close="isNotificationsOpen = false"

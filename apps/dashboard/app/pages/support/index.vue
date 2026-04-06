@@ -15,65 +15,91 @@
 
       <ErrorAlert v-if="error" :error="error" title="Failed to load tickets" hint="Please try refreshing the page. If the problem persists, contact support." />
 
-      <!-- Filters -->
-      <OuiCard variant="default">
-        <OuiCardBody>
-          <OuiGrid :cols="{ sm: 1, md: 4 }" gap="md">
+      <!-- Stats Row -->
+      <OuiGrid v-if="tickets" :cols="{ sm: 2, md: 4 }" gap="sm">
+        <UiStatCard label="Open" :icon="InboxIcon" color="primary" :value="String(ticketStats.open)" />
+        <UiStatCard label="In Progress" :icon="ArrowPathIcon" color="warning" :value="String(ticketStats.inProgress)" />
+        <UiStatCard label="Resolved" :icon="CheckCircleIcon" color="success" :value="String(ticketStats.resolved)" />
+        <UiStatCard label="Total" :icon="ChatBubbleLeftRightIcon" color="secondary" :value="String(tickets.length)" />
+      </OuiGrid>
+
+      <!-- Toolbar -->
+      <OuiCard variant="outline">
+        <OuiCardBody class="py-2! px-4!">
+          <OuiFlex align="center" gap="md" wrap="wrap">
             <OuiInput
               v-model="searchQuery"
-              placeholder="Search tickets..."
-              clearable
+              placeholder="Search tickets…"
+              size="sm"
+              class="flex-1"
+              :style="{ minWidth: '160px' }"
               @update:model-value="handleSearch"
             >
               <template #prefix>
-                <MagnifyingGlassIcon class="h-4 w-4 text-secondary" />
+                <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
+              </template>
+              <template v-if="searchQuery" #suffix>
+                <button class="text-tertiary hover:text-primary transition-colors" @click="searchQuery = ''">
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </button>
               </template>
             </OuiInput>
             <OuiSelect
               v-model="filters.status"
               :items="statusOptions"
               placeholder="All Status"
+              size="sm"
               clearable
+              :style="{ minWidth: '130px' }"
               @update:model-value="refreshTickets"
             />
             <OuiSelect
               v-model="filters.category"
               :items="categoryOptions"
               placeholder="All Categories"
+              size="sm"
               clearable
+              :style="{ minWidth: '150px' }"
               @update:model-value="refreshTickets"
             />
             <OuiSelect
               v-model="filters.priority"
               :items="priorityOptions"
               placeholder="All Priorities"
+              size="sm"
               clearable
+              :style="{ minWidth: '130px' }"
               @update:model-value="refreshTickets"
             />
-          </OuiGrid>
+            <OuiButton
+              v-if="hasActiveFilters"
+              variant="ghost"
+              size="sm"
+              class="gap-1 shrink-0 whitespace-nowrap"
+              @click="clearFilters"
+            >
+              <XMarkIcon class="h-3.5 w-3.5" />
+              Clear
+            </OuiButton>
+          </OuiFlex>
         </OuiCardBody>
       </OuiCard>
 
       <!-- Loading Skeletons -->
       <OuiStack v-if="pending && !tickets" gap="sm">
-        <OuiCard v-for="i in 5" :key="i">
+        <OuiCard v-for="i in 5" :key="i" variant="outline">
           <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiFlex justify="between" align="start" gap="md">
-                <OuiStack gap="xs" class="flex-1 min-w-0">
-                  <OuiSkeleton width="60%" height="1rem" variant="text" />
-                  <OuiSkeleton width="80%" height="0.75rem" variant="text" />
-                </OuiStack>
-                <OuiFlex gap="xs" class="shrink-0">
-                  <OuiSkeleton width="4rem" height="1.25rem" variant="rectangle" rounded />
-                  <OuiSkeleton width="4rem" height="1.25rem" variant="rectangle" rounded />
-                </OuiFlex>
+            <OuiFlex align="center" gap="md">
+              <OuiSkeleton width="2.5rem" height="2.5rem" variant="rectangle" rounded class="shrink-0" />
+              <OuiStack gap="xs" class="flex-1 min-w-0">
+                <OuiSkeleton width="55%" height="0.875rem" variant="text" />
+                <OuiSkeleton width="80%" height="0.75rem" variant="text" />
+              </OuiStack>
+              <OuiFlex gap="xs" class="shrink-0">
+                <OuiSkeleton width="4rem" height="1.25rem" variant="rectangle" rounded />
+                <OuiSkeleton width="4rem" height="1.25rem" variant="rectangle" rounded />
               </OuiFlex>
-              <OuiFlex gap="md" align="center">
-                <OuiSkeleton width="6rem" height="0.75rem" variant="text" />
-                <OuiSkeleton width="6rem" height="0.75rem" variant="text" />
-              </OuiFlex>
-            </OuiStack>
+            </OuiFlex>
           </OuiCardBody>
         </OuiCard>
       </OuiStack>
@@ -112,72 +138,93 @@
         <OuiCard
           v-for="ticket in filteredTickets"
           :key="ticket.id"
+          variant="outline"
           class="cursor-pointer hover:border-border-strong transition-colors"
           @click="navigateToTicket(ticket.id)"
         >
           <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
-                <OuiStack gap="xs" class="flex-1 min-w-0">
-                  <OuiText size="sm" weight="semibold" class="line-clamp-1">{{ ticket.subject }}</OuiText>
-                  <OuiText color="tertiary" size="xs" class="line-clamp-1">{{ ticket.description }}</OuiText>
-                </OuiStack>
-                <OuiFlex gap="xs" class="shrink-0">
-                  <OuiBadge :variant="getStatusColor(ticket.status) as any" size="xs">{{ getStatusLabel(ticket.status) }}</OuiBadge>
-                  <OuiBadge :variant="getPriorityColor(ticket.priority) as any" size="xs">{{ getPriorityLabel(ticket.priority) }}</OuiBadge>
-                  <OuiBadge :variant="getCategoryVariant(ticket.category) as any" size="xs">{{ getCategoryLabel(ticket.category) }}</OuiBadge>
+            <OuiFlex align="start" gap="md">
+              <!-- Status dot -->
+              <div class="shrink-0 mt-1">
+                <span
+                  class="block h-2 w-2 rounded-full"
+                  :class="{
+                    'bg-accent-primary': ticket.status === SupportTicketStatus.OPEN,
+                    'bg-warning': ticket.status === SupportTicketStatus.IN_PROGRESS || ticket.status === SupportTicketStatus.WAITING_FOR_USER,
+                    'bg-success': ticket.status === SupportTicketStatus.RESOLVED,
+                    'bg-border-strong': ticket.status === SupportTicketStatus.CLOSED,
+                  }"
+                />
+              </div>
+              <!-- Content -->
+              <OuiStack gap="xs" class="flex-1 min-w-0">
+                <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+                  <OuiText size="sm" weight="semibold" class="line-clamp-1 flex-1 min-w-0">{{ ticket.subject }}</OuiText>
+                  <OuiFlex gap="xs" class="shrink-0">
+                    <OuiBadge :variant="getStatusColor(ticket.status) as any" size="xs">{{ getStatusLabel(ticket.status) }}</OuiBadge>
+                    <OuiBadge :variant="getPriorityColor(ticket.priority) as any" size="xs">{{ getPriorityLabel(ticket.priority) }}</OuiBadge>
+                    <OuiBadge :variant="getCategoryVariant(ticket.category) as any" size="xs" class="hidden sm:inline-flex">{{ getCategoryLabel(ticket.category) }}</OuiBadge>
+                  </OuiFlex>
                 </OuiFlex>
-              </OuiFlex>
-              <OuiFlex gap="md" align="center" wrap="wrap" class="pt-1 border-t border-border-muted">
-                <OuiText size="xs" color="tertiary">
-                  <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
-                </OuiText>
-                <OuiText v-if="ticket.createdByName || ticket.createdByEmail" size="xs" color="tertiary">
-                  by {{ ticket.createdByName || ticket.createdByEmail || ticket.createdBy || 'Unknown' }}
-                </OuiText>
-                <OuiText v-if="ticket.commentCount > 0" size="xs" color="tertiary">
-                  {{ ticket.commentCount }} comment{{ ticket.commentCount !== 1 ? 's' : '' }}
-                </OuiText>
-              </OuiFlex>
-            </OuiStack>
+                <OuiText color="tertiary" size="xs" class="line-clamp-1">{{ ticket.description }}</OuiText>
+                <OuiFlex gap="sm" align="center" wrap="wrap">
+                  <OuiText size="xs" color="tertiary">
+                    <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
+                  </OuiText>
+                  <span class="text-border-strong text-xs">·</span>
+                  <OuiText v-if="ticket.createdByName || ticket.createdByEmail" size="xs" color="tertiary">
+                    {{ ticket.createdByName || ticket.createdByEmail || 'Unknown' }}
+                  </OuiText>
+                  <template v-if="ticket.commentCount > 0">
+                    <span class="text-border-strong text-xs">·</span>
+                    <OuiFlex align="center" gap="xs">
+                      <ChatBubbleLeftRightIcon class="h-3 w-3 text-tertiary" />
+                      <OuiText size="xs" color="tertiary">{{ ticket.commentCount }}</OuiText>
+                    </OuiFlex>
+                  </template>
+                </OuiFlex>
+              </OuiStack>
+            </OuiFlex>
           </OuiCardBody>
         </OuiCard>
       </OuiStack>
     </OuiStack>
 
     <!-- Create Ticket Dialog -->
-    <OuiDialog v-model:open="showCreateDialog" title="Create Support Ticket" description="Describe your issue and we'll get back to you as soon as possible.">
-      <form @submit.prevent="createTicket">
-        <OuiStack gap="lg">
-          <OuiInput
-            v-model="newTicket.subject"
-            label="Subject"
-            placeholder="Brief description of your issue"
+    <OuiDialog
+      v-model:open="showCreateDialog"
+      title="Create Support Ticket"
+      description="Describe your issue and we'll get back to you as soon as possible."
+    >
+      <OuiStack gap="md" class="py-1">
+        <OuiInput
+          v-model="newTicket.subject"
+          label="Subject"
+          placeholder="Brief description of your issue"
+          required
+        />
+        <OuiTextarea
+          v-model="newTicket.description"
+          label="Description"
+          placeholder="Please provide as much detail as possible…"
+          :rows="4"
+          required
+        />
+        <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
+          <OuiSelect
+            v-model="newTicket.category"
+            label="Category"
+            :items="categoryOptions"
             required
           />
-          <OuiTextarea
-            v-model="newTicket.description"
-            label="Description"
-            placeholder="Please provide details about your issue..."
-            :rows="4"
+          <OuiSelect
+            v-model="newTicket.priority"
+            label="Priority"
+            :items="priorityOptions"
             required
           />
-          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
-            <OuiSelect
-              v-model="newTicket.category"
-              label="Category"
-              :items="categoryOptions"
-              required
-            />
-            <OuiSelect
-              v-model="newTicket.priority"
-              label="Priority"
-              :items="priorityOptions"
-              required
-            />
-          </OuiGrid>
-        </OuiStack>
-      </form>
+        </OuiGrid>
+      </OuiStack>
       <template #footer>
         <OuiFlex justify="end" gap="sm">
           <OuiButton @click="showCreateDialog = false" variant="ghost">Cancel</OuiButton>
@@ -206,13 +253,9 @@ import {
   MagnifyingGlassIcon,
   XMarkIcon,
   ArrowPathIcon,
-  ClockIcon,
   CheckCircleIcon,
-  ExclamationCircleIcon,
   InboxIcon,
   ChatBubbleLeftRightIcon,
-  ArrowRightIcon,
-  DocumentTextIcon,
 } from "@heroicons/vue/24/outline";
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
