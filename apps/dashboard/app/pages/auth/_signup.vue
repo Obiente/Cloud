@@ -1,12 +1,18 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-surface-base p-4">
+  <div
+    class="min-h-screen flex items-center justify-center bg-surface-base p-4"
+  >
     <div class="w-full max-w-md">
       <!-- Logo and Header -->
       <OuiStack gap="lg" align="center" class="mb-8">
         <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
-          <OuiText size="3xl" weight="bold" color="primary">Create Account</OuiText>
-          <OuiText size="md" color="tertiary">Sign up to get started with Obiente Cloud</OuiText>
+          <OuiText size="3xl" weight="bold" color="primary"
+            >Create Account</OuiText
+          >
+          <OuiText size="md" color="tertiary"
+            >Sign up to get started with Obiente Cloud</OuiText
+          >
         </OuiStack>
       </OuiStack>
 
@@ -25,7 +31,7 @@
                 <OuiFlex align="center" gap="sm">
                   <ExclamationCircleIcon class="h-5 w-5 text-danger shrink-0" />
                   <OuiText size="sm" color="danger">{{ error }}</OuiText>
-              </OuiFlex>
+                </OuiFlex>
               </OuiCardBody>
             </OuiCard>
 
@@ -138,10 +144,7 @@
 
                 <!-- Terms and Conditions -->
                 <div>
-                  <OuiCheckbox
-                    v-model="acceptedTerms"
-                    :disabled="loading"
-                  >
+                  <OuiCheckbox v-model="acceptedTerms" :disabled="loading">
                     <OuiText size="sm" color="tertiary">
                       I agree to the
                       <NuxtLink
@@ -161,7 +164,12 @@
                       </NuxtLink>
                     </OuiText>
                   </OuiCheckbox>
-                  <OuiText v-if="errors.terms" size="sm" color="danger" class="mt-1">
+                  <OuiText
+                    v-if="errors.terms"
+                    size="sm"
+                    color="danger"
+                    class="mt-1"
+                  >
                     {{ errors.terms }}
                   </OuiText>
                 </div>
@@ -179,9 +187,7 @@
                     <UserPlusIcon class="h-5 w-5 mr-2" />
                     Create Account
                   </template>
-                  <template v-else>
-                    Creating account...
-                  </template>
+                  <template v-else> Creating account... </template>
                 </OuiButton>
               </OuiStack>
             </form>
@@ -212,7 +218,8 @@
       <!-- Footer -->
       <OuiStack gap="xs" align="center" class="mt-8">
         <OuiText size="xs" color="tertiary" class="text-center">
-          By creating an account, you agree to our Terms of Service and Privacy Policy
+          By creating an account, you agree to our Terms of Service and Privacy
+          Policy
         </OuiText>
       </OuiStack>
     </div>
@@ -265,17 +272,20 @@ const success = ref(false);
 
 // Form validation
 const errors = computed(() => ({
-  name: name.value && name.value.length < 2
-    ? "Name must be at least 2 characters"
-    : "",
-  email: email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
-    ? "Please enter a valid email address"
-    : "",
-  password: password.value && password.value.length < 8
-    ? "Password must be at least 8 characters"
-    : password.value && !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password.value)
-    ? "Password must contain uppercase, lowercase, and a number"
-    : "",
+  name:
+    name.value && name.value.length < 2
+      ? "Name must be at least 2 characters"
+      : "",
+  email:
+    email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
+      ? "Please enter a valid email address"
+      : "",
+  password:
+    password.value && password.value.length < 8
+      ? "Password must be at least 8 characters"
+      : password.value && !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password.value)
+      ? "Password must contain uppercase, lowercase, and a number"
+      : "",
   confirmPassword:
     confirmPassword.value && password.value !== confirmPassword.value
       ? "Passwords do not match"
@@ -330,9 +340,9 @@ const handleSignup = async () => {
 
     if (response.success) {
       success.value = true;
-      
-      // Refresh auth state
-      await auth.fetch();
+
+      // Wait until the dashboard session and access token are both ready.
+      await auth.waitForAuthenticatedClient();
 
       // Redirect to dashboard after a short delay
       setTimeout(async () => {
@@ -340,7 +350,8 @@ const handleSignup = async () => {
         await navigateTo(returnTo || "/dashboard");
       }, 1500);
     } else {
-      error.value = response.message || "Failed to create account. Please try again.";
+      error.value =
+        response.message || "Failed to create account. Please try again.";
     }
   } catch (err: unknown) {
     console.error("Signup error:", err);
@@ -357,4 +368,3 @@ const handleSignup = async () => {
 <style scoped>
 /* Additional custom styles if needed */
 </style>
-

@@ -16,8 +16,8 @@ export const useAuth = () => {
   const tokenExpiry = useState<number | null>("token-expiry", () => null);
   const isRefreshing = useState<boolean>("is-refreshing", () => false);
   const user = computed(() => sessionState.value?.user || null);
-  const isAuthenticated = computed(
-    () => Boolean(sessionState.value && user.value)
+  const isAuthenticated = computed(() =>
+    Boolean(sessionState.value && user.value)
   );
   const isLoading = ref(false);
 
@@ -59,7 +59,7 @@ export const useAuth = () => {
 
     // Get id_token from session BEFORE clearing it (needed for logout)
     const idToken = sessionState.value?.secure?.id_token;
-    
+
     await useRequestFetch()("/auth/session", {
       method: "DELETE",
       onResponse({ response: { headers } }) {
@@ -82,40 +82,40 @@ export const useAuth = () => {
       // IMPORTANT: The URI must match EXACTLY (including protocol, domain, and path)
       // Use requestHost from config to ensure consistency across environments
       const homepageUrl = config.public.requestHost || window.location.origin;
-      
+
       // Get the end_session endpoint
       // Zitadel's end_session endpoint is at /oidc/v1/end_session
       // According to OIDC spec: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
       const endSessionEndpoint = `${config.public.oidcBase}/oidc/v1/end_session`;
-      
+
       // Build parameters according to OIDC RP-Initiated Logout spec
       // See: https://zitadel.com/docs/guides/integrate/login/oidc/logout
       // Reference: https://zitadel.com/docs/apis/openidoauth/endpoints
       const params = new URLSearchParams();
-      
+
       // post_logout_redirect_uri is REQUIRED and must be registered in Zitadel
       // This must match EXACTLY one of the URIs in "Post Logout Redirect URIs" in Zitadel console
       params.set("post_logout_redirect_uri", homepageUrl);
-      
+
       // client_id is REQUIRED if id_token_hint is not provided
       // Zitadel needs either id_token_hint OR client_id to identify the client and validate the redirect URI
       // Always include client_id to ensure Zitadel can identify the client
       params.set("client_id", config.public.oidcClientId);
-      
+
       // id_token_hint helps Zitadel identify which session to terminate
       // This is recommended but optional - client_id can be used instead
       if (idToken) {
         params.set("id_token_hint", idToken);
       }
-      
+
       // Optional: state parameter for CSRF protection
       const state = crypto.randomUUID();
       params.set("state", state);
       // Store state to verify on redirect (optional, for security)
       sessionStorage.setItem("logout_state", state);
-      
+
       const logoutUrl = `${endSessionEndpoint}?${params.toString()}`;
-      
+
       // Redirect to Zitadel's end_session endpoint
       // Zitadel will clear the session and redirect back to post_logout_redirect_uri
       // If the redirect URI is not registered, Zitadel will show its UI logout page instead
@@ -206,10 +206,10 @@ export const useAuth = () => {
       };
 
       window.addEventListener("message", messageHandler);
-      
+
       // Append iframe first without src to avoid blocking during hydration
       document.body.appendChild(iframe);
-      
+
       // Defer setting src until after the next frame to avoid blocking hydration
       // This prevents Chrome from freezing during hydration
       requestAnimationFrame(() => {
@@ -221,7 +221,7 @@ export const useAuth = () => {
   // Popup authentication support - track listeners to prevent duplicates
   let popupListenerActive = false;
   let messageListenerActive = false;
-  
+
   const popupListener = (e: StorageEvent) => {
     if (e.key === "auth-completed") {
       fetch();
@@ -236,11 +236,15 @@ export const useAuth = () => {
   // Message listener for OAuth errors and signup success from popup (not used for silent auth iframe)
   const messageListener = (e: MessageEvent) => {
     if (e.origin !== window.location.origin) return;
-    
+
     if (e.data?.type === "oauth-error") {
       // Only handle popup errors, not silent auth iframe errors
       // Silent auth errors are handled in trySilentAuth message handler
-      if (e.data.error === "login_required" || e.data.error === "interaction_required" || e.data.error === "no_session") {
+      if (
+        e.data.error === "login_required" ||
+        e.data.error === "interaction_required" ||
+        e.data.error === "no_session"
+      ) {
         // Clean up listener before opening new popup
         if (messageListenerActive) {
           window.removeEventListener("message", messageListener);
@@ -267,7 +271,7 @@ export const useAuth = () => {
     size: { width?: number; height?: number } = {}
   ) => {
     if (!import.meta.client) return;
-    
+
     const width = size.width ?? 500;
     const height = size.height ?? 700;
     const top =
@@ -301,7 +305,7 @@ export const useAuth = () => {
     size: { width?: number; height?: number } = {}
   ) => {
     if (!import.meta.client) return;
-    
+
     const width = size.width ?? 500;
     const height = size.height ?? 700;
     const top =
@@ -328,10 +332,14 @@ export const useAuth = () => {
       "zitadel-signup",
       `width=${width}, height=${height}, top=${top}, left=${left}, toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no`
     );
-    
+
     if (!popup || popup.closed || typeof popup.closed === "undefined") {
-      console.error("[Auth] Popup blocked or failed to open - please allow popups for this site");
-      alert("Please allow popups for this site to sign up. The popup was blocked by your browser.");
+      console.error(
+        "[Auth] Popup blocked or failed to open - please allow popups for this site"
+      );
+      alert(
+        "Please allow popups for this site to sign up. The popup was blocked by your browser."
+      );
       // Clean up listeners if popup failed
       if (messageListenerActive) {
         window.removeEventListener("message", messageListener);
@@ -412,14 +420,14 @@ export const useAuth = () => {
         }
       } catch {}
 
-        const response = await $fetch<{
-          accessToken: string;
-          expiresIn?: number;
+      const response = await $fetch<{
+        accessToken: string;
+        expiresIn?: number;
       }>("/auth/refresh", { method: "POST" });
-        if (response.accessToken) {
-          accessToken.value = response.accessToken;
-          if (response.expiresIn) {
-            tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
+      if (response.accessToken) {
+        accessToken.value = response.accessToken;
+        if (response.expiresIn) {
+          tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
         }
       }
     } catch (error) {
@@ -440,9 +448,50 @@ export const useAuth = () => {
     }
   };
 
+  const waitForAuthenticatedClient = async (
+    options: { timeoutMs?: number; intervalMs?: number } = {}
+  ): Promise<boolean> => {
+    const timeoutMs = options.timeoutMs ?? 4000;
+    const intervalMs = options.intervalMs ?? 100;
+
+    const hasSession = () => Boolean(sessionState.value?.user);
+
+    await fetch();
+
+    if (import.meta.server) {
+      return hasSession();
+    }
+
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      if (!hasSession()) {
+        await fetch();
+      }
+
+      if (hasSession()) {
+        const token = await getAccessToken().catch((error) => {
+          console.warn(
+            "[useAuth] Failed to prime access token after login:",
+            error
+          );
+          return null;
+        });
+
+        if (token) {
+          return true;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    return hasSession();
+  };
+
   // Track if token fetch is in progress to prevent concurrent calls
   let tokenFetchInProgress = false;
-  
+
   watch(
     () => sessionState.value,
     async (newSession, oldSession) => {
@@ -450,20 +499,25 @@ export const useAuth = () => {
       if (tokenFetchInProgress) {
         return;
       }
-      
+
       // Only fetch token if session actually changed (not just on mount)
       // Use deep equality check to prevent unnecessary triggers
       if (newSession && newSession !== oldSession) {
         // Check if session actually changed (compare user sub to avoid unnecessary updates)
         const newUserSub = newSession?.user?.sub;
         const oldUserSub = oldSession?.user?.sub;
-        
+
         // If user sub is the same and we have a token, skip
-        if (newUserSub && oldUserSub && newUserSub === oldUserSub && accessToken.value) {
+        if (
+          newUserSub &&
+          oldUserSub &&
+          newUserSub === oldUserSub &&
+          accessToken.value
+        ) {
           // Session object reference changed but user is the same - skip
           return;
         }
-        
+
         try {
           if (import.meta.client) {
             // Only fetch if we don't have a valid token already
@@ -473,7 +527,7 @@ export const useAuth = () => {
             ) {
               // Defer token fetch to avoid blocking during hydration
               tokenFetchInProgress = true;
-              
+
               // Use requestAnimationFrame to defer until after hydration
               requestAnimationFrame(() => {
                 requestAnimationFrame(async () => {
@@ -490,7 +544,10 @@ export const useAuth = () => {
                       }
                     }
                   } catch (e) {
-                    console.error("[useAuth] Failed to fetch token after session update:", e);
+                    console.error(
+                      "[useAuth] Failed to fetch token after session update:",
+                      e
+                    );
                   } finally {
                     tokenFetchInProgress = false;
                   }
@@ -499,7 +556,10 @@ export const useAuth = () => {
             }
           }
         } catch (e) {
-          console.error("[useAuth] Failed to fetch token after session update:", e);
+          console.error(
+            "[useAuth] Failed to fetch token after session update:",
+            e
+          );
           tokenFetchInProgress = false;
         }
       } else if (!newSession && oldSession) {
@@ -520,35 +580,39 @@ export const useAuth = () => {
     // getCurrentInstance may fail during hydration - treat as non-component context
     instance = null;
   }
-  
+
   // Store interval ID for cleanup
   let tokenCheckInterval: ReturnType<typeof setInterval> | null = null;
-  
+
   const initializeAuth = () => {
     if (import.meta.client) {
       // Defer fetch() to avoid blocking during hydration
       // Use multiple requestAnimationFrame calls to ensure hydration is fully complete
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          fetch().then(() => {
-            // fetch completed
-          }).catch((err) => {
-            console.error("[useAuth] fetch() error:", err);
-          });
+          fetch()
+            .then(() => {
+              // fetch completed
+            })
+            .catch((err) => {
+              console.error("[useAuth] fetch() error:", err);
+            });
 
           // Try silent auth first if no session exists (defer to avoid blocking hydration)
           if (!sessionState.value || !user.value) {
             // Use multiple deferrals to ensure hydration is complete
             // requestAnimationFrame ensures DOM is ready, then setTimeout gives extra time
             setTimeout(() => {
-              trySilentAuth().then((success) => {
-                if (!success) {
-                  // Silent auth failed, but don't auto-open popup here
-                  // Let the middleware handle it if needed
-                }
-              }).catch((err) => {
-                console.error("[useAuth] trySilentAuth error:", err);
-              });
+              trySilentAuth()
+                .then((success) => {
+                  if (!success) {
+                    // Silent auth failed, but don't auto-open popup here
+                    // Let the middleware handle it if needed
+                  }
+                })
+                .catch((err) => {
+                  console.error("[useAuth] trySilentAuth error:", err);
+                });
             }, 500); // Increased delay to ensure hydration completes
           }
 
@@ -564,7 +628,7 @@ export const useAuth = () => {
       fetch();
     }
   };
-  
+
   if (instance) {
     // We're in a component context - use lifecycle hooks
     onMounted(() => {
@@ -583,7 +647,7 @@ export const useAuth = () => {
         }, 0);
       });
     });
-    
+
     onUnmounted(() => {
       if (tokenCheckInterval) {
         clearInterval(tokenCheckInterval);
@@ -613,7 +677,7 @@ export const useAuth = () => {
       initializeAuth();
     }
   }
-  
+
   // Create computed properties lazily to avoid triggering during initialization
   const currentOrganization = computed(() => {
     return orgStore.currentOrg;
@@ -624,7 +688,7 @@ export const useAuth = () => {
   const currentOrganizationId = computed(() => {
     return orgStore.currentOrgId;
   });
-  
+
   const authObject = reactive({
     user: user,
     currentOrganization,
@@ -647,7 +711,8 @@ export const useAuth = () => {
 
     getAccessToken,
     refreshAccessToken,
+    waitForAuthenticatedClient,
   });
-  
+
   return authObject;
 };

@@ -1,12 +1,18 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-surface-base p-4">
+  <div
+    class="min-h-screen flex items-center justify-center bg-surface-base p-4"
+  >
     <div class="w-full max-w-md">
       <!-- Logo and Header -->
       <OuiStack gap="lg" align="center" class="mb-8">
         <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
-          <OuiText size="3xl" weight="bold" color="primary">Welcome Back</OuiText>
-          <OuiText size="md" color="tertiary">Sign in to your account to continue</OuiText>
+          <OuiText size="3xl" weight="bold" color="primary"
+            >Welcome Back</OuiText
+          >
+          <OuiText size="md" color="tertiary"
+            >Sign in to your account to continue</OuiText
+          >
         </OuiStack>
       </OuiStack>
 
@@ -101,9 +107,7 @@
                     <ArrowRightOnRectangleIcon class="h-5 w-5 mr-2" />
                     Sign In
                   </template>
-                  <template v-else>
-                    Signing in...
-                  </template>
+                  <template v-else> Signing in... </template>
                 </OuiButton>
               </OuiStack>
             </form>
@@ -181,12 +185,14 @@ const error = ref("");
 
 // Form errors
 const errors = computed(() => ({
-  email: email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
-    ? "Please enter a valid email address"
-    : "",
-  password: password.value && password.value.length < 8
-    ? "Password must be at least 8 characters"
-    : "",
+  email:
+    email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
+      ? "Please enter a valid email address"
+      : "",
+  password:
+    password.value && password.value.length < 8
+      ? "Password must be at least 8 characters"
+      : "",
 }));
 
 // Auth composable
@@ -212,24 +218,21 @@ const handleLogin = async () => {
 
   try {
     // Call login API (which calls backend API with service account)
-    const response = await $fetch<{ 
-      success: boolean; 
+    const response = await $fetch<{
+      success: boolean;
       message?: string;
-    }>(
-      "/api/auth/login",
-      {
-        method: "POST",
-        body: {
-          email: email.value,
-          password: password.value,
-          rememberMe: rememberMe.value,
-        },
-      }
-    );
+    }>("/api/auth/login", {
+      method: "POST",
+      body: {
+        email: email.value,
+        password: password.value,
+        rememberMe: rememberMe.value,
+      },
+    });
 
     if (response.success) {
-      // Refresh auth state
-      await auth.fetch();
+      // Wait until the dashboard session and access token are both ready.
+      await auth.waitForAuthenticatedClient();
 
       // Redirect to dashboard or return URL
       const returnTo = useRoute().query.returnTo as string | undefined;
@@ -252,4 +255,3 @@ const handleLogin = async () => {
 <style scoped>
 /* Additional custom styles if needed */
 </style>
-
