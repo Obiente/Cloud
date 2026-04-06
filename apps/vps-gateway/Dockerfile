@@ -23,9 +23,10 @@ RUN cd apps/shared && GOWORK=off go mod download && \
 # Build service - modules in image layer; only go-build cache is runner-local
 RUN --mount=type=bind,source=.,target=/src,rw \
     --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/apps/vps-gateway && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     GOWORK=off go build -trimpath -ldflags="-w -s -extldflags '-static'" \
-    -o /build/apps/vps-gateway/vps-gateway /src/apps/vps-gateway/main.go
+    -o /build/apps/vps-gateway/vps-gateway .
 
 # Build grpcurl (baked into layer - exported to registry cache)
 RUN --mount=type=cache,target=/root/.cache/go-build \
@@ -58,4 +59,3 @@ EXPOSE 1537 9091
 
 # Run the service
 CMD ["./vps-gateway"]
-

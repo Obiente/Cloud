@@ -25,9 +25,10 @@ RUN cd apps/shared && GOWORK=off go mod download && \
 # Build - modules already in image layer; only go-build cache is runner-local
 RUN --mount=type=bind,source=.,target=/src,rw \
     --mount=type=cache,target=/root/.cache/go-build \
+    cd /src/apps/vps-service && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     GOWORK=off go build -trimpath -ldflags="-w -s -extldflags '-static'" \
-    -o /build/vps-service /src/apps/vps-service
+    -o /build/vps-service .
 
 # Final stage
 FROM ${BASE_REGISTRY}/library/alpine:latest
