@@ -125,9 +125,6 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.17
         version: 4.1.18(vite@7.3.1(@types/node@24.10.8)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
-      '@types/dompurify':
-        specifier: ^3.2.0
-        version: 3.2.0
       '@types/highlight.js':
         specifier: ^10.1.0
         version: 10.1.0
@@ -2971,10 +2968,6 @@ packages:
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
-
-  '@types/dompurify@3.2.0':
-    resolution: {integrity: sha512-Fgg31wv9QbLDA0SpTOXO3MaxySc4DKGLi8sna4/Utjo4r3ZRPdCt4UQee8BWr+Q5z21yifghREPJGYaEOEIACg==}
-    deprecated: This is a stub types definition. dompurify provides its own type definitions, so you do not need this installed.
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -11902,10 +11895,6 @@ snapshots:
   '@types/chroma-js@3.1.2': {}
 
   '@types/deep-eql@4.0.2': {}
-
-  '@types/dompurify@3.2.0':
-    dependencies:
-      dompurify: 3.1.7
 
   '@types/estree@1.0.8': {}
 
