@@ -10,6 +10,7 @@ import "obiente/cloud/billing/v1/billing_service.proto";
 import "obiente/cloud/common/v1/common.proto";
 import "obiente/cloud/vps/v1/vps_service.proto";
 import "obiente/cloud/vpsgateway/v1/gateway_service.proto";
+import "obiente/cloud/gameservers/v1/game_server_service.proto";
 
 service SuperadminService {
   // Returns a system-wide overview for superadmin operators.
@@ -51,6 +52,17 @@ service SuperadminService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
   rpc ListDormantResourceOwners(ListDormantResourceOwnersRequest) returns (ListDormantResourceOwnersResponse);
+  rpc SuspendUser(SuspendUserRequest) returns (SuspendUserResponse);
+  rpc UnsuspendUser(UnsuspendUserRequest) returns (UnsuspendUserResponse);
+  rpc BanUser(BanUserRequest) returns (BanUserResponse);
+  rpc UnbanUser(UnbanUserRequest) returns (UnbanUserResponse);
+  rpc GetUserBanStatus(GetUserBanStatusRequest) returns (GetUserBanStatusResponse);
+
+  // Organization moderation endpoints
+  rpc SuspendOrganization(SuspendOrganizationRequest) returns (SuspendOrganizationResponse);
+  rpc UnsuspendOrganization(UnsuspendOrganizationRequest) returns (UnsuspendOrganizationResponse);
+  rpc BanOrganization(BanOrganizationRequest) returns (BanOrganizationResponse);
+  rpc UnbanOrganization(UnbanOrganizationRequest) returns (UnbanOrganizationResponse);
   
   // VPS management endpoints
   rpc ListAllVPS(ListAllVPSRequest) returns (ListAllVPSResponse);
@@ -94,6 +106,14 @@ service SuperadminService {
   
   // Get current user's superadmin permissions (from their role bindings)
   rpc GetMySuperadminPermissions(GetMySuperadminPermissionsRequest) returns (GetMySuperadminPermissionsResponse);
+
+  // Game server management endpoints (superadmin)
+  rpc ListAllGameServers(ListAllGameServersRequest) returns (ListAllGameServersResponse);
+  rpc SuperadminGetGameServer(SuperadminGetGameServerRequest) returns (SuperadminGetGameServerResponse);
+  rpc SuperadminSuspendGameServer(SuperadminSuspendGameServerRequest) returns (SuperadminSuspendGameServerResponse);
+  rpc SuperadminUnsuspendGameServer(SuperadminUnsuspendGameServerRequest) returns (SuperadminUnsuspendGameServerResponse);
+  rpc SuperadminForceStopGameServer(SuperadminForceStopGameServerRequest) returns (SuperadminForceStopGameServerResponse);
+  rpc SuperadminForceDeleteGameServer(SuperadminForceDeleteGameServerRequest) returns (SuperadminForceDeleteGameServerResponse);
   
   // Superadmin role management endpoints (global roles, not organization-scoped)
   rpc ListSuperadminRoles(ListSuperadminRolesRequest) returns (ListSuperadminRolesResponse);
@@ -1067,4 +1087,159 @@ message DeleteSuperadminRoleBindingRequest {
 
 message DeleteSuperadminRoleBindingResponse {
   bool success = 1;
+}
+
+// ─── User ban / suspend ────────────────────────────────────────────────────────
+
+message SuspendUserRequest {
+  string user_id = 1;
+  optional string reason = 2;
+  optional google.protobuf.Timestamp expires_at = 3; // null = indefinite
+}
+message SuspendUserResponse {
+  UserBanInfo ban = 1;
+  string message = 2;
+}
+
+message UnsuspendUserRequest {
+  string user_id = 1;
+}
+message UnsuspendUserResponse {
+  string message = 1;
+}
+
+message BanUserRequest {
+  string user_id = 1;
+  optional string reason = 2;
+}
+message BanUserResponse {
+  UserBanInfo ban = 1;
+  string message = 2;
+}
+
+message UnbanUserRequest {
+  string user_id = 1;
+}
+message UnbanUserResponse {
+  string message = 1;
+}
+
+message GetUserBanStatusRequest {
+  string user_id = 1;
+}
+message GetUserBanStatusResponse {
+  optional UserBanInfo ban = 1; // null if not banned/suspended
+}
+
+// UserBanInfo represents a current or historical ban/suspension record
+message UserBanInfo {
+  string id = 1;
+  string user_id = 2;
+  string type = 3; // "suspended" | "banned"
+  optional string reason = 4;
+  string banned_by = 5; // superadmin user ID
+  google.protobuf.Timestamp banned_at = 6;
+  optional google.protobuf.Timestamp expires_at = 7; // null = permanent
+  bool is_active = 8;
+}
+
+// ─── Organization ban / suspend ───────────────────────────────────────────────
+
+message SuspendOrganizationRequest {
+  string organization_id = 1;
+  optional string reason = 2;
+  optional google.protobuf.Timestamp expires_at = 3;
+}
+message SuspendOrganizationResponse {
+  string message = 1;
+  string status = 2; // new status
+}
+
+message UnsuspendOrganizationRequest {
+  string organization_id = 1;
+}
+message UnsuspendOrganizationResponse {
+  string message = 1;
+}
+
+message BanOrganizationRequest {
+  string organization_id = 1;
+  optional string reason = 2;
+}
+message BanOrganizationResponse {
+  string message = 1;
+  string status = 2;
+}
+
+message UnbanOrganizationRequest {
+  string organization_id = 1;
+}
+message UnbanOrganizationResponse {
+  string message = 1;
+}
+
+// ─── Game server superadmin management ────────────────────────────────────────
+
+message GameServerOverview {
+  obiente.cloud.gameservers.v1.GameServer game_server = 1;
+  string organization_name = 2;
+  optional UserInfo created_by_user = 3;
+  bool is_suspended = 4;
+  optional string suspension_reason = 5;
+}
+
+message ListAllGameServersRequest {
+  optional string organization_id = 1;
+  optional obiente.cloud.gameservers.v1.GameServerStatus status = 2;
+  optional string search = 3; // name, ID, org
+  optional int32 page = 4;
+  optional int32 per_page = 5;
+  optional bool flagged_only = 6; // only servers flagged by abuse detection
+}
+message ListAllGameServersResponse {
+  repeated GameServerOverview game_servers = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message SuperadminGetGameServerRequest {
+  string game_server_id = 1;
+}
+message SuperadminGetGameServerResponse {
+  GameServerOverview game_server = 1;
+}
+
+message SuperadminSuspendGameServerRequest {
+  string game_server_id = 1;
+  optional string reason = 2;
+}
+message SuperadminSuspendGameServerResponse {
+  obiente.cloud.gameservers.v1.GameServer game_server = 1;
+  string message = 2;
+}
+
+message SuperadminUnsuspendGameServerRequest {
+  string game_server_id = 1;
+}
+message SuperadminUnsuspendGameServerResponse {
+  obiente.cloud.gameservers.v1.GameServer game_server = 1;
+  string message = 2;
+}
+
+message SuperadminForceStopGameServerRequest {
+  string game_server_id = 1;
+  optional string reason = 2;
+}
+message SuperadminForceStopGameServerResponse {
+  obiente.cloud.gameservers.v1.GameServer game_server = 1;
+  string message = 2;
+}
+
+message SuperadminForceDeleteGameServerRequest {
+  string game_server_id = 1;
+  optional string reason = 2;
+  bool hard_delete = 3;
+}
+message SuperadminForceDeleteGameServerResponse {
+  bool success = 1;
+  string message = 2;
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
@@ -532,6 +533,9 @@ func (s *Service) UploadGameServerFiles(ctx context.Context, req *connect.Reques
 	if destPath == "" {
 		destPath = "/"
 	}
+	if err := inputvalidation.UploadDestPath(destPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid destination_path: %w", err))
+	}
 
 	// Extract files from tar archive
 	files := make(map[string][]byte)
@@ -698,6 +702,12 @@ func (s *Service) ExtractGameServerFile(ctx context.Context, req *connect.Reques
 	}
 	if destPath == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("destination_path is required"))
+	}
+	if err := inputvalidation.UploadDestPath(destPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid destination_path: %w", err))
+	}
+	if err := inputvalidation.UploadDestPath(zipPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid zip_path: %w", err))
 	}
 
 	// Check permissions

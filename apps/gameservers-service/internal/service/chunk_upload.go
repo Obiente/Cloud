@@ -12,6 +12,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/chunkupload"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -58,6 +59,14 @@ func (s *Service) ChunkUploadGameServerFiles(ctx context.Context, req *connect.R
 	// Validate upload payload using shared validator
 	if err := chunkupload.ValidatePayload(upload); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Validate user-controlled file name and destination path
+	if err := inputvalidation.UploadFileName(upload.FileName); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid file name: %w", err))
+	}
+	if err := inputvalidation.UploadDestPath(upload.DestinationPath); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid destination_path: %w", err))
 	}
 
 	// Get or create session

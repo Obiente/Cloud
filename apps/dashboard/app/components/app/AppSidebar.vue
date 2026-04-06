@@ -206,6 +206,13 @@
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/gameservers')"
+            to="/superadmin/gameservers"
+            label="Game Servers"
+            :icon="ServerIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             v-if="hasPagePermission('/superadmin/nodes')"
             to="/superadmin/nodes"
             label="Nodes"
@@ -451,6 +458,7 @@ const pagePermissions: Record<string, string> = {
   "/superadmin/plans": "superadmin.plans.read",
   "/superadmin/deployments": "superadmin.deployments.read",
   "/superadmin/vps": "superadmin.vps.read",
+  "/superadmin/gameservers": "superadmin.gameservers.read",
   "/superadmin/nodes": "superadmin.nodes.read",
   "/superadmin/users": "superadmin.users.read",
   "/superadmin/resource-hygiene": "superadmin.users.read",

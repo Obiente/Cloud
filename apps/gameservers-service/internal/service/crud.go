@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
@@ -178,6 +179,21 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 	dockerImage := req.Msg.GetDockerImage()
 	if dockerImage == "" {
 		dockerImage = getDefaultDockerImage(req.Msg.GetGameType())
+	}
+
+	// Validate user-supplied fields for abuse patterns
+	if err := inputvalidation.DockerImage(dockerImage); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	if req.Msg.StartCommand != nil {
+		if err := inputvalidation.StartCommand(*req.Msg.StartCommand); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+	}
+	for k, v := range req.Msg.GetEnvVars() {
+		if err := inputvalidation.EnvVar(k, v); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 	}
 
 	// Get memory bytes (default to 2GB if not specified)
@@ -447,6 +463,9 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		cpuChanged = oldCPUCores != *req.Msg.CpuCores
 	}
 	if req.Msg.StartCommand != nil {
+		if err := inputvalidation.StartCommand(*req.Msg.StartCommand); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 		dbGameServer.StartCommand = req.Msg.StartCommand
 	}
 	if req.Msg.Description != nil {
@@ -489,6 +508,13 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 	}
 
 	if len(req.Msg.EnvVars) > 0 {
+		// Validate env var keys and values for abuse patterns
+		for k, v := range req.Msg.EnvVars {
+			if err := inputvalidation.EnvVar(k, v); err != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+		}
+
 		// Start from the provided env vars
 		merged := make(map[string]string)
 		for k, v := range req.Msg.EnvVars {

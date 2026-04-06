@@ -205,3 +205,70 @@ func MigrateModels(db *gorm.DB) error {
 	return nil
 }
 
+// addModerationTables adds ban/suspension columns to orgs and creates new moderation tables.
+func addModerationTables(db *gorm.DB) error {
+	// Add moderation columns to organizations
+	orgCols := []struct {
+		col  string
+		stmt string
+	}{
+		{"suspended_at", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ"},
+		{"suspension_reason", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspension_reason TEXT"},
+		{"suspended_by", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspended_by TEXT"},
+		{"suspension_expires", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS suspension_expires TIMESTAMPTZ"},
+		{"banned_at", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ"},
+		{"ban_reason", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS ban_reason TEXT"},
+		{"banned_by", "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS banned_by TEXT"},
+	}
+	for _, c := range orgCols {
+		if !db.Migrator().HasColumn("organizations", c.col) {
+			if err := db.Exec(c.stmt).Error; err != nil {
+				return fmt.Errorf("add organizations.%s: %w", c.col, err)
+			}
+		}
+	}
+
+	// Create user_bans table
+	if err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS user_bans (
+			id           TEXT PRIMARY KEY,
+			user_id      TEXT NOT NULL,
+			type         TEXT NOT NULL CHECK (type IN ('suspended','banned')),
+			reason       TEXT,
+			banned_by    TEXT NOT NULL,
+			banned_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+			expires_at   TIMESTAMPTZ,
+			revoked_at   TIMESTAMPTZ,
+			revoked_by   TEXT
+		)
+	`).Error; err != nil {
+		return fmt.Errorf("create user_bans: %w", err)
+	}
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_user_bans_user_id ON user_bans(user_id)`).Error; err != nil {
+		return fmt.Errorf("index user_bans.user_id: %w", err)
+	}
+
+	// Create game_server_suspensions table
+	if err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS game_server_suspensions (
+			id               TEXT PRIMARY KEY,
+			game_server_id   TEXT NOT NULL,
+			organization_id  TEXT NOT NULL,
+			reason           TEXT,
+			suspended_by     TEXT NOT NULL,
+			suspended_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+			lifted_at        TIMESTAMPTZ,
+			lifted_by        TEXT,
+			abuse_flags      JSONB NOT NULL DEFAULT '[]'
+		)
+	`).Error; err != nil {
+		return fmt.Errorf("create game_server_suspensions: %w", err)
+	}
+	if err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gs_suspensions_gs_id ON game_server_suspensions(game_server_id) WHERE lifted_at IS NULL`).Error; err != nil {
+		return fmt.Errorf("index game_server_suspensions.game_server_id: %w", err)
+	}
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_gs_suspensions_org_id ON game_server_suspensions(organization_id)`).Error; err != nil {
+		return fmt.Errorf("index game_server_suspensions.organization_id: %w", err)
+	}
+	return nil
+}

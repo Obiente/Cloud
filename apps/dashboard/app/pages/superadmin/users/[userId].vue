@@ -169,8 +169,150 @@
           </OuiCardBody>
         </OuiCard>
       </OuiGrid>
+
+      <!-- Moderation Card -->
+      <OuiCard class="border border-border-muted rounded-xl">
+        <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+          <OuiFlex align="center" justify="between">
+            <OuiText tag="h2" size="lg" weight="bold">Moderation</OuiText>
+            <OuiBadge
+              v-if="banStatus?.isActive && banStatus.type === 'banned'"
+              variant="danger"
+              tone="solid"
+            >BANNED</OuiBadge>
+            <OuiBadge
+              v-else-if="banStatus?.isActive && banStatus.type === 'suspended'"
+              variant="warning"
+              tone="solid"
+            >SUSPENDED</OuiBadge>
+            <OuiBadge v-else variant="success" tone="soft">No active ban</OuiBadge>
+          </OuiFlex>
+        </OuiCardHeader>
+        <OuiCardBody class="p-6">
+          <OuiStack gap="lg">
+            <!-- Active ban details -->
+            <OuiStack v-if="banStatus?.isActive" gap="md" class="p-4 rounded-lg bg-surface-subtle border border-border-muted">
+              <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Type</OuiText>
+                  <OuiBadge
+                    :variant="banStatus.type === 'banned' ? 'danger' : 'warning'"
+                    tone="soft"
+                    size="sm"
+                  >
+                    {{ banStatus.type === 'banned' ? 'Permanent Ban' : 'Suspension' }}
+                  </OuiBadge>
+                </OuiStack>
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Issued By</OuiText>
+                  <OuiText size="sm" class="font-mono">{{ banStatus.bannedBy || "—" }}</OuiText>
+                </OuiStack>
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Issued At</OuiText>
+                  <OuiText size="sm">
+                    <OuiDate v-if="banStatus.bannedAt" :value="banStatus.bannedAt" />
+                    <span v-else>—</span>
+                  </OuiText>
+                </OuiStack>
+                <OuiStack v-if="banStatus.reason" gap="xs" class="md:col-span-3">
+                  <OuiText size="sm" weight="medium" color="tertiary">Reason</OuiText>
+                  <OuiText size="sm">{{ banStatus.reason }}</OuiText>
+                </OuiStack>
+                <OuiStack v-if="banStatus.expiresAt" gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Expires</OuiText>
+                  <OuiText size="sm">
+                    <OuiDate :value="banStatus.expiresAt" />
+                  </OuiText>
+                </OuiStack>
+              </OuiGrid>
+            </OuiStack>
+
+            <!-- Action buttons -->
+            <OuiFlex gap="sm" wrap="wrap">
+              <template v-if="!banStatus?.isActive">
+                <OuiButton
+                  color="warning"
+                  variant="outline"
+                  size="sm"
+                  @click="openSuspendDialog"
+                  :disabled="isModerating"
+                >
+                  Suspend User
+                </OuiButton>
+                <OuiButton
+                  color="danger"
+                  size="sm"
+                  @click="openBanDialog"
+                  :disabled="isModerating"
+                >
+                  Ban User
+                </OuiButton>
+              </template>
+              <template v-else>
+                <OuiButton
+                  color="primary"
+                  size="sm"
+                  @click="handleLiftBan"
+                  :disabled="isModerating"
+                >
+                  {{ isModerating ? 'Lifting...' :banStatus.type === 'banned' ? 'Unban User' : 'Lift Suspension' }}
+                </OuiButton>
+              </template>
+            </OuiFlex>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
     </OuiStack>
   </OuiContainer>
+
+  <!-- Suspend Dialog -->
+  <OuiDialog v-model:open="suspendDialogOpen" title="Suspend User">
+    <OuiStack gap="lg">
+      <OuiText size="sm" color="tertiary">
+        Suspend this user account. They will be unable to access the platform until the suspension is lifted.
+      </OuiText>
+      <OuiInput
+        v-model="moderationForm.reason"
+        label="Reason (Optional)"
+        placeholder="Reason for suspension"
+      />
+      <OuiInput
+        v-model="moderationForm.expiresAt"
+        label="Expires At (Optional, ISO date)"
+        placeholder="e.g. 2025-12-31T00:00:00Z"
+      />
+    </OuiStack>
+    <template #footer>
+      <OuiFlex justify="end" gap="sm">
+        <OuiButton variant="ghost" @click="suspendDialogOpen = false">Cancel</OuiButton>
+        <OuiButton color="warning" @click="handleSuspend" :disabled="isModerating">
+          {{ isModerating ? 'Suspending...' : 'Suspend' }}
+        </OuiButton>
+      </OuiFlex>
+    </template>
+  </OuiDialog>
+
+  <!-- Ban Dialog -->
+  <OuiDialog v-model:open="banDialogOpen" title="Ban User">
+    <OuiStack gap="lg">
+      <OuiText size="sm" color="tertiary">
+        Permanently ban this user from the platform. This is a serious action.
+      </OuiText>
+      <OuiInput
+        v-model="moderationForm.reason"
+        label="Reason (Optional)"
+        placeholder="Reason for ban"
+      />
+    </OuiStack>
+    <template #footer>
+      <OuiFlex justify="end" gap="sm">
+        <OuiButton variant="ghost" @click="banDialogOpen = false">Cancel</OuiButton>
+        <OuiButton color="danger" @click="handleBan" :disabled="isModerating">
+          {{ isModerating ? 'Banning...' : 'Ban User' }}
+        </OuiButton>
+      </OuiFlex>
+    </template>
+  </OuiDialog>
 </template>
 
 <script setup lang="ts">
@@ -185,10 +327,12 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
+const { toast } = useToast();
 
 const userId = computed(() => route.params.userId as string);
 const user = ref<any>(null);
 const organizations = ref<any[]>([]);
+const banStatus = ref<any>(null);
 
 const orgColumns = [
   { key: "organization", label: "Organization", defaultWidth: 250, minWidth: 200 },
@@ -225,18 +369,103 @@ async function loadUser() {
   }
 }
 
-// Use client-side fetching for non-blocking navigation
 const { data: userData, pending: loading } = useClientFetch(
   () => `superadmin-user-${userId.value}`,
   loadUser
 );
 
-// Update refs when data is loaded
 watch(userData, (newData) => {
   if (newData) {
     user.value = newData.user;
     organizations.value = newData.organizations;
   }
 }, { immediate: true });
+
+// Load ban status
+const loadBanStatus = async () => {
+  if (!userId.value) return;
+  try {
+    const response = await client.getUserBanStatus({ userId: userId.value });
+    banStatus.value = response.ban || null;
+  } catch {
+    banStatus.value = null;
+  }
+};
+
+watch(userId, () => loadBanStatus(), { immediate: true });
+
+// Moderation
+const suspendDialogOpen = ref(false);
+const banDialogOpen = ref(false);
+const isModerating = ref(false);
+const moderationForm = ref({ reason: "", expiresAt: "" });
+
+function openSuspendDialog() {
+  moderationForm.value = { reason: "", expiresAt: "" };
+  suspendDialogOpen.value = true;
+}
+
+function openBanDialog() {
+  moderationForm.value = { reason: "", expiresAt: "" };
+  banDialogOpen.value = true;
+}
+
+const handleSuspend = async () => {
+  if (!userId.value) return;
+  isModerating.value = true;
+  try {
+    await client.suspendUser({
+      userId: userId.value,
+      reason: moderationForm.value.reason || undefined,
+      expiresAt: moderationForm.value.expiresAt
+        ? { seconds: BigInt(Math.floor(new Date(moderationForm.value.expiresAt).getTime() / 1000)), nanos: 0 }
+        : undefined,
+    });
+    toast.success("User suspended.");
+    suspendDialogOpen.value = false;
+    await loadBanStatus();
+  } catch (error: unknown) {
+    toast.error(`Failed to suspend: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
+
+const handleBan = async () => {
+  if (!userId.value) return;
+  isModerating.value = true;
+  try {
+    await client.banUser({
+      userId: userId.value,
+      reason: moderationForm.value.reason || undefined,
+    });
+    toast.success("User banned.");
+    banDialogOpen.value = false;
+    await loadBanStatus();
+  } catch (error: unknown) {
+    toast.error(`Failed to ban: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
+
+const handleLiftBan = async () => {
+  if (!userId.value || !banStatus.value) return;
+  isModerating.value = true;
+  try {
+    if (banStatus.value.type === "banned") {
+      await client.unbanUser({ userId: userId.value });
+      toast.success("User unbanned.");
+    } else {
+      await client.unsuspendUser({ userId: userId.value });
+      toast.success("Suspension lifted.");
+    }
+    await loadBanStatus();
+  } catch (error: unknown) {
+    toast.error(`Failed to lift ban: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
 </script>
 

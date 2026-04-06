@@ -9,6 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 )
 
 // HandleUploadFile handles a single-file multipart upload and streams it directly into Docker as a tar entry.
@@ -42,6 +43,10 @@ func (s *Service) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 	destPath := r.URL.Query().Get("destPath")
 	if destPath == "" {
 		http.Error(w, "destPath is required", http.StatusBadRequest)
+		return
+	}
+	if err := inputvalidation.UploadDestPath(destPath); err != nil {
+		http.Error(w, "invalid destPath: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -155,6 +160,11 @@ func (s *Service) HandleUploadFile(w http.ResponseWriter, r *http.Request) {
 		if fname == "" {
 			pw.CloseWithError(fmt.Errorf("file name required"))
 			http.Error(w, "file name required", http.StatusBadRequest)
+			return
+		}
+		if err := inputvalidation.UploadFileName(fname); err != nil {
+			pw.CloseWithError(err)
+			http.Error(w, "invalid file name: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 

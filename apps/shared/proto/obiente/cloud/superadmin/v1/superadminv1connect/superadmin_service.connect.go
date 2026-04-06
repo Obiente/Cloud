@@ -104,6 +104,33 @@ const (
 	// SuperadminServiceListDormantResourceOwnersProcedure is the fully-qualified name of the
 	// SuperadminService's ListDormantResourceOwners RPC.
 	SuperadminServiceListDormantResourceOwnersProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListDormantResourceOwners"
+	// SuperadminServiceSuspendUserProcedure is the fully-qualified name of the SuperadminService's
+	// SuspendUser RPC.
+	SuperadminServiceSuspendUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuspendUser"
+	// SuperadminServiceUnsuspendUserProcedure is the fully-qualified name of the SuperadminService's
+	// UnsuspendUser RPC.
+	SuperadminServiceUnsuspendUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnsuspendUser"
+	// SuperadminServiceBanUserProcedure is the fully-qualified name of the SuperadminService's BanUser
+	// RPC.
+	SuperadminServiceBanUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/BanUser"
+	// SuperadminServiceUnbanUserProcedure is the fully-qualified name of the SuperadminService's
+	// UnbanUser RPC.
+	SuperadminServiceUnbanUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnbanUser"
+	// SuperadminServiceGetUserBanStatusProcedure is the fully-qualified name of the SuperadminService's
+	// GetUserBanStatus RPC.
+	SuperadminServiceGetUserBanStatusProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetUserBanStatus"
+	// SuperadminServiceSuspendOrganizationProcedure is the fully-qualified name of the
+	// SuperadminService's SuspendOrganization RPC.
+	SuperadminServiceSuspendOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuspendOrganization"
+	// SuperadminServiceUnsuspendOrganizationProcedure is the fully-qualified name of the
+	// SuperadminService's UnsuspendOrganization RPC.
+	SuperadminServiceUnsuspendOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnsuspendOrganization"
+	// SuperadminServiceBanOrganizationProcedure is the fully-qualified name of the SuperadminService's
+	// BanOrganization RPC.
+	SuperadminServiceBanOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/BanOrganization"
+	// SuperadminServiceUnbanOrganizationProcedure is the fully-qualified name of the
+	// SuperadminService's UnbanOrganization RPC.
+	SuperadminServiceUnbanOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UnbanOrganization"
 	// SuperadminServiceListAllVPSProcedure is the fully-qualified name of the SuperadminService's
 	// ListAllVPS RPC.
 	SuperadminServiceListAllVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS"
@@ -179,6 +206,24 @@ const (
 	// SuperadminServiceGetMySuperadminPermissionsProcedure is the fully-qualified name of the
 	// SuperadminService's GetMySuperadminPermissions RPC.
 	SuperadminServiceGetMySuperadminPermissionsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetMySuperadminPermissions"
+	// SuperadminServiceListAllGameServersProcedure is the fully-qualified name of the
+	// SuperadminService's ListAllGameServers RPC.
+	SuperadminServiceListAllGameServersProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllGameServers"
+	// SuperadminServiceSuperadminGetGameServerProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminGetGameServer RPC.
+	SuperadminServiceSuperadminGetGameServerProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminGetGameServer"
+	// SuperadminServiceSuperadminSuspendGameServerProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminSuspendGameServer RPC.
+	SuperadminServiceSuperadminSuspendGameServerProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminSuspendGameServer"
+	// SuperadminServiceSuperadminUnsuspendGameServerProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminUnsuspendGameServer RPC.
+	SuperadminServiceSuperadminUnsuspendGameServerProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminUnsuspendGameServer"
+	// SuperadminServiceSuperadminForceStopGameServerProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminForceStopGameServer RPC.
+	SuperadminServiceSuperadminForceStopGameServerProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceStopGameServer"
+	// SuperadminServiceSuperadminForceDeleteGameServerProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminForceDeleteGameServer RPC.
+	SuperadminServiceSuperadminForceDeleteGameServerProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceDeleteGameServer"
 	// SuperadminServiceListSuperadminRolesProcedure is the fully-qualified name of the
 	// SuperadminService's ListSuperadminRoles RPC.
 	SuperadminServiceListSuperadminRolesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminRoles"
@@ -237,6 +282,16 @@ type SuperadminServiceClient interface {
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	ListDormantResourceOwners(context.Context, *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error)
+	SuspendUser(context.Context, *connect.Request[v1.SuspendUserRequest]) (*connect.Response[v1.SuspendUserResponse], error)
+	UnsuspendUser(context.Context, *connect.Request[v1.UnsuspendUserRequest]) (*connect.Response[v1.UnsuspendUserResponse], error)
+	BanUser(context.Context, *connect.Request[v1.BanUserRequest]) (*connect.Response[v1.BanUserResponse], error)
+	UnbanUser(context.Context, *connect.Request[v1.UnbanUserRequest]) (*connect.Response[v1.UnbanUserResponse], error)
+	GetUserBanStatus(context.Context, *connect.Request[v1.GetUserBanStatusRequest]) (*connect.Response[v1.GetUserBanStatusResponse], error)
+	// Organization moderation endpoints
+	SuspendOrganization(context.Context, *connect.Request[v1.SuspendOrganizationRequest]) (*connect.Response[v1.SuspendOrganizationResponse], error)
+	UnsuspendOrganization(context.Context, *connect.Request[v1.UnsuspendOrganizationRequest]) (*connect.Response[v1.UnsuspendOrganizationResponse], error)
+	BanOrganization(context.Context, *connect.Request[v1.BanOrganizationRequest]) (*connect.Response[v1.BanOrganizationResponse], error)
+	UnbanOrganization(context.Context, *connect.Request[v1.UnbanOrganizationRequest]) (*connect.Response[v1.UnbanOrganizationResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
 	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
@@ -272,6 +327,13 @@ type SuperadminServiceClient interface {
 	ListSuperadminPermissions(context.Context, *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error)
 	// Get current user's superadmin permissions (from their role bindings)
 	GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error)
+	// Game server management endpoints (superadmin)
+	ListAllGameServers(context.Context, *connect.Request[v1.ListAllGameServersRequest]) (*connect.Response[v1.ListAllGameServersResponse], error)
+	SuperadminGetGameServer(context.Context, *connect.Request[v1.SuperadminGetGameServerRequest]) (*connect.Response[v1.SuperadminGetGameServerResponse], error)
+	SuperadminSuspendGameServer(context.Context, *connect.Request[v1.SuperadminSuspendGameServerRequest]) (*connect.Response[v1.SuperadminSuspendGameServerResponse], error)
+	SuperadminUnsuspendGameServer(context.Context, *connect.Request[v1.SuperadminUnsuspendGameServerRequest]) (*connect.Response[v1.SuperadminUnsuspendGameServerResponse], error)
+	SuperadminForceStopGameServer(context.Context, *connect.Request[v1.SuperadminForceStopGameServerRequest]) (*connect.Response[v1.SuperadminForceStopGameServerResponse], error)
+	SuperadminForceDeleteGameServer(context.Context, *connect.Request[v1.SuperadminForceDeleteGameServerRequest]) (*connect.Response[v1.SuperadminForceDeleteGameServerResponse], error)
 	// Superadmin role management endpoints (global roles, not organization-scoped)
 	ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error)
 	CreateSuperadminRole(context.Context, *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error)
@@ -433,6 +495,60 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("ListDormantResourceOwners")),
 			connect.WithClientOptions(opts...),
 		),
+		suspendUser: connect.NewClient[v1.SuspendUserRequest, v1.SuspendUserResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuspendUserProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuspendUser")),
+			connect.WithClientOptions(opts...),
+		),
+		unsuspendUser: connect.NewClient[v1.UnsuspendUserRequest, v1.UnsuspendUserResponse](
+			httpClient,
+			baseURL+SuperadminServiceUnsuspendUserProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UnsuspendUser")),
+			connect.WithClientOptions(opts...),
+		),
+		banUser: connect.NewClient[v1.BanUserRequest, v1.BanUserResponse](
+			httpClient,
+			baseURL+SuperadminServiceBanUserProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("BanUser")),
+			connect.WithClientOptions(opts...),
+		),
+		unbanUser: connect.NewClient[v1.UnbanUserRequest, v1.UnbanUserResponse](
+			httpClient,
+			baseURL+SuperadminServiceUnbanUserProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UnbanUser")),
+			connect.WithClientOptions(opts...),
+		),
+		getUserBanStatus: connect.NewClient[v1.GetUserBanStatusRequest, v1.GetUserBanStatusResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetUserBanStatusProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetUserBanStatus")),
+			connect.WithClientOptions(opts...),
+		),
+		suspendOrganization: connect.NewClient[v1.SuspendOrganizationRequest, v1.SuspendOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuspendOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuspendOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		unsuspendOrganization: connect.NewClient[v1.UnsuspendOrganizationRequest, v1.UnsuspendOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceUnsuspendOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UnsuspendOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		banOrganization: connect.NewClient[v1.BanOrganizationRequest, v1.BanOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceBanOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("BanOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		unbanOrganization: connect.NewClient[v1.UnbanOrganizationRequest, v1.UnbanOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceUnbanOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UnbanOrganization")),
+			connect.WithClientOptions(opts...),
+		),
 		listAllVPS: connect.NewClient[v1.ListAllVPSRequest, v1.ListAllVPSResponse](
 			httpClient,
 			baseURL+SuperadminServiceListAllVPSProcedure,
@@ -583,6 +699,42 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetMySuperadminPermissions")),
 			connect.WithClientOptions(opts...),
 		),
+		listAllGameServers: connect.NewClient[v1.ListAllGameServersRequest, v1.ListAllGameServersResponse](
+			httpClient,
+			baseURL+SuperadminServiceListAllGameServersProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListAllGameServers")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminGetGameServer: connect.NewClient[v1.SuperadminGetGameServerRequest, v1.SuperadminGetGameServerResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminGetGameServerProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminGetGameServer")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminSuspendGameServer: connect.NewClient[v1.SuperadminSuspendGameServerRequest, v1.SuperadminSuspendGameServerResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminSuspendGameServerProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminSuspendGameServer")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminUnsuspendGameServer: connect.NewClient[v1.SuperadminUnsuspendGameServerRequest, v1.SuperadminUnsuspendGameServerResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminUnsuspendGameServerProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminUnsuspendGameServer")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminForceStopGameServer: connect.NewClient[v1.SuperadminForceStopGameServerRequest, v1.SuperadminForceStopGameServerResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminForceStopGameServerProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceStopGameServer")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminForceDeleteGameServer: connect.NewClient[v1.SuperadminForceDeleteGameServerRequest, v1.SuperadminForceDeleteGameServerResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminForceDeleteGameServerProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceDeleteGameServer")),
+			connect.WithClientOptions(opts...),
+		),
 		listSuperadminRoles: connect.NewClient[v1.ListSuperadminRolesRequest, v1.ListSuperadminRolesResponse](
 			httpClient,
 			baseURL+SuperadminServiceListSuperadminRolesProcedure,
@@ -653,6 +805,15 @@ type superadminServiceClient struct {
 	listUsers                                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
 	getUser                                  *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
 	listDormantResourceOwners                *connect.Client[v1.ListDormantResourceOwnersRequest, v1.ListDormantResourceOwnersResponse]
+	suspendUser                              *connect.Client[v1.SuspendUserRequest, v1.SuspendUserResponse]
+	unsuspendUser                            *connect.Client[v1.UnsuspendUserRequest, v1.UnsuspendUserResponse]
+	banUser                                  *connect.Client[v1.BanUserRequest, v1.BanUserResponse]
+	unbanUser                                *connect.Client[v1.UnbanUserRequest, v1.UnbanUserResponse]
+	getUserBanStatus                         *connect.Client[v1.GetUserBanStatusRequest, v1.GetUserBanStatusResponse]
+	suspendOrganization                      *connect.Client[v1.SuspendOrganizationRequest, v1.SuspendOrganizationResponse]
+	unsuspendOrganization                    *connect.Client[v1.UnsuspendOrganizationRequest, v1.UnsuspendOrganizationResponse]
+	banOrganization                          *connect.Client[v1.BanOrganizationRequest, v1.BanOrganizationResponse]
+	unbanOrganization                        *connect.Client[v1.UnbanOrganizationRequest, v1.UnbanOrganizationResponse]
 	listAllVPS                               *connect.Client[v1.ListAllVPSRequest, v1.ListAllVPSResponse]
 	superadminGetVPS                         *connect.Client[v1.SuperadminGetVPSRequest, v1.SuperadminGetVPSResponse]
 	superadminResizeVPS                      *connect.Client[v1.SuperadminResizeVPSRequest, v1.SuperadminResizeVPSResponse]
@@ -678,6 +839,12 @@ type superadminServiceClient struct {
 	updateNodeConfig                         *connect.Client[v1.UpdateNodeConfigRequest, v1.UpdateNodeConfigResponse]
 	listSuperadminPermissions                *connect.Client[v1.ListSuperadminPermissionsRequest, v1.ListSuperadminPermissionsResponse]
 	getMySuperadminPermissions               *connect.Client[v1.GetMySuperadminPermissionsRequest, v1.GetMySuperadminPermissionsResponse]
+	listAllGameServers                       *connect.Client[v1.ListAllGameServersRequest, v1.ListAllGameServersResponse]
+	superadminGetGameServer                  *connect.Client[v1.SuperadminGetGameServerRequest, v1.SuperadminGetGameServerResponse]
+	superadminSuspendGameServer              *connect.Client[v1.SuperadminSuspendGameServerRequest, v1.SuperadminSuspendGameServerResponse]
+	superadminUnsuspendGameServer            *connect.Client[v1.SuperadminUnsuspendGameServerRequest, v1.SuperadminUnsuspendGameServerResponse]
+	superadminForceStopGameServer            *connect.Client[v1.SuperadminForceStopGameServerRequest, v1.SuperadminForceStopGameServerResponse]
+	superadminForceDeleteGameServer          *connect.Client[v1.SuperadminForceDeleteGameServerRequest, v1.SuperadminForceDeleteGameServerResponse]
 	listSuperadminRoles                      *connect.Client[v1.ListSuperadminRolesRequest, v1.ListSuperadminRolesResponse]
 	createSuperadminRole                     *connect.Client[v1.CreateSuperadminRoleRequest, v1.CreateSuperadminRoleResponse]
 	updateSuperadminRole                     *connect.Client[v1.UpdateSuperadminRoleRequest, v1.UpdateSuperadminRoleResponse]
@@ -807,6 +974,51 @@ func (c *superadminServiceClient) GetUser(ctx context.Context, req *connect.Requ
 // obiente.cloud.superadmin.v1.SuperadminService.ListDormantResourceOwners.
 func (c *superadminServiceClient) ListDormantResourceOwners(ctx context.Context, req *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error) {
 	return c.listDormantResourceOwners.CallUnary(ctx, req)
+}
+
+// SuspendUser calls obiente.cloud.superadmin.v1.SuperadminService.SuspendUser.
+func (c *superadminServiceClient) SuspendUser(ctx context.Context, req *connect.Request[v1.SuspendUserRequest]) (*connect.Response[v1.SuspendUserResponse], error) {
+	return c.suspendUser.CallUnary(ctx, req)
+}
+
+// UnsuspendUser calls obiente.cloud.superadmin.v1.SuperadminService.UnsuspendUser.
+func (c *superadminServiceClient) UnsuspendUser(ctx context.Context, req *connect.Request[v1.UnsuspendUserRequest]) (*connect.Response[v1.UnsuspendUserResponse], error) {
+	return c.unsuspendUser.CallUnary(ctx, req)
+}
+
+// BanUser calls obiente.cloud.superadmin.v1.SuperadminService.BanUser.
+func (c *superadminServiceClient) BanUser(ctx context.Context, req *connect.Request[v1.BanUserRequest]) (*connect.Response[v1.BanUserResponse], error) {
+	return c.banUser.CallUnary(ctx, req)
+}
+
+// UnbanUser calls obiente.cloud.superadmin.v1.SuperadminService.UnbanUser.
+func (c *superadminServiceClient) UnbanUser(ctx context.Context, req *connect.Request[v1.UnbanUserRequest]) (*connect.Response[v1.UnbanUserResponse], error) {
+	return c.unbanUser.CallUnary(ctx, req)
+}
+
+// GetUserBanStatus calls obiente.cloud.superadmin.v1.SuperadminService.GetUserBanStatus.
+func (c *superadminServiceClient) GetUserBanStatus(ctx context.Context, req *connect.Request[v1.GetUserBanStatusRequest]) (*connect.Response[v1.GetUserBanStatusResponse], error) {
+	return c.getUserBanStatus.CallUnary(ctx, req)
+}
+
+// SuspendOrganization calls obiente.cloud.superadmin.v1.SuperadminService.SuspendOrganization.
+func (c *superadminServiceClient) SuspendOrganization(ctx context.Context, req *connect.Request[v1.SuspendOrganizationRequest]) (*connect.Response[v1.SuspendOrganizationResponse], error) {
+	return c.suspendOrganization.CallUnary(ctx, req)
+}
+
+// UnsuspendOrganization calls obiente.cloud.superadmin.v1.SuperadminService.UnsuspendOrganization.
+func (c *superadminServiceClient) UnsuspendOrganization(ctx context.Context, req *connect.Request[v1.UnsuspendOrganizationRequest]) (*connect.Response[v1.UnsuspendOrganizationResponse], error) {
+	return c.unsuspendOrganization.CallUnary(ctx, req)
+}
+
+// BanOrganization calls obiente.cloud.superadmin.v1.SuperadminService.BanOrganization.
+func (c *superadminServiceClient) BanOrganization(ctx context.Context, req *connect.Request[v1.BanOrganizationRequest]) (*connect.Response[v1.BanOrganizationResponse], error) {
+	return c.banOrganization.CallUnary(ctx, req)
+}
+
+// UnbanOrganization calls obiente.cloud.superadmin.v1.SuperadminService.UnbanOrganization.
+func (c *superadminServiceClient) UnbanOrganization(ctx context.Context, req *connect.Request[v1.UnbanOrganizationRequest]) (*connect.Response[v1.UnbanOrganizationResponse], error) {
+	return c.unbanOrganization.CallUnary(ctx, req)
 }
 
 // ListAllVPS calls obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS.
@@ -941,6 +1153,41 @@ func (c *superadminServiceClient) GetMySuperadminPermissions(ctx context.Context
 	return c.getMySuperadminPermissions.CallUnary(ctx, req)
 }
 
+// ListAllGameServers calls obiente.cloud.superadmin.v1.SuperadminService.ListAllGameServers.
+func (c *superadminServiceClient) ListAllGameServers(ctx context.Context, req *connect.Request[v1.ListAllGameServersRequest]) (*connect.Response[v1.ListAllGameServersResponse], error) {
+	return c.listAllGameServers.CallUnary(ctx, req)
+}
+
+// SuperadminGetGameServer calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetGameServer.
+func (c *superadminServiceClient) SuperadminGetGameServer(ctx context.Context, req *connect.Request[v1.SuperadminGetGameServerRequest]) (*connect.Response[v1.SuperadminGetGameServerResponse], error) {
+	return c.superadminGetGameServer.CallUnary(ctx, req)
+}
+
+// SuperadminSuspendGameServer calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendGameServer.
+func (c *superadminServiceClient) SuperadminSuspendGameServer(ctx context.Context, req *connect.Request[v1.SuperadminSuspendGameServerRequest]) (*connect.Response[v1.SuperadminSuspendGameServerResponse], error) {
+	return c.superadminSuspendGameServer.CallUnary(ctx, req)
+}
+
+// SuperadminUnsuspendGameServer calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendGameServer.
+func (c *superadminServiceClient) SuperadminUnsuspendGameServer(ctx context.Context, req *connect.Request[v1.SuperadminUnsuspendGameServerRequest]) (*connect.Response[v1.SuperadminUnsuspendGameServerResponse], error) {
+	return c.superadminUnsuspendGameServer.CallUnary(ctx, req)
+}
+
+// SuperadminForceStopGameServer calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopGameServer.
+func (c *superadminServiceClient) SuperadminForceStopGameServer(ctx context.Context, req *connect.Request[v1.SuperadminForceStopGameServerRequest]) (*connect.Response[v1.SuperadminForceStopGameServerResponse], error) {
+	return c.superadminForceStopGameServer.CallUnary(ctx, req)
+}
+
+// SuperadminForceDeleteGameServer calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteGameServer.
+func (c *superadminServiceClient) SuperadminForceDeleteGameServer(ctx context.Context, req *connect.Request[v1.SuperadminForceDeleteGameServerRequest]) (*connect.Response[v1.SuperadminForceDeleteGameServerResponse], error) {
+	return c.superadminForceDeleteGameServer.CallUnary(ctx, req)
+}
+
 // ListSuperadminRoles calls obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles.
 func (c *superadminServiceClient) ListSuperadminRoles(ctx context.Context, req *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error) {
 	return c.listSuperadminRoles.CallUnary(ctx, req)
@@ -1014,6 +1261,16 @@ type SuperadminServiceHandler interface {
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	ListDormantResourceOwners(context.Context, *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error)
+	SuspendUser(context.Context, *connect.Request[v1.SuspendUserRequest]) (*connect.Response[v1.SuspendUserResponse], error)
+	UnsuspendUser(context.Context, *connect.Request[v1.UnsuspendUserRequest]) (*connect.Response[v1.UnsuspendUserResponse], error)
+	BanUser(context.Context, *connect.Request[v1.BanUserRequest]) (*connect.Response[v1.BanUserResponse], error)
+	UnbanUser(context.Context, *connect.Request[v1.UnbanUserRequest]) (*connect.Response[v1.UnbanUserResponse], error)
+	GetUserBanStatus(context.Context, *connect.Request[v1.GetUserBanStatusRequest]) (*connect.Response[v1.GetUserBanStatusResponse], error)
+	// Organization moderation endpoints
+	SuspendOrganization(context.Context, *connect.Request[v1.SuspendOrganizationRequest]) (*connect.Response[v1.SuspendOrganizationResponse], error)
+	UnsuspendOrganization(context.Context, *connect.Request[v1.UnsuspendOrganizationRequest]) (*connect.Response[v1.UnsuspendOrganizationResponse], error)
+	BanOrganization(context.Context, *connect.Request[v1.BanOrganizationRequest]) (*connect.Response[v1.BanOrganizationResponse], error)
+	UnbanOrganization(context.Context, *connect.Request[v1.UnbanOrganizationRequest]) (*connect.Response[v1.UnbanOrganizationResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
 	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
@@ -1049,6 +1306,13 @@ type SuperadminServiceHandler interface {
 	ListSuperadminPermissions(context.Context, *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error)
 	// Get current user's superadmin permissions (from their role bindings)
 	GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error)
+	// Game server management endpoints (superadmin)
+	ListAllGameServers(context.Context, *connect.Request[v1.ListAllGameServersRequest]) (*connect.Response[v1.ListAllGameServersResponse], error)
+	SuperadminGetGameServer(context.Context, *connect.Request[v1.SuperadminGetGameServerRequest]) (*connect.Response[v1.SuperadminGetGameServerResponse], error)
+	SuperadminSuspendGameServer(context.Context, *connect.Request[v1.SuperadminSuspendGameServerRequest]) (*connect.Response[v1.SuperadminSuspendGameServerResponse], error)
+	SuperadminUnsuspendGameServer(context.Context, *connect.Request[v1.SuperadminUnsuspendGameServerRequest]) (*connect.Response[v1.SuperadminUnsuspendGameServerResponse], error)
+	SuperadminForceStopGameServer(context.Context, *connect.Request[v1.SuperadminForceStopGameServerRequest]) (*connect.Response[v1.SuperadminForceStopGameServerResponse], error)
+	SuperadminForceDeleteGameServer(context.Context, *connect.Request[v1.SuperadminForceDeleteGameServerRequest]) (*connect.Response[v1.SuperadminForceDeleteGameServerResponse], error)
 	// Superadmin role management endpoints (global roles, not organization-scoped)
 	ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error)
 	CreateSuperadminRole(context.Context, *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error)
@@ -1205,6 +1469,60 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("ListDormantResourceOwners")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceSuspendUserHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuspendUserProcedure,
+		svc.SuspendUser,
+		connect.WithSchema(superadminServiceMethods.ByName("SuspendUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUnsuspendUserHandler := connect.NewUnaryHandler(
+		SuperadminServiceUnsuspendUserProcedure,
+		svc.UnsuspendUser,
+		connect.WithSchema(superadminServiceMethods.ByName("UnsuspendUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceBanUserHandler := connect.NewUnaryHandler(
+		SuperadminServiceBanUserProcedure,
+		svc.BanUser,
+		connect.WithSchema(superadminServiceMethods.ByName("BanUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUnbanUserHandler := connect.NewUnaryHandler(
+		SuperadminServiceUnbanUserProcedure,
+		svc.UnbanUser,
+		connect.WithSchema(superadminServiceMethods.ByName("UnbanUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetUserBanStatusHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetUserBanStatusProcedure,
+		svc.GetUserBanStatus,
+		connect.WithSchema(superadminServiceMethods.ByName("GetUserBanStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuspendOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuspendOrganizationProcedure,
+		svc.SuspendOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("SuspendOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUnsuspendOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceUnsuspendOrganizationProcedure,
+		svc.UnsuspendOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("UnsuspendOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceBanOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceBanOrganizationProcedure,
+		svc.BanOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("BanOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUnbanOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceUnbanOrganizationProcedure,
+		svc.UnbanOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("UnbanOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceListAllVPSHandler := connect.NewUnaryHandler(
 		SuperadminServiceListAllVPSProcedure,
 		svc.ListAllVPS,
@@ -1355,6 +1673,42 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetMySuperadminPermissions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListAllGameServersHandler := connect.NewUnaryHandler(
+		SuperadminServiceListAllGameServersProcedure,
+		svc.ListAllGameServers,
+		connect.WithSchema(superadminServiceMethods.ByName("ListAllGameServers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminGetGameServerHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminGetGameServerProcedure,
+		svc.SuperadminGetGameServer,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminGetGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminSuspendGameServerHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminSuspendGameServerProcedure,
+		svc.SuperadminSuspendGameServer,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminSuspendGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminUnsuspendGameServerHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminUnsuspendGameServerProcedure,
+		svc.SuperadminUnsuspendGameServer,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminUnsuspendGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminForceStopGameServerHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminForceStopGameServerProcedure,
+		svc.SuperadminForceStopGameServer,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceStopGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminForceDeleteGameServerHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminForceDeleteGameServerProcedure,
+		svc.SuperadminForceDeleteGameServer,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceDeleteGameServer")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceListSuperadminRolesHandler := connect.NewUnaryHandler(
 		SuperadminServiceListSuperadminRolesProcedure,
 		svc.ListSuperadminRoles,
@@ -1445,6 +1799,24 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceGetUserHandler.ServeHTTP(w, r)
 		case SuperadminServiceListDormantResourceOwnersProcedure:
 			superadminServiceListDormantResourceOwnersHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuspendUserProcedure:
+			superadminServiceSuspendUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceUnsuspendUserProcedure:
+			superadminServiceUnsuspendUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceBanUserProcedure:
+			superadminServiceBanUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceUnbanUserProcedure:
+			superadminServiceUnbanUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetUserBanStatusProcedure:
+			superadminServiceGetUserBanStatusHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuspendOrganizationProcedure:
+			superadminServiceSuspendOrganizationHandler.ServeHTTP(w, r)
+		case SuperadminServiceUnsuspendOrganizationProcedure:
+			superadminServiceUnsuspendOrganizationHandler.ServeHTTP(w, r)
+		case SuperadminServiceBanOrganizationProcedure:
+			superadminServiceBanOrganizationHandler.ServeHTTP(w, r)
+		case SuperadminServiceUnbanOrganizationProcedure:
+			superadminServiceUnbanOrganizationHandler.ServeHTTP(w, r)
 		case SuperadminServiceListAllVPSProcedure:
 			superadminServiceListAllVPSHandler.ServeHTTP(w, r)
 		case SuperadminServiceSuperadminGetVPSProcedure:
@@ -1495,6 +1867,18 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListSuperadminPermissionsHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetMySuperadminPermissionsProcedure:
 			superadminServiceGetMySuperadminPermissionsHandler.ServeHTTP(w, r)
+		case SuperadminServiceListAllGameServersProcedure:
+			superadminServiceListAllGameServersHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminGetGameServerProcedure:
+			superadminServiceSuperadminGetGameServerHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminSuspendGameServerProcedure:
+			superadminServiceSuperadminSuspendGameServerHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminUnsuspendGameServerProcedure:
+			superadminServiceSuperadminUnsuspendGameServerHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminForceStopGameServerProcedure:
+			superadminServiceSuperadminForceStopGameServerHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminForceDeleteGameServerProcedure:
+			superadminServiceSuperadminForceDeleteGameServerHandler.ServeHTTP(w, r)
 		case SuperadminServiceListSuperadminRolesProcedure:
 			superadminServiceListSuperadminRolesHandler.ServeHTTP(w, r)
 		case SuperadminServiceCreateSuperadminRoleProcedure:
@@ -1610,6 +1994,42 @@ func (UnimplementedSuperadminServiceHandler) ListDormantResourceOwners(context.C
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListDormantResourceOwners is not implemented"))
 }
 
+func (UnimplementedSuperadminServiceHandler) SuspendUser(context.Context, *connect.Request[v1.SuspendUserRequest]) (*connect.Response[v1.SuspendUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuspendUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UnsuspendUser(context.Context, *connect.Request[v1.UnsuspendUserRequest]) (*connect.Response[v1.UnsuspendUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnsuspendUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) BanUser(context.Context, *connect.Request[v1.BanUserRequest]) (*connect.Response[v1.BanUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.BanUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UnbanUser(context.Context, *connect.Request[v1.UnbanUserRequest]) (*connect.Response[v1.UnbanUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnbanUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetUserBanStatus(context.Context, *connect.Request[v1.GetUserBanStatusRequest]) (*connect.Response[v1.GetUserBanStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetUserBanStatus is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuspendOrganization(context.Context, *connect.Request[v1.SuspendOrganizationRequest]) (*connect.Response[v1.SuspendOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuspendOrganization is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UnsuspendOrganization(context.Context, *connect.Request[v1.UnsuspendOrganizationRequest]) (*connect.Response[v1.UnsuspendOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnsuspendOrganization is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) BanOrganization(context.Context, *connect.Request[v1.BanOrganizationRequest]) (*connect.Response[v1.BanOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.BanOrganization is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UnbanOrganization(context.Context, *connect.Request[v1.UnbanOrganizationRequest]) (*connect.Response[v1.UnbanOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UnbanOrganization is not implemented"))
+}
+
 func (UnimplementedSuperadminServiceHandler) ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS is not implemented"))
 }
@@ -1708,6 +2128,30 @@ func (UnimplementedSuperadminServiceHandler) ListSuperadminPermissions(context.C
 
 func (UnimplementedSuperadminServiceHandler) GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListAllGameServers(context.Context, *connect.Request[v1.ListAllGameServersRequest]) (*connect.Response[v1.ListAllGameServersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListAllGameServers is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminGetGameServer(context.Context, *connect.Request[v1.SuperadminGetGameServerRequest]) (*connect.Response[v1.SuperadminGetGameServerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetGameServer is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminSuspendGameServer(context.Context, *connect.Request[v1.SuperadminSuspendGameServerRequest]) (*connect.Response[v1.SuperadminSuspendGameServerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendGameServer is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminUnsuspendGameServer(context.Context, *connect.Request[v1.SuperadminUnsuspendGameServerRequest]) (*connect.Response[v1.SuperadminUnsuspendGameServerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendGameServer is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminForceStopGameServer(context.Context, *connect.Request[v1.SuperadminForceStopGameServerRequest]) (*connect.Response[v1.SuperadminForceStopGameServerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopGameServer is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminForceDeleteGameServer(context.Context, *connect.Request[v1.SuperadminForceDeleteGameServerRequest]) (*connect.Response[v1.SuperadminForceDeleteGameServerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteGameServer is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error) {

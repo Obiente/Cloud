@@ -210,9 +210,48 @@ type Organization struct {
 	TotalPaidCents            int64     `gorm:"column:total_paid_cents;default:0" json:"total_paid_cents"`                             // Total amount paid in cents (for safety check/auto-upgrade)
 	AllowInterVMCommunication bool      `gorm:"column:allow_inter_vm_communication;default:false" json:"allow_inter_vm_communication"` // Allow VMs in this organization to communicate with each other
 	CreatedAt                 time.Time `json:"created_at"`
+
+	// Moderation fields (set by superadmin)
+	SuspendedAt       *time.Time `gorm:"column:suspended_at" json:"suspended_at"`
+	SuspensionReason  *string    `gorm:"column:suspension_reason" json:"suspension_reason"`
+	SuspendedBy       *string    `gorm:"column:suspended_by" json:"suspended_by"`
+	SuspensionExpires *time.Time `gorm:"column:suspension_expires" json:"suspension_expires"`
+	BannedAt          *time.Time `gorm:"column:banned_at" json:"banned_at"`
+	BanReason         *string    `gorm:"column:ban_reason" json:"ban_reason"`
+	BannedBy          *string    `gorm:"column:banned_by" json:"banned_by"`
 }
 
 func (Organization) TableName() string { return "organizations" }
+
+// UserBan records a superadmin-imposed suspension or permanent ban on a user.
+type UserBan struct {
+	ID        string     `gorm:"primaryKey" json:"id"`
+	UserID    string     `gorm:"column:user_id;index;not null" json:"user_id"`
+	Type      string     `gorm:"column:type;not null" json:"type"` // "suspended" | "banned"
+	Reason    *string    `gorm:"column:reason" json:"reason"`
+	BannedBy  string     `gorm:"column:banned_by;not null" json:"banned_by"`
+	BannedAt  time.Time  `gorm:"column:banned_at;not null" json:"banned_at"`
+	ExpiresAt *time.Time `gorm:"column:expires_at" json:"expires_at"` // nil = permanent
+	RevokedAt *time.Time `gorm:"column:revoked_at" json:"revoked_at"` // set when lifted
+	RevokedBy *string    `gorm:"column:revoked_by" json:"revoked_by"`
+}
+
+func (UserBan) TableName() string { return "user_bans" }
+
+// GameServerSuspension records a superadmin-imposed suspension or flag on a game server.
+type GameServerSuspension struct {
+	ID             string     `gorm:"primaryKey" json:"id"`
+	GameServerID   string     `gorm:"column:game_server_id;uniqueIndex;not null" json:"game_server_id"`
+	OrganizationID string     `gorm:"column:organization_id;index;not null" json:"organization_id"`
+	Reason         *string    `gorm:"column:reason" json:"reason"`
+	SuspendedBy    string     `gorm:"column:suspended_by;not null" json:"suspended_by"`
+	SuspendedAt    time.Time  `gorm:"column:suspended_at;not null" json:"suspended_at"`
+	LiftedAt       *time.Time `gorm:"column:lifted_at" json:"lifted_at"`
+	LiftedBy       *string    `gorm:"column:lifted_by" json:"lifted_by"`
+	AbuseFlags     string     `gorm:"column:abuse_flags;type:jsonb;default:'[]'" json:"abuse_flags"` // JSON array of detected flags
+}
+
+func (GameServerSuspension) TableName() string { return "game_server_suspensions" }
 
 type OrganizationMember struct {
 	ID               string     `gorm:"primaryKey" json:"id"`

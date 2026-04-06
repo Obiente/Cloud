@@ -84,6 +84,8 @@ func DetectAbuse(ctx context.Context) (*superadminv1.GetAbuseDetectionResponse, 
 			dnsAbuseCount++
 		case "game_server_abuse":
 			gameServerAbuseCount++
+		case "cryptominer_suspected":
+			gameServerAbuseCount++ // count miners under game server abuse bucket
 		}
 	}
 
@@ -330,6 +332,22 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 		logger.Error("[SuperAdmin] Failed to detect game server abuse: %v", err)
 	} else {
 		allActivities = append(allActivities, gameServerAbuse...)
+	}
+
+	// Check for cryptominer game servers
+	cryptominers, err := detectCryptominerGameServers()
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to detect cryptominer game servers: %v", err)
+	} else {
+		allActivities = append(allActivities, cryptominers...)
+	}
+
+	// Check for VPS shell injection attempts via audit logs
+	vpsInjection, err := detectVPSShellInjection(ctx, twentyFourHoursAgo)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to detect VPS shell injection: %v", err)
+	} else {
+		allActivities = append(allActivities, vpsInjection...)
 	}
 
 	return allActivities, nil
@@ -1063,7 +1081,231 @@ func detectGameServerAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Suspic
 	return activities, nil
 }
 
-// notifySuperadminsOfAbuse sends notifications to all superadmins when abuse is detected
+// detectCryptominerGameServers scans active game servers for cryptominer indicators:
+//   - Known miner keywords in env vars (POOL_URL, XMR, MONERO, STRATUM, etc.)
+//   - Non-standard Docker image for a Minecraft-type server
+//   - Miner commands in start_command
+//
+// Each match produces a high-severity "cryptominer_suspected" activity.
+func detectCryptominerGameServers() ([]*superadminv1.SuspiciousActivity, error) {
+	var activities []*superadminv1.SuspiciousActivity
+
+	// Env-var keys that are unique to miners
+	minerEnvKeys := []string{
+		"POOL_URL", "POOL_HOST", "POOL_PORT",
+		"MONERO", "XMR", "WALLET", "MINING",
+		"STRATUM", "HASHRATE", "CRYPTONIGHT",
+		"XMRIG", "CPUMINER", "CCMINER",
+		"NICEHASH", "MINING_KEY",
+	}
+
+	// Substrings in docker image names that indicate a miner
+	minerImageSubstrings := []string{
+		"xmrig", "monero", "cpuminer", "ccminer",
+		"nicehash", "claymore", "cryptominer", "miner",
+	}
+
+	// Substrings in start_command
+	minerCmdSubstrings := []string{
+		"xmrig", "cpuminer", "ccminer", "monero-miner",
+		"stratum+tcp://", "pool.hashvault", "xmrpool",
+		"minexmr", "nanopool", "supportxmr",
+	}
+
+	// Fetch all non-deleted game servers. We query in chunks to avoid loading huge datasets.
+	type row struct {
+		ID             string
+		Name           string
+		OrganizationID string
+		GameType       int32
+		DockerImage    string
+		StartCommand   string
+		EnvVars        string
+	}
+
+	var rows []row
+	if err := database.DB.Table("game_servers").
+		Select("id, name, organization_id, game_type, docker_image, start_command, env_vars").
+		Where("deleted_at IS NULL").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("query game servers for cryptominer scan: %w", err)
+	}
+
+	orgNames := make(map[string]string)
+
+	for _, gs := range rows {
+		var flags []string
+
+		// 1. Scan env vars for miner keywords
+		if gs.EnvVars != "" {
+			var envMap map[string]string
+			if err := json.Unmarshal([]byte(gs.EnvVars), &envMap); err == nil {
+				for k, v := range envMap {
+					kUpper := strings.ToUpper(k)
+					vUpper := strings.ToUpper(v)
+					for _, keyword := range minerEnvKeys {
+						if strings.Contains(kUpper, keyword) || strings.Contains(vUpper, keyword) {
+							flags = append(flags, "env:"+keyword)
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// 2. Suspicious Docker image for Minecraft-type servers
+		// game_type 1=MINECRAFT, 2=MINECRAFT_JAVA, 3=MINECRAFT_BEDROCK
+		if gs.GameType >= 1 && gs.GameType <= 3 {
+			imgLower := strings.ToLower(gs.DockerImage)
+			legitMcImage := strings.Contains(imgLower, "itzg") ||
+				strings.Contains(imgLower, "minecraft") ||
+				strings.Contains(imgLower, "java")
+			if !legitMcImage {
+				flags = append(flags, "suspicious_mc_image:"+gs.DockerImage)
+			}
+		}
+
+		// 3. Scan Docker image name for miner substrings
+		imgLower := strings.ToLower(gs.DockerImage)
+		for _, sub := range minerImageSubstrings {
+			if strings.Contains(imgLower, sub) {
+				flags = append(flags, "image:"+sub)
+				break
+			}
+		}
+
+		// 4. Scan start_command
+		cmdLower := strings.ToLower(gs.StartCommand)
+		for _, sub := range minerCmdSubstrings {
+			if strings.Contains(cmdLower, sub) {
+				flags = append(flags, "cmd:"+sub)
+				break
+			}
+		}
+
+		if len(flags) == 0 {
+			continue
+		}
+
+		// Cache org name
+		if _, ok := orgNames[gs.OrganizationID]; !ok {
+			var org database.Organization
+			if err := database.DB.Select("name").Where("id = ?", gs.OrganizationID).First(&org).Error; err == nil {
+				orgNames[gs.OrganizationID] = org.Name
+			}
+		}
+
+		activities = append(activities, &superadminv1.SuspiciousActivity{
+			Id:               fmt.Sprintf("cryptominer-%s", gs.ID),
+			OrganizationId:   gs.OrganizationID,
+			OrganizationName: orgNames[gs.OrganizationID],
+			ActivityType:     "cryptominer_suspected",
+			Description: fmt.Sprintf(
+				"Game server %q (%s) has cryptominer indicators: %s",
+				gs.Name, gs.ID, strings.Join(flags, ", "),
+			),
+			Severity:   90,
+			OccurredAt: timestamppb.New(time.Now()),
+		})
+	}
+
+	return activities, nil
+}
+
+// detectVPSShellInjection scans audit logs for VPS user/cloud-init requests that contain
+// cryptominer indicators or shell injection patterns. These attempts are now blocked at the
+// API layer, but scanning logs lets us retroactively flag accounts that tried to exploit the
+// service and lets us catch any newly discovered bypass routes.
+func detectVPSShellInjection(_ context.Context, since time.Time) ([]*superadminv1.SuspiciousActivity, error) {
+	var activities []*superadminv1.SuspiciousActivity
+
+	// Miner / dropper substrings to search for inside the JSON request_data column.
+	// We use ILIKE patterns so the DB does the scanning efficiently.
+	minerPatterns := []string{
+		"%xmrig%", "%cpuminer%", "%ccminer%", "%nicehash%",
+		"%stratum+%", "%unmineable%", "%hashvault%", "%xmrpool%",
+		"%minexmr%", "%nanopool%", "%moneroocean%", "%2miners%",
+		"%nr_hugepages%", "%msr-tools%",
+		"%wget %", "%curl %", "%apt-get%",
+		"%tmux new%", "%screen -d%",
+	}
+
+	// Build a single OR condition for efficiency
+	var orConditions []string
+	var args []interface{}
+	// First arg is the timestamp, rest are the ILIKE patterns
+	args = append(args, since)
+	for _, pat := range minerPatterns {
+		orConditions = append(orConditions, "request_data::text ILIKE ?")
+		args = append(args, pat)
+	}
+
+	type AuditResult struct {
+		ID             string
+		Action         string
+		UserID         string
+		OrganizationID string
+		RequestData    string
+		CreatedAt      time.Time
+	}
+
+	var results []AuditResult
+	query := fmt.Sprintf(
+		`SELECT id, action, user_id, organization_id, request_data::text AS request_data, created_at
+		 FROM audit_logs
+		 WHERE service IN ('VPSConfigService', 'VPSService')
+		   AND action IN ('CreateVPSUser', 'UpdateVPSUser', 'UpdateCloudInitConfig', 'CreateVPS')
+		   AND created_at >= ?
+		   AND (%s)
+		 ORDER BY created_at DESC
+		 LIMIT 100`,
+		strings.Join(orConditions, " OR "),
+	)
+
+	if err := database.MetricsDB.Raw(query, args...).Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("failed to query audit logs for VPS injection: %w", err)
+	}
+
+	// Deduplicate by user to avoid flooding the dashboard: one activity per user
+	seen := map[string]bool{}
+	for _, r := range results {
+		key := r.UserID + "|" + r.Action
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		// Extract the matched pattern for the description
+		lower := strings.ToLower(r.RequestData)
+		matchedPattern := "suspicious payload"
+		for _, p := range []string{
+			"xmrig", "cpuminer", "ccminer", "nicehash",
+			"stratum+", "unmineable", "hashvault", "xmrpool",
+			"minexmr", "moneroocean", "nr_hugepages", "msr-tools",
+			"wget ", "curl ", "apt-get", "tmux new", "screen -d",
+		} {
+			if strings.Contains(lower, p) {
+				matchedPattern = p
+				break
+			}
+		}
+
+		activities = append(activities, &superadminv1.SuspiciousActivity{
+			Id:             fmt.Sprintf("vps-injection-%s-%s", r.UserID, r.Action),
+			OrganizationId: r.OrganizationID,
+			ActivityType:   "vps_shell_injection",
+			Description: fmt.Sprintf(
+				"User %s attempted VPS shell injection via %s (matched: %q) at %s",
+				r.UserID, r.Action, matchedPattern, r.CreatedAt.Format(time.RFC3339),
+			),
+			Severity:   95,
+			OccurredAt: timestamppb.New(r.CreatedAt),
+		})
+	}
+
+	return activities, nil
+}
+
 // Only sends notifications if the abuse detection results have changed since the last notification
 // Uses a background context to avoid cancellation issues
 func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv1.SuspiciousOrganization, suspiciousActivities []*superadminv1.SuspiciousActivity) {
@@ -1283,6 +1525,8 @@ func formatActivityType(activityType string) string {
 		"dns_delegation_abuse":  "DNS delegation abuse case(s)",
 		"usage_spike":           "usage spike(s)",
 		"game_server_abuse":     "game server abuse case(s)",
+		"cryptominer_suspected": "suspected cryptominer(s)",
+		"vps_shell_injection":   "VPS shell injection attempt(s)",
 	}
 	if formatted, ok := typeMap[activityType]; ok {
 		return formatted

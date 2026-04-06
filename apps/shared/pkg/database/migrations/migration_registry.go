@@ -47,6 +47,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_11_14_001", "Add ssh_alias column to vps_instances", addSSHAliasToVPSInstances)
 	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
 	registry.Register("2025_01_03_003", "Create support_tickets and ticket_comments tables", createSupportTicketsTables)
+	registry.Register("2026_04_06_001", "Add moderation fields to organizations and create user_bans/game_server_suspensions tables", addModerationTables)
 
 	// Add new shared migrations here
 }

@@ -169,13 +169,192 @@
           </OuiCardBody>
         </OuiCard>
       </OuiGrid>
+
+      <!-- Moderation Card -->
+      <OuiCard class="border border-border-muted rounded-xl">
+        <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+          <OuiFlex align="center" justify="between">
+            <OuiText tag="h2" size="lg" weight="bold">Moderation</OuiText>
+            <OuiBadge
+              v-if="organization?.status === 'banned'"
+              variant="danger"
+              tone="solid"
+            >BANNED</OuiBadge>
+            <OuiBadge
+              v-else-if="organization?.status === 'suspended'"
+              variant="warning"
+              tone="solid"
+            >SUSPENDED</OuiBadge>
+            <OuiBadge v-else variant="success" tone="soft">Active</OuiBadge>
+          </OuiFlex>
+        </OuiCardHeader>
+        <OuiCardBody class="p-6">
+          <OuiStack gap="lg">
+            <!-- Suspension details -->
+            <OuiStack
+              v-if="organization?.status === 'suspended'"
+              gap="md"
+              class="p-4 rounded-lg bg-surface-subtle border border-border-muted"
+            >
+              <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Suspended By</OuiText>
+                  <OuiText size="sm" class="font-mono">{{ organization.suspendedBy || "—" }}</OuiText>
+                </OuiStack>
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Suspended At</OuiText>
+                  <OuiText size="sm">
+                    <OuiDate v-if="organization.suspendedAt" :value="organization.suspendedAt" />
+                    <span v-else>—</span>
+                  </OuiText>
+                </OuiStack>
+                <OuiStack v-if="organization.suspensionExpires" gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Expires</OuiText>
+                  <OuiText size="sm">
+                    <OuiDate :value="organization.suspensionExpires" />
+                  </OuiText>
+                </OuiStack>
+                <OuiStack v-if="organization.suspensionReason" gap="xs" class="md:col-span-3">
+                  <OuiText size="sm" weight="medium" color="tertiary">Reason</OuiText>
+                  <OuiText size="sm">{{ organization.suspensionReason }}</OuiText>
+                </OuiStack>
+              </OuiGrid>
+            </OuiStack>
+
+            <!-- Ban details -->
+            <OuiStack
+              v-if="organization?.status === 'banned'"
+              gap="md"
+              class="p-4 rounded-lg bg-surface-subtle border border-border-muted"
+            >
+              <OuiGrid :cols="{ sm: 1, md: 3 }" gap="md">
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Banned By</OuiText>
+                  <OuiText size="sm" class="font-mono">{{ organization.bannedBy || "—" }}</OuiText>
+                </OuiStack>
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium" color="tertiary">Banned At</OuiText>
+                  <OuiText size="sm">
+                    <OuiDate v-if="organization.bannedAt" :value="organization.bannedAt" />
+                    <span v-else>—</span>
+                  </OuiText>
+                </OuiStack>
+                <OuiStack v-if="organization.banReason" gap="xs" class="md:col-span-3">
+                  <OuiText size="sm" weight="medium" color="tertiary">Reason</OuiText>
+                  <OuiText size="sm">{{ organization.banReason }}</OuiText>
+                </OuiStack>
+              </OuiGrid>
+            </OuiStack>
+
+            <!-- Action buttons -->
+            <OuiFlex gap="sm" wrap="wrap">
+              <template v-if="organization?.status === 'active'">
+                <OuiButton
+                  color="warning"
+                  variant="outline"
+                  size="sm"
+                  @click="openSuspendDialog"
+                  :disabled="isModerating"
+                >
+                  Suspend Organization
+                </OuiButton>
+                <OuiButton
+                  color="danger"
+                  size="sm"
+                  @click="openBanDialog"
+                  :disabled="isModerating"
+                >
+                  Ban Organization
+                </OuiButton>
+              </template>
+              <template v-else-if="organization?.status === 'suspended'">
+                <OuiButton
+                  color="primary"
+                  size="sm"
+                  @click="handleUnsuspend"
+                  :disabled="isModerating"
+                >
+                  {{ isModerating ? 'Unsuspending...' : 'Unsuspend' }}
+                </OuiButton>
+                <OuiButton
+                  color="danger"
+                  size="sm"
+                  @click="openBanDialog"
+                  :disabled="isModerating"
+                >
+                  Ban Organization
+                </OuiButton>
+              </template>
+              <template v-else-if="organization?.status === 'banned'">
+                <OuiButton
+                  color="primary"
+                  size="sm"
+                  @click="handleUnban"
+                  :disabled="isModerating"
+                >
+                  {{ isModerating ? 'Unbanning...' : 'Unban Organization' }}
+                </OuiButton>
+              </template>
+            </OuiFlex>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
     </OuiStack>
   </OuiContainer>
+
+  <!-- Suspend Dialog -->
+  <OuiDialog v-model:open="suspendDialogOpen" title="Suspend Organization">
+    <OuiStack gap="lg">
+      <OuiText size="sm" color="tertiary">
+        Suspend this organization. Members will not be able to access platform resources until unsuspended.
+      </OuiText>
+      <OuiInput
+        v-model="moderationForm.reason"
+        label="Reason (Optional)"
+        placeholder="Reason for suspension"
+      />
+      <OuiInput
+        v-model="moderationForm.expiresAt"
+        label="Expires At (Optional, ISO date)"
+        placeholder="e.g. 2025-12-31T00:00:00Z"
+      />
+    </OuiStack>
+    <template #footer>
+      <OuiFlex justify="end" gap="sm">
+        <OuiButton variant="ghost" @click="suspendDialogOpen = false">Cancel</OuiButton>
+        <OuiButton color="warning" @click="handleSuspend" :disabled="isModerating">
+          {{ isModerating ? 'Suspending...' : 'Suspend' }}
+        </OuiButton>
+      </OuiFlex>
+    </template>
+  </OuiDialog>
+
+  <!-- Ban Dialog -->
+  <OuiDialog v-model:open="banDialogOpen" title="Ban Organization">
+    <OuiStack gap="lg">
+      <OuiText size="sm" color="tertiary">
+        Permanently ban this organization. This is a serious action that cannot be easily reversed.
+      </OuiText>
+      <OuiInput
+        v-model="moderationForm.reason"
+        label="Reason (Optional)"
+        placeholder="Reason for ban"
+      />
+    </OuiStack>
+    <template #footer>
+      <OuiFlex justify="end" gap="sm">
+        <OuiButton variant="ghost" @click="banDialogOpen = false">Cancel</OuiButton>
+        <OuiButton color="danger" @click="handleBan" :disabled="isModerating">
+          {{ isModerating ? 'Banning...' : 'Ban Organization' }}
+        </OuiButton>
+      </OuiFlex>
+    </template>
+  </OuiDialog>
 </template>
 
 <script setup lang="ts">
 import { ArrowLeftIcon } from "@heroicons/vue/24/outline";
-import { OrganizationService } from "@obiente/proto";
+import { OrganizationService, SuperadminService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useUtils } from "~/composables/useUtils";
 
@@ -186,6 +365,8 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const orgClient = useConnectClient(OrganizationService);
+const superadminClient = useConnectClient(SuperadminService);
+const { toast } = useToast();
 const { formatBytes, formatCurrency } = useUtils();
 
 const orgId = computed(() => route.params.orgId as string);
@@ -238,5 +419,99 @@ watch(orgData, (newData) => {
     members.value = newData.members;
   }
 }, { immediate: true });
+
+// Reload org data (after moderation action)
+const reloadOrg = async () => {
+  if (!orgId.value) return;
+  try {
+    const orgResponse = await orgClient.getOrganization({ organizationId: orgId.value });
+    organization.value = orgResponse.organization;
+  } catch {
+    // silently ignore
+  }
+};
+
+// Moderation
+const suspendDialogOpen = ref(false);
+const banDialogOpen = ref(false);
+const isModerating = ref(false);
+const moderationForm = ref({ reason: "", expiresAt: "" });
+
+function openSuspendDialog() {
+  moderationForm.value = { reason: "", expiresAt: "" };
+  suspendDialogOpen.value = true;
+}
+
+function openBanDialog() {
+  moderationForm.value = { reason: "", expiresAt: "" };
+  banDialogOpen.value = true;
+}
+
+const handleSuspend = async () => {
+  if (!orgId.value) return;
+  isModerating.value = true;
+  try {
+    await superadminClient.suspendOrganization({
+      organizationId: orgId.value,
+      reason: moderationForm.value.reason || undefined,
+      expiresAt: moderationForm.value.expiresAt
+        ? { seconds: BigInt(Math.floor(new Date(moderationForm.value.expiresAt).getTime() / 1000)), nanos: 0 }
+        : undefined,
+    });
+    toast.success("Organization suspended.");
+    suspendDialogOpen.value = false;
+    await reloadOrg();
+  } catch (error: unknown) {
+    toast.error(`Failed to suspend: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
+
+const handleUnsuspend = async () => {
+  if (!orgId.value) return;
+  isModerating.value = true;
+  try {
+    await superadminClient.unsuspendOrganization({ organizationId: orgId.value });
+    toast.success("Organization unsuspended.");
+    await reloadOrg();
+  } catch (error: unknown) {
+    toast.error(`Failed to unsuspend: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
+
+const handleBan = async () => {
+  if (!orgId.value) return;
+  isModerating.value = true;
+  try {
+    await superadminClient.banOrganization({
+      organizationId: orgId.value,
+      reason: moderationForm.value.reason || undefined,
+    });
+    toast.success("Organization banned.");
+    banDialogOpen.value = false;
+    await reloadOrg();
+  } catch (error: unknown) {
+    toast.error(`Failed to ban: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
+
+const handleUnban = async () => {
+  if (!orgId.value) return;
+  isModerating.value = true;
+  try {
+    await superadminClient.unbanOrganization({ organizationId: orgId.value });
+    toast.success("Organization unbanned.");
+    await reloadOrg();
+  } catch (error: unknown) {
+    toast.error(`Failed to unban: ${(error as any)?.message || "Unknown error"}`);
+  } finally {
+    isModerating.value = false;
+  }
+};
 </script>
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
@@ -154,6 +155,13 @@ func (s *ConfigService) UpdateCloudInitConfig(ctx context.Context, req *connect.
 	cloudInitProto := req.Msg.GetCloudInit()
 	cloudInitConfig := protoToCloudInitConfig(cloudInitProto)
 
+	// Validate all user-controlled fields before persisting
+	if cloudInitConfig != nil {
+		if err := validateCloudInitConfig(cloudInitConfig); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+	}
+
 	// Save cloud-init config and update Proxmox
 	if err := s.saveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update cloud-init config: %w", err))
@@ -228,6 +236,9 @@ func (s *ConfigService) CreateVPSUser(ctx context.Context, req *connect.Request[
 	if username == "root" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cannot create root user (already exists)"))
 	}
+	if err := inputvalidation.Username(username); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 
 	// Get current cloud-init config
 	cloudInitConfig, err := s.getCloudInitConfigForVPS(ctx, vpsID)
@@ -269,7 +280,15 @@ func (s *ConfigService) CreateVPSUser(ctx context.Context, req *connect.Request[
 	}
 	if req.Msg.Shell != nil {
 		shell := req.Msg.GetShell()
+		if err := inputvalidation.Shell(shell); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 		newUser.Shell = &shell
+	}
+	for _, g := range req.Msg.Groups {
+		if err := inputvalidation.GroupName(g); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid group name: %w", err))
+		}
 	}
 	if req.Msg.LockPasswd != nil {
 		lockPasswd := req.Msg.GetLockPasswd()
@@ -281,7 +300,6 @@ func (s *ConfigService) CreateVPSUser(ctx context.Context, req *connect.Request[
 	}
 
 	// Add user to config
-	cloudInitConfig.Users = append(cloudInitConfig.Users, newUser)
 
 	// Save updated config
 	if err := s.saveCloudInitConfigForVPS(ctx, vpsID, cloudInitConfig); err != nil {
@@ -375,12 +393,20 @@ func (s *ConfigService) UpdateVPSUser(ctx context.Context, req *connect.Request[
 		sudoNopasswd := req.Msg.GetSudoNopasswd()
 		user.SudoNopasswd = &sudoNopasswd
 	}
-	if req.Msg.Groups != nil {
-		user.Groups = req.Msg.Groups
-	}
 	if req.Msg.Shell != nil {
 		shell := req.Msg.GetShell()
+		if err := inputvalidation.Shell(shell); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 		user.Shell = &shell
+	}
+	if req.Msg.Groups != nil {
+		for _, g := range req.Msg.Groups {
+			if err := inputvalidation.GroupName(g); err != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid group name: %w", err))
+			}
+		}
+		user.Groups = req.Msg.Groups
 	}
 	if req.Msg.LockPasswd != nil {
 		lockPasswd := req.Msg.GetLockPasswd()
@@ -1752,3 +1778,54 @@ func (s *ConfigService) RemoveSSHAlias(ctx context.Context, req *connect.Request
 		Message: "SSH alias has been removed. You can still connect using the full VPS ID.",
 	}), nil
 }
+
+// validateCloudInitConfig validates all user-controllable fields in a
+// cloud-init config using the shared inputvalidation package.
+func validateCloudInitConfig(cfg *orchestrator.CloudInitConfig) error {
+	if cfg == nil {
+		return nil
+	}
+
+	hostname := ""
+	if cfg.Hostname != nil {
+		hostname = *cfg.Hostname
+	}
+	timezone := ""
+	if cfg.Timezone != nil {
+		timezone = *cfg.Timezone
+	}
+	locale := ""
+	if cfg.Locale != nil {
+		locale = *cfg.Locale
+	}
+
+	users := make([]inputvalidation.CloudInitUser, 0, len(cfg.Users))
+	for _, u := range cfg.Users {
+		shell := ""
+		if u.Shell != nil {
+			shell = *u.Shell
+		}
+		users = append(users, inputvalidation.CloudInitUser{
+			Name:              u.Name,
+			Shell:             shell,
+			Groups:            u.Groups,
+			SSHAuthorizedKeys: u.SSHAuthorizedKeys,
+		})
+	}
+
+	writeFiles := make([]inputvalidation.CloudInitWriteFile, 0, len(cfg.WriteFiles))
+	for _, wf := range cfg.WriteFiles {
+		perms := ""
+		if wf.Permissions != nil {
+			perms = *wf.Permissions
+		}
+		writeFiles = append(writeFiles, inputvalidation.CloudInitWriteFile{
+			Path:        wf.Path,
+			Content:     wf.Content,
+			Permissions: perms,
+		})
+	}
+
+	return inputvalidation.CloudInitConfig(hostname, timezone, locale, cfg.Packages, users, cfg.Runcmd, writeFiles)
+}
+
