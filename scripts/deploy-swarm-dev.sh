@@ -139,22 +139,16 @@ if [ "$BUILD_IMAGES" = "true" ]; then
   echo "✅ Build complete!"
 elif [ "$PULL_IMAGES" = "true" ]; then
   echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
-  
-  # Pull all microservice images
-  FAILED_PULLS=()
+
+  PULL_TARGETS=()
   for service in "${MICROSERVICES[@]}"; do
-    IMAGE="${REGISTRY}/cloud-${service}:latest"
-    echo "📦 Pulling ${IMAGE}..."
-    if ! docker pull "${IMAGE}"; then
-      echo "⚠️  Warning: Failed to pull ${service} image"
-      FAILED_PULLS+=("${service}")
-    fi
+    PULL_TARGETS+=("${service}=${REGISTRY}/cloud-${service}:latest")
   done
-  
-  if [ ${#FAILED_PULLS[@]} -gt 0 ]; then
+
+  if ! pull_images_in_parallel "${PULL_TARGETS[@]}"; then
     echo ""
     echo "❌ Failed to pull the following images:"
-    for service in "${FAILED_PULLS[@]}"; do
+    for service in "${PARALLEL_PULL_FAILURES[@]}"; do
       echo "   - ${service}"
     done
     echo ""
