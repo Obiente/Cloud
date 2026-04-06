@@ -6,7 +6,8 @@
           <OuiButton
             v-for="tab in sourceTabs"
             :key="tab.id"
-            :variant="activeSource === tab.id ? 'primary' : 'ghost'"
+            :variant="activeSource === tab.id ? 'soft' : 'ghost'"
+            :color="activeSource === tab.id ? 'primary' : 'neutral'"
             size="sm"
             @click="activeSource = tab.id"
           >
@@ -388,8 +389,8 @@ import {
   ServerStackIcon,
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { VPSService } from "@obiente/proto";
-import { date } from "@obiente/proto/utils";
 import { useConnectClient } from "~/lib/connect-client";
 import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
@@ -436,7 +437,9 @@ const effectiveOrgId = computed(
 const activeSource = ref<SourceTab>("provisioning");
 const showTimestamps = ref(true);
 
-const sourceTabs = computed(() => [
+const sourceTabs = computed<
+  Array<{ id: SourceTab; label: string; icon: typeof CommandLineIcon }>
+>(() => [
   { id: "provisioning", label: "Provisioning", icon: CommandLineIcon },
   { id: "journal", label: "Journal", icon: DocumentTextIcon },
   { id: "services", label: "Services", icon: ServerStackIcon },
@@ -566,13 +569,17 @@ async function ensureAuthReady() {
   });
 }
 
-function formatTimestamp(
-  value: { seconds: bigint; nanos: number } | undefined
-) {
+function formatTimestamp(value: Timestamp | undefined) {
   if (!value) {
     return new Date().toISOString();
   }
-  return date(value).toISOString();
+  const seconds =
+    typeof value.seconds === "bigint"
+      ? value.seconds
+      : BigInt(value.seconds ?? 0);
+  const nanos = typeof value.nanos === "number" ? value.nanos : 0;
+  const millis = seconds * 1000n + BigInt(Math.floor(nanos / 1_000_000));
+  return new Date(Number(millis)).toISOString();
 }
 
 function clearProvisioningLogs() {
