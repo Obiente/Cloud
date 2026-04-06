@@ -38,22 +38,54 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Format: "dockerhub-source|ecr-fallback|target"
+          # ecr-fallback is empty for images not available on ECR Public
           images=(
-            "docker.io/moby/buildkit:buildx-stable-1|${LOCAL_REGISTRY}/dockerhub/moby/buildkit:buildx-stable-1"
-            "docker.io/library/golang:1.25-alpine|${LOCAL_REGISTRY}/dockerhub/library/golang:1.25-alpine"
-            "docker.io/library/alpine:latest|${LOCAL_REGISTRY}/dockerhub/library/alpine:latest"
-            "docker.io/library/node:22-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:22-alpine"
-            "docker.io/library/node:20-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:20-alpine"
-            "docker.io/library/rust:1.75-alpine|${LOCAL_REGISTRY}/dockerhub/library/rust:1.75-alpine"
+            "docker.io/moby/buildkit:buildx-stable-1||${LOCAL_REGISTRY}/dockerhub/moby/buildkit:buildx-stable-1"
+            "docker.io/library/golang:1.25-alpine|public.ecr.aws/docker/library/golang:1.25-alpine|${LOCAL_REGISTRY}/dockerhub/library/golang:1.25-alpine"
+            "docker.io/library/alpine:latest|public.ecr.aws/docker/library/alpine:latest|${LOCAL_REGISTRY}/dockerhub/library/alpine:latest"
+            "docker.io/library/node:22-alpine|public.ecr.aws/docker/library/node:22-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:22-alpine"
+            "docker.io/library/node:20-alpine|public.ecr.aws/docker/library/node:20-alpine|${LOCAL_REGISTRY}/dockerhub/library/node:20-alpine"
+            "docker.io/library/rust:1.75-alpine|public.ecr.aws/docker/library/rust:1.75-alpine|${LOCAL_REGISTRY}/dockerhub/library/rust:1.75-alpine"
           )
 
-          for image in "${images[@]}"; do
-            source_ref="${image%%|*}"
-            target_ref="${image##*|}"
-
-            echo "Syncing ${source_ref} -> ${target_ref}"
+          sync_image() {
+            local source_ref="$1"
+            local target_ref="$2"
+            echo "  Trying ${source_ref} -> ${target_ref}"
             docker buildx imagetools create --tag "${target_ref}" "${source_ref}"
+          }
+
+          sync_with_fallback() {
+            local primary_ref="$1"
+            local fallback_ref="$2"
+            local target_ref="$3"
+
+            if sync_image "${primary_ref}" "${target_ref}"; then
+              echo "Synced from primary: ${primary_ref}"
+            elif [[ -n "${fallback_ref}" ]]; then
+              echo "Primary failed (rate limited?), falling back to ECR: ${fallback_ref}"
+              sync_image "${fallback_ref}" "${target_ref}"
+              echo "Synced from fallback: ${fallback_ref}"
+            else
+              echo "ERROR: Primary failed and no fallback available for ${primary_ref}"
+              return 1
+            fi
+
             if ! docker buildx imagetools inspect "${target_ref}" >/dev/null; then
               echo "Verification warning: inspect failed for ${target_ref}, but the mirror step completed."
             fi
+          }
+
+          first=true
+          for image in "${images[@]}"; do
+            IFS='|' read -r primary_ref fallback_ref target_ref <<< "${image}"
+
+            if [[ "$first" == "true" ]]; then
+              first=false
+            else
+              sleep 10
+            fi
+
+            sync_with_fallback "${primary_ref}" "${fallback_ref}" "${target_ref}"
           done
