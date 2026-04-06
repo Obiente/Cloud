@@ -1,138 +1,123 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiStack gap="xs">
-        <OuiText as="h3" size="md" weight="semibold">
-          Game Server Logs
-        </OuiText>
-        <OuiText size="xs" color="tertiary">
-          Real-time logs from your game server
-        </OuiText>
-      </OuiStack>
-      <OuiFlex gap="sm" align="center">
-        <!-- Search Input -->
-        <OuiInput
-          v-model="searchQuery"
-          placeholder="Search logs..."
-          size="sm"
-          style="width: 200px"
-          @update:model-value="handleSearch"
-        >
-          <template #prefix>
-            <MagnifyingGlassIcon class="h-4 w-4" />
-          </template>
-        </OuiInput>
-        <OuiButton
-          variant="ghost"
-          size="sm"
-          @click="toggleFollow"
-          :class="{ 'text-primary': isFollowing && isConnected }"
-          :disabled="isLoading"
-        >
-          <ArrowPathIcon
-            class="h-3.5 w-3.5"
-            :class="{
-              'animate-spin': isLoading || (isFollowing && !isConnected),
-            }"
-          />
-          {{
-            isLoading
-              ? "Connecting..."
-              : isFollowing && isConnected
-              ? "Connected"
-              : "Disconnected"
-          }}
-        </OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="clearLogs">
-          Clear
-        </OuiButton>
-        <OuiMenu>
-          <template #trigger>
-            <OuiButton variant="ghost" size="sm">
-              <EllipsisVerticalIcon class="h-4 w-4" />
-            </OuiButton>
-          </template>
-          <template #default>
-            <OuiMenuItem>
-              <OuiCheckbox
-                v-model="showTimestamps"
-                label="Show timestamps"
-                @click.stop
+  <OuiStack gap="sm">
+    <!-- Toolbar -->
+    <OuiCard variant="outline">
+      <OuiCardBody class="py-2! px-4!">
+        <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
+          <!-- Left: title -->
+          <UiSectionHeader :icon="CommandLineIcon" color="success" size="sm">Server Logs</UiSectionHeader>
+          <!-- Right: controls -->
+          <OuiFlex align="center" gap="sm">
+            <OuiInput
+              v-model="searchQuery"
+              placeholder="Search logs…"
+              size="sm"
+              :style="{ width: '170px' }"
+              @update:model-value="handleSearch"
+            >
+              <template #prefix>
+                <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
+              </template>
+              <template v-if="searchQuery" #suffix>
+                <button class="text-tertiary hover:text-primary transition-colors" @click="searchQuery = ''; handleSearch()">
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </button>
+              </template>
+            </OuiInput>
+            <OuiFlex align="center" gap="xs" class="shrink-0">
+              <span
+                class="h-1.5 w-1.5 rounded-full transition-colors"
+                :class="isConnected ? 'bg-success animate-pulse' : 'bg-border-strong'"
               />
-            </OuiMenuItem>
-            <OuiMenuItem>
-              <label
-                class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer"
-              >
-                <span>Tail lines:</span>
-                <OuiInput
-                  :model-value="tailLines.toString()"
-                  type="number"
-                  :min="10"
-                  :max="10000"
-                  size="sm"
-                  style="width: 100px"
-                  @update:model-value="handleTailChange"
-                  @click.stop
-                />
-              </label>
-            </OuiMenuItem>
-          </template>
-        </OuiMenu>
-      </OuiFlex>
+              <OuiText size="xs" color="tertiary" class="whitespace-nowrap">
+                {{ isLoading ? 'Connecting…' : isConnected ? 'Live' : 'Disconnected' }}
+              </OuiText>
+            </OuiFlex>
+            <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0" :disabled="isLoading" @click="toggleFollow">
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoading || (isFollowing && !isConnected) }" />
+              {{ isFollowing ? 'Stop' : 'Connect' }}
+            </OuiButton>
+            <OuiButton variant="ghost" size="sm" :disabled="logs.length === 0" @click="clearLogs">
+              Clear
+            </OuiButton>
+            <OuiMenu>
+              <template #trigger>
+                <OuiButton variant="ghost" size="sm">
+                  <EllipsisVerticalIcon class="h-3.5 w-3.5" />
+                </OuiButton>
+              </template>
+              <OuiMenuItem>
+                <OuiCheckbox v-model="showTimestamps" label="Show timestamps" @click.stop />
+              </OuiMenuItem>
+              <OuiMenuSeparator />
+              <OuiMenuItem>
+                <label class="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer">
+                  <span class="text-tertiary">Tail:</span>
+                  <OuiInput
+                    :model-value="tailLines.toString()"
+                    type="number"
+                    min="10"
+                    max="10000"
+                    size="sm"
+                    :style="{ width: '80px' }"
+                    @update:model-value="handleTailChange"
+                    @click.stop
+                  />
+                </label>
+              </OuiMenuItem>
+            </OuiMenu>
+          </OuiFlex>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
+
+    <!-- Load older logs indicator -->
+    <OuiFlex v-if="isLoadingOlderLogs" align="center" justify="center" gap="sm" class="py-1">
+      <ArrowPathIcon class="h-3.5 w-3.5 animate-spin text-tertiary" />
+      <OuiText size="xs" color="tertiary">Loading older logs…</OuiText>
     </OuiFlex>
 
-    <!-- Loading older logs indicator -->
-    <div v-if="isLoadingOlderLogs" class="logs-loading-indicator">
-      <OuiFlex align="center" justify="center" gap="sm">
-        <ArrowPathIcon class="h-4 w-4 animate-spin" />
-        <OuiText size="xs" color="tertiary">Loading older logs...</OuiText>
-      </OuiFlex>
-    </div>
+    <!-- End of history indicator -->
+    <OuiFlex v-if="hasLoadedAllLogs && logs.length > 0" align="center" justify="center" class="py-1">
+      <OuiText size="xs" color="tertiary">Beginning of logs</OuiText>
+    </OuiFlex>
 
-    <!-- Search indicator -->
-    <div v-if="searchQuery && !isSearching" class="logs-search-indicator">
-      <OuiFlex align="center" justify="between" gap="sm">
-        <OuiText size="xs" color="tertiary">
-          Showing {{ logs.length }} result{{ logs.length !== 1 ? 's' : '' }} for "{{ searchQuery }}"
-        </OuiText>
-        <OuiButton
-          variant="ghost"
-          size="xs"
-          @click="searchQuery = ''; handleSearch()"
-        >
-          Clear
-        </OuiButton>
-      </OuiFlex>
-    </div>
-
-    <!-- No more logs indicator -->
-    <div v-if="hasLoadedAllLogs && logs.length > 0" class="logs-end-indicator">
-      <OuiText size="xs" color="tertiary" align="center">
-        No more logs available
+    <!-- Search results summary -->
+    <OuiFlex v-if="searchQuery && !isSearching" align="center" justify="between" gap="sm">
+      <OuiText size="xs" color="tertiary">
+        {{ logs.length }} result{{ logs.length !== 1 ? 's' : '' }} for "{{ searchQuery }}"
       </OuiText>
-    </div>
+    </OuiFlex>
 
-    <div
-      ref="logsContainer"
-      class="logs-container-wrapper"
-    >
+    <!-- Log viewer -->
+    <div ref="logsContainer">
       <OuiLogs
         ref="logsComponent"
         :logs="formattedLogs"
         :is-loading="isLoading || isSearching"
         :show-timestamps="showTimestamps"
-        :show-tail-controls="false"
         :enable-ansi="false"
         :auto-scroll="!searchQuery"
-        empty-message="No logs available. Start following to see real-time logs."
-        loading-message="Connecting..."
-      >
-        <template #footer>
-          <!-- Empty footer to hide inline controls since we have them in the menu -->
-        </template>
-      </OuiLogs>
+        empty-message="No logs yet — click Connect to start streaming."
+        loading-message="Connecting to server…"
+      />
     </div>
+
+    <!-- Footer: line count + error/status -->
+    <OuiFlex justify="between" align="center">
+      <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
+      <span v-else />
+      <OuiText size="xs" color="tertiary">
+        {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}
+      </OuiText>
+    </OuiFlex>
+
+    <!-- Interactive Terminal divider -->
+    <OuiFlex align="center" gap="sm" class="pt-1">
+      <div class="h-px flex-1 bg-border-default" />
+      <OuiText size="xs" color="tertiary">Interactive Terminal</OuiText>
+      <div class="h-px flex-1 bg-border-default" />
+    </OuiFlex>
 
     <!-- Interactive Terminal -->
     <GameServerTerminal
@@ -140,11 +125,6 @@
       :organization-id="props.organizationId"
       @log-output="handleTerminalOutput"
     />
-
-    <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
-    <OuiText v-if="isConnected && !error" size="xs" color="success">
-      ✓ Connected. Logs will appear here when the server is running.
-    </OuiText>
   </OuiStack>
 </template>
 
@@ -154,6 +134,8 @@ import {
   ArrowPathIcon,
   EllipsisVerticalIcon,
   MagnifyingGlassIcon,
+  CommandLineIcon,
+  XMarkIcon,
 } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService } from "@obiente/proto";
@@ -935,29 +917,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.logs-container-wrapper {
-  position: relative;
-}
 
-.logs-loading-indicator {
-  padding: 0.5rem;
-  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
-}
-
-.logs-end-indicator {
-  padding: 0.5rem;
-  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
-}
-
-.logs-search-indicator {
-  padding: 0.5rem;
-  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
-  border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
-}
-</style>

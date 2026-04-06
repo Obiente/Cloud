@@ -1,127 +1,244 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiText as="h3" size="sm" weight="semibold">Terminal Output</OuiText>
-      <OuiFlex gap="sm" align="center">
-        <OuiButton
-          variant="ghost"
-          size="sm"
-          @click="clearLogs"
-          class="gap-2"
-        >
-          <TrashIcon class="h-3.5 w-3.5" />
-          Clear
-        </OuiButton>
-      </OuiFlex>
-    </OuiFlex>
+  <OuiStack gap="sm">
+    <!-- Toolbar -->
+    <OuiCard variant="outline">
+      <OuiCardBody class="py-2! px-4!">
+        <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
+          <!-- Left: title -->
+          <UiSectionHeader :icon="CommandLineIcon" color="secondary" size="sm">System Logs</UiSectionHeader>
+          <!-- Right: controls -->
+          <OuiFlex align="center" gap="sm">
+            <OuiInput
+              v-model="searchQuery"
+              size="sm"
+              placeholder="Filter logs…"
+              :style="{ width: '170px' }"
+            >
+              <template #prefix>
+                <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
+              </template>
+              <template v-if="searchQuery" #suffix>
+                <button class="text-tertiary hover:text-primary transition-colors" @click="searchQuery = ''">
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </button>
+              </template>
+            </OuiInput>
+            <OuiFlex align="center" gap="xs" class="shrink-0">
+              <span
+                class="h-1.5 w-1.5 rounded-full transition-colors"
+                :class="isFollowing ? 'bg-success animate-pulse' : 'bg-border-strong'"
+              />
+              <OuiText size="xs" color="tertiary" class="whitespace-nowrap">{{ isFollowing ? 'Live' : 'Stopped' }}</OuiText>
+            </OuiFlex>
+            <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0" @click="toggleFollow">
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoading }" />
+              {{ isFollowing ? 'Stop' : 'Follow' }}
+            </OuiButton>
+            <OuiButton variant="ghost" size="sm" :disabled="logs.length === 0" @click="clearLogs">
+              Clear
+            </OuiButton>
+            <OuiMenu>
+              <template #trigger>
+                <OuiButton variant="ghost" size="sm">
+                  <EllipsisVerticalIcon class="h-3.5 w-3.5" />
+                </OuiButton>
+              </template>
+              <OuiMenuItem>
+                <OuiCheckbox v-model="showTimestamps" label="Show timestamps" @click.stop />
+              </OuiMenuItem>
+            </OuiMenu>
+          </OuiFlex>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
 
+    <!-- Log viewer -->
     <OuiLogs
       ref="logsComponent"
-      :logs="formattedLogs"
+      :logs="filteredLogs"
       :is-loading="isLoading"
       :show-timestamps="showTimestamps"
-      :show-tail-controls="false"
       :enable-ansi="true"
       :auto-scroll="true"
-      empty-message="No output yet. Commands will appear here."
-      loading-message="Connecting..."
-      title="VPS Terminal"
+      empty-message="No logs yet — click Follow to start streaming."
+      loading-message="Connecting to log stream…"
     />
 
-    <!-- Interactive Terminal -->
-    <VPSTerminal
-      :vps-id="props.vpsId"
-      :organization-id="props.organizationId"
-      @log-output="handleTerminalOutput"
-    />
-
-    <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
-    <OuiText v-if="isConnected && !error" size="xs" color="success">
-      ✓ Connected. Terminal output will appear here.
-    </OuiText>
+    <!-- Footer -->
+    <OuiFlex justify="end" align="center">
+      <OuiText size="xs" color="tertiary">
+        {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}<template v-if="searchQuery && filteredLogs.length !== logs.length"> &middot; {{ filteredLogs.length }} matching</template>
+      </OuiText>
+    </OuiFlex>
   </OuiStack>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { TrashIcon } from "@heroicons/vue/24/outline";
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import {
+  ArrowPathIcon,
+  EllipsisVerticalIcon,
+  CommandLineIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
+import { useConnectClient } from "~/lib/connect-client";
+import { VPSService } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
-import VPSTerminal from "~/components/vps/VPSTerminal.vue";
 
 interface Props {
   vpsId: string;
   organizationId: string;
 }
 
+interface LogLine {
+  line: string;
+  timestamp: string;
+  stderr: boolean;
+}
+
 const props = defineProps<Props>();
 const orgsStore = useOrganizationsStore();
+const auth = useAuth();
+const client = useConnectClient(VPSService);
+
+const effectiveOrgId = computed(
+  () => props.organizationId || orgsStore.currentOrgId || ""
+);
 
 const logsComponent = ref<any>(null);
+const logs = ref<LogLine[]>([]);
+const isFollowing = ref(false);
 const isLoading = ref(false);
-const isConnected = ref(false);
-const error = ref<string | null>(null);
 const showTimestamps = ref(true);
+const searchQuery = ref("");
+let streamController: AbortController | null = null;
+let isAborting = false;
 
-const logs = ref<LogEntry[]>([]);
-let terminalOutputBuffer = "";
+const formattedLogs = computed<LogEntry[]>(() =>
+  logs.value.map((log, idx) => ({
+    id: idx,
+    line: log.line,
+    timestamp: log.timestamp,
+    stderr: log.stderr,
+    level: log.stderr ? ("error" as const) : undefined,
+  }))
+);
 
-const formattedLogs = computed(() => logs.value);
-
-// Handle output from terminal WebSocket
-const handleTerminalOutput = (text: string) => {
-  if (!text) return;
-  
-  // Add to buffer
-  terminalOutputBuffer += text;
-  
-  // Split by newlines - keep incomplete line in buffer
-  const lines = terminalOutputBuffer.split(/\r?\n/);
-  
-  // If buffer ends with newline, last element will be empty string
-  // Otherwise, last element is an incomplete line that stays in buffer
-  if (terminalOutputBuffer.endsWith("\n") || terminalOutputBuffer.endsWith("\r")) {
-    terminalOutputBuffer = "";
-  } else {
-    terminalOutputBuffer = lines.pop() || ""; // Keep last incomplete line
-  }
-  
-  // Add complete lines to logs (including empty lines)
-  for (const line of lines) {
-    // Add line even if empty (for proper spacing)
-    logs.value.push({
-      line: line || " ", // Use space for empty lines so they still render
-      timestamp: new Date().toISOString(),
-      level: undefined, // Terminal output doesn't have a log level
-    });
-    
-    // Keep only last 10000 lines
-    if (logs.value.length > 10000) {
-      logs.value = logs.value.slice(-10000);
-    }
-  }
-  
-  // Also flush buffer if it gets too large (in case we never get a newline)
-  if (terminalOutputBuffer.length > 1000) {
-    logs.value.push({
-      line: terminalOutputBuffer,
-      timestamp: new Date().toISOString(),
-    });
-    terminalOutputBuffer = "";
-    
-    // Keep only last 10000 lines
-    if (logs.value.length > 10000) {
-      logs.value = logs.value.slice(-10000);
-    }
-  }
-};
+const filteredLogs = computed<LogEntry[]>(() => {
+  if (!searchQuery.value) return formattedLogs.value;
+  const q = searchQuery.value.toLowerCase();
+  return formattedLogs.value.filter((l) =>
+    (l.line || "").toLowerCase().includes(q)
+  );
+});
 
 const clearLogs = () => {
   logs.value = [];
-  terminalOutputBuffer = "";
-  if (logsComponent.value) {
-    logsComponent.value.scrollToTop?.();
+};
+
+const toggleFollow = () => {
+  if (isFollowing.value) {
+    stopStream();
+  } else {
+    startStream();
   }
 };
+
+const startStream = async () => {
+  if (isFollowing.value) return;
+  isFollowing.value = true;
+  isLoading.value = true;
+  logs.value = [];
+
+  let hasReceivedLogs = false;
+
+  try {
+    if (!auth.ready) {
+      await new Promise<void>((resolve) => {
+        const check = () => (auth.ready ? resolve() : setTimeout(check, 100));
+        check();
+      });
+    }
+
+    const token = await auth.getAccessToken();
+    if (!token) throw new Error("Authentication required.");
+
+    streamController = new AbortController();
+
+    const stream = client.streamVPSLogs(
+      {
+        organizationId: effectiveOrgId.value,
+        vpsId: props.vpsId,
+      },
+      { signal: streamController.signal }
+    );
+
+    isLoading.value = false;
+
+    for await (const update of stream) {
+      if (update.line) {
+        hasReceivedLogs = true;
+        logs.value.push({
+          line: update.line,
+          timestamp: update.timestamp
+            ? new Date(
+                Number(update.timestamp.seconds) * 1000 +
+                  Number(update.timestamp.nanos || 0) / 1e6
+              ).toISOString()
+            : new Date().toISOString(),
+          stderr: update.stderr || false,
+        });
+      }
+    }
+  } catch (error: unknown) {
+    const isAbortError =
+      (error as any).name === "AbortError" ||
+      (error as Error).message?.toLowerCase().includes("aborted") ||
+      (error as Error).message?.toLowerCase().includes("canceled") ||
+      (error as Error).message?.toLowerCase().includes("cancelled") ||
+      isAborting;
+
+    if (isAbortError) return;
+
+    const isBenignError =
+      (error as Error).message?.toLowerCase().includes("missing trailer") ||
+      (error as Error).message?.toLowerCase().includes("trailer") ||
+      (error as Error).message?.toLowerCase().includes("missing endstreamresponse") ||
+      (error as Error).message?.toLowerCase().includes("endstreamresponse") ||
+      (error as any).code === "unknown";
+
+    if (!isBenignError || !hasReceivedLogs) {
+      logs.value.push({
+        line: `[error] Failed to stream logs: ${(error as Error).message}`,
+        timestamp: new Date().toISOString(),
+        stderr: true,
+      });
+    }
+  } finally {
+    isLoading.value = false;
+    isFollowing.value = false;
+    isAborting = false;
+  }
+};
+
+const stopStream = () => {
+  if (streamController) {
+    isAborting = true;
+    streamController.abort();
+    streamController = null;
+  }
+  isFollowing.value = false;
+};
+
+onMounted(() => {
+  startStream();
+});
+
+onUnmounted(() => {
+  stopStream();
+});
 </script>
 

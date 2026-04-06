@@ -39,14 +39,15 @@
     </div>
 
     <!-- Logs Display -->
-    <div
-      ref="logContainer"
-      class="oui-logs-viewer"
-      :class="viewerClass"
-      :style="viewerStyle"
-      @scroll="handleScroll"
-    >
-      <!-- Empty State -->
+    <div class="oui-logs-viewer-wrapper">
+      <div
+        ref="logContainer"
+        class="oui-logs-viewer"
+        :class="viewerClass"
+        :style="viewerStyle"
+        @scroll="handleScroll"
+      >
+        <!-- Empty State -->
       <div v-if="logs.length === 0 && !isLoading" class="oui-logs-empty">
         <slot name="empty">
           <OuiText color="secondary" size="sm" align="center">
@@ -101,6 +102,18 @@
           </div>
         </div>
       </div>
+      </div>
+
+      <!-- Scroll to bottom button -->
+      <Transition name="oui-scroll-btn">
+        <button
+          v-if="isUserScrolledUp && logs.length > 0"
+          class="oui-scroll-to-bottom"
+          @click="scrollToBottomManual"
+        >
+          ↓ Latest
+        </button>
+      </Transition>
     </div>
 
   </div>
@@ -300,6 +313,14 @@ onMounted(() => {
   }
 });
 
+const scrollToBottomManual = () => {
+  isUserScrolledUp.value = false;
+  shouldAutoScroll.value = true;
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight;
+  }
+};
+
 defineExpose({
   scrollToBottom,
   scrollToTop: () => {
@@ -335,6 +356,14 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.oui-logs-viewer-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .oui-logs-viewer {
@@ -465,6 +494,43 @@ defineExpose({
 
 .oui-log-line-debug .oui-log-content {
   color: #c4b5fd;
+}
+
+.oui-scroll-to-bottom {
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.65);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: all 0.15s;
+  z-index: 10;
+}
+
+.oui-scroll-to-bottom:hover {
+  background: rgba(0, 0, 0, 0.88);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.oui-scroll-btn-enter-active,
+.oui-scroll-btn-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.oui-scroll-btn-enter-from,
+.oui-scroll-btn-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 /* Custom Scrollbar */

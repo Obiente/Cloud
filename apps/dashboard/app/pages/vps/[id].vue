@@ -286,6 +286,9 @@
           <template #terminal>
             <VPSXTermTerminal :vps-id="vpsId" :organization-id="orgId" />
           </template>
+          <template #logs>
+            <VPSLogs :vps-id="vpsId" :organization-id="orgId" />
+          </template>
           <template #firewall>
             <VPSFirewall
               v-if="vps.instanceId"
@@ -1647,6 +1650,7 @@
     TrashIcon,
     InformationCircleIcon,
     ClipboardDocumentListIcon,
+    DocumentTextIcon,
     KeyIcon,
     PencilIcon,
     CpuChipIcon,
@@ -1692,6 +1696,9 @@
   );
   const VPSXTermTerminal = defineAsyncComponent(
     () => import("~/components/vps/VPSXTermTerminal.vue")
+  );
+  const VPSLogs = defineAsyncComponent(
+    () => import("~/components/vps/VPSLogs.vue")
   );
   const VPSUsersManagement = defineAsyncComponent(
     () => import("~/components/vps/VPSUsersManagement.vue")
@@ -2991,6 +2998,7 @@
     { id: "overview", label: "Overview", icon: InformationCircleIcon },
     { id: "metrics", label: "Metrics", icon: ChartBarIcon },
     { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+    { id: "logs", label: "Logs", icon: DocumentTextIcon },
     { id: "firewall", label: "Firewall", icon: ShieldExclamationIcon },
     { id: "users", label: "Users", icon: UserIcon },
     { id: "cloud-init", label: "Cloud-Init", icon: CogIcon },

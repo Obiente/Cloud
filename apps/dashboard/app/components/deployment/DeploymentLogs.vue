@@ -1,84 +1,108 @@
 <template>
-    <!-- Service Selector -->
-    <div class="mb-4">
-      <ContainerSelector
-        :deployment-id="props.deploymentId"
-        :organization-id="effectiveOrgId"
-        :model-value="selectedService"
-        :show-selected-info="true"
-        selected-info-text="Viewing logs for"
-        @change="onServiceChange"
-      />
-    </div>
-
-    <OuiLogs
-      ref="logsComponent"
-      :logs="formattedLogs"
-      :is-loading="isLoading"
-      :show-timestamps="showTimestamps"
-      :show-tail-controls="false"
-      :enable-ansi="true"
-      :auto-scroll="true"
-      empty-message="No logs available. Start following to see real-time logs."
-      loading-message="Connecting..."
-      title="Deployment Logs"
-    >
-      <template #actions>
-        <OuiFlex gap="sm" align="center">
-          <OuiButton
-            variant="ghost"
-            size="sm"
-            @click="toggleFollow"
-            :class="{ 'text-primary': isFollowing }"
-          >
-            <ArrowPathIcon
-              class="h-3.5 w-3.5"
-              :class="{ 'animate-spin': isFollowing }"
+  <OuiStack gap="sm">
+    <!-- Toolbar -->
+    <OuiCard variant="outline">
+      <OuiCardBody class="py-2! px-4!">
+        <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
+          <!-- Left: title + service selector -->
+          <OuiFlex align="center" gap="md">
+            <UiSectionHeader :icon="CommandLineIcon" color="secondary" size="sm">Container Logs</UiSectionHeader>
+            <ContainerSelector
+              :deployment-id="props.deploymentId"
+              :organization-id="effectiveOrgId"
+              :model-value="selectedService"
+              :show-label="false"
+              placeholder="All services"
+              :style="{ minWidth: '160px' }"
+              @change="onServiceChange"
             />
-            {{ isFollowing ? "Following" : "Follow" }}
-          </OuiButton>
-          <OuiButton variant="ghost" size="sm" @click="clearLogs">
-            Clear
-          </OuiButton>
-          <OuiMenu>
-            <template #trigger>
-              <OuiButton variant="ghost" size="sm">
-                <EllipsisVerticalIcon class="h-3.5 w-3.5" />
-              </OuiButton>
-            </template>
-            <template #default>
+          </OuiFlex>
+          <!-- Right: controls -->
+          <OuiFlex align="center" gap="sm">
+            <OuiInput
+              v-model="searchQuery"
+              size="sm"
+              placeholder="Filter logs..."
+              :style="{ width: '170px' }"
+            >
+              <template #prefix>
+                <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
+              </template>
+              <template v-if="searchQuery" #suffix>
+                <button class="text-tertiary hover:text-primary transition-colors" @click="searchQuery = ''">
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </button>
+              </template>
+            </OuiInput>
+            <OuiFlex align="center" gap="xs" class="shrink-0">
+              <span
+                class="h-1.5 w-1.5 rounded-full transition-colors"
+                :class="isFollowing ? 'bg-success animate-pulse' : 'bg-border-strong'"
+              />
+              <OuiText size="xs" color="tertiary" class="whitespace-nowrap">{{ isFollowing ? 'Live' : 'Stopped' }}</OuiText>
+            </OuiFlex>
+            <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0" @click="toggleFollow">
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isLoading }" />
+              {{ isFollowing ? 'Stop' : 'Follow' }}
+            </OuiButton>
+            <OuiButton variant="ghost" size="sm" :disabled="logs.length === 0" @click="clearLogs">
+              Clear
+            </OuiButton>
+            <OuiMenu>
+              <template #trigger>
+                <OuiButton variant="ghost" size="sm">
+                  <EllipsisVerticalIcon class="h-3.5 w-3.5" />
+                </OuiButton>
+              </template>
               <OuiMenuItem>
-                <OuiCheckbox
-                  v-model="showTimestamps"
-                  label="Show timestamps"
-                  @click.stop
-                />
+                <OuiCheckbox v-model="showTimestamps" label="Show timestamps" @click.stop />
               </OuiMenuItem>
+              <OuiMenuSeparator />
               <OuiMenuItem>
-                <label class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer">
-                  <span>Tail lines:</span>
+                <label class="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer">
+                  <span class="text-tertiary">Tail:</span>
                   <OuiInput
                     :model-value="tailLines.toString()"
                     type="number"
-                    :min="10"
-                    :max="10000"
+                    min="10"
+                    max="10000"
                     size="sm"
-                    style="width: 100px;"
+                    :style="{ width: '80px' }"
                     @update:model-value="handleTailChange"
                     @click.stop
                   />
                 </label>
               </OuiMenuItem>
-            </template>
-          </OuiMenu>
+            </OuiMenu>
+          </OuiFlex>
         </OuiFlex>
-      </template>
-    </OuiLogs>
+      </OuiCardBody>
+    </OuiCard>
+
+    <!-- Log viewer -->
+    <OuiLogs
+      ref="logsComponent"
+      :logs="filteredLogs"
+      :is-loading="isLoading"
+      :show-timestamps="showTimestamps"
+      :enable-ansi="true"
+      :auto-scroll="true"
+      empty-message="No logs yet — click Follow to start streaming."
+      loading-message="Connecting to log stream…"
+    />
+
+    <!-- Footer -->
+    <OuiFlex justify="end" align="center">
+      <OuiText size="xs" color="tertiary">
+        {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}<template v-if="searchQuery && filteredLogs.length !== logs.length"> &middot; {{ filteredLogs.length }} matching</template>
+      </OuiText>
+    </OuiFlex>
+  </OuiStack>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { ArrowPathIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import { ArrowPathIcon, EllipsisVerticalIcon, CommandLineIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService, type StreamDeploymentLogsRequest } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
@@ -115,6 +139,16 @@ const showTimestamps = ref(true);
 const logsComponent = ref<any>(null);
 let streamController: AbortController | null = null;
 let isAborting = false; // Track if we're intentionally aborting
+
+// Search / filter
+const searchQuery = ref("");
+const filteredLogs = computed<LogEntry[]>(() => {
+  if (!searchQuery.value) return formattedLogs.value;
+  const q = searchQuery.value.toLowerCase();
+  return formattedLogs.value.filter((l) =>
+    (l.line || l.content || l.data || "").toLowerCase().includes(q)
+  );
+});
 
 // Service selection
 const selectedService = ref<string>(""); // Empty string means "first container" (default)

@@ -1,95 +1,93 @@
 <template>
-    <OuiStack gap="md">
-      <!-- Show latest build info and link if no active build -->
-      <OuiCard v-if="!isStreaming && latestBuild && !isLoading" variant="outline">
-        <OuiCardBody>
-          <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
-            <OuiStack gap="xs">
-              <OuiFlex align="center" gap="sm">
-                <OuiText as="h4" size="sm" weight="semibold">
-                  Latest Build #{{ latestBuild.buildNumber }}
-                </OuiText>
-                <OuiBadge
-                  :variant="getBuildStatusVariant(latestBuild.status)"
-                  size="xs"
-                >
-                  {{ getBuildStatusLabel(latestBuild.status) }}
-                </OuiBadge>
-              </OuiFlex>
-              <OuiText size="xs" color="tertiary">
-                <OuiRelativeTime
-                  :value="latestBuild.startedAt ? date(latestBuild.startedAt) : undefined"
-                  :style="'short'"
-                />
-              </OuiText>
-            </OuiStack>
-            <NuxtLink
-              :to="`/deployments/${props.deploymentId}?tab=builds`"
-              class="text-primary hover:underline"
-            >
-              <OuiButton variant="ghost" size="sm">
-                View All Builds
-                <ArrowTopRightOnSquareIcon class="h-4 w-4 ml-1" />
-              </OuiButton>
-            </NuxtLink>
-          </OuiFlex>
-        </OuiCardBody>
-      </OuiCard>
-
-      <OuiLogs
-        :logs="formattedLogs"
-        :is-loading="isLoading"
-        :show-timestamps="showTimestamps"
-        :enable-ansi="true"
-        :auto-scroll="isStreaming"
-        empty-message="No build logs available. Build logs will appear here when a deployment is triggered."
-        loading-message="Connecting to build logs..."
-        title="Build Logs"
-        @update:show-timestamps="showTimestamps = $event"
-      >
-        <template #title>
+  <OuiStack gap="sm">
+    <!-- Historical build info bar -->
+    <OuiCard v-if="!isStreaming && latestBuild && !isLoading" variant="outline">
+      <OuiCardBody class="py-2.5! px-4!">
+        <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
           <OuiFlex align="center" gap="sm">
-            <OuiText as="h3" size="md" weight="semibold">Build Logs</OuiText>
-            <OuiBadge v-if="isStreaming" color="info" size="sm">
-              <span class="animate-pulse">●</span> Live
+            <OuiText size="sm" weight="medium">Build #{{ latestBuild.buildNumber }}</OuiText>
+            <OuiBadge :variant="getBuildStatusVariant(latestBuild.status)" size="xs">
+              {{ getBuildStatusLabel(latestBuild.status) }}
             </OuiBadge>
-            <OuiBadge v-else-if="latestBuild" color="tertiary" size="sm">
-              Historical
-            </OuiBadge>
-          </OuiFlex>
-        </template>
-        <template #actions>
-          <OuiButton
-            v-if="isStreaming"
-            variant="ghost"
-            size="sm"
-            @click="toggleFollow"
-            :class="{ 'text-primary': isFollowing }"
-          >
-            <ArrowPathIcon
-              class="h-4 w-4 mr-1"
-              :class="{ 'animate-spin': isFollowing }"
-            />
-            {{ isFollowing ? "Following" : "Follow" }}
-          </OuiButton>
-          <OuiButton variant="ghost" size="sm" @click="clearLogs">
-            Clear
-          </OuiButton>
-        </template>
-        <template #footer>
-          <div class="oui-logs-controls">
-            <OuiText size="xs" color="tertiary" class="logs-count">
-              {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}
+            <OuiText size="xs" color="tertiary">
+              <OuiRelativeTime
+                :value="latestBuild.startedAt ? date(latestBuild.startedAt) : undefined"
+                :style="'short'"
+              />
             </OuiText>
-          </div>
-        </template>
-      </OuiLogs>
-    </OuiStack>
+          </OuiFlex>
+          <NuxtLink :to="`/deployments/${props.deploymentId}?tab=builds`">
+            <OuiButton variant="ghost" size="sm">
+              All Builds
+              <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5 ml-1" />
+            </OuiButton>
+          </NuxtLink>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
+
+    <!-- Toolbar -->
+    <OuiCard variant="outline">
+      <OuiCardBody class="py-2! px-4!">
+        <OuiFlex align="center" justify="between" gap="md">
+          <!-- Left: title + live/historical badge -->
+          <OuiFlex align="center" gap="sm">
+            <UiSectionHeader :icon="BeakerIcon" color="warning" size="sm">Build Logs</UiSectionHeader>
+            <OuiBadge v-if="isStreaming" color="info" size="xs">
+              <span class="animate-pulse mr-1">●</span>Live
+            </OuiBadge>
+            <OuiBadge v-else-if="latestBuild" color="secondary" size="xs">Historical</OuiBadge>
+          </OuiFlex>
+          <!-- Right: controls -->
+          <OuiFlex align="center" gap="sm">
+            <OuiFlex v-if="isStreaming" align="center" gap="xs" class="shrink-0">
+              <span
+                class="h-1.5 w-1.5 rounded-full transition-colors"
+                :class="isFollowing ? 'bg-success animate-pulse' : 'bg-border-strong'"
+              />
+              <OuiText size="xs" color="tertiary" class="whitespace-nowrap">{{ isFollowing ? 'Following' : 'Paused' }}</OuiText>
+            </OuiFlex>
+            <OuiButton
+              v-if="isStreaming"
+              variant="ghost"
+              size="sm"
+              class="whitespace-nowrap shrink-0"
+              @click="toggleFollow"
+            >
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isFollowing }" />
+              {{ isFollowing ? 'Stop' : 'Follow' }}
+            </OuiButton>
+            <OuiButton variant="ghost" size="sm" :disabled="logs.length === 0" @click="clearLogs">
+              Clear
+            </OuiButton>
+          </OuiFlex>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
+
+    <!-- Log viewer -->
+    <OuiLogs
+      :logs="formattedLogs"
+      :is-loading="isLoading"
+      :show-timestamps="showTimestamps"
+      :enable-ansi="true"
+      :auto-scroll="isStreaming && isFollowing"
+      empty-message="No build logs available. Logs appear here when a build is triggered."
+      loading-message="Connecting to build log stream…"
+    />
+
+    <!-- Footer -->
+    <OuiFlex justify="end" align="center">
+      <OuiText size="xs" color="tertiary">
+        {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}
+      </OuiText>
+    </OuiFlex>
+  </OuiStack>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from "vue";
-import { ArrowPathIcon, ArrowTopRightOnSquareIcon } from "@heroicons/vue/24/outline";
+import { ArrowPathIcon, ArrowTopRightOnSquareIcon, BeakerIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService, BuildStatus, type Build } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
