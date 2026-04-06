@@ -528,11 +528,14 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 					vpsID = identifier
 				}
 			} else if strings.Contains(errStr, "vps-") {
-				// Try to extract VPS ID from error message
+				// Try to extract VPS ID from error message.
+				// Go error wrapping appends a colon before the next message
+				// (e.g. "failed to get VPS vps-xxx: record not found"), so
+				// strip trailing punctuation after splitting on whitespace.
 				parts := strings.Fields(errStr)
 				for _, part := range parts {
 					if strings.HasPrefix(part, "vps-") {
-						vpsID = part
+						vpsID = strings.TrimRight(part, ":,.")
 						break
 					}
 				}
@@ -1407,20 +1410,89 @@ func (s *SSHProxyServer) sendMessageToChannel(channel ssh.Channel, message strin
 	}
 }
 
-// sendConnectionStatus sends connection status messages with loading indicators to a channel
-func (s *SSHProxyServer) sendConnectionStatus(channel ssh.Channel, vpsID, targetUser string) {
-	statusMessages := []string{
-		fmt.Sprintf("Connecting to your VPS (%s) as user %s", vpsID, targetUser),
-		".",
-		".",
-		".",
-		"\r\n",
+// pendingSSHRequest holds an SSH request that may have already been replied to
+// on behalf of the VPS (e.g. pty-req was ACK'd before the VPS connection was ready).
+type pendingSSHRequest struct {
+	r          *ssh.Request
+	preReplied bool // true = we already sent "true" back to the client
+}
+
+// forwardSessionWithPendingReqs opens a VPS session channel, replays buffered
+// client requests (some already replied), bridges data, then shows a goodbye
+// box on close — equivalent to forwardChannelWithGoodbye but for the first
+// session channel whose requests were intercepted for early status display.
+func (s *SSHProxyServer) forwardSessionWithPendingReqs(
+	ctx context.Context,
+	clientChannel ssh.Channel,
+	pending <-chan pendingSSHRequest,
+	vpsConn ssh.Conn,
+	serverConn *ssh.ServerConn,
+	clientIP, vpsIP string,
+) {
+	defer func() {
+		goodbyeMsg := createBox("Thank you for using Obiente Cloud!", []string{"Connection closed."})
+		s.sendMessageToChannel(clientChannel, goodbyeMsg, false)
+		time.Sleep(500 * time.Millisecond)
+		clientChannel.Close()
+	}()
+
+	vpsChannel, vpsReqs, err := vpsConn.OpenChannel("session", nil)
+	if err != nil {
+		logger.Error("[SSHProxy] Failed to open VPS session channel: %v", err)
+		return
+	}
+	defer vpsChannel.Close()
+
+	if clientIP != "" {
+		setClientIPEnv(vpsChannel, clientIP, vpsIP)
 	}
 
-	for _, msg := range statusMessages {
-		s.sendMessageToChannel(channel, msg, false)
-		time.Sleep(300 * time.Millisecond)
-	}
+	done := make(chan struct{}, 2)
+	go func() {
+		io.Copy(vpsChannel, clientChannel)
+		vpsChannel.CloseWrite()
+		done <- struct{}{}
+	}()
+	go func() {
+		io.Copy(clientChannel, vpsChannel)
+		clientChannel.CloseWrite()
+		done <- struct{}{}
+	}()
+
+	// Forward VPS-initiated requests to the client (exit-status, etc.)
+	go func() {
+		for req := range vpsReqs {
+			ok, payload, err := serverConn.SendRequest(req.Type, req.WantReply, req.Payload)
+			if req.WantReply {
+				req.Reply(ok, payload)
+			}
+			if err != nil {
+				logger.Debug("[SSHProxy] VPS→client request error: %v", err)
+			}
+		}
+	}()
+
+	// Forward client requests to VPS.
+	// For requests we pre-replied to (pty-req, env): still send to VPS so it
+	// allocates the PTY/sets env, but don't reply to the client again.
+	go func() {
+		for pr := range pending {
+			if pr.preReplied {
+				// VPS needs to know (e.g. PTY dimensions), but client already got its reply.
+				_, _ = vpsChannel.SendRequest(pr.r.Type, true, pr.r.Payload)
+			} else {
+				ok, err := vpsChannel.SendRequest(pr.r.Type, pr.r.WantReply, pr.r.Payload)
+				if pr.r.WantReply {
+					pr.r.Reply(ok, nil)
+				}
+				if err != nil {
+					logger.Debug("[SSHProxy] client→VPS request %s error: %v", pr.r.Type, err)
+				}
+			}
+		}
+	}()
+
+	<-done
 }
 
 // forwardChannelsToVPS forwards SSH channels from the client to the VPS.
@@ -1429,7 +1501,6 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 	var vpsChans <-chan ssh.NewChannel
 	var vpsReqs <-chan *ssh.Request
 	var connectionErr error
-	var connectionEstablished sync.Once
 	var firstSessionChannel sync.Once
 
 	// Try to establish VPS connection in background
@@ -1478,18 +1549,81 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 				handled := false
 				firstSessionChannel.Do(func() {
 					handled = true
-					// Accept the channel first
 					clientChannel, clientReqs, err := newChannel.Accept()
 					if err != nil {
 						logger.Error("[SSHProxy] Failed to accept session channel: %v", err)
 						return
 					}
 
-					// Wait for connection attempt to complete
-					<-connectionReady
+					// Intercept client requests so we can:
+					//   (a) reply to "pty-req" immediately — puts the client's terminal in raw
+					//       mode so it can render our status output.
+					//   (b) buffer all requests for replay on the VPS session channel.
+					pending := make(chan pendingSSHRequest, 64)
+					ptyDone := make(chan struct{})
+					var ptyOnce sync.Once
+					go func() {
+						defer close(pending)
+						for req := range clientReqs {
+							preReplied := false
+							switch req.Type {
+							case "pty-req", "env":
+								if req.WantReply {
+									req.Reply(true, nil)
+									preReplied = true
+								}
+								if req.Type == "pty-req" {
+									ptyOnce.Do(func() { close(ptyDone) })
+								}
+							}
+							pending <- pendingSSHRequest{r: req, preReplied: preReplied}
+						}
+					}()
+
+					// Wait for pty-req (500 ms max). If none arrives the session is
+					// non-interactive (e.g. `ssh host -- cmd`): skip status output to
+					// avoid corrupting stdout of the command.
+					ptyReceived := false
+					select {
+					case <-ptyDone:
+						ptyReceived = true
+					case <-time.After(500 * time.Millisecond):
+					}
+
+					displayName := vpsID
+					if vpsName != "" {
+						displayName = vpsName
+					}
+
+					// Show a live spinner while the VPS connection is being established.
+					if ptyReceived {
+						stopStatus := make(chan struct{})
+						go func() {
+							spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+							clientChannel.Write([]byte(fmt.Sprintf("\r\n\033[1mConnecting to %s\033[0m %s", displayName, spinner[0])))
+							ticker := time.NewTicker(100 * time.Millisecond)
+							defer ticker.Stop()
+							i := 1
+							for {
+								select {
+								case <-stopStatus:
+									return
+								case <-ticker.C:
+									clientChannel.Write([]byte("\b" + spinner[i%len(spinner)]))
+									i++
+								}
+							}
+						}()
+						<-connectionReady
+						close(stopStatus)
+					} else {
+						<-connectionReady
+					}
 
 					if connectionErr != nil {
-						// Send error message
+						if ptyReceived {
+							clientChannel.Write([]byte("\r\n"))
+						}
 						errorMsg := s.formatConnectionError(connectionErr, vpsID)
 						s.sendMessageToChannel(clientChannel, errorMsg, true)
 						time.Sleep(2 * time.Second)
@@ -1498,24 +1632,13 @@ func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *s
 						return
 					}
 
-					// Send connection status
-					s.sendConnectionStatus(clientChannel, vpsID, targetUser)
+					if ptyReceived {
+						// Clear the spinner and show a brief success line.
+						clientChannel.Write([]byte(fmt.Sprintf("\b\033[1;32m✓\033[0m Connected to %s\r\n\r\n", displayName)))
+					}
 
-					// Now forward the channel
-					connectionEstablished.Do(func() {
-						logger.Info("[SSHProxy] Connected to VPS, forwarding channels...")
-						// Use VPS name for display (fallback to ID if name is empty)
-						displayName := vpsID
-						if vpsName != "" {
-							displayName = vpsName
-						}
-						successMsg := fmt.Sprintf("✓ Successfully connected to VPS %s\r\n", displayName)
-						s.sendMessageToChannel(clientChannel, successMsg, false)
-						time.Sleep(500 * time.Millisecond)
-					})
-
-					// Forward this channel with goodbye message
-					go s.forwardChannelWithGoodbye(ctx, clientChannel, clientReqs, vpsConn, serverConn, clientIP, vpsIP)
+					logger.Info("[SSHProxy] Connected to VPS %s, forwarding channels...", vpsID)
+					go s.forwardSessionWithPendingReqs(ctx, clientChannel, pending, vpsConn, serverConn, clientIP, vpsIP)
 				})
 				// If this is not the first session channel, handle it normally
 				if !handled {
@@ -2227,6 +2350,9 @@ func createFailedSSHAuditLog(vpsID, username string, err error, clientIP string)
 
 	// Try to get organization ID from VPS if we have a valid VPS ID
 	var orgID *string
+	// Sanitize vpsID — Go error wrapping can leave a trailing colon on IDs
+	// extracted from error messages (e.g. "failed to get VPS vps-xxx: ...").
+	vpsID = strings.TrimRight(vpsID, ":,.")
 	if vpsID != "" && strings.HasPrefix(vpsID, "vps-") {
 		var vps database.VPSInstance
 		if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err == nil {

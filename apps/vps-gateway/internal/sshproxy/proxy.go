@@ -245,64 +245,54 @@ func NewProxy(dhcpManager *dhcp.Manager) (*Proxy, error) {
 	}, nil
 }
 
-// ProxyConnection proxies an SSH connection to a target VPS
-func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string, port int, clientConn net.Conn) error {
-	// Resolve target (could be IP or hostname)
+// DialTarget resolves the hostname and establishes a TCP connection to target:port.
+// It is separated from ProxyEstablished so the caller can report success/failure
+// to the client before starting the SSH data forwarding loop.
+func (p *Proxy) DialTarget(ctx context.Context, target string, port int) (net.Conn, error) {
 	if port == 0 {
 		port = 22
 	}
 
-	// Resolve hostname to IP using gateway's own dnsmasq (localhost:53)
-	// This ensures VPS hostnames are resolved by the gateway's dnsmasq, not the host DNS
-	// IMPORTANT: If target is already an IP, use it directly - don't resolve
 	var targetIP string
 	parsedIP := net.ParseIP(target)
 	if parsedIP != nil {
-		// Target is already an IP address - use it directly
 		targetIP = target
 		logger.Debug("Using provided IP address directly: %s", targetIP)
 	} else {
-		// Target is a hostname - resolve using gateway's dnsmasq via direct DNS query
 		logger.Info("Resolving hostname %s using direct DNS query to 127.0.0.1:53", target)
 
-		// First, verify dnsmasq is listening on 127.0.0.1:53
 		testConn, err := net.DialTimeout("udp", "127.0.0.1:53", 1*time.Second)
 		if err != nil {
-			logger.Warn("dnsmasq not reachable on 127.0.0.1:53: %v. DNS resolution may fail. Please check dnsmasq is running and configured to listen on 127.0.0.1", err)
+			logger.Warn("dnsmasq not reachable on 127.0.0.1:53: %v", err)
 		} else {
 			testConn.Close()
 			logger.Debug("dnsmasq is reachable on 127.0.0.1:53")
 		}
 
-		// Use direct DNS query with explicit timeout
-		// Create a new context with a timeout to prevent hanging
 		resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
 		ips, err := queryDNSDirect(resolveCtx, target)
 		if err != nil {
-			logger.Debug("First resolution attempt failed for %s: %v", target, err)
-			// Try with domain suffix if resolution fails
 			domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
 			if domain == "" {
 				domain = "vps.local"
 			}
 			fqdn := fmt.Sprintf("%s.%s", target, domain)
-			logger.Debug("Trying FQDN: %s", fqdn)
+			logger.Debug("First resolution failed for %s, trying FQDN %s: %v", target, fqdn, err)
 
-			// Try FQDN with new context
 			resolveCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel2()
 			ips, err = queryDNSDirect(resolveCtx2, fqdn)
 			if err != nil {
-				logger.Error("DNS resolution failed for %s and %s: %v (check if dnsmasq is running on 127.0.0.1:53)", target, fqdn, err)
-				return fmt.Errorf("failed to resolve hostname %s (tried %s and %s): %w", target, target, fqdn, err)
+				logger.Error("DNS resolution failed for %s and %s: %v", target, fqdn, err)
+				return nil, fmt.Errorf("failed to resolve hostname %s: %w", target, err)
 			}
 		}
 		if len(ips) == 0 {
-			return fmt.Errorf("no IP addresses found for hostname %s", target)
+			return nil, fmt.Errorf("no IP addresses found for hostname %s", target)
 		}
-		// Use the first IP address (prefer IPv4 if available)
+
 		var ip net.IP
 		for _, candidate := range ips {
 			if candidate.To4() != nil {
@@ -310,31 +300,32 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 				break
 			}
 		}
-		if ip == nil && len(ips) > 0 {
-			ip = ips[0] // Use first IPv6 if no IPv4
-		}
 		if ip == nil {
-			return fmt.Errorf("no valid IP address found for hostname %s", target)
+			ip = ips[0]
 		}
 		logger.Info("Resolved %s to %s", target, ip.String())
 		targetIP = ip.String()
 	}
 
-	// Use net.JoinHostPort to properly format IPv6 addresses
 	targetAddr := net.JoinHostPort(targetIP, fmt.Sprintf("%d", port))
-	logger.Info("Proxying SSH connection %s to %s (%s)", connectionID, targetAddr, target)
+	logger.Info("Dialing SSH target %s (%s)", targetAddr, target)
 
-	// Dial target using resolved IP
-	targetConn, err := net.DialTimeout("tcp", targetAddr, 10*time.Second)
+	// 5s dial: "no route to host" returns via ICMP in <1 s; reachable hosts
+	// complete the TCP handshake well within 5 s on a LAN.
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", targetAddr)
 	if err != nil {
-		return fmt.Errorf("failed to connect to target %s (%s): %w", targetAddr, target, err)
+		return nil, fmt.Errorf("failed to connect to target %s (%s): %w", targetAddr, target, err)
 	}
+	return conn, nil
+}
 
-	// Create connection record
+// ProxyEstablished forwards data between an already-connected targetConn and
+// the clientConn pipe.  Call this after DialTarget succeeds.
+func (p *Proxy) ProxyEstablished(ctx context.Context, connectionID string, targetConn net.Conn, clientConn net.Conn) error {
 	conn := &Connection{
 		ID:           connectionID,
-		Target:       target,
-		Port:         port,
+		Target:       connectionID,
 		ClientConn:   clientConn,
 		TargetConn:   targetConn,
 		CreatedAt:    time.Now(),
@@ -345,7 +336,6 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 	p.connections[connectionID] = conn
 	p.mu.Unlock()
 
-	// Cleanup on exit
 	defer func() {
 		p.mu.Lock()
 		delete(p.connections, connectionID)
@@ -354,26 +344,26 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 		logger.Info("Closed SSH proxy connection %s", connectionID)
 	}()
 
-	// Forward data bidirectionally
 	errChan := make(chan error, 2)
 
-	// Forward client -> target
 	go func() {
 		_, err := io.Copy(targetConn, clientConn)
 		if err != nil {
 			errChan <- fmt.Errorf("client->target copy error: %w", err)
+		} else {
+			errChan <- nil
 		}
 	}()
 
-	// Forward target -> client
 	go func() {
 		_, err := io.Copy(clientConn, targetConn)
 		if err != nil {
 			errChan <- fmt.Errorf("target->client copy error: %w", err)
+		} else {
+			errChan <- nil
 		}
 	}()
 
-	// Wait for connection to close or error
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -383,6 +373,16 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 		}
 		return nil
 	}
+}
+
+// ProxyConnection proxies an SSH connection to a target VPS.
+// Kept for backwards-compatibility; new callers should use DialTarget + ProxyEstablished.
+func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string, port int, clientConn net.Conn) error {
+	targetConn, err := p.DialTarget(ctx, target, port)
+	if err != nil {
+		return err
+	}
+	return p.ProxyEstablished(ctx, connectionID, targetConn, clientConn)
 }
 
 // GetConnection returns a connection by ID
