@@ -1,23 +1,32 @@
 <template>
     <OuiStack gap="md">
-      <OuiFlex justify="between" align="center">
+      <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
         <OuiStack gap="none">
-          <OuiText as="h3" size="md" weight="semibold"
+          <OuiText as="h3" size="sm" weight="semibold"
             >Environment Variables</OuiText
           >
-          <OuiText size="sm" color="secondary">
-            Manage environment variables for this deployment. Changes take
-            effect on the next deployment.
+          <OuiText size="xs" color="tertiary">
+            Changes take effect on the next deployment.
           </OuiText>
         </OuiStack>
         <OuiFlex gap="sm" align="center">
-          <OuiButton
-            variant="ghost"
-            size="sm"
-            @click="viewMode = viewMode === 'list' ? 'file' : 'list'"
-          >
-            {{ viewMode === "list" ? "File View" : "List View" }}
-          </OuiButton>
+          <!-- View toggle -->
+          <div class="flex rounded-lg border border-border-default overflow-hidden">
+            <button
+              class="px-3 py-1.5 text-xs font-medium transition-colors"
+              :class="viewMode === 'list' ? 'bg-surface-muted text-primary' : 'text-tertiary hover:text-secondary'"
+              @click="viewMode = 'list'"
+            >
+              List
+            </button>
+            <button
+              class="px-3 py-1.5 text-xs font-medium transition-colors border-l border-border-default"
+              :class="viewMode === 'file' ? 'bg-surface-muted text-primary' : 'text-tertiary hover:text-secondary'"
+              @click="viewMode = 'file'"
+            >
+              .env
+            </button>
+          </div>
           <OuiButton v-if="viewMode === 'list'" size="sm" @click="addVariable">
             Add Variable
           </OuiButton>
@@ -29,76 +38,88 @@
         justify="center"
         class="py-8"
       >
-        <OuiText color="secondary">Loading environment variables...</OuiText>
+        <OuiText color="tertiary">Loading environment variables...</OuiText>
       </OuiFlex>
 
       <!-- List View -->
-      <OuiStack v-if="viewMode === 'list'" gap="sm">
-        <OuiStack v-if="!isLoading && envVars.length === 0" gap="sm">
-          <OuiText color="secondary" class="text-center py-4">
-            No environment variables set. Click "Add Variable" to add one.
-          </OuiText>
-        </OuiStack>
-
-        <OuiStack v-else gap="sm">
-          <OuiCard
-            v-for="env in envVars"
-            :key="env._id"
-            variant="outline"
-            class="p-3"
-          >
-            <OuiStack gap="xs">
-              <OuiFlex align="center" gap="md">
-                <OuiInput
-                  :model-value="env.key"
-                  placeholder="KEY"
-                  class="flex-1 uppercase"
-                  size="sm"
-                  @update:model-value="(val) => handleKeyUpdate(env, val)"
-                />
-                <OuiInput
-                  v-model="env.value"
-                  placeholder="value"
-                  class="flex-1"
-                  size="sm"
-                  @update:model-value="markDirty"
-                />
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  color="danger"
-                  @click="removeVariable(env._id)"
-                >
-                  Remove
-                </OuiButton>
-              </OuiFlex>
-              <OuiFlex v-if="env.description !== undefined" align="center" gap="xs">
-                <OuiText size="xs" color="secondary" class="w-4 shrink-0">#</OuiText>
-                <OuiInput
-                  v-model="env.description"
-                  placeholder="Description (will be saved as comment)"
-                  size="sm"
-                  class="flex-1 text-xs"
-                  @update:model-value="markDirty"
-                />
-              </OuiFlex>
-              <OuiButton
-                v-else
-                variant="ghost"
-                size="xs"
-                @click="env.description = ''"
-                class="self-start"
-              >
-                + Add description
-              </OuiButton>
+      <template v-if="viewMode === 'list'">
+        <!-- Empty State -->
+        <OuiCard v-if="!isLoading && envVars.length === 0" variant="outline">
+          <OuiCardBody>
+            <OuiStack gap="md" align="center" class="py-6">
+              <div class="h-10 w-10 rounded-xl bg-surface-muted flex items-center justify-center">
+                <VariableIcon class="h-5 w-5 text-secondary" />
+              </div>
+              <OuiStack gap="xs" align="center">
+                <OuiText size="sm" weight="medium">No variables set</OuiText>
+                <OuiText size="xs" color="tertiary">Click "Add Variable" to get started.</OuiText>
+              </OuiStack>
             </OuiStack>
-          </OuiCard>
-        </OuiStack>
-      </OuiStack>
+          </OuiCardBody>
+        </OuiCard>
+
+        <!-- Variable Rows -->
+        <OuiCard v-else variant="outline">
+          <OuiStack gap="none" class="divide-y divide-border-default">
+            <div
+              v-for="env in envVars"
+              :key="env._id"
+              class="px-4 py-3 group hover:bg-surface-muted/30 transition-colors"
+            >
+              <OuiStack gap="xs">
+                <OuiFlex align="center" gap="sm">
+                  <OuiInput
+                    :model-value="env.key"
+                    placeholder="KEY"
+                    class="flex-1 uppercase font-mono"
+                    size="sm"
+                    @update:model-value="(val) => handleKeyUpdate(env, val)"
+                  />
+                  <OuiText size="xs" color="tertiary" class="shrink-0">=</OuiText>
+                  <OuiInput
+                    v-model="env.value"
+                    placeholder="value"
+                    class="flex-[2] font-mono"
+                    size="sm"
+                    @update:model-value="markDirty"
+                  />
+                  <OuiButton
+                    variant="ghost"
+                    size="xs"
+                    color="danger"
+                    @click="removeVariable(env._id)"
+                    class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  >
+                    <TrashIcon class="h-3.5 w-3.5" />
+                  </OuiButton>
+                </OuiFlex>
+                <OuiFlex v-if="env.description !== undefined" align="center" gap="xs" class="pl-1">
+                  <OuiText size="xs" color="tertiary" class="shrink-0">#</OuiText>
+                  <OuiInput
+                    v-model="env.description"
+                    placeholder="Description (saved as comment)"
+                    size="sm"
+                    class="flex-1 text-xs"
+                    @update:model-value="markDirty"
+                  />
+                </OuiFlex>
+                <OuiButton
+                  v-else
+                  variant="ghost"
+                  size="xs"
+                  @click="env.description = ''"
+                  class="self-start opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  + Add comment
+                </OuiButton>
+              </OuiStack>
+            </div>
+          </OuiStack>
+        </OuiCard>
+      </template>
 
       <!-- File View -->
       <OuiStack v-if="viewMode === 'file'" gap="xs">
-        <OuiText size="sm" weight="medium">Edit as .env file</OuiText>
         <OuiFileEditor
           v-model="envFileContent"
           language="dotenv"
@@ -109,13 +130,16 @@
           @save="saveEnvVars"
           @change="markDirty"
         />
-        <OuiText size="xs" color="secondary">
-          Format: KEY=value (one per line). Empty lines are ignored. Press
-          Ctrl+S to save.
+        <OuiText size="xs" color="tertiary">
+          Format: KEY=value (one per line). Press Ctrl+S to save.
         </OuiText>
       </OuiStack>
 
-      <OuiFlex justify="end">
+      <OuiFlex justify="between" align="center">
+        <OuiText v-if="envVars.length > 0" size="xs" color="tertiary">
+          {{ envVars.length }} variable{{ envVars.length !== 1 ? 's' : '' }}
+        </OuiText>
+        <div v-else />
         <OuiButton
           @click="saveEnvVars"
           :disabled="!isDirty || isLoading"
@@ -129,6 +153,7 @@
 
 <script setup lang="ts">
   import { ref, watch, onMounted, computed } from "vue";
+  import { TrashIcon, VariableIcon } from "@heroicons/vue/24/outline";
   import { useConnectClient } from "~/lib/connect-client";
   import { DeploymentService } from "@obiente/proto";
   import type { Deployment } from "@obiente/proto";

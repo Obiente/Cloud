@@ -1,52 +1,49 @@
 <template>
-  <OuiCard v-if="usageData && usageData.estimatedMonthly && usageData.current">
-    <OuiCardHeader>
-      <OuiFlex justify="between" align="center">
-        <OuiStack gap="xs">
-          <OuiText size="lg" weight="bold">Estimated Monthly Cost</OuiText>
-          <OuiText size="xs" color="muted">
-            Cost breakdown by resource type
-          </OuiText>
-        </OuiStack>
-      </OuiFlex>
-    </OuiCardHeader>
+  <OuiCard v-if="usageData && usageData.estimatedMonthly && usageData.current" variant="outline">
     <OuiCardBody>
       <OuiStack gap="md">
-        <OuiFlex align="center" justify="between" class="pb-3 border-b border-border-muted">
-          <OuiStack gap="xs">
-            <OuiText size="sm" color="muted">Total Estimated</OuiText>
-            <OuiText size="2xl" weight="bold" color="primary">
-              {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
-            </OuiText>
-          </OuiStack>
-          <OuiText size="xs" color="muted">
+        <OuiFlex justify="between" align="center">
+          <OuiFlex align="center" gap="sm">
+            <BanknotesIcon class="h-4 w-4 text-success" />
+            <OuiText size="sm" weight="semibold">Cost Estimate</OuiText>
+          </OuiFlex>
+          <OuiText size="xs" color="tertiary">
             Current: {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
           </OuiText>
         </OuiFlex>
-        <OuiGrid :cols="{ sm: 1, md: 2 }" gap="sm">
-          <OuiBox
+
+        <!-- Total -->
+        <OuiText size="2xl" weight="semibold">
+          {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
+          <OuiText as="span" size="xs" color="tertiary"> /mo projected</OuiText>
+        </OuiText>
+
+        <!-- Stacked bar -->
+        <div v-if="costBreakdown.length > 0" class="h-2 rounded-full bg-surface-muted overflow-hidden flex">
+          <div
             v-for="cost in costBreakdown"
             :key="cost.label"
-            p="sm"
-            rounded="lg"
-            class="bg-surface-muted/40 ring-1 ring-border-muted"
+            class="h-full first:rounded-l-full last:rounded-r-full"
+            :class="cost.color"
+            :style="{ width: cost.pct + '%' }"
+          />
+        </div>
+
+        <!-- Legend -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <OuiFlex
+            v-for="cost in costBreakdown"
+            :key="cost.label"
+            align="center"
+            gap="sm"
           >
-            <OuiFlex align="center" justify="between" gap="md">
-              <OuiFlex align="center" gap="sm" class="flex-1">
-                <OuiBox
-                  class="w-3 h-3 rounded-full"
-                  :class="cost.color"
-                />
-                <OuiText size="sm" weight="medium" color="primary">
-                  {{ cost.label }}
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="sm" weight="semibold" color="primary">
-                {{ cost.value }}
-              </OuiText>
-            </OuiFlex>
-          </OuiBox>
-        </OuiGrid>
+            <span class="h-2 w-2 rounded-full shrink-0" :class="cost.color" />
+            <OuiStack gap="none">
+              <OuiText size="xs" color="tertiary">{{ cost.label }}</OuiText>
+              <OuiText size="sm" weight="semibold">{{ cost.value }}</OuiText>
+            </OuiStack>
+          </OuiFlex>
+        </div>
       </OuiStack>
     </OuiCardBody>
   </OuiCard>
@@ -54,6 +51,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { BanknotesIcon } from "@heroicons/vue/24/outline";
 
 interface Props {
   usageData: any;
@@ -73,35 +71,20 @@ const formatCurrency = (amount: number) =>
 const costBreakdown = computed(() => {
   if (!props.usageData?.estimatedMonthly) return [];
   const estimated = props.usageData.estimatedMonthly;
-  const breakdown = [];
-  
   const totalCents = Number(estimated.estimatedCostCents);
-  if (totalCents > 0) {
-    // Use actual cost breakdown if available, otherwise estimate
-    breakdown.push(
-      { 
-        label: "CPU", 
-        value: formatCurrency(estimated.cpuCostCents ? Number(estimated.cpuCostCents) / 100 : totalCents * 0.4 / 100), 
-        color: "bg-accent-primary" 
-      },
-      { 
-        label: "Memory", 
-        value: formatCurrency(estimated.memoryCostCents ? Number(estimated.memoryCostCents) / 100 : totalCents * 0.3 / 100), 
-        color: "bg-success" 
-      },
-      { 
-        label: "Bandwidth", 
-        value: formatCurrency(estimated.bandwidthCostCents ? Number(estimated.bandwidthCostCents) / 100 : totalCents * 0.2 / 100), 
-        color: "bg-accent-secondary" 
-      },
-      { 
-        label: "Storage", 
-        value: formatCurrency(estimated.storageCostCents ? Number(estimated.storageCostCents) / 100 : totalCents * 0.1 / 100), 
-        color: "bg-warning" 
-      },
-    );
-  }
-  
-  return breakdown;
+  if (totalCents <= 0) return [];
+
+  const cpu = estimated.cpuCostCents ? Number(estimated.cpuCostCents) : totalCents * 0.4;
+  const mem = estimated.memoryCostCents ? Number(estimated.memoryCostCents) : totalCents * 0.3;
+  const bw = estimated.bandwidthCostCents ? Number(estimated.bandwidthCostCents) : totalCents * 0.2;
+  const stor = estimated.storageCostCents ? Number(estimated.storageCostCents) : totalCents * 0.1;
+  const sum = cpu + mem + bw + stor;
+
+  return [
+    { label: "CPU", value: formatCurrency(cpu / 100), color: "bg-accent-primary", pct: Math.round((cpu / sum) * 100) },
+    { label: "Memory", value: formatCurrency(mem / 100), color: "bg-accent-info", pct: Math.round((mem / sum) * 100) },
+    { label: "Bandwidth", value: formatCurrency(bw / 100), color: "bg-success", pct: Math.round((bw / sum) * 100) },
+    { label: "Storage", value: formatCurrency(stor / 100), color: "bg-warning", pct: Math.round((stor / sum) * 100) },
+  ];
 });
 </script>

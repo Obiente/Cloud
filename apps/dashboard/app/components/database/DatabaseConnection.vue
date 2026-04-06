@@ -1,186 +1,166 @@
 <template>
-  <OuiStack gap="lg">
-    <OuiCard>
-      <OuiCardHeader>
-        <OuiCardTitle>Connection Information</OuiCardTitle>
-        <OuiCardDescription>
-          Connection details for your database
-        </OuiCardDescription>
-      </OuiCardHeader>
+  <OuiStack gap="md">
+    <!-- Loading State -->
+    <OuiCard v-if="loading" variant="outline">
       <OuiCardBody>
-        <OuiStack gap="md">
-          <!-- Loading State -->
-          <OuiStack v-if="loading" align="center" gap="md" class="py-10">
-            <OuiSpinner size="lg" />
-            <OuiText color="secondary">Loading connection info...</OuiText>
-          </OuiStack>
-
-          <!-- Connection Info -->
-          <OuiStack v-else-if="connectionInfo" gap="lg">
-            <!-- Quick Connection Info -->
-            <OuiGrid cols="1" cols-md="2" gap="md">
-              <OuiStack gap="sm">
-                <OuiFlex justify="between" align="center">
-                  <OuiText weight="semibold" size="sm">Host</OuiText>
-                  <OuiButton
-                    variant="ghost"
-                    size="xs"
-                    @click="copyToClipboard(connectionInfo.host, 'Host')"
-                  >
-                    Copy
-                  </OuiButton>
-                </OuiFlex>
-                <OuiCode :code="connectionInfo.host" />
-              </OuiStack>
-
-              <OuiStack gap="sm">
-                <OuiFlex justify="between" align="center">
-                  <OuiText weight="semibold" size="sm">Port</OuiText>
-                  <OuiButton
-                    variant="ghost"
-                    size="xs"
-                    @click="copyToClipboard(String(connectionInfo.port), 'Port')"
-                  >
-                    Copy
-                  </OuiButton>
-                </OuiFlex>
-                <OuiCode :code="String(connectionInfo.port)" />
-              </OuiStack>
-
-              <OuiStack gap="sm">
-                <OuiFlex justify="between" align="center">
-                  <OuiText weight="semibold" size="sm">Database Name</OuiText>
-                  <OuiButton
-                    variant="ghost"
-                    size="xs"
-                    @click="copyToClipboard(connectionInfo.databaseName, 'Database name')"
-                  >
-                    Copy
-                  </OuiButton>
-                </OuiFlex>
-                <OuiCode :code="connectionInfo.databaseName" />
-              </OuiStack>
-
-              <OuiStack gap="sm">
-                <OuiFlex justify="between" align="center">
-                  <OuiText weight="semibold" size="sm">Username</OuiText>
-                  <OuiButton
-                    variant="ghost"
-                    size="xs"
-                    @click="copyToClipboard(connectionInfo.username, 'Username')"
-                  >
-                    Copy
-                  </OuiButton>
-                </OuiFlex>
-                <OuiCode :code="connectionInfo.username" />
-              </OuiStack>
-            </OuiGrid>
-
-            <!-- Password Section -->
-            <OuiStack gap="sm">
-              <OuiFlex justify="between" align="center">
-                <OuiText weight="semibold">Password</OuiText>
-                <OuiButton variant="outline" size="sm" @click="handleResetPassword">
-                  Reset Password
-                </OuiButton>
-              </OuiFlex>
-              <OuiAlert color="warning">
-                <OuiText size="sm">
-                  Password is only shown once during database creation or after a password reset.
-                  If you've lost your password, use the "Reset Password" button above.
-                </OuiText>
-              </OuiAlert>
-            </OuiStack>
-
-            <!-- Connection Strings -->
-            <OuiStack gap="sm">
-              <OuiText weight="semibold">Connection Strings</OuiText>
-              <OuiStack gap="md">
-                <OuiStack gap="xs" v-if="connectionInfo.postgresqlUrl">
-                  <OuiFlex justify="between" align="center">
-                    <OuiText size="sm" color="secondary">PostgreSQL</OuiText>
-                    <OuiButton
-                      variant="ghost"
-                      size="xs"
-                      @click="copyToClipboard(connectionInfo.postgresqlUrl, 'PostgreSQL connection string')"
-                    >
-                      Copy
-                    </OuiButton>
-                  </OuiFlex>
-                  <OuiCode :code="connectionInfo.postgresqlUrl" class="text-xs break-all font-mono" />
-                </OuiStack>
-
-                <OuiStack gap="xs" v-if="connectionInfo.mysqlUrl">
-                  <OuiFlex justify="between" align="center">
-                    <OuiText size="sm" color="secondary">MySQL</OuiText>
-                    <OuiButton
-                      variant="ghost"
-                      size="xs"
-                      @click="copyToClipboard(connectionInfo.mysqlUrl, 'MySQL connection string')"
-                    >
-                      Copy
-                    </OuiButton>
-                  </OuiFlex>
-                  <OuiCode :code="connectionInfo.mysqlUrl" class="text-xs break-all font-mono" />
-                </OuiStack>
-
-                <OuiStack gap="xs" v-if="connectionInfo.mongodbUrl">
-                  <OuiFlex justify="between" align="center">
-                    <OuiText size="sm" color="secondary">MongoDB</OuiText>
-                    <OuiButton
-                      variant="ghost"
-                      size="xs"
-                      @click="copyToClipboard(connectionInfo.mongodbUrl, 'MongoDB connection string')"
-                    >
-                      Copy
-                    </OuiButton>
-                  </OuiFlex>
-                  <OuiCode :code="connectionInfo.mongodbUrl" class="text-xs break-all font-mono" />
-                </OuiStack>
-
-                <OuiStack gap="xs" v-if="connectionInfo.redisUrl">
-                  <OuiFlex justify="between" align="center">
-                    <OuiText size="sm" color="secondary">Redis</OuiText>
-                    <OuiButton
-                      variant="ghost"
-                      size="xs"
-                      @click="copyToClipboard(connectionInfo.redisUrl, 'Redis connection string')"
-                    >
-                      Copy
-                    </OuiButton>
-                  </OuiFlex>
-                  <OuiCode :code="connectionInfo.redisUrl" class="text-xs break-all font-mono" />
-                </OuiStack>
-              </OuiStack>
-            </OuiStack>
-
-            <!-- Connection Instructions -->
-            <OuiAlert color="info">
-              <OuiStack gap="sm">
-                <OuiText size="sm" weight="semibold">Connection Instructions</OuiText>
-                <OuiText size="sm" class="whitespace-pre-line">{{ connectionInfo.connectionInstructions }}</OuiText>
-              </OuiStack>
-            </OuiAlert>
-
-            <!-- SSL Info -->
-            <OuiAlert v-if="connectionInfo.sslRequired" color="default">
-              <OuiStack gap="xs">
-                <OuiText size="sm" weight="semibold">SSL/TLS Required</OuiText>
-                <OuiText size="sm">This database requires encrypted connections for security.</OuiText>
-              </OuiStack>
-            </OuiAlert>
-          </OuiStack>
-
-          <!-- Error State -->
-          <ErrorAlert v-else-if="error" :error="error" title="Failed to load connection info" />
+        <OuiStack align="center" gap="md" class="py-10">
+          <OuiSpinner size="lg" />
+          <OuiText size="sm" color="tertiary">Loading connection info...</OuiText>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>
+
+    <!-- Error State -->
+    <ErrorAlert v-else-if="error" :error="error" title="Failed to load connection info" />
+
+    <!-- Connection Info -->
+    <template v-else-if="connectionInfo">
+      <!-- Connection Details Grid -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Connection Details</OuiText>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-border-default rounded-lg overflow-hidden border border-border-default">
+              <!-- Host -->
+              <div class="bg-surface-base px-4 py-3 group">
+                <OuiFlex justify="between" align="start">
+                  <OuiStack gap="xs">
+                    <OuiText size="xs" color="tertiary">Host</OuiText>
+                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.host }}</OuiText>
+                  </OuiStack>
+                  <button
+                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                    @click="copyToClipboard(connectionInfo.host, 'Host')"
+                  >
+                    <ClipboardIcon class="h-3.5 w-3.5" />
+                  </button>
+                </OuiFlex>
+              </div>
+
+              <!-- Port -->
+              <div class="bg-surface-base px-4 py-3 group">
+                <OuiFlex justify="between" align="start">
+                  <OuiStack gap="xs">
+                    <OuiText size="xs" color="tertiary">Port</OuiText>
+                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.port }}</OuiText>
+                  </OuiStack>
+                  <button
+                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                    @click="copyToClipboard(String(connectionInfo.port), 'Port')"
+                  >
+                    <ClipboardIcon class="h-3.5 w-3.5" />
+                  </button>
+                </OuiFlex>
+              </div>
+
+              <!-- Database Name -->
+              <div class="bg-surface-base px-4 py-3 group">
+                <OuiFlex justify="between" align="start">
+                  <OuiStack gap="xs">
+                    <OuiText size="xs" color="tertiary">Database Name</OuiText>
+                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.databaseName }}</OuiText>
+                  </OuiStack>
+                  <button
+                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                    @click="copyToClipboard(connectionInfo.databaseName, 'Database name')"
+                  >
+                    <ClipboardIcon class="h-3.5 w-3.5" />
+                  </button>
+                </OuiFlex>
+              </div>
+
+              <!-- Username -->
+              <div class="bg-surface-base px-4 py-3 group">
+                <OuiFlex justify="between" align="start">
+                  <OuiStack gap="xs">
+                    <OuiText size="xs" color="tertiary">Username</OuiText>
+                    <OuiText size="sm" weight="medium" class="font-mono">{{ connectionInfo.username }}</OuiText>
+                  </OuiStack>
+                  <button
+                    class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                    @click="copyToClipboard(connectionInfo.username, 'Username')"
+                  >
+                    <ClipboardIcon class="h-3.5 w-3.5" />
+                  </button>
+                </OuiFlex>
+              </div>
+            </div>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Password -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="semibold">Password</OuiText>
+              <OuiText size="xs" color="tertiary">
+                Only shown during creation or after reset.
+              </OuiText>
+            </OuiStack>
+            <OuiButton variant="outline" size="sm" @click="handleResetPassword">
+              Reset Password
+            </OuiButton>
+          </OuiFlex>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Connection Strings -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Connection Strings</OuiText>
+
+            <OuiStack gap="sm">
+              <template v-for="cs in connectionStrings" :key="cs.label">
+                <div class="group rounded-lg border border-border-default overflow-hidden">
+                  <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
+                    <OuiText size="xs" weight="medium">{{ cs.label }}</OuiText>
+                    <button
+                      class="p-1 rounded text-tertiary hover:text-primary transition-colors"
+                      @click="copyToClipboard(cs.value, cs.label + ' connection string')"
+                    >
+                      <ClipboardIcon class="h-3.5 w-3.5" />
+                    </button>
+                  </OuiFlex>
+                  <div class="px-3 py-2.5">
+                    <OuiText size="xs" class="font-mono break-all text-secondary">{{ cs.value }}</OuiText>
+                  </div>
+                </div>
+              </template>
+            </OuiStack>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Connection Instructions -->
+      <OuiCard v-if="connectionInfo.connectionInstructions" variant="outline" status="info">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">Connection Instructions</OuiText>
+            <OuiText size="xs" color="tertiary" class="whitespace-pre-line">{{ connectionInfo.connectionInstructions }}</OuiText>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- SSL -->
+      <OuiCard v-if="connectionInfo.sslRequired" variant="outline" status="success">
+        <OuiCardBody>
+          <OuiFlex align="center" gap="sm">
+            <ShieldCheckIcon class="h-4 w-4 text-success shrink-0" />
+            <OuiText size="sm">SSL/TLS connections required</OuiText>
+          </OuiFlex>
+        </OuiCardBody>
+      </OuiCard>
+    </template>
   </OuiStack>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { ClipboardIcon, ShieldCheckIcon } from "@heroicons/vue/24/outline";
 import { DatabaseService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
@@ -198,6 +178,16 @@ const dbClient = useConnectClient(DatabaseService);
 const loading = ref(false);
 const connectionInfo = ref<any>(null);
 const error = ref<any>(null);
+
+const connectionStrings = computed(() => {
+  if (!connectionInfo.value) return [];
+  const strings: { label: string; value: string }[] = [];
+  if (connectionInfo.value.postgresqlUrl) strings.push({ label: 'PostgreSQL', value: connectionInfo.value.postgresqlUrl });
+  if (connectionInfo.value.mysqlUrl) strings.push({ label: 'MySQL', value: connectionInfo.value.mysqlUrl });
+  if (connectionInfo.value.mongodbUrl) strings.push({ label: 'MongoDB', value: connectionInfo.value.mongodbUrl });
+  if (connectionInfo.value.redisUrl) strings.push({ label: 'Redis', value: connectionInfo.value.redisUrl });
+  return strings;
+});
 
 async function copyToClipboard(text: string, label: string) {
   try {

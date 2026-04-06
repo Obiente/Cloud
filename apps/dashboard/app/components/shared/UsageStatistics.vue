@@ -1,87 +1,117 @@
 <template>
-  <OuiCard v-if="usageData && usageData.current">
-    <OuiCardHeader>
-      <OuiFlex justify="between" align="center">
-        <OuiStack gap="xs">
-          <OuiText size="lg" weight="bold">Monthly Usage</OuiText>
-          <OuiText size="xs" color="muted">
-            Current month resource usage and estimated costs
-          </OuiText>
-        </OuiStack>
-        <OuiBadge variant="secondary">
-          {{ usageData.month }}
-        </OuiBadge>
-      </OuiFlex>
-    </OuiCardHeader>
+  <OuiCard v-if="usageData && usageData.current" variant="outline">
     <OuiCardBody>
-      <OuiGrid :cols="{ sm: 1, md: 2, lg: 4 }" gap="lg">
-        <!-- CPU Usage -->
-        <OuiStack gap="sm">
-          <OuiFlex align="center" justify="between">
-            <OuiText size="sm" weight="medium" color="primary">CPU</OuiText>
-            <OuiText size="xs" color="muted">
-              {{ formatCPUUsage(Number(usageData.current.cpuCoreSeconds)) }}
-            </OuiText>
+      <OuiStack gap="md">
+        <OuiFlex justify="between" align="center">
+          <OuiFlex align="center" gap="sm">
+            <ChartBarIcon class="h-4 w-4 text-accent-primary" />
+            <OuiText size="sm" weight="semibold">Monthly Usage</OuiText>
           </OuiFlex>
-          <OuiText size="xs" color="muted">
-            {{ formatCurrency((usageData.current.cpuCostCents ? Number(usageData.current.cpuCostCents) : 0) / 100) }} estimated
-          </OuiText>
-        </OuiStack>
+          <OuiBadge variant="secondary" size="xs">
+            {{ usageData.month }}
+          </OuiBadge>
+        </OuiFlex>
 
-        <!-- Memory Usage -->
-        <OuiStack gap="sm">
-          <OuiFlex align="center" justify="between">
-            <OuiText size="sm" weight="medium" color="primary">Memory</OuiText>
-            <OuiText size="xs" color="muted">
-              <OuiByte :value="Number(usageData.current.memoryByteSeconds) / 3600" unit-display="short" />/hr avg
-            </OuiText>
-          </OuiFlex>
-          <OuiText size="xs" color="muted">
-            {{ formatUptime(Number(usageData.current.uptimeSeconds)) }} uptime
-          </OuiText>
-        </OuiStack>
+        <OuiGrid :cols="{ sm: 2, lg: 4 }" gap="sm">
+          <!-- CPU -->
+          <div class="rounded-lg border border-border-default p-3">
+            <OuiStack gap="sm">
+              <OuiFlex align="center" gap="xs">
+                <CpuChipIcon class="h-3 w-3 text-accent-primary" />
+                <OuiText size="xs" color="tertiary">CPU</OuiText>
+              </OuiFlex>
+              <OuiText size="lg" weight="semibold">
+                {{ formatCPUUsage(Number(usageData.current.cpuCoreSeconds)) }}
+              </OuiText>
+              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
+                <div class="h-full rounded-full bg-accent-primary/60" style="width: 40%" />
+              </div>
+              <OuiText size="xs" color="tertiary">
+                {{ formatCurrency((usageData.current.cpuCostCents ? Number(usageData.current.cpuCostCents) : 0) / 100) }}
+              </OuiText>
+            </OuiStack>
+          </div>
 
-        <!-- Bandwidth Usage -->
-        <OuiStack gap="sm">
-          <OuiFlex align="center" justify="between">
-            <OuiText size="sm" weight="medium" color="primary">Bandwidth</OuiText>
-            <OuiText size="xs" color="muted">
-              <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" base="decimal" />
-            </OuiText>
-          </OuiFlex>
-          <OuiText size="xs" color="muted">
-            <template v-if="usageData.current.requestCount !== undefined && Number(usageData.current.requestCount) > 0">
-              {{ formatNumber(Number(usageData.current.requestCount)) }} requests
-            </template>
-            <template v-else>
-              Total bandwidth usage
-            </template>
-          </OuiText>
-        </OuiStack>
+          <!-- Memory -->
+          <div class="rounded-lg border border-border-default p-3">
+            <OuiStack gap="sm">
+              <OuiFlex align="center" gap="xs">
+                <CircleStackIcon class="h-3 w-3 text-accent-info" />
+                <OuiText size="xs" color="tertiary">Memory</OuiText>
+              </OuiFlex>
+              <OuiText size="lg" weight="semibold">
+                <OuiByte :value="Number(usageData.current.memoryByteSeconds) / 3600" unit-display="short" />/hr
+              </OuiText>
+              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
+                <div class="h-full rounded-full bg-accent-info/60" style="width: 55%" />
+              </div>
+              <OuiText size="xs" color="tertiary">
+                {{ formatUptime(Number(usageData.current.uptimeSeconds)) }} uptime
+              </OuiText>
+            </OuiStack>
+          </div>
 
-        <!-- Storage Usage -->
-        <OuiStack gap="sm">
-          <OuiFlex align="center" justify="between">
-            <OuiText size="sm" weight="medium" color="primary">Storage</OuiText>
-            <OuiText size="xs" color="muted">
-              <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
-            </OuiText>
-          </OuiFlex>
-          <OuiText size="xs" color="muted">
-            <template v-if="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0">
-              {{ formatNumber(Number(usageData.current.errorCount)) }} errors
-            </template>
-            <template v-else>
-              Storage usage
-            </template>
-          </OuiText>
-        </OuiStack>
-      </OuiGrid>
+          <!-- Bandwidth -->
+          <div class="rounded-lg border border-border-default p-3">
+            <OuiStack gap="sm">
+              <OuiFlex align="center" gap="xs">
+                <ArrowsRightLeftIcon class="h-3 w-3 text-success" />
+                <OuiText size="xs" color="tertiary">Bandwidth</OuiText>
+              </OuiFlex>
+              <OuiText size="lg" weight="semibold">
+                <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" base="decimal" />
+              </OuiText>
+              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
+                <div class="h-full rounded-full bg-success/60" style="width: 30%" />
+              </div>
+              <OuiText size="xs" color="tertiary">
+                <template v-if="usageData.current.requestCount !== undefined && Number(usageData.current.requestCount) > 0">
+                  {{ formatNumber(Number(usageData.current.requestCount)) }} requests
+                </template>
+                <template v-else>
+                  Total transfer
+                </template>
+              </OuiText>
+            </OuiStack>
+          </div>
+
+          <!-- Storage -->
+          <div class="rounded-lg border border-border-default p-3">
+            <OuiStack gap="sm">
+              <OuiFlex align="center" gap="xs">
+                <ArchiveBoxIcon class="h-3 w-3 text-accent-secondary" />
+                <OuiText size="xs" color="tertiary">Storage</OuiText>
+              </OuiFlex>
+              <OuiText size="lg" weight="semibold">
+                <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
+              </OuiText>
+              <div class="h-1 rounded-full bg-surface-muted overflow-hidden">
+                <div class="h-full rounded-full bg-accent-secondary/60" style="width: 25%" />
+              </div>
+              <OuiText size="xs" color="tertiary">
+                <template v-if="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0">
+                  {{ formatNumber(Number(usageData.current.errorCount)) }} errors
+                </template>
+                <template v-else>
+                  Disk usage
+                </template>
+              </OuiText>
+            </OuiStack>
+          </div>
+        </OuiGrid>
+      </OuiStack>
     </OuiCardBody>
   </OuiCard>
 </template>
 
 <script setup lang="ts">
+import {
+  ChartBarIcon,
+  CpuChipIcon,
+  CircleStackIcon,
+  ArrowsRightLeftIcon,
+  ArchiveBoxIcon,
+} from "@heroicons/vue/24/outline";
 import OuiByte from "~/components/oui/Byte.vue";
 
 interface Props {

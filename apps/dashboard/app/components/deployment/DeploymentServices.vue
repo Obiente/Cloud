@@ -1,79 +1,75 @@
 <template>
-  <OuiCardBody>
-    <OuiStack gap="xl">
-      <!-- Header -->
-      <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
-        <OuiStack gap="xs">
-          <OuiText as="h3" size="lg" weight="semibold">Services</OuiText>
-          <OuiText size="sm" color="secondary">
-            Manage individual services and containers for this compose deployment
-          </OuiText>
-        </OuiStack>
-        <OuiButton
-          variant="ghost"
-          size="sm"
-          @click="refresh"
-          :disabled="isLoading"
-          class="gap-2"
-        >
-          <ArrowPathIcon
-            class="h-4 w-4"
-            :class="{ 'animate-spin': isLoading }"
-          />
-          <OuiText as="span" size="xs" weight="medium">Refresh</OuiText>
-        </OuiButton>
-      </OuiFlex>
+  <OuiStack gap="md">
+    <!-- Header -->
+    <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+      <OuiStack gap="xs">
+        <OuiText as="h3" size="sm" weight="semibold">Services</OuiText>
+        <OuiText size="xs" color="tertiary">
+          Manage individual services and containers for this compose deployment
+        </OuiText>
+      </OuiStack>
+      <OuiButton
+        variant="ghost"
+        size="sm"
+        @click="refresh"
+        :disabled="isLoading"
+        class="gap-1.5"
+      >
+        <ArrowPathIcon
+          class="h-3.5 w-3.5"
+          :class="{ 'animate-spin': isLoading }"
+        />
+        Refresh
+      </OuiButton>
+    </OuiFlex>
 
-      <!-- Loading State -->
-      <div v-if="isLoading && services.length === 0" class="flex justify-center py-12">
-        <OuiStack gap="sm" align="center">
-          <ArrowPathIcon class="h-6 w-6 text-secondary animate-spin" />
-          <OuiText size="sm" color="secondary">Loading services...</OuiText>
-        </OuiStack>
-      </div>
+    <!-- Loading State -->
+    <div v-if="isLoading && services.length === 0" class="flex justify-center py-12">
+      <OuiStack gap="sm" align="center">
+        <ArrowPathIcon class="h-5 w-5 text-secondary animate-spin" />
+        <OuiText size="sm" color="tertiary">Loading services...</OuiText>
+      </OuiStack>
+    </div>
 
-      <!-- No Services -->
-      <OuiCard v-if="!isLoading && services.length === 0" variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="sm" align="center" class="py-8">
-            <CubeIcon class="h-12 w-12 text-secondary" />
-            <OuiText size="sm" color="secondary">
-              No services found. This deployment may not be a compose deployment.
-            </OuiText>
+    <!-- No Services -->
+    <OuiCard v-if="!isLoading && services.length === 0" variant="outline">
+      <OuiCardBody>
+        <OuiStack gap="md" align="center" class="py-8">
+          <div class="h-12 w-12 rounded-xl bg-surface-muted flex items-center justify-center">
+            <CubeIcon class="h-6 w-6 text-secondary" />
+          </div>
+          <OuiStack gap="xs" align="center">
+            <OuiText size="sm" weight="semibold">No services found</OuiText>
+            <OuiText size="xs" color="tertiary">This deployment may not be a compose deployment.</OuiText>
           </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
 
-      <!-- Services List -->
-      <OuiStack v-else gap="lg">
-        <div
-          v-for="service in services"
-          :key="service.name"
-          class="border border-border-default rounded-xl overflow-hidden"
-        >
-          <OuiCard variant="default">
+    <!-- Services List -->
+    <OuiStack v-else gap="sm">
+      <OuiCard
+        v-for="service in services"
+        :key="service.name"
+        variant="outline"
+        :status="service.hasRunning ? (service.runningCount === service.containerCount ? 'success' : 'warning') : undefined"
+      >
             <!-- Service Header -->
-            <OuiCardBody class="p-0">
-              <div class="p-6 border-b border-border-default">
+            <OuiCardBody>
                 <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
                   <OuiStack gap="sm" class="flex-1 min-w-0">
-                    <OuiFlex align="center" gap="md">
-                      <OuiBox
-                        p="xs"
-                        rounded="lg"
-                        bg="accent-primary"
-                        class="bg-primary/10 ring-1 ring-primary/20 shrink-0"
-                      >
-                        <CubeIcon class="w-5 h-5 text-primary" />
-                      </OuiBox>
-                      <OuiText as="h4" size="md" weight="semibold" truncate>
+                    <OuiFlex align="center" gap="sm">
+                      <div class="h-6 w-6 rounded-md bg-surface-muted flex items-center justify-center shrink-0">
+                        <CubeIcon class="h-3 w-3 text-accent-primary" />
+                      </div>
+                      <OuiText as="h4" size="sm" weight="semibold" truncate>
                         {{ service.name }}
                       </OuiText>
                     </OuiFlex>
-                    <OuiFlex align="center" gap="md" wrap="wrap">
+                    <OuiFlex align="center" gap="sm" wrap="wrap">
                       <OuiBadge
                         :variant="getServiceStatusVariant(service.status)"
-                        size="sm"
+                        size="xs"
                       >
                         <span
                           class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
@@ -83,12 +79,11 @@
                           as="span"
                           size="xs"
                           weight="medium"
-                          transform="uppercase"
                         >
                           {{ service.status }}
                         </OuiText>
                       </OuiBadge>
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         {{ service.containerCount }}
                         {{
                           service.containerCount === 1
@@ -99,7 +94,7 @@
                       <OuiText
                         v-if="service.containerCount > 0"
                         size="xs"
-                        color="secondary"
+                        color="tertiary"
                       >
                         {{ service.runningCount }}/{{ service.containerCount }}
                         {{
@@ -122,7 +117,7 @@
                       class="gap-2"
                       title="Open Terminal"
                     >
-                      <CommandLineIcon class="h-4 w-4" />
+                      <CommandLineIcon class="h-3.5 w-3.5" />
                       <OuiText as="span" size="xs" weight="medium" class="hidden sm:inline">Terminal</OuiText>
                     </OuiButton>
                     <OuiButton
@@ -132,7 +127,7 @@
                       class="gap-2"
                       title="Open Filesystem"
                     >
-                      <FolderIcon class="h-4 w-4" />
+                      <FolderIcon class="h-3.5 w-3.5" />
                       <OuiText as="span" size="xs" weight="medium" class="hidden sm:inline">Files</OuiText>
                     </OuiButton>
                     <OuiButton
@@ -142,7 +137,7 @@
                       class="gap-2"
                       title="Configure Routing"
                     >
-                      <GlobeAltIcon class="h-4 w-4" />
+                      <GlobeAltIcon class="h-3.5 w-3.5" />
                       <OuiText as="span" size="xs" weight="medium" class="hidden sm:inline">Routing</OuiText>
                     </OuiButton>
                     <OuiButton
@@ -154,7 +149,7 @@
                       :disabled="isProcessingService(service.name)"
                       class="gap-2"
                     >
-                      <StopIcon class="h-4 w-4" />
+                      <StopIcon class="h-3.5 w-3.5" />
                       <OuiText as="span" size="xs" weight="medium" class="hidden sm:inline">Stop All</OuiText>
                     </OuiButton>
                     <OuiButton
@@ -166,7 +161,7 @@
                       :disabled="isProcessingService(service.name)"
                       class="gap-2"
                     >
-                      <PlayIcon class="h-4 w-4" />
+                      <PlayIcon class="h-3.5 w-3.5" />
                       <OuiText as="span" size="xs" weight="medium" class="hidden sm:inline">Start All</OuiText>
                     </OuiButton>
                     <OuiButton
@@ -178,7 +173,7 @@
                       class="gap-2"
                     >
                       <ArrowPathIcon
-                        class="h-4 w-4"
+                        class="h-3.5 w-3.5"
                         :class="{
                           'animate-spin': isProcessingService(service.name),
                         }"
@@ -189,53 +184,49 @@
                     </OuiButton>
                   </OuiFlex>
                 </OuiFlex>
-              </div>
+            </OuiCardBody>
 
               <!-- Containers List -->
-              <div v-if="service.containers.length > 0" class="divide-y divide-border-default">
+              <div v-if="service.containers.length > 0" class="divide-y divide-border-default border-t border-border-default">
                 <div
                   v-for="container in service.containers"
                   :key="container.containerId"
-                  class="p-4 hover:bg-surface-subtle/50 transition-colors"
+                  class="px-4 py-3 hover:bg-surface-subtle/50 transition-colors group"
                 >
-                  <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
-                    <OuiStack gap="xs" class="flex-1 min-w-0">
-                      <OuiFlex align="center" gap="sm">
-                        <OuiBadge
-                          :variant="getContainerStatusVariant(container.status)"
-                          size="sm"
-                        >
-                          <span
-                            class="inline-flex h-1 w-1 rounded-full mr-1"
-                            :class="getContainerStatusDotClass(container.status)"
-                          />
-                          <OuiText as="span" size="xs" weight="medium">
-                            {{ container.status }}
-                          </OuiText>
-                        </OuiBadge>
-                        <OuiText size="xs" color="secondary" class="font-mono">
-                          {{ container.containerId.substring(0, 12) }}
-                        </OuiText>
-                        <OuiText
-                          v-if="container.port"
-                          size="xs"
-                          color="secondary"
-                        >
-                          Port {{ container.port }}
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiText size="xs" color="secondary">
-                        Updated
+                  <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
+                    <OuiFlex align="center" gap="sm" class="flex-1 min-w-0">
+                      <span
+                        class="inline-flex h-2 w-2 rounded-full shrink-0"
+                        :class="getContainerStatusDotClass(container.status)"
+                      />
+                      <OuiText size="xs" class="font-mono text-secondary">
+                        {{ container.containerId.substring(0, 12) }}
+                      </OuiText>
+                      <OuiBadge
+                        :variant="getContainerStatusVariant(container.status)"
+                        size="xs"
+                      >
+                        {{ container.status }}
+                      </OuiBadge>
+                      <OuiText
+                        v-if="container.port"
+                        size="xs"
+                        color="tertiary"
+                        class="font-mono"
+                      >
+                        :{{ container.port }}
+                      </OuiText>
+                      <OuiText size="xs" color="tertiary">
                         <OuiRelativeTime
                           v-if="container.updatedAt"
                           :value="date(container.updatedAt)"
                           :style="'short'"
                         />
                       </OuiText>
-                    </OuiStack>
+                    </OuiFlex>
 
                     <!-- Container Actions -->
-                    <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
+                    <OuiFlex gap="xs" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <OuiButton
                         v-if="container.status === 'running'"
                         variant="ghost"
@@ -284,7 +275,7 @@
                 v-else
                 class="p-8 text-center"
               >
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   No containers found for this service
                 </OuiText>
               </div>
@@ -309,7 +300,7 @@
                     </OuiFlex>
 
                     <div v-if="getServiceRoutingRules(service.name).length === 0">
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         No routing rules configured for this service. Add a rule to route traffic to this service.
                       </OuiText>
                     </div>
@@ -413,12 +404,9 @@
                   </OuiStack>
                 </div>
               </div>
-            </OuiCardBody>
-          </OuiCard>
-        </div>
-      </OuiStack>
+      </OuiCard>
     </OuiStack>
-  </OuiCardBody>
+  </OuiStack>
 </template>
 
 <script setup lang="ts">
@@ -926,12 +914,12 @@
     } catch (error: unknown) {
       // Only show error if it's not a network/timeout error
       const isNetworkError = 
-        error?.message?.includes("NetworkError") ||
-        error?.message?.includes("fetch") ||
-        error?.message?.includes("timeout") ||
-        error?.message?.includes("Failed to fetch") ||
-        error?.code === "unknown" ||
-        error?.name === "NetworkError";
+        (error as any)?.message?.includes("NetworkError") ||
+        (error as any)?.message?.includes("fetch") ||
+        (error as any)?.message?.includes("timeout") ||
+        (error as any)?.message?.includes("Failed to fetch") ||
+        (error as any)?.code === "unknown" ||
+        (error as any)?.name === "NetworkError";
 
       if (!isNetworkError) {
         await showAlert({
@@ -1029,12 +1017,12 @@
       // Only show error if it's not a network/timeout error
       // Container might have stopped even if API timed out
       const isNetworkError = 
-        error?.message?.includes("NetworkError") ||
-        error?.message?.includes("fetch") ||
-        error?.message?.includes("timeout") ||
-        error?.message?.includes("Failed to fetch") ||
-        error?.code === "unknown" ||
-        error?.name === "NetworkError";
+        (error as any)?.message?.includes("NetworkError") ||
+        (error as any)?.message?.includes("fetch") ||
+        (error as any)?.message?.includes("timeout") ||
+        (error as any)?.message?.includes("Failed to fetch") ||
+        (error as any)?.code === "unknown" ||
+        (error as any)?.name === "NetworkError";
 
       if (!isNetworkError) {
         await showAlert({

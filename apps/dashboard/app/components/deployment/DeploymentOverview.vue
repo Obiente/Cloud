@@ -1,258 +1,6 @@
 <template>
-    <OuiStack gap="xl">
-      <!-- Key Metrics Grid -->
-      <OuiGrid :cols="{ sm: 1, md: 2, lg: 3, xl: 4 }" gap="md">
-        <!-- Status Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Status
-              </OuiText>
-              <OuiFlex align="center" gap="sm">
-                <span
-                  class="h-2 w-2 rounded-full"
-                  :class="getStatusDotClass(deployment.status)"
-                />
-                <OuiText size="lg" weight="bold">
-                  {{ getStatusLabel(deployment.status) }}
-                </OuiText>
-              </OuiFlex>
-              <OuiText v-if="deployment.lastDeployedAt" size="xs" color="muted">
-                Last deployed
-                <OuiRelativeTime
-                  :value="date(deployment.lastDeployedAt)"
-                  :style="'short'"
-                />
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Containers Card -->
-        <OuiCard v-if="deployment.containersTotal !== undefined">
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Containers
-              </OuiText>
-              <OuiFlex align="center" gap="md">
-                <OuiText size="2xl" weight="bold">
-                  {{ deployment.containersRunning ?? 0 }}/{{ deployment.containersTotal }}
-                </OuiText>
-                <OuiBadge
-                  :variant="getContainerStatusVariant()"
-                  size="sm"
-                >
-                  <OuiText as="span" size="xs" weight="medium">
-                    {{ getContainerStatusLabel() }}
-                  </OuiText>
-                </OuiBadge>
-          </OuiFlex>
-              <OuiText size="xs" color="muted">
-                {{ deployment.containersTotal === 1 ? "Container" : "Containers" }} total
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Build Time Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Build Time
-              </OuiText>
-              <OuiFlex align="center" gap="sm">
-                <ClockIcon class="h-5 w-5 text-secondary" />
-                <OuiText size="2xl" weight="bold">
-                  {{ formatBuildTime(deployment.buildTime ?? 0) }}
-                </OuiText>
-          </OuiFlex>
-              <OuiText size="xs" color="muted">
-                Last build duration
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Size Card -->
-        <OuiCard v-if="deployment.size && deployment.size !== '--'">
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Bundle Size
-              </OuiText>
-              <OuiFlex align="center" gap="sm">
-                <ArchiveBoxIcon class="h-5 w-5 text-secondary" />
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="deployment.size ?? 0" unit-display="short" />
-                </OuiText>
-          </OuiFlex>
-              <OuiText size="xs" color="muted">
-                Compressed size
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Storage Card -->
-        <OuiCard v-if="deployment.storageUsage !== undefined && deployment.storageUsage !== null && Number(deployment.storageUsage) > 0">
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Storage Usage
-              </OuiText>
-              <OuiFlex align="center" gap="sm">
-                <CubeIcon class="h-5 w-5 text-secondary" />
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="deployment.storageUsage" />
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                Image + Volumes + Disk
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Health Status Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Health Status
-              </OuiText>
-              <template v-if="deployment.healthStatus">
-                <OuiFlex align="center" gap="sm">
-                  <component
-                    :is="getHealthIcon(deployment.healthStatus)"
-                    :class="`h-5 w-5 ${getHealthIconClass(deployment.healthStatus)}`"
-                  />
-                  <OuiText size="2xl" weight="bold">
-                    {{ deployment.healthStatus }}
-                  </OuiText>
-                </OuiFlex>
-                <OuiBadge
-                  :variant="getHealthVariant(deployment.healthStatus)"
-                  size="sm"
-                >
-                  <OuiText as="span" size="xs" weight="medium">
-                    {{ getHealthLabel(deployment.healthStatus) }}
-                  </OuiText>
-                </OuiBadge>
-              </template>
-              <template v-else>
-                <OuiFlex align="center" gap="sm">
-                  <HeartIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="2xl" weight="bold">Unknown</OuiText>
-                </OuiFlex>
-                <OuiText size="xs" color="muted">
-                  No health data available
-                </OuiText>
-              </template>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Created Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Created
-              </OuiText>
-              <template v-if="deployment.createdAt">
-                <OuiFlex align="center" gap="sm">
-                  <CalendarIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="lg" weight="bold">
-                    <OuiRelativeTime
-                      :value="date(deployment.createdAt)"
-                      :style="'short'"
-                    />
-                  </OuiText>
-                </OuiFlex>
-                <OuiText size="xs" color="muted">
-                  {{ formatDate(deployment.createdAt) }}
-                </OuiText>
-              </template>
-              <template v-else>
-                <OuiFlex align="center" gap="sm">
-                  <CalendarIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="lg" weight="bold">Unknown</OuiText>
-                </OuiFlex>
-                <OuiText size="xs" color="muted">
-                  Creation date unavailable
-                </OuiText>
-              </template>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Environment Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Environment
-              </OuiText>
-              <OuiFlex align="center" gap="sm">
-                <CpuChipIcon class="h-5 w-5 text-secondary" />
-                <OuiBadge
-                  :variant="getEnvironmentVariant(deployment.environment)"
-                  size="sm"
-                >
-                  <OuiText as="span" size="sm" weight="medium">
-                    {{ getEnvironmentLabel(deployment.environment) }}
-                  </OuiText>
-                </OuiBadge>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                Deployment environment
-              </OuiText>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Port Card -->
-        <OuiCard>
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                Port
-              </OuiText>
-              <template v-if="deployment.port">
-                <OuiFlex align="center" gap="sm">
-                  <SignalIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="2xl" weight="bold">
-                    {{ deployment.port }}
-                  </OuiText>
-                </OuiFlex>
-                <OuiText size="xs" color="muted">
-                  Application port
-                </OuiText>
-              </template>
-              <template v-else>
-                <OuiFlex align="center" gap="sm">
-                  <SignalIcon class="h-5 w-5 text-secondary" />
-                  <OuiText size="lg" weight="bold">Default</OuiText>
-                </OuiFlex>
-                <OuiText size="xs" color="muted">
-                  No port specified
-                </OuiText>
-              </template>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-      </OuiGrid>
-
-      <!-- Usage Statistics Section -->
-      <UsageStatistics v-if="usageData" :usage-data="usageData" />
-
-      <!-- Cost Breakdown -->
-      <CostBreakdown v-if="usageData" :usage-data="usageData" />
-
-      <!-- Enhanced Live Metrics -->
+    <OuiStack gap="md">
+      <!-- Live Metrics -->
       <LiveMetrics
         :is-streaming="isStreaming"
         :latest-metric="latestMetric"
@@ -262,349 +10,208 @@
         :current-network-tx="currentNetworkTx"
       />
 
-      <!-- Main Information Grid -->
-      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="lg">
-        <!-- Deployment Details Card -->
-        <OuiCard>
-          <OuiCardHeader>
-            <OuiText size="lg" weight="bold">Deployment Details</OuiText>
-          </OuiCardHeader>
+      <!-- Quick Info Bar: Domain + Environment + Type -->
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+            <!-- Domain -->
+            <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+              <GlobeAltIcon class="h-4 w-4 text-accent-primary shrink-0" />
+              <OuiText v-if="primaryDomain" size="sm" weight="medium" truncate class="font-mono">{{ primaryDomain }}</OuiText>
+              <OuiText v-else size="sm" color="tertiary">No domain configured</OuiText>
+              <OuiButton v-if="primaryDomain" variant="ghost" size="xs" @click="openDomain">
+                <ArrowTopRightOnSquareIcon class="h-3 w-3" />
+              </OuiButton>
+            </OuiFlex>
+
+            <!-- Badges -->
+            <OuiFlex gap="xs" wrap="wrap" class="shrink-0">
+              <OuiBadge :variant="getEnvironmentVariant(deployment.environment)" size="xs">
+                {{ getEnvironmentLabel(deployment.environment) }}
+              </OuiBadge>
+              <OuiBadge variant="secondary" size="xs">
+                {{ getTypeLabel((deployment as any).type) }}
+              </OuiBadge>
+              <OuiBadge v-if="deployment.buildStrategy !== undefined" variant="secondary" size="xs">
+                {{ getBuildStrategyLabel(deployment.buildStrategy) }}
+              </OuiBadge>
+              <OuiBadge
+                v-for="domain in getDisplayDomains(deployment.customDomains || [])"
+                :key="domain.domain"
+                :variant="getDomainStatusVariant(domain.status)"
+                size="xs"
+              >
+                {{ domain.domain }}
+              </OuiBadge>
+            </OuiFlex>
+          </OuiFlex>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Configuration Grid -->
+      <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="sm">
+        <!-- Infrastructure Card -->
+        <OuiCard variant="outline">
           <OuiCardBody>
             <OuiStack gap="md">
-              <!-- Domain -->
-              <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <GlobeAltIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Domain
-                    </OuiText>
-                    <OuiText size="sm" weight="medium" truncate>
-                      {{ primaryDomain }}
-                    </OuiText>
-                  </OuiStack>
+              <OuiFlex align="center" gap="sm">
+                <ServerStackIcon class="h-4 w-4 text-accent-secondary" />
+                <OuiText size="sm" weight="semibold">Infrastructure</OuiText>
+              </OuiFlex>
+
+              <OuiStack gap="none" class="divide-y divide-border-default">
+                <!-- Port -->
+                <OuiFlex v-if="deployment.port" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Port</OuiText>
+                  <OuiText size="sm" weight="medium" class="font-mono">:{{ deployment.port }}</OuiText>
                 </OuiFlex>
-                <OuiButton
-                  variant="ghost"
-                  size="xs"
-                  @click="openDomain"
-                  :disabled="!primaryDomain"
-                >
-                  <ArrowTopRightOnSquareIcon class="h-3 w-3" />
-                </OuiButton>
-              </div>
 
-              <!-- Custom Domains -->
-              <div
-                v-if="deployment.customDomains && deployment.customDomains.length > 0"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiStack gap="xs" class="min-w-0 flex-1">
-                  <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                    Custom Domains
-                  </OuiText>
-                  <OuiFlex gap="xs" wrap="wrap">
-                    <OuiBadge
-                      v-for="domain in getDisplayDomains(deployment.customDomains)"
-                      :key="domain.domain"
-                      :variant="getDomainStatusVariant(domain.status)"
-                      size="sm"
-                    >
-                      {{ domain.domain }}
-                      <span v-if="domain.status === 'pending'" class="ml-1">(pending)</span>
-                    </OuiBadge>
-                  </OuiFlex>
-                </OuiStack>
-              </div>
-
-              <!-- Environment -->
-              <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <CpuChipIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Environment
-                    </OuiText>
-                    <OuiBadge
-                      :variant="getEnvironmentVariant(deployment.environment)"
-                      size="sm" 
-                    >
-                      {{ getEnvironmentLabel(deployment.environment) }}
-                    </OuiBadge>
-                  </OuiStack>
-                </OuiFlex>
-              </div>
-
-              <!-- Type & Build Strategy -->
-              <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <CodeBracketIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Type
-                    </OuiText>
-                    <OuiText size="sm" weight="medium">
-                      {{ getTypeLabel((deployment as any).type) }}
-                    </OuiText>
-                  </OuiStack>
-                </OuiFlex>
-              </div>
-
-              <!-- Build Strategy -->
-              <div
-                v-if="deployment.buildStrategy !== undefined"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <WrenchScrewdriverIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Build Strategy
-                    </OuiText>
-                    <OuiText size="sm" weight="medium">
-                      {{ getBuildStrategyLabel(deployment.buildStrategy) }}
-                    </OuiText>
-                  </OuiStack>
-                  </OuiFlex>
-              </div>
-
-              <!-- Groups -->
-              <div
-                v-if="deployment.groups && deployment.groups.length > 0"
-                class="flex items-start justify-between gap-4 py-2"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <TagIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Groups
-                    </OuiText>
-                    <OuiFlex gap="xs" wrap="wrap">
-                      <OuiBadge
-                        v-for="group in deployment.groups"
-                        :key="group"
-                        variant="secondary"
-                        size="sm"
-                      >
-                        {{ group }}
-                      </OuiBadge>
-                  </OuiFlex>
-                  </OuiStack>
-                </OuiFlex>
-              </div>
-                </OuiStack>
-              </OuiCardBody>
-            </OuiCard>
-
-        <!-- Repository & Runtime Card -->
-        <OuiCard>
-          <OuiCardHeader>
-            <OuiText size="lg" weight="bold">Repository & Runtime</OuiText>
-          </OuiCardHeader>
-          <OuiCardBody>
-            <OuiStack gap="md">
-              <!-- Repository URL -->
-              <div
-                v-if="deployment.repositoryUrl"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <CodeBracketSquareIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Repository
-                    </OuiText>
-                    <OuiText size="sm" weight="medium" truncate>
-                      {{ deployment.repositoryUrl }}
-                    </OuiText>
-                  </OuiStack>
-                </OuiFlex>
-                      <OuiButton
-                        variant="ghost"
-                  size="xs"
-                  @click="openRepository"
-                  :disabled="!deployment.repositoryUrl"
-                      >
-                  <ArrowTopRightOnSquareIcon class="h-3 w-3" />
-                      </OuiButton>
-              </div>
-
-              <!-- Branch -->
-              <div
-                v-if="deployment.branch"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <TagIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Branch
-                    </OuiText>
-                    <OuiText size="sm" weight="medium">
-                      {{ deployment.branch }}
-                    </OuiText>
-                  </OuiStack>
+                <!-- Containers -->
+                <OuiFlex v-if="deployment.containersTotal !== undefined" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Containers</OuiText>
+                  <OuiFlex align="center" gap="sm">
+                    <!-- Container dots visualization -->
+                    <OuiFlex gap="xs" align="center">
+                      <span
+                        v-for="i in deployment.containersTotal"
+                        :key="i"
+                        class="h-2 w-2 rounded-full transition-colors"
+                        :class="i <= (deployment.containersRunning ?? 0) ? 'bg-success' : 'bg-border-strong'"
+                      />
                     </OuiFlex>
-              </div>
-
-              <!-- Dockerfile Path -->
-              <div
-                v-if="deployment.dockerfilePath"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <DocumentTextIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Dockerfile
-                    </OuiText>
-                    <OuiText size="sm" weight="medium" truncate>
-                      {{ deployment.dockerfilePath }}
-                    </OuiText>
-                  </OuiStack>
+                    <OuiText size="xs" color="tertiary">{{ deployment.containersRunning ?? 0 }}/{{ deployment.containersTotal }}</OuiText>
+                  </OuiFlex>
                 </OuiFlex>
-              </div>
 
-              <!-- Compose File Path -->
-              <div
-                v-if="deployment.composeFilePath"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <DocumentTextIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Compose File
-                    </OuiText>
-                    <OuiText size="sm" weight="medium" truncate>
-                      {{ deployment.composeFilePath }}
-                    </OuiText>
-                  </OuiStack>
+                <!-- Health -->
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Health</OuiText>
+                  <OuiFlex align="center" gap="xs">
+                    <component v-if="deployment.healthStatus" :is="getHealthIcon(deployment.healthStatus)" :class="`h-3.5 w-3.5 ${getHealthIconClass(deployment.healthStatus)}`" />
+                    <OuiText size="sm" weight="medium">{{ deployment.healthStatus || 'Unknown' }}</OuiText>
+                  </OuiFlex>
                 </OuiFlex>
-              </div>
 
-              <!-- Port -->
-              <div
-                v-if="deployment.port"
-                class="flex items-start justify-between gap-4 py-2 border-b border-border-default"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <SignalIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Port
-                    </OuiText>
-                    <OuiText size="sm" weight="medium">
-                      {{ deployment.port }}
-                    </OuiText>
-                  </OuiStack>
+                <!-- Build Time -->
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Last Build</OuiText>
+                  <OuiText size="sm" weight="medium">{{ formatBuildTime(deployment.buildTime ?? 0) }}</OuiText>
                 </OuiFlex>
-              </div>
 
-              <!-- Image -->
-              <div
-                v-if="deployment.image"
-                class="flex items-start justify-between gap-4 py-2"
-              >
-                <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
-                  <CubeIcon class="h-4 w-4 text-secondary shrink-0" />
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
-                    <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                      Image
-                    </OuiText>
-                    <OuiText size="sm" weight="medium" truncate>
-                      {{ deployment.image }}
-                    </OuiText>
+                <!-- Bundle Size -->
+                <OuiFlex v-if="deployment.size && deployment.size !== '--'" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Bundle Size</OuiText>
+                  <OuiText size="sm" weight="medium"><OuiByte :value="deployment.size ?? 0" unit-display="short" /></OuiText>
+                </OuiFlex>
+
+                <!-- Storage -->
+                <OuiFlex v-if="deployment.storageUsage !== undefined && deployment.storageUsage !== null && Number(deployment.storageUsage) > 0" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Storage</OuiText>
+                  <OuiText size="sm" weight="medium"><OuiByte :value="deployment.storageUsage" /></OuiText>
+                </OuiFlex>
+
+                <!-- Groups -->
+                <OuiFlex v-if="deployment.groups?.length" align="start" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Groups</OuiText>
+                  <OuiFlex gap="xs" wrap="wrap" class="justify-end">
+                    <OuiBadge v-for="group in deployment.groups" :key="group" variant="secondary" size="xs">{{ group }}</OuiBadge>
+                  </OuiFlex>
+                </OuiFlex>
+
+                <!-- Created -->
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Created</OuiText>
+                  <OuiText v-if="deployment.createdAt" size="sm" weight="medium">
+                    <OuiRelativeTime :value="date(deployment.createdAt)" :style="'short'" />
+                  </OuiText>
+                  <OuiText v-else size="sm" color="tertiary">—</OuiText>
+                </OuiFlex>
               </OuiStack>
-                </OuiFlex>
-              </div>
-
-              <!-- No Repository Message -->
-              <div
-                v-if="!deployment.repositoryUrl"
-                class="py-4 text-center"
-              >
-                <OuiText size="sm" color="muted">
-                  No repository configured
-                </OuiText>
-              </div>
             </OuiStack>
           </OuiCardBody>
         </OuiCard>
-            </OuiGrid>
-            
-      <!-- Quick Links -->
-      <OuiCard>
-        <OuiCardHeader>
-          <OuiText size="lg" weight="bold">Quick Links</OuiText>
-        </OuiCardHeader>
-        <OuiCardBody>
-          <OuiGrid :cols="{ sm: 2, md: 4 }" gap="md">
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="justify-start"
-              @click="$emit('navigate', 'metrics')"
-            >
-              <ChartBarIcon class="h-4 w-4 mr-2" />
-              <OuiText as="span" size="sm">Metrics</OuiText>
-            </OuiButton>
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="justify-start"
-              @click="$emit('navigate', 'logs')"
-            >
-              <DocumentTextIcon class="h-4 w-4 mr-2" />
-              <OuiText as="span" size="sm">Logs</OuiText>
-            </OuiButton>
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="justify-start"
-              @click="$emit('navigate', 'terminal')"
-            >
-              <CommandLineIcon class="h-4 w-4 mr-2" />
-              <OuiText as="span" size="sm">Terminal</OuiText>
-            </OuiButton>
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="justify-start"
-              @click="$emit('navigate', 'files')"
-            >
-              <FolderIcon class="h-4 w-4 mr-2" />
-              <OuiText as="span" size="sm">Files</OuiText>
-            </OuiButton>
-            </OuiGrid>
-        </OuiCardBody>
-      </OuiCard>
+
+        <!-- Source Card -->
+        <OuiCard variant="outline">
+          <OuiCardBody>
+            <OuiStack gap="md">
+              <OuiFlex align="center" gap="sm">
+                <CodeBracketSquareIcon class="h-4 w-4 text-accent-primary" />
+                <OuiText size="sm" weight="semibold">Source</OuiText>
+              </OuiFlex>
+
+              <!-- Repository Info - prominent display -->
+              <template v-if="deployment.repositoryUrl">
+                <OuiCard variant="outline" class="bg-surface-muted/30">
+                  <OuiCardBody class="!py-3 !px-4">
+                    <OuiStack gap="sm">
+                      <OuiFlex align="center" justify="between" gap="sm">
+                        <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+                          <Icon name="uil:github" class="h-4 w-4 text-secondary shrink-0" />
+                          <OuiText size="sm" weight="medium" truncate class="font-mono">{{ repoDisplayName }}</OuiText>
+                        </OuiFlex>
+                        <OuiButton variant="ghost" size="xs" @click="openRepository">
+                          <ArrowTopRightOnSquareIcon class="h-3 w-3" />
+                        </OuiButton>
+                      </OuiFlex>
+                      <OuiFlex v-if="deployment.branch" align="center" gap="xs">
+                        <svg class="h-3 w-3 text-tertiary shrink-0" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Z" /></svg>
+                        <OuiText size="xs" color="tertiary" class="font-mono">{{ deployment.branch }}</OuiText>
+                      </OuiFlex>
+                    </OuiStack>
+                  </OuiCardBody>
+                </OuiCard>
+              </template>
+
+              <OuiStack gap="none" class="divide-y divide-border-default">
+                <!-- Dockerfile Path -->
+                <OuiFlex v-if="deployment.dockerfilePath" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Dockerfile</OuiText>
+                  <OuiText size="sm" weight="medium" truncate class="font-mono">{{ deployment.dockerfilePath }}</OuiText>
+                </OuiFlex>
+
+                <!-- Compose File Path -->
+                <OuiFlex v-if="deployment.composeFilePath" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Compose File</OuiText>
+                  <OuiText size="sm" weight="medium" truncate class="font-mono">{{ deployment.composeFilePath }}</OuiText>
+                </OuiFlex>
+
+                <!-- Image -->
+                <OuiFlex v-if="deployment.image" align="center" justify="between" gap="sm" class="py-2.5">
+                  <OuiText size="xs" color="tertiary">Image</OuiText>
+                  <OuiText size="sm" weight="medium" truncate class="font-mono">{{ deployment.image }}</OuiText>
+                </OuiFlex>
+              </OuiStack>
+
+              <!-- No Source -->
+              <OuiFlex v-if="!deployment.repositoryUrl && !deployment.image" align="center" justify="center" class="py-6">
+                <OuiStack align="center" gap="sm">
+                  <CodeBracketSquareIcon class="h-8 w-8 text-border-strong" />
+                  <OuiText size="sm" color="tertiary">No source configured</OuiText>
+                </OuiStack>
+              </OuiFlex>
+            </OuiStack>
+          </OuiCardBody>
+        </OuiCard>
+      </OuiGrid>
+
+      <!-- Usage & Cost -->
+      <UsageStatistics v-if="usageData" :usage-data="usageData" />
+      <CostBreakdown v-if="usageData" :usage-data="usageData" />
     </OuiStack>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import {
-  CodeBracketIcon,
-  CpuChipIcon,
-  ClockIcon,
-  ArchiveBoxIcon,
-  GlobeAltIcon,
   ArrowTopRightOnSquareIcon,
-  WrenchScrewdriverIcon,
-  TagIcon,
-  CodeBracketSquareIcon,
-  DocumentTextIcon,
-  SignalIcon,
-  CubeIcon,
-  ChartBarIcon,
-  CommandLineIcon,
-  FolderIcon,
-  CalendarIcon,
   HeartIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
+  GlobeAltIcon,
+  ServerStackIcon,
+  CodeBracketSquareIcon,
 } from "@heroicons/vue/24/outline";
 import { type Deployment, type StreamDeploymentMetricsRequest } from "@obiente/proto";
 import {
@@ -776,14 +383,14 @@ const startStreaming = async () => {
       latestMetric.value = metric;
     }
   } catch (err: unknown) {
-    if (err.name === "AbortError") {
+    if ((err as any).name === "AbortError") {
       return;
     }
     // Suppress "missing trailer" errors
     const isMissingTrailerError =
       (err as Error).message?.toLowerCase().includes("missing trailer") ||
       (err as Error).message?.toLowerCase().includes("trailer") ||
-      err.code === "unknown";
+      (err as any).code === "unknown";
 
     if (!isMissingTrailerError) {
       console.error("Failed to stream metrics:", err);
@@ -1074,4 +681,11 @@ const openRepository = () => {
     window.open(props.deployment.repositoryUrl, "_blank");
   }
 };
+
+const repoDisplayName = computed(() => {
+  const url = props.deployment.repositoryUrl || '';
+  // Extract "owner/repo" from GitHub-style URLs
+  const match = url.match(/(?:github\.com|gitlab\.com|bitbucket\.org)[/:](.+?)(?:\.git)?$/);
+  return match ? match[1] : url;
+});
 </script>

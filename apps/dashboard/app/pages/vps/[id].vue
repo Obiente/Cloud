@@ -1,6 +1,6 @@
 <template>
-  <OuiContainer size="full" py="sm" class="md:py-6">
-    <OuiStack gap="md" class="md:gap-xl">
+  <OuiContainer size="full" p="none">
+    <OuiStack gap="lg">
       <!-- Access Error State -->
       <OuiCard v-if="accessError" variant="outline" class="border-danger/20">
         <OuiCardBody>
@@ -24,41 +24,19 @@
       <!-- Loading State (only on initial load, not during refresh) -->
       <template v-else-if="pending && !vps">
         <!-- Header Skeleton -->
-        <OuiStack gap="md" class="md:gap-xl">
-          <OuiCard>
+        <OuiStack gap="lg">
+          <OuiCard variant="outline" class="border-border-default/50">
             <OuiCardBody>
-              <OuiStack gap="md">
-                <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
-                  <OuiStack gap="sm" class="flex-1 min-w-0">
-                    <OuiSkeleton width="12rem" height="2rem" variant="text" />
-                    <OuiSkeleton
-                      width="20rem"
-                      height="1.25rem"
-                      variant="text"
-                    />
-                  </OuiStack>
-                  <OuiFlex gap="sm">
-                    <OuiSkeleton
-                      width="5rem"
-                      height="2rem"
-                      variant="rectangle"
-                      rounded
-                    />
-                    <OuiSkeleton
-                      width="5rem"
-                      height="2rem"
-                      variant="rectangle"
-                      rounded
-                    />
-                    <OuiSkeleton
-                      width="5rem"
-                      height="2rem"
-                      variant="rectangle"
-                      rounded
-                    />
-                  </OuiFlex>
+              <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+                <OuiStack gap="sm" class="flex-1 min-w-0">
+                  <OuiSkeleton width="16rem" height="1.5rem" variant="text" />
+                  <OuiSkeleton width="10rem" height="0.875rem" variant="text" />
+                </OuiStack>
+                <OuiFlex gap="xs">
+                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                  <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
                 </OuiFlex>
-              </OuiStack>
+              </OuiFlex>
             </OuiCardBody>
           </OuiCard>
 
@@ -66,9 +44,9 @@
           <ResourceDetailsGrid>
             <OuiCard v-for="i in 4" :key="i">
               <OuiCardBody>
-                <OuiStack gap="sm">
-                  <OuiSkeleton width="6rem" height="0.875rem" variant="text" />
-                  <OuiSkeleton width="4rem" height="1.5rem" variant="text" />
+                <OuiStack gap="xs">
+                  <OuiSkeleton width="6rem" height="0.75rem" variant="text" />
+                  <OuiSkeleton width="4rem" height="1.25rem" variant="text" />
                 </OuiStack>
               </OuiCardBody>
             </OuiCard>
@@ -76,22 +54,11 @@
 
           <!-- Tab Content Skeleton -->
           <OuiCard>
-            <OuiCardHeader>
-              <OuiSkeleton width="8rem" height="1.5rem" variant="text" />
-            </OuiCardHeader>
             <OuiCardBody>
-              <OuiStack gap="lg">
-                <OuiStack gap="md">
-                  <OuiSkeleton width="100%" height="1rem" variant="text" />
-                  <OuiSkeleton width="80%" height="1rem" variant="text" />
-                  <OuiSkeleton width="90%" height="1rem" variant="text" />
-                </OuiStack>
-                <OuiSkeleton
-                  width="100%"
-                  height="12rem"
-                  variant="rectangle"
-                  rounded
-                />
+              <OuiStack gap="md">
+                <OuiSkeleton width="100%" height="1rem" variant="text" />
+                <OuiSkeleton width="80%" height="1rem" variant="text" />
+                <OuiSkeleton width="90%" height="1rem" variant="text" />
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
@@ -118,7 +85,7 @@
       <!-- VPS Content -->
       <template v-else-if="vps">
         <!-- Header -->
-        <ResourceHeader :title="vps.name" :icon="ServerIcon">
+        <ResourceHeader :title="vps.name">
           <template #badges>
             <ResourceStatusBadge
               :label="statusLabel"
@@ -129,15 +96,12 @@
               v-if="vps.instanceId"
               variant="secondary"
               size="xs"
-              class="md:size-sm"
             >
-              <OuiText as="span" size="xs" weight="medium">
-                VM ID: {{ vps.instanceId }}
-              </OuiText>
+              VM ID: {{ vps.instanceId }}
             </OuiBadge>
           </template>
           <template #subtitle>
-            <span v-if="vps.description">{{ vps.description }} • </span>
+            <span v-if="vps.description">{{ vps.description }} · </span>
             <span>Last updated </span>
             <OuiRelativeTime
               :value="vps.updatedAt ? date(vps.updatedAt) : undefined"
@@ -145,26 +109,9 @@
             />
           </template>
           <template #actions>
-            <OuiButton
-              variant="ghost"
-              color="secondary"
-              size="sm"
-              @click="refreshVPS"
-              :loading="isRefreshing"
-              class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-            >
-              <ArrowPathIcon
-                class="h-4 w-4"
-                :class="{ 'animate-spin': isRefreshing }"
-              />
-              <OuiText
-                as="span"
-                size="xs"
-                weight="medium"
-                class="hidden sm:inline"
-              >
-                Refresh
-              </OuiText>
+            <OuiButton variant="ghost" size="sm" @click="refreshVPS" :loading="isRefreshing" class="gap-1.5">
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': isRefreshing }" />
+              <span class="hidden sm:inline">Refresh</span>
             </OuiButton>
             <OuiButton
               v-if="vps.status === VPSStatus.STOPPED"
@@ -173,17 +120,10 @@
               size="sm"
               @click="handleStart"
               :disabled="isActioning"
-              class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
+              class="gap-1.5"
             >
-              <PlayIcon class="h-4 w-4" />
-              <OuiText
-                as="span"
-                size="xs"
-                weight="medium"
-                class="hidden sm:inline"
-              >
-                Start
-              </OuiText>
+              <PlayIcon class="h-3.5 w-3.5" />
+              <span class="hidden sm:inline">Start</span>
             </OuiButton>
             <OuiButton
               v-if="vps.status === VPSStatus.RUNNING"
@@ -192,250 +132,172 @@
               size="sm"
               @click="handleStop"
               :disabled="isActioning"
-              class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
+              class="gap-1.5"
             >
-              <StopIcon class="h-4 w-4" />
-              <OuiText
-                as="span"
-                size="xs"
-                weight="medium"
-                class="hidden sm:inline"
-              >
-                Stop
-              </OuiText>
+              <StopIcon class="h-3.5 w-3.5" />
+              <span class="hidden sm:inline">Stop</span>
             </OuiButton>
             <OuiButton
               v-if="vps.status === VPSStatus.RUNNING"
               variant="outline"
-              color="secondary"
               size="sm"
               @click="handleReboot"
               :disabled="isActioning"
-              class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
+              class="gap-1.5"
             >
-              <ArrowPathIcon class="h-4 w-4" />
-              <OuiText
-                as="span"
-                size="xs"
-                weight="medium"
-                class="hidden sm:inline"
-              >
-                Reboot
-              </OuiText>
+              <ArrowPathIcon class="h-3.5 w-3.5" />
+              <span class="hidden sm:inline">Reboot</span>
             </OuiButton>
           </template>
         </ResourceHeader>
 
-        <!-- Overview Cards -->
-        <ResourceDetailsGrid :cols="{ sm: 2, lg: 4 }">
-          <ResourceDetailCard label="CPU Cores" :icon="CpuChipIcon">
-            {{ vps.cpuCores || "N/A" }}
-          </ResourceDetailCard>
-          <ResourceDetailCard label="Memory" :icon="CircleStackIcon">
-            <OuiByte :value="vps.memoryBytes" />
-          </ResourceDetailCard>
-          <ResourceDetailCard label="Storage" :icon="ArchiveBoxIcon">
-            <OuiByte :value="vps.diskBytes" />
-          </ResourceDetailCard>
-          <ResourceDetailCard label="Instance Size" :icon="ServerIcon">
-            {{ vps.size || "N/A" }}
-          </ResourceDetailCard>
-        </ResourceDetailsGrid>
-
         <!-- Tabbed Content -->
         <ResourceTabs ref="tabsRef" :tabs="tabs" default-tab="overview">
           <template #overview>
-            <OuiStack gap="xl">
-              <!-- VPS Information Grid -->
-              <ResourceDetailsGrid cols="1" cols-md="2" cols-lg="2">
-                <!-- VPS Details Card -->
-                <OuiCard variant="default">
-                  <OuiCardHeader>
-                    <OuiText as="h2" class="oui-card-title"
-                      >VPS Details</OuiText
-                    >
-                  </OuiCardHeader>
+            <OuiStack gap="md">
+              <!-- Quick Info Bar -->
+              <OuiCard variant="outline">
+                <OuiCardBody>
+                  <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+                    <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+                      <div class="h-8 w-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
+                        <ServerStackIcon class="h-4 w-4 text-accent-primary" />
+                      </div>
+                      <OuiStack gap="none" class="min-w-0">
+                        <OuiText size="sm" weight="medium" class="font-mono" truncate>
+                          {{ vps.ipv4Addresses?.[0] || vps.name }}
+                        </OuiText>
+                        <OuiText size="xs" color="tertiary">{{ imageLabel }} · {{ vps.region || 'Unknown region' }}</OuiText>
+                      </OuiStack>
+                    </OuiFlex>
+                    <OuiFlex gap="xs" align="center" class="shrink-0">
+                      <OuiBadge variant="secondary" size="xs">{{ vps.cpuCores || '—' }} vCPU</OuiBadge>
+                      <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.memoryBytes" /></OuiBadge>
+                      <OuiBadge variant="secondary" size="xs"><OuiByte :value="vps.diskBytes" /> disk</OuiBadge>
+                      <OuiBadge v-if="vps.size" variant="primary" size="xs">{{ vps.size }}</OuiBadge>
+                    </OuiFlex>
+                  </OuiFlex>
+                </OuiCardBody>
+              </OuiCard>
+
+              <!-- Details + Network Grid -->
+              <OuiGrid :cols="{ sm: 1, lg: 2 }" gap="sm">
+                <!-- VPS Details -->
+                <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="sm" color="secondary">Status</OuiText>
-                        <ResourceStatusBadge
-                          :label="statusLabel"
-                          :badge="statusBadgeColor"
-                          :dot-class="statusDotClass"
-                        />
+                      <OuiFlex align="center" gap="xs">
+                        <CpuChipIcon class="h-3.5 w-3.5 text-accent-primary" />
+                        <OuiText size="sm" weight="semibold">Details</OuiText>
                       </OuiFlex>
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="sm" color="secondary">Region</OuiText>
-                        <OuiText size="sm" weight="medium">{{
-                          vps.region || "—"
-                        }}</OuiText>
-                      </OuiFlex>
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="sm" color="secondary"
-                          >Operating System</OuiText
-                        >
-                        <OuiText size="sm" weight="medium">{{
-                          imageLabel
-                        }}</OuiText>
-                      </OuiFlex>
-                      <OuiFlex
-                        justify="between"
-                        align="center"
-                        v-if="vps.instanceId"
-                      >
-                        <OuiText size="sm" color="secondary">VM ID</OuiText>
-                        <OuiText
-                          size="sm"
-                          weight="medium"
-                          class="font-mono text-xs"
-                          >{{ vps.instanceId }}</OuiText
-                        >
-                      </OuiFlex>
-                      <OuiFlex
-                        justify="between"
-                        align="center"
-                        v-if="vps.nodeId"
-                      >
-                        <OuiText size="sm" color="secondary">Node ID</OuiText>
-                        <OuiText
-                          size="sm"
-                          weight="medium"
-                          class="font-mono text-xs"
-                          >{{ vps.nodeId }}</OuiText
-                        >
-                      </OuiFlex>
-                      <OuiFlex justify="between" align="center">
-                        <OuiText size="sm" color="secondary">Created</OuiText>
-                        <OuiText size="sm" weight="medium">
-                          <OuiRelativeTime
-                            :value="
-                              vps.createdAt ? date(vps.createdAt) : undefined
-                            "
-                            :style="'short'"
-                          />
-                        </OuiText>
-                      </OuiFlex>
-                      <OuiFlex
-                        justify="between"
-                        align="center"
-                        v-if="vps.lastStartedAt"
-                      >
-                        <OuiText size="sm" color="secondary"
-                          >Last Started</OuiText
-                        >
-                        <OuiText size="sm" weight="medium">
-                          <OuiDate :value="vps.lastStartedAt" />
-                        </OuiText>
-                      </OuiFlex>
+
+                      <div class="grid grid-cols-2 gap-3">
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">CPU</OuiText>
+                          <OuiText size="sm" weight="medium">{{ vps.cpuCores || '—' }} cores</OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">Memory</OuiText>
+                          <OuiText size="sm" weight="medium"><OuiByte :value="vps.memoryBytes" /></OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">Storage</OuiText>
+                          <OuiText size="sm" weight="medium"><OuiByte :value="vps.diskBytes" /></OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">OS</OuiText>
+                          <OuiText size="sm" weight="medium">{{ imageLabel }}</OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">Region</OuiText>
+                          <OuiText size="sm" weight="medium">{{ vps.region || '—' }}</OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">Size</OuiText>
+                          <OuiText size="sm" weight="medium">{{ vps.size || '—' }}</OuiText>
+                        </OuiStack>
+                        <OuiStack v-if="vps.instanceId" gap="xs">
+                          <OuiText size="xs" color="tertiary">VM ID</OuiText>
+                          <OuiText size="xs" weight="medium" class="font-mono">{{ vps.instanceId }}</OuiText>
+                        </OuiStack>
+                        <OuiStack gap="xs">
+                          <OuiText size="xs" color="tertiary">Created</OuiText>
+                          <OuiText size="sm" weight="medium">
+                            <OuiRelativeTime :value="vps.createdAt ? date(vps.createdAt) : undefined" :style="'short'" />
+                          </OuiText>
+                        </OuiStack>
+                      </div>
                     </OuiStack>
                   </OuiCardBody>
                 </OuiCard>
 
-                <!-- Network Information Card -->
-                <OuiCard variant="default">
-                  <OuiCardHeader>
-                    <OuiText as="h2" class="oui-card-title"
-                      >Network Information</OuiText
-                    >
-                  </OuiCardHeader>
+                <!-- Network -->
+                <OuiCard variant="outline">
                   <OuiCardBody>
                     <OuiStack gap="md">
-                      <div
-                        v-if="vps.ipv4Addresses && vps.ipv4Addresses.length > 0"
-                      >
-                        <OuiText
-                          size="xs"
-                          color="muted"
-                          transform="uppercase"
-                          weight="semibold"
-                          class="mb-2"
-                        >
-                          IPv4 Addresses
-                        </OuiText>
-                        <OuiStack gap="xs">
-                          <OuiBox
+                      <OuiFlex align="center" gap="xs">
+                        <GlobeAltIcon class="h-3.5 w-3.5 text-accent-info" />
+                        <OuiText size="sm" weight="semibold">Network</OuiText>
+                      </OuiFlex>
+
+                      <OuiStack gap="sm">
+                        <!-- IPv4 -->
+                        <div v-if="vps.ipv4Addresses?.length" class="space-y-1.5">
+                          <OuiText size="xs" color="tertiary">IPv4</OuiText>
+                          <div
                             v-for="(ip, idx) in vps.ipv4Addresses"
-                            :key="idx"
-                            p="sm"
-                            rounded="md"
-                            class="bg-surface-muted/40 ring-1 ring-border-muted"
+                            :key="'v4-' + idx"
+                            class="group rounded-lg border border-border-default px-3 py-2"
                           >
-                            <OuiFlex justify="between" align="center" gap="sm">
-                              <OuiText size="sm" class="font-mono">{{
-                                ip
-                              }}</OuiText>
-                              <OuiButton
-                                variant="ghost"
-                                size="xs"
-                                icon-only
+                            <OuiFlex align="center" justify="between" gap="sm">
+                              <OuiText size="sm" weight="medium" class="font-mono">{{ ip }}</OuiText>
+                              <button
+                                class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                 @click="copyToClipboard(ip)"
-                                title="Copy IP address"
                               >
-                                <ClipboardDocumentListIcon class="h-3 w-3" />
-                              </OuiButton>
+                                <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
+                              </button>
                             </OuiFlex>
-                          </OuiBox>
-                        </OuiStack>
-                      </div>
-                      <div v-else>
-                        <OuiText size="sm" color="secondary"
-                          >No IPv4 addresses assigned</OuiText
-                        >
-                      </div>
-                      <div
-                        v-if="vps.ipv6Addresses && vps.ipv6Addresses.length > 0"
-                      >
-                        <OuiText
-                          size="xs"
-                          color="muted"
-                          transform="uppercase"
-                          weight="semibold"
-                          class="mb-2"
-                        >
-                          IPv6 Addresses
-                        </OuiText>
-                        <OuiStack gap="xs">
-                          <OuiBox
+                          </div>
+                        </div>
+                        <OuiFlex v-else align="center" gap="xs">
+                          <OuiText size="xs" color="tertiary">IPv4 · None assigned</OuiText>
+                        </OuiFlex>
+
+                        <!-- IPv6 -->
+                        <div v-if="vps.ipv6Addresses?.length" class="space-y-1.5">
+                          <OuiText size="xs" color="tertiary">IPv6</OuiText>
+                          <div
                             v-for="(ip, idx) in vps.ipv6Addresses"
-                            :key="idx"
-                            p="sm"
-                            rounded="md"
-                            class="bg-surface-muted/40 ring-1 ring-border-muted"
+                            :key="'v6-' + idx"
+                            class="group rounded-lg border border-border-default px-3 py-2"
                           >
-                            <OuiFlex justify="between" align="center" gap="sm">
-                              <OuiText size="sm" class="font-mono">{{
-                                ip
-                              }}</OuiText>
-                              <OuiButton
-                                variant="ghost"
-                                size="xs"
-                                icon-only
+                            <OuiFlex align="center" justify="between" gap="sm">
+                              <OuiText size="sm" weight="medium" class="font-mono break-all">{{ ip }}</OuiText>
+                              <button
+                                class="p-1 rounded text-tertiary hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                                 @click="copyToClipboard(ip)"
-                                title="Copy IP address"
                               >
-                                <ClipboardDocumentListIcon class="h-3 w-3" />
-                              </OuiButton>
+                                <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
+                              </button>
                             </OuiFlex>
-                          </OuiBox>
-                        </OuiStack>
-                      </div>
-                      <div v-else>
-                        <OuiText size="sm" color="secondary"
-                          >No IPv6 addresses assigned</OuiText
-                        >
-                      </div>
+                          </div>
+                        </div>
+                        <OuiFlex v-else align="center" gap="xs">
+                          <OuiText size="xs" color="tertiary">IPv6 · None assigned</OuiText>
+                        </OuiFlex>
+                      </OuiStack>
                     </OuiStack>
                   </OuiCardBody>
                 </OuiCard>
+              </OuiGrid>
 
-                <!-- Network Leases -->
-                <VpsLeases
-                  :leases="leases"
-                  :loading="leasesLoading"
-                  :error="leasesError"
-                />
-              </ResourceDetailsGrid>
+              <!-- Network Leases -->
+              <VpsLeases
+                :leases="leases"
+                :loading="leasesLoading"
+                :error="leasesError"
+              />
 
               <!-- Usage Statistics Section -->
               <UsageStatistics v-if="usageData" :usage-data="usageData" />
@@ -444,157 +306,50 @@
               <CostBreakdown v-if="usageData" :usage-data="usageData" />
 
               <!-- Connection Information -->
-              <OuiCard
-                v-if="vps.status === VPSStatus.RUNNING"
-                variant="default"
-              >
-                <OuiCardHeader>
-                  <OuiStack gap="xs">
-                    <OuiText as="h2" class="oui-card-title"
-                      >Connection Information</OuiText
-                    >
-                    <OuiText color="secondary" size="sm">
-                      Access your VPS instance using SSH or the web terminal
-                      (available in the Terminal tab)
-                    </OuiText>
-                  </OuiStack>
-                </OuiCardHeader>
+              <OuiCard v-if="vps.status === VPSStatus.RUNNING" variant="outline" status="success">
                 <OuiCardBody>
                   <OuiStack gap="md">
-                    <OuiBox
-                      p="md"
-                      rounded="lg"
-                      class="bg-surface-muted/40 ring-1 ring-border-muted"
-                    >
-                      <OuiStack gap="sm">
-                        <OuiFlex align="center" gap="sm">
-                          <CommandLineIcon class="h-5 w-5 text-primary" />
-                          <OuiText size="sm" weight="semibold" color="primary"
-                            >SSH Access</OuiText
+                    <OuiFlex align="center" gap="xs">
+                      <CommandLineIcon class="h-3.5 w-3.5 text-success" />
+                      <OuiText size="sm" weight="semibold">SSH Access</OuiText>
+                    </OuiFlex>
+
+                    <template v-if="sshInfo">
+                      <div class="group rounded-lg border border-border-default overflow-hidden">
+                        <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
+                          <OuiText size="xs" weight="medium">SSH Command</OuiText>
+                          <button
+                            class="p-1 rounded text-tertiary hover:text-primary transition-colors"
+                            @click="copySSHCommand"
                           >
+                            <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
+                          </button>
                         </OuiFlex>
-                        <OuiText size="sm" color="secondary">
-                          Connect to your VPS via SSH using the SSH proxy. SSH
-                          key authentication is tried first, then password
-                          authentication.
-                        </OuiText>
-                        <div v-if="sshInfo" class="mt-2">
-                          <OuiStack gap="sm">
-                            <div>
-                              <OuiText size="xs" weight="semibold" class="mb-1"
-                                >SSH Command:</OuiText
-                              >
-                              <OuiBox
-                                p="sm"
-                                rounded="md"
-                                class="bg-surface-muted font-mono text-xs overflow-x-auto"
-                              >
-                                <code>{{ sshInfo.sshProxyCommand }}</code>
-                              </OuiBox>
-                              <OuiButton
-                                variant="ghost"
-                                size="xs"
-                                @click="copySSHCommand"
-                                class="mt-2"
-                              >
-                                <ClipboardDocumentListIcon
-                                  class="h-3 w-3 mr-1"
-                                />
-                                Copy Command
-                              </OuiButton>
-                            </div>
-                            <div v-if="sshInfo.connectionInstructions">
-                              <OuiText size="xs" weight="semibold" class="mb-2"
-                                >Full Connection Instructions:</OuiText
-                              >
-                              <OuiBox
-                                p="sm"
-                                rounded="md"
-                                class="bg-surface-muted font-mono text-xs whitespace-pre-wrap overflow-x-auto"
-                              >
-                                <code>{{
-                                  sshInfo.connectionInstructions
-                                }}</code>
-                              </OuiBox>
-                              <OuiButton
-                                variant="ghost"
-                                size="xs"
-                                @click="copyConnectionInstructions"
-                                class="mt-2"
-                              >
-                                <ClipboardDocumentListIcon
-                                  class="h-3 w-3 mr-1"
-                                />
-                                Copy Instructions
-                              </OuiButton>
-                            </div>
-                          </OuiStack>
+                        <div class="px-3 py-2.5">
+                          <code class="text-xs font-mono break-all text-secondary">{{ sshInfo.sshProxyCommand }}</code>
                         </div>
-                        <div v-else-if="sshInfoLoading" class="mt-2">
-                          <OuiStack gap="sm">
-                            <OuiText size="xs" weight="semibold"
-                              >Quick Connect:</OuiText
-                            >
-                            <OuiBox
-                              p="sm"
-                              rounded="md"
-                              class="bg-surface-muted font-mono text-xs"
-                            >
-                              <OuiSkeleton
-                                width="24rem"
-                                height="1rem"
-                                variant="text"
-                              />
-                            </OuiBox>
-                            <OuiButton
-                              variant="ghost"
-                              size="xs"
-                              disabled
-                              class="self-start"
-                            >
-                              <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
-                              Copy Command
-                            </OuiButton>
-                          </OuiStack>
-                        </div>
-                        <div v-else-if="sshInfoError" class="mt-2">
-                          <OuiBox variant="danger" p="sm" rounded="md">
-                            <OuiText size="xs" color="danger">
-                              Failed to load SSH connection info.
-                              {{ sshInfoError }}
-                            </OuiText>
-                          </OuiBox>
-                        </div>
-                      </OuiStack>
-                    </OuiBox>
-                    <OuiBox
-                      p="md"
-                      rounded="lg"
-                      class="bg-primary/5 ring-1 ring-primary/20"
-                    >
-                      <OuiStack gap="xs">
-                        <OuiFlex align="center" gap="sm">
-                          <CommandLineIcon class="h-5 w-5 text-primary" />
-                          <OuiText size="sm" weight="semibold" color="primary"
-                            >Web Terminal</OuiText
+                      </div>
+                      <div v-if="sshInfo.connectionInstructions" class="group rounded-lg border border-border-default overflow-hidden">
+                        <OuiFlex align="center" justify="between" class="px-3 py-2 bg-surface-muted/30 border-b border-border-default">
+                          <OuiText size="xs" weight="medium">Instructions</OuiText>
+                          <button
+                            class="p-1 rounded text-tertiary hover:text-primary transition-colors"
+                            @click="copyConnectionInstructions"
                           >
+                            <ClipboardDocumentListIcon class="h-3.5 w-3.5" />
+                          </button>
                         </OuiFlex>
-                        <OuiText size="sm" color="secondary">
-                          Access your VPS directly from the browser using the
-                          built-in web terminal. Navigate to the
-                          <strong>Terminal</strong> tab to get started.
-                        </OuiText>
-                        <OuiButton
-                          variant="outline"
-                          size="sm"
-                          @click="openTerminal"
-                          class="self-start gap-2 mt-1"
-                        >
-                          <CommandLineIcon class="h-4 w-4" />
-                          Go to Terminal Tab
-                        </OuiButton>
-                      </OuiStack>
-                    </OuiBox>
+                        <div class="px-3 py-2.5">
+                          <code class="text-xs font-mono whitespace-pre-wrap break-all text-secondary">{{ sshInfo.connectionInstructions }}</code>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else-if="sshInfoLoading">
+                      <OuiSkeleton width="24rem" height="1rem" variant="text" />
+                    </template>
+                    <OuiText v-else-if="sshInfoError" size="xs" color="danger">
+                      Failed to load SSH connection info. {{ sshInfoError }}
+                    </OuiText>
                   </OuiStack>
                 </OuiCardBody>
               </OuiCard>
@@ -621,7 +376,7 @@
               <OuiCardBody>
                 <OuiStack gap="md" align="center" class="py-8">
                   <ShieldExclamationIcon class="h-12 w-12 text-secondary" />
-                  <OuiText color="secondary" size="sm">
+                  <OuiText color="tertiary" size="sm">
                     Firewall settings are only available after the VPS is
                     provisioned.
                   </OuiText>
@@ -652,7 +407,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >General Settings</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Manage basic VPS configuration and information
                     </OuiText>
                   </OuiStack>
@@ -679,7 +434,7 @@
                           Save
                         </OuiButton>
                       </OuiFlex>
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         A descriptive name to identify this VPS instance
                       </OuiText>
                     </OuiStack>
@@ -704,7 +459,7 @@
                           Save
                         </OuiButton>
                       </OuiFlex>
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Optional description for this VPS instance
                       </OuiText>
                     </OuiStack>
@@ -716,7 +471,7 @@
                       >
                       <OuiStack gap="xs">
                         <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">VPS ID</OuiText>
+                          <OuiText size="sm" color="tertiary">VPS ID</OuiText>
                           <OuiText
                             size="sm"
                             weight="medium"
@@ -729,7 +484,7 @@
                           align="center"
                           v-if="vps?.instanceId"
                         >
-                          <OuiText size="sm" color="secondary">VM ID</OuiText>
+                          <OuiText size="sm" color="tertiary">VM ID</OuiText>
                           <OuiText
                             size="sm"
                             weight="medium"
@@ -742,7 +497,7 @@
                           align="center"
                           v-if="vps?.nodeId"
                         >
-                          <OuiText size="sm" color="secondary">Node ID</OuiText>
+                          <OuiText size="sm" color="tertiary">Node ID</OuiText>
                           <OuiText
                             size="sm"
                             weight="medium"
@@ -751,13 +506,13 @@
                           >
                         </OuiFlex>
                         <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Region</OuiText>
+                          <OuiText size="sm" color="tertiary">Region</OuiText>
                           <OuiText size="sm" weight="medium">{{
                             vps?.region || "—"
                           }}</OuiText>
                         </OuiFlex>
                         <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Size</OuiText>
+                          <OuiText size="sm" color="tertiary">Size</OuiText>
                           <OuiText size="sm" weight="medium">{{
                             vps?.size || "—"
                           }}</OuiText>
@@ -775,7 +530,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >Security Settings</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Manage passwords and security configurations
                     </OuiText>
                   </OuiStack>
@@ -787,7 +542,7 @@
                       <OuiText size="sm" weight="semibold"
                         >Root Password</OuiText
                       >
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Reset the root password for this VPS. The new password
                         will be generated and shown once. It will take effect
                         after the VPS is rebooted or cloud-init is re-run.
@@ -813,7 +568,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >VM Management</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Advanced VM operations and reinitialization
                     </OuiText>
                   </OuiStack>
@@ -825,7 +580,7 @@
                       <OuiText size="sm" weight="semibold"
                         >Reinitialize VPS</OuiText
                       >
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Reinstall the VPS with a fresh OS image. This will
                         permanently delete all data on the VPS and reinstall the
                         operating system. The VPS will be reconfigured with
@@ -859,7 +614,7 @@
                       >
                         Danger Zone
                       </OuiText>
-                      <OuiText size="sm" color="secondary">
+                      <OuiText size="sm" color="tertiary">
                         Irreversible and destructive actions
                       </OuiText>
                     </OuiStack>
@@ -875,7 +630,7 @@
                           <OuiText size="sm" weight="medium" color="primary">
                             Delete VPS Instance
                           </OuiText>
-                          <OuiText size="xs" color="secondary">
+                          <OuiText size="xs" color="tertiary">
                             Once you delete a VPS instance, there is no going
                             back. This will permanently remove the VPS and all
                             associated data.
@@ -908,7 +663,7 @@
                 <OuiCardHeader>
                   <OuiStack gap="xs">
                     <OuiText as="h2" class="oui-card-title">SSH Keys</OuiText>
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Manage SSH public keys for accessing your VPS instances.
                       These keys are automatically added to new VPS instances
                       via cloud-init.
@@ -974,7 +729,7 @@
                       </OuiText>
                     </div>
                     <div v-else-if="sshKeys.length === 0" class="py-8">
-                      <OuiText color="secondary" class="text-center">
+                      <OuiText color="tertiary" class="text-center">
                         No SSH keys found. Add your first SSH key to get
                         started.
                       </OuiText>
@@ -1011,12 +766,12 @@
                               </OuiFlex>
                               <OuiText
                                 size="xs"
-                                color="secondary"
+                                color="tertiary"
                                 class="font-mono"
                               >
                                 {{ key.fingerprint }}
                               </OuiText>
-                              <OuiText size="xs" color="muted">
+                              <OuiText size="xs" color="tertiary">
                                 Added {{ formatSSHKeyDate(key.createdAt) }}
                               </OuiText>
                             </OuiStack>
@@ -1052,7 +807,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >Root Password</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Reset the root password for this VPS instance. The new
                       password will be shown once and must be saved immediately.
                     </OuiText>
@@ -1065,7 +820,7 @@
                         <OuiText size="xs" weight="semibold"
                           >Security Note</OuiText
                         >
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           SSH key authentication is preferred and tried first.
                           Passwords are only used as a fallback. For better
                           security, use SSH keys instead of passwords.
@@ -1088,7 +843,7 @@
                       }}
                     </OuiButton>
 
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       After resetting, you'll need to reboot the VPS for the new
                       password to take effect. The password will only be shown
                       once.
@@ -1102,7 +857,7 @@
                 <OuiCardHeader>
                   <OuiStack gap="xs">
                     <OuiText as="h2" class="oui-card-title">SSH Alias</OuiText>
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Set a memorable alias for easier SSH connections. Instead
                       of using the long VPS ID, you can use a short alias like
                       "prod-db" or "web-1".
@@ -1116,7 +871,7 @@
                         <OuiText size="xs" weight="semibold"
                           >About SSH Aliases</OuiText
                         >
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           SSH aliases make it easier to connect to your VPS.
                           Instead of typing the long VPS ID, you can use a
                           short, memorable alias. Aliases must be unique and can
@@ -1173,12 +928,12 @@
                               >
                               <OuiText
                                 size="xs"
-                                color="secondary"
+                                color="tertiary"
                                 class="font-mono"
                               >
                                 {{ sshAlias }}
                               </OuiText>
-                              <OuiText size="xs" color="muted">
+                              <OuiText size="xs" color="tertiary">
                                 Connect using:
                                 <code
                                   class="text-xs bg-surface-muted px-1 py-0.5 rounded"
@@ -1228,7 +983,7 @@
                     </div>
                     <div v-else class="py-4">
                       <OuiStack gap="md" align="center">
-                        <OuiText color="secondary" class="text-center">
+                        <OuiText color="tertiary" class="text-center">
                           No SSH alias set. Set an alias to make SSH connections
                           easier.
                         </OuiText>
@@ -1254,7 +1009,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >SSH Bastion Key</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Manage the SSH key used for SSH bastion host connections.
                       This key is required for SSH access through the bastion
                       host and is automatically generated.
@@ -1268,7 +1023,7 @@
                         <OuiText size="xs" weight="semibold"
                           >About Bastion Keys</OuiText
                         >
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           The bastion key is required for SSH proxy connections
                           through the bastion host. The public key is
                           automatically added to the root user via cloud-init.
@@ -1332,12 +1087,12 @@
                               >
                               <OuiText
                                 size="xs"
-                                color="secondary"
+                                color="tertiary"
                                 class="font-mono"
                               >
                                 {{ bastionKey.fingerprint }}
                               </OuiText>
-                              <OuiText size="xs" color="muted">
+                              <OuiText size="xs" color="tertiary">
                                 Created
                                 {{ formatSSHKeyDate(bastionKey.createdAt) }}
                               </OuiText>
@@ -1360,7 +1115,7 @@
                         {{ rotatingBastionKey ? "Rotating..." : "Rotate Key" }}
                       </OuiButton>
 
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Rotating the key generates a new key pair. The new key
                         will take effect after the VPS is rebooted or cloud-init
                         is re-run.
@@ -1368,7 +1123,7 @@
                     </div>
                     <div v-else class="py-4">
                       <OuiStack gap="md" align="center">
-                        <OuiText color="secondary" class="text-center">
+                        <OuiText color="tertiary" class="text-center">
                           No bastion key found. SSH bastion access requires this
                           key.
                         </OuiText>
@@ -1398,7 +1153,7 @@
                     <OuiText as="h2" class="oui-card-title"
                       >Web Terminal Key</OuiText
                     >
-                    <OuiText color="secondary" size="sm">
+                    <OuiText color="tertiary" size="sm">
                       Manage the SSH key used for web terminal access. This key
                       is optional and can be removed to disable web terminal
                       access while keeping SSH bastion working.
@@ -1412,7 +1167,7 @@
                         <OuiText size="xs" weight="semibold"
                           >About Web Terminal Keys</OuiText
                         >
-                        <OuiText size="xs" color="secondary">
+                        <OuiText size="xs" color="tertiary">
                           The web terminal key enables browser-based terminal
                           access to your VPS. The public key is automatically
                           added to the root user via cloud-init. You can remove
@@ -1476,12 +1231,12 @@
                               >
                               <OuiText
                                 size="xs"
-                                color="secondary"
+                                color="tertiary"
                                 class="font-mono"
                               >
                                 {{ terminalKey.fingerprint }}
                               </OuiText>
-                              <OuiText size="xs" color="muted">
+                              <OuiText size="xs" color="tertiary">
                                 Created
                                 {{ formatSSHKeyDate(terminalKey.createdAt) }}
                               </OuiText>
@@ -1528,7 +1283,7 @@
                         </OuiButton>
                       </OuiFlex>
 
-                      <OuiText size="xs" color="secondary">
+                      <OuiText size="xs" color="tertiary">
                         Rotating the key generates a new key pair. Removing the
                         key disables web terminal access. The new key will take
                         effect after the VPS is rebooted or cloud-init is
@@ -1537,7 +1292,7 @@
                     </div>
                     <div v-else class="py-4">
                       <OuiStack gap="md" align="center">
-                        <OuiText color="secondary" class="text-center">
+                        <OuiText color="tertiary" class="text-center">
                           No terminal key found. Web terminal access is
                           disabled. Create a key to enable it.
                         </OuiText>
@@ -1574,12 +1329,12 @@
                     <OuiText size="sm" weight="semibold" color="warning">
                       ⚠️ Warning
                     </OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       Removing the terminal key will disable web terminal
                       access. SSH bastion access will continue to work using the
                       separate bastion key.
                     </OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       The key will be removed from the VPS on the next reboot or
                       when cloud-init is re-run. You can recreate the key at any
                       time to re-enable web terminal access.
@@ -1620,7 +1375,7 @@
                     <OuiText size="xs" weight="semibold"
                       >Alias Requirements</OuiText
                     >
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       • 1-63 characters<br />
                       • Alphanumeric characters, hyphens, and underscores
                       only<br />
@@ -1641,7 +1396,7 @@
                   <OuiText
                     v-if="newSSHAlias"
                     size="xs"
-                    color="secondary"
+                    color="tertiary"
                     class="mt-1"
                   >
                     Connect using:
@@ -1685,7 +1440,7 @@
             >
               <OuiStack gap="md">
                 <OuiBox variant="info" p="sm" rounded="md">
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     After removing the alias, you'll need to use the full VPS ID
                     to connect:
                     <code class="text-xs bg-surface-muted px-1 py-0.5 rounded"
@@ -1729,19 +1484,19 @@
                     <OuiText size="sm" weight="semibold" color="warning">
                       ⚠️ Important
                     </OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       The new password will only be shown once. After closing
                       this dialog, you won't be able to see it again. Make sure
                       to save it securely.
                     </OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       The password will take effect after the VPS is rebooted or
                       cloud-init is re-run.
                     </OuiText>
                   </OuiStack>
                 </OuiBox>
 
-                <OuiText color="secondary" size="sm">
+                <OuiText color="tertiary" size="sm">
                   Are you sure you want to reset the root password for this VPS
                   instance?
                 </OuiText>
@@ -1753,7 +1508,7 @@
                     <OuiText size="sm" weight="semibold" color="warning">
                       ⚠️ Save This Password Now
                     </OuiText>
-                    <OuiText size="xs" color="secondary">
+                    <OuiText size="xs" color="tertiary">
                       This password will only be shown once. If you lose it,
                       you'll need to reset it again.
                     </OuiText>
@@ -1780,7 +1535,7 @@
                       </OuiButton>
                     </OuiFlex>
                   </OuiBox>
-                  <OuiText size="xs" color="secondary">
+                  <OuiText size="xs" color="tertiary">
                     {{
                       resetPasswordMessage ||
                       "The password will take effect after the VPS is rebooted or cloud-init is re-run."
@@ -1844,7 +1599,7 @@
               size="md"
             >
               <OuiStack gap="md">
-                <OuiText color="muted" size="sm">
+                <OuiText color="tertiary" size="sm">
                   Update the name for this SSH key. The name will be synced to
                   Proxmox.
                 </OuiText>
@@ -1898,7 +1653,7 @@
               size="md"
             >
               <OuiStack gap="md">
-                <OuiText color="secondary" size="sm">
+                <OuiText color="tertiary" size="sm">
                   Paste your SSH public key below. This key will be added to all
                   VPS instances in your organization.
                 </OuiText>
@@ -1984,6 +1739,8 @@
     CheckIcon,
     XMarkIcon,
     ChartBarIcon,
+    ServerStackIcon,
+    GlobeAltIcon,
   } from "@heroicons/vue/24/outline";
   import {
     VPSService,

@@ -1,153 +1,119 @@
 <template>
-  <OuiStack gap="lg" p="lg" md:p="xl">
-    <!-- Connection Information -->
-    <OuiStack gap="md">
-      <OuiText as="h3" size="lg" weight="bold">Connection Information</OuiText>
+  <OuiStack gap="md">
+    <!-- Sleeping Notice -->
+    <OuiCard v-if="props.database?.status === DatabaseStatus.SLEEPING" variant="outline" status="warning">
+      <OuiCardBody>
+        <OuiFlex align="center" gap="sm">
+          <OuiText size="lg">💤</OuiText>
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="semibold">Database is sleeping</OuiText>
+            <OuiText size="xs" color="tertiary">
+              It will start automatically when a connection is made. First connection may take a few seconds.
+            </OuiText>
+          </OuiStack>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
 
-      <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiFlex align="center" gap="sm" justify="between" wrap="wrap">
-            <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-                Hostname
+    <!-- Quick Connect Bar -->
+    <OuiCard variant="outline">
+      <OuiCardBody>
+        <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+            <div class="h-8 w-8 rounded-lg bg-surface-muted flex items-center justify-center shrink-0">
+              <ServerStackIcon class="h-4 w-4 text-accent-primary" />
+            </div>
+            <OuiStack gap="none" class="min-w-0">
+              <OuiText size="sm" weight="medium" truncate class="font-mono">
+                {{ database.host || 'N/A' }}:{{ database.port }}
               </OuiText>
-              <OuiCode :code="database.host || 'N/A'" class="flex-1 min-w-0" />
+              <OuiText size="xs" color="tertiary">{{ getTypeLabel(database.type) }} · {{ database.name || 'N/A' }}</OuiText>
             </OuiStack>
           </OuiFlex>
-        </OuiStack>
+          <OuiFlex gap="xs" class="shrink-0">
+            <OuiBadge :variant="statusMeta.variant" size="xs">
+              <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1" :class="statusMeta.dotClass" />
+              {{ statusMeta.label }}
+            </OuiBadge>
+          </OuiFlex>
+        </OuiFlex>
+      </OuiCardBody>
+    </OuiCard>
 
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Port
-          </OuiText>
-          <OuiCode :code="String(database.port)" />
-        </OuiStack>
-
-        <!-- <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Username
-          </OuiText>
-            <OuiCode :code="database.username" />
-        </OuiStack> -->
-      </OuiGrid>
-    </OuiStack>
-
-    <!-- Sleeping Notice -->
-    <OuiStack v-if="props.database?.status === DatabaseStatus.SLEEPING" gap="sm" p="md" rounded="lg"
-      class="bg-secondary/10 border border-secondary/30">
-      <OuiFlex align="center" gap="sm">
-        <OuiText size="lg">💤</OuiText>
-        <OuiStack gap="xs">
-          <OuiText size="sm" weight="semibold" color="primary">This database is sleeping</OuiText>
-          <OuiText size="xs" color="secondary">It will start automatically when a connection is made. The first
-            connection may take a few seconds while the container starts.</OuiText>
-        </OuiStack>
-      </OuiFlex>
-    </OuiStack>
-
-    <!-- Resource Information -->
-    <OuiStack gap="md">
-      <OuiText as="h3" size="lg" weight="bold">Resources</OuiText>
-
-      <OuiGrid :cols="{ sm: 2, md: 4 }" gap="md">
-        <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
-          <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-              CPU Cores
-            </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+    <!-- Resource Cards -->
+    <OuiGrid :cols="{ sm: 2, md: 4 }" gap="sm">
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiFlex align="center" gap="xs">
+              <CpuChipIcon class="h-3.5 w-3.5 text-accent-primary" />
+              <OuiText size="xs" color="tertiary">CPU Cores</OuiText>
+            </OuiFlex>
+            <OuiText size="xl" weight="semibold">
               {{ database.cpuCores }}
             </OuiText>
           </OuiStack>
-        </OuiBox>
+        </OuiCardBody>
+      </OuiCard>
 
-        <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
-          <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-              Memory
-            </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiFlex align="center" gap="xs">
+              <CircleStackIcon class="h-3.5 w-3.5 text-accent-info" />
+              <OuiText size="xs" color="tertiary">Memory</OuiText>
+            </OuiFlex>
+            <OuiText size="xl" weight="semibold">
               {{ formatBytes(database.memoryBytes) }}
             </OuiText>
           </OuiStack>
-        </OuiBox>
+        </OuiCardBody>
+      </OuiCard>
 
-        <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
-          <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-              Storage
-            </OuiText>
-            <OuiText size="lg" weight="bold" color="primary">
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiFlex align="center" gap="xs">
+              <ArchiveBoxIcon class="h-3.5 w-3.5 text-success" />
+              <OuiText size="xs" color="tertiary">Storage</OuiText>
+            </OuiFlex>
+            <OuiText size="xl" weight="semibold">
               {{ formatBytes(database.diskBytes) }}
             </OuiText>
           </OuiStack>
-        </OuiBox>
+        </OuiCardBody>
+      </OuiCard>
 
-        <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
-          <OuiStack gap="xs">
-            <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-              Database Name
-            </OuiText>
-            <OuiText size="lg" weight="bold" color="primary" class="truncate">
-              {{ database.name || 'N/A' }}
+      <OuiCard variant="outline">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiFlex align="center" gap="xs">
+              <ClockIcon class="h-3.5 w-3.5 text-accent-secondary" />
+              <OuiText size="xs" color="tertiary">Created</OuiText>
+            </OuiFlex>
+            <OuiText size="sm" weight="semibold">
+              {{ formatDate(database.createdAt) }}
             </OuiText>
           </OuiStack>
-        </OuiBox>
-      </OuiGrid>
-    </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+    </OuiGrid>
 
     <!-- Usage & Billing -->
     <UsageStatistics v-if="usageData" :usage-data="usageData" />
     <CostBreakdown v-if="usageData" :usage-data="usageData" />
-
-    <!-- Database Details -->
-    <OuiStack gap="md">
-      <OuiText as="h3" size="lg" weight="bold">Details</OuiText>
-
-      <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Type
-          </OuiText>
-          <OuiText size="sm" color="primary" weight="medium">
-            {{ getTypeLabel(database.type) }}
-          </OuiText>
-        </OuiStack>
-
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Status
-          </OuiText>
-          <OuiBadge :variant="statusMeta.variant" size="sm">
-            <span class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5" :class="statusMeta.dotClass" />
-            <OuiText as="span" size="xs" weight="semibold">{{ statusMeta.label }}</OuiText>
-          </OuiBadge>
-        </OuiStack>
-
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Created
-          </OuiText>
-          <OuiText size="sm" color="primary" weight="medium">
-            {{ formatDate(database.createdAt) }}
-          </OuiText>
-        </OuiStack>
-
-        <OuiStack gap="sm" p="md" rounded="lg" class="bg-surface-muted/30 border border-border-muted/50">
-          <OuiText size="xs" weight="bold" transform="uppercase" color="secondary" class="tracking-wider">
-            Last Updated
-          </OuiText>
-          <OuiText size="sm" color="primary" weight="medium">
-            {{ formatDate(database.updatedAt) }}
-          </OuiText>
-        </OuiStack>
-      </OuiGrid>
-    </OuiStack>
   </OuiStack>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import {
+  ServerStackIcon,
+  CpuChipIcon,
+  CircleStackIcon,
+  ArchiveBoxIcon,
+  ClockIcon,
+} from "@heroicons/vue/24/outline";
 import { DatabaseType, DatabaseStatus, DatabaseService, type DatabaseInstance } from "@obiente/proto";
 import { formatBytes, formatDate } from "~/utils/common";
 import { useToast } from "~/composables/useToast";
@@ -155,7 +121,6 @@ import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import UsageStatistics from "~/components/shared/UsageStatistics.vue";
 import CostBreakdown from "~/components/shared/CostBreakdown.vue";
-import OuiCode from "~/components/oui/Code.vue";
 
 const props = defineProps<{
   database: DatabaseInstance;
