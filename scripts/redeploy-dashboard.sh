@@ -16,17 +16,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-DOMAIN="${1:-${DOMAIN:-obiente.cloud}}"
 STACK_NAME="${STACK_NAME:-obiente}"
-
-echo "🚀 Redeploying dashboard with DOMAIN=$DOMAIN..."
 
 if [ -f "${REPO_ROOT}/.env" ]; then
   load_env_file "${REPO_ROOT}/.env"
 fi
 
-# Override DOMAIN if provided as argument
+# Resolve domain after loading env so self-hosted .env values win.
+DOMAIN="${1:-${DOMAIN:-localhost}}"
 export DOMAIN="$DOMAIN"
+
+echo "🚀 Redeploying dashboard with DOMAIN=$DOMAIN..."
 
 # Merge docker-compose.base.yml with docker-compose.dashboard.yml
 TEMP_DASHBOARD_COMPOSE=$(mktemp)

@@ -5,7 +5,7 @@
 set -e
 
 STACK_NAME="${1:-obiente}"
-DOMAIN="${DOMAIN:-obiente.cloud}"
+DOMAIN="${DOMAIN:-localhost}"
 
 # Colors
 RED='\033[0;31m'
@@ -74,7 +74,7 @@ echo "  Traefik service: $TRAEFIK_SERVICE"
 echo ""
 echo -e "${YELLOW}💡 To fix routing issues:${NC}"
 echo "1. Ensure DOMAIN environment variable is set when deploying:"
-echo "   DOMAIN=obiente.cloud docker stack deploy -c docker-compose.dashboard.yml obiente-dashboard"
+echo "   DOMAIN=${DOMAIN} docker stack deploy -c docker-compose.dashboard.yml ${STACK_NAME}"
 echo ""
 echo "2. Force update Traefik to rediscover services:"
 echo "   docker service update --force ${TRAEFIK_SERVICE}"

@@ -65,7 +65,7 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo "  cd \"$PROJECT_ROOT\""
-echo "  export DOMAIN=\"\${DOMAIN:-obiente.cloud}\""
+echo "  export DOMAIN=\"\${DOMAIN:-localhost}\""
 echo "  STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME"
 echo ""
 
@@ -124,6 +124,5 @@ echo ""
 # Get the directory containing this script, then go up to project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-echo -e "${GREEN}  cd \"$PROJECT_ROOT\" && export DOMAIN=\"\${DOMAIN:-obiente.cloud}\" && STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME${NC}"
+echo -e "${GREEN}  cd \"$PROJECT_ROOT\" && export DOMAIN=\"\${DOMAIN:-localhost}\" && STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME${NC}"
 echo ""
-

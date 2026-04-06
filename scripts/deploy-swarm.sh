@@ -423,8 +423,8 @@ echo ""
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "🚀 Adding dashboard service to main stack '$STACK_NAME'..."
   
-  # Ensure DOMAIN is set for label substitution
-  export DOMAIN="${DOMAIN:-obiente.cloud}"
+  # Ensure DOMAIN is set for label substitution using env/.env first.
+  export DOMAIN="${DOMAIN:-localhost}"
   
   # Merge docker-compose.base.yml with docker-compose.dashboard.yml
   TEMP_DASHBOARD_COMPOSE=$(mktemp)

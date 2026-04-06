@@ -234,7 +234,7 @@ show_overview() {
   echo -e "${GREEN}📋 Environment Variables${NC}"
   echo ""
   echo "  STACK_NAME          - Stack name (default: obiente)"
-  echo "  DOMAIN              - Domain for dashboard (default: obiente.cloud)"
+  echo "  DOMAIN              - Domain for dashboard (default: localhost, or from .env)"
   echo "  BUILD_LOCAL         - Build images locally (default: false)"
   echo "  DEPLOY_DASHBOARD    - Deploy dashboard service in main stack (default: true)"
   echo "  API_IMAGE           - API image tag (default: ghcr.io/obiente/cloud-api:latest)"
@@ -275,7 +275,7 @@ show_script_details() {
       echo -e "${YELLOW}Environment Variables:${NC}"
       echo "  BUILD_LOCAL=true        - Build images locally instead of pulling"
       echo "  DEPLOY_DASHBOARD=false  - Skip dashboard deployment"
-      echo "  DOMAIN                  - Dashboard domain (default: obiente.cloud)"
+      echo "  DOMAIN                  - Dashboard domain (default: localhost, or from .env)"
       echo ""
       echo -e "${YELLOW}Examples:${NC}"
       echo "  ./scripts/deploy-swarm.sh"
@@ -424,4 +424,3 @@ if [ -z "$SCRIPT_NAME" ]; then
 else
   show_script_details
 fi
-

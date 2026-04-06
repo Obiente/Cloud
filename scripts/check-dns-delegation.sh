@@ -103,7 +103,7 @@ echo ""
 echo "=== Next Steps ==="
 if [ -z "$PROD_URL" ] || [ -z "$API_KEY" ]; then
     echo "1. Add DNS delegation environment variables to your .env file:"
-    echo "   DNS_DELEGATION_PRODUCTION_API_URL=https://api.obiente.cloud"
+    echo "   DNS_DELEGATION_PRODUCTION_API_URL=https://api.<your-domain>"
     echo "   DNS_DELEGATION_API_KEY=your-api-key-here"
     echo ""
     echo "2. Restart the API service:"
@@ -118,4 +118,3 @@ else
     echo "2. If no pushes are happening, check for errors:"
     echo "   docker logs obiente-api | grep -i 'dns pusher.*fail\|dns pusher.*error'"
 fi
-

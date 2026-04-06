@@ -87,8 +87,8 @@ echo ""
 # Redeploy dashboard service in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}🚀 Redeploying dashboard service in stack '${STACK_NAME}'...${NC}"
-  # Ensure DOMAIN is set for label substitution
-  export DOMAIN="${DOMAIN:-obiente.cloud}"
+  # Ensure DOMAIN is set for label substitution using env/.env first.
+  export DOMAIN="${DOMAIN:-localhost}"
   
   # Merge docker-compose.base.yml with docker-compose.dashboard.yml
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
