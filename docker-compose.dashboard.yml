@@ -53,13 +53,17 @@ services:
       update_config:
         parallelism: 1 # Update one replica at a time to prevent mixed versions
         delay: 30s # Wait between updates to ensure complete transition
-        order: start-first # Start new replica first (prevents service unavailability during rolling update)
+        # Default to stop-first because strict max_replicas_per_node placement
+        # makes start-first updates unschedulable on smaller clusters.
+        # Set DASHBOARD_UPDATE_ORDER=start-first if the cluster has enough spare
+        # per-node capacity for zero-downtime rollouts.
+        order: ${DASHBOARD_UPDATE_ORDER:-stop-first}
         failure_action: rollback
         monitor: 60s # Monitor for 60s to ensure new replica is fully healthy before continuing
       rollback_config:
         parallelism: 1
         delay: 10s
-        order: stop-first
+        order: ${DASHBOARD_ROLLBACK_ORDER:-stop-first}
       restart_policy:
         condition: on-failure
         delay: 5s
