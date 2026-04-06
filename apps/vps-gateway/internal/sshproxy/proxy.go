@@ -259,52 +259,63 @@ func (p *Proxy) DialTarget(ctx context.Context, target string, port int) (net.Co
 		targetIP = target
 		logger.Debug("Using provided IP address directly: %s", targetIP)
 	} else {
-		logger.Info("Resolving hostname %s using direct DNS query to 127.0.0.1:53", target)
-
-		testConn, err := net.DialTimeout("udp", "127.0.0.1:53", 1*time.Second)
-		if err != nil {
-			logger.Warn("dnsmasq not reachable on 127.0.0.1:53: %v", err)
+		// Prefer the DHCP manager's in-memory allocation table: it is always
+		// up-to-date and is the authoritative source for VPS UUIDs.  This avoids
+		// stale dnsmasq TTLs and guarantees we reach exactly the right VPS.
+		if allocs, err := p.dhcpManager.ListIPs(ctx, "", target); err == nil && len(allocs) > 0 {
+			ip := allocs[0].IPAddress
+			logger.Info("Resolved %s to %s via DHCP allocation table", target, ip.String())
+			targetIP = ip.String()
 		} else {
-			testConn.Close()
-			logger.Debug("dnsmasq is reachable on 127.0.0.1:53")
-		}
+			// Fall back to DNS for hostnames that are not registered VPS IDs
+			// (e.g. static entries or external names).
+			logger.Info("Resolving hostname %s using direct DNS query to 127.0.0.1:53", target)
 
-		resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		ips, err := queryDNSDirect(resolveCtx, target)
-		if err != nil {
-			domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
-			if domain == "" {
-				domain = "vps.local"
-			}
-			fqdn := fmt.Sprintf("%s.%s", target, domain)
-			logger.Debug("First resolution failed for %s, trying FQDN %s: %v", target, fqdn, err)
-
-			resolveCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel2()
-			ips, err = queryDNSDirect(resolveCtx2, fqdn)
+			testConn, err := net.DialTimeout("udp", "127.0.0.1:53", 1*time.Second)
 			if err != nil {
-				logger.Error("DNS resolution failed for %s and %s: %v", target, fqdn, err)
-				return nil, fmt.Errorf("failed to resolve hostname %s: %w", target, err)
+				logger.Warn("dnsmasq not reachable on 127.0.0.1:53: %v", err)
+			} else {
+				testConn.Close()
+				logger.Debug("dnsmasq is reachable on 127.0.0.1:53")
 			}
-		}
-		if len(ips) == 0 {
-			return nil, fmt.Errorf("no IP addresses found for hostname %s", target)
-		}
 
-		var ip net.IP
-		for _, candidate := range ips {
-			if candidate.To4() != nil {
-				ip = candidate
-				break
+			resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			ips, err := queryDNSDirect(resolveCtx, target)
+			if err != nil {
+				domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
+				if domain == "" {
+					domain = "vps.local"
+				}
+				fqdn := fmt.Sprintf("%s.%s", target, domain)
+				logger.Debug("First resolution failed for %s, trying FQDN %s: %v", target, fqdn, err)
+
+				resolveCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+				defer cancel2()
+				ips, err = queryDNSDirect(resolveCtx2, fqdn)
+				if err != nil {
+					logger.Error("DNS resolution failed for %s and %s: %v", target, fqdn, err)
+					return nil, fmt.Errorf("failed to resolve hostname %s: %w", target, err)
+				}
 			}
+			if len(ips) == 0 {
+				return nil, fmt.Errorf("no IP addresses found for hostname %s", target)
+			}
+
+			var ip net.IP
+			for _, candidate := range ips {
+				if candidate.To4() != nil {
+					ip = candidate
+					break
+				}
+			}
+			if ip == nil {
+				ip = ips[0]
+			}
+			logger.Info("Resolved %s to %s via DNS", target, ip.String())
+			targetIP = ip.String()
 		}
-		if ip == nil {
-			ip = ips[0]
-		}
-		logger.Info("Resolved %s to %s", target, ip.String())
-		targetIP = ip.String()
 	}
 
 	targetAddr := net.JoinHostPort(targetIP, fmt.Sprintf("%d", port))
