@@ -198,6 +198,7 @@
             </OuiStack>
           </OuiBox>
         </OuiStack>
+        </OuiStack>
       </OuiCardBody>
     </OuiCard>
 

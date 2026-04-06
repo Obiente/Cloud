@@ -240,6 +240,7 @@
             </OuiButton>
           </OuiFlex>
         </OuiStack>
+        </OuiStack>
       </OuiCardBody>
     </OuiCard>
 

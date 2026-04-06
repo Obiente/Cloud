@@ -58,6 +58,7 @@
             </OuiButton>
           </OuiFlex>
         </OuiStack>
+      </OuiStack>
       </OuiCardBody>
     </OuiCard>
 
@@ -212,6 +213,7 @@
             </OuiFlex>
           </template>
         </OuiTable>
+        </OuiStack>
       </OuiCardBody>
     </OuiCard>
 

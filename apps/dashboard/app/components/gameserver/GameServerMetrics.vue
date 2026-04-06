@@ -49,8 +49,6 @@
 
       <OuiCard variant="outline">
         <OuiCardBody>
-      <OuiCard variant="outline">
-        <OuiCardBody>
           <OuiStack gap="xs">
             <OuiText size="xs" color="tertiary">Network (GB)</OuiText>
             <OuiText size="xl" weight="semibold">
