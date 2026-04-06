@@ -14,6 +14,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
@@ -633,24 +634,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			}
 
 			if isSwarmMode {
-				registryURL := os.Getenv("REGISTRY_URL")
-				if registryURL == "" {
-					domain := os.Getenv("DOMAIN")
-					if domain == "" {
-						domain = "obiente.cloud"
-					}
-					registryURL = fmt.Sprintf("https://registry.%s", domain)
-				} else {
-					// Handle unexpanded docker-compose variables
-					if strings.Contains(registryURL, "${DOMAIN") {
-						domain := os.Getenv("DOMAIN")
-						if domain == "" {
-							domain = "obiente.cloud"
-						}
-						registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
-						registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
-					}
-				}
+				registryURL := platform.RegistryURL()
 
 				registryHost := strings.TrimPrefix(registryURL, "https://")
 				registryHost = strings.TrimPrefix(registryHost, "http://")

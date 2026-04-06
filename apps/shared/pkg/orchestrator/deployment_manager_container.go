@@ -13,6 +13,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
@@ -714,24 +715,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// For multi-node Swarm deployments, we need to ensure registry authentication
 	// is set up on the manager node so credentials can be passed to worker nodes
 	// via --with-registry-auth=true. Worker nodes will pull the image automatically.
-	registryURL := os.Getenv("REGISTRY_URL")
-	if registryURL == "" {
-		domain := os.Getenv("DOMAIN")
-		if domain == "" {
-			domain = "obiente.cloud"
-		}
-		registryURL = fmt.Sprintf("https://registry.%s", domain)
-	} else {
-		// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
-		if strings.Contains(registryURL, "${DOMAIN") {
-			domain := os.Getenv("DOMAIN")
-			if domain == "" {
-				domain = "obiente.cloud"
-			}
-			registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
-			registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
-		}
-	}
+	registryURL := platform.RegistryURL()
 
 	// Strip protocol from registry URL for comparison (Docker image names don't include protocols)
 	registryHost := strings.TrimPrefix(registryURL, "https://")
@@ -739,7 +723,6 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 	// Check if this image is from our registry or a known registry
 	isRegistryImage := strings.HasPrefix(config.Image, registryHost+"/") ||
-		strings.HasPrefix(config.Image, "registry.obiente.cloud/") ||
 		strings.Contains(config.Image, "/obiente/deploy-") ||
 		strings.Contains(config.Image, "ghcr.io/") ||
 		strings.Contains(config.Image, "docker.io/")

@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 )
 
 const defaultTimeout = 30 * time.Second
@@ -42,16 +44,20 @@ const defaultTimeout = 30 * time.Second
 // 4. Grant "Org User Manager" permission (or "Org Owner" for full access) at the ORGANIZATION level
 // 5. Go to Projects → Select your project
 // 6. IMPORTANT: Ensure the project is GRANTED to the organization:
-//    - Go to Projects → Your Project → Settings → Granted Organizations
-//    - Add the organization where users exist
-//    - This allows the PAT (created in the project) to access that organization
+//   - Go to Projects → Your Project → Settings → Granted Organizations
+//   - Add the organization where users exist
+//   - This allows the PAT (created in the project) to access that organization
+//
 // 7. Generate Personal Access Token (scopes are automatically set based on the project)
 // 8. IMPORTANT: Regenerate the token AFTER adding the member and granting the project - tokens capture permissions at creation time
 //
 // NOTE: If you get "membership not found" error even though you have project-level roles,
-//       you need to add the user/service account as an organization member explicitly.
+//
+//	you need to add the user/service account as an organization member explicitly.
+//
 // NOTE: Personal Access Tokens capture permissions/memberships at creation time, so you must
-//       regenerate the token after adding organization membership or roles.
+//
+//	regenerate the token after adding organization membership or roles.
 type Client struct {
 	baseURL         string
 	clientID        string
@@ -65,7 +71,7 @@ type Client struct {
 func NewClient() *Client {
 	zitadelURL := os.Getenv("ZITADEL_URL")
 	if zitadelURL == "" {
-		zitadelURL = "https://auth.obiente.cloud"
+		zitadelURL = platform.ZitadelURL()
 	}
 	zitadelURL = strings.TrimSuffix(zitadelURL, "/")
 
@@ -125,24 +131,24 @@ func (c *Client) decodeTokenClaims() (map[string]interface{}, error) {
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("token is not a JWT (expected 3 parts, got %d)", len(parts))
 	}
-	
+
 	// Decode the payload (second part)
 	payload := parts[1]
 	// Add padding if needed
 	if len(payload)%4 != 0 {
 		payload += strings.Repeat("=", 4-len(payload)%4)
 	}
-	
+
 	decoded, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode token payload: %w", err)
 	}
-	
+
 	var claims map[string]interface{}
 	if err := json.Unmarshal(decoded, &claims); err != nil {
 		return nil, fmt.Errorf("failed to parse token claims: %w", err)
 	}
-	
+
 	return claims, nil
 }
 
@@ -150,16 +156,16 @@ func (c *Client) decodeTokenClaims() (map[string]interface{}, error) {
 func (c *Client) debugTokenInfo() {
 	fmt.Printf("[Zitadel] === Token Debug Information ===\n")
 	fmt.Printf("[Zitadel] Token preview: %s...\n", c.managementToken[:min(20, len(c.managementToken))])
-	
+
 	claims, err := c.decodeTokenClaims()
 	if err != nil {
 		fmt.Printf("[Zitadel] WARNING: Could not decode token claims: %v\n", err)
 		fmt.Printf("[Zitadel] Token might not be a JWT, or might be encrypted\n")
 		return
 	}
-	
+
 	fmt.Printf("[Zitadel] Token claims decoded successfully\n")
-	
+
 	// Log important claims
 	if sub, ok := claims["sub"].(string); ok {
 		fmt.Printf("[Zitadel] Token subject (sub): %s\n", sub)
@@ -190,7 +196,7 @@ func (c *Client) debugTokenInfo() {
 	if roles, ok := claims["urn:zitadel:iam:org:project:roles"].([]interface{}); ok {
 		fmt.Printf("[Zitadel] Token org project roles: %v\n", roles)
 	}
-	
+
 	// Log all claims for debugging
 	fmt.Printf("[Zitadel] All token claims:\n")
 	for key, value := range claims {
@@ -223,21 +229,21 @@ func (c *Client) getTokenOrganizationContext() (string, error) {
 			return orgID, nil
 		}
 	}
-	
+
 	// Fallback: Try to query organizations endpoint to see what org the token defaults to
 	// This is a best-effort check - not all Zitadel instances expose this
 	orgsURL := fmt.Sprintf("%s/v2/organizations/_search", c.baseURL)
-	
+
 	searchBody := map[string]interface{}{
 		"queries": []map[string]interface{}{},
 		"limit":   1,
 	}
-	
+
 	bodyBytes, err := json.Marshal(searchBody)
 	if err != nil {
 		return "", err
 	}
-	
+
 	req, err := http.NewRequest("POST", orgsURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return "", err
@@ -245,13 +251,13 @@ func (c *Client) getTokenOrganizationContext() (string, error) {
 	req.Header.Set("Authorization", "Bearer "+c.managementToken)
 	req.Header.Set("Content-Type", "application/json")
 	// Don't set org header - use token's default
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusOK {
 		var result struct {
 			Result []struct {
@@ -262,7 +268,7 @@ func (c *Client) getTokenOrganizationContext() (string, error) {
 			return result.Result[0].ID, nil
 		}
 	}
-	
+
 	return "", fmt.Errorf("could not determine token organization context")
 }
 
@@ -271,14 +277,14 @@ func (c *Client) getTokenOrganizationContext() (string, error) {
 func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []string) {
 	// Try multiple endpoints to identify the PAT owner
 	// Personal Access Tokens might work with different endpoints than regular OAuth tokens
-	
+
 	// Endpoint 1: Try Management API user info endpoint
 	endpoints := []string{
 		fmt.Sprintf("%s/management/v1/users/me", c.baseURL),
 		fmt.Sprintf("%s/auth/v1/users/me", c.baseURL),
 		fmt.Sprintf("%s/oidc/v1/userinfo", c.baseURL),
 	}
-	
+
 	for _, userInfoURL := range endpoints {
 		req, err := http.NewRequest("GET", userInfoURL, nil)
 		if err != nil {
@@ -290,15 +296,15 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 			continue
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode == http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			fmt.Printf("[Zitadel] Successfully queried user info from %s\n", userInfoURL)
-			
+
 			// Try to parse as Management API response (nested user object)
 			var userInfoWrapper struct {
 				User struct {
-					UserID string `json:"id"`
+					UserID  string `json:"id"`
 					Details struct {
 						ResourceOwner string `json:"resourceOwner"`
 					} `json:"details"`
@@ -312,10 +318,10 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 				}
 				return userID, verifiedMemberships
 			}
-			
+
 			// Try to parse as flat Management API response
 			var userInfoFlat struct {
-				UserID string `json:"id"`
+				UserID  string `json:"id"`
 				Details struct {
 					ResourceOwner string `json:"resourceOwner"`
 				} `json:"details"`
@@ -328,7 +334,7 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 				}
 				return userID, verifiedMemberships
 			}
-			
+
 			// Try to parse as OIDC userinfo response
 			var oidcInfo struct {
 				Sub string `json:"sub"`
@@ -338,18 +344,18 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 				userID = oidcInfo.Sub
 				return userID, verifiedMemberships
 			}
-			
+
 			// Log the raw response for debugging
 			fmt.Printf("[Zitadel] User info response (could not parse): %s\n", string(body))
 		}
 	}
-	
+
 	fmt.Printf("[Zitadel] Could not identify service account via standard endpoints\n")
 	fmt.Printf("[Zitadel] To find the PAT owner:\n")
 	fmt.Printf("[Zitadel] 1. Go to Zitadel Console → Projects → Your Project → Personal Access Tokens\n")
 	fmt.Printf("[Zitadel] 2. Find the token starting with 'LL1-4CuGS-...'\n")
 	fmt.Printf("[Zitadel] 3. Check which user/service account created it\n")
-	
+
 	// Try to query organizations the service account can see
 	// NOTE: This doesn't mean membership - it just means the PAT has project-level permissions to query orgs
 	orgsURL := fmt.Sprintf("%s/v2/organizations/_search", c.baseURL)
@@ -357,7 +363,7 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 		"queries": []map[string]interface{}{},
 		"limit":   100,
 	}
-	
+
 	bodyBytes, err := json.Marshal(searchBody)
 	if err == nil {
 		req2, err := http.NewRequest("POST", orgsURL, strings.NewReader(string(bodyBytes)))
@@ -384,7 +390,7 @@ func (c *Client) getServiceAccountInfo() (userID string, verifiedMemberships []s
 			}
 		}
 	}
-	
+
 	return userID, verifiedMemberships
 }
 
@@ -395,20 +401,20 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 		fmt.Printf("[Zitadel] Cannot verify membership: Service account ID is unknown\n")
 		return false
 	}
-	
+
 	// Try to query members and see if the service account is in the list
 	membersURL := fmt.Sprintf("%s/v2/organizations/%s/members/_search", c.baseURL, orgID)
 	searchBody := map[string]interface{}{
 		"queries": []map[string]interface{}{},
 		"limit":   1000, // Get enough to find our service account
 	}
-	
+
 	bodyBytes, err := json.Marshal(searchBody)
 	if err != nil {
 		fmt.Printf("[Zitadel] Failed to marshal members search request: %v\n", err)
 		return false
 	}
-	
+
 	req, err := http.NewRequest("POST", membersURL, strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		fmt.Printf("[Zitadel] Failed to create members search request: %v\n", err)
@@ -417,7 +423,7 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 	req.Header.Set("Authorization", "Bearer "+c.managementToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-zitadel-orgid", orgID)
-	
+
 	fmt.Printf("[Zitadel] Querying organization members to verify service account (User ID: %s) membership...\n", serviceAccountID)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -425,9 +431,9 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	
+
 	fmt.Printf("[Zitadel] Members query response status: %s\n", resp.Status)
-	
+
 	if resp.StatusCode == http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		var result struct {
@@ -442,7 +448,7 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 				if member.UserID == serviceAccountID {
 					fmt.Printf("[Zitadel] ✓ VERIFIED: Service account (User ID: %s) IS a member of organization %s\n", serviceAccountID, orgID)
 					fmt.Printf("[Zitadel]   Roles assigned: %v\n", member.Roles)
-					
+
 					// Check for expected roles
 					hasOrgOwner := false
 					hasOrgUserManager := false
@@ -458,7 +464,7 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 							hasImpersonator = true
 						}
 					}
-					
+
 					if hasOrgOwner {
 						fmt.Printf("[Zitadel]   ✓ Has Org Owner role\n")
 					}
@@ -468,7 +474,7 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 					if hasImpersonator {
 						fmt.Printf("[Zitadel]   ✓ Has Impersonator role\n")
 					}
-					
+
 					return true
 				}
 			}
@@ -487,7 +493,7 @@ func (c *Client) verifyActualMembership(serviceAccountID, orgID string) bool {
 			fmt.Printf("[Zitadel] This could indicate the service account is not a member, OR the token needs to be regenerated\n")
 		}
 	}
-	
+
 	return false
 }
 
@@ -496,23 +502,23 @@ func (c *Client) verifyServiceAccountPermissions(orgID string) {
 	// First, try to identify the service account
 	fmt.Printf("[Zitadel] Attempting to identify service account...\n")
 	serviceAccountID, verifiedMemberships := c.getServiceAccountInfo()
-	
+
 	if serviceAccountID != "" {
 		fmt.Printf("[Zitadel] Service account User ID: %s\n", serviceAccountID)
 	} else {
 		fmt.Printf("[Zitadel] WARNING: Could not identify service account User ID\n")
 		fmt.Printf("[Zitadel] The Personal Access Token might not allow querying user info\n")
 	}
-	
+
 	// IMPORTANT: Check if user has project-level permissions but not org membership
 	// In Zitadel, project-level roles (like "Org Manager" in a project) do NOT grant organization membership
 	// Session creation requires actual organization membership, not just project permissions
 	fmt.Printf("[Zitadel] Verifying actual membership in organization %s...\n", orgID)
 	fmt.Printf("[Zitadel] NOTE: Project-level roles/permissions do NOT grant organization membership\n")
 	fmt.Printf("[Zitadel] Even if you're an 'Org Manager' in a project, you must be added as an organization member\n")
-	
+
 	isMember := c.verifyActualMembership(serviceAccountID, orgID)
-	
+
 	if !isMember {
 		fmt.Printf("[Zitadel] ✗ CRITICAL: Service account is NOT a member of organization %s\n", orgID)
 		fmt.Printf("[Zitadel] \n")
@@ -552,11 +558,11 @@ func (c *Client) verifyServiceAccountPermissions(orgID string) {
 		fmt.Printf("[Zitadel] ✓ Service account membership verified - roles should be active\n")
 		fmt.Printf("[Zitadel] If you still get 'membership not found' errors, try regenerating the Personal Access Token\n")
 	}
-	
+
 	if len(verifiedMemberships) > 0 {
 		fmt.Printf("[Zitadel] Service account's verified organization memberships: %v\n", verifiedMemberships)
 	}
-	
+
 	// Additional diagnostic: Try to query members list (this will fail if not a member)
 	// Note: verifyActualMembership already did this check, but we log it here for diagnostics
 	if !isMember {
@@ -566,7 +572,7 @@ func (c *Client) verifyServiceAccountPermissions(orgID string) {
 			"queries": []map[string]interface{}{},
 			"limit":   10,
 		}
-		
+
 		bodyBytes, err := json.Marshal(searchBody)
 		if err == nil {
 			req, err := http.NewRequest("POST", membersURL, strings.NewReader(string(bodyBytes)))
@@ -641,7 +647,7 @@ func (c *Client) getOAuthTokensForUser(email, password string) (*LoginResponse, 
 // Requires: Org User Manager (or Org Owner) organization permission
 func (c *Client) authenticateWithSessionAPI(email, password string) (*LoginResponse, error) {
 	fmt.Printf("[Zitadel] Starting authentication flow for email: %s\n", email)
-	
+
 	// Step 1: Find the user first to determine their organization
 	// The user might be in a different organization than the service account
 	fmt.Printf("[Zitadel] Step 1: Searching for user by email...\n")
@@ -650,17 +656,17 @@ func (c *Client) authenticateWithSessionAPI(email, password string) (*LoginRespo
 		fmt.Printf("[Zitadel] ERROR: User lookup failed: %v\n", err)
 		return nil, fmt.Errorf("user lookup: %w", err)
 	}
-	
+
 	fmt.Printf("[Zitadel] Step 1: SUCCESS - Found user ID: %s in organization: %s\n", userID, userOrgID)
 	fmt.Printf("[Zitadel] Service account's configured organization ID: %s\n", c.organizationID)
 	fmt.Printf("[Zitadel] User's organization ID: %s\n", userOrgID)
 	if c.organizationID != "" && c.organizationID != userOrgID {
 		fmt.Printf("[Zitadel] WARNING: Service account org (%s) differs from user org (%s)\n", c.organizationID, userOrgID)
 	}
-	
+
 	// Debug token information
 	c.debugTokenInfo()
-	
+
 	// Try to verify token's organization context
 	fmt.Printf("[Zitadel] Verifying token's organization context...\n")
 	tokenOrgID, err := c.getTokenOrganizationContext()
@@ -673,7 +679,7 @@ func (c *Client) authenticateWithSessionAPI(email, password string) (*LoginRespo
 			fmt.Printf("[Zitadel] The Personal Access Token must be generated from a project within organization %s\n", userOrgID)
 		}
 	}
-	
+
 	// Try to verify service account membership and permissions
 	fmt.Printf("[Zitadel] Verifying service account permissions in organization %s...\n", userOrgID)
 	c.verifyServiceAccountPermissions(userOrgID)
@@ -845,7 +851,7 @@ func (c *Client) findUserByEmailWithOrg(email string) (userID string, orgID stri
 
 	var searchResult struct {
 		Result []struct {
-			UserID string `json:"userId"`
+			UserID  string `json:"userId"`
 			Details struct {
 				ResourceOwner string `json:"resourceOwner"`
 			} `json:"details"`
@@ -874,12 +880,12 @@ func (c *Client) findUserByEmailWithOrg(email string) (userID string, orgID stri
 
 	userID = searchResult.Result[0].UserID
 	orgID = searchResult.Result[0].Details.ResourceOwner
-	
+
 	if userID == "" {
 		fmt.Printf("[Zitadel] ERROR: User ID is empty in search result!\n")
 		return "", "", fmt.Errorf("user ID is empty in search result")
 	}
-	
+
 	if orgID == "" {
 		fmt.Printf("[Zitadel] WARNING: Organization ID not in search response, using service account's organization: %s\n", c.organizationID)
 		// If organization ID not in response, use service account's organization
@@ -945,7 +951,7 @@ func (c *Client) findUserByEmailInOrg(email, orgID string) (userID string, found
 
 	var searchResult struct {
 		Result []struct {
-			UserID string `json:"userId"`
+			UserID  string `json:"userId"`
 			Details struct {
 				ResourceOwner string `json:"resourceOwner"`
 			} `json:"details"`
@@ -969,12 +975,12 @@ func (c *Client) findUserByEmailInOrg(email, orgID string) (userID string, found
 
 	userID = searchResult.Result[0].UserID
 	foundOrgID = searchResult.Result[0].Details.ResourceOwner
-	
+
 	if userID == "" {
 		fmt.Printf("[Zitadel] ERROR: User ID is empty in search result!\n")
 		return "", "", fmt.Errorf("user ID is empty in search result")
 	}
-	
+
 	if foundOrgID == "" {
 		fmt.Printf("[Zitadel] Organization ID not in response, using requested org: %s\n", orgID)
 		foundOrgID = orgID
@@ -997,10 +1003,10 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 	} else {
 		fmt.Printf("[Zitadel] ✓ Token can access organization %s\n", orgID)
 	}
-	
+
 	// Session API uses /v2/sessions endpoint (same as User API, not /management/v2)
 	sessionURL := fmt.Sprintf("%s/v2/sessions", c.baseURL)
-	
+
 	// Try creating session with organization context in the body instead of header
 	// Some Zitadel APIs require org context in the request body
 	sessionBody := map[string]interface{}{}
@@ -1010,7 +1016,7 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 	} else {
 		fmt.Printf("[Zitadel] Creating session without organizationId in request body\n")
 	}
-	
+
 	bodyBytes, err := json.Marshal(sessionBody)
 	if err != nil {
 		return "", fmt.Errorf("marshal session: %w", err)
@@ -1026,7 +1032,7 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 		return c.updateSessionWithCredentials(sessionID, email, password, orgID)
 	}
 	fmt.Printf("[Zitadel] Strategy 1 failed: %v\n", err)
-	
+
 	// Strategy 2: Try creating session with organizationId in body but NO header
 	// Some Zitadel APIs prefer body over header for organization context
 	fmt.Printf("[Zitadel] Strategy 2: Creating session with organizationId in body (no header)...\n")
@@ -1036,7 +1042,7 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 		return c.updateSessionWithCredentials(sessionID, email, password, orgID)
 	}
 	fmt.Printf("[Zitadel] Strategy 2 failed: %v\n", err)
-	
+
 	// Strategy 3: Try with organization header AND body
 	if orgID != "" {
 		fmt.Printf("[Zitadel] Strategy 3: Creating session with organization header AND body: %s\n", orgID)
@@ -1049,7 +1055,7 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 		// Return the more specific error from the org-specific attempt
 		return "", err2
 	}
-	
+
 	return "", err
 }
 
@@ -1057,25 +1063,25 @@ func (c *Client) createSessionForUser(email, password, orgID string) (string, er
 func (c *Client) verifyTokenCanAccessOrg(orgID string) error {
 	// Try to get organization details - this is a simple read operation
 	orgURL := fmt.Sprintf("%s/v2/organizations/%s", c.baseURL, orgID)
-	
+
 	req, err := http.NewRequest("GET", orgURL, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.managementToken)
 	req.Header.Set("x-zitadel-orgid", orgID)
-	
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusOK {
 		fmt.Printf("[Zitadel] ✓ Token can successfully query organization %s\n", orgID)
 		return nil
 	}
-	
+
 	body, _ := io.ReadAll(resp.Body)
 	return fmt.Errorf("cannot access organization (status %d): %s", resp.StatusCode, string(body))
 }
@@ -1146,7 +1152,7 @@ func (c *Client) tryCreateSession(sessionURL string, bodyBytes []byte, orgID str
 	}
 	req.Header.Set("Authorization", "Bearer "+c.managementToken)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	if orgID != "" {
 		req.Header.Set("x-zitadel-orgid", orgID)
 		fmt.Printf("[Zitadel] Session creation request: POST %s (with x-zitadel-orgid=%s)\n", sessionURL, orgID)
@@ -1162,7 +1168,7 @@ func (c *Client) tryCreateSession(sessionURL string, bodyBytes []byte, orgID str
 	defer resp.Body.Close()
 
 	fmt.Printf("[Zitadel] Session creation response status: %s\n", resp.Status)
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("[Zitadel] Error response body: %s\n", string(body))
@@ -1220,7 +1226,7 @@ func (c *Client) completeSessionAndGetTokens(sessionID string, userOrgID string)
 	fmt.Printf("[Zitadel] Creating OIDC intent for session %s...\n", sessionID)
 	// Session API uses /v2/sessions endpoint (same as User API, not /management/v2)
 	intentURL := fmt.Sprintf("%s/v2/sessions/%s/intents/oidc", c.baseURL, sessionID)
-	
+
 	intentBody := map[string]interface{}{
 		"clientId": c.clientID,
 		"scope":    []string{"openid", "profile", "email", "offline_access"},

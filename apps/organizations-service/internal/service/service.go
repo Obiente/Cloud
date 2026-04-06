@@ -16,6 +16,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	sharedorganizations "github.com/obiente/cloud/apps/shared/pkg/services/organizations"
@@ -31,10 +32,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	defaultConsoleURL        = "https://obiente.cloud"
-	defaultOwnerFallbackRole = auth.SystemRoleIDAdmin
-)
+const defaultOwnerFallbackRole = auth.SystemRoleIDAdmin
 
 type Config struct {
 	EmailSender  email.Sender
@@ -54,7 +52,7 @@ var _ organizationsv1connect.OrganizationServiceHandler = (*Service)(nil)
 func NewService(cfg Config) organizationsv1connect.OrganizationServiceHandler {
 	consoleURL := strings.TrimSuffix(strings.TrimSpace(cfg.ConsoleURL), "/")
 	if consoleURL == "" {
-		consoleURL = defaultConsoleURL
+		consoleURL = platform.DashboardURL()
 	}
 
 	return &Service{mailer: cfg.EmailSender, consoleURL: consoleURL, supportEmail: strings.TrimSpace(cfg.SupportEmail)}
@@ -1616,7 +1614,7 @@ func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organiz
 
 	consoleURL := s.consoleURL
 	if consoleURL == "" {
-		consoleURL = defaultConsoleURL
+		consoleURL = platform.DashboardURL()
 	}
 
 	inviterName := strings.TrimSpace(inviter.GetName())

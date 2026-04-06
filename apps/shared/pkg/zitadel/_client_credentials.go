@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 )
 
 // ClientCredentialsService handles OAuth2 Client Credentials Grant authentication
@@ -34,7 +36,7 @@ type clientCredentialsToken struct {
 func NewClientCredentialsService() *ClientCredentialsService {
 	zitadelURL := os.Getenv("ZITADEL_URL")
 	if zitadelURL == "" {
-		zitadelURL = "https://auth.obiente.cloud"
+		zitadelURL = platform.ZitadelURL()
 	}
 	zitadelURL = strings.TrimSuffix(zitadelURL, "/")
 
@@ -70,7 +72,7 @@ func (s *ClientCredentialsService) GetAccessToken() (string, error) {
 
 	data := url.Values{}
 	data.Set("grant_type", "client_credentials")
-	
+
 	// Request scopes for management API access
 	// Required scopes for Session API and User API:
 	// - openid: Basic OpenID Connect scope
@@ -78,10 +80,10 @@ func (s *ClientCredentialsService) GetAccessToken() (string, error) {
 	// - urn:zitadel:iam:org:project:id:zitadel:aud: Management API access
 	// See: https://zitadel.com/docs/guides/integrate/service-users/client-credentials
 	scopes := "openid profile urn:zitadel:iam:org:project:id:zitadel:aud"
-	
+
 	// Optional: Add email scope if needed for user info
 	// scopes += " email"
-	
+
 	// Note: Organization-specific scopes are not typically needed for Client Credentials
 	// The service user's organization membership is checked via roles/permissions, not scopes
 	fmt.Printf("[Zitadel ClientCredentials] Requesting scopes: %s\n", scopes)
@@ -96,7 +98,7 @@ func (s *ClientCredentialsService) GetAccessToken() (string, error) {
 	// See: https://zitadel.com/docs/guides/integrate/login/oidc/oauth-recommended-flows#client-credentials-grant
 	req.SetBasicAuth(s.clientID, s.clientSecret)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	
+
 	fmt.Printf("[Zitadel ClientCredentials] Using HTTP Basic Auth with client_id: %s\n", s.clientID)
 
 	resp, err := s.httpClient.Do(req)
@@ -132,4 +134,3 @@ func (s *ClientCredentialsService) GetAccessToken() (string, error) {
 func (s *ClientCredentialsService) IsConfigured() bool {
 	return s.clientID != "" && s.clientSecret != ""
 }
-

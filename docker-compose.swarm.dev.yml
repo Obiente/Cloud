@@ -1160,7 +1160,7 @@ services:
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
-        - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-obiente.cloud}`)"
+        - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.registry.entrypoints=websecure"
         - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
         - "traefik.http.routers.registry.service=registry"

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/stripe/stripe-go/v83"
 	portalsession "github.com/stripe/stripe-go/v83/billingportal/session"
 	"github.com/stripe/stripe-go/v83/checkout/session"
@@ -43,18 +44,12 @@ func NewClient() (*Client, error) {
 func (c *Client) CreateCheckoutSession(ctx context.Context, params *CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 	successURL := params.SuccessURL
 	if successURL == "" {
-		dashboardURL := os.Getenv("DASHBOARD_URL")
-		if dashboardURL == "" {
-			dashboardURL = "https://obiente.cloud"
-		}
+		dashboardURL := platform.DashboardURL()
 		successURL = dashboardURL + "/organizations?tab=billing&payment=success"
 	}
 	cancelURL := params.CancelURL
 	if cancelURL == "" {
-		dashboardURL := os.Getenv("DASHBOARD_URL")
-		if dashboardURL == "" {
-			dashboardURL = "https://obiente.cloud"
-		}
+		dashboardURL := platform.DashboardURL()
 		cancelURL = dashboardURL + "/organizations?tab=billing&payment=canceled"
 	}
 
@@ -109,10 +104,7 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, params *CheckoutSess
 // CreatePortalSession creates a Stripe Customer Portal session
 func (c *Client) CreatePortalSession(ctx context.Context, customerID, returnURL string) (*stripe.BillingPortalSession, error) {
 	if returnURL == "" {
-		dashboardURL := os.Getenv("DASHBOARD_URL")
-		if dashboardURL == "" {
-			dashboardURL = "https://obiente.cloud"
-		}
+		dashboardURL := platform.DashboardURL()
 		returnURL = dashboardURL + "/organizations?tab=billing"
 	}
 
@@ -343,18 +335,12 @@ func formatAmount(cents int64) string {
 func (c *Client) CreateSubscriptionCheckoutSession(ctx context.Context, params *SubscriptionCheckoutSessionParams) (*stripe.CheckoutSession, error) {
 	successURL := params.SuccessURL
 	if successURL == "" {
-		dashboardURL := os.Getenv("DASHBOARD_URL")
-		if dashboardURL == "" {
-			dashboardURL = "https://obiente.cloud"
-		}
+		dashboardURL := platform.DashboardURL()
 		successURL = dashboardURL + "/organizations?tab=billing&payment=success"
 	}
 	cancelURL := params.CancelURL
 	if cancelURL == "" {
-		dashboardURL := os.Getenv("DASHBOARD_URL")
-		if dashboardURL == "" {
-			dashboardURL = "https://obiente.cloud"
-		}
+		dashboardURL := platform.DashboardURL()
 		cancelURL = dashboardURL + "/organizations?tab=billing&payment=canceled"
 	}
 

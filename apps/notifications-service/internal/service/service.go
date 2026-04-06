@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -716,10 +716,7 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 	}
 
 	// Get console URL for action links
-	consoleURL := os.Getenv("DASHBOARD_URL")
-	if consoleURL == "" {
-		consoleURL = "https://cloud.obiente.com"
-	}
+	consoleURL := platform.DashboardURL()
 
 	// Build action URL
 	actionLink := consoleURL
@@ -757,7 +754,7 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 		Category:     emailCategory,
 		BaseURL:      consoleURL,
 		BrandURL:     consoleURL,
-		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
+		SupportEmail: platform.SupportEmail(),
 	}
 
 	if actionURL != nil && actionLabel != nil {

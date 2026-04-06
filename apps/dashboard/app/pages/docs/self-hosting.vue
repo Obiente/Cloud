@@ -5,7 +5,8 @@
         Self-Hosting Obiente Cloud
       </OuiText>
       <OuiText color="tertiary" size="lg">
-        Deploy and manage your own Obiente Cloud instance with DNS delegation support
+        Deploy and manage your own Obiente Cloud instance with DNS delegation
+        support
       </OuiText>
     </OuiStack>
 
@@ -13,19 +14,25 @@
       <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Overview</OuiText>
         <OuiText size="sm" color="tertiary">
-          Self-host Obiente Cloud on your own infrastructure while using the main DNS service
+          Self-host Obiente Cloud on your own infrastructure while using the
+          main DNS service
         </OuiText>
       </OuiCardHeader>
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiText>
-            Self-hosting allows you to deploy Obiente Cloud on your own infrastructure while 
-            leveraging the production DNS service for unified domain resolution. This enables 
-            you to maintain full control over your deployments and data while benefiting from 
-            centralized DNS management.
+            Self-hosting allows you to deploy Obiente Cloud on your own
+            infrastructure while leveraging the production DNS service for
+            unified domain resolution. This enables you to maintain full control
+            over your deployments and data while benefiting from centralized DNS
+            management.
           </OuiText>
 
-          <OuiBox p="md" rounded="lg" class="bg-success/10 border border-success/20">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-success/10 border border-success/20"
+          >
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">
                 Key Benefits
@@ -35,7 +42,11 @@
                   • Full control over your infrastructure and data
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
-                  • Use <code class="text-xs bg-surface-subtle px-1 py-0.5 rounded">my.obiente.cloud</code> DNS without exposing port 53
+                  • Use
+                  <code class="text-xs bg-surface-subtle px-1 py-0.5 rounded"
+                    >my.obiente.cloud</code
+                  >
+                  DNS without exposing port 53
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
                   • Automatic DNS record synchronization
@@ -67,7 +78,8 @@
               • Docker and Docker Compose installed
             </OuiText>
             <OuiText size="sm" color="tertiary">
-              • A server with sufficient resources (minimum 2GB RAM, 2 CPU cores recommended)
+              • A server with sufficient resources (minimum 2GB RAM, 2 CPU cores
+              recommended)
             </OuiText>
             <OuiText size="sm" color="tertiary">
               • Domain name configured (optional, for custom domains)
@@ -76,7 +88,8 @@
               • An Obiente Cloud account with an organization
             </OuiText>
             <OuiText size="sm" color="tertiary">
-              • DNS delegation subscription ($2/month) - Subscribe via the dashboard
+              • DNS delegation subscription ($2/month) - Subscribe via the
+              dashboard
             </OuiText>
           </OuiStack>
         </OuiStack>
@@ -92,14 +105,26 @@
       </OuiCardHeader>
       <OuiCardBody>
         <OuiStack gap="md">
-          <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-primary/10 border border-primary/20"
+          >
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">
                 Step 1: Subscribe to DNS Delegation
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
                 <OuiText size="sm" color="tertiary">
-                  1. Navigate to <NuxtLink to="/billing" class="text-primary hover:underline">Billing</NuxtLink> or <NuxtLink to="/self-host" class="text-primary hover:underline">Self-Hosted DNS</NuxtLink> in the dashboard
+                  1. Navigate to
+                  <NuxtLink to="/billing" class="text-primary hover:underline"
+                    >Billing</NuxtLink
+                  >
+                  or
+                  <NuxtLink to="/self-host" class="text-primary hover:underline"
+                    >Self-Hosted DNS</NuxtLink
+                  >
+                  in the dashboard
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
                   2. Select your organization
@@ -111,20 +136,29 @@
                   4. Complete the Stripe checkout process
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
-                  5. Your API key will be automatically created when the subscription becomes active
+                  5. Your API key will be automatically created when the
+                  subscription becomes active
                 </OuiText>
               </OuiStack>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-primary/10 border border-primary/20"
+          >
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">
                 Step 2: Retrieve Your API Key
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
                 <OuiText size="sm" color="tertiary">
-                  1. Navigate to <NuxtLink to="/self-host" class="text-primary hover:underline">Self-Hosted DNS</NuxtLink> in the dashboard
+                  1. Navigate to
+                  <NuxtLink to="/self-host" class="text-primary hover:underline"
+                    >Self-Hosted DNS</NuxtLink
+                  >
+                  in the dashboard
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
                   2. Select your organization
@@ -139,7 +173,11 @@
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-primary/10 border border-primary/20"
+          >
             <OuiStack gap="sm">
               <OuiText size="sm" weight="semibold" color="primary">
                 Step 3: Configure Your Self-Hosted Instance
@@ -175,9 +213,14 @@
         <OuiStack gap="lg">
           <OuiStack gap="md">
             <OuiText size="sm" weight="medium">Environment Variables</OuiText>
-            <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
-              <pre class="text-xs font-mono whitespace-pre-wrap"><code># Production API URL
-DNS_DELEGATION_PRODUCTION_API_URL="https://api.obiente.cloud"
+            <OuiBox
+              p="md"
+              class="bg-surface-base border border-border-muted rounded"
+            >
+              <pre
+                class="text-xs font-mono whitespace-pre-wrap"
+              ><code># Production API URL
+DNS_DELEGATION_PRODUCTION_API_URL="https://api.example.com"
 
 # API key (retrieved from dashboard)
 DNS_DELEGATION_API_KEY="your-api-key-here"
@@ -192,12 +235,15 @@ DNS_DELEGATION_TTL="300s"</code></pre>
 
           <OuiStack gap="md">
             <OuiText size="sm" weight="medium">Docker Compose Example</OuiText>
-            <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
+            <OuiBox
+              p="md"
+              class="bg-surface-base border border-border-muted rounded"
+            >
               <pre class="text-xs font-mono whitespace-pre-wrap"><code>services:
   api:
     image: obiente/cloud-api:latest
     environment:
-      DNS_DELEGATION_PRODUCTION_API_URL: "https://api.obiente.cloud"
+      DNS_DELEGATION_PRODUCTION_API_URL: "https://api.example.com"
       DNS_DELEGATION_API_KEY: "your-api-key-here"
       DNS_DELEGATION_PUSH_INTERVAL: "2m"
       DNS_DELEGATION_TTL: "300s"
@@ -205,10 +251,7 @@ DNS_DELEGATION_TTL="300s"</code></pre>
             </OuiBox>
           </OuiStack>
 
-          <OuiAccordion
-            :items="configAccordionItems"
-            multiple
-          >
+          <OuiAccordion :items="configAccordionItems" multiple>
             <template #trigger="{ item }">
               <OuiFlex align="center" gap="sm">
                 <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
@@ -233,9 +276,13 @@ DNS_DELEGATION_TTL="300s"</code></pre>
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiText>
-            DNS delegation allows your self-hosted Obiente Cloud instance to use the main 
-            <code class="text-xs bg-surface-subtle px-1 py-0.5 rounded">my.obiente.cloud</code> DNS service 
-            without exposing DNS port 53 locally. This enables unified DNS resolution across all deployments.
+            DNS delegation allows your self-hosted Obiente Cloud instance to use
+            the main
+            <code class="text-xs bg-surface-subtle px-1 py-0.5 rounded"
+              >my.obiente.cloud</code
+            >
+            DNS service without exposing DNS port 53 locally. This enables
+            unified DNS resolution across all deployments.
           </OuiText>
 
           <OuiBox p="md" rounded="lg" class="bg-info/10 border border-info/20">
@@ -245,13 +292,16 @@ DNS_DELEGATION_TTL="300s"</code></pre>
               </OuiText>
               <OuiStack gap="xs" class="pl-4">
                 <OuiText size="sm" color="tertiary">
-                  1. Your self-hosted API periodically pushes DNS records to the production API
+                  1. Your self-hosted API periodically pushes DNS records to the
+                  production API
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
-                  2. Production API stores these records with a TTL (time-to-live)
+                  2. Production API stores these records with a TTL
+                  (time-to-live)
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
-                  3. Production DNS server queries delegated records when local lookup fails
+                  3. Production DNS server queries delegated records when local
+                  lookup fails
                 </OuiText>
                 <OuiText size="sm" color="tertiary">
                   4. Records automatically expire if not refreshed within TTL
@@ -294,12 +344,19 @@ DNS_DELEGATION_TTL="300s"</code></pre>
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiStack gap="md">
-            <OuiText size="sm" weight="medium">Verify DNS Records Are Being Pushed</OuiText>
+            <OuiText size="sm" weight="medium"
+              >Verify DNS Records Are Being Pushed</OuiText
+            >
             <OuiText size="sm" color="tertiary">
               Check your API logs to verify DNS records are being pushed:
             </OuiText>
-            <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
-              <pre class="text-xs font-mono whitespace-pre-wrap"><code>docker logs obiente-api | grep -i "dns pusher"
+            <OuiBox
+              p="md"
+              class="bg-surface-base border border-border-muted rounded"
+            >
+              <pre
+                class="text-xs font-mono whitespace-pre-wrap"
+              ><code>docker logs obiente-api | grep -i "dns pusher"
 
 # You should see logs like:
 # [DNS Pusher] Successfully pushed 5 DNS records</code></pre>
@@ -311,8 +368,13 @@ DNS_DELEGATION_TTL="300s"</code></pre>
             <OuiText size="sm" color="tertiary">
               Verify that your deployments resolve correctly via production DNS:
             </OuiText>
-            <OuiBox p="md" class="bg-surface-base border border-border-muted rounded">
-              <pre class="text-xs font-mono whitespace-pre-wrap"><code># Query DNS for your deployment
+            <OuiBox
+              p="md"
+              class="bg-surface-base border border-border-muted rounded"
+            >
+              <pre
+                class="text-xs font-mono whitespace-pre-wrap"
+              ><code># Query DNS for your deployment
 dig deploy-123.my.obiente.cloud
 
 # Should return the IP from your self-hosted database</code></pre>
@@ -327,10 +389,7 @@ dig deploy-123.my.obiente.cloud
         <OuiText as="h2" class="oui-card-title">Troubleshooting</OuiText>
       </OuiCardHeader>
       <OuiCardBody>
-        <OuiAccordion
-          :items="troubleshootingItems"
-          multiple
-        >
+        <OuiAccordion :items="troubleshootingItems" multiple>
           <template #trigger="{ item }">
             <OuiFlex align="center" gap="sm">
               <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
@@ -350,38 +409,82 @@ dig deploy-123.my.obiente.cloud
       </OuiCardHeader>
       <OuiCardBody>
         <OuiStack gap="md">
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">API Key Security</OuiText>
+              <OuiText size="sm" weight="semibold" color="primary"
+                >API Key Security</OuiText
+              >
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="tertiary">• Never commit API keys to version control</OuiText>
-                <OuiText size="sm" color="tertiary">• Use environment variables or secrets management</OuiText>
-                <OuiText size="sm" color="tertiary">• Rotate API keys periodically</OuiText>
-                <OuiText size="sm" color="tertiary">• Revoke compromised keys immediately</OuiText>
+                <OuiText size="sm" color="tertiary"
+                  >• Never commit API keys to version control</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Use environment variables or secrets management</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Rotate API keys periodically</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Revoke compromised keys immediately</OuiText
+                >
               </OuiStack>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">TTL Configuration</OuiText>
+              <OuiText size="sm" weight="semibold" color="primary"
+                >TTL Configuration</OuiText
+              >
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="tertiary">• Default TTL: 300 seconds (5 minutes)</OuiText>
-                <OuiText size="sm" color="tertiary">• Push interval must be less than TTL</OuiText>
-                <OuiText size="sm" color="tertiary">• Recommended: Push interval < TTL / 2</OuiText>
-                <OuiText size="sm" color="tertiary">• Shorter TTL = faster expiration but more frequent pushes</OuiText>
+                <OuiText size="sm" color="tertiary"
+                  >• Default TTL: 300 seconds (5 minutes)</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Push interval must be less than TTL</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Recommended: Push interval < TTL / 2</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Shorter TTL = faster expiration but more frequent
+                  pushes</OuiText
+                >
               </OuiStack>
             </OuiStack>
           </OuiBox>
 
-          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+          <OuiBox
+            p="md"
+            rounded="lg"
+            class="bg-surface-muted/40 ring-1 ring-border-muted"
+          >
             <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold" color="primary">Monitoring</OuiText>
+              <OuiText size="sm" weight="semibold" color="primary"
+                >Monitoring</OuiText
+              >
               <OuiStack gap="xs" class="pl-4">
-                <OuiText size="sm" color="tertiary">• Monitor API logs for DNS pusher activity</OuiText>
-                <OuiText size="sm" color="tertiary">• Set up alerts for DNS push failures</OuiText>
-                <OuiText size="sm" color="tertiary">• Verify DNS resolution periodically</OuiText>
-                <OuiText size="sm" color="tertiary">• Keep subscription active to maintain DNS delegation</OuiText>
+                <OuiText size="sm" color="tertiary"
+                  >• Monitor API logs for DNS pusher activity</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Set up alerts for DNS push failures</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Verify DNS resolution periodically</OuiText
+                >
+                <OuiText size="sm" color="tertiary"
+                  >• Keep subscription active to maintain DNS
+                  delegation</OuiText
+                >
               </OuiStack>
             </OuiStack>
           </OuiBox>
@@ -400,26 +503,44 @@ dig deploy-123.my.obiente.cloud
           </OuiText>
           <OuiStack gap="sm">
             <NuxtLink to="/docs/deployments">
-              <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer">
+              <OuiBox
+                p="md"
+                rounded="lg"
+                class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer"
+              >
                 <OuiFlex align="center" gap="sm">
                   <RocketLaunchIcon class="h-5 w-5 text-primary" />
-                  <OuiText size="sm" weight="semibold" color="primary">Learn about Deployments</OuiText>
+                  <OuiText size="sm" weight="semibold" color="primary"
+                    >Learn about Deployments</OuiText
+                  >
                 </OuiFlex>
               </OuiBox>
             </NuxtLink>
             <NuxtLink to="/docs/gameservers">
-              <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer">
+              <OuiBox
+                p="md"
+                rounded="lg"
+                class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer"
+              >
                 <OuiFlex align="center" gap="sm">
                   <CubeIcon class="h-5 w-5 text-primary" />
-                  <OuiText size="sm" weight="semibold" color="primary">Learn about Game Servers</OuiText>
+                  <OuiText size="sm" weight="semibold" color="primary"
+                    >Learn about Game Servers</OuiText
+                  >
                 </OuiFlex>
               </OuiBox>
             </NuxtLink>
             <NuxtLink to="/self-host">
-              <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer">
+              <OuiBox
+                p="md"
+                rounded="lg"
+                class="bg-surface-muted/40 ring-1 ring-border-muted hover:ring-primary/50 transition-all cursor-pointer"
+              >
                 <OuiFlex align="center" gap="sm">
                   <ServerIcon class="h-5 w-5 text-primary" />
-                  <OuiText size="sm" weight="semibold" color="primary">Manage DNS Delegation</OuiText>
+                  <OuiText size="sm" weight="semibold" color="primary"
+                    >Manage DNS Delegation</OuiText
+                  >
                 </OuiFlex>
               </OuiBox>
             </NuxtLink>
@@ -555,4 +676,3 @@ const troubleshootingItems = [
   },
 ];
 </script>
-

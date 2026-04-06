@@ -13,6 +13,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/client"
@@ -218,24 +219,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 
 		// Ensure registry authentication is set up for multi-node deployments
 		// This ensures credentials are available for --with-registry-auth=true
-		registryURL := os.Getenv("REGISTRY_URL")
-		if registryURL == "" {
-			domain := os.Getenv("DOMAIN")
-			if domain == "" {
-				domain = "obiente.cloud"
-			}
-			registryURL = fmt.Sprintf("https://registry.%s", domain)
-		} else {
-			// Handle unexpanded docker-compose variables
-			if strings.Contains(registryURL, "${DOMAIN") {
-				domain := os.Getenv("DOMAIN")
-				if domain == "" {
-					domain = "obiente.cloud"
-				}
-				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
-				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
-			}
-		}
+		registryURL := platform.RegistryURL()
 
 		registryUsername := os.Getenv("REGISTRY_USERNAME")
 		registryPassword := os.Getenv("REGISTRY_PASSWORD")

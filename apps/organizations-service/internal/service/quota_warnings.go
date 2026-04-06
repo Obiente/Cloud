@@ -275,9 +275,6 @@ func (s *Service) sendQuotaWarningEmail(ctx context.Context, orgID, orgName stri
 	}
 
 	consoleURL := fmt.Sprintf("%s/billing?organizationId=%s", s.consoleURL, orgID)
-	if s.consoleURL == "" {
-		consoleURL = fmt.Sprintf("https://obiente.cloud/billing?organizationId=%s", orgID)
-	}
 
 	tmpl := email.TemplateData{
 		Subject:     subject,

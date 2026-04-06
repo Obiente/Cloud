@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 )
@@ -36,15 +36,8 @@ func NewRollbackMonitor() (*RollbackMonitor, error) {
 	}
 
 	mailer := email.NewSenderFromEnv()
-	consoleURL := os.Getenv("DASHBOARD_URL")
-	if consoleURL == "" {
-		consoleURL = "https://obiente.cloud"
-	}
-
-	supportEmail := os.Getenv("SUPPORT_EMAIL")
-	if supportEmail == "" {
-		supportEmail = "support@obiente.cloud"
-	}
+	consoleURL := platform.DashboardURL()
+	supportEmail := platform.SupportEmail()
 
 	ctx, cancel := context.WithCancel(context.Background())
 

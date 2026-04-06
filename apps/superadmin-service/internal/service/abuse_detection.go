@@ -14,6 +14,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
@@ -87,11 +88,11 @@ func DetectAbuse(ctx context.Context) (*superadminv1.GetAbuseDetectionResponse, 
 	}
 
 	metrics := &superadminv1.AbuseMetrics{
-		TotalSuspiciousOrgs:         int64(len(suspiciousOrgs)),
-		HighRiskOrgs:                highRiskCount,
-		RapidCreations_24H:          rapidCreationsCount,
-		FailedPaymentAttempts_24H:   failedPaymentsCount,
-		UnusualUsageSpikes_24H:      usageSpikesCount,
+		TotalSuspiciousOrgs:       int64(len(suspiciousOrgs)),
+		HighRiskOrgs:              highRiskCount,
+		RapidCreations_24H:        rapidCreationsCount,
+		FailedPaymentAttempts_24H: failedPaymentsCount,
+		UnusualUsageSpikes_24H:    usageSpikesCount,
 	}
 
 	return &superadminv1.GetAbuseDetectionResponse{
@@ -239,15 +240,15 @@ func detectSuspiciousOrganizations(twentyFourHoursAgo time.Time) ([]*superadminv
 
 		if riskScore > 0 {
 			suspiciousOrgs = append(suspiciousOrgs, &superadminv1.SuspiciousOrganization{
-				OrganizationId:      act.OrganizationID,
-				OrganizationName:    act.Name,
-				Reason:             strings.Join(reasons, "; "),
-				RiskScore:          riskScore,
-				CreatedCount_24H:    act.Created24h,
+				OrganizationId:        act.OrganizationID,
+				OrganizationName:      act.Name,
+				Reason:                strings.Join(reasons, "; "),
+				RiskScore:             riskScore,
+				CreatedCount_24H:      act.Created24h,
 				FailedDeployments_24H: act.Failed24h,
-				TotalCreditsSpent:  act.CreditsSpent,
-				CreatedAt:          timestamppb.New(act.CreatedAt),
-				LastActivity:       timestamppb.New(act.LastActivity),
+				TotalCreditsSpent:     act.CreditsSpent,
+				CreatedAt:             timestamppb.New(act.CreatedAt),
+				LastActivity:          timestamppb.New(act.LastActivity),
 			})
 		}
 	}
@@ -349,11 +350,11 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 		label     string
 		severity  int64
 	}{
-		{10 * time.Minute, 3, "10 minutes", 95},  // Very aggressive: 3+ in 10 min
-		{30 * time.Minute, 5, "30 minutes", 85},  // Aggressive: 5+ in 30 min
-		{1 * time.Hour, 8, "1 hour", 75},         // Moderate: 8+ in 1 hour
-		{6 * time.Hour, 12, "6 hours", 65},       // Standard: 12+ in 6 hours
-		{24 * time.Hour, 15, "24 hours", 55},     // Daily: 15+ in 24 hours
+		{10 * time.Minute, 3, "10 minutes", 95}, // Very aggressive: 3+ in 10 min
+		{30 * time.Minute, 5, "30 minutes", 85}, // Aggressive: 5+ in 30 min
+		{1 * time.Hour, 8, "1 hour", 75},        // Moderate: 8+ in 1 hour
+		{6 * time.Hour, 12, "6 hours", 65},      // Standard: 12+ in 6 hours
+		{24 * time.Hour, 15, "24 hours", 55},    // Daily: 15+ in 24 hours
 	}
 
 	// Track organizations we've already flagged to avoid duplicates (keep most severe)
@@ -369,7 +370,7 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 			OrganizationID string
 			Count          int64
 		}
-		
+
 		// PRIMARY METHOD: Query audit logs (can't be bypassed by deleting records)
 		if database.MetricsDB != nil {
 			// Main query
@@ -424,7 +425,7 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 				HAVING COUNT(*) > ?
 			`, windowStart, window.threshold).
 				Scan(&combinedCreations).Error
-			
+
 			if err != nil {
 				logger.Warn("[SuperAdmin] Failed to query audit logs for rapid creations, falling back to direct table queries: %v", err)
 				combinedCreations = []struct {
@@ -435,7 +436,7 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 		} else {
 			logger.Warn("[SuperAdmin] MetricsDB not available, cannot use audit logs for abuse detection")
 		}
-		
+
 		// FALLBACK: Only use direct table queries if audit logs are unavailable or failed
 		// This is less reliable as it can be bypassed by deleting records
 		if len(combinedCreations) == 0 && database.MetricsDB == nil {
@@ -452,7 +453,7 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 				HAVING COUNT(*) > ?
 			`, windowStart, windowStart, windowStart, window.threshold).
 				Scan(&combinedCreations).Error
-			
+
 			if err != nil {
 				logger.Error("[SuperAdmin] Failed to query rapid combined creations: %v", err)
 				continue
@@ -465,13 +466,13 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 				var org database.Organization
 				if err := database.DB.First(&org, "id = ?", cc.OrganizationID).Error; err == nil {
 					activities = append(activities, &superadminv1.SuspiciousActivity{
-						Id:              fmt.Sprintf("rapid-%s-%d", cc.OrganizationID, window.duration),
+						Id:               fmt.Sprintf("rapid-%s-%d", cc.OrganizationID, window.duration),
 						OrganizationId:   cc.OrganizationID,
 						OrganizationName: org.Name,
-						ActivityType:    "rapid_creation",
-						Description:     fmt.Sprintf("Created %d resources (deployments + VPS + game servers) in %s", cc.Count, window.label),
-						Severity:        window.severity,
-						OccurredAt:      timestamppb.New(time.Now()),
+						ActivityType:     "rapid_creation",
+						Description:      fmt.Sprintf("Created %d resources (deployments + VPS + game servers) in %s", cc.Count, window.label),
+						Severity:         window.severity,
+						OccurredAt:       timestamppb.New(time.Now()),
 					})
 					flaggedOrgs[cc.OrganizationID] = true
 				}
@@ -512,13 +513,13 @@ func detectFailedPayments(twentyFourHoursAgo time.Time) ([]*superadminv1.Suspici
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", fp.OrganizationID).Error; err == nil {
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:              fmt.Sprintf("payment-%s", fp.OrganizationID),
+				Id:               fmt.Sprintf("payment-%s", fp.OrganizationID),
 				OrganizationId:   fp.OrganizationID,
 				OrganizationName: org.Name,
-				ActivityType:    "failed_payments",
-				Description:     fmt.Sprintf("%d failed payment attempts in 24 hours", fp.Count),
-				Severity:        70,
-				OccurredAt:      timestamppb.New(time.Now()),
+				ActivityType:     "failed_payments",
+				Description:      fmt.Sprintf("%d failed payment attempts in 24 hours", fp.Count),
+				Severity:         70,
+				OccurredAt:       timestamppb.New(time.Now()),
 			})
 		}
 	}
@@ -543,17 +544,17 @@ func detectSSHBruteForce(ctx context.Context, twentyFourHoursAgo time.Time) ([]*
 		label     string
 		severity  int64
 	}{
-		{10 * time.Minute, 3, "10 minutes", 95},  // Very aggressive: 3+ failures in 10 min
-		{30 * time.Minute, 5, "30 minutes", 85},  // Aggressive: 5+ failures in 30 min
-		{1 * time.Hour, 8, "1 hour", 75},         // Moderate: 8+ failures in 1 hour
-		{24 * time.Hour, 10, "24 hours", 65},     // Standard: 10+ failures in 24 hours
+		{10 * time.Minute, 3, "10 minutes", 95}, // Very aggressive: 3+ failures in 10 min
+		{30 * time.Minute, 5, "30 minutes", 85}, // Aggressive: 5+ failures in 30 min
+		{1 * time.Hour, 8, "1 hour", 75},        // Moderate: 8+ failures in 1 hour
+		{24 * time.Hour, 10, "24 hours", 65},    // Standard: 10+ failures in 24 hours
 	}
 
 	flaggedIPs := make(map[string]bool)
 
 	for _, window := range timeWindows {
 		windowStart := now.Add(-window.duration)
-		
+
 		var bruteForceAttempts []struct {
 			IPAddress string
 			Count     int64
@@ -581,12 +582,12 @@ func detectSSHBruteForce(ctx context.Context, twentyFourHoursAgo time.Time) ([]*
 				}
 
 				activities = append(activities, &superadminv1.SuspiciousActivity{
-					Id:            fmt.Sprintf("ssh-bf-%s-%d", bf.IPAddress, window.duration),
+					Id:             fmt.Sprintf("ssh-bf-%s-%d", bf.IPAddress, window.duration),
 					OrganizationId: orgID,
-					ActivityType:  "ssh_brute_force",
-					Description:   fmt.Sprintf("IP %s: %d failed SSH connection attempts in %s", bf.IPAddress, bf.Count, window.label),
-					Severity:      window.severity,
-					OccurredAt:    timestamppb.New(time.Now()),
+					ActivityType:   "ssh_brute_force",
+					Description:    fmt.Sprintf("IP %s: %d failed SSH connection attempts in %s", bf.IPAddress, bf.Count, window.label),
+					Severity:       window.severity,
+					OccurredAt:     timestamppb.New(time.Now()),
 				})
 				flaggedIPs[bf.IPAddress] = true
 			}
@@ -613,10 +614,10 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 		label     string
 		severity  int64
 	}{
-		{10 * time.Minute, 100, "10 minutes", 90},   // Very aggressive: 100+ calls in 10 min
-		{30 * time.Minute, 300, "30 minutes", 80},  // Aggressive: 300+ calls in 30 min
-		{1 * time.Hour, 500, "1 hour", 70},          // Moderate: 500+ calls in 1 hour
-		{24 * time.Hour, 2000, "24 hours", 60},       // Standard: 2000+ calls in 24 hours
+		{10 * time.Minute, 100, "10 minutes", 90}, // Very aggressive: 100+ calls in 10 min
+		{30 * time.Minute, 300, "30 minutes", 80}, // Aggressive: 300+ calls in 30 min
+		{1 * time.Hour, 500, "1 hour", 70},        // Moderate: 500+ calls in 1 hour
+		{24 * time.Hour, 2000, "24 hours", 60},    // Standard: 2000+ calls in 24 hours
 	}
 
 	flaggedUsers := make(map[string]bool)
@@ -624,7 +625,7 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 
 	for _, window := range timeWindows {
 		windowStart := now.Add(-window.duration)
-		
+
 		// Check for excessive API calls per user
 		var userAbuse []struct {
 			UserID         string
@@ -653,12 +654,12 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 				}
 
 				activities = append(activities, &superadminv1.SuspiciousActivity{
-					Id:            fmt.Sprintf("api-user-%s-%d", abuse.UserID, window.duration),
+					Id:             fmt.Sprintf("api-user-%s-%d", abuse.UserID, window.duration),
 					OrganizationId: orgID,
-					ActivityType:  "api_abuse",
-					Description:   fmt.Sprintf("User %s: %d API calls in %s (IP: %s)", abuse.UserID, abuse.Count, window.label, abuse.IPAddress),
-					Severity:      window.severity,
-					OccurredAt:    timestamppb.New(time.Now()),
+					ActivityType:   "api_abuse",
+					Description:    fmt.Sprintf("User %s: %d API calls in %s (IP: %s)", abuse.UserID, abuse.Count, window.label, abuse.IPAddress),
+					Severity:       window.severity,
+					OccurredAt:     timestamppb.New(time.Now()),
 				})
 				flaggedUsers[abuse.UserID] = true
 			}
@@ -685,12 +686,12 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 			// Only flag if not already flagged
 			if !flaggedIPs[abuse.IPAddress] {
 				activities = append(activities, &superadminv1.SuspiciousActivity{
-					Id:            fmt.Sprintf("api-ip-%s-%d", abuse.IPAddress, window.duration),
+					Id:             fmt.Sprintf("api-ip-%s-%d", abuse.IPAddress, window.duration),
 					OrganizationId: "unknown",
-					ActivityType:  "api_abuse",
-					Description:   fmt.Sprintf("IP %s: %d API calls in %s", abuse.IPAddress, abuse.Count, window.label),
-					Severity:      window.severity,
-					OccurredAt:    timestamppb.New(time.Now()),
+					ActivityType:   "api_abuse",
+					Description:    fmt.Sprintf("IP %s: %d API calls in %s", abuse.IPAddress, abuse.Count, window.label),
+					Severity:       window.severity,
+					OccurredAt:     timestamppb.New(time.Now()),
 				})
 				flaggedIPs[abuse.IPAddress] = true
 			}
@@ -727,12 +728,12 @@ func detectFailedAuthentication(ctx context.Context, twentyFourHoursAgo time.Tim
 
 	for _, fa := range failedAuths {
 		activities = append(activities, &superadminv1.SuspiciousActivity{
-			Id:            fmt.Sprintf("auth-fail-%s", fa.IPAddress),
+			Id:             fmt.Sprintf("auth-fail-%s", fa.IPAddress),
 			OrganizationId: "unknown",
-			ActivityType:  "failed_authentication",
-			Description:   fmt.Sprintf("IP %s: %d failed login attempts in 24 hours", fa.IPAddress, fa.Count),
-			Severity:      75,
-			OccurredAt:    timestamppb.New(time.Now()),
+			ActivityType:   "failed_authentication",
+			Description:    fmt.Sprintf("IP %s: %d failed login attempts in 24 hours", fa.IPAddress, fa.Count),
+			Severity:       75,
+			OccurredAt:     timestamppb.New(time.Now()),
 		})
 	}
 
@@ -750,9 +751,9 @@ func detectMultipleAccountCreation(ctx context.Context, twentyFourHoursAgo time.
 
 	// Find users who created multiple organizations in the last 24 hours
 	var multipleOrgs []struct {
-		UserID         string
-		IPAddress      string
-		Count          int64
+		UserID          string
+		IPAddress       string
+		Count           int64
 		OrganizationIDs string
 	}
 
@@ -791,12 +792,12 @@ func detectMultipleAccountCreation(ctx context.Context, twentyFourHoursAgo time.
 		}
 
 		activities = append(activities, &superadminv1.SuspiciousActivity{
-			Id:            fmt.Sprintf("multi-org-%s", mo.UserID),
+			Id:             fmt.Sprintf("multi-org-%s", mo.UserID),
 			OrganizationId: "unknown",
-			ActivityType:  "multiple_accounts",
-			Description:   desc,
-			Severity:      65,
-			OccurredAt:    timestamppb.New(time.Now()),
+			ActivityType:   "multiple_accounts",
+			Description:    desc,
+			Severity:       65,
+			OccurredAt:     timestamppb.New(time.Now()),
 		})
 	}
 
@@ -856,13 +857,13 @@ func detectDNSDelegationAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Sus
 			var org database.Organization
 			if err := database.DB.First(&org, "id = ?", dns.OrganizationID).Error; err == nil {
 				activities = append(activities, &superadminv1.SuspiciousActivity{
-					Id:              fmt.Sprintf("dns-%s", dns.OrganizationID),
+					Id:               fmt.Sprintf("dns-%s", dns.OrganizationID),
 					OrganizationId:   dns.OrganizationID,
 					OrganizationName: org.Name,
-					ActivityType:    "dns_delegation_abuse",
-					Description:     fmt.Sprintf("Created %d DNS delegation API keys in 24 hours", dns.Count),
-					Severity:        55,
-					OccurredAt:      timestamppb.New(time.Now()),
+					ActivityType:     "dns_delegation_abuse",
+					Description:      fmt.Sprintf("Created %d DNS delegation API keys in 24 hours", dns.Count),
+					Severity:         55,
+					OccurredAt:       timestamppb.New(time.Now()),
 				})
 			}
 		}
@@ -982,13 +983,13 @@ func detectUsageSpikes(ctx context.Context, twentyFourHoursAgo time.Time) ([]*su
 			}
 
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:              fmt.Sprintf("usage-spike-%s", r.DeploymentID),
+				Id:               fmt.Sprintf("usage-spike-%s", r.DeploymentID),
 				OrganizationId:   orgID,
 				OrganizationName: orgName,
-				ActivityType:    "usage_spike",
-				Description:     fmt.Sprintf("Deployment %s: Unusual usage spike - %s", r.DeploymentID, strings.Join(spikeDesc, ", ")),
-				Severity:        50,
-				OccurredAt:      timestamppb.New(time.Now()),
+				ActivityType:     "usage_spike",
+				Description:      fmt.Sprintf("Deployment %s: Unusual usage spike - %s", r.DeploymentID, strings.Join(spikeDesc, ", ")),
+				Severity:         50,
+				OccurredAt:       timestamppb.New(time.Now()),
 			})
 		}
 	}
@@ -1048,13 +1049,13 @@ func detectGameServerAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Suspic
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", gs.OrganizationID).Error; err == nil {
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:              fmt.Sprintf("game-server-%s", gs.OrganizationID),
+				Id:               fmt.Sprintf("game-server-%s", gs.OrganizationID),
 				OrganizationId:   gs.OrganizationID,
 				OrganizationName: org.Name,
-				ActivityType:    "game_server_abuse",
-				Description:     fmt.Sprintf("Created %d game servers in 24 hours", gs.Count),
-				Severity:        60,
-				OccurredAt:      timestamppb.New(time.Now()),
+				ActivityType:     "game_server_abuse",
+				Description:      fmt.Sprintf("Created %d game servers in 24 hours", gs.Count),
+				Severity:         60,
+				OccurredAt:       timestamppb.New(time.Now()),
 			})
 		}
 	}
@@ -1069,20 +1070,20 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 	// Use background context with timeout to avoid cancellation
 	bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	
+
 	// Generate a fingerprint of the current abuse detection results
 	abuseFingerprint := generateAbuseFingerprint(suspiciousOrgs, suspiciousActivities)
-	
+
 	// Check if we've already sent a notification for this exact abuse pattern
 	// Look for recent notifications with the same fingerprint in metadata
 	// Use JSONB query to check metadata field
 	var existingNotification database.Notification
-	err := database.DB.Where("type = ? AND metadata::jsonb->>'abuse_fingerprint' = ?", 
-		"SYSTEM", 
+	err := database.DB.Where("type = ? AND metadata::jsonb->>'abuse_fingerprint' = ?",
+		"SYSTEM",
 		abuseFingerprint).
 		Order("created_at DESC").
 		First(&existingNotification).Error
-	
+
 	// If we found a recent notification (within last 24 hours) with the same fingerprint, skip
 	if err == nil {
 		// Check if notification is recent (within 24 hours)
@@ -1091,7 +1092,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 			return
 		}
 	}
-	
+
 	// Get superadmin emails from environment
 	superAdminEmails := getSuperAdminEmails()
 	logger.Info("[SuperAdmin] Found %d superadmin email(s) configured", len(superAdminEmails))
@@ -1118,7 +1119,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 		return
 	}
 	logger.Info("[SuperAdmin] Found %d user ID(s) from organization members to check for superadmin status", len(userIDs))
-	
+
 	// Find superadmin user IDs by resolving profiles and checking emails
 	superAdminUserIDs := make(map[string]bool)
 	for _, userID := range userIDs {
@@ -1143,7 +1144,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 			logger.Info("[SuperAdmin] Found superadmin user: %s (email: %s)", userID, lowerEmail)
 		}
 	}
-	
+
 	// If we didn't find all superadmins, log a warning
 	// Superadmins need to be in at least one organization to receive notifications
 	if len(superAdminUserIDs) < len(superAdminEmails) {
@@ -1184,7 +1185,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 	if len(suspiciousOrgs) > 0 {
 		details = append(details, fmt.Sprintf("• %d suspicious organization(s)", len(suspiciousOrgs)))
 	}
-	
+
 	// Group activities by type
 	activityCounts := make(map[string]int)
 	for _, activity := range suspiciousActivities {
@@ -1199,10 +1200,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 	}
 
 	// Get dashboard URL for action link
-	dashboardURL := os.Getenv("DASHBOARD_URL")
-	if dashboardURL == "" {
-		dashboardURL = "https://cloud.obiente.com"
-	}
+	dashboardURL := platform.DashboardURL()
 	actionURL := dashboardURL + "/superadmin/abuse"
 	actionLabel := "View Abuse Detection"
 
@@ -1212,7 +1210,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 	if highSeverityCount > 10 || len(suspiciousOrgs) > 20 {
 		severity = notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_CRITICAL
 	}
-	
+
 	logger.Info("[SuperAdmin] Resolved %d superadmin user ID(s) from %d total users", len(superAdminUserIDs), len(userIDs))
 	if len(superAdminUserIDs) == 0 {
 		logger.Warn("[SuperAdmin] No superadmin user IDs found, cannot send abuse notifications")
@@ -1236,10 +1234,10 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 			&actionLabel,
 			map[string]string{
 				"abuse_type":        "detection",
-				"abuse_fingerprint":  abuseFingerprint,
-				"suspicious_orgs":    fmt.Sprintf("%d", len(suspiciousOrgs)),
-				"suspicious_acts":    fmt.Sprintf("%d", len(suspiciousActivities)),
-				"high_severity":      fmt.Sprintf("%d", highSeverityCount),
+				"abuse_fingerprint": abuseFingerprint,
+				"suspicious_orgs":   fmt.Sprintf("%d", len(suspiciousOrgs)),
+				"suspicious_acts":   fmt.Sprintf("%d", len(suspiciousActivities)),
+				"high_severity":     fmt.Sprintf("%d", highSeverityCount),
 			},
 		); err != nil {
 			logger.Error("[SuperAdmin] Failed to send abuse notification to user %s: %v", userID, err)
@@ -1248,7 +1246,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 			logger.Info("[SuperAdmin] Successfully sent abuse detection notification to superadmin user: %s", userID)
 		}
 	}
-	
+
 	if notificationCount == 0 {
 		logger.Error("[SuperAdmin] No abuse notifications were successfully sent to any superadmin")
 	} else {
@@ -1260,7 +1258,7 @@ func notifySuperadminsOfAbuse(ctx context.Context, suspiciousOrgs []*superadminv
 func getSuperAdminEmails() map[string]struct{} {
 	superAdmins := make(map[string]struct{})
 	envValue := os.Getenv("SUPERADMIN_EMAILS")
-	
+
 	for _, raw := range strings.Split(envValue, ",") {
 		email := strings.TrimSpace(raw)
 		email = strings.Trim(email, "\"'")
@@ -1269,14 +1267,14 @@ func getSuperAdminEmails() map[string]struct{} {
 			superAdmins[email] = struct{}{}
 		}
 	}
-	
+
 	return superAdmins
 }
 
 // formatActivityType formats activity type for display
 func formatActivityType(activityType string) string {
 	typeMap := map[string]string{
-		"rapid_creation":         "rapid resource creation(s)",
+		"rapid_creation":        "rapid resource creation(s)",
 		"failed_payments":       "failed payment attempt(s)",
 		"ssh_brute_force":       "SSH brute force attempt(s)",
 		"api_abuse":             "API abuse case(s)",
@@ -1301,27 +1299,26 @@ func generateAbuseFingerprint(suspiciousOrgs []*superadminv1.SuspiciousOrganizat
 		orgIDs = append(orgIDs, org.OrganizationId)
 	}
 	sort.Strings(orgIDs)
-	
+
 	activityIDs := make([]string, 0, len(suspiciousActivities))
 	for _, activity := range suspiciousActivities {
 		activityIDs = append(activityIDs, activity.Id)
 	}
 	sort.Strings(activityIDs)
-	
+
 	// Create a JSON representation for hashing
 	fingerprintData := map[string]interface{}{
-		"orgs":     orgIDs,
+		"orgs":       orgIDs,
 		"activities": activityIDs,
 	}
-	
+
 	jsonData, err := json.Marshal(fingerprintData)
 	if err != nil {
 		// Fallback to simple concatenation if JSON marshaling fails
 		return fmt.Sprintf("%d-%d", len(orgIDs), len(activityIDs))
 	}
-	
+
 	// Generate SHA256 hash
 	hash := sha256.Sum256(jsonData)
 	return hex.EncodeToString(hash[:])
 }
-

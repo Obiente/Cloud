@@ -17,6 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/stripe"
 
 	billingv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1/billingv1connect"
@@ -138,10 +139,7 @@ func main() {
 	}
 
 	// Get console URL
-	consoleURL := os.Getenv("DASHBOARD_URL")
-	if consoleURL == "" {
-		consoleURL = "https://obiente.cloud"
-	}
+	consoleURL := platform.DashboardURL()
 
 	// Check if billing is enabled
 	billingEnabled := os.Getenv("BILLING_ENABLED") != "false" && os.Getenv("BILLING_ENABLED") != "0"

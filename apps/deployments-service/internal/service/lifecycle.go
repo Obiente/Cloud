@@ -16,6 +16,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
@@ -464,24 +465,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 
 				if isSwarmMode {
-					registryURL := os.Getenv("REGISTRY_URL")
-					if registryURL == "" {
-						domain := os.Getenv("DOMAIN")
-						if domain == "" {
-							domain = "obiente.cloud"
-						}
-						registryURL = fmt.Sprintf("https://registry.%s", domain)
-					} else {
-						// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
-						if strings.Contains(registryURL, "${DOMAIN") {
-							domain := os.Getenv("DOMAIN")
-							if domain == "" {
-								domain = "obiente.cloud"
-							}
-							registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
-							registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
-						}
-					}
+					registryURL := platform.RegistryURL()
 
 					// Strip protocol from registry URL for image name (Docker doesn't use protocols in image names)
 					registryHost := strings.TrimPrefix(registryURL, "https://")

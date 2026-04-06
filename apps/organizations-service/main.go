@@ -17,6 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 
 	orgservice "organizations-service/internal/service"
 
@@ -97,11 +98,8 @@ func main() {
 
 	// Configure email sender and shared links
 	mailer := email.NewSenderFromEnv()
-	consoleURL := os.Getenv("DASHBOARD_URL")
-	if consoleURL == "" {
-		consoleURL = "https://obiente.cloud"
-	}
-	supportEmail := os.Getenv("SUPPORT_EMAIL")
+	consoleURL := platform.DashboardURL()
+	supportEmail := platform.SupportEmail()
 
 	// Register organizations service
 	orgService := orgservice.NewService(orgservice.Config{

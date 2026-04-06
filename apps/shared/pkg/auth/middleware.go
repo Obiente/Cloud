@@ -14,6 +14,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/platform"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 
@@ -166,8 +167,8 @@ func NewAuthConfig() *AuthConfig {
 	// Get Zitadel URL from environment
 	zitadelURL := os.Getenv("ZITADEL_URL")
 	if zitadelURL == "" {
-		zitadelURL = "https://auth.obiente.cloud" // Default fallback
-		logger.Warn("⚠️  Warning: ZITADEL_URL not set, using default")
+		zitadelURL = platform.ZitadelURL()
+		logger.Warn("⚠️  Warning: ZITADEL_URL not set, using fallback %s", zitadelURL)
 	}
 
 	// Build userinfo URL
@@ -298,7 +299,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 	// Check cache first
 	if cachedUser, found := c.UserInfoCache.Get(ctx, token); found {
 		logger.Debug("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
-		
+
 		// Always check superadmin emails for cached users, as SUPERADMIN_EMAILS might have changed
 		// This ensures superadmin status is applied even when using cached user data
 		if cachedUser.Email != "" && c.SuperAdmins != nil {
@@ -331,7 +332,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 					rolesChanged = true
 				}
 			}
-			
+
 			// Update cache if roles changed to ensure persistence
 			if rolesChanged {
 				c.UserInfoCache.Set(ctx, token, cachedUser)
@@ -345,7 +346,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 				logger.Debug("[SuperAdmin] SuperAdmins map is nil, skipping superadmin check")
 			}
 		}
-		
+
 		return cachedUser, nil
 	}
 
@@ -453,7 +454,7 @@ func loadSuperAdminEmails() map[string]struct{} {
 	superAdmins := make(map[string]struct{})
 	envValue := os.Getenv("SUPERADMIN_EMAILS")
 	logger.Debug("[SuperAdmin] Loading SUPERADMIN_EMAILS from environment: %q", envValue)
-	
+
 	for _, raw := range strings.Split(envValue, ",") {
 		email := strings.TrimSpace(raw)
 		email = strings.Trim(email, "\"'")

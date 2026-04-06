@@ -201,12 +201,26 @@ export default defineNuxtConfig({
     },
     // Public keys (exposed to client-side)
     public: {
-      requestHost: "http://localhost:3000",
+      requestHost:
+        process.env.NUXT_PUBLIC_REQUEST_HOST ||
+        process.env.DASHBOARD_URL ||
+        "http://localhost:3000",
       // API Gateway is the single entry point for all API requests
       // It routes to appropriate microservices automatically
-      apiHost: "http://api.localhost",
-      oidcIssuer: "https://obiente.cloud",
-      oidcBase: "https://auth.obiente.cloud",
+      apiHost:
+        process.env.NUXT_PUBLIC_API_HOST ||
+        process.env.API_URL ||
+        "http://api.localhost",
+      oidcIssuer:
+        process.env.NUXT_PUBLIC_OIDC_ISSUER ||
+        process.env.OIDC_ISSUER_URL ||
+        process.env.DASHBOARD_URL ||
+        "http://localhost:3000",
+      oidcBase:
+        process.env.NUXT_PUBLIC_OIDC_BASE ||
+        process.env.ZITADEL_BASE_URL ||
+        process.env.ZITADEL_URL ||
+        "http://localhost:8080",
       oidcClientId: "339499954043158530",
       githubClientId: "",
       stripePublishableKey: "",
