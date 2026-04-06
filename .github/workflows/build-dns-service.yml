@@ -8,9 +8,9 @@ on:
       - "v*"
     paths:
       - "apps/dns-service/**"
-      - "apps/shared/pkg/logger/**"
-      - "apps/shared/proto/**"
-      - "packages/proto/proto/obiente/cloud/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/metrics/**"
       - "apps/shared/go.mod"
       - "apps/shared/go.sum"
       - ".github/scripts/go-service-affected.sh"
@@ -20,9 +20,9 @@ on:
       - main
     paths:
       - "apps/dns-service/**"
-      - "apps/shared/pkg/logger/**"
-      - "apps/shared/proto/**"
-      - "packages/proto/proto/obiente/cloud/**"
+      - "apps/shared/pkg/database/**"
+      - "apps/shared/pkg/health/**"
+      - "apps/shared/pkg/metrics/**"
       - "apps/shared/go.mod"
       - "apps/shared/go.sum"
       - ".github/scripts/go-service-affected.sh"
