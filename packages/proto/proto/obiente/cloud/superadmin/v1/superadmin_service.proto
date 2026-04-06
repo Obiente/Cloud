@@ -50,6 +50,7 @@ service SuperadminService {
   // User management endpoints
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListDormantResourceOwners(ListDormantResourceOwnersRequest) returns (ListDormantResourceOwnersResponse);
   
   // VPS management endpoints
   rpc ListAllVPS(ListAllVPSRequest) returns (ListAllVPSResponse);
@@ -615,6 +616,59 @@ message GetUserRequest {
 message GetUserResponse {
   UserInfo user = 1;
   repeated UserOrganization organizations = 2; // Organizations this user belongs to
+}
+
+// List Dormant Resource Owners Request
+message ListDormantResourceOwnersRequest {
+  optional int32 page = 1; // Page number (default: 1)
+  optional int32 per_page = 2; // Results per page (default: 25, max: 100)
+  optional string search = 3; // Search by user or organization metadata
+  optional int32 min_inactive_days = 4; // Minimum days since last observed activity (default: 30)
+}
+
+// Dormant resource summary for the current filter set
+message DormantResourceSummary {
+  int32 dormant_users = 1;
+  int32 users_with_vps = 2;
+  int32 users_with_databases = 3;
+  int32 users_with_deployments = 4;
+  int32 users_with_game_servers = 5;
+  int64 total_reserved_bytes = 6;
+}
+
+// Organization-specific retained resources for a dormant user
+message DormantResourceOrganization {
+  string organization_id = 1;
+  string organization_name = 2;
+  int32 vps_count = 3;
+  int32 database_count = 4;
+  int32 deployment_count = 5;
+  int32 game_server_count = 6;
+  int64 reserved_bytes = 7;
+}
+
+// Dormant resource owner details
+message DormantResourceOwner {
+  UserInfo user = 1;
+  google.protobuf.Timestamp last_activity_at = 2;
+  string last_activity_source = 3; // audit_log | profile_updated | profile_created | resource_updated | resource_created | unknown
+  int32 inactive_days = 4;
+  int32 organization_count = 5;
+  int32 vps_count = 6;
+  int32 database_count = 7;
+  int32 deployment_count = 8;
+  int32 game_server_count = 9;
+  int64 total_reserved_bytes = 10;
+  google.protobuf.Timestamp last_resource_created_at = 11;
+  google.protobuf.Timestamp last_resource_updated_at = 12;
+  repeated DormantResourceOrganization organizations = 13;
+}
+
+// List Dormant Resource Owners Response
+message ListDormantResourceOwnersResponse {
+  repeated DormantResourceOwner owners = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+  DormantResourceSummary summary = 3;
 }
 
 // User Info

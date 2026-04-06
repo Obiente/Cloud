@@ -8,6 +8,7 @@ const routePermissions: Record<string, string> = {
   "/superadmin/vps": "superadmin.vps.read",
   "/superadmin/nodes": "superadmin.nodes.read",
   "/superadmin/users": "superadmin.users.read",
+  "/superadmin/resource-hygiene": "superadmin.users.read",
   "/superadmin/usage": "superadmin.overview.read",
   "/superadmin/dns": "superadmin.dns.read",
   "/superadmin/abuse": "superadmin.abuse.read",

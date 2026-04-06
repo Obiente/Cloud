@@ -447,6 +447,7 @@ func RegisterSuperadminServiceProcedures() {
 		// User management
 		{"/obiente.cloud.superadmin.v1.SuperadminService/ListUsers", "superadmin.users.read", "superadmin", "users.read", "List all users"},
 		{"/obiente.cloud.superadmin.v1.SuperadminService/GetUser", "superadmin.users.read", "superadmin", "users.read", "View user details"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListDormantResourceOwners", "superadmin.users.read", "superadmin", "users.read", "Audit dormant users with retained resources"},
 
 		// VPS management
 		{"/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS", "superadmin.vps.read", "superadmin", "vps.read", "List all VPS instances"},

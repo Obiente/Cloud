@@ -195,6 +195,13 @@
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/resource-hygiene')"
+            to="/superadmin/resource-hygiene"
+            label="Resource Hygiene"
+            :icon="ShieldExclamationIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             v-if="hasPagePermission('/superadmin/usage')"
             to="/superadmin/usage"
             label="Usage"
@@ -420,6 +427,7 @@ const pagePermissions: Record<string, string> = {
   "/superadmin/vps": "superadmin.vps.read",
   "/superadmin/nodes": "superadmin.nodes.read",
   "/superadmin/users": "superadmin.users.read",
+  "/superadmin/resource-hygiene": "superadmin.users.read",
   "/superadmin/usage": "superadmin.overview.read", // Usage is part of overview
   "/superadmin/dns": "superadmin.dns.read",
   "/superadmin/abuse": "superadmin.abuse.read",

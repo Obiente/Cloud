@@ -101,6 +101,9 @@ const (
 	// SuperadminServiceGetUserProcedure is the fully-qualified name of the SuperadminService's GetUser
 	// RPC.
 	SuperadminServiceGetUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetUser"
+	// SuperadminServiceListDormantResourceOwnersProcedure is the fully-qualified name of the
+	// SuperadminService's ListDormantResourceOwners RPC.
+	SuperadminServiceListDormantResourceOwnersProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListDormantResourceOwners"
 	// SuperadminServiceListAllVPSProcedure is the fully-qualified name of the SuperadminService's
 	// ListAllVPS RPC.
 	SuperadminServiceListAllVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS"
@@ -233,6 +236,7 @@ type SuperadminServiceClient interface {
 	// User management endpoints
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
+	ListDormantResourceOwners(context.Context, *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
 	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
@@ -421,6 +425,12 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+SuperadminServiceGetUserProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
+			connect.WithClientOptions(opts...),
+		),
+		listDormantResourceOwners: connect.NewClient[v1.ListDormantResourceOwnersRequest, v1.ListDormantResourceOwnersResponse](
+			httpClient,
+			baseURL+SuperadminServiceListDormantResourceOwnersProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListDormantResourceOwners")),
 			connect.WithClientOptions(opts...),
 		),
 		listAllVPS: connect.NewClient[v1.ListAllVPSRequest, v1.ListAllVPSResponse](
@@ -642,6 +652,7 @@ type superadminServiceClient struct {
 	assignPlanToOrganization                 *connect.Client[v1.AssignPlanToOrganizationRequest, v1.AssignPlanToOrganizationResponse]
 	listUsers                                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
 	getUser                                  *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
+	listDormantResourceOwners                *connect.Client[v1.ListDormantResourceOwnersRequest, v1.ListDormantResourceOwnersResponse]
 	listAllVPS                               *connect.Client[v1.ListAllVPSRequest, v1.ListAllVPSResponse]
 	superadminGetVPS                         *connect.Client[v1.SuperadminGetVPSRequest, v1.SuperadminGetVPSResponse]
 	superadminResizeVPS                      *connect.Client[v1.SuperadminResizeVPSRequest, v1.SuperadminResizeVPSResponse]
@@ -790,6 +801,12 @@ func (c *superadminServiceClient) ListUsers(ctx context.Context, req *connect.Re
 // GetUser calls obiente.cloud.superadmin.v1.SuperadminService.GetUser.
 func (c *superadminServiceClient) GetUser(ctx context.Context, req *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error) {
 	return c.getUser.CallUnary(ctx, req)
+}
+
+// ListDormantResourceOwners calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListDormantResourceOwners.
+func (c *superadminServiceClient) ListDormantResourceOwners(ctx context.Context, req *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error) {
+	return c.listDormantResourceOwners.CallUnary(ctx, req)
 }
 
 // ListAllVPS calls obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS.
@@ -996,6 +1013,7 @@ type SuperadminServiceHandler interface {
 	// User management endpoints
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
+	ListDormantResourceOwners(context.Context, *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
 	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
@@ -1179,6 +1197,12 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		SuperadminServiceGetUserProcedure,
 		svc.GetUser,
 		connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListDormantResourceOwnersHandler := connect.NewUnaryHandler(
+		SuperadminServiceListDormantResourceOwnersProcedure,
+		svc.ListDormantResourceOwners,
+		connect.WithSchema(superadminServiceMethods.ByName("ListDormantResourceOwners")),
 		connect.WithHandlerOptions(opts...),
 	)
 	superadminServiceListAllVPSHandler := connect.NewUnaryHandler(
@@ -1419,6 +1443,8 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListUsersHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetUserProcedure:
 			superadminServiceGetUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceListDormantResourceOwnersProcedure:
+			superadminServiceListDormantResourceOwnersHandler.ServeHTTP(w, r)
 		case SuperadminServiceListAllVPSProcedure:
 			superadminServiceListAllVPSHandler.ServeHTTP(w, r)
 		case SuperadminServiceSuperadminGetVPSProcedure:
@@ -1578,6 +1604,10 @@ func (UnimplementedSuperadminServiceHandler) ListUsers(context.Context, *connect
 
 func (UnimplementedSuperadminServiceHandler) GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListDormantResourceOwners(context.Context, *connect.Request[v1.ListDormantResourceOwnersRequest]) (*connect.Response[v1.ListDormantResourceOwnersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListDormantResourceOwners is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error) {
