@@ -2758,7 +2758,7 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 				ListIPs(ctx context.Context, nodeName, organizationID, vpsID string) ([]*vpsgatewayv1.IPAllocation, error)
 			}
 			if gc, ok := bidiClient.(gatewayClient); ok {
-				nodeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+				nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				allocs, err := gc.ListIPs(nodeCtx, nodeName, "", "")
 				cancel()
 				if err == nil {
@@ -2777,7 +2777,7 @@ func (vm *VPSManager) SyncLeasesFromGateways(ctx context.Context) error {
 				continue
 			}
 
-			nodeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			nodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			allocs, err := client.ListIPs(nodeCtx, "", "")
 			cancel()
 			if err != nil {

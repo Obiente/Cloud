@@ -117,7 +117,10 @@ func main() {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
-				syncCtx, cancel := context.WithTimeout(shutdownCtx, 30*time.Second)
+				// Allow enough time for all configured gateway nodes: each node gets up to
+				// 10 s (see SyncLeasesFromGateways), so 5 min supports up to ~30 nodes
+				// before the parent deadline becomes the binding constraint.
+				syncCtx, cancel := context.WithTimeout(shutdownCtx, 5*time.Minute)
 				if err := vpsManager.SyncLeasesFromGateways(syncCtx); err != nil && !errors.Is(err, context.Canceled) {
 					logger.Debug("[LeaseSync] %v", err)
 				}

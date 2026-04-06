@@ -468,14 +468,17 @@ func (c *GatewayClient) sendRequest(ctx context.Context, nodeName, method string
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Wait for response with timeout
+	// Wait for response. ctx must carry a deadline set by the caller;
+	// the safety-net timer here is a last resort for callers that forget.
+	timer := time.NewTimer(30 * time.Second)
+	defer timer.Stop()
 	select {
 	case resp := <-respChan:
 		return resp, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-time.After(60 * time.Second):
-		return nil, fmt.Errorf("request timeout")
+		return nil, fmt.Errorf("gateway request %s timed out: %w", method, ctx.Err())
+	case <-timer.C:
+		return nil, fmt.Errorf("gateway request %s exceeded safety deadline (no response in 30s)", method)
 	}
 }
 

@@ -88,7 +88,9 @@ func (pc *ProxmoxClient) getAllVMIDs(ctx context.Context) ([]int, error) {
 	for _, nodeName := range nodes {
 		resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
 		if err != nil {
-			logger.Warn("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
+			// Individual node unreachable is expected in multi-node clusters; import
+			// continues using other nodes so this is debug, not warn.
+			logger.Debug("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
 			continue
 		}
 		defer resp.Body.Close()
@@ -100,7 +102,7 @@ func (pc *ProxmoxClient) getAllVMIDs(ctx context.Context) ([]int, error) {
 		}
 
 		if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
-			logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			logger.Debug("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
 			continue
 		}
 
@@ -137,7 +139,7 @@ func (pc *ProxmoxClient) ListAllVMsWithDescriptions(ctx context.Context) ([]Prox
 	for _, nodeName := range nodes {
 		resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
 		if err != nil {
-			logger.Warn("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
+			logger.Debug("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
 			continue
 		}
 		defer resp.Body.Close()

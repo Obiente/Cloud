@@ -281,8 +281,9 @@ func (s *Service) StreamVPSMetrics(ctx context.Context, req *connect.Request[vps
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			// Get latest metric from database
-			var vpsMetric database.VPSMetrics
+			// Get latest metric from database. Use Find (not First) to avoid GORM
+			// logging a spurious ERROR on every tick when no new rows are present.
+			var metrics []database.VPSMetrics
 			query := database.GetMetricsDB().Where("vps_instance_id = ?", vpsID).
 				Order("timestamp DESC").
 				Limit(1)
@@ -291,16 +292,16 @@ func (s *Service) StreamVPSMetrics(ctx context.Context, req *connect.Request[vps
 				query = query.Where("timestamp > ?", lastSentTimestamp)
 			}
 
-			if err := query.First(&vpsMetric).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) && firstRun {
-					// No metrics yet, continue waiting
-					firstRun = false
-					continue
-				}
-				// Error or no new metrics, continue
+			if err := query.Find(&metrics).Error; err != nil {
+				// Real database error, not simply "no rows"
+				continue
+			}
+			if len(metrics) == 0 {
+				firstRun = false
 				continue
 			}
 
+			vpsMetric := metrics[0]
 			firstRun = false
 			lastSentTimestamp = vpsMetric.Timestamp
 

@@ -1,50 +1,43 @@
 <template>
   <OuiStack gap="sm">
+
+    <!-- Unified toolbar -->
     <OuiCard variant="outline">
-      <OuiCardBody class="py-2! px-4!">
-        <OuiFlex align="center" gap="xs" wrap="wrap">
-          <OuiButton
-            v-for="tab in sourceTabs"
-            :key="tab.id"
-            :variant="activeSource === tab.id ? 'soft' : 'ghost'"
-            :color="activeSource === tab.id ? 'primary' : 'neutral'"
-            size="sm"
-            @click="activeSource = tab.id"
-          >
-            <component :is="tab.icon" class="h-3.5 w-3.5" />
-            {{ tab.label }}
-          </OuiButton>
-        </OuiFlex>
-      </OuiCardBody>
-    </OuiCard>
+      <OuiCardBody class="py-2! px-3!">
+        <OuiStack gap="xs">
 
-    <template v-if="activeSource === 'provisioning'">
-      <OuiCard variant="outline">
-        <OuiCardBody class="py-2! px-4!">
+          <!-- Row 1: source tabs + section controls -->
           <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
-            <UiSectionHeader
-              :icon="CommandLineIcon"
-              color="secondary"
-              size="sm"
-            >
-              Provisioning Logs
-            </UiSectionHeader>
 
-            <OuiFlex align="center" gap="sm">
+            <!-- Source tabs -->
+            <OuiFlex align="center" gap="xs" class="shrink-0">
+              <button
+                v-for="tab in sourceTabs"
+                :key="tab.id"
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap border"
+                :class="activeSource === tab.id
+                  ? 'bg-primary/10 text-primary border-primary/20'
+                  : 'bg-transparent border-transparent text-text-secondary hover:bg-surface-muted hover:text-text-primary'"
+                @click="activeSource = tab.id"
+              >
+                <component :is="tab.icon" class="h-3.5 w-3.5" />
+                {{ tab.label }}
+              </button>
+            </OuiFlex>
+
+            <!-- Provisioning controls -->
+            <OuiFlex v-if="activeSource === 'provisioning'" align="center" gap="sm" wrap="wrap">
               <OuiInput
                 v-model="provisioningSearchQuery"
                 size="sm"
                 placeholder="Filter logs…"
-                :style="{ width: '170px' }"
+                class="w-40"
               >
                 <template #prefix>
-                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
+                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-text-tertiary" />
                 </template>
                 <template v-if="provisioningSearchQuery" #suffix>
-                  <button
-                    class="text-tertiary hover:text-primary transition-colors"
-                    @click="provisioningSearchQuery = ''"
-                  >
+                  <button class="text-text-tertiary hover:text-text-primary transition-colors" @click="provisioningSearchQuery = ''">
                     <XMarkIcon class="h-3.5 w-3.5" />
                   </button>
                 </template>
@@ -53,58 +46,151 @@
               <OuiFlex align="center" gap="xs" class="shrink-0">
                 <span
                   class="h-1.5 w-1.5 rounded-full transition-colors"
-                  :class="
-                    isFollowing
-                      ? 'bg-success animate-pulse'
-                      : 'bg-border-strong'
-                  "
+                  :class="isFollowing ? 'bg-success animate-pulse' : 'bg-border-strong'"
                 />
                 <OuiText size="xs" color="tertiary" class="whitespace-nowrap">
                   {{ isFollowing ? "Live" : "Stopped" }}
                 </OuiText>
               </OuiFlex>
 
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                class="whitespace-nowrap shrink-0"
-                @click="toggleFollow"
-              >
-                <ArrowPathIcon
-                  class="h-3.5 w-3.5"
-                  :class="{ 'animate-spin': provisioningLoading }"
-                />
+              <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0 gap-1.5" @click="toggleFollow">
+                <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': provisioningLoading }" />
                 {{ isFollowing ? "Stop" : "Follow" }}
               </OuiButton>
 
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                :disabled="provisioningLogs.length === 0"
-                @click="clearProvisioningLogs"
-              >
+              <OuiButton variant="ghost" size="sm" :disabled="provisioningLogs.length === 0" @click="clearProvisioningLogs">
                 Clear
               </OuiButton>
 
               <OuiMenu>
                 <template #trigger>
-                  <OuiButton variant="ghost" size="sm">
-                    <EllipsisVerticalIcon class="h-3.5 w-3.5" />
-                  </OuiButton>
+                  <OuiButton variant="ghost" size="sm"><EllipsisVerticalIcon class="h-3.5 w-3.5" /></OuiButton>
                 </template>
                 <OuiMenuItem>
-                  <OuiCheckbox
-                    v-model="showTimestamps"
-                    label="Show timestamps"
-                    @click.stop
-                  />
+                  <OuiCheckbox v-model="showTimestamps" label="Show timestamps" @click.stop />
                 </OuiMenuItem>
               </OuiMenu>
             </OuiFlex>
-          </OuiFlex>
-        </OuiCardBody>
-      </OuiCard>
 
+            <!-- Journal controls -->
+            <OuiFlex v-else-if="activeSource === 'journal'" align="center" gap="sm" wrap="wrap">
+              <OuiInput
+                v-model="journalSearchQuery"
+                size="sm"
+                placeholder="Filter loaded logs…"
+                class="w-40"
+              >
+                <template #prefix>
+                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-text-tertiary" />
+                </template>
+                <template v-if="journalSearchQuery" #suffix>
+                  <button class="text-text-tertiary hover:text-text-primary transition-colors" @click="journalSearchQuery = ''">
+                    <XMarkIcon class="h-3.5 w-3.5" />
+                  </button>
+                </template>
+              </OuiInput>
+
+              <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0 gap-1.5" @click="refreshJournalLogs">
+                <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': journalLoading }" />
+                Refresh
+              </OuiButton>
+
+              <OuiMenu>
+                <template #trigger>
+                  <OuiButton variant="ghost" size="sm"><EllipsisVerticalIcon class="h-3.5 w-3.5" /></OuiButton>
+                </template>
+                <OuiMenuItem>
+                  <OuiCheckbox v-model="showTimestamps" label="Show timestamps" @click.stop />
+                </OuiMenuItem>
+              </OuiMenu>
+            </OuiFlex>
+
+            <!-- Services controls -->
+            <OuiFlex v-else align="center" gap="sm" wrap="wrap">
+              <OuiInput
+                v-model="serviceSearchQuery"
+                size="sm"
+                placeholder="Search services…"
+                class="w-48"
+              >
+                <template #prefix>
+                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-text-tertiary" />
+                </template>
+                <template v-if="serviceSearchQuery" #suffix>
+                  <button class="text-text-tertiary hover:text-text-primary transition-colors" @click="serviceSearchQuery = ''">
+                    <XMarkIcon class="h-3.5 w-3.5" />
+                  </button>
+                </template>
+              </OuiInput>
+
+              <OuiButton variant="ghost" size="sm" class="whitespace-nowrap shrink-0 gap-1.5" @click="refreshServices">
+                <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': servicesLoading }" />
+                Refresh
+              </OuiButton>
+            </OuiFlex>
+
+          </OuiFlex>
+
+          <!-- Row 2 (journal only): unit + lines config -->
+          <OuiFlex
+            v-if="activeSource === 'journal'"
+            align="center"
+            gap="sm"
+            wrap="wrap"
+            class="border-t border-border-muted pt-2"
+          >
+            <OuiText size="xs" color="tertiary" class="shrink-0">Filter by:</OuiText>
+            <OuiInput
+              v-model="journalUnit"
+              size="sm"
+              placeholder="Unit (e.g. nginx.service)"
+              class="flex-1 min-w-[160px] max-w-[260px]"
+              @keydown.enter.prevent="refreshJournalLogs"
+            />
+            <OuiText size="xs" color="tertiary" class="shrink-0">Lines:</OuiText>
+            <OuiInput
+              v-model="journalLinesInput"
+              type="number"
+              min="25"
+              max="1000"
+              size="sm"
+              placeholder="200"
+              class="w-20"
+              @keydown.enter.prevent="refreshJournalLogs"
+            />
+            <OuiButton variant="soft" color="primary" size="sm" class="shrink-0" @click="refreshJournalLogs">
+              Apply
+            </OuiButton>
+            <OuiText v-if="journalUnit" size="xs" color="tertiary" class="ml-auto">
+              Showing {{ journalLines }} lines for
+              <span class="font-mono text-text-primary">{{ journalUnit }}</span>
+            </OuiText>
+            <OuiText v-else size="xs" color="tertiary" class="ml-auto">
+              Showing latest {{ journalLines }} journal lines
+            </OuiText>
+          </OuiFlex>
+
+          <!-- Row 2 (services only): include inactive toggle -->
+          <OuiFlex
+            v-if="activeSource === 'services'"
+            align="center"
+            gap="sm"
+            class="border-t border-border-muted pt-2"
+          >
+            <OuiCheckbox v-model="includeInactiveServices" label="Include inactive services" />
+            <OuiText v-if="services.length > 0" size="xs" color="tertiary" class="ml-auto">
+              {{ filteredServices.length }}
+              <template v-if="filteredServices.length !== services.length"> of {{ services.length }}</template>
+              service{{ services.length !== 1 ? 's' : '' }}
+            </OuiText>
+          </OuiFlex>
+
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
+
+    <!-- Provisioning log viewer -->
+    <template v-if="activeSource === 'provisioning'">
       <OuiLogs
         :logs="filteredProvisioningLogs"
         :is-loading="provisioningLoading"
@@ -114,111 +200,21 @@
         empty-message="No provisioning logs yet."
         loading-message="Connecting to provisioning log stream…"
       />
-
       <OuiFlex justify="between" align="center">
         <OuiText size="xs" color="tertiary">
-          These logs come from the platform provisioning flow and are retained
-          briefly for setup/debugging.
+          Provisioning logs are retained briefly for setup and debugging.
         </OuiText>
         <OuiText size="xs" color="tertiary">
-          {{ provisioningLogs.length }} line{{
-            provisioningLogs.length !== 1 ? "s" : ""
-          }}
-          <template
-            v-if="
-              provisioningSearchQuery &&
-              filteredProvisioningLogs.length !== provisioningLogs.length
-            "
-          >
-            &middot; {{ filteredProvisioningLogs.length }} matching
+          {{ provisioningLogs.length }} line{{ provisioningLogs.length !== 1 ? "s" : "" }}
+          <template v-if="provisioningSearchQuery && filteredProvisioningLogs.length !== provisioningLogs.length">
+            · {{ filteredProvisioningLogs.length }} matching
           </template>
         </OuiText>
       </OuiFlex>
     </template>
 
+    <!-- Journal log viewer -->
     <template v-else-if="activeSource === 'journal'">
-      <OuiCard variant="outline">
-        <OuiCardBody class="py-2! px-4!">
-          <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
-            <UiSectionHeader
-              :icon="DocumentTextIcon"
-              color="secondary"
-              size="sm"
-            >
-              Guest Journal
-            </UiSectionHeader>
-
-            <OuiFlex align="center" gap="sm" wrap="wrap">
-              <OuiInput
-                v-model="journalSearchQuery"
-                size="sm"
-                placeholder="Filter loaded logs…"
-                :style="{ width: '170px' }"
-              >
-                <template #prefix>
-                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
-                </template>
-                <template v-if="journalSearchQuery" #suffix>
-                  <button
-                    class="text-tertiary hover:text-primary transition-colors"
-                    @click="journalSearchQuery = ''"
-                  >
-                    <XMarkIcon class="h-3.5 w-3.5" />
-                  </button>
-                </template>
-              </OuiInput>
-
-              <OuiInput
-                v-model="journalUnit"
-                size="sm"
-                placeholder="Unit e.g. nginx.service"
-                :style="{ width: '220px' }"
-                @keydown.enter.prevent="refreshJournalLogs"
-              />
-
-              <OuiInput
-                v-model="journalLinesInput"
-                type="number"
-                min="25"
-                max="1000"
-                size="sm"
-                placeholder="200"
-                :style="{ width: '90px' }"
-                @keydown.enter.prevent="refreshJournalLogs"
-              />
-
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                class="whitespace-nowrap shrink-0"
-                @click="refreshJournalLogs"
-              >
-                <ArrowPathIcon
-                  class="h-3.5 w-3.5"
-                  :class="{ 'animate-spin': journalLoading }"
-                />
-                Refresh
-              </OuiButton>
-
-              <OuiMenu>
-                <template #trigger>
-                  <OuiButton variant="ghost" size="sm">
-                    <EllipsisVerticalIcon class="h-3.5 w-3.5" />
-                  </OuiButton>
-                </template>
-                <OuiMenuItem>
-                  <OuiCheckbox
-                    v-model="showTimestamps"
-                    label="Show timestamps"
-                    @click.stop
-                  />
-                </OuiMenuItem>
-              </OuiMenu>
-            </OuiFlex>
-          </OuiFlex>
-        </OuiCardBody>
-      </OuiCard>
-
       <OuiLogs
         :logs="filteredJournalLogs"
         :is-loading="journalLoading"
@@ -227,94 +223,77 @@
         :auto-scroll="false"
         empty-message="No guest journal logs found for this VPS."
         loading-message="Loading journal logs from the guest OS…"
-      />
-
+      >
+        <template #loading>
+          <div class="flex flex-col items-center gap-4 py-10">
+            <ArrowPathIcon class="h-5 w-5 animate-spin text-primary" />
+            <div class="flex flex-col items-center gap-2 text-center">
+              <p class="text-sm font-medium text-text-primary">{{ journalConnStatus.message }}</p>
+              <p class="text-xs text-text-tertiary max-w-xs">{{ journalConnStatus.sub }}</p>
+            </div>
+            <!-- Step indicators -->
+            <div class="flex items-center gap-1.5">
+              <template v-for="(step, i) in CONN_PHASES" :key="i">
+                <div
+                  class="h-1.5 w-6 rounded-full transition-colors duration-500"
+                  :class="i < journalConnStatus.phase
+                    ? 'bg-primary'
+                    : i === journalConnStatus.phase
+                      ? 'bg-primary/50'
+                      : 'bg-border-strong'"
+                />
+              </template>
+            </div>
+          </div>
+        </template>
+      </OuiLogs>
       <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
-        <OuiText v-if="journalError" size="xs" color="danger">{{
-          journalError
-        }}</OuiText>
-        <OuiText v-else size="xs" color="tertiary">
-          {{
-            journalUnit?.trim()
-              ? `Showing ${journalLines} lines for ${journalUnit.trim()}`
-              : `Showing the latest ${journalLines} guest journal lines`
-          }}
-        </OuiText>
+        <OuiText v-if="journalError" size="xs" color="danger">{{ journalError }}</OuiText>
+        <OuiText v-else size="xs" color="tertiary">Journal logs fetched from the guest OS via the hypervisor.</OuiText>
         <OuiText size="xs" color="tertiary">
           {{ journalLogs.length }} line{{ journalLogs.length !== 1 ? "s" : "" }}
-          <template
-            v-if="
-              journalSearchQuery &&
-              filteredJournalLogs.length !== journalLogs.length
-            "
-          >
-            &middot; {{ filteredJournalLogs.length }} matching
+          <template v-if="journalSearchQuery && filteredJournalLogs.length !== journalLogs.length">
+            · {{ filteredJournalLogs.length }} matching
           </template>
         </OuiText>
       </OuiFlex>
     </template>
 
+    <!-- Services table -->
     <template v-else>
-      <OuiCard variant="outline">
-        <OuiCardBody class="py-2! px-4!">
-          <OuiFlex align="center" justify="between" gap="md" wrap="wrap">
-            <UiSectionHeader
-              :icon="ServerStackIcon"
-              color="secondary"
-              size="sm"
-            >
-              Guest Services
-            </UiSectionHeader>
-
-            <OuiFlex align="center" gap="sm" wrap="wrap">
-              <OuiInput
-                v-model="serviceSearchQuery"
-                size="sm"
-                placeholder="Search services…"
-                :style="{ width: '200px' }"
-              >
-                <template #prefix>
-                  <MagnifyingGlassIcon class="h-3.5 w-3.5 text-tertiary" />
-                </template>
-                <template v-if="serviceSearchQuery" #suffix>
-                  <button
-                    class="text-tertiary hover:text-primary transition-colors"
-                    @click="serviceSearchQuery = ''"
-                  >
-                    <XMarkIcon class="h-3.5 w-3.5" />
-                  </button>
-                </template>
-              </OuiInput>
-
-              <OuiCheckbox
-                v-model="includeInactiveServices"
-                label="Include inactive"
-              />
-
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                class="whitespace-nowrap shrink-0"
-                @click="refreshServices"
-              >
-                <ArrowPathIcon
-                  class="h-3.5 w-3.5"
-                  :class="{ 'animate-spin': servicesLoading }"
+      <!-- Connection status banner shown while loading services -->
+      <OuiCard v-if="servicesLoading" variant="outline">
+        <OuiCardBody class="py-5!">
+          <OuiFlex align="center" justify="center" gap="md">
+            <ArrowPathIcon class="h-4 w-4 shrink-0 animate-spin text-primary" />
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <p class="text-sm font-medium text-text-primary">{{ servicesConnStatus.message }}</p>
+              <p class="text-xs text-text-tertiary">{{ servicesConnStatus.sub }}</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0 ml-2">
+              <template v-for="(step, i) in CONN_PHASES" :key="i">
+                <div
+                  class="h-1.5 w-6 rounded-full transition-colors duration-500"
+                  :class="i < servicesConnStatus.phase
+                    ? 'bg-primary'
+                    : i === servicesConnStatus.phase
+                      ? 'bg-primary/50'
+                      : 'bg-border-strong'"
                 />
-                Refresh
-              </OuiButton>
-            </OuiFlex>
+              </template>
+            </div>
           </OuiFlex>
         </OuiCardBody>
       </OuiCard>
 
       <OuiTable
+        v-else
         :columns="serviceColumns"
         :rows="filteredServices"
         :sortable="false"
         :resizable="true"
         :clickable="true"
-        :loading="servicesLoading"
+        :loading="false"
         empty-text="No guest services found."
         aria-label="Guest systemd services"
         row-key="name"
@@ -322,59 +301,38 @@
       >
         <template #cell-name="{ row }">
           <OuiStack gap="xs">
-            <OuiText size="sm" class="font-medium">{{ row.name }}</OuiText>
-            <OuiText size="xs" color="tertiary">{{
-              row.description || "No description available"
-            }}</OuiText>
+            <OuiText size="sm" weight="semibold">{{ row.name }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ row.description || "No description available" }}</OuiText>
           </OuiStack>
         </template>
 
         <template #cell-state="{ row }">
-          <OuiFlex align="center" gap="xs" wrap="wrap">
-            <OuiBadge
-              :variant="serviceBadgeVariant(row.activeState, row.subState)"
-              size="xs"
-            >
+          <OuiFlex align="center" gap="xs">
+            <OuiBadge :variant="serviceBadgeVariant(row.activeState, row.subState)" size="xs">
               {{ row.activeState || "unknown" }}
             </OuiBadge>
-            <OuiText size="xs" color="tertiary">{{
-              row.subState || "n/a"
-            }}</OuiText>
+            <OuiText size="xs" color="tertiary">{{ row.subState || "—" }}</OuiText>
           </OuiFlex>
         </template>
 
         <template #cell-load="{ row }">
-          <OuiText size="sm">{{ row.loadState || "unknown" }}</OuiText>
+          <OuiText size="sm" color="tertiary">{{ row.loadState || "unknown" }}</OuiText>
         </template>
 
         <template #cell-action="{ row }">
-          <OuiButton
-            variant="ghost"
-            size="sm"
-            @click.stop="openServiceJournal(row)"
-          >
-            View Journal
+          <OuiButton variant="ghost" size="sm" class="gap-1" @click.stop="openServiceJournal(row)">
+            Journal
+            <ArrowTopRightOnSquareIcon class="h-3 w-3" />
           </OuiButton>
         </template>
       </OuiTable>
 
       <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
-        <OuiText v-if="servicesError" size="xs" color="danger">{{
-          servicesError
-        }}</OuiText>
-        <OuiText v-else size="xs" color="tertiary">
-          Click a service to jump into its journal logs.
-        </OuiText>
-        <OuiText size="xs" color="tertiary">
-          {{ filteredServices.length }} service{{
-            filteredServices.length !== 1 ? "s" : ""
-          }}
-          <template v-if="filteredServices.length !== services.length">
-            of {{ services.length }}</template
-          >
-        </OuiText>
+        <OuiText v-if="servicesError" size="xs" color="danger">{{ servicesError }}</OuiText>
+        <OuiText v-else size="xs" color="tertiary">Click any service row to open its journal logs.</OuiText>
       </OuiFlex>
     </template>
+
   </OuiStack>
 </template>
 
@@ -382,6 +340,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   ArrowPathIcon,
+  ArrowTopRightOnSquareIcon,
   CommandLineIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
@@ -452,9 +411,72 @@ const isFollowing = ref(false);
 let provisioningStreamController: AbortController | null = null;
 let provisioningAbortRequested = false;
 
+// ── Connection status for slow guest-OS calls (journal & services) ───────────
+// The backend tries SSH (~12 s timeout) then falls back to the hypervisor agent.
+// We mirror those phases in the UI so users understand what's happening.
+
+type ConnPhase = 0 | 1 | 2; // 0=connect, 1=ssh, 2=agent
+
+interface ConnStatus {
+  phase: ConnPhase;
+  message: string;
+  sub: string;
+}
+
+const CONN_PHASES: Array<{ msg: string; sub: string; delay: number }> = [
+  {
+    msg: "Querying hypervisor agent…",
+    sub: "Fetching data via Proxmox QEMU guest agent",
+    delay: 0,
+  },
+  {
+    msg: "Agent slow — trying SSH via gateway…",
+    sub: "Falling back to SSH connection through the VPS gateway",
+    delay: 5000,
+  },
+  {
+    msg: "Still connecting…",
+    sub: "This is taking longer than expected",
+    delay: 12000,
+  },
+];
+
+function makeConnStatus(): ConnStatus {
+  return {
+    phase: 0,
+    message: CONN_PHASES[0]!.msg,
+    sub: CONN_PHASES[0]!.sub,
+  };
+}
+
+function startConnTimer(
+  status: ReturnType<typeof ref<ConnStatus>>
+): ReturnType<typeof setTimeout>[] {
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  for (let i = 1; i < CONN_PHASES.length; i++) {
+    const phaseEntry = CONN_PHASES[i]!;
+    const idx = i as ConnPhase;
+    timers.push(
+      setTimeout(() => {
+        status.value = { phase: idx, message: phaseEntry.msg, sub: phaseEntry.sub };
+      }, phaseEntry.delay)
+    );
+  }
+  return timers;
+}
+
+function clearConnTimers(timers: ReturnType<typeof setTimeout>[]) {
+  timers.forEach(clearTimeout);
+  timers.length = 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const journalLogs = ref<JournalLogLine[]>([]);
 const journalLoading = ref(false);
 const journalError = ref<string | null>(null);
+const journalConnStatus = ref<ConnStatus>(makeConnStatus());
+const journalConnTimers: ReturnType<typeof setTimeout>[] = [];
 const journalSearchQuery = ref("");
 const journalUnit = ref("");
 const journalLines = ref(200);
@@ -472,6 +494,8 @@ const journalLinesInput = computed({
 const services = ref<ServiceRow[]>([]);
 const servicesLoading = ref(false);
 const servicesError = ref<string | null>(null);
+const servicesConnStatus = ref<ConnStatus>(makeConnStatus());
+const servicesConnTimers: ReturnType<typeof setTimeout>[] = [];
 const serviceSearchQuery = ref("");
 const includeInactiveServices = ref(true);
 
@@ -669,6 +693,9 @@ function stopProvisioningStream() {
 async function refreshJournalLogs() {
   journalLoading.value = true;
   journalError.value = null;
+  journalConnStatus.value = makeConnStatus();
+  clearConnTimers(journalConnTimers);
+  journalConnTimers.push(...startConnTimer(journalConnStatus));
 
   try {
     await ensureAuthReady();
@@ -690,6 +717,7 @@ async function refreshJournalLogs() {
     journalError.value =
       error instanceof Error ? error.message : "Failed to load journal logs.";
   } finally {
+    clearConnTimers(journalConnTimers);
     journalLoading.value = false;
   }
 }
@@ -697,6 +725,9 @@ async function refreshJournalLogs() {
 async function refreshServices() {
   servicesLoading.value = true;
   servicesError.value = null;
+  servicesConnStatus.value = makeConnStatus();
+  clearConnTimers(servicesConnTimers);
+  servicesConnTimers.push(...startConnTimer(servicesConnStatus));
 
   try {
     await ensureAuthReady();
@@ -718,6 +749,7 @@ async function refreshServices() {
     servicesError.value =
       error instanceof Error ? error.message : "Failed to load services.";
   } finally {
+    clearConnTimers(servicesConnTimers);
     servicesLoading.value = false;
   }
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
@@ -140,18 +141,33 @@ func (s *Service) runVPSGuestCommand(ctx context.Context, vpsID, command string)
 	if s.vpsManager == nil {
 		return nil, errors.New("VPS manager is unavailable")
 	}
-	if s.sshPool == nil {
-		return nil, errors.New("SSH connection pool is unavailable")
-	}
 
-	conn, err := s.getVPSGuestSSHConnection(ctx, vpsID)
-	if err != nil {
-		return nil, err
+	// Attempt 1: QEMU guest agent exec via Proxmox API (fastest, no SSH/gateway
+	// required — same infrastructure as the web terminal). This is the primary
+	// path for Obiente-managed VMs where cloud-init installs qemu-guest-agent.
+	logger.Debug("[VPS GuestCmd] Trying hypervisor guest agent for VPS %s", vpsID)
+	output, agentErr := s.runVPSGuestCommandViaAgent(ctx, vpsID, command)
+	if agentErr == nil {
+		return output, nil
+	}
+	logger.Debug("[VPS GuestCmd] Guest agent failed for VPS %s, will try SSH: %v", vpsID, agentErr)
+
+	// Attempt 2: SSH via gateway (fallback — useful when the guest agent is not
+	// installed/running, e.g. non-managed VMs). Cap the entire attempt in a
+	// bounded context so a hung gateway doesn't consume the caller's deadline.
+	if s.sshPool == nil {
+		return nil, agentErr
+	}
+	sshCtx, sshCancel := context.WithTimeout(ctx, 12*time.Second)
+	conn, sshConnErr := s.getVPSGuestSSHConnection(sshCtx, vpsID)
+	sshCancel()
+	if sshConnErr != nil {
+		return nil, fmt.Errorf("guest agent failed (%v); SSH also failed: %w", agentErr, sshConnErr)
 	}
 
 	session, err := conn.sshClient.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create SSH session: %w", err)
+		return nil, fmt.Errorf("guest agent failed (%v); SSH session error: %w", agentErr, err)
 	}
 	defer session.Close()
 
@@ -161,8 +177,8 @@ func (s *Service) runVPSGuestCommand(ctx context.Context, vpsID, command string)
 	}
 	done := make(chan result, 1)
 	go func() {
-		output, runErr := session.CombinedOutput(command)
-		done <- result{output: output, err: runErr}
+		out, runErr := session.CombinedOutput(command)
+		done <- result{output: out, err: runErr}
 	}()
 
 	select {
@@ -179,6 +195,41 @@ func (s *Service) runVPSGuestCommand(ctx context.Context, vpsID, command string)
 		}
 		return res.output, nil
 	}
+}
+
+// runVPSGuestCommandViaAgent executes a shell command on the VM using the Proxmox
+// QEMU guest agent (/agent/exec). This path does not require the vps-gateway service.
+func (s *Service) runVPSGuestCommandViaAgent(ctx context.Context, vpsID, command string) ([]byte, error) {
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, fmt.Errorf("VPS not found: %w", err)
+	}
+	if vps.NodeID == nil || *vps.NodeID == "" {
+		return nil, errors.New("VPS has no assigned node — cannot use guest agent")
+	}
+	if vps.InstanceID == nil || *vps.InstanceID == "" {
+		return nil, errors.New("VPS has no Proxmox instance ID — cannot use guest agent")
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return nil, fmt.Errorf("invalid VPS instance ID %q", *vps.InstanceID)
+	}
+
+	proxmoxClient, err := s.vpsManager.GetProxmoxClientForNode(*vps.NodeID)
+	if err != nil {
+		return nil, fmt.Errorf("no Proxmox client for node %s: %w", *vps.NodeID, err)
+	}
+
+	output, exitCode, err := proxmoxClient.RunGuestShellCommand(ctx, *vps.NodeID, vmIDInt, command)
+	if err != nil {
+		return nil, fmt.Errorf("guest agent exec failed: %w", err)
+	}
+	if exitCode != 0 {
+		return output, fmt.Errorf("command exited with code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	}
+	return output, nil
 }
 
 func (s *Service) getVPSGuestSSHConnection(ctx context.Context, vpsID string) (*PooledSSHConnection, error) {

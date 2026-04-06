@@ -27,6 +27,11 @@ type SSHConnectionPool struct {
 	idleTimeout   time.Duration
 	cleanupTicker *time.Ticker
 	stopCleanup   chan struct{}
+	// poolCtx is used for the lifetime of ProxySSH bidi streams.
+	// Using the caller's request context would cancel the stream when the request
+	// ends, breaking pooled connections for subsequent requests.
+	poolCtx    context.Context
+	poolCancel context.CancelFunc
 }
 
 // PooledSSHConnection represents a persistent SSH connection to a VPS
@@ -50,12 +55,15 @@ type ForwardedChannel struct {
 
 // NewSSHConnectionPool creates a new SSH connection pool
 func NewSSHConnectionPool(gatewayClient *orchestrator.VPSGatewayClient) *SSHConnectionPool {
+	poolCtx, poolCancel := context.WithCancel(context.Background())
 	pool := &SSHConnectionPool{
 		connections:   make(map[string]*PooledSSHConnection),
 		gatewayClient: gatewayClient,
 		idleTimeout:   5 * time.Minute,
 		cleanupTicker: time.NewTicker(1 * time.Minute),
 		stopCleanup:   make(chan struct{}),
+		poolCtx:       poolCtx,
+		poolCancel:    poolCancel,
 	}
 
 	// Start cleanup goroutine
@@ -86,9 +94,10 @@ func (p *SSHConnectionPool) GetOrCreateConnection(ctx context.Context, vpsID, vp
 		delete(p.connections, connKey)
 	}
 
-	// Create new connection
+	// Create new connection — use the pool-level context (not the caller's request
+	// context) so the ProxySSH bidi stream stays open beyond a single request.
 	logger.Info("[SSHConnectionPool] Creating new SSH connection for VPS %s (key: %s)", vpsID, keyID)
-	sshClient, err := p.createSSHConnectionViaGateway(ctx, vpsID, vpsIP, sshSigner)
+	sshClient, err := p.createSSHConnectionViaGateway(p.poolCtx, vpsID, vpsIP, sshSigner)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH connection: %w", err)
 	}
@@ -109,13 +118,14 @@ func (p *SSHConnectionPool) GetOrCreateConnection(ctx context.Context, vpsID, vp
 
 // streamConn implements net.Conn by wrapping a ProxySSH bidirectional stream
 type streamConn struct {
-	stream       *connect.BidiStreamForClient[vpsgatewayv1.ProxySSHRequest, vpsgatewayv1.ProxySSHResponse]
-	connectionID string
-	readBuf      []byte
-	readMu       sync.Mutex
-	writeMu      sync.Mutex
-	closed       bool
-	closeMu      sync.Mutex
+	stream        *connect.BidiStreamForClient[vpsgatewayv1.ProxySSHRequest, vpsgatewayv1.ProxySSHResponse]
+	connectionID  string
+	readBuf       []byte
+	readDeadline  time.Time
+	readMu        sync.Mutex
+	writeMu       sync.Mutex
+	closed        bool
+	closeMu       sync.Mutex
 }
 
 func (c *streamConn) Read(b []byte) (n int, err error) {
@@ -127,6 +137,44 @@ func (c *streamConn) Read(b []byte) (n int, err error) {
 		n = copy(b, c.readBuf)
 		c.readBuf = c.readBuf[n:]
 		return n, nil
+	}
+
+	// Honour read deadline (used by ssh.NewClientConn for the handshake timeout).
+	if !c.readDeadline.IsZero() {
+		d := time.Until(c.readDeadline)
+		if d <= 0 {
+			return 0, fmt.Errorf("read deadline exceeded")
+		}
+		type receiveResult struct {
+			resp *vpsgatewayv1.ProxySSHResponse
+			err  error
+		}
+		ch := make(chan receiveResult, 1)
+		go func() {
+			r, e := c.stream.Receive()
+			ch <- receiveResult{r, e}
+		}()
+		select {
+		case <-time.After(d):
+			return 0, fmt.Errorf("read deadline exceeded")
+		case r := <-ch:
+			if r.err == io.EOF {
+				return 0, io.EOF
+			}
+			if r.err != nil {
+				return 0, r.err
+			}
+			if r.resp.Type == "data" {
+				n = copy(b, r.resp.Data)
+				if len(r.resp.Data) > n {
+					c.readBuf = append(c.readBuf, r.resp.Data[n:]...)
+				}
+				return n, nil
+			} else if r.resp.Type == "closed" || r.resp.Type == "error" {
+				return 0, io.EOF
+			}
+			return 0, nil
+		}
 	}
 
 	// Read from stream
@@ -192,10 +240,13 @@ func (c *streamConn) Close() error {
 	return nil
 }
 
-func (c *streamConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
-func (c *streamConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
-func (c *streamConn) SetDeadline(t time.Time) error      { return nil }
-func (c *streamConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *streamConn) LocalAddr() net.Addr { return &net.TCPAddr{} }
+func (c *streamConn) RemoteAddr() net.Addr { return &net.TCPAddr{} }
+
+// SetDeadline enforces a read deadline so that ssh.NewClientConn's Timeout
+// field (10 s) actually fires during the SSH handshake.
+func (c *streamConn) SetDeadline(t time.Time) error      { return c.SetReadDeadline(t) }
+func (c *streamConn) SetReadDeadline(t time.Time) error  { c.readDeadline = t; return nil }
 func (c *streamConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // createSSHConnectionViaGateway creates an SSH client connection via the gateway
@@ -254,10 +305,30 @@ func (p *SSHConnectionPool) createSSHConnectionViaGateway(ctx context.Context, v
 		return nil, fmt.Errorf("failed to send connect request: %w", err)
 	}
 
-	// Wait for connected response
-	resp, err := stream.Receive()
-	if err != nil {
-		return nil, fmt.Errorf("failed to receive connect response: %w", err)
+	// Wait for "connected" response with a short timeout.
+	// The gateway must TCP-dial the VPS SSH port; if the port is unreachable/filtered
+	// that dial can block for the OS TCP timeout (~2 min). We fail fast here so the
+	// caller can fall back to the guest-agent path before the request context expires.
+	type receiveResult struct {
+		resp *vpsgatewayv1.ProxySSHResponse
+		err  error
+	}
+	resultCh := make(chan receiveResult, 1)
+	go func() {
+		resp, err := stream.Receive()
+		resultCh <- receiveResult{resp, err}
+	}()
+
+	var resp *vpsgatewayv1.ProxySSHResponse
+	select {
+	case <-time.After(10 * time.Second):
+		_ = stream.CloseRequest()
+		return nil, fmt.Errorf("timeout waiting for gateway to connect to VPS %s SSH port", vpsIP)
+	case r := <-resultCh:
+		if r.err != nil {
+			return nil, fmt.Errorf("failed to receive connect response: %w", r.err)
+		}
+		resp = r.resp
 	}
 
 	if resp.Type != "connected" {
@@ -365,6 +436,7 @@ func (p *SSHConnectionPool) cleanupIdleConnections() {
 func (p *SSHConnectionPool) Close() error {
 	close(p.stopCleanup)
 	p.cleanupTicker.Stop()
+	p.poolCancel() // cancel the pool context so all ProxySSH streams are torn down
 
 	p.mu.Lock()
 	defer p.mu.Unlock()

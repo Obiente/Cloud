@@ -3426,6 +3426,112 @@ func (pc *ProxmoxClient) ExecuteGuestCommand(ctx context.Context, nodeName strin
 	return output, execResp.Data.ExitCode, nil
 }
 
+// RunGuestShellCommand executes a shell command on the VM via the QEMU guest agent.
+// The command string is passed to /bin/bash -c so shell features (env vars, pipes, etc.) work.
+// stdout and stderr are captured via capture-output and returned as a combined byte slice.
+func (pc *ProxmoxClient) RunGuestShellCommand(ctx context.Context, nodeName string, vmID int, command string) ([]byte, int, error) {
+	// Check if guest agent is available
+	agentAvailable, err := pc.CheckGuestAgentStatus(ctx, nodeName, vmID)
+	if err != nil {
+		return nil, -1, fmt.Errorf("guest agent unavailable: %w", err)
+	}
+	if !agentAvailable {
+		return nil, -1, fmt.Errorf("guest agent is not running on VM %d", vmID)
+	}
+
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec", nodeName, vmID)
+
+	// Pass command as ["/bin/bash", "-c", command] so shell features work.
+	// Proxmox accepts multiple 'command' form values as an array.
+	formData := url.Values{}
+	formData.Add("command", "/bin/bash")
+	formData.Add("command", "-c")
+	formData.Add("command", command)
+	formData.Add("capture-output", "1")
+
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
+	if err != nil {
+		return nil, -1, fmt.Errorf("failed to exec guest command: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, -1, fmt.Errorf("agent exec returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var execResp struct {
+		Data struct {
+			Pid int `json:"pid"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&execResp); err != nil {
+		return nil, -1, fmt.Errorf("failed to decode exec response: %w", err)
+	}
+
+	pid := execResp.Data.Pid
+	statusEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec-status?pid=%d", nodeName, vmID, pid)
+	deadline := time.Now().Add(30 * time.Second)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return nil, -1, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+
+		statusResp, err := pc.apiRequest(ctx, "GET", statusEndpoint, nil)
+		if err != nil {
+			continue
+		}
+
+		var statusData struct {
+			Data struct {
+				Exited   int    `json:"exited"`
+				ExitCode int    `json:"exitcode"`
+				OutData  string `json:"out-data"`
+				ErrData  string `json:"err-data"`
+			} `json:"data"`
+		}
+		decodeErr := json.NewDecoder(statusResp.Body).Decode(&statusData)
+		statusResp.Body.Close()
+		if decodeErr != nil {
+			continue
+		}
+
+		if statusData.Data.Exited == 0 {
+			continue
+		}
+
+		// Decode base64-encoded output (Proxmox returns out-data as base64)
+		var outBytes, errBytes []byte
+		if statusData.Data.OutData != "" {
+			outBytes, _ = base64.StdEncoding.DecodeString(statusData.Data.OutData)
+			if outBytes == nil {
+				outBytes = []byte(statusData.Data.OutData)
+			}
+		}
+		if statusData.Data.ErrData != "" {
+			errBytes, _ = base64.StdEncoding.DecodeString(statusData.Data.ErrData)
+			if errBytes == nil {
+				errBytes = []byte(statusData.Data.ErrData)
+			}
+		}
+
+		combined := outBytes
+		if len(errBytes) > 0 {
+			if len(combined) > 0 {
+				combined = append(combined, '\n')
+			}
+			combined = append(combined, errBytes...)
+		}
+
+		return combined, statusData.Data.ExitCode, nil
+	}
+
+	return nil, -1, fmt.Errorf("guest agent command timed out after 30s (pid %d)", pid)
+}
+
 // ConfigurePublicIPOnVM configures a public IP address on a running VM
 // This manually adds the IP and routing without requiring a reboot
 func (pc *ProxmoxClient) ConfigurePublicIPOnVM(ctx context.Context, nodeName string, vmID int, publicIP string, publicGateway string, netmask string) error {

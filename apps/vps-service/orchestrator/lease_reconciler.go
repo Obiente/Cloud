@@ -58,13 +58,19 @@ func (vm *VPSManager) reconcileAllLeases(ctx context.Context) error {
 	errorCount := 0
 
 	for _, vps := range vpsList {
-		// Check if this VPS already has a non-public lease in the database
-		var existingLease database.DHCPLease
-		err := database.DB.WithContext(ctx).
+		// Check if this VPS already has a non-public lease in the database.
+		// Use Count instead of First to avoid GORM logging spurious "record not found"
+		// errors every time a VPS legitimately has no lease yet.
+		var leaseCount int64
+		if err := database.DB.WithContext(ctx).
+			Model(&database.DHCPLease{}).
 			Where("vps_id = ? AND is_public = ?", vps.ID, false).
-			First(&existingLease).Error
-
-		if err == nil {
+			Count(&leaseCount).Error; err != nil {
+			logger.Warn("[LeaseReconciler] DB error checking lease for VPS %s: %v", vps.ID, err)
+			errorCount++
+			continue
+		}
+		if leaseCount > 0 {
 			// Lease exists, skip
 			skippedCount++
 			continue
@@ -164,7 +170,7 @@ func (vm *VPSManager) reconcileAllLeases(ctx context.Context) error {
 		}
 		gc := bidiClient.(gatewayClient)
 		
-		allocCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		allocCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		allocResp, err := gc.AllocateIP(allocCtx, nodeName, vps.ID, vps.OrganizationID, mac)
 		cancel()
 
