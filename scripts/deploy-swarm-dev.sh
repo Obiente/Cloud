@@ -4,7 +4,19 @@
 # Use -b or --build to build images locally
 # Use -p or --pull to pull images from registry
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+TMP_FILES=()
+cleanup() {
+  if [ ${#TMP_FILES[@]} -gt 0 ]; then
+    rm -f "${TMP_FILES[@]}"
+  fi
+}
+trap cleanup EXIT
 
 # Parse command-line arguments
 BUILD_IMAGES=false
@@ -49,6 +61,7 @@ MICROSERVICES=(
   "deployments-service"
   "dns-service"
   "gameservers-service"
+  "notifications-service"
   "orchestrator-service"
   "organizations-service"
   "superadmin-service"
@@ -57,14 +70,9 @@ MICROSERVICES=(
   "vps-service"
 )
 
-# Load .env file if it exists
-if [ -f .env ]; then
-  echo "📝 Loading environment variables from .env file..."
-  # Export variables from .env file (handles comments and empty lines)
-  set -a
-  source .env
-  set +a
-elif [ -f .env.example ]; then
+if [ -f "${REPO_ROOT}/.env" ]; then
+  load_env_file "${REPO_ROOT}/.env"
+elif [ -f "${REPO_ROOT}/.env.example" ]; then
   echo "⚠️  Warning: .env file not found. Using .env.example as reference."
   echo "   Copy .env.example to .env and configure it: cp .env.example .env"
 fi
@@ -174,6 +182,7 @@ echo "ℹ️  Network '$NETWORK_NAME' will be created automatically by Docker Sw
 # Merge docker-compose.base.yml with the compose file
 # YAML anchors don't work across files, so we merge them first
 MERGED_COMPOSE=$(mktemp)
+TMP_FILES+=("$MERGED_COMPOSE")
 ./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
 
 # Substitute __STACK_NAME__ placeholder with actual stack name
@@ -183,7 +192,6 @@ sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 # Convert relative config file paths to absolute paths
 # Docker configs resolve file: paths relative to current working directory
 # We need absolute paths so they work regardless of where docker stack deploy is run
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$MERGED_COMPOSE"
 
 # Convert relative bind mount paths to absolute paths
@@ -210,7 +218,6 @@ if [ ${#MISSING_CONFIGS[@]} -gt 0 ]; then
   done
   echo ""
   echo "Please ensure all scripts are present before deploying."
-  rm -f "$MERGED_COMPOSE"
   exit 1
 fi
 echo "✅ All config files found"
@@ -320,4 +327,3 @@ done
 echo ""
 echo "⚠️  If you see mount errors on worker nodes, ensure directories exist:"
 echo "   Run on each worker: ./scripts/setup-all-nodes.sh"
-

@@ -2,7 +2,7 @@
 # Wrapper script to merge docker-compose.base.yml with compose files
 # This allows YAML anchors to work across files
 
-set -e
+set -euo pipefail
 
 BASE_FILE="docker-compose.base.yml"
 COMPOSE_FILE="${1:-docker-compose.yml}"
@@ -19,6 +19,10 @@ fi
 
 # Create temporary merged file in /tmp
 TMP_FILE=$(mktemp)
+cleanup() {
+    rm -f "$TMP_FILE"
+}
+trap cleanup EXIT
 PROJECT_DIR="$(pwd)"
 {
     cat "$BASE_FILE"
@@ -31,10 +35,3 @@ PROJECT_DIR="$(pwd)"
 # Use --project-directory to ensure relative paths resolve correctly
 shift || true
 docker compose --project-directory "$PROJECT_DIR" -f "$TMP_FILE" "$@"
-EXIT_CODE=$?
-
-# Cleanup
-rm -f "$TMP_FILE"
-
-exit $EXIT_CODE
-

@@ -3,7 +3,7 @@
 # Usage: merge-compose-files.sh <compose-file> [output-file]
 # If output-file is not provided, outputs to stdout
 
-set -e
+set -euo pipefail
 
 BASE_FILE="docker-compose.base.yml"
 COMPOSE_FILE="$1"
@@ -34,4 +34,3 @@ fi
     grep -v "^  - docker-compose.base.yml" | \
     grep -v "^# This file includes\|^# Usage:.*include\|^# The 'include'"
 } > "${OUTPUT_FILE:-/dev/stdout}"
-

@@ -2,19 +2,27 @@
 # Quick script to redeploy dashboard with proper DOMAIN substitution
 # Usage: ./scripts/redeploy-dashboard.sh [domain]
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+TMP_FILES=()
+cleanup() {
+  if [ ${#TMP_FILES[@]} -gt 0 ]; then
+    rm -f "${TMP_FILES[@]}"
+  fi
+}
+trap cleanup EXIT
 
 DOMAIN="${1:-${DOMAIN:-obiente.cloud}}"
 STACK_NAME="${STACK_NAME:-obiente}"
 
 echo "🚀 Redeploying dashboard with DOMAIN=$DOMAIN..."
 
-# Load .env file if it exists
-if [ -f .env ]; then
-  echo "📝 Loading environment variables from .env file..."
-  set -a
-  source .env
-  set +a
+if [ -f "${REPO_ROOT}/.env" ]; then
+  load_env_file "${REPO_ROOT}/.env"
 fi
 
 # Override DOMAIN if provided as argument
@@ -22,6 +30,7 @@ export DOMAIN="$DOMAIN"
 
 # Merge docker-compose.base.yml with docker-compose.dashboard.yml
 TEMP_DASHBOARD_COMPOSE=$(mktemp)
+TMP_FILES+=("$TEMP_DASHBOARD_COMPOSE")
 ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
 
 # Substitute __STACK_NAME__ placeholder and DOMAIN variables
@@ -31,7 +40,6 @@ sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
 
 # Deploy dashboard service in the same stack (not a separate stack)
 docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
-rm -f "$TEMP_DASHBOARD_COMPOSE"
 
 echo "✅ Dashboard redeployed!"
 
@@ -47,4 +55,3 @@ echo "   # Find dashboard service name first:"
 echo "   DASHBOARD_SERVICE=\$(docker service ls --format '{{.Name}}' | grep -i dashboard | head -1)"
 echo "   docker service inspect \$DASHBOARD_SERVICE --format '{{json .Spec.Labels}}' | jq 'to_entries | map(select(.key | startswith(\"traefik\")))'"
 echo ""
-

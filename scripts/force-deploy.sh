@@ -3,7 +3,19 @@
 # Force updates all services to ensure they're running latest configuration
 # Usage: ./scripts/force-deploy.sh [stack-name] [compose-file]
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+TMP_FILES=()
+cleanup() {
+  if [ ${#TMP_FILES[@]} -gt 0 ]; then
+    rm -f "${TMP_FILES[@]}"
+  fi
+}
+trap cleanup EXIT
 
 STACK_NAME="${1:-obiente}"
 COMPOSE_FILE="${2:-docker-compose.swarm.yml}"
@@ -16,12 +28,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Load .env file if it exists
-if [ -f .env ]; then
-  echo -e "${BLUE}📝 Loading environment variables from .env file...${NC}"
-  set -a
-  source .env
-  set +a
+if [ -f "${REPO_ROOT}/.env" ]; then
+  load_env_file "${REPO_ROOT}/.env"
 fi
 
 echo -e "${BLUE}🔄 Force deploying Obiente Cloud stack: ${STACK_NAME}${NC}"
@@ -58,6 +66,7 @@ echo -e "${BLUE}🚀 Redeploying main stack '${STACK_NAME}'...${NC}"
 # Merge docker-compose.base.yml with the compose file
 # YAML anchors don't work across files, so we merge them first
 MERGED_COMPOSE=$(mktemp)
+TMP_FILES+=("$MERGED_COMPOSE")
 ./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
 
 # Substitute __STACK_NAME__ placeholder with actual stack name
@@ -83,6 +92,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   
   # Merge docker-compose.base.yml with docker-compose.dashboard.yml
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
+  TMP_FILES+=("$TEMP_DASHBOARD_COMPOSE")
   ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
   
   # Substitute __STACK_NAME__ placeholder and DOMAIN variables
@@ -166,4 +176,3 @@ echo "  Service status:     docker service ps ${STACK_NAME}_api-gateway"
 echo ""
 echo -e "${YELLOW}💡 Note: Services are being updated. Check status with: docker service ps <service-name>${NC}"
 echo ""
-
