@@ -21,9 +21,10 @@ load_env_file() {
 
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
+    line="$(trim_whitespace "$line")"
 
     case "$line" in
-      "" | [[:space:]]*"#")
+      "" | \#*)
         continue
         ;;
     esac
