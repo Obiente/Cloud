@@ -167,6 +167,7 @@ import SuperadminActionsCell, {
   type Action,
 } from "~/components/superadmin/SuperadminActionsCell.vue";
 import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.vue";
+import type { TableColumn } from "~/components/oui/Table.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -188,7 +189,7 @@ const search = ref("");
 const minInactiveDays = ref("30");
 let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
-const columns = [
+const columns: TableColumn[] = [
   { key: "user", label: "User", defaultWidth: 280, minWidth: 240 },
   {
     key: "lastActivity",
@@ -222,7 +223,7 @@ const columns = [
     minWidth: 90,
     resizable: false,
   },
-] as const;
+];
 
 const filterConfigs = computed(
   () =>
