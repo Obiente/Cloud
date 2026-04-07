@@ -4,6 +4,7 @@
 # Set BUILD_LOCAL=true to build images locally instead
 # Set DEPLOY_DASHBOARD=false to skip dashboard deployment
 # Use -p or --pull to pull images before deploying
+# Use -f or --force to force-restart all containers (picks up new images without re-pulling)
 
 set -euo pipefail
 
@@ -21,6 +22,7 @@ trap cleanup EXIT
 
 # Parse command-line arguments
 PULL_IMAGES=false
+FORCE_UPDATE=false
 STACK_NAME=""
 COMPOSE_FILE=""
 
@@ -28,6 +30,10 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     -p|--pull)
       PULL_IMAGES=true
+      shift
+      ;;
+    -f|--force)
+      FORCE_UPDATE=true
       shift
       ;;
     *)
@@ -46,7 +52,8 @@ STACK_NAME="${STACK_NAME:-obiente}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.swarm.yml}"
 BUILD_LOCAL="${BUILD_LOCAL:-false}"
 DEPLOY_DASHBOARD="${DEPLOY_DASHBOARD:-true}"
-RESOLVE_IMAGE_MODE="never"
+FORCE_UPDATE="${FORCE_UPDATE:-false}"
+RESOLVE_IMAGE_MODE="always"
 
 # Define all microservice images
 REGISTRY="${REGISTRY:-ghcr.io/obiente}"
@@ -182,21 +189,20 @@ elif [ "$PULL_IMAGES" = "true" ]; then
       echo "   - ${service}"
     done
     echo ""
-    echo "Continuing deployment with cached image resolution."
-    echo "Services that use these images may keep their existing version or fail"
-    echo "to schedule on nodes that do not already have the image cached."
+    echo "Continuing deployment — successfully pulled images will be updated."
+    echo "Services with failed pulls will keep their existing cached version."
     echo ""
-    echo "To fully fix this, either:"
+    echo "To fix missing images, either:"
     echo "   1. Publish the missing image to ghcr.io"
     echo "   2. Or set BUILD_LOCAL=true to build locally"
-    RESOLVE_IMAGE_MODE="never"
-  else
+    # Keep resolve-image=always so services that DID pull get their new digest.
+    # Services whose pull failed will fall back to whatever the node has cached.
     RESOLVE_IMAGE_MODE="always"
   fi
 
   echo "✅ Image pull step complete!"
 else
-  echo "ℹ️  Skipping image pull (use -p or --pull to pull images)"
+  echo "ℹ️  Skipping image pull (use -p/--pull to pull images, -f/--force to force-restart all containers)"
 fi
 
 echo ""
@@ -431,6 +437,22 @@ rm -f "$MERGED_COMPOSE"
 echo ""
 echo "✅ Main stack deployment started!"
 echo ""
+
+# Force update all microservices if -f/--force was passed
+# This ensures services pick up new images even when their spec hasn't changed
+if [ "$FORCE_UPDATE" = "true" ]; then
+  echo "🔄 Force-updating all microservice containers..."
+  for service in "${MICROSERVICES[@]}"; do
+    FULL_NAME="${STACK_NAME}_${service}"
+    if docker service inspect "$FULL_NAME" &>/dev/null; then
+      echo "   Updating ${FULL_NAME}..."
+      docker service update --force "$FULL_NAME" &
+    fi
+  done
+  wait
+  echo "✅ Force update triggered for all services!"
+  echo ""
+fi
 
 # Deploy dashboard in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
