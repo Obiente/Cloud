@@ -438,22 +438,6 @@ echo ""
 echo "✅ Main stack deployment started!"
 echo ""
 
-# Force update all microservices if -f/--force was passed
-# This ensures services pick up new images even when their spec hasn't changed
-if [ "$FORCE_UPDATE" = "true" ]; then
-  echo "🔄 Force-updating all microservice containers..."
-  for service in "${MICROSERVICES[@]}"; do
-    FULL_NAME="${STACK_NAME}_${service}"
-    if docker service inspect "$FULL_NAME" &>/dev/null; then
-      echo "   Updating ${FULL_NAME}..."
-      docker service update --force "$FULL_NAME" &
-    fi
-  done
-  wait
-  echo "✅ Force update triggered for all services!"
-  echo ""
-fi
-
 # Deploy dashboard in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "🚀 Adding dashboard service to main stack '$STACK_NAME'..."
@@ -524,6 +508,26 @@ fi
 
 echo "✅ All deployments started!"
 echo ""
+
+# Force update all services if -f/--force was passed
+# Runs after both main stack and dashboard are deployed so all services exist
+if [ "$FORCE_UPDATE" = "true" ]; then
+  echo "🔄 Force-updating all containers..."
+  FORCE_UPDATE_SERVICES=("${MICROSERVICES[@]}")
+  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
+    FORCE_UPDATE_SERVICES+=("dashboard")
+  fi
+  for service in "${FORCE_UPDATE_SERVICES[@]}"; do
+    FULL_NAME="${STACK_NAME}_${service}"
+    if docker service inspect "$FULL_NAME" &>/dev/null; then
+      echo "   Updating ${FULL_NAME}..."
+      docker service update --force "$FULL_NAME" &
+    fi
+  done
+  wait
+  echo "✅ Force update triggered for all services!"
+  echo ""
+fi
 echo "📋 Useful commands:"
 echo "  View services:     docker stack services $STACK_NAME"
 echo "  View logs:         docker service logs -f ${STACK_NAME}_api-gateway"
