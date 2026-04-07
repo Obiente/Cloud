@@ -885,6 +885,11 @@ func sanitizeMap(data map[string]interface{}, sensitiveFields []string) {
 // It checks multiple headers in order of preference to get the real client IP
 // Traefik is configured with forwardedHeaders middleware to properly forward the real client IP
 func getClientIP(req connect.AnyRequest) string {
+	// Try X-Obiente-Client-IP (set by API gateway — most reliable canonical header)
+	if clientIP := req.Header().Get("X-Obiente-Client-IP"); clientIP != "" {
+		return strings.TrimSpace(clientIP)
+	}
+
 	// Try CF-Connecting-IP (Cloudflare)
 	if cfIP := req.Header().Get("CF-Connecting-IP"); cfIP != "" {
 		return strings.TrimSpace(cfIP)

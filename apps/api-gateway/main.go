@@ -896,6 +896,27 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Set X-Obiente-Client-IP: a canonical header with the resolved real client IP.
+	// Backend services read this header first in audit logging to get the most reliable IP.
+	// Resolution order: CF-Connecting-IP > True-Client-IP > X-Forwarded-For (first) > X-Real-IP > RemoteAddr
+	resolvedClientIP := ""
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		resolvedClientIP = strings.TrimSpace(cfIP)
+	} else if trueClientIP := r.Header.Get("True-Client-IP"); trueClientIP != "" {
+		resolvedClientIP = strings.TrimSpace(trueClientIP)
+	} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ips := strings.SplitN(xff, ",", 2)
+		resolvedClientIP = strings.TrimSpace(ips[0])
+	} else if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		resolvedClientIP = strings.TrimSpace(realIP)
+	} else if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		resolvedClientIP = host
+	}
+	if resolvedClientIP != "" {
+		req.Header.Set("X-Obiente-Client-IP", resolvedClientIP)
+		logger.Debug("[API Gateway] Set X-Obiente-Client-IP: %s", resolvedClientIP)
+	}
+
 	req.Host = target.Host
 
 	if authHeader := req.Header.Get("Authorization"); authHeader != "" {
@@ -1338,6 +1359,25 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
 			backendConn.Write([]byte(fmt.Sprintf("X-Real-IP: %s\r\n", realIP)))
 		}
+	}
+
+	// Set X-Obiente-Client-IP: a canonical header with the resolved real client IP.
+	// Resolution order: CF-Connecting-IP > True-Client-IP > X-Forwarded-For (first) > X-Real-IP > RemoteAddr
+	wsResolvedClientIP := ""
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		wsResolvedClientIP = strings.TrimSpace(cfIP)
+	} else if trueClientIP := r.Header.Get("True-Client-IP"); trueClientIP != "" {
+		wsResolvedClientIP = strings.TrimSpace(trueClientIP)
+	} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ips := strings.SplitN(xff, ",", 2)
+		wsResolvedClientIP = strings.TrimSpace(ips[0])
+	} else if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		wsResolvedClientIP = strings.TrimSpace(realIP)
+	} else if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		wsResolvedClientIP = host
+	}
+	if wsResolvedClientIP != "" {
+		backendConn.Write([]byte(fmt.Sprintf("X-Obiente-Client-IP: %s\r\n", wsResolvedClientIP)))
 	}
 
 	backendConn.Write([]byte("\r\n"))
