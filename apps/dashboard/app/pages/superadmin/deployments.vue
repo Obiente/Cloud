@@ -25,6 +25,10 @@
             <SuperadminOrganizationCell
               :organization-name="row.organizationName"
               :organization-id="row.organizationId || value"
+              :owner-name="row._ownerName"
+              :owner-id="row._ownerId"
+              :plan="row._plan"
+              :slug="row._slug"
             />
           </template>
           <template #cell-environment="{ value }">
@@ -139,6 +143,9 @@ const filteredDeployments = computed(() => {
       deployment.id,
       deployment.domain,
       deployment.organizationId,
+      deployment.organizationName,
+      deployment.ownerId,
+      deployment.ownerName,
       formatEnvironment(deployment.environment),
       formatStatus(deployment.status),
     ].filter(Boolean).join(" ").toLowerCase();
@@ -157,15 +164,25 @@ const tableColumns = computed(() => [
 ]);
 
 const tableRows = computed(() => {
-  return (filteredDeployments.value || []).map((deployment) => ({
-    ...deployment,
-    organization: deployment.organizationId,
-    organizationName: deployment.organizationName,
-    environment: formatEnvironment(deployment.environment),
-    status: formatStatus(deployment.status),
-    created: formatDate(deployment.createdAt),
-    lastDeployed: formatDate(deployment.lastDeployedAt || deployment.createdAt),
-  }));
+  return (filteredDeployments.value || []).map((deployment) => {
+    // Get org plan/slug from the overview org list (for personal detection)
+    const overviewOrg = superAdmin.overview.value?.organizations?.find(o => o.id === (deployment.organizationId || ""));
+    return {
+      ...deployment,
+      organization: deployment.organizationId,
+      organizationName: deployment.organizationName,
+      environment: formatEnvironment(deployment.environment),
+      status: formatStatus(deployment.status),
+      created: formatDate(deployment.createdAt),
+      lastDeployed: formatDate(deployment.lastDeployedAt || deployment.createdAt),
+      // Owner comes directly from the deployment proto (populated by backend JOIN)
+      _ownerName: deployment.ownerName,
+      _ownerId: deployment.ownerId,
+      // plan/slug for personal detection - from overview org if available
+      _plan: overviewOrg?.plan,
+      _slug: overviewOrg?.slug,
+    };
+  });
 });
 
 function refresh() {

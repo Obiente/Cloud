@@ -32,6 +32,8 @@
             <SuperadminOrganizationCell
               :organization-name="row.organizationName"
               :organization-id="row.vps?.organizationId"
+              :owner-name="row.ownerName"
+              :owner-id="row.ownerId"
             />
           </template>
           <template #cell-status="{ row }">

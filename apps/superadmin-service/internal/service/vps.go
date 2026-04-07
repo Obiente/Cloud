@@ -184,9 +184,11 @@ func (s *Service) ListAllVPS(ctx context.Context, req *connect.Request[superadmi
 	query := database.DB.Table("vps_instances v").
 		Select(`
 			v.*,
-			o.name as organization_name
+			o.name as organization_name,
+			owner_m.user_id as owner_id
 		`).
 		Joins("LEFT JOIN organizations o ON o.id = v.organization_id").
+		Joins("LEFT JOIN LATERAL (SELECT user_id FROM organization_members WHERE organization_id = v.organization_id AND role = 'system:owner' AND status = 'active' LIMIT 1) owner_m ON true").
 		Where("v.deleted_at IS NULL")
 
 	// Apply filters
@@ -221,6 +223,7 @@ func (s *Service) ListAllVPS(ctx context.Context, req *connect.Request[superadmi
 	var vpsRows []struct {
 		database.VPSInstance
 		OrganizationName string `gorm:"column:organization_name"`
+		OwnerID          string `gorm:"column:owner_id"`
 	}
 
 	if err := query.Order("v.created_at DESC").Limit(perPage).Offset(offset).Find(&vpsRows).Error; err != nil {
@@ -228,15 +231,36 @@ func (s *Service) ListAllVPS(ctx context.Context, req *connect.Request[superadmi
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list VPS instances: %w", err))
 	}
 
+	// Collect unique owner IDs and resolve names
+	ownerIDSlice := make([]string, 0)
+	seenOwners := make(map[string]struct{})
+	for _, row := range vpsRows {
+		if row.OwnerID != "" {
+			if _, ok := seenOwners[row.OwnerID]; !ok {
+				ownerIDSlice = append(ownerIDSlice, row.OwnerID)
+				seenOwners[row.OwnerID] = struct{}{}
+			}
+		}
+	}
+	ownerNameMap := resolveOwnerNames(ctx, ownerIDSlice)
+
 	// Convert to proto
 	vpsOverviews := make([]*superadminv1.VPSOverview, 0, len(vpsRows))
 	for _, row := range vpsRows {
 		// Convert database model to proto
 		vpsProto := convertVPSInstanceToProto(&row.VPSInstance)
-		vpsOverviews = append(vpsOverviews, &superadminv1.VPSOverview{
+		ov := &superadminv1.VPSOverview{
 			Vps:              vpsProto,
 			OrganizationName: row.OrganizationName,
-		})
+		}
+		if row.OwnerID != "" {
+			ownerID := row.OwnerID
+			ov.OwnerId = &ownerID
+			if name, ok := ownerNameMap[row.OwnerID]; ok && name != "" {
+				ov.OwnerName = &name
+			}
+		}
+		vpsOverviews = append(vpsOverviews, ov)
 	}
 
 	// Calculate pagination

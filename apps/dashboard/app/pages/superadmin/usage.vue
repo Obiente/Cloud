@@ -32,10 +32,14 @@
           :empty-text="isLoading ? 'Loading usage…' : 'No usage entries match your search.'"
         >
           <template #cell-organization="{ value, row }">
-            <div>
-              <div class="font-medium text-text-primary">{{ value || "—" }}</div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">{{ row.organizationId }}</div>
-            </div>
+            <SuperadminOrganizationCell
+              :organization-name="row.organizationName"
+              :organization-id="row.organizationId"
+              :owner-name="orgOwnerMap.get(row.organizationId)?.ownerName"
+              :owner-id="orgOwnerMap.get(row.organizationId)?.ownerId"
+              :plan="orgOwnerMap.get(row.organizationId)?.plan"
+              :slug="orgOwnerMap.get(row.organizationId)?.slug"
+            />
           </template>
           <template #cell-actions="{ row }">
             <div class="text-right">
@@ -54,6 +58,7 @@
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
+import SuperadminOrganizationCell from "~/components/superadmin/SuperadminOrganizationCell.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -62,6 +67,17 @@ definePageMeta({
 const superAdmin = useSuperAdmin();
 // Use client-side fetching for non-blocking navigation
 useClientFetch("superadmin-usage-overview", () => superAdmin.fetchOverview(true));
+
+// Build org → owner map from the cached superadmin overview
+const orgOwnerMap = computed(() => {
+  const map = new Map<string, { ownerName: string; ownerId: string; plan?: string; slug?: string }>();
+  for (const org of superAdmin.overview.value?.organizations ?? []) {
+    if (org.ownerId) {
+      map.set(org.id, { ownerName: org.ownerName || org.ownerId, ownerId: org.ownerId, plan: org.plan, slug: org.slug });
+    }
+  }
+  return map;
+});
 
 const organizationsStore = useOrganizationsStore();
 const router = useRouter();

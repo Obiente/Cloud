@@ -18,26 +18,31 @@ Complete reference for all Obiente Cloud environment variables.
 | `SUPPORT_EMAIL`                      | -                            | ❌            | Support contact displayed in email footers                                                                          |
 | `SUPERADMIN_EMAILS`                  | -                            | ❌            | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
 | `SELF_HOSTED`                        | `false`                      | ❌            | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
+| `NUXT_PUBLIC_GITHUB_CLIENT_ID`       | -                            | ✅ (GitHub)   | Public GitHub OAuth client ID used by the dashboard                                                                 |
+| `GITHUB_CLIENT_ID`                   | -                            | ❌            | Alternative server-side source for the GitHub OAuth client ID                                                       |
+| `GITHUB_CLIENT_SECRET`               | -                            | ✅ (GitHub)   | Server-side GitHub OAuth client secret                                                                              |
+| `NUXT_GITHUB_CLIENT_SECRET`          | -                            | ❌            | Alternative server-side source for the GitHub OAuth client secret                                                   |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`        | -                            | Recommended   | Dedicated encryption key for stored GitHub access tokens                                                            |
 | `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
 | `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
 | `USE_TRAEFIK_ROUTING`                | `true`                       | ❌            | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP)                          |
-| `USE_DOMAIN_ROUTING`                 | `true`                       | ❌            | Use domain-based routing for service-to-service communication (works across nodes/networks)                          |
+| `USE_DOMAIN_ROUTING`                 | `true`                       | ❌            | Use domain-based routing for service-to-service communication (works across nodes/networks)                         |
 
 ## Configuration Sections
 
 ### Database Configuration
 
 | Variable                 | Type   | Default    | Required     |
-| ------------------------ | ------ | ---------- | ------------ |
+| ------------------------ | ------ | ---------- | ------------ | ---------------------------------------------------------------------------------------------------------- |
 | `POSTGRES_USER`          | string | `obiente`  | ❌           |
 | `POSTGRES_PASSWORD`      | string | -          | ✅           |
 | `POSTGRES_DB`            | string | `obiente`  | ❌           |
 | `DB_HOST`                | string | `postgres` | ❌           |
 | `DB_PORT`                | number | `5432`     | ❌           |
 | `POSTGRES_EXPOSE_PORT`   | number | `5433`     | ❌           | Port to expose PostgreSQL on host (default: 5433, localhost only; 5432 is used by databases-service proxy) |
-| `POSTGRES_PORT_MODE`     | string | `host`     | ❌           | Port mode: `host` (default, for localhost binding) or `ingress` |
-| `POSTGRES_ALLOWED_HOSTS` | string | -          | ❌           | Comma-separated IPs/subnets to allow in pg_hba.conf (e.g., "10.10.10.1,10.0.0.0/8") |
+| `POSTGRES_PORT_MODE`     | string | `host`     | ❌           | Port mode: `host` (default, for localhost binding) or `ingress`                                            |
+| `POSTGRES_ALLOWED_HOSTS` | string | -          | ❌           | Comma-separated IPs/subnets to allow in pg_hba.conf (e.g., "10.10.10.1,10.0.0.0/8")                        |
 | `REPLICATION_PASSWORD`   | string | -          | ❌ (HA only) |
 | `PATRONI_ADMIN_PASSWORD` | string | -          | ❌ (HA only) |
 
@@ -74,11 +79,13 @@ DB_HOST=postgres.example.netbird
 PostgreSQL port is **exposed by default on localhost only** (127.0.0.1:5433) for security. This allows local access while preventing external connections.
 
 **Default Configuration:**
+
 - Port exposed: `5433` (configurable via `POSTGRES_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
 **To restrict to localhost only**, configure firewall rules on the host:
+
 ```bash
 # Using iptables (restrict PostgreSQL to localhost only)
 sudo iptables -A INPUT -p tcp --dport 5433 ! -s 127.0.0.1 -j DROP
@@ -129,26 +136,29 @@ POSTGRES_ALLOWED_HOSTS=10.0.0.0/8
 POSTGRES_ALLOWED_HOSTS=10.10.10.1,10.0.0.0/8,192.168.1.0/24
 ```
 
-**Note:** Single IPs are automatically converted to `/32` CIDR format. 
+**Note:** Single IPs are automatically converted to `/32` CIDR format.
 
 **To apply allowed hosts changes:**
 
 1. **Update the environment variable** in your deployment:
+
    ```bash
    # Update the service with new allowed hosts
    docker service update --env-add POSTGRES_ALLOWED_HOSTS="10.10.10.1,10.0.0.0/8" obiente_postgres
    ```
 
 2. **Run the manual update script** to apply changes to pg_hba.conf:
+
    ```bash
    # For postgres service
    ./scripts/update-postgres-hba.sh postgres
-   
+
    # For timescaledb service
    ./scripts/update-postgres-hba.sh timescaledb
    ```
 
 The script will:
+
 - Read the `POSTGRES_ALLOWED_HOSTS` (or `METRICS_DB_ALLOWED_HOSTS` for timescaledb) from the service environment
 - Add missing rules to `pg_hba.conf`
 - Reload PostgreSQL configuration automatically
@@ -193,15 +203,51 @@ LOG_LEVEL=warn
 DB_LOG_LEVEL=debug
 ```
 
+### GitHub OAuth Configuration
+
+| Variable                       | Type   | Default | Required    |
+| ------------------------------ | ------ | ------- | ----------- |
+| `NUXT_PUBLIC_GITHUB_CLIENT_ID` | string | -       | ✅          |
+| `GITHUB_CLIENT_ID`             | string | -       | ❌          |
+| `GITHUB_CLIENT_SECRET`         | string | -       | ✅          |
+| `NUXT_GITHUB_CLIENT_SECRET`    | string | -       | ❌          |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`  | string | -       | Recommended |
+
+Use either:
+
+```bash
+NUXT_PUBLIC_GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+or the fallback pair:
+
+```bash
+GITHUB_CLIENT_ID=...
+NUXT_GITHUB_CLIENT_SECRET=...
+```
+
+Recommended:
+
+```bash
+GITHUB_TOKEN_ENCRYPTION_KEY=your_dedicated_secret
+```
+
+Notes:
+
+- `NUXT_PUBLIC_GITHUB_CLIENT_ID` is exposed to the browser
+- `GITHUB_CLIENT_SECRET` and `NUXT_GITHUB_CLIENT_SECRET` must remain server-side only
+- If `GITHUB_TOKEN_ENCRYPTION_KEY` is not set, Obiente may derive encryption from other service secrets, but a dedicated key is safer and easier to reason about
+
 ### Redis Configuration
 
 | Variable            | Type   | Default | Required |
-| ------------------- | ------ | ------- | -------- |
+| ------------------- | ------ | ------- | -------- | --------------------------------------------------------------------------------------- |
 | `REDIS_HOST`        | string | `redis` | ❌       |
 | `REDIS_PORT`        | number | `6379`  | ❌       |
-| `REDIS_PASSWORD`    | string | -       | ❌       | Redis password (required if port is exposed) |
-| `REDIS_EXPOSE_PORT` | number | `6379`  | ❌       | Port to expose Redis on host (default: 6379, localhost only) |
-| `REDIS_PORT_MODE`   | string | `host`  | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
+| `REDIS_PASSWORD`    | string | -       | ❌       | Redis password (required if port is exposed)                                            |
+| `REDIS_EXPOSE_PORT` | number | `6379`  | ❌       | Port to expose Redis on host (default: 6379, localhost only)                            |
+| `REDIS_PORT_MODE`   | string | `host`  | ❌       | Port mode: `host` (default, for localhost binding) or `ingress`                         |
 | `REDIS_URL`         | string | -       | ❌       | Full Redis URL (constructed from REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD if not set) |
 
 **Redis Host Configuration (`REDIS_HOST`):**
@@ -269,11 +315,13 @@ REDIS_URL=redis://:password@redis.example.netbird:6379
 Redis port is **exposed by default on localhost only** (127.0.0.1:6379) for security. This allows local access while preventing external connections.
 
 **Default Configuration:**
+
 - Port exposed: `6379` (configurable via `REDIS_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
 **To restrict to localhost only**, configure firewall rules on the host:
+
 ```bash
 # Using iptables (restrict Redis to localhost only)
 sudo iptables -A INPUT -p tcp --dport 6379 ! -s 127.0.0.1 -j DROP
@@ -306,17 +354,18 @@ REDIS_PORT_MODE=ingress
 
 ### API Gateway Routing Configuration
 
-| Variable                    | Type    | Default | Required | Description                                                                                                                                    |
-| --------------------------- | ------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `USE_TRAEFIK_ROUTING`       | boolean | `true`  | ❌       | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP). Defaults to `true` for cross-node compatibility. |
-| `USE_DOMAIN_ROUTING`        | boolean | `true`  | ❌       | Use domain-based routing for service-to-service communication. When `true`, services communicate via domains (works across nodes/networks).   |
-| `SKIP_TLS_VERIFY`           | boolean | `false` | ❌       | Skip TLS certificate verification when using Traefik routing (for internal certs).                                                         |
+| Variable              | Type    | Default | Required | Description                                                                                                                                  |
+| --------------------- | ------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USE_TRAEFIK_ROUTING` | boolean | `true`  | ❌       | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP). Defaults to `true` for cross-node compatibility. |
+| `USE_DOMAIN_ROUTING`  | boolean | `true`  | ❌       | Use domain-based routing for service-to-service communication. When `true`, services communicate via domains (works across nodes/networks).  |
+| `SKIP_TLS_VERIFY`     | boolean | `false` | ❌       | Skip TLS certificate verification when using Traefik routing (for internal certs).                                                           |
 
 **Service Routing Modes:**
 
 The API Gateway can route to backend services in two ways:
 
 1. **Internal Routing**: Direct service-to-service communication using Docker Swarm service names
+
    - Uses HTTP: `http://auth-service:3002`
    - Faster, no TLS overhead
    - Requires services to be on the same Docker network
@@ -357,6 +406,7 @@ Node-specific domains are configured using node labels stored in the database:
 **Domain Patterns:**
 
 - **`node-service` (default)**: `node1-auth-service.obiente.cloud`
+
   - Node identifier comes first
   - Example: `node1-auth-service.obiente.cloud`, `us-east-1-billing-service.obiente.cloud`
 
@@ -367,10 +417,10 @@ Node-specific domains are configured using node labels stored in the database:
 **Important Notes:**
 
 - **API Gateway and Dashboard ALWAYS use shared domains** (`api.${DOMAIN}` and `${DOMAIN}`) for load balancing, regardless of node-specific domain settings
-- **Node subdomain detection**: 
+- **Node subdomain detection**:
   - **Swarm deployments**: Extracted from node labels (`obiente.subdomain` or `subdomain`) configured via Superadmin dashboard, or hostname if not configured
   - **Compose deployments**: Use `NODE_SUBDOMAIN` environment variable
-- **Configuration**: 
+- **Configuration**:
   - **Swarm deployments**: Use the Superadmin dashboard to configure node-specific domains per node
   - **Compose deployments**: Use environment variables `NODE_SUBDOMAIN`, `USE_NODE_SPECIFIC_DOMAINS`, and `SERVICE_DOMAIN_PATTERN`
 
@@ -494,15 +544,15 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 
 ### Orchestration
 
-| Variable                   | Type    | Default        | Required | Description                                                                                                                                    |
-| -------------------------- | ------- | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEPLOYMENT_STRATEGY`      | string  | `least-loaded` | ❌       | Deployment strategy for node selection                                                                                                         |
-| `MAX_DEPLOYMENTS_PER_NODE` | number  | `50`           | ❌       | Maximum number of deployments allowed per node                                                                                                |
-| `API_BASE_URL`             | string  | `http://api-gateway:3001` | ❌   | Base URL for API service communication. Automatically uses domain-based URL (`https://api.${DOMAIN}`) when `USE_DOMAIN_ROUTING=true`.         |
-| `USE_DOMAIN_ROUTING`       | boolean | `true`         | ❌       | Use domain-based routing for service-to-service communication. When `true`, services use domain-based URLs (works across nodes/networks).    |
-| `NODE_SUBDOMAIN`           | string  | -              | ❌       | Node subdomain identifier for compose deployments (e.g., `node1`, `us-east-1`). Used for node-specific domains when `USE_NODE_SPECIFIC_DOMAINS=true`. For Swarm deployments, configure via Superadmin dashboard instead. |
-| `USE_NODE_SPECIFIC_DOMAINS`| boolean | `false`        | ❌       | Enable node-specific domains for compose deployments. When `true`, microservices use node-specific subdomains (e.g., `node1-auth-service.domain`). For Swarm deployments, configure via Superadmin dashboard instead. |
-| `SERVICE_DOMAIN_PATTERN`   | string  | `node-service` | ❌       | Domain pattern for node-specific domains (`node-service` or `service-node`). For Swarm deployments, configure via Superadmin dashboard instead. |
+| Variable                    | Type    | Default                   | Required | Description                                                                                                                                                                                                              |
+| --------------------------- | ------- | ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DEPLOYMENT_STRATEGY`       | string  | `least-loaded`            | ❌       | Deployment strategy for node selection                                                                                                                                                                                   |
+| `MAX_DEPLOYMENTS_PER_NODE`  | number  | `50`                      | ❌       | Maximum number of deployments allowed per node                                                                                                                                                                           |
+| `API_BASE_URL`              | string  | `http://api-gateway:3001` | ❌       | Base URL for API service communication. Automatically uses domain-based URL (`https://api.${DOMAIN}`) when `USE_DOMAIN_ROUTING=true`.                                                                                    |
+| `USE_DOMAIN_ROUTING`        | boolean | `true`                    | ❌       | Use domain-based routing for service-to-service communication. When `true`, services use domain-based URLs (works across nodes/networks).                                                                                |
+| `NODE_SUBDOMAIN`            | string  | -                         | ❌       | Node subdomain identifier for compose deployments (e.g., `node1`, `us-east-1`). Used for node-specific domains when `USE_NODE_SPECIFIC_DOMAINS=true`. For Swarm deployments, configure via Superadmin dashboard instead. |
+| `USE_NODE_SPECIFIC_DOMAINS` | boolean | `false`                   | ❌       | Enable node-specific domains for compose deployments. When `true`, microservices use node-specific subdomains (e.g., `node1-auth-service.domain`). For Swarm deployments, configure via Superadmin dashboard instead.    |
+| `SERVICE_DOMAIN_PATTERN`    | string  | `node-service`            | ❌       | Domain pattern for node-specific domains (`node-service` or `service-node`). For Swarm deployments, configure via Superadmin dashboard instead.                                                                          |
 
 **Deployment Strategies:**
 
@@ -557,16 +607,16 @@ SERVICE_DOMAIN_PATTERN=service-node
 
 ### Metrics Database Configuration
 
-| Variable              | Type   | Default                           | Required |
-| --------------------- | ------ | --------------------------------- | -------- |
-| `METRICS_DB_HOST`         | string | `timescaledb`                     | ❌       |
-| `METRICS_DB_PORT`         | number | `5432`                            | ❌       |
-| `METRICS_DB_EXPOSE_PORT`  | number | `5434`                            | ❌       | Port to expose TimescaleDB on host (default: 5434, localhost only) |
-| `METRICS_DB_PORT_MODE`    | string | `host`                             | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
+| Variable                   | Type   | Default                           | Required |
+| -------------------------- | ------ | --------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `METRICS_DB_HOST`          | string | `timescaledb`                     | ❌       |
+| `METRICS_DB_PORT`          | number | `5432`                            | ❌       |
+| `METRICS_DB_EXPOSE_PORT`   | number | `5434`                            | ❌       | Port to expose TimescaleDB on host (default: 5434, localhost only)                         |
+| `METRICS_DB_PORT_MODE`     | string | `host`                            | ❌       | Port mode: `host` (default, for localhost binding) or `ingress`                            |
 | `METRICS_DB_ALLOWED_HOSTS` | string | -                                 | ❌       | Comma-separated IPs/subnets to allow in pg_hba.conf (falls back to POSTGRES_ALLOWED_HOSTS) |
-| `METRICS_DB_USER`         | string | `POSTGRES_USER` or `postgres`     | ❌       |
-| `METRICS_DB_PASSWORD`     | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
-| `METRICS_DB_NAME`         | string | `obiente_metrics`                 | ❌       |
+| `METRICS_DB_USER`          | string | `POSTGRES_USER` or `postgres`     | ❌       |
+| `METRICS_DB_PASSWORD`      | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
+| `METRICS_DB_NAME`          | string | `obiente_metrics`                 | ❌       |
 
 **Metrics Database Host Configuration (`METRICS_DB_HOST`):**
 
@@ -594,11 +644,13 @@ METRICS_DB_HOST=metrics-db.example.com
 TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5434) for security, similar to PostgreSQL.
 
 **Default Configuration:**
+
 - Port exposed: `5434` (configurable via `METRICS_DB_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
 **To restrict to localhost only**, configure firewall rules (same as PostgreSQL):
+
 ```bash
 # Using iptables (restrict TimescaleDB to localhost only)
 sudo iptables -A INPUT -p tcp --dport 5434 ! -s 127.0.0.1 -j DROP
@@ -788,21 +840,21 @@ ACME_EMAIL=admin@obiente.cloud
 
 ### DNS Configuration
 
-| Variable      | Type   | Default | Required | Description                                                                                |
-| ------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
+| Variable   | Type   | Default | Required | Description                                                                                                                                       |
+| ---------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_IPS` | string | -       | ✅       | Node IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`). Used for DNS resolution of deployments and game servers. |
-| `DNS_IPS`     | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                              |
-| `DNS_PORT`    | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                       |
+| `DNS_IPS`  | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                                                                                     |
+| `DNS_PORT` | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                                                                              |
 
 ### Traefik Port Configuration
 
-| Variable                  | Type   | Default | Required | Description                                                                                |
-| ------------------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
-| `TRAEFIK_HTTP_PORT`       | number | `80`    | ❌       | Published HTTP port for Traefik (default: 80)                                              |
-| `TRAEFIK_HTTPS_PORT`      | number | `443`   | ❌       | Published HTTPS port for Traefik (default: 443)                                            |
-| `TRAEFIK_DEPLOYMENTS_PORT`| number | `8000`  | ❌       | Published port for user deployments (default: 8000)                                        |
-| `TRAEFIK_DASHBOARD_PORT`  | number | `8080`  | ❌       | Published port for Traefik dashboard (default: 8080)                                       |
-| `TRAEFIK_SSH_PORT`        | number | `2222`  | ❌       | Published port for SSH proxy (default: 2222)                                              |
+| Variable                   | Type   | Default | Required | Description                                          |
+| -------------------------- | ------ | ------- | -------- | ---------------------------------------------------- |
+| `TRAEFIK_HTTP_PORT`        | number | `80`    | ❌       | Published HTTP port for Traefik (default: 80)        |
+| `TRAEFIK_HTTPS_PORT`       | number | `443`   | ❌       | Published HTTPS port for Traefik (default: 443)      |
+| `TRAEFIK_DEPLOYMENTS_PORT` | number | `8000`  | ❌       | Published port for user deployments (default: 8000)  |
+| `TRAEFIK_DASHBOARD_PORT`   | number | `8080`  | ❌       | Published port for Traefik dashboard (default: 8080) |
+| `TRAEFIK_SSH_PORT`         | number | `2222`  | ❌       | Published port for SSH proxy (default: 2222)         |
 
 **Examples:**
 
@@ -827,49 +879,49 @@ TRAEFIK_DASHBOARD_PORT=9090
 
 ### VPS Configuration
 
-| Variable                 | Type   | Default     | Required | Description                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------ | ------ | ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VPS_REGIONS`            | string | -           | ✅       | VPS regions configuration (format: `"region1:Name 1;region2:Name 2"` or simple `"region1"`)                                                                                                                                                                                                                                                             |
-| `PROXMOX_NODE_ENDPOINTS` | string | -           | ✅       | **Node endpoints mapping** (used for both API and SSH if not overridden). Maps Proxmox node names to hostnames/IPs (optionally with port). Format: `"node1:host1,node2:host2"` or `"node1:host1:8006,node2:host2:8006"`. For API: Constructs `https://host:8006` URLs. For SSH: Uses endpoints directly (assumes port 22 if not specified). Required for all Proxmox deployments (single-node or multi-node). |
-| `PROXMOX_NODE_API_ENDPOINTS` | string | -           | ❌       | **Optional API-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for API only). Maps Proxmox node names to full API URLs. Format: `"node1:https://proxmox1:8006,node2:https://proxmox2:8006"` (full URLs required). If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default). Enables high availability: if one node goes down, others continue working as long as there's quorum. |
-| `PROXMOX_USERNAME`       | string | `root@pam`  | ❌       | Proxmox username (default: `root@pam`)                                                                                                                                                                                                                                                                                                                  |
-| `PROXMOX_PASSWORD`       | string | -           | ✅\*     | Proxmox password (required if not using token)                                                                                                                                                                                                                                                                                                          |
-| `PROXMOX_TOKEN_ID`       | string | -           | ✅\*     | Proxmox API token ID (required if not using password)                                                                                                                                                                                                                                                                                                   |
-| `PROXMOX_TOKEN_SECRET`   | string | -           | ✅\*     | Proxmox API token secret (required if not using password)                                                                                                                                                                                                                                                                                               |
-| `PROXMOX_STORAGE_POOL`   | string | `local-lvm` | ❌       | Proxmox storage pool for VM disks. **Note:** For template-based VMs (linked clones), the storage pool is inherited from the template and this setting is ignored. This setting only applies to: (1) VMs created without templates (ISO installation), (2) new disks created when templates have no disk, or (3) additional disks beyond what's cloned. To use a different storage pool for cloned VMs, create the template on the desired storage pool. |
-| `PROXMOX_VM_ID_START`    | number | -           | ❌       | Starting VM ID range (e.g., `300`). If set, VMs will be created starting from this ID. If not set, Proxmox auto-generates the next available ID.                                                                                                                                                                                                        |
-| `PROXMOX_VLAN_ID`        | number | -           | ❌       | Optional VLAN tag for VM network isolation (e.g., `100`). If set, all VMs will be placed on this VLAN. This provides Layer 2 isolation and helps prevent IP spoofing and network attacks.                                                                                                                                                               |
-| `PROXMOX_NODE_SSH_ENDPOINTS` | string | -           | ❌       | **Optional SSH-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for SSH only). Comma-separated mapping of Proxmox node names to SSH endpoints. Format: `"node1:192.168.1.10,node2:192.168.1.11"` or `"node1:hostname1.example.com:22,node2:hostname2.example.com:2222"`. Endpoints can be IP addresses or hostnames, optionally with ports. If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default). |
-| `PROXMOX_SSH_USER`       | string | `obiente-cloud` | ❌       | SSH user for snippet writing. Defaults to `obiente-cloud` if not set. Same user must exist on all Proxmox nodes. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for setup instructions.                                                                                                                                                                                  |
-| `PROXMOX_SSH_KEY_PATH`   | string | -           | ❌       | Path to SSH private key file for snippet writing. Either this or `PROXMOX_SSH_KEY_DATA` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                                                                                  |
-| `PROXMOX_SSH_KEY_DATA`   | string | -           | ❌       | SSH private key content (alternative to `PROXMOX_SSH_KEY_PATH`). Supports both raw key data and base64-encoded keys. Useful when using secrets managers. Either this or `PROXMOX_SSH_KEY_PATH` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                              |
-| `PROXMOX_REGION_NODES`   | string | -           | ❌       | Maps VPS regions to specific Proxmox cluster nodes. Format: `"region1:node1;region2:node2"`. When creating a VPS in a region, the system will use the mapped node if available. If not configured or the mapped node doesn't exist, it falls back to the first available node. Useful for multi-node Proxmox clusters where you want to control which node hosts VMs for each region. |
-| `SSH_PROXY_PORT`         | number | `2222`      | ❌       | SSH proxy port for VPS access                                                                                                                                                                                                                                                                                                                           |
-| `VPS_GATEWAY_API_SECRET` | string | -           | ❌       | Shared secret for authenticating with vps-gateway service. Must match `GATEWAY_API_SECRET` configured in vps-gateway. Required when using gateway service.                                                                                                                                                                                              |
-| `VPS_NODE_GATEWAY_ENDPOINTS` | string | -           | ✅\*     | Maps Proxmox node names to gateway URLs (required for multi-node deployments). Format: `"node1:http://gateway1:1537,node2:http://gateway2:1537"`. Each gateway URL points to the vps-gateway service on that node. Must be configured for all nodes where VPSs will be created.                                                                         |
-| `VPS_GATEWAY_BRIDGE`     | string | `OCvpsnet`  | ❌       | Bridge name for gateway network in Proxmox. When using SDN, this should be the SDN VNet bridge name (auto-created by Proxmox, e.g., `OCvpsnet` for the OCvps-vnet VNet). VPS instances will be connected to this bridge when gateway is enabled. See [VPS Gateway Setup Guide](../guides/vps-gateway-setup.md) for details on finding SDN bridge names. |
+| Variable                     | Type   | Default         | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ------ | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VPS_REGIONS`                | string | -               | ✅       | VPS regions configuration (format: `"region1:Name 1;region2:Name 2"` or simple `"region1"`)                                                                                                                                                                                                                                                                                                                                                             |
+| `PROXMOX_NODE_ENDPOINTS`     | string | -               | ✅       | **Node endpoints mapping** (used for both API and SSH if not overridden). Maps Proxmox node names to hostnames/IPs (optionally with port). Format: `"node1:host1,node2:host2"` or `"node1:host1:8006,node2:host2:8006"`. For API: Constructs `https://host:8006` URLs. For SSH: Uses endpoints directly (assumes port 22 if not specified). Required for all Proxmox deployments (single-node or multi-node).                                           |
+| `PROXMOX_NODE_API_ENDPOINTS` | string | -               | ❌       | **Optional API-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for API only). Maps Proxmox node names to full API URLs. Format: `"node1:https://proxmox1:8006,node2:https://proxmox2:8006"` (full URLs required). If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default). Enables high availability: if one node goes down, others continue working as long as there's quorum.                                                              |
+| `PROXMOX_USERNAME`           | string | `root@pam`      | ❌       | Proxmox username (default: `root@pam`)                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `PROXMOX_PASSWORD`           | string | -               | ✅\*     | Proxmox password (required if not using token)                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `PROXMOX_TOKEN_ID`           | string | -               | ✅\*     | Proxmox API token ID (required if not using password)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `PROXMOX_TOKEN_SECRET`       | string | -               | ✅\*     | Proxmox API token secret (required if not using password)                                                                                                                                                                                                                                                                                                                                                                                               |
+| `PROXMOX_STORAGE_POOL`       | string | `local-lvm`     | ❌       | Proxmox storage pool for VM disks. **Note:** For template-based VMs (linked clones), the storage pool is inherited from the template and this setting is ignored. This setting only applies to: (1) VMs created without templates (ISO installation), (2) new disks created when templates have no disk, or (3) additional disks beyond what's cloned. To use a different storage pool for cloned VMs, create the template on the desired storage pool. |
+| `PROXMOX_VM_ID_START`        | number | -               | ❌       | Starting VM ID range (e.g., `300`). If set, VMs will be created starting from this ID. If not set, Proxmox auto-generates the next available ID.                                                                                                                                                                                                                                                                                                        |
+| `PROXMOX_VLAN_ID`            | number | -               | ❌       | Optional VLAN tag for VM network isolation (e.g., `100`). If set, all VMs will be placed on this VLAN. This provides Layer 2 isolation and helps prevent IP spoofing and network attacks.                                                                                                                                                                                                                                                               |
+| `PROXMOX_NODE_SSH_ENDPOINTS` | string | -               | ❌       | **Optional SSH-specific override** (overrides `PROXMOX_NODE_ENDPOINTS` for SSH only). Comma-separated mapping of Proxmox node names to SSH endpoints. Format: `"node1:192.168.1.10,node2:192.168.1.11"` or `"node1:hostname1.example.com:22,node2:hostname2.example.com:2222"`. Endpoints can be IP addresses or hostnames, optionally with ports. If not configured, uses `PROXMOX_NODE_ENDPOINTS` (default).                                          |
+| `PROXMOX_SSH_USER`           | string | `obiente-cloud` | ❌       | SSH user for snippet writing. Defaults to `obiente-cloud` if not set. Same user must exist on all Proxmox nodes. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for setup instructions.                                                                                                                                                                                                                                        |
+| `PROXMOX_SSH_KEY_PATH`       | string | -               | ❌       | Path to SSH private key file for snippet writing. Either this or `PROXMOX_SSH_KEY_DATA` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                                                                                                                                                |
+| `PROXMOX_SSH_KEY_DATA`       | string | -               | ❌       | SSH private key content (alternative to `PROXMOX_SSH_KEY_PATH`). Supports both raw key data and base64-encoded keys. Useful when using secrets managers. Either this or `PROXMOX_SSH_KEY_PATH` must be set if using SSH method. Same key is used for all nodes.                                                                                                                                                                                         |
+| `PROXMOX_REGION_NODES`       | string | -               | ❌       | Maps VPS regions to specific Proxmox cluster nodes. Format: `"region1:node1;region2:node2"`. When creating a VPS in a region, the system will use the mapped node if available. If not configured or the mapped node doesn't exist, it falls back to the first available node. Useful for multi-node Proxmox clusters where you want to control which node hosts VMs for each region.                                                                   |
+| `SSH_PROXY_PORT`             | number | `2222`          | ❌       | SSH proxy port for VPS access                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `VPS_GATEWAY_API_SECRET`     | string | -               | ❌       | Shared secret for authenticating with vps-gateway service. Must match `GATEWAY_API_SECRET` configured in vps-gateway. Required when using gateway service.                                                                                                                                                                                                                                                                                              |
+| `VPS_NODE_GATEWAY_ENDPOINTS` | string | -               | ✅\*     | Maps Proxmox node names to gateway URLs (required for multi-node deployments). Format: `"node1:http://gateway1:1537,node2:http://gateway2:1537"`. Each gateway URL points to the vps-gateway service on that node. Must be configured for all nodes where VPSs will be created.                                                                                                                                                                         |
+| `VPS_GATEWAY_BRIDGE`         | string | `OCvpsnet`      | ❌       | Bridge name for gateway network in Proxmox. When using SDN, this should be the SDN VNet bridge name (auto-created by Proxmox, e.g., `OCvpsnet` for the OCvps-vnet VNet). VPS instances will be connected to this bridge when gateway is enabled. See [VPS Gateway Setup Guide](../guides/vps-gateway-setup.md) for details on finding SDN bridge names.                                                                                                 |
 
 ### VPS Gateway Service Configuration
 
 These environment variables are used by the `vps-gateway` service itself (not the API):
 
-| Variable                   | Type   | Default | Required | Description                                                                                                                                                                                                            |
-| -------------------------- | ------ | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GATEWAY_GRPC_PORT`        | int    | `1537`  | ⚪       | gRPC server port for the gateway. Default is **1537** which maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3". Gateway exposes this port for API instances to connect. |
-| `GATEWAY_API_SECRET`       | string | -       | ✅\*     | Shared secret for authenticating API connections (required when using gateway service). Must match `VPS_GATEWAY_API_SECRET` in API service. Both must be identical.                                                                                          |
-| `GATEWAY_OUTBOUND_IP`     | string | -       | ❌       | Optional IP address to use for outbound SNAT. If set, gateway will automatically configure iptables SNAT rules to use this IP for all outbound traffic from VPSs on this node. Allows isolation of VPS traffic from other infrastructure. Prevents abuse/blocking on VPS traffic from affecting other services. Each node's gateway can have a different outbound IP. The gateway automatically configures and cleans up iptables rules on startup/shutdown. |
-| `GATEWAY_OUTBOUND_INTERFACE` | string | - | ❌ | Optional network interface name for outbound traffic. If not set, the gateway will auto-detect the primary outbound interface from the default route. Only needed if auto-detection fails or you want to use a specific interface. |
-| `GATEWAY_PUBLIC_IP`        | string | -       | ⚪       | Public IP address for DNAT configuration. Used for documentation purposes - actual DNAT is configured on router/firewall. Example: `203.0.113.1`.                                                                      |
-| `GATEWAY_DHCP_POOL_START`  | string | `10.15.3.20` | ❌       | Starting IP address for DHCP pool (e.g., `10.15.3.20`). Defaults provided in docker-compose.                                                                                                                                                                 |
-| `GATEWAY_DHCP_POOL_END`    | string | `10.15.3.254` | ❌       | Ending IP address for DHCP pool (e.g., `10.15.3.254`). Defaults provided in docker-compose.                                                                                                                                                                  |
-| `GATEWAY_DHCP_SUBNET`      | string | `10.15.3.0` | ❌       | Subnet address (e.g., `10.15.3.0`). Defaults provided in docker-compose.                                                                                                                                                                                     |
-| `GATEWAY_DHCP_SUBNET_MASK` | string | `255.255.255.0` | ❌       | Subnet mask (e.g., `255.255.255.0`). Defaults provided in docker-compose.                                                                                                                                                                                    |
-| `GATEWAY_DHCP_GATEWAY`     | string | `10.15.3.1` | ❌       | Gateway IP address that VPSs should use (e.g., `10.15.3.1`). This is the VXLAN gateway/router, same for all nodes. Defaults provided in docker-compose.                                                                                                     |
-| `GATEWAY_DHCP_LISTEN_IP`   | string | -       | ❌       | IP address for the gateway service to listen on (e.g., `10.15.3.10`). **Required for multi-node deployments** - each node's gateway must have a unique IP on the VXLAN. If not set, defaults to `GATEWAY_DHCP_GATEWAY` (single-node mode). |
-| `GATEWAY_DHCP_DNS`         | string | `1.1.1.1,1.0.0.1` | ❌       | Comma-separated DNS servers for upstream DNS resolution (e.g., `1.1.1.1,1.0.0.1`). Defaults provided in docker-compose.                                                                                                                                      |
-| `GATEWAY_DHCP_DOMAIN`      | string | `vps.local` | ❌       | DNS domain for VPS hostname resolution (e.g., `vps.local`). The gateway's dnsmasq will resolve VPS hostnames within this domain.                          |
-| `GATEWAY_DHCP_INTERFACE`   | string | `eth0` | ❌       | Network interface name for DHCP **inside the container/VM** (e.g., `eth0`, `eth1`). This is the interface connected to the SDN bridge (`OCvpsnet` on the Proxmox host). The interface name inside the container is typically `eth0` (first interface), not the bridge name. Check with `ip addr show` inside the container to find the correct interface name. Defaults to `eth0` in docker-compose. |
-| `LOG_LEVEL`                | string | `info`  | ❌       | Logging level (`debug`, `info`, `warn`, `error`)                                                                                                                                                                       |
+| Variable                     | Type   | Default           | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------- | ------ | ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GATEWAY_GRPC_PORT`          | int    | `1537`            | ⚪       | gRPC server port for the gateway. Default is **1537** which maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3". Gateway exposes this port for API instances to connect.                                                                                                                                                                                                                                       |
+| `GATEWAY_API_SECRET`         | string | -                 | ✅\*     | Shared secret for authenticating API connections (required when using gateway service). Must match `VPS_GATEWAY_API_SECRET` in API service. Both must be identical.                                                                                                                                                                                                                                                                                          |
+| `GATEWAY_OUTBOUND_IP`        | string | -                 | ❌       | Optional IP address to use for outbound SNAT. If set, gateway will automatically configure iptables SNAT rules to use this IP for all outbound traffic from VPSs on this node. Allows isolation of VPS traffic from other infrastructure. Prevents abuse/blocking on VPS traffic from affecting other services. Each node's gateway can have a different outbound IP. The gateway automatically configures and cleans up iptables rules on startup/shutdown. |
+| `GATEWAY_OUTBOUND_INTERFACE` | string | -                 | ❌       | Optional network interface name for outbound traffic. If not set, the gateway will auto-detect the primary outbound interface from the default route. Only needed if auto-detection fails or you want to use a specific interface.                                                                                                                                                                                                                           |
+| `GATEWAY_PUBLIC_IP`          | string | -                 | ⚪       | Public IP address for DNAT configuration. Used for documentation purposes - actual DNAT is configured on router/firewall. Example: `203.0.113.1`.                                                                                                                                                                                                                                                                                                            |
+| `GATEWAY_DHCP_POOL_START`    | string | `10.15.3.20`      | ❌       | Starting IP address for DHCP pool (e.g., `10.15.3.20`). Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                                                                                 |
+| `GATEWAY_DHCP_POOL_END`      | string | `10.15.3.254`     | ❌       | Ending IP address for DHCP pool (e.g., `10.15.3.254`). Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                                                                                  |
+| `GATEWAY_DHCP_SUBNET`        | string | `10.15.3.0`       | ❌       | Subnet address (e.g., `10.15.3.0`). Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `GATEWAY_DHCP_SUBNET_MASK`   | string | `255.255.255.0`   | ❌       | Subnet mask (e.g., `255.255.255.0`). Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `GATEWAY_DHCP_GATEWAY`       | string | `10.15.3.1`       | ❌       | Gateway IP address that VPSs should use (e.g., `10.15.3.1`). This is the VXLAN gateway/router, same for all nodes. Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                      |
+| `GATEWAY_DHCP_LISTEN_IP`     | string | -                 | ❌       | IP address for the gateway service to listen on (e.g., `10.15.3.10`). **Required for multi-node deployments** - each node's gateway must have a unique IP on the VXLAN. If not set, defaults to `GATEWAY_DHCP_GATEWAY` (single-node mode).                                                                                                                                                                                                                   |
+| `GATEWAY_DHCP_DNS`           | string | `1.1.1.1,1.0.0.1` | ❌       | Comma-separated DNS servers for upstream DNS resolution (e.g., `1.1.1.1,1.0.0.1`). Defaults provided in docker-compose.                                                                                                                                                                                                                                                                                                                                      |
+| `GATEWAY_DHCP_DOMAIN`        | string | `vps.local`       | ❌       | DNS domain for VPS hostname resolution (e.g., `vps.local`). The gateway's dnsmasq will resolve VPS hostnames within this domain.                                                                                                                                                                                                                                                                                                                             |
+| `GATEWAY_DHCP_INTERFACE`     | string | `eth0`            | ❌       | Network interface name for DHCP **inside the container/VM** (e.g., `eth0`, `eth1`). This is the interface connected to the SDN bridge (`OCvpsnet` on the Proxmox host). The interface name inside the container is typically `eth0` (first interface), not the bridge name. Check with `ip addr show` inside the container to find the correct interface name. Defaults to `eth0` in docker-compose.                                                         |
+| `LOG_LEVEL`                  | string | `info`            | ❌       | Logging level (`debug`, `info`, `warn`, `error`)                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 **NODE_IPS Format:**
 
@@ -996,6 +1048,7 @@ All Proxmox deployments (single-node or multi-node) require node endpoint mappin
 **Configuration Hierarchy:**
 
 1. **Default Mapping** (required for all setups):
+
    ```bash
    # Default endpoints used for both API and SSH
    # For API: Constructs https://host:8006 URLs
@@ -1007,6 +1060,7 @@ All Proxmox deployments (single-node or multi-node) require node endpoint mappin
    ```
 
 2. **Optional API Override** (if API endpoints differ from default):
+
    ```bash
    # Override API endpoints only (full URLs required)
    PROXMOX_NODE_API_ENDPOINTS="node1:https://proxmox1.example.com:8006,node2:https://proxmox2.example.com:8006"
@@ -1097,13 +1151,13 @@ See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-t
 
 ### Notifications Service Configuration
 
-| Variable                        | Type     | Default                              | Required | Description                                                                                                                                    |
-| ------------------------------- | -------- | ------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERNAL_SERVICE_SECRET`       | string   | -                                    | ✅\*     | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications.   |
-| `NOTIFICATIONS_SERVICE_URL`     | string   | `http://notifications-service:3012`  | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                              |
-| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | number | `3`                                | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                   |
-| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                            | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                    |
-| `NOTIFICATIONS_RETRY_MAX_BACKOFF` | duration | `10s`                            | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                                                |
+| Variable                              | Type     | Default                             | Required | Description                                                                                                                                 |
+| ------------------------------------- | -------- | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERNAL_SERVICE_SECRET`             | string   | -                                   | ✅\*     | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications. |
+| `NOTIFICATIONS_SERVICE_URL`           | string   | `http://notifications-service:3012` | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                            |
+| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS`    | number   | `3`                                 | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                 |
+| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                                | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                  |
+| `NOTIFICATIONS_RETRY_MAX_BACKOFF`     | duration | `10s`                               | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                                               |
 
 **Internal Service Authentication:**
 
@@ -1114,6 +1168,7 @@ The `INTERNAL_SERVICE_SECRET` is used to secure the notifications service endpoi
 The notifications package automatically retries failed requests with exponential backoff for transient errors (connection refused, service unavailable, timeouts, etc.). Non-retryable errors (authentication failures, invalid arguments, etc.) are not retried.
 
 **Retryable Errors:**
+
 - Connection refused
 - Service unavailable
 - Network timeouts
@@ -1121,6 +1176,7 @@ The notifications package automatically retries failed requests with exponential
 - Temporary network failures
 
 **Non-Retryable Errors:**
+
 - Authentication failures
 - Invalid arguments
 - Permission denied
@@ -1147,12 +1203,14 @@ NOTIFICATIONS_RETRY_MAX_BACKOFF=10s
 **Retry Behavior:**
 
 With default settings (3 attempts, 1s initial backoff, 10s max backoff):
+
 - Attempt 1: Immediate
 - Attempt 2: After 1s (if first attempt fails)
 - Attempt 3: After 2s (if second attempt fails)
 - Total max wait time: ~3 seconds
 
 **Note:** The `INTERNAL_SERVICE_SECRET` must be identical across all services that communicate with the notifications service. This includes:
+
 - notifications-service (needs the secret to validate incoming requests)
 - vps-service
 - organizations-service
@@ -1176,8 +1234,8 @@ SECRET=<generated_value>
 
 ### Stripe Payment Processing
 
-| Variable                             | Type   | Default | Required      |
-| ------------------------------------ | ------ | ------- | ------------- |
+| Variable                             | Type   | Default | Required        |
+| ------------------------------------ | ------ | ------- | --------------- |
 | `STRIPE_SECRET_KEY`                  | string | -       | ✅\* (billing)  |
 | `STRIPE_WEBHOOK_SECRET`              | string | -       | ✅\* (webhooks) |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | string | -       | ✅\* (frontend) |

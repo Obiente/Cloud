@@ -155,6 +155,119 @@ CORS_ORIGIN=http://localhost:3000
 PUBLIC_HTTPS_PORT=2443
 ```
 
+### GitHub Account Linking Fails
+
+**Problem**: GitHub OAuth redirects back, but the account is not linked or the settings page still shows no connected accounts.
+
+**Check:**
+
+```bash
+# Dashboard runtime env
+echo "$NUXT_PUBLIC_GITHUB_CLIENT_ID"
+echo "$GITHUB_CLIENT_SECRET"
+
+# Recommended dedicated encryption key
+echo "$GITHUB_TOKEN_ENCRYPTION_KEY"
+```
+
+**Common causes:**
+
+1. Missing GitHub OAuth credentials in the dashboard runtime
+2. Callback URL mismatch in the GitHub OAuth app
+3. `auth-service` cannot encrypt the GitHub token
+4. Dashboard or auth-service was not redeployed after secret changes
+
+**Fix:**
+
+```bash
+NUXT_PUBLIC_GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+GITHUB_TOKEN_ENCRYPTION_KEY=...
+```
+
+Then redeploy:
+
+```bash
+docker service update --force obiente_dashboard
+docker service update --force obiente_auth-service
+docker service update --force obiente_deployments-service
+```
+
+### Managed Database Hostname Does Not Resolve
+
+**Problem**: Your app logs something like:
+
+```text
+getaddrinfo ENOTFOUND db-xxxxxxxxxxxxxxxx.my.obiente.cloud
+```
+
+**Check from the failing container:**
+
+```bash
+getent hosts db-xxxxxxxxxxxxxxxx.my.obiente.cloud
+nslookup db-xxxxxxxxxxxxxxxx.my.obiente.cloud 1.1.1.1
+```
+
+**Likely causes:**
+
+1. `dns-service` is not healthy
+2. `my.obiente.cloud` delegation is not correct in self-hosted setups
+3. The database is not running or its DNS record is not being served yet
+4. The container resolver cannot reach working upstream DNS
+
+**Quick checks:**
+
+```bash
+dig my.obiente.cloud NS
+dig @YOUR_DNS_NODE_IP db-xxxxxxxxxxxxxxxx.my.obiente.cloud A
+dig +trace db-xxxxxxxxxxxxxxxx.my.obiente.cloud
+```
+
+If the direct query to your DNS node works but normal `dig` does not, the problem is delegation or recursive DNS cache, not the application.
+
+### Compose App Cannot Resolve `cache`, `redis`, Or Another Internal Host
+
+**Problem**: A Compose deployment logs something like:
+
+```text
+getaddrinfo ENOTFOUND cache
+```
+
+**Cause**: The app is trying to resolve a Compose service name that does not exist in the same deployment, or the hostname in the env var does not match the service key in the Compose file.
+
+**Fix:**
+
+```yaml
+services:
+  cache:
+    image: redis:7
+
+  app:
+    environment:
+      REDIS_URL: "redis://cache:6379"
+```
+
+Also remember that `depends_on` is not a readiness guarantee. Use retries or health checks if startup timing is sensitive.
+
+### Database Password Reset Completed, But Clients Still Cannot Log In
+
+**Problem**: You reset the password in the dashboard, but the application still cannot connect.
+
+**Check:**
+
+1. Update the application secret or env var with the new password
+2. Restart or redeploy the application using that password
+3. Verify you reset a supported engine
+
+Current password reset support:
+
+- PostgreSQL: supported
+- MySQL: supported
+- MariaDB: supported
+- MongoDB / Redis: verify support before relying on reset workflows
+
+The dashboard only shows the new password once. Save it immediately.
+
 ### Port Already in Use
 
 **Problem**: Port 3001 or 5432 already in use
@@ -252,25 +365,28 @@ curl http://localhost:3001/metrics/observability | jq
 **Common Issues:**
 
 1. **Circuit Breaker Open (state = 1)**
+
    - Docker API is having issues
    - Check Docker daemon connectivity
    - Review Docker API permissions
    - Wait for cooldown period or restart API
 
 2. **High Error Rates**
+
    ```bash
    # Check Docker API connectivity
    docker ps
-   
+
    # Check API logs for errors
    docker service logs obiente_api | grep -i "metrics\|docker"
    ```
 
 3. **Metrics Database Connection Failed**
+
    ```bash
    # Verify TimescaleDB is running
    docker compose ps timescaledb
-   
+
    # Check connection from API
    docker exec obiente-api psql -h timescaledb -U postgres -d obiente_metrics
    ```

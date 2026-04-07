@@ -218,7 +218,6 @@ export default defineNuxtConfig({
         "http://localhost:3000",
       oidcBase:
         process.env.NUXT_PUBLIC_OIDC_BASE ||
-        process.env.ZITADEL_BASE_URL ||
         process.env.ZITADEL_URL ||
         "http://localhost:8080",
       oidcClientId: "339499954043158530",

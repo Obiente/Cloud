@@ -459,6 +459,8 @@ type DeploymentOverview struct {
 	Domain           *string                `protobuf:"bytes,7,opt,name=domain,proto3,oneof" json:"domain,omitempty"`
 	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	LastDeployedAt   *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=last_deployed_at,json=lastDeployedAt,proto3" json:"last_deployed_at,omitempty"`
+	OwnerId          *string                `protobuf:"bytes,10,opt,name=owner_id,json=ownerId,proto3,oneof" json:"owner_id,omitempty"`       // Organization owner user ID
+	OwnerName        *string                `protobuf:"bytes,11,opt,name=owner_name,json=ownerName,proto3,oneof" json:"owner_name,omitempty"` // Organization owner name or email
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -554,6 +556,20 @@ func (x *DeploymentOverview) GetLastDeployedAt() *timestamppb.Timestamp {
 		return x.LastDeployedAt
 	}
 	return nil
+}
+
+func (x *DeploymentOverview) GetOwnerId() string {
+	if x != nil && x.OwnerId != nil {
+		return *x.OwnerId
+	}
+	return ""
+}
+
+func (x *DeploymentOverview) GetOwnerName() string {
+	if x != nil && x.OwnerName != nil {
+		return *x.OwnerName
+	}
+	return ""
 }
 
 type OrganizationUsage struct {
@@ -5169,6 +5185,8 @@ type VPSOverview struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Vps              *v13.VPSInstance       `protobuf:"bytes,1,opt,name=vps,proto3" json:"vps,omitempty"`
 	OrganizationName string                 `protobuf:"bytes,2,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"` // Organization name (for display)
+	OwnerId          *string                `protobuf:"bytes,3,opt,name=owner_id,json=ownerId,proto3,oneof" json:"owner_id,omitempty"`                      // Organization owner user ID
+	OwnerName        *string                `protobuf:"bytes,4,opt,name=owner_name,json=ownerName,proto3,oneof" json:"owner_name,omitempty"`                // Organization owner name or email
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -5213,6 +5231,20 @@ func (x *VPSOverview) GetVps() *v13.VPSInstance {
 func (x *VPSOverview) GetOrganizationName() string {
 	if x != nil {
 		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *VPSOverview) GetOwnerId() string {
+	if x != nil && x.OwnerId != nil {
+		return *x.OwnerId
+	}
+	return ""
+}
+
+func (x *VPSOverview) GetOwnerName() string {
+	if x != nil && x.OwnerName != nil {
+		return *x.OwnerName
 	}
 	return ""
 }
@@ -9400,6 +9432,8 @@ type GameServerOverview struct {
 	CreatedByUser    *UserInfo              `protobuf:"bytes,3,opt,name=created_by_user,json=createdByUser,proto3,oneof" json:"created_by_user,omitempty"`
 	IsSuspended      bool                   `protobuf:"varint,4,opt,name=is_suspended,json=isSuspended,proto3" json:"is_suspended,omitempty"`
 	SuspensionReason *string                `protobuf:"bytes,5,opt,name=suspension_reason,json=suspensionReason,proto3,oneof" json:"suspension_reason,omitempty"`
+	OwnerId          *string                `protobuf:"bytes,6,opt,name=owner_id,json=ownerId,proto3,oneof" json:"owner_id,omitempty"`       // Organization owner user ID
+	OwnerName        *string                `protobuf:"bytes,7,opt,name=owner_name,json=ownerName,proto3,oneof" json:"owner_name,omitempty"` // Organization owner name or email
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -9465,6 +9499,20 @@ func (x *GameServerOverview) GetIsSuspended() bool {
 func (x *GameServerOverview) GetSuspensionReason() string {
 	if x != nil && x.SuspensionReason != nil {
 		return *x.SuspensionReason
+	}
+	return ""
+}
+
+func (x *GameServerOverview) GetOwnerId() string {
+	if x != nil && x.OwnerId != nil {
+		return *x.OwnerId
+	}
+	return ""
+}
+
+func (x *GameServerOverview) GetOwnerName() string {
+	if x != nil && x.OwnerName != nil {
+		return *x.OwnerName
 	}
 	return ""
 }
@@ -10160,7 +10208,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x129\n" +
 	"\n" +
-	"invited_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tinvitedAt\"\xe7\x03\n" +
+	"invited_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tinvitedAt\"\xc7\x04\n" +
 	"\x12DeploymentOverview\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x120\n" +
@@ -10171,9 +10219,15 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x06domain\x18\a \x01(\tH\x01R\x06domain\x88\x01\x01\x129\n" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12D\n" +
-	"\x10last_deployed_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x0elastDeployedAtB\x14\n" +
+	"\x10last_deployed_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x0elastDeployedAt\x12\x1e\n" +
+	"\bowner_id\x18\n" +
+	" \x01(\tH\x02R\aownerId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"owner_name\x18\v \x01(\tH\x03R\townerName\x88\x01\x01B\x14\n" +
 	"\x12_organization_nameB\t\n" +
-	"\a_domain\"\x92\x03\n" +
+	"\a_domainB\v\n" +
+	"\t_owner_idB\r\n" +
+	"\v_owner_name\"\x92\x03\n" +
 	"\x11OrganizationUsage\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12+\n" +
 	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\x12\x14\n" +
@@ -10603,10 +10657,15 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\a_statusB\a\n" +
 	"\x05_pageB\v\n" +
 	"\t_per_pageB\t\n" +
-	"\a_search\"o\n" +
+	"\a_search\"\xcf\x01\n" +
 	"\vVPSOverview\x123\n" +
 	"\x03vps\x18\x01 \x01(\v2!.obiente.cloud.vps.v1.VPSInstanceR\x03vps\x12+\n" +
-	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\"\xa8\x01\n" +
+	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\x12\x1e\n" +
+	"\bowner_id\x18\x03 \x01(\tH\x00R\aownerId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"owner_name\x18\x04 \x01(\tH\x01R\townerName\x88\x01\x01B\v\n" +
+	"\t_owner_idB\r\n" +
+	"\v_owner_name\"\xa8\x01\n" +
 	"\x12ListAllVPSResponse\x12M\n" +
 	"\rvps_instances\x18\x01 \x03(\v2(.obiente.cloud.superadmin.v1.VPSOverviewR\fvpsInstances\x12C\n" +
 	"\n" +
@@ -10951,16 +11010,21 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x18UnbanOrganizationRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"5\n" +
 	"\x19UnbanOrganizationResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage\"\xdf\x02\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"\xbf\x03\n" +
 	"\x12GameServerOverview\x12I\n" +
 	"\vgame_server\x18\x01 \x01(\v2(.obiente.cloud.gameservers.v1.GameServerR\n" +
 	"gameServer\x12+\n" +
 	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\x12R\n" +
 	"\x0fcreated_by_user\x18\x03 \x01(\v2%.obiente.cloud.superadmin.v1.UserInfoH\x00R\rcreatedByUser\x88\x01\x01\x12!\n" +
 	"\fis_suspended\x18\x04 \x01(\bR\visSuspended\x120\n" +
-	"\x11suspension_reason\x18\x05 \x01(\tH\x01R\x10suspensionReason\x88\x01\x01B\x12\n" +
+	"\x11suspension_reason\x18\x05 \x01(\tH\x01R\x10suspensionReason\x88\x01\x01\x12\x1e\n" +
+	"\bowner_id\x18\x06 \x01(\tH\x02R\aownerId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"owner_name\x18\a \x01(\tH\x03R\townerName\x88\x01\x01B\x12\n" +
 	"\x10_created_by_userB\x14\n" +
-	"\x12_suspension_reason\"\xe5\x02\n" +
+	"\x12_suspension_reasonB\v\n" +
+	"\t_owner_idB\r\n" +
+	"\v_owner_name\"\xe5\x02\n" +
 	"\x19ListAllGameServersRequest\x12,\n" +
 	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12K\n" +
 	"\x06status\x18\x02 \x01(\x0e2..obiente.cloud.gameservers.v1.GameServerStatusH\x01R\x06status\x88\x01\x01\x12\x1b\n" +
@@ -11569,6 +11633,7 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[64].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[69].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[71].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[72].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[74].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[78].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[83].OneofWrappers = []any{}

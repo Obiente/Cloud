@@ -37,6 +37,8 @@
       <SuperadminOrganizationCell
         :organization-name="row.organizationName"
         :organization-id="row.gameServer?.organizationId"
+        :owner-name="row.ownerName"
+        :owner-id="row.ownerId"
       />
     </template>
     <template #cell-status="{ row }">

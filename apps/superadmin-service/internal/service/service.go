@@ -1371,7 +1371,7 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 			NULL AS owner_name`).
 		Joins("LEFT JOIN organization_members m ON m.organization_id = o.id").
 		Joins("LEFT JOIN deployments d ON d.organization_id = o.id").
-		Joins("LEFT JOIN organization_members owner_m ON owner_m.organization_id = o.id AND owner_m.role = 'owner' AND owner_m.status = 'active'").
+		Joins("LEFT JOIN organization_members owner_m ON owner_m.organization_id = o.id AND owner_m.role = 'system:owner' AND owner_m.status = 'active'").
 		Group("o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at, owner_m.user_id").
 		Order("o.created_at DESC").
 		Limit(overviewLimit).
@@ -1417,6 +1417,35 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 	return items, nil
 }
 
+// resolveOwnerNames resolves display names for a list of user IDs using the
+// shared user-profile resolver (backed by Redis cache). Returns a map of
+// userID → name/email. Duplicate IDs are only resolved once.
+func resolveOwnerNames(ctx context.Context, ownerIDs []string) map[string]string {
+	result := make(map[string]string, len(ownerIDs))
+	resolver := organizations.GetUserProfileResolver()
+	if resolver == nil || !resolver.IsConfigured() {
+		return result
+	}
+	for _, id := range ownerIDs {
+		if id == "" {
+			continue
+		}
+		if _, already := result[id]; already {
+			continue
+		}
+		if profile, err := resolver.Resolve(ctx, id); err == nil && profile != nil {
+			name := profile.Name
+			if name == "" {
+				name = profile.Email
+			}
+			result[id] = name
+		} else {
+			result[id] = "" // mark as attempted to avoid re-lookup
+		}
+	}
+	return result
+}
+
 func loadPendingInvites() ([]*superadminv1.SuperadminPendingInvite, error) {
 	var rows []database.OrganizationMember
 	if err := database.DB.Where("status = ?", "invited").Order("joined_at DESC").Limit(overviewLimit).Find(&rows).Error; err != nil {
@@ -1440,18 +1469,33 @@ func loadPendingInvites() ([]*superadminv1.SuperadminPendingInvite, error) {
 type deploymentOverviewRow struct {
 	database.Deployment
 	OrganizationName *string
+	OwnerID          *string `gorm:"column:owner_id"`
 }
 
 func loadDeploymentOverviews() ([]*superadminv1.DeploymentOverview, error) {
 	var rows []deploymentOverviewRow
 	if err := database.DB.Table("deployments d").
-		Select("d.*, o.name AS organization_name").
+		Select("d.*, o.name AS organization_name, owner_m.user_id AS owner_id").
 		Joins("LEFT JOIN organizations o ON o.id = d.organization_id").
+		Joins("LEFT JOIN LATERAL (SELECT user_id FROM organization_members WHERE organization_id = d.organization_id AND role = 'system:owner' AND status = 'active' LIMIT 1) owner_m ON true").
 		Order("d.created_at DESC").
 		Limit(overviewLimit).
 		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load deployments: %w", err)
 	}
+
+	// Collect unique owner IDs for name resolution
+	ownerIDs := make([]string, 0)
+	seenOwners := make(map[string]struct{})
+	for _, r := range rows {
+		if r.OwnerID != nil && *r.OwnerID != "" {
+			if _, ok := seenOwners[*r.OwnerID]; !ok {
+				ownerIDs = append(ownerIDs, *r.OwnerID)
+				seenOwners[*r.OwnerID] = struct{}{}
+			}
+		}
+	}
+	ownerNames := resolveOwnerNames(context.Background(), ownerIDs)
 
 	items := make([]*superadminv1.DeploymentOverview, 0, len(rows))
 	for _, row := range rows {
@@ -1470,6 +1514,12 @@ func loadDeploymentOverviews() ([]*superadminv1.DeploymentOverview, error) {
 		}
 		if row.OrganizationName != nil && *row.OrganizationName != "" {
 			item.OrganizationName = row.OrganizationName
+		}
+		if row.OwnerID != nil && *row.OwnerID != "" {
+			item.OwnerId = row.OwnerID
+			if name, ok := ownerNames[*row.OwnerID]; ok && name != "" {
+				item.OwnerName = &name
+			}
 		}
 		items = append(items, item)
 	}

@@ -87,6 +87,7 @@ func (s *Service) ListAllGameServers(ctx context.Context, req *connect.Request[s
 
 	// Batch load org names
 	orgNames := make(map[string]string, len(orgIDSlice))
+	orgOwnerIDs := make(map[string]string, len(orgIDSlice)) // orgID -> ownerUserID
 	if len(orgIDSlice) > 0 {
 		var orgs []struct {
 			ID   string
@@ -96,7 +97,28 @@ func (s *Service) ListAllGameServers(ctx context.Context, req *connect.Request[s
 		for _, o := range orgs {
 			orgNames[o.ID] = o.Name
 		}
+		// Batch load org owner IDs
+		var ownerMembers []struct {
+			OrganizationID string `gorm:"column:organization_id"`
+			UserID         string `gorm:"column:user_id"`
+		}
+		database.DB.Table("organization_members").
+			Select("organization_id, user_id").
+			Where("organization_id IN ? AND role = ? AND status = ?", orgIDSlice, "system:owner", "active").
+			Scan(&ownerMembers)
+		for _, m := range ownerMembers {
+			orgOwnerIDs[m.OrganizationID] = m.UserID
+		}
 	}
+
+	// Resolve owner display names
+	ownerIDSlice := make([]string, 0, len(orgOwnerIDs))
+	for _, uid := range orgOwnerIDs {
+		if uid != "" {
+			ownerIDSlice = append(ownerIDSlice, uid)
+		}
+	}
+	ownerNameMap := resolveOwnerNames(ctx, ownerIDSlice)
 
 	// Batch load active suspensions
 	activeSuspensions := make(map[string]*database.GameServerSuspension)
@@ -114,7 +136,9 @@ func (s *Service) ListAllGameServers(ctx context.Context, req *connect.Request[s
 
 	overviews := make([]*superadminv1.GameServerOverview, 0, len(gameServers))
 	for _, gs := range gameServers {
-		ov := gameServerToOverview(gs, orgNames[gs.OrganizationID], activeSuspensions[gs.ID])
+		ownerID := orgOwnerIDs[gs.OrganizationID]
+		ownerName := ownerNameMap[ownerID]
+		ov := gameServerToOverview(gs, orgNames[gs.OrganizationID], activeSuspensions[gs.ID], ownerID, ownerName)
 		overviews = append(overviews, ov)
 	}
 
@@ -159,6 +183,21 @@ func (s *Service) SuperadminGetGameServer(ctx context.Context, req *connect.Requ
 		orgName = org.Name
 	}
 
+	// Load org owner
+	var ownerMember struct {
+		UserID string `gorm:"column:user_id"`
+	}
+	var ownerID, ownerName string
+	if err := database.DB.Table("organization_members").
+		Select("user_id").
+		Where("organization_id = ? AND role = ? AND status = ?", gs.OrganizationID, "system:owner", "active").
+		Limit(1).
+		Scan(&ownerMember).Error; err == nil && ownerMember.UserID != "" {
+		ownerID = ownerMember.UserID
+		names := resolveOwnerNames(ctx, []string{ownerID})
+		ownerName = names[ownerID]
+	}
+
 	var susp *database.GameServerSuspension
 	var tmp database.GameServerSuspension
 	if err := database.DB.Where("game_server_id = ? AND lifted_at IS NULL", gsID).First(&tmp).Error; err == nil {
@@ -166,7 +205,7 @@ func (s *Service) SuperadminGetGameServer(ctx context.Context, req *connect.Requ
 	}
 
 	return connect.NewResponse(&superadminv1.SuperadminGetGameServerResponse{
-		GameServer: gameServerToOverview(&gs, orgName, susp),
+		GameServer: gameServerToOverview(&gs, orgName, susp, ownerID, ownerName),
 	}), nil
 }
 
@@ -367,7 +406,7 @@ func (s *Service) SuperadminForceDeleteGameServer(ctx context.Context, req *conn
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func gameServerToOverview(gs *database.GameServer, orgName string, susp *database.GameServerSuspension) *superadminv1.GameServerOverview {
+func gameServerToOverview(gs *database.GameServer, orgName string, susp *database.GameServerSuspension, ownerID string, ownerName string) *superadminv1.GameServerOverview {
 	ov := &superadminv1.GameServerOverview{
 		GameServer:       gameServerProto(gs),
 		OrganizationName: orgName,
@@ -377,6 +416,12 @@ func gameServerToOverview(gs *database.GameServer, orgName string, susp *databas
 		if susp.Reason != nil {
 			reason := *susp.Reason
 			ov.SuspensionReason = &reason
+		}
+	}
+	if ownerID != "" {
+		ov.OwnerId = &ownerID
+		if ownerName != "" {
+			ov.OwnerName = &ownerName
 		}
 	}
 	return ov

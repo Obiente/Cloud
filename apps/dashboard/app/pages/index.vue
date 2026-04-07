@@ -88,7 +88,7 @@
                 Pay for What You Use.
               </OuiText>
 
-              <OuiText size="lg" color="secondary" maxW="2xl" mt="md"
+              <OuiText size="lg" color="tertiary" maxW="2xl" mt="md"
                 class="text-base md:text-lg lg:text-xl leading-relaxed">
                 Deploy any containerized application from GitHub, host game servers, and launch VPS instances with
                 transparent pay-as-you-go pricing. Pay only for CPU, memory, storage, and bandwidth you actually use.
@@ -144,7 +144,7 @@
             <OuiText as="h2" size="3xl" weight="bold" color="primary" class="md:text-4xl">
               Complete Cloud Platform Features
             </OuiText>
-            <OuiText color="secondary" class="md:text-base">
+            <OuiText color="tertiary" class="md:text-base">
               Everything you need to deploy, monitor, and scale your applications. From simple Docker containers to
               complex multi-service deployments, game servers, and full VPS instances.
             </OuiText>
@@ -164,7 +164,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       GitHub Integration & CI/CD
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Connect your GitHub repository and deploy automatically on every push. Supports Docker, Docker
                       Compose, and custom build strategies.
                     </OuiText>
@@ -186,7 +186,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Custom Domains & SSL
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Add unlimited custom domains with automatic Let's Encrypt SSL certificates. Configure advanced
                       routing rules and path-based routing.
                     </OuiText>
@@ -208,7 +208,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Docker & Docker Compose
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Deploy single containers or complex multi-service applications with Docker Compose. Manage
                       multiple
                       services, volumes, and networks from one dashboard.
@@ -231,7 +231,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Environment Variables
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Manage environment variables per deployment. Secure secrets management with easy configuration
                       through the dashboard.
                     </OuiText>
@@ -253,7 +253,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Real-Time Monitoring & Logs
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Live metrics dashboard with CPU, memory, network, and disk usage. Real-time log streaming, build
                       logs, and container logs.
                     </OuiText>
@@ -275,7 +275,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       File Management & Terminal
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Web-based file browser with upload, edit, and delete capabilities. Built-in terminal access for
                       SSH-like experience.
                     </OuiText>
@@ -297,7 +297,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Pay-as-You-Go Pricing
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Only pay for resources you actually use. Perfect for game servers and VPSs where you often overpay
                       for idle time.
                     </OuiText>
@@ -319,7 +319,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Game Server Hosting
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Deploy Minecraft and other game servers with Docker. Built-in Minecraft server management. Pay
                       only
                       when running - save 50%+ vs traditional hosting.
@@ -342,7 +342,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       VPS Instances with Root Access
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Full root access Linux VPS instances. Web console, SSH access, firewall management, and snapshots.
                       Pay for actual usage, not idle time.
                     </OuiText>
@@ -361,7 +361,7 @@
             <OuiText as="h2" size="3xl" weight="bold" color="primary" class="md:text-4xl">
               Interactive Dashboard Preview
             </OuiText>
-            <OuiText color="secondary" class="md:text-base">
+            <OuiText color="tertiary" class="md:text-base">
               Experience our cloud platform dashboard with live previews. Click any card below to explore real-time
               metrics, deployment management, game server controls, and VPS terminal access.
             </OuiText>
@@ -393,7 +393,7 @@
               </OuiBox>
               <OuiStack gap="lg" grow class="flex-1">
                 <OuiText size="2xl" weight="bold" color="primary">Container Deployment</OuiText>
-                <OuiText color="secondary">Deploy any containerized application from GitHub - web apps, APIs, background
+                <OuiText color="tertiary">Deploy any containerized application from GitHub - web apps, APIs, background
                   workers,
                   databases, or anything that runs in Docker. Automatic builds, custom domains, and SSL certificates
                   included.
@@ -402,27 +402,27 @@
                 <OuiStack gap="sm" mt="md">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Automatic GitHub builds</OuiText>
+                    <OuiText size="sm" color="tertiary">Automatic GitHub builds</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Custom domains & SSL</OuiText>
+                    <OuiText size="sm" color="tertiary">Custom domains & SSL</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Real-time monitoring</OuiText>
+                    <OuiText size="sm" color="tertiary">Real-time monitoring</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Docker Compose</OuiText>
+                    <OuiText size="sm" color="tertiary">Docker Compose</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Environment variables</OuiText>
+                    <OuiText size="sm" color="tertiary">Environment variables</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Zero-downtime deploys</OuiText>
+                    <OuiText size="sm" color="tertiary">Zero-downtime deploys</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -447,34 +447,34 @@
               </OuiBox>
               <OuiStack gap="lg" grow class="flex-1">
                 <OuiText size="2xl" weight="bold" color="primary">Game Server Hosting</OuiText>
-                <OuiText color="secondary">Host game servers with pay-as-you-go pricing. Only pay when your server is
+                <OuiText color="tertiary">Host game servers with pay-as-you-go pricing. Only pay when your server is
                   running.
                   Perfect for Minecraft, Valheim, and other multiplayer games.</OuiText>
 
                 <OuiStack gap="sm" mt="md">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Pay-as-you-go pricing</OuiText>
+                    <OuiText size="sm" color="tertiary">Pay-as-you-go pricing</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Low-cost when idle</OuiText>
+                    <OuiText size="sm" color="tertiary">Low-cost when idle</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Backups & snapshots</OuiText>
+                    <OuiText size="sm" color="tertiary">Backups & snapshots</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Docker support</OuiText>
+                    <OuiText size="sm" color="tertiary">Docker support</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Real-time monitoring</OuiText>
+                    <OuiText size="sm" color="tertiary">Real-time monitoring</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">File management</OuiText>
+                    <OuiText size="sm" color="tertiary">File management</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -502,7 +502,7 @@
               </OuiStack>
               <OuiStack gap="lg" grow class="flex-1">
                 <OuiText size="2xl" weight="bold" color="primary">VPS Instances</OuiText>
-                <OuiText color="secondary">Get full root access VPS instances with complete control over your
+                <OuiText color="tertiary">Get full root access VPS instances with complete control over your
                   environment.
                   Perfect
                   for development, hosting, and personal projects.</OuiText>
@@ -510,27 +510,27 @@
                 <OuiStack gap="sm" mt="md">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Full root access & SSH</OuiText>
+                    <OuiText size="sm" color="tertiary">Full root access & SSH</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Web console & snapshots</OuiText>
+                    <OuiText size="sm" color="tertiary">Web console & snapshots</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Usage-based pricing</OuiText>
+                    <OuiText size="sm" color="tertiary">Usage-based pricing</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Multiple Linux distros</OuiText>
+                    <OuiText size="sm" color="tertiary">Multiple Linux distros</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Real-time metrics</OuiText>
+                    <OuiText size="sm" color="tertiary">Real-time metrics</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Firewall management</OuiText>
+                    <OuiText size="sm" color="tertiary">Firewall management</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -546,7 +546,7 @@
             <OuiText as="h2" size="3xl" weight="bold" color="primary" class="md:text-4xl">
               Enterprise Infrastructure & Support
             </OuiText>
-            <OuiText color="secondary" class="md:text-base">
+            <OuiText color="tertiary" class="md:text-base">
               Built on modern, high-performance infrastructure with 99.9% uptime SLA, automatic failover, and
               comprehensive
               security. Get help when you need it with our free support team.
@@ -567,7 +567,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Enterprise Infrastructure
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Modern cloud infrastructure with high-performance compute, SSD storage, and low-latency
                       networking.
                       Deployed across multiple regions for optimal performance.
@@ -590,7 +590,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       High Availability & Redundancy
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       99.9% uptime SLA with built-in redundancy and automatic failover. Multi-region deployment options
                       ensure
                       your services stay online.
@@ -613,7 +613,7 @@
                     <OuiText as="h3" size="md" weight="semibold" color="primary">
                       Free Support
                     </OuiText>
-                    <OuiText size="sm" color="secondary">
+                    <OuiText size="sm" color="tertiary">
                       Get help when you need it. Our support team is available to assist with deployment, configuration,
                       and
                       troubleshooting.
@@ -633,12 +633,12 @@
             <OuiText as="h2" size="3xl" weight="bold" color="primary" class="md:text-4xl">
               Simple, Transparent Pricing
             </OuiText>
-            <OuiText color="secondary" class="md:text-base">
+            <OuiText color="tertiary" class="md:text-base">
               Pay only for what you use. No fixed plans or hidden fees. Just transparent, usage-based pricing for CPU,
               memory,
               storage, and bandwidth.
             </OuiText>
-            <OuiText size="sm" color="secondary" class="opacity-75 mt-2">
+            <OuiText size="sm" color="tertiary" class="opacity-75 mt-2">
               Students, open-source projects, non-profits, and early-stage startups may qualify for reduced pricing.
               Contact
               us to discuss.
@@ -658,38 +658,38 @@
                     <RocketLaunchIcon class="h-6 w-6 text-accent-primary" />
                   </OuiBox>
                   <OuiText size="lg" weight="semibold" color="primary">Small App</OuiText>
-                  <OuiText size="sm" color="secondary">Perfect for side projects</OuiText>
+                  <OuiText size="sm" color="tertiary">Perfect for side projects</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="4xl" weight="bold" color="primary">~$5</OuiText>
-                  <OuiText size="sm" color="secondary">per month</OuiText>
+                  <OuiText size="sm" color="tertiary">per month</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">0.5 GB RAM running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">0.5 GB RAM running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">0.25 vCPU cores running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">0.25 vCPU cores running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~10 GB bandwidth/month</OuiText>
+                    <OuiText size="sm" color="tertiary">~10 GB bandwidth/month</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~5 GB storage</OuiText>
+                    <OuiText size="sm" color="tertiary">~5 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                    <OuiText size="sm" color="tertiary">Free support</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Built-in redundancy</OuiText>
+                    <OuiText size="sm" color="tertiary">Built-in redundancy</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -711,13 +711,13 @@
                     <OuiText size="lg" weight="semibold" color="primary">Game Server</OuiText>
                     <OuiBadge color="success" size="sm">Save 50%</OuiBadge>
                   </OuiFlex>
-                  <OuiText size="sm" color="secondary">12 hours/day runtime</OuiText>
+                  <OuiText size="sm" color="tertiary">12 hours/day runtime</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="4xl" weight="bold" color="primary">~$15</OuiText>
-                  <OuiText size="sm" color="secondary">per month</OuiText>
-                  <OuiText size="xs" color="secondary" class="opacity-75 italic line-through">
+                  <OuiText size="sm" color="tertiary">per month</OuiText>
+                  <OuiText size="xs" color="tertiary" class="opacity-75 italic line-through">
                     Traditional hosting: $5-15/month fixed
                   </OuiText>
                 </OuiStack>
@@ -725,27 +725,27 @@
                 <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">4 GB RAM running 12h/day</OuiText>
+                    <OuiText size="sm" color="tertiary">4 GB RAM running 12h/day</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">2 vCPU cores average</OuiText>
+                    <OuiText size="sm" color="tertiary">2 vCPU cores average</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~100 GB bandwidth/month</OuiText>
+                    <OuiText size="sm" color="tertiary">~100 GB bandwidth/month</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~20 GB storage</OuiText>
+                    <OuiText size="sm" color="tertiary">~20 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Low costs when idle or offline</OuiText>
+                    <OuiText size="sm" color="tertiary">Low costs when idle or offline</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                    <OuiText size="sm" color="tertiary">Free support</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -764,13 +764,13 @@
                     </OuiFlex>
                   </OuiBox>
                   <OuiText size="lg" weight="semibold" color="primary">VPS Instance</OuiText>
-                  <OuiText size="sm" color="secondary">Competitive pricing</OuiText>
+                  <OuiText size="sm" color="tertiary">Competitive pricing</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="4xl" weight="bold" color="primary">~$8</OuiText>
-                  <OuiText size="sm" color="secondary">per month</OuiText>
-                  <OuiText size="xs" color="secondary" class="opacity-75 italic">
+                  <OuiText size="sm" color="tertiary">per month</OuiText>
+                  <OuiText size="xs" color="tertiary" class="opacity-75 italic">
                     Traditional VPS: $10-12/month
                   </OuiText>
                 </OuiStack>
@@ -778,27 +778,27 @@
                 <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">2 GB RAM running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">2 GB RAM running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">1 vCPU core running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">1 vCPU core running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~50 GB bandwidth/month</OuiText>
+                    <OuiText size="sm" color="tertiary">~50 GB bandwidth/month</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~10 GB storage</OuiText>
+                    <OuiText size="sm" color="tertiary">~10 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Pay for actual usage, not idle time</OuiText>
+                    <OuiText size="sm" color="tertiary">Pay for actual usage, not idle time</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                    <OuiText size="sm" color="tertiary">Free support</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -820,42 +820,42 @@
                     <OuiText size="lg" weight="semibold" color="primary">Medium App</OuiText>
                     <OuiBadge color="primary" size="sm">Popular</OuiBadge>
                   </OuiFlex>
-                  <OuiText size="sm" color="secondary">For growing teams</OuiText>
+                  <OuiText size="sm" color="tertiary">For growing teams</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="4xl" weight="bold" color="primary">~$14</OuiText>
-                  <OuiText size="sm" color="secondary">per month</OuiText>
+                  <OuiText size="sm" color="tertiary">per month</OuiText>
                 </OuiStack>
 
                 <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">2 GB RAM running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">2 GB RAM running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">1 vCPU core running 24/7</OuiText>
+                    <OuiText size="sm" color="tertiary">1 vCPU core running 24/7</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~50 GB bandwidth/month</OuiText>
+                    <OuiText size="sm" color="tertiary">~50 GB bandwidth/month</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~25 GB storage</OuiText>
+                    <OuiText size="sm" color="tertiary">~25 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Custom configurations</OuiText>
+                    <OuiText size="sm" color="tertiary">Custom configurations</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                    <OuiText size="sm" color="tertiary">Free support</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Built-in redundancy</OuiText>
+                    <OuiText size="sm" color="tertiary">Built-in redundancy</OuiText>
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -872,7 +872,7 @@
             </OuiButton>
           </OuiFlex>
 
-          <OuiText size="sm" color="secondary" class="opacity-75 text-center" maxW="2xl">
+          <OuiText size="sm" color="tertiary" class="opacity-75 text-center" maxW="2xl">
             * Example costs based on 24/7 usage. You only pay for actual runtime -
             if your app runs part-time, you'll pay less. Use the calculator below
             to estimate your exact costs.
@@ -887,7 +887,7 @@
                 <OuiText size="xl" weight="bold" color="primary">
                   Why Pay-as-You-Go Matters
                 </OuiText>
-                <OuiText size="sm" color="secondary">
+                <OuiText size="sm" color="tertiary">
                   Traditional hosting charges you for resources you don't use. We only charge for what you actually
                   consume.
                 </OuiText>
@@ -905,7 +905,7 @@
                         <OuiText size="sm" weight="semibold" color="primary">
                           Game Servers
                         </OuiText>
-                        <OuiText size="sm" color="secondary">
+                        <OuiText size="sm" color="tertiary">
                           Low costs when idle or offline. Traditional hosting charges $5-15/month fixed plans even when
                           your
                           server is empty.
@@ -926,7 +926,7 @@
                         <OuiText size="sm" weight="semibold" color="primary">
                           VPS Instances
                         </OuiText>
-                        <OuiText size="sm" color="secondary">
+                        <OuiText size="sm" color="tertiary">
                           Pay for actual CPU, memory, storage, and bandwidth usage, not idle time. Most VPS providers
                           charge
                           full price regardless of utilization.
@@ -947,7 +947,7 @@
                         <OuiText size="sm" weight="semibold" color="primary">
                           Development Environments
                         </OuiText>
-                        <OuiText size="sm" color="secondary">
+                        <OuiText size="sm" color="tertiary">
                           Stop paying for resources that sit idle overnight or on weekends. Only pay when you're
                           actively
                           developing.
@@ -968,7 +968,7 @@
                         <OuiText size="sm" weight="semibold" color="primary">
                           Variable Workloads
                         </OuiText>
-                        <OuiText size="sm" color="secondary">
+                        <OuiText size="sm" color="tertiary">
                           Scale costs automatically with demand - no over-provisioning required. Perfect for
                           applications
                           with
@@ -998,7 +998,7 @@
                 <OuiText as="h2" size="3xl" weight="bold" color="primary" class="md:text-4xl">
                   Ready to Deploy?
                 </OuiText>
-                <OuiText size="lg" color="secondary" class="md:text-xl" style="max-width: 48rem;">
+                <OuiText size="lg" color="tertiary" class="md:text-xl" style="max-width: 48rem;">
                   Deploy from GitHub in minutes. Pay only for the CPU, memory, storage, and bandwidth you actually use.
                 </OuiText>
                 <OuiFlex gap="md" wrap="wrap" justify="center" mt="lg">
@@ -1261,14 +1261,14 @@ const startHomepageMetricsStream = async () => {
       homepageLatestMetric.value = metric;
     }
   } catch (err: unknown) {
-    if (err.name === "AbortError") {
+    if ((err as any).name === "AbortError") {
       return;
     }
     // Suppress "missing trailer" errors
     const isMissingTrailerError =
       (err as Error).message?.toLowerCase().includes("missing trailer") ||
       (err as Error).message?.toLowerCase().includes("trailer") ||
-      err.code === "unknown";
+      (err as any).code === "unknown";
 
     if (!isMissingTrailerError) {
       console.error("[Homepage] Failed to stream metrics:", err);

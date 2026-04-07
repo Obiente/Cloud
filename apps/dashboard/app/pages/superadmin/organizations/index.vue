@@ -15,34 +15,15 @@
     @row-click="(row) => viewOrganization(row.id)"
   >
           <template #cell-organization="{ value, row }">
-            <div>
-              <NuxtLink
-                :to="`/superadmin/organizations/${row.id}`"
-                class="font-medium text-text-primary hover:text-primary transition-colors cursor-pointer"
-                @click.stop
-              >
-                {{ row.name || row.slug || "—" }}
-              </NuxtLink>
-              <div v-if="row.slug" class="text-xs text-text-muted mt-0.5">{{ row.slug }}</div>
-              <NuxtLink
-                :to="`/superadmin/organizations/${row.id}`"
-                class="text-xs font-mono text-text-tertiary mt-0.5 hover:text-primary transition-colors cursor-pointer"
-                @click.stop
-              >
-                {{ row.id }}
-              </NuxtLink>
-              <div v-if="row.domain" class="text-xs text-text-muted mt-0.5">{{ row.domain }}</div>
-            </div>
-            <div v-if="organizationOwners.get(row.id)" class="text-xs text-text-muted mt-1">
-              Owner: 
-              <NuxtLink
-                :to="`/superadmin/users/${organizationOwners.get(row.id)?.userId}`"
-                class="text-primary hover:underline"
-                @click.stop
-              >
-                {{ organizationOwners.get(row.id)?.name }}
-              </NuxtLink>
-            </div>
+            <SuperadminOrganizationCell
+              :organization-name="row.name"
+              :organization-id="row.id"
+              :owner-name="row._ownerName"
+              :owner-id="row._ownerId"
+              :plan="row.plan"
+              :slug="row.slug"
+            />
+            <div v-if="row.domain" class="text-xs text-text-muted mt-0.5">{{ row.domain }}</div>
           </template>
           <template #cell-plan="{ value }">
             <span class="text-text-secondary">{{ prettyPlan(value) }}</span>
@@ -200,6 +181,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
 import SuperadminResourceCell from "~/components/superadmin/SuperadminResourceCell.vue";
+import SuperadminOrganizationCell from "~/components/superadmin/SuperadminOrganizationCell.vue";
 import SuperadminStatusBadge from "~/components/superadmin/SuperadminStatusBadge.vue";
 import SuperadminActionsCell, { type Action } from "~/components/superadmin/SuperadminActionsCell.vue";
 import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.vue";
@@ -316,10 +298,24 @@ const { data: availablePlans, refresh: refreshPlans } = await useClientFetch(
 const organizations = computed(() => organizationsData.value || []);
 
 // Store owner information for organizations (map of orgId -> { name, userId })
+// Seeded from the superadmin overview (already has owner_id/owner_name) so no extra
+// API calls for those orgs; remaining orgs are fetched lazily via listMembers.
 const organizationOwners = ref<Map<string, { name: string; userId: string }>>(new Map());
 const loadingOwners = ref<Set<string>>(new Set());
 
-// Fetch owner for an organization
+// Seed owner cache from the cached superadmin overview (free — already loaded)
+function seedOwnersFromOverview() {
+  const superAdmin = useSuperAdmin();
+  const overviewOrgs = superAdmin.overview.value?.organizations || [];
+  for (const o of overviewOrgs) {
+    if (o.ownerId && !organizationOwners.value.has(o.id)) {
+      const name = o.ownerName || o.ownerId;
+      organizationOwners.value.set(o.id, { name, userId: o.ownerId });
+    }
+  }
+}
+
+// Fetch owner for a single org via member list (fallback when not in overview)
 async function fetchOwner(orgId: string): Promise<void> {
   if (organizationOwners.value.has(orgId) || loadingOwners.value.has(orgId)) {
     return;
@@ -343,11 +339,13 @@ async function fetchOwner(orgId: string): Promise<void> {
   }
 }
 
-// Fetch owners for all organizations
+// Fetch owners for all organizations (seeded from overview, lazy-load the rest)
 async function loadOwners() {
   if (!organizations.value.length) return;
-  const promises = organizations.value.map((org) => fetchOwner(org.id));
-  await Promise.all(promises);
+  seedOwnersFromOverview();
+  // For orgs not already seeded, fetch their owner via member list
+  const remaining = organizations.value.filter((org) => !organizationOwners.value.has(org.id));
+  await Promise.all(remaining.map((org) => fetchOwner(org.id)));
 }
 
 // Watch for organizations changes and load owners
@@ -388,6 +386,7 @@ const filteredOrganizations = computed(() => {
     // Search filter
     if (!term) return true;
     
+    const ownerInfo = organizationOwners.value.get(org.id);
     const searchable = [
       org.name,
       org.slug,
@@ -395,6 +394,8 @@ const filteredOrganizations = computed(() => {
       org.domain,
       org.plan,
       org.status,
+      ownerInfo?.name,
+      ownerInfo?.userId,
     ].filter(Boolean).join(" ").toLowerCase();
     
     return searchable.includes(term);
@@ -411,16 +412,22 @@ const tableColumns = computed(() => [
 ]);
 
 const tableRows = computed(() => {
-  return (filteredOrganizations.value || []).map((org) => ({
-    ...org,
-    createdAt: formatDate(org.createdAt),
-    credits: org.credits ?? BigInt(0),
-    owner: organizationOwners.value.get(org.id) || null,
-  }));
+  return (filteredOrganizations.value || []).map((org) => {
+    const ownerInfo = organizationOwners.value.get(org.id);
+    return {
+      ...org,
+      createdAt: formatDate(org.createdAt),
+      credits: org.credits ?? BigInt(0),
+      _ownerName: ownerInfo?.name,
+      _ownerId: ownerInfo?.userId,
+    };
+  });
 });
 
 async function refresh() {
   await refreshOrganizations();
+  organizationOwners.value.clear();
+  loadingOwners.value.clear();
   await loadOwners();
 }
 

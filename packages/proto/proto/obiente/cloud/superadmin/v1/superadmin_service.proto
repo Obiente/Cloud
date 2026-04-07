@@ -181,6 +181,8 @@ message DeploymentOverview {
   optional string domain = 7;
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp last_deployed_at = 9;
+  optional string owner_id = 10;   // Organization owner user ID
+  optional string owner_name = 11; // Organization owner name or email
 }
 
 message OrganizationUsage {
@@ -729,6 +731,8 @@ message ListAllVPSRequest {
 message VPSOverview {
   obiente.cloud.vps.v1.VPSInstance vps = 1;
   string organization_name = 2; // Organization name (for display)
+  optional string owner_id = 3;   // Organization owner user ID
+  optional string owner_name = 4; // Organization owner name or email
 }
 
 // List All VPS Response
@@ -1186,6 +1190,8 @@ message GameServerOverview {
   optional UserInfo created_by_user = 3;
   bool is_suspended = 4;
   optional string suspension_reason = 5;
+  optional string owner_id = 6;   // Organization owner user ID
+  optional string owner_name = 7; // Organization owner name or email
 }
 
 message ListAllGameServersRequest {

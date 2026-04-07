@@ -97,11 +97,32 @@
         >
           <template #cell-organization="{ value, row }">
             <div>
-              <div class="font-medium text-text-primary">
-                {{ row.organizationName }}
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <NuxtLink
+                  v-if="row.organizationId"
+                  :to="`/superadmin/organizations/${row.organizationId}`"
+                  class="font-medium text-text-primary hover:text-primary transition-colors"
+                >
+                  {{ row.organizationName }}
+                </NuxtLink>
+                <span v-else class="font-medium text-text-primary">{{ row.organizationName }}</span>
+                <span
+                  v-if="orgOwnerMap.get(row.organizationId)?.plan === 'personal' || orgOwnerMap.get(row.organizationId)?.slug?.startsWith('personal-') || row.organizationName === 'Personal'"
+                  class="inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium bg-primary/10 text-primary leading-none"
+                >Personal</span>
               </div>
               <div class="text-xs font-mono text-text-tertiary mt-0.5">
                 {{ value }}
+              </div>
+              <div v-if="orgOwnerMap.get(row.organizationId)" class="text-xs text-text-muted mt-0.5 flex items-center gap-1">
+                <span class="text-text-tertiary">Owner:</span>
+                <NuxtLink
+                  :to="`/superadmin/users/${orgOwnerMap.get(row.organizationId)?.ownerId}`"
+                  class="text-primary hover:underline truncate max-w-[160px]"
+                >{{ orgOwnerMap.get(row.organizationId)?.ownerName }}</NuxtLink>
+              </div>
+              <div v-else-if="row.customerEmail" class="text-xs text-text-muted mt-0.5">
+                {{ row.customerEmail }}
               </div>
             </div>
           </template>
@@ -196,6 +217,18 @@ definePageMeta({
 });
 
 const client = useConnectClient(SuperadminService);
+
+// Build org → owner map from the cached superadmin overview
+const superAdmin = useSuperAdmin();
+const orgOwnerMap = computed(() => {
+  const map = new Map<string, { ownerName: string; ownerId: string; plan?: string; slug?: string }>();
+  for (const org of superAdmin.overview.value?.organizations ?? []) {
+    if (org.ownerId) {
+      map.set(org.id, { ownerName: org.ownerName || org.ownerId, ownerId: org.ownerId, plan: org.plan, slug: org.slug });
+    }
+  }
+  return map;
+});
 
 const sendingReminder = ref<string | null>(null);
 

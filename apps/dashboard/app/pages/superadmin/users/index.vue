@@ -57,15 +57,22 @@
             </template>
             <template #cell-organizations="{ row }">
               <OuiFlex gap="xs" wrap="wrap">
-                <OuiBadge
+                <NuxtLink
                   v-for="org in row.organizations"
                   :key="org.organizationId"
-                  variant="secondary"
-                  tone="soft"
-                  size="sm"
+                  :to="`/superadmin/organizations/${org.organizationId}`"
+                  class="inline-flex items-center gap-1"
+                  @click.stop
                 >
-                  {{ org.organizationName || org.organizationId }}
-                </OuiBadge>
+                  <OuiBadge
+                    :variant="org.organizationName === 'Personal' ? 'primary' : 'secondary'"
+                    tone="soft"
+                    size="sm"
+                    class="cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    {{ org.organizationName === 'Personal' ? `Personal (${row.name || row.email || ''})` : (org.organizationName || org.organizationId) }}
+                  </OuiBadge>
+                </NuxtLink>
                 <OuiText v-if="!row.organizations?.length" color="tertiary" size="sm">
                   —
                 </OuiText>

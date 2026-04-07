@@ -1,267 +1,210 @@
-# GitHub Integration Setup
+# GitHub Integration
 
-This guide explains how to set up GitHub OAuth integration to enable repository imports and deployments from GitHub.
+Use GitHub integrations to import repositories, deploy from branches, and enable automatic redeploys on push.
+
+## What This Enables
+
+- Connect a personal GitHub account
+- Connect a GitHub organization account from the dashboard
+- Browse repositories in deployment setup
+- Create repository webhooks for automatic deploys
 
 ## Prerequisites
 
-- A GitHub account
-- Access to your Obiente Cloud dashboard
-- Admin or organization owner permissions
+- A GitHub account with access to the repositories you want to deploy
+- Access to the Obiente dashboard
+- For organization connections: an Obiente organization you can manage
+- For self-hosted setups: a publicly reachable dashboard URL
 
-## Creating a GitHub OAuth App
+## GitHub OAuth App Setup
 
-1. **Navigate to GitHub Developer Settings**
+Create a GitHub OAuth app in GitHub Developer Settings:
 
-   - Go to [GitHub Settings > Developer settings](https://github.com/settings/developers)
-   - Click **OAuth Apps** in the left sidebar
-   - Click **New OAuth App**
+1. Go to `https://github.com/settings/developers`
+2. Open `OAuth Apps`
+3. Create a new app
 
-2. **Configure OAuth App Details**
+Use these values:
 
-   - **Application name**: `Obiente Cloud` (or your custom name)
-   - **Homepage URL**: Your Obiente Cloud dashboard URL
-     - Production: `https://your-domain.com`
-     - Development: `http://localhost:3000`
-   - **Authorization callback URL**: **IMPORTANT** - Use one of these:
+- `Application name`: your Obiente deployment name
+- `Homepage URL`: your public dashboard URL
+- `Authorization callback URL`: `https://YOUR-DASHBOARD/api/github/callback`
 
-     **For Production:**
+Examples:
 
-     ```
-     https://your-domain.com/api/github/callback
-     ```
+```text
+Production: https://obiente.example.com/api/github/callback
+Development: http://localhost:3000/api/github/callback
+```
 
-     **For Development:**
+The callback URL must match exactly, including protocol, host, port, and path.
 
-     ```
-     http://localhost:3000/api/github/callback
-     ```
+## Required Environment Variables
 
-     > **Note**: The callback URL must match exactly what you configure in your `.env` file. This is where GitHub will redirect users after they authorize your application.
+The dashboard reads the GitHub OAuth credentials from runtime config or environment variables.
 
-3. **Register the Application**
-
-   - Click **Register application**
-   - GitHub will generate a **Client ID** and **Client Secret**
-
-4. **Save Your Credentials**
-   - **Client ID**: Copy this immediately (you can always see it later)
-   - **Client Secret**: Click **Generate a new client secret** and copy it immediately
-     - ⚠️ **Warning**: You can only see the client secret once. Save it securely!
-
-## Required OAuth Scopes
-
-Your GitHub OAuth App will request the following scopes:
-
-- **`repo`** - Full control of private repositories
-  - Required for accessing private repositories
-  - Allows reading and writing repository contents, branches, and files
-  - Required for fetching `docker-compose.yml` files from private repos
-  - Includes read access to repository webhooks
-
-- **`read:user`** - Read user profile data
-  - Required to identify which GitHub user is connecting
-  - Allows reading basic user information (username, email, etc.)
-
-- **`admin:repo_hook`** - Full control of repository hooks
-  - Required for creating and managing repository webhooks
-  - Enables automatic deployments on push events
-  - Allows configuring webhook URLs, events, and secrets
-
-### Scope Breakdown
-
-| Scope            | Purpose                                    | Required                                     |
-| ---------------- | ------------------------------------------ | -------------------------------------------- |
-| `repo`            | Access to private repositories             | ✅ Yes (for full functionality)              |
-| `read:user`       | Read GitHub user profile                   | ✅ Yes (to identify connected account)       |
-| `admin:repo_hook` | Full control of repository hooks/webhooks | ✅ Yes (for autodeploy on push functionality) |
-
-**Why these scopes?**
-
-- **`repo` scope** provides:
-  - List all repositories (public and private)
-  - Read repository contents and branches
-  - Access `docker-compose.yml` files from private repositories
-  - Read repository webhooks
-
-- **`admin:repo_hook` scope** is required for:
-  - Creating repository webhooks automatically
-  - Configuring webhook endpoints for push events
-  - Managing webhook secrets for secure delivery
-  - Enabling automatic deployments when code is pushed
-
-**Without `admin:repo_hook`:**
-- You won't be able to set up automatic deployments on push
-- Manual deployment triggering will still work
-- Repository browsing and manual deployments will function normally
-
-**Alternative (Limited Functionality):**
-If you only want to support public repositories and don't need autodeploy, you can use `public_repo` scope instead of `repo`, but this will limit functionality to public repositories only and autodeploy will not be available.
-
-## Configuration
-
-### 1. Update Environment Variables
-
-Add the following to your `.env` file (see `.env.example`):
+Set at least:
 
 ```bash
-# GitHub OAuth Client ID (public - exposed to client-side)
-NUXT_PUBLIC_GITHUB_CLIENT_ID=your_client_id_here
-
-# GitHub OAuth Client Secret (server-side only - NEVER expose in client code)
-GITHUB_CLIENT_SECRET=your_client_secret_here
+NUXT_PUBLIC_GITHUB_CLIENT_ID=your_github_oauth_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 ```
 
-### 2. Update Dashboard Configuration
+Also supported:
 
-The dashboard will automatically pick up these environment variables. No additional configuration needed.
-
-### 3. Verify Callback URL
-
-Ensure your GitHub OAuth App's **Authorization callback URL** matches:
-
-**Production:**
-
-```
-https://your-domain.com/api/github/callback
+```bash
+GITHUB_CLIENT_ID=your_github_oauth_client_id
+NUXT_GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 ```
 
-**Development:**
+Recommended for self-hosted deployments:
 
+```bash
+GITHUB_TOKEN_ENCRYPTION_KEY=base64_or_high_entropy_secret
 ```
-http://localhost:3000/api/github/callback
+
+Notes:
+
+- `NUXT_PUBLIC_GITHUB_CLIENT_ID` is safe to expose to the browser
+- `GITHUB_CLIENT_SECRET` and `NUXT_GITHUB_CLIENT_SECRET` must stay server-side only
+- If you do not provide `GITHUB_TOKEN_ENCRYPTION_KEY`, Obiente falls back to other service secrets, but a dedicated key is the safest setup
+
+## OAuth Scopes
+
+Obiente requests:
+
+- `repo`
+- `read:user`
+- `admin:repo_hook`
+
+Why:
+
+- `repo`: access public and private repositories
+- `read:user`: identify the connected GitHub identity
+- `admin:repo_hook`: create and manage webhooks for auto-deploy
+
+## How The Connection Flow Works
+
+The dashboard starts OAuth from the server, not directly from the browser.
+
+- User account connection: `/api/github/connect?type=user`
+- Organization account connection: `/api/github/connect?type=organization&orgId=ORG_ID`
+
+The server:
+
+1. Builds the callback URL from the incoming request, including forwarded proxy headers
+2. Stores a short-lived OAuth state cookie
+3. Redirects to GitHub
+4. Exchanges the code on the callback
+5. Persists the integration through `auth-service`
+
+This is important for load-balanced and reverse-proxied deployments because the callback URL must reflect the public origin GitHub sees.
+
+## Connecting A Personal Account
+
+1. Open `Settings -> Integrations`
+2. Start `Connect GitHub`
+3. Approve the OAuth app in GitHub
+4. Return to the settings page
+
+After success, the account should appear under connected accounts and be available in deployment repository pickers.
+
+## Connecting An Organization Account
+
+1. Open `Settings -> Integrations`
+2. Choose the Obiente organization you want to connect for
+3. Start the GitHub organization connection flow
+4. Complete OAuth in GitHub
+
+Use organization connections when repository access should belong to the organization rather than a single user.
+
+## Auto-Deploy Webhooks
+
+Once a repository is connected:
+
+1. Configure the repository and branch on a deployment
+2. Enable automatic deploys
+3. Obiente creates or updates the GitHub webhook
+
+Webhook endpoint:
+
+```text
+https://YOUR-DOMAIN/api/webhooks/github
 ```
-
-> **Important**: The callback URL must:
->
-> - Be an absolute URL (include `http://` or `https://`)
-> - Match exactly (including protocol, domain, port, and path)
-> - Be accessible from the internet (for production)
-
-## Connecting Your GitHub Account
-
-1. Navigate to **Settings** > **Integrations** in your dashboard
-2. Click **Connect GitHub**
-3. You'll be redirected to GitHub to authorize the application
-4. Review the requested permissions and click **Authorize**
-5. You'll be redirected back to your dashboard with GitHub connected
 
 ## Troubleshooting
 
-### "Redirect URI mismatch" Error
+### `GitHub integration is not properly configured`
 
-This error means the callback URL in your GitHub OAuth App doesn't match what's configured in your code.
+Usually means the dashboard cannot read the GitHub client ID or secret at runtime.
 
-**Solution:**
+Check:
 
-1. Check your GitHub OAuth App settings
-2. Ensure the **Authorization callback URL** matches exactly:
-   - `http://localhost:3000/api/github/callback` (development)
-   - `https://your-domain.com/api/github/callback` (production)
-3. The URL is case-sensitive and must match exactly
+- `NUXT_PUBLIC_GITHUB_CLIENT_ID` or `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET` or `NUXT_GITHUB_CLIENT_SECRET`
+- the dashboard was restarted or redeployed after changing env vars
 
-### "Bad credentials" Error
+### `Redirect URI mismatch`
 
-This usually means the Client ID or Client Secret is incorrect.
+The callback URL registered in GitHub does not exactly match the URL Obiente generated.
 
-**Solution:**
+Check:
 
-1. Verify `NUXT_PUBLIC_GITHUB_CLIENT_ID` in your `.env` matches your GitHub OAuth App's Client ID
-2. Verify `GITHUB_CLIENT_SECRET` in your `.env` matches your GitHub OAuth App's Client Secret
-3. If you regenerated the client secret, make sure you're using the new one (old secrets are invalidated)
+- the GitHub OAuth app callback URL
+- reverse proxy headers such as `x-forwarded-host` and `x-forwarded-proto`
+- that the dashboard public URL is the same URL users actually visit
 
-### Cannot See Private Repositories
+### OAuth succeeds, but no connected account appears
 
-If you can only see public repositories:
+Check the backend path, not just the browser:
 
-**Solution:**
+- confirm the callback redirects back with `provider=github`
+- inspect `auth-service` logs for failed integration saves
+- make sure `auth-service` has a stable token encryption secret available
+- make sure both `dashboard` and `auth-service` were redeployed after changing GitHub or encryption env vars
 
-1. Verify your OAuth App requests the `repo` scope (not just `public_repo`)
-2. Re-authorize the connection if you initially authorized with limited scopes
-3. Check that your GitHub account has access to the private repositories
+### `failed to encrypt GitHub token`
 
-### Autodeploy Not Working / Webhook Creation Failed
+`auth-service` could not initialize the token cipher.
 
-If automatic deployments on push are not working:
+Best fix:
 
-**Solution:**
+```bash
+GITHUB_TOKEN_ENCRYPTION_KEY=your_dedicated_secret
+```
 
-1. Verify your OAuth App has the `admin:repo_hook` scope
-2. Re-authorize your GitHub connection to grant webhook permissions
-3. Check your repository's webhook settings in GitHub (`Settings > Webhooks`)
-4. Verify the webhook URL is correct: `https://your-domain.com/api/webhooks/github`
-5. Check webhook delivery logs in GitHub for any errors
-6. Ensure the deployment has autodeploy enabled in its settings
+Then redeploy `auth-service` and any service that reads GitHub tokens, especially `deployments-service`.
 
-### Callback Endpoint Not Found
+### Private repositories are missing
 
-If you get a 404 when GitHub tries to redirect back:
+Check:
 
-**Solution:**
+- the connected GitHub account actually has access
+- the app was authorized with `repo`
+- the connection was recreated after changing scopes
 
-1. Ensure the callback endpoint is implemented: `/api/github/callback`
-2. Check that your server is running and accessible
-3. Verify the callback URL in your GitHub OAuth App matches your server URL
+### Auto-deploy webhook creation fails
 
-## Security Considerations
+Check:
 
-1. **Client Secret**: Never expose `GITHUB_CLIENT_SECRET` in client-side code. It should only be used server-side.
+- the connection includes `admin:repo_hook`
+- the repository allows webhook management
+- GitHub can reach `https://YOUR-DOMAIN/api/webhooks/github`
 
-2. **HTTPS in Production**: Always use HTTPS in production for OAuth callbacks to protect user credentials.
+## Security Notes
 
-3. **State Parameter**: The OAuth flow uses a state parameter to prevent CSRF attacks. This is handled automatically.
+- OAuth state is validated server-side
+- Tokens are stored server-side only
+- Stored GitHub tokens are encrypted before persistence when service secrets are configured correctly
+- Production should always use HTTPS for dashboard and webhook endpoints
 
-4. **Token Storage**: GitHub access tokens are stored securely on the server and never exposed to the client.
+## Recommended Self-Hosted Checklist
 
-## Automatic Deployments on Push
+Before enabling GitHub deploys in production, verify:
 
-Once your GitHub account is connected, you can enable automatic deployments that trigger whenever code is pushed to your repository.
-
-### How It Works
-
-1. **Webhook Creation**: When you configure a deployment to use a GitHub repository with autodeploy enabled, Obiente Cloud automatically creates a webhook in your GitHub repository
-2. **Event Monitoring**: The webhook listens for `push` events on the configured branch (e.g., `main`, `master`)
-3. **Automatic Trigger**: When a push occurs, GitHub sends a webhook event to Obiente Cloud
-4. **Deployment**: Obiente Cloud automatically triggers a deployment build and deploys the latest code
-
-### Enabling Autodeploy
-
-1. **Create or Edit a Deployment**
-   - Navigate to your deployment settings
-   - Select a GitHub repository and branch
-   - Enable "Auto-deploy on push" option (coming in UI)
-
-2. **Webhook Setup** (Automatic)
-   - The system automatically creates a webhook in your GitHub repository
-   - Webhook URL: `https://your-domain.com/api/webhooks/github`
-   - Events: `push` events for the configured branch
-
-3. **Verification**
-   - Check your repository's webhook settings: `Settings > Webhooks`
-   - You should see a webhook configured for Obiente Cloud
-   - Test by pushing a commit to your repository
-
-### Webhook Security
-
-- Webhooks are secured with a secret that's automatically generated and stored
-- GitHub signs webhook payloads using HMAC-SHA256
-- Obiente Cloud validates webhook signatures before processing deployments
-
-### Manual Deployment
-
-Even with autodeploy enabled, you can still trigger deployments manually:
-- Use the "Deploy" button in the deployment overview
-- Manual deployments allow you to deploy specific commits or branches
-
-## Next Steps
-
-After connecting your GitHub account:
-
-- ✅ Browse and select repositories directly in the deployment overview
-- ✅ Auto-detect branches from connected repositories  
-- ✅ Load `docker-compose.yml` files from GitHub repositories
-- ✅ **Automatic deployments on push** - Enabled with `admin:repo_hook` scope
-
-## Related Documentation
-
-- [Environment Variables Reference](../reference/environment-variables.md)
-- [Deployment Guide](./deployment.md)
+- dashboard public URL is correct
+- GitHub callback URL matches exactly
+- `NUXT_PUBLIC_GITHUB_CLIENT_ID` is set
+- `GITHUB_CLIENT_SECRET` is set
+- `GITHUB_TOKEN_ENCRYPTION_KEY` is set
+- `auth-service` and `deployments-service` were redeployed after secret changes
