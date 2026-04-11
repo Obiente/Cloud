@@ -2,8 +2,10 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -127,6 +129,16 @@ func (s *Service) captureDeploymentFailureDiagnostics(ctx context.Context, deplo
 		}
 	}
 
+	if taskLines, taskErr := captureSwarmTaskDiagnostics(diagnosticsCtx, deploymentID); taskErr == nil && len(taskLines) > 0 {
+		appendEntry("", "", "[runtime] Swarm task status snapshot:", false, commonv1.LogLevel_LOG_LEVEL_INFO, time.Now())
+		for _, taskLine := range taskLines {
+			appendEntry(taskLine.ServiceName, "", taskLine.Line, taskLine.Stderr, taskLine.LogLevel, taskLine.Timestamp)
+			capturedLogLines++
+		}
+	} else if taskErr != nil {
+		appendEntry("", "", fmt.Sprintf("[runtime] Failed to capture Swarm task diagnostics: %v", taskErr), true, commonv1.LogLevel_LOG_LEVEL_WARN, time.Now())
+	}
+
 	if capturedLogLines == 0 {
 		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(diagnosticsCtx, deploymentID, "", deploymentDiagnosticsTailLines)
 		if snapshotErr == nil && len(snapshotLogs) > 0 {
@@ -233,6 +245,106 @@ func inferDeploymentServiceName(containerID string, labels map[string]string) st
 		return "unknown"
 	}
 	return shortenContainerID(containerID)
+}
+
+type swarmTaskDiagnosticLine struct {
+	ServiceName string
+	Line        string
+	Timestamp   time.Time
+	Stderr      bool
+	LogLevel    commonv1.LogLevel
+}
+
+type dockerServicePSRow struct {
+	ID           string `json:"ID"`
+	Name         string `json:"Name"`
+	Image        string `json:"Image"`
+	Node         string `json:"Node"`
+	DesiredState string `json:"DesiredState"`
+	CurrentState string `json:"CurrentState"`
+	Error        string `json:"Error"`
+	Ports        string `json:"Ports"`
+}
+
+func captureSwarmTaskDiagnostics(ctx context.Context, deploymentID string) ([]swarmTaskDiagnosticLine, error) {
+	stackName := fmt.Sprintf("deploy-%s", deploymentID)
+	listCmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=com.docker.stack.namespace=%s", stackName), "--format", "{{.Name}}")
+	listOutput, err := listCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("list services for stack %s: %w", stackName, err)
+	}
+
+	serviceNames := make([]string, 0)
+	for _, rawLine := range strings.Split(string(listOutput), "\n") {
+		serviceName := strings.TrimSpace(rawLine)
+		if serviceName == "" {
+			continue
+		}
+		serviceNames = append(serviceNames, serviceName)
+	}
+
+	lines := make([]swarmTaskDiagnosticLine, 0)
+	for _, serviceName := range serviceNames {
+		psCmd := exec.CommandContext(ctx, "docker", "service", "ps", "--no-trunc", "--format", "{{json .}}", serviceName)
+		psOutput, psErr := psCmd.Output()
+		if psErr != nil {
+			lines = append(lines, swarmTaskDiagnosticLine{
+				ServiceName: serviceName,
+				Line:        fmt.Sprintf("[runtime][%s] Failed to inspect service tasks: %v", serviceName, psErr),
+				Timestamp:   time.Now(),
+				Stderr:      true,
+				LogLevel:    commonv1.LogLevel_LOG_LEVEL_WARN,
+			})
+			continue
+		}
+
+		for _, rawLine := range strings.Split(strings.TrimSpace(string(psOutput)), "\n") {
+			if strings.TrimSpace(rawLine) == "" {
+				continue
+			}
+
+			var row dockerServicePSRow
+			if err := json.Unmarshal([]byte(rawLine), &row); err != nil {
+				lines = append(lines, swarmTaskDiagnosticLine{
+					ServiceName: serviceName,
+					Line:        fmt.Sprintf("[runtime][%s] Failed to parse task status row: %s", serviceName, strings.TrimSpace(rawLine)),
+					Timestamp:   time.Now(),
+					Stderr:      true,
+					LogLevel:    commonv1.LogLevel_LOG_LEVEL_WARN,
+				})
+				continue
+			}
+
+			message := fmt.Sprintf("[runtime][%s] task %s on %s: desired=%s current=%s", serviceName, row.ID, coalesce(row.Node, "unknown-node"), row.DesiredState, row.CurrentState)
+			stderr := false
+			level := commonv1.LogLevel_LOG_LEVEL_INFO
+
+			if strings.TrimSpace(row.Error) != "" {
+				message = fmt.Sprintf("%s error=%s", message, strings.TrimSpace(row.Error))
+				stderr = true
+				level = commonv1.LogLevel_LOG_LEVEL_ERROR
+			} else if current := strings.ToLower(row.CurrentState); strings.Contains(current, "failed") || strings.Contains(current, "rejected") || strings.Contains(current, "shutdown") || strings.Contains(current, "complete") || strings.Contains(current, "pending") {
+				level = commonv1.LogLevel_LOG_LEVEL_WARN
+			}
+
+			lines = append(lines, swarmTaskDiagnosticLine{
+				ServiceName: serviceName,
+				Line:        message,
+				Timestamp:   time.Now(),
+				Stderr:      stderr,
+				LogLevel:    level,
+			})
+		}
+	}
+
+	return lines, nil
+}
+
+func coalesce(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 func shortenContainerID(containerID string) string {
