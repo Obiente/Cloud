@@ -62,6 +62,12 @@ func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[de
 		}
 	}
 	if len(persistedLogs) == 0 {
+		persistedLogs, err = s.loadPersistedDiagnosticDeploymentLogLines(ctx, deploymentID, int(lines))
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load deployment diagnostic logs: %w", err))
+		}
+	}
+	if len(persistedLogs) == 0 {
 		return connect.NewResponse(&deploymentsv1.GetDeploymentLogsResponse{Logs: []string{}}), nil
 	}
 
@@ -114,20 +120,31 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	// Find container by container_id or service_name, or use first if neither specified
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
-		if len(persistedLogs) > 0 {
-			return nil
-		}
 		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
 		if snapshotErr == nil && len(snapshotLogs) > 0 {
 			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, "", "swarm_service_snapshot", snapshotLogs)
-			for _, line := range snapshotLogs {
-				if sendErr := stream.Send(line); sendErr != nil {
-					return sendErr
+			if len(persistedLogs) == 0 {
+				for _, line := range snapshotLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
 				}
 			}
 			return nil
 		}
-		return connect.NewError(connect.CodeNotFound, err)
+		if len(persistedLogs) == 0 {
+			diagnosticLogs, diagErr := s.loadPersistedDiagnosticDeploymentLogLines(ctx, deploymentID, int(tail))
+			if diagErr == nil && len(diagnosticLogs) > 0 {
+				for _, line := range diagnosticLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
+				}
+				return nil
+			}
+			return connect.NewError(connect.CodeNotFound, err)
+		}
+		return nil
 	}
 
 	// Check if we need to forward to another node
@@ -178,6 +195,17 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			}
 			return nil
 		}
+		if len(persistedLogs) == 0 {
+			diagnosticLogs, diagErr := s.loadPersistedDiagnosticDeploymentLogLines(ctx, deploymentID, int(tail))
+			if diagErr == nil && len(diagnosticLogs) > 0 {
+				for _, line := range diagnosticLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
+				}
+				return nil
+			}
+		}
 	}
 
 	// For stopped containers, use follow=false to get historical logs
@@ -191,17 +219,30 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	// Start container logs stream
 	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", liveTail), follow, nil, nil)
 	if err != nil {
-		if len(persistedLogs) > 0 {
-			return nil
-		}
 		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
 		if snapshotErr == nil && len(snapshotLogs) > 0 {
 			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, loc.ContainerID, "swarm_service_snapshot", snapshotLogs)
-			for _, line := range snapshotLogs {
-				if sendErr := stream.Send(line); sendErr != nil {
-					return sendErr
+			if len(persistedLogs) == 0 {
+				for _, line := range snapshotLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
 				}
 			}
+			return nil
+		}
+		if len(persistedLogs) == 0 {
+			diagnosticLogs, diagErr := s.loadPersistedDiagnosticDeploymentLogLines(ctx, deploymentID, int(tail))
+			if diagErr == nil && len(diagnosticLogs) > 0 {
+				for _, line := range diagnosticLogs {
+					if sendErr := stream.Send(line); sendErr != nil {
+						return sendErr
+					}
+				}
+				return nil
+			}
+		}
+		if len(persistedLogs) > 0 {
 			return nil
 		}
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
@@ -395,13 +436,28 @@ func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymen
 	if err != nil {
 		return nil, err
 	}
-	if len(logs) == 0 {
-		logs, err = s.runtimeLogsRepo.GetRecentLogs(ctx, deploymentID, limit)
-		if err != nil {
-			return nil, err
-		}
-	}
 
+	protoLogs := make([]*deploymentsv1.DeploymentLogLine, 0, len(logs))
+	for _, entry := range logs {
+		protoLogs = append(protoLogs, &deploymentsv1.DeploymentLogLine{
+			DeploymentId: deploymentID,
+			Line:         entry.Line,
+			Timestamp:    timestamppb.New(entry.Timestamp),
+			Stderr:       entry.Stderr,
+			LogLevel:     commonv1.LogLevel(entry.LogLevel),
+		})
+	}
+	return protoLogs, nil
+}
+
+func (s *Service) loadPersistedDiagnosticDeploymentLogLines(ctx context.Context, deploymentID string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
+	if s.runtimeLogsRepo == nil {
+		return nil, nil
+	}
+	logs, err := s.runtimeLogsRepo.GetRecentLogsForSources(ctx, deploymentID, limit, diagnosticRuntimeLogSources)
+	if err != nil {
+		return nil, err
+	}
 	protoLogs := make([]*deploymentsv1.DeploymentLogLine, 0, len(logs))
 	for _, entry := range logs {
 		protoLogs = append(protoLogs, &deploymentsv1.DeploymentLogLine{

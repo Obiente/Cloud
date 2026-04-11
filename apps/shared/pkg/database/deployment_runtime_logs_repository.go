@@ -76,6 +76,30 @@ func (r *DeploymentRuntimeLogsRepository) GetRecentLogsExcludingSources(ctx cont
 	return logs, nil
 }
 
+func (r *DeploymentRuntimeLogsRepository) GetRecentLogsForSources(ctx context.Context, deploymentID string, limit int, includedSources []string) ([]*DeploymentRuntimeLog, error) {
+	if r == nil || r.db == nil || len(includedSources) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+
+	var logs []*DeploymentRuntimeLog
+	if err := r.db.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Where("source IN ?", includedSources).
+		Order("timestamp DESC, id DESC").
+		Limit(limit).
+		Find(&logs).Error; err != nil {
+		return nil, err
+	}
+
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
+	}
+	return logs, nil
+}
+
 func (r *DeploymentRuntimeLogsRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) error {
 	if r == nil || r.db == nil {
 		return nil

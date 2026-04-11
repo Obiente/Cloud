@@ -331,7 +331,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			} else {
 				// Named volume - convert to bind mount in /var/lib/obiente
 				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
-				os.MkdirAll(obienteVolumePath, 0755)
+				_ = ensureWritableBindDir(obienteVolumePath)
 				return map[string]interface{}{
 					"type":   "bind",
 					"source": obienteVolumePath,
@@ -373,7 +373,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			volumeName := hostPath
 			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volumeName)
 			// Ensure directory exists
-			os.MkdirAll(obienteVolumePath, 0755)
+			_ = ensureWritableBindDir(obienteVolumePath)
 			// Return as bind mount
 			return fmt.Sprintf("%s:%s", obienteVolumePath, containerPath)
 		}
@@ -390,7 +390,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 	if volStr != "" && !strings.Contains(volStr, "/") && !strings.Contains(volStr, ":") {
 		// This is a named volume - convert to bind mount
 		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
-		os.MkdirAll(obienteVolumePath, 0755)
+		_ = ensureWritableBindDir(obienteVolumePath)
 		// Return as bind mount with default container path
 		return fmt.Sprintf("%s:/data", obienteVolumePath)
 	}
@@ -431,7 +431,7 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	safePath := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
 
 	// Ensure directory exists
-	os.MkdirAll(safePath, 0755)
+	_ = ensureWritableBindDir(safePath)
 
 	return safePath
 }
@@ -445,7 +445,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
 			// This is a named volume - convert to bind mount specification
 			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
-			os.MkdirAll(obienteVolumePath, 0755)
+			_ = ensureWritableBindDir(obienteVolumePath)
 
 			// Replace with bind mount configuration
 			// Note: We can't fully represent bind mounts in top-level volumes,
@@ -472,6 +472,13 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 			}
 		}
 	}
+}
+
+func ensureWritableBindDir(path string) error {
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o777)
 }
 
 // sanitizeBindOptions sanitizes bind mount options

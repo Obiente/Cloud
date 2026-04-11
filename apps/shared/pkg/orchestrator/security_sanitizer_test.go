@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -247,5 +249,25 @@ services:
 	dnsServers := app["dns"].([]interface{})
 	if len(dnsServers) != 1 || dnsServers[0] != "1.1.1.1" {
 		t.Fatalf("dns should preserve user value, got %#v", dnsServers)
+	}
+}
+
+func TestEnsureWritableBindDir_MakesDirectoryWritable(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "uploads")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to create test dir: %v", err)
+	}
+
+	if err := ensureWritableBindDir(dir); err != nil {
+		t.Fatalf("ensureWritableBindDir failed: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("failed to stat dir: %v", err)
+	}
+
+	if got := info.Mode().Perm(); got != 0o777 {
+		t.Fatalf("expected directory mode 0777, got %#o", got)
 	}
 }
