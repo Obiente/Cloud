@@ -377,13 +377,29 @@ func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 	return commonv1.LogLevel_LOG_LEVEL_INFO
 }
 
+var diagnosticRuntimeLogSources = []string{
+	"compose_deploy_failed",
+	"orchestrator_deploy_failed",
+	"startup_verification_failed",
+	"manual_start_failed",
+	"manual_start_verification_failed",
+	"manual_restart_failed",
+	"manual_restart_verification_failed",
+}
+
 func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymentID string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
 	if s.runtimeLogsRepo == nil {
 		return nil, nil
 	}
-	logs, err := s.runtimeLogsRepo.GetRecentLogs(ctx, deploymentID, limit)
+	logs, err := s.runtimeLogsRepo.GetRecentLogsExcludingSources(ctx, deploymentID, limit, diagnosticRuntimeLogSources)
 	if err != nil {
 		return nil, err
+	}
+	if len(logs) == 0 {
+		logs, err = s.runtimeLogsRepo.GetRecentLogs(ctx, deploymentID, limit)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	protoLogs := make([]*deploymentsv1.DeploymentLogLine, 0, len(logs))
