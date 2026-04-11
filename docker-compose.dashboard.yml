@@ -47,9 +47,9 @@ services:
     deploy:
       # Configure replicas based on cluster size
       # Formula: replicas = ceil(cluster_size * DASHBOARD_REPLICAS_PERCENT / 100)
-      # Example: 3 nodes * 50% = 1.5 → 2 replicas (minimum 2 for HA)
-      # Set DASHBOARD_REPLICAS to override (e.g., DASHBOARD_REPLICAS=3)
-      replicas: ${DASHBOARD_REPLICAS:-3}
+      # Keep the default at 1 so small clusters do not leave replicas pending.
+      # Set DASHBOARD_REPLICAS to override when the cluster has spare capacity.
+      replicas: ${DASHBOARD_REPLICAS:-1}
       update_config:
         parallelism: 1 # Update one replica at a time to prevent mixed versions
         delay: 30s # Wait between updates to ensure complete transition
@@ -74,8 +74,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.25"
+          memory: 128M
       placement:
         # Spread across nodes - prefer manager nodes but allow workers if needed
         # Remove 'node.role == manager' constraint to allow deployment on worker nodes
@@ -85,7 +85,7 @@ services:
         # Example: 5 replicas / 3 nodes = 1.67 → 2 per node
         # Set DASHBOARD_MAX_REPLICAS_PER_NODE to override (e.g., DASHBOARD_MAX_REPLICAS_PER_NODE=2)
         # For percentage-based: ceil(replicas * DASHBOARD_MAX_REPLICAS_PERCENT / 100 / cluster_size)
-        max_replicas_per_node: ${DASHBOARD_MAX_REPLICAS_PER_NODE:-2}
+        max_replicas_per_node: ${DASHBOARD_MAX_REPLICAS_PER_NODE:-1}
         # Optional: Uncomment below to restrict to manager nodes only
         # constraints:
         #   - node.role == manager
