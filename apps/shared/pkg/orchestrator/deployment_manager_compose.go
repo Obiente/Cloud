@@ -22,6 +22,14 @@ import (
 
 // Compose operations for deployments
 
+func composeUpArgs(projectName, composeFile string) []string {
+	return []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--build", "--pull", "always", "--force-recreate", "--remove-orphans"}
+}
+
+func stackDeployArgs(projectName, composeFile string) []string {
+	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "always", projectName}
+}
+
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 
@@ -256,7 +264,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 
 		// Deploy as a Swarm stack - this creates Swarm services that Traefik can discover
 		// Use --with-registry-auth=true to pass registry credentials to Swarm
-		args := []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", projectName}
+		args := stackDeployArgs(projectName, composeFile)
 		logger.Info("[DeploymentManager] Deploying stack %s with docker stack deploy (creates Swarm services)", projectName)
 
 		cmd := exec.CommandContext(ctx, "docker", args...)
@@ -272,8 +280,8 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		}
 	} else {
 		// In non-Swarm mode, use docker compose (creates containers)
-		args := []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--force-recreate", "--remove-orphans"}
-		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will force recreate containers with updated labels")
+		args := composeUpArgs(projectName, composeFile)
+		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will rebuild buildable services, pull tagged images, and force recreate containers with updated labels")
 
 		cmd := exec.CommandContext(ctx, "docker", args...)
 		cmd.Dir = deployDir

@@ -1,6 +1,9 @@
 package orchestrator
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestTraefikHostRule(t *testing.T) {
 	t.Parallel()
@@ -61,5 +64,47 @@ func TestTraefikRouterPriority(t *testing.T) {
 				t.Fatalf("traefikRouterPriority(%q) = %q, want %q", tc.domain, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeServiceNetworksFromList(t *testing.T) {
+	service := map[string]interface{}{
+		"networks": []interface{}{"deployment-123", "obiente-network"},
+	}
+
+	got := normalizeServiceNetworks(service)
+	want := map[string]interface{}{
+		"deployment-123": nil,
+		"obiente-network": nil,
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalizeServiceNetworks mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestMergeNetworkAliasesAddsAlias(t *testing.T) {
+	got := mergeNetworkAliases(nil, "cache")
+	want := map[string]interface{}{
+		"aliases": []interface{}{"cache"},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mergeNetworkAliases mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestMergeNetworkAliasesPreservesExistingAliases(t *testing.T) {
+	input := map[string]interface{}{
+		"aliases": []interface{}{"cache", "cache.internal"},
+	}
+
+	got := mergeNetworkAliases(input, "cache")
+	want := map[string]interface{}{
+		"aliases": []interface{}{"cache", "cache.internal"},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mergeNetworkAliases should preserve aliases\nwant: %#v\ngot:  %#v", want, got)
 	}
 }

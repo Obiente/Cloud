@@ -574,24 +574,14 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 		if services, ok := compose["services"].(map[string]interface{}); ok {
 			for serviceName, serviceData := range services {
 				if service, ok := serviceData.(map[string]interface{}); ok {
-					// Get or create networks section for this service
-					var serviceNetworks map[string]interface{}
-					if existingServiceNetworks, ok := service["networks"].(map[string]interface{}); ok {
-						serviceNetworks = existingServiceNetworks
-					} else if existingServiceNetworksList, ok := service["networks"].([]interface{}); ok {
-						// Convert list format to map format
-						serviceNetworks = make(map[string]interface{})
-						for _, netItem := range existingServiceNetworksList {
-							if netStr, ok := netItem.(string); ok {
-								serviceNetworks[netStr] = nil
-							}
-						}
-					} else {
-						serviceNetworks = make(map[string]interface{})
+					serviceNetworks := normalizeServiceNetworks(service)
+
+					// Ensure obiente-network is in the service's networks and every network has the bare service alias.
+					serviceNetworks["obiente-network"] = mergeNetworkAliases(serviceNetworks["obiente-network"], serviceName)
+					for networkName, networkConfig := range serviceNetworks {
+						serviceNetworks[networkName] = mergeNetworkAliases(networkConfig, serviceName)
 					}
 
-					// Ensure obiente-network is in the service's networks
-					serviceNetworks["obiente-network"] = nil
 					service["networks"] = serviceNetworks
 					logger.Debug("[DeploymentManager] Ensured service %s is connected to obiente-network (Swarm mode)", serviceName)
 				}
@@ -606,6 +596,55 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	}
 
 	return string(labeledYaml), nil
+}
+
+func normalizeServiceNetworks(service map[string]interface{}) map[string]interface{} {
+	if existingServiceNetworks, ok := service["networks"].(map[string]interface{}); ok {
+		return existingServiceNetworks
+	}
+
+	serviceNetworks := make(map[string]interface{})
+	if existingServiceNetworksList, ok := service["networks"].([]interface{}); ok {
+		for _, netItem := range existingServiceNetworksList {
+			if netStr, ok := netItem.(string); ok {
+				serviceNetworks[netStr] = nil
+			}
+		}
+	}
+
+	return serviceNetworks
+}
+
+func mergeNetworkAliases(networkConfig interface{}, alias string) interface{} {
+	if strings.TrimSpace(alias) == "" {
+		if networkConfig == nil {
+			return map[string]interface{}{}
+		}
+		return networkConfig
+	}
+
+	configMap, ok := networkConfig.(map[string]interface{})
+	if !ok || configMap == nil {
+		configMap = make(map[string]interface{})
+	}
+
+	aliases := make([]interface{}, 0)
+	aliasSeen := false
+	if existingAliases, ok := configMap["aliases"].([]interface{}); ok {
+		for _, existingAlias := range existingAliases {
+			aliases = append(aliases, existingAlias)
+			if aliasStr, ok := existingAlias.(string); ok && aliasStr == alias {
+				aliasSeen = true
+			}
+		}
+	}
+
+	if !aliasSeen {
+		aliases = append(aliases, alias)
+	}
+
+	configMap["aliases"] = aliases
+	return configMap
 }
 
 func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting, servicePort *int, networkName string) map[string]string {
