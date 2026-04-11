@@ -43,17 +43,17 @@ func ValidateCompose(ctx context.Context, composeYaml string) []ValidationError 
 	if err := yaml.Unmarshal([]byte(composeYaml), &rootNode); err != nil {
 		// Try to extract line number from YAML error
 		line, col := extractErrorLocation(err.Error(), composeYaml)
-		
+
 		// Get the actual line content for better error context
 		actualLine := ""
 		if line > 0 && int(line) <= len(lines) {
 			actualLine = lines[line-1]
 		}
-		
+
 		// Improve error message with context
 		errMsg := cleanYAMLError(err.Error())
 		enhancedMsg := enhanceYAMLSyntaxError(errMsg, line, actualLine)
-		
+
 		// Calculate proper end column
 		endCol := col + 10
 		if actualLine != "" && int(col) <= len(actualLine) {
@@ -65,7 +65,7 @@ func ValidateCompose(ctx context.Context, composeYaml string) []ValidationError 
 				endCol = int32(len(actualLine) + 1)
 			}
 		}
-		
+
 		errors = append(errors, ValidationError{
 			Line:        line,
 			Column:      col,
@@ -137,7 +137,7 @@ func validateWithDockerCompose(ctx context.Context, composeYaml string) []Valida
 		// Sometimes errors/warnings go to stdout instead
 		errorOutput = stdOutput
 	}
-	
+
 	// Always parse warnings (can appear even if validation passes)
 	warnings := parseDockerComposeWarnings(errorOutput, composeYaml)
 	// Deduplicate warnings by message to avoid showing the same warning multiple times
@@ -151,7 +151,7 @@ func validateWithDockerCompose(ctx context.Context, composeYaml string) []Valida
 	for _, w := range warningMap {
 		errors = append(errors, w)
 	}
-	
+
 	// Parse errors if Docker Compose returned an error exit code
 	if err != nil {
 		// Parse error output to extract line numbers and messages
@@ -192,14 +192,14 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 		if !strings.Contains(line, "level=warning") || !strings.Contains(line, "msg=") {
 			continue
 		}
-		
+
 		// Find the msg= field
 		msgStart := strings.Index(line, `msg="`)
 		if msgStart == -1 {
 			continue
 		}
 		msgStart += 5 // Skip `msg="`
-		
+
 		// Find the closing quote, handling escaped quotes
 		msg := ""
 		for i := msgStart; i < len(line); i++ {
@@ -209,20 +209,20 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 				break
 			}
 		}
-		
+
 		// If we didn't find a closing quote, use the rest of the line (shouldn't happen but be safe)
 		if msg == "" && msgStart < len(line) {
 			msg = line[msgStart:]
 		}
-		
+
 		// Handle escaped quotes and backslashes
 		msg = strings.ReplaceAll(msg, `\"`, `"`)
 		msg = strings.ReplaceAll(msg, `\\`, `\`)
-		
+
 		if msg == "" {
 			continue
 		}
-		
+
 		// Remove file path prefix if present (e.g., "/tmp/file.yml: message" -> "message")
 		// But be careful - if the message itself contains ": ", only remove if it looks like a file path
 		if idx := strings.LastIndex(msg, ": "); idx > 0 {
@@ -232,16 +232,16 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 				msg = msg[idx+2:]
 			}
 		}
-		
+
 		// Skip empty or very short messages (likely parsing errors)
 		if len(strings.TrimSpace(msg)) < 3 {
 			continue
 		}
-		
+
 		// Try to locate the warning in the compose file
 		lineNum := int32(1)
 		colNum := int32(1)
-		
+
 		// Check for common warnings that we can locate
 		if strings.Contains(msg, "version") && (strings.Contains(msg, "obsolete") || strings.Contains(msg, "deprecated")) {
 			// Version warning - typically on line 1 or 2
@@ -256,7 +256,7 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 				}
 			}
 		}
-		
+
 		// Calculate end column
 		endCol := colNum + 20
 		if lineNum <= int32(len(lines)) {
@@ -270,7 +270,7 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 				}
 			}
 		}
-		
+
 		warnings = append(warnings, ValidationError{
 			Line:        lineNum,
 			Column:      colNum,
@@ -303,11 +303,7 @@ func parseDockerComposeErrors(errorOutput string, composeYaml string) []Validati
 			continue
 		}
 
-		// Remove "validating <file>:" prefix if present
-		line = strings.TrimPrefix(line, "validating ")
-		if idx := strings.Index(line, ": "); idx > 0 {
-			line = line[idx+2:]
-		}
+		line = stripDockerComposeErrorPrefix(line)
 
 		// Try to extract line number from various formats
 		lineNum, colNum, message := extractDockerComposeError(line, lines)
@@ -330,7 +326,7 @@ func parseDockerComposeErrors(errorOutput string, composeYaml string) []Validati
 					}
 				}
 			}
-			
+
 			errors = append(errors, ValidationError{
 				Line:        int32(lineNum),
 				Column:      int32(colNum),
@@ -359,6 +355,22 @@ func parseDockerComposeErrors(errorOutput string, composeYaml string) []Validati
 	return errors
 }
 
+func stripDockerComposeErrorPrefix(line string) string {
+	if !strings.HasPrefix(line, "validating ") {
+		return line
+	}
+
+	trimmed := strings.TrimPrefix(line, "validating ")
+	if idx := strings.Index(trimmed, ": "); idx > 0 {
+		prefix := trimmed[:idx]
+		if strings.Contains(prefix, "/") || strings.HasSuffix(prefix, ".yml") || strings.HasSuffix(prefix, ".yaml") {
+			return trimmed[idx+2:]
+		}
+	}
+
+	return trimmed
+}
+
 // extractDockerComposeError extracts line number, column, and message from Docker Compose error
 func extractDockerComposeError(errorLine string, composeLines []string) (int, int, string) {
 	// Pattern 1: "yaml: line X: column Y: message" (most specific)
@@ -372,20 +384,20 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 				}
 			}
 			message := matches[3]
-			
+
 			// YAML parsers often report errors one line before the actual problem
 			// when they encounter issues like missing commas/brackets on the next line
 			// For "did not find expected" errors, check if the next line has the actual issue
 			if strings.Contains(message, "did not find expected") && line < len(composeLines) {
 				reportedLine := composeLines[line-1]
 				nextLine := composeLines[line]
-				
+
 				// Check if the next line has an unclosed bracket/parenthesis/brace
 				// If so, that's likely where the error actually is
 				nextOpenBrackets := strings.Count(nextLine, "[") - strings.Count(nextLine, "]")
 				nextOpenParens := strings.Count(nextLine, "(") - strings.Count(nextLine, ")")
 				nextOpenBraces := strings.Count(nextLine, "{") - strings.Count(nextLine, "}")
-				
+
 				// If next line has unclosed brackets/parens/braces, error is likely on that line
 				if nextOpenBrackets > 0 || nextOpenParens > 0 || nextOpenBraces > 0 {
 					// Error is on the next line
@@ -398,8 +410,8 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 						// If next line starts a new key (not a continuation), error is on reported line
 						// If next line looks like a continuation, check if it's the actual problem
 						if !strings.HasPrefix(strings.TrimSpace(nextLine), "-") &&
-						   !strings.HasPrefix(strings.TrimSpace(nextLine), "[") &&
-						   strings.Contains(strings.TrimSpace(nextLine), ":") {
+							!strings.HasPrefix(strings.TrimSpace(nextLine), "[") &&
+							strings.Contains(strings.TrimSpace(nextLine), ":") {
 							// Next line is a new key/value pair - error is on reported line (missing closing bracket)
 						} else {
 							// Next line might be continuation - error could be on either line
@@ -409,7 +421,7 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 					}
 				}
 			}
-			
+
 			// Make message more descriptive
 			message = improveErrorMessage(message, line, composeLines)
 			return line, col, message
@@ -427,7 +439,7 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 				}
 			}
 			message := matches[len(matches)-1]
-			
+
 			// If we have column info from the regex but didn't extract it, try again
 			// Pattern 2 sometimes has column in different format: "line 5, column 10:"
 			if col == 1 && len(matches) >= 4 {
@@ -440,19 +452,19 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 					}
 				}
 			}
-			
+
 			// Apply same line offset logic as Pattern 1
 			if strings.Contains(message, "did not find expected") && line < len(composeLines) {
 				nextLine := composeLines[line]
 				nextOpenBrackets := strings.Count(nextLine, "[") - strings.Count(nextLine, "]")
 				nextOpenParens := strings.Count(nextLine, "(") - strings.Count(nextLine, ")")
 				nextOpenBraces := strings.Count(nextLine, "{") - strings.Count(nextLine, "}")
-				
+
 				if nextOpenBrackets > 0 || nextOpenParens > 0 || nextOpenBraces > 0 {
 					line = line + 1
 				}
 			}
-			
+
 			message = improveErrorMessage(message, line, composeLines)
 			return line, col, message
 		}
@@ -466,11 +478,11 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 		// 2. Nested: "section.name additional properties 'field' not allowed"
 		reNested := regexp.MustCompile(`^([^.\s]+)\.([^.\s]+)\s+additional\s+properties\s+['"]([^'"]+)['"]`)
 		if matches := reNested.FindStringSubmatch(errorLine); len(matches) >= 4 {
-			section := matches[1]    // "services", "networks", "volumes"
-			name := matches[2]        // service/network/volume name
-			fieldName := matches[3]   // invalid field name
+			section := matches[1]   // "services", "networks", "volumes"
+			name := matches[2]      // service/network/volume name
+			fieldName := matches[3] // invalid field name
 			message := fmt.Sprintf("Invalid field '%s' in %s '%s'", fieldName, section, name)
-			
+
 			// Find the field line in the compose file
 			lineNum := findServiceFieldLine(fmt.Sprintf("%s.%s.%s", section, name, fieldName), composeLines)
 			if lineNum > 0 {
@@ -486,7 +498,7 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 				}
 			}
 		}
-		
+
 		// Root level pattern: "additional properties 'field' not allowed"
 		reRoot := regexp.MustCompile(`^additional\s+properties\s+['"]([^'"]+)['"]`)
 		if matches := reRoot.FindStringSubmatch(errorLine); len(matches) >= 2 {
@@ -506,7 +518,7 @@ func extractDockerComposeError(errorLine string, composeLines []string) (int, in
 		if len(parts) == 2 {
 			servicePath := strings.TrimSpace(parts[0])
 			message := strings.TrimSpace(parts[1])
-			
+
 			// Try to find the service and field in the compose file
 			lineNum := findServiceFieldLine(servicePath, composeLines)
 			if lineNum > 0 {
@@ -537,10 +549,10 @@ func improveErrorMessage(message string, lineNum int, composeLines []string) str
 	if lineNum <= 0 || lineNum > len(composeLines) {
 		return message
 	}
-	
+
 	line := composeLines[lineNum-1]
 	trimmed := strings.TrimSpace(line)
-	
+
 	// Check for "additional properties" errors and make them clearer
 	if strings.Contains(message, "additional properties") {
 		// Extract the field name from the error
@@ -550,23 +562,23 @@ func improveErrorMessage(message string, lineNum int, composeLines []string) str
 			//TODO: what the helly
 			// Suggest common corrections for typos
 			suggestions := map[string]string{
-				"sevices":  "Did you mean 'services'?",
-				"bild":     "Did you mean 'build'?",
+				"sevices":       "Did you mean 'services'?",
+				"bild":          "Did you mean 'build'?",
 				"conainer_name": "Did you mean 'container_name'?",
-				"vlumes":   "Did you mean 'volumes'?",
-				"network":  "Did you mean 'networks' (plural)?",
-				"alwys":    "Did you mean 'always'?",
-				"eee":      "Unknown field. Check if this should be 'environment', 'env_file', or another valid service field.",
+				"vlumes":        "Did you mean 'volumes'?",
+				"network":       "Did you mean 'networks' (plural)?",
+				"alwys":         "Did you mean 'always'?",
+				"eee":           "Unknown field. Check if this should be 'environment', 'env_file', or another valid service field.",
 			}
-			
+
 			if suggestion, ok := suggestions[fieldName]; ok {
 				return fmt.Sprintf("Invalid field '%s' is not allowed. %s", fieldName, suggestion)
 			}
-			
+
 			return fmt.Sprintf("Invalid field '%s' is not allowed in this context", fieldName)
 		}
 	}
-	
+
 	// Check for port-related errors
 	if strings.Contains(message, "port") || (strings.Contains(message, "invalid") && strings.Contains(trimmed, "ports:")) {
 		// Check if the line contains a port mapping
@@ -590,28 +602,28 @@ func improveErrorMessage(message string, lineNum int, composeLines []string) str
 			return fmt.Sprintf("Invalid port format in '%s'. Port mappings must be in format 'host:container' where both ports are numbers (0-65535), e.g., '8080:80'", trimmed)
 		}
 	}
-	
+
 	// Check for environment variable errors
 	if strings.Contains(message, "environment") || strings.Contains(message, "env") {
 		if !strings.Contains(trimmed, "=") && !strings.Contains(trimmed, ":") && trimmed != "" && !strings.HasPrefix(trimmed, "-") {
 			return "Invalid environment variable format. Environment variables must be in format 'KEY=VALUE' or 'KEY: VALUE'"
 		}
 	}
-	
+
 	// Check for volume errors
 	if strings.Contains(message, "volume") {
 		if !strings.Contains(trimmed, ":") && !strings.HasPrefix(trimmed, "/") && !strings.HasPrefix(trimmed, "./") {
 			return "Invalid volume format. Volumes must be in format 'host:container', './path:/path', or a named volume"
 		}
 	}
-	
+
 	// Check for service reference errors
 	if strings.Contains(message, "depends_on") || strings.Contains(message, "service") {
 		if strings.Contains(message, "not found") || strings.Contains(message, "does not exist") {
 			return fmt.Sprintf("Service reference error: %s", message)
 		}
 	}
-	
+
 	// Check for "did not find expected" - improve context
 	if strings.Contains(message, "did not find expected") {
 		if strings.Contains(line, "[") && !strings.Contains(line, "]") {
@@ -626,7 +638,7 @@ func improveErrorMessage(message string, lineNum int, composeLines []string) str
 			return message + " (check for missing colon or incorrect value format)"
 		}
 	}
-	
+
 	return message
 }
 
@@ -686,7 +698,7 @@ func cleanYAMLError(errMsg string) string {
 // enhanceYAMLSyntaxError adds context to YAML syntax errors
 func enhanceYAMLSyntaxError(errMsg string, lineNum int32, lineContent string) string {
 	trimmed := strings.TrimSpace(lineContent)
-	
+
 	// Handle "did not find expected key" - often means invalid value or structure
 	if strings.Contains(errMsg, "did not find expected key") {
 		if trimmed != "" {
@@ -702,20 +714,20 @@ func enhanceYAMLSyntaxError(errMsg string, lineNum int32, lineContent string) st
 				}
 				return fmt.Sprintf("Invalid version declaration. %s Check that the version value is properly formatted (e.g., '3.8').", errMsg)
 			}
-			
+
 			// Check for missing colon (common cause of "did not find expected key")
 			if strings.Contains(trimmed, " ") && !strings.Contains(trimmed, ":") {
 				// Has space but no colon - might be missing colon
 				firstWord := strings.Fields(trimmed)[0]
 				return fmt.Sprintf("Missing colon after '%s'. YAML requires a colon to separate keys from values: '%s: value'", firstWord, firstWord)
 			}
-			
+
 			// Generic but more helpful message
 			return fmt.Sprintf("YAML syntax error: %s. Check the line structure - each key-value pair should be in format 'key: value'", errMsg)
 		}
 		return fmt.Sprintf("YAML syntax error: %s. Check that the line has proper YAML structure.", errMsg)
 	}
-	
+
 	// Handle other common YAML errors
 	if strings.Contains(errMsg, "cannot unmarshal") {
 		if trimmed != "" {
@@ -723,16 +735,16 @@ func enhanceYAMLSyntaxError(errMsg string, lineNum int32, lineContent string) st
 			return fmt.Sprintf("Invalid value type: %s. Check that values match the expected data type (string, number, boolean, array, object).", errMsg)
 		}
 	}
-	
+
 	if strings.Contains(errMsg, "mapping values are not allowed") {
 		return fmt.Sprintf("YAML syntax error: %s. This usually means there's a formatting issue with key-value pairs. Check for missing colons or incorrect indentation.", errMsg)
 	}
-	
+
 	// Add line content context if available
 	if trimmed != "" && len(trimmed) < 100 {
 		return fmt.Sprintf("YAML syntax error: %s (at: %s)", errMsg, trimmed)
 	}
-	
+
 	return fmt.Sprintf("YAML syntax error: %s", errMsg)
 }
 
@@ -779,7 +791,7 @@ func findKeyLine(lines []string, key string) int {
 func validateVersion(composeYaml string) []ValidationError {
 	var warnings []ValidationError
 	lines := strings.Split(composeYaml, "\n")
-	
+
 	// Look for version: line
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -787,25 +799,25 @@ func validateVersion(composeYaml string) []ValidationError {
 			// Note: Docker Compose v2 doesn't require version field, but it's still accepted
 			// We'll always show a warning that version is deprecated
 			col := strings.Index(line, "version") + 1
-				if col == 0 {
+			if col == 0 {
 				col = 1
-				}
-				
+			}
+
 			warnings = append(warnings, ValidationError{
-					Line:        int32(i + 1),
-					Column:      int32(col),
+				Line:        int32(i + 1),
+				Column:      int32(col),
 				Message:     "The 'version' field is deprecated in Docker Compose v2. It's accepted but not required. Consider removing it.",
 				Severity:    "warning",
-					StartLine:   int32(i + 1),
-					EndLine:     int32(i + 1),
-					StartColumn: int32(col),
+				StartLine:   int32(i + 1),
+				EndLine:     int32(i + 1),
+				StartColumn: int32(col),
 				EndColumn:   int32(col + 7),
-				})
-			
+			})
+
 			break // Only check first version declaration
 		}
 	}
-	
+
 	return warnings
 }
 
@@ -813,16 +825,16 @@ func validateVersion(composeYaml string) []ValidationError {
 // Users must use the routing system instead of port mappings
 func validateNoHostPortMappings(composeYaml string) []ValidationError {
 	var errors []ValidationError
-	
+
 	// Parse YAML to check for port mappings
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
 		// If we can't parse YAML, skip this check (YAML syntax errors will be caught elsewhere)
 		return errors
 	}
-	
+
 	lines := strings.Split(composeYaml, "\n")
-	
+
 	// Check services for port mappings
 	if services, ok := compose["services"].(map[string]interface{}); ok {
 		for serviceName, serviceData := range services {
@@ -833,7 +845,7 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 						if hasHostPortBinding(port) {
 							// Find the line number for this port mapping
 							lineNum, colNum := findPortMappingLine(serviceName, portIndex, ports, lines)
-							
+
 							// Create error message
 							var portDesc string
 							switch v := port.(type) {
@@ -852,9 +864,9 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 							default:
 								portDesc = "port mapping"
 							}
-							
+
 							message := fmt.Sprintf("Host port mappings are not supported. Found port mapping '%s' in service '%s'. Please use the routing configuration instead of port mappings in your compose file.", portDesc, serviceName)
-							
+
 							// Calculate end column
 							endCol := colNum + 30
 							if lineNum <= len(lines) {
@@ -868,7 +880,7 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 									}
 								}
 							}
-							
+
 							errors = append(errors, ValidationError{
 								Line:        int32(lineNum),
 								Column:      colNum,
@@ -885,7 +897,7 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 			}
 		}
 	}
-	
+
 	return errors
 }
 
@@ -919,20 +931,20 @@ func findPortMappingLine(serviceName string, portIndex int, ports []interface{},
 			break
 		}
 	}
-	
+
 	if serviceLine == 0 {
 		return 1, 1 // Fallback
 	}
-	
+
 	// Find the "ports:" line within the service
 	portsLine := 0
 	inService := false
 	indentLevel := 0
-	
+
 	for i := serviceLine - 1; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check if we've left the service block (same or less indentation, different top-level key)
 		if !inService && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")) {
 			inService = true
@@ -945,7 +957,7 @@ func findPortMappingLine(serviceName string, portIndex int, ports []interface{},
 				}
 			}
 		}
-		
+
 		if inService {
 			currentIndent := 0
 			for _, char := range line {
@@ -955,36 +967,36 @@ func findPortMappingLine(serviceName string, portIndex int, ports []interface{},
 					break
 				}
 			}
-			
+
 			// If we've left the service block
 			if currentIndent <= indentLevel && trimmed != "" && strings.HasSuffix(trimmed, ":") && !strings.HasPrefix(trimmed, serviceName) {
 				break
 			}
-			
+
 			if strings.HasPrefix(trimmed, "ports:") {
 				portsLine = i + 1
 				break
 			}
 		}
 	}
-	
+
 	if portsLine == 0 {
 		return serviceLine, 1 // Fallback to service line
 	}
-	
+
 	// Find the specific port mapping line (portIndex-th entry in the ports array)
 	// Ports are typically in YAML array format with "- " prefix
 	itemCount := -1 // Start at -1 because we'll count as we go
-	
+
 	for i := portsLine; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check if we've left the ports block
 		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") && trimmed != "" {
 			break
 		}
-		
+
 		// Check if this is a port entry (starts with "- " or is indented)
 		if strings.HasPrefix(trimmed, "- ") || (strings.HasPrefix(line, "  ") && !strings.HasPrefix(trimmed, "ports:")) {
 			itemCount++
@@ -1008,7 +1020,7 @@ func findPortMappingLine(serviceName string, portIndex int, ports []interface{},
 			}
 		}
 	}
-	
+
 	// Fallback: return the ports line
 	col := strings.Index(lines[portsLine-1], "ports") + 1
 	if col == 0 {
