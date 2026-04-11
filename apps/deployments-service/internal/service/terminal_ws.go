@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -41,6 +42,21 @@ type terminalWSOutput struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+func normalizeWebSocketHostForOrigin(r *http.Request, origin string, logPrefix string) {
+	if origin == "" {
+		return
+	}
+
+	originalHost := r.Host
+	originURL, err := url.Parse(origin)
+	if err != nil || originURL.Host == "" {
+		return
+	}
+
+	r.Host = originURL.Host
+	log.Printf("[%s] Adjusted Host header: %s -> %s (from Origin)", logPrefix, originalHost, r.Host)
+}
+
 // HandleTerminalWebSocket upgrades the HTTP connection to a WebSocket and proxies
 // terminal input/output directly to the Go API, bypassing the Nuxt proxy.
 func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -54,14 +70,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// When requests come through the API gateway, the Host header is rewritten to the
+	// internal service name. Match Host to Origin before websocket.Accept validates it.
+	normalizeWebSocketHostForOrigin(r, origin, "Terminal WS")
+
 	// Prepare origin patterns for WebSocket library
 	// The websocket library needs all allowed origins, not just the validated one
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
 
-	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s",
-		isWildcard, corsConfig.AllowedOrigins, origin)
+	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s",
+		isWildcard, corsConfig.AllowedOrigins, origin, r.Host)
 
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
@@ -567,20 +587,24 @@ func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseW
 		return
 	}
 
+	// Requests forwarded between nodes still arrive through a proxy path, so normalize
+	// Host here as well before accepting the client-side websocket upgrade.
+	normalizeWebSocketHostForOrigin(r, origin, "Terminal WS Forward")
+
 	// Prepare origin patterns for WebSocket library
 	// The websocket library needs all allowed origins, not just the validated one
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
 
-	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s",
-		isWildcard, corsConfig.AllowedOrigins, origin)
+	log.Printf("[Terminal WS Forward] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s",
+		isWildcard, corsConfig.AllowedOrigins, origin, r.Host)
 
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
 		// Setting to nil completely disables origin validation (allows all origins)
 		acceptOptions.OriginPatterns = nil
-		log.Printf("[Terminal WS] Using wildcard origin pattern (nil = allow all)")
+		log.Printf("[Terminal WS Forward] Using wildcard origin pattern (nil = allow all)")
 	} else {
 		// Use all allowed origins from CORS config for WebSocket validation
 		// This ensures the websocket library can properly validate against all configured origins
