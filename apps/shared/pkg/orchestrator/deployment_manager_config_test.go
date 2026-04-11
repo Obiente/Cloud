@@ -1,8 +1,12 @@
 package orchestrator
 
 import (
+	"strings"
 	"reflect"
 	"testing"
+
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"gopkg.in/yaml.v3"
 )
 
 func TestTraefikHostRule(t *testing.T) {
@@ -106,5 +110,71 @@ func TestMergeNetworkAliasesPreservesExistingAliases(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("mergeNetworkAliases should preserve aliases\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestAddTraefikNetworkToRoutedServicesPreservesSwarmNetworkAliases(t *testing.T) {
+	t.Setenv("ENABLE_SWARM", "true")
+
+	dm := &DeploymentManager{}
+	composeYaml := strings.TrimSpace(`
+services:
+  directus:
+    image: directus/directus:11
+    networks:
+      deployment-123:
+        aliases:
+          - directus
+      obiente-network:
+        aliases:
+          - directus
+networks:
+  deployment-123: {}
+  obiente-network:
+    external: true
+    name: obiente_obiente-network
+`)
+
+	routings := []database.DeploymentRouting{{ServiceName: "directus"}}
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings)
+	if err != nil {
+		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(gotYaml), &compose); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	services := compose["services"].(map[string]interface{})
+	directus := services["directus"].(map[string]interface{})
+	networks := directus["networks"].(map[string]interface{})
+
+	obienteNetwork, ok := networks["obiente-network"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected obiente-network to remain map config, got %T", networks["obiente-network"])
+	}
+
+	aliases, ok := obienteNetwork["aliases"].([]interface{})
+	if !ok {
+		t.Fatalf("expected obiente-network aliases to be preserved, got %T", obienteNetwork["aliases"])
+	}
+
+	if !reflect.DeepEqual(aliases, []interface{}{"directus"}) {
+		t.Fatalf("expected aliases to remain intact, got %#v", aliases)
+	}
+
+	deploymentNetwork, ok := networks["deployment-123"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected deployment network to remain map config, got %T", networks["deployment-123"])
+	}
+
+	deploymentAliases, ok := deploymentNetwork["aliases"].([]interface{})
+	if !ok {
+		t.Fatalf("expected deployment network aliases to be preserved, got %T", deploymentNetwork["aliases"])
+	}
+
+	if !reflect.DeepEqual(deploymentAliases, []interface{}{"directus"}) {
+		t.Fatalf("expected deployment aliases to remain intact, got %#v", deploymentAliases)
 	}
 }

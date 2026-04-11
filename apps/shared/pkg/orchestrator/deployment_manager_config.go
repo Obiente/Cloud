@@ -838,26 +838,19 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 		for serviceName, serviceData := range services {
 			if servicesToRoute[serviceName] {
 				if service, ok := serviceData.(map[string]interface{}); ok {
-					// Get existing networks if any
-					var networks []interface{}
-					if existingNets, ok := service["networks"].([]interface{}); ok {
-						networks = existingNets
+					serviceNetworks := normalizeServiceNetworks(service)
+					if _, exists := serviceNetworks["obiente-network"]; !exists {
+						serviceNetworks["obiente-network"] = nil
 					}
 
-					// Add obiente-network if not already present
-					hasObienteNetwork := false
-					for _, net := range networks {
-						if netStr, ok := net.(string); ok && netStr == "obiente-network" {
-							hasObienteNetwork = true
-							break
+					if utils.IsSwarmModeEnabled() {
+						for networkName, networkConfig := range serviceNetworks {
+							serviceNetworks[networkName] = mergeNetworkAliases(networkConfig, serviceName)
 						}
 					}
 
-					if !hasObienteNetwork {
-						networks = append(networks, "obiente-network")
-						service["networks"] = networks
-						logger.Debug("[DeploymentManager] Added obiente-network to routed service %s for Traefik discovery", serviceName)
-					}
+					service["networks"] = serviceNetworks
+					logger.Debug("[DeploymentManager] Added obiente-network to routed service %s for Traefik discovery", serviceName)
 				}
 			}
 		}
