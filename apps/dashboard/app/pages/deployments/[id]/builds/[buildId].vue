@@ -64,6 +64,24 @@
       </OuiCard>
 
       <!-- Logs -->
+      <OuiCard
+        v-if="hasRuntimeDiagnostics"
+        variant="outline"
+        class="border-warning/20 bg-warning/5"
+      >
+        <OuiCardBody>
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="semibold" color="warning">
+              Startup Diagnostics Captured
+            </OuiText>
+            <OuiText size="sm" color="tertiary">
+              This run includes post-build runtime diagnostics. Look for <span class="font-mono">[runtime]</span> entries below to inspect exit codes and the last container output captured for the failed startup.
+            </OuiText>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Logs -->
       <OuiCard>
         <OuiCardBody>
           <OuiLogs
@@ -102,7 +120,7 @@
       >
         <OuiCardBody>
           <OuiText size="sm" weight="semibold" color="danger" class="mb-2">
-            Build Error
+            {{ build?.status === BuildStatus.BUILD_SUCCESS ? "Runtime Error After Build" : "Build Error" }}
           </OuiText>
           <OuiText size="xs" color="danger" class="font-mono whitespace-pre-wrap">
             {{ build.error }}
@@ -165,6 +183,9 @@ const formattedLogs = computed<LogEntry[]>(() => {
 });
 
 const buildNumber = computed(() => build.value?.buildNumber || 0);
+const hasRuntimeDiagnostics = computed(() =>
+  logs.value.some((log) => (log.line || "").includes("[runtime]"))
+);
 
 const loadBuild = async () => {
   if (!organizationId.value || !deploymentId.value || !buildId.value) return;
@@ -279,4 +300,3 @@ watch(
   }
 );
 </script>
-

@@ -386,6 +386,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
 				logger.Warn("[TriggerDeployment] Compose deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				s.captureDeploymentFailureDiagnostics(buildCtx, deploymentID, "compose_deploy_failed", err.Error(), streamer)
 				errorMsg := err.Error()
 				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
@@ -573,6 +574,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				s.captureDeploymentFailureDiagnostics(buildCtx, deploymentID, "orchestrator_deploy_failed", err.Error(), streamer)
 				errorMsg := err.Error()
 				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
@@ -602,10 +604,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
 			logger.Warn("[TriggerDeployment] WARNING: Containers not running: %v", err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
+			runtimeFailureMsg := fmt.Sprintf("Deployment startup failed after the build completed: %v", err)
+			s.captureDeploymentFailureDiagnostics(buildCtx, deploymentID, "startup_verification_failed", runtimeFailureMsg, streamer)
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+			_ = s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, 3, int32(time.Since(buildStartTime).Seconds()), &runtimeFailureMsg)
 
-			// Create notification for deployment failure
 			deploymentName := dbDeployment.Name
 			if deploymentName == "" {
 				deploymentName = dbDeployment.Domain
@@ -613,22 +617,21 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if deploymentName == "" {
 				deploymentName = deploymentID
 			}
-			actionURL := fmt.Sprintf("/deployments/%s", deploymentID)
-			actionLabel := "View Deployment"
 			metadata := map[string]string{
 				"deployment_id": deploymentID,
 				"build_id":      buildID,
 				"build_number":  fmt.Sprintf("%d", buildNumber),
-				"error":         err.Error(),
+				"error":         runtimeFailureMsg,
 			}
-			if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
-				notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
-				notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
-				"Deployment Failed",
-				fmt.Sprintf("Deployment failed for %s after successful build. %s", deploymentName, err.Error()),
-				&actionURL, &actionLabel, metadata, nil); err != nil {
-				logger.Warn("[TriggerDeployment] Failed to create deployment failure notification: %v", err)
-			}
+			s.notifyDeploymentFailure(
+				buildCtx,
+				dbDeployment,
+				buildID,
+				buildNumber,
+				"Deployment Startup Failed",
+				fmt.Sprintf("Deployment startup failed for %s after the build completed. Runtime diagnostics were captured for this run.", deploymentName),
+				metadata,
+			)
 		} else {
 			streamer.Write([]byte("✅ Deployment completed successfully!\n"))
 
@@ -828,6 +831,18 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		if s.manager != nil {
 			if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
 				logger.Warn("[StartDeployment] Failed to deploy compose file for deployment %s: %v", deploymentID, err)
+				s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_failed", err.Error(), nil)
+				notifyCtx, cancel := s.detachedContext(10 * time.Second)
+				defer cancel()
+				s.notifyDeploymentFailure(
+					notifyCtx,
+					dbDep,
+					"",
+					0,
+					"Deployment Start Failed",
+					fmt.Sprintf("Starting deployment %s failed. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+					map[string]string{"error": err.Error()},
+				)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to deploy compose file: %w", err))
 			}
 			logger.Info("[StartDeployment] Successfully deployed compose file for deployment %s", deploymentID)
@@ -835,6 +850,19 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 			// Verify containers are actually running before setting status
 			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
 				logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
+				runtimeFailureMsg := fmt.Sprintf("deployment start did not leave any running containers: %v", err)
+				s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_verification_failed", runtimeFailureMsg, nil)
+				notifyCtx, cancel := s.detachedContext(10 * time.Second)
+				defer cancel()
+				s.notifyDeploymentFailure(
+					notifyCtx,
+					dbDep,
+					"",
+					0,
+					"Deployment Start Failed",
+					fmt.Sprintf("Starting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+					map[string]string{"error": runtimeFailureMsg},
+				)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("deployment started but no containers are running: %w", err))
 			}
 		} else {
@@ -905,6 +933,19 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 				// Verify containers are actually running before setting status
 				if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
 					logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
+					runtimeFailureMsg := fmt.Sprintf("containers were created but none remained running: %v", err)
+					s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_verification_failed", runtimeFailureMsg, nil)
+					notifyCtx, cancel := s.detachedContext(10 * time.Second)
+					defer cancel()
+					s.notifyDeploymentFailure(
+						notifyCtx,
+						dbDep,
+						"",
+						0,
+						"Deployment Start Failed",
+						fmt.Sprintf("Starting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+						map[string]string{"error": runtimeFailureMsg},
+					)
 					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("containers created but not running: %w", err))
 				}
 			} else {
@@ -921,6 +962,19 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 			// Verify containers are actually running after starting
 			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
 				logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s after start: %v", deploymentID, err)
+				runtimeFailureMsg := fmt.Sprintf("containers failed to stay running after start: %v", err)
+				s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_verification_failed", runtimeFailureMsg, nil)
+				notifyCtx, cancel := s.detachedContext(10 * time.Second)
+				defer cancel()
+				s.notifyDeploymentFailure(
+					notifyCtx,
+					dbDep,
+					"",
+					0,
+					"Deployment Start Failed",
+					fmt.Sprintf("Starting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+					map[string]string{"error": runtimeFailureMsg},
+				)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start containers: %w", err))
 			}
 		}
@@ -1016,6 +1070,34 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 		_ = s.manager.StopComposeDeployment(ctx, deploymentID)
 		if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
 			logger.Warn("[RestartDeployment] Failed to restart compose deployment %s: %v", deploymentID, err)
+			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_failed", err.Error(), nil)
+			notifyCtx, cancel := s.detachedContext(10 * time.Second)
+			defer cancel()
+			s.notifyDeploymentFailure(
+				notifyCtx,
+				dbDep,
+				"",
+				0,
+				"Deployment Restart Failed",
+				fmt.Sprintf("Restarting deployment %s failed. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+				map[string]string{"error": err.Error()},
+			)
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
+		}
+		if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
+			runtimeFailureMsg := fmt.Sprintf("deployment restart did not leave any running containers: %v", err)
+			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_verification_failed", runtimeFailureMsg, nil)
+			notifyCtx, cancel := s.detachedContext(10 * time.Second)
+			defer cancel()
+			s.notifyDeploymentFailure(
+				notifyCtx,
+				dbDep,
+				"",
+				0,
+				"Deployment Restart Failed",
+				fmt.Sprintf("Restarting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+				map[string]string{"error": runtimeFailureMsg},
+			)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
 		}
 	} else if s.manager != nil {
@@ -1027,6 +1109,22 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart deployment: %w", err))
 			}
 			logger.Info("[RestartDeployment] Successfully started deployment %s after restart failure", deploymentID)
+		}
+		if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
+			runtimeFailureMsg := fmt.Sprintf("deployment restart did not leave any running containers: %v", err)
+			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_verification_failed", runtimeFailureMsg, nil)
+			notifyCtx, cancel := s.detachedContext(10 * time.Second)
+			defer cancel()
+			s.notifyDeploymentFailure(
+				notifyCtx,
+				dbDep,
+				"",
+				0,
+				"Deployment Restart Failed",
+				fmt.Sprintf("Restarting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+				map[string]string{"error": runtimeFailureMsg},
+			)
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart deployment: %w", err))
 		}
 	} else {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("deployment manager not available"))
