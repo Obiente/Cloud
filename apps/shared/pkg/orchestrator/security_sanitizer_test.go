@@ -179,3 +179,86 @@ services:
 		t.Errorf("EMPTY_VALUE should be empty string, got %q", emptyValue)
 	}
 }
+
+func TestSanitizeDNS_AddsPlatformDefaults(t *testing.T) {
+	t.Setenv("DNS_IPS", "10.0.9.10, 10.0.9.11")
+	t.Setenv("DNS_PORT", "53")
+
+	composeYaml := `version: '3.8'
+services:
+  app:
+    image: nginx:alpine
+`
+
+	sanitizer := NewComposeSanitizer("test-deployment")
+	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("Failed to sanitize YAML: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitizedYaml), &result); err != nil {
+		t.Fatalf("Failed to parse sanitized YAML: %v", err)
+	}
+
+	services := result["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+
+	dnsSearch, ok := app["dns_search"].([]interface{})
+	if !ok {
+		t.Fatalf("dns_search should be present as a list, got %T", app["dns_search"])
+	}
+	if len(dnsSearch) != 0 {
+		t.Fatalf("dns_search should default to an empty list, got %#v", dnsSearch)
+	}
+
+	dnsServers, ok := app["dns"].([]interface{})
+	if !ok {
+		t.Fatalf("dns should be present as a list, got %T", app["dns"])
+	}
+	if len(dnsServers) != 2 {
+		t.Fatalf("dns should contain 2 server IPs, got %#v", dnsServers)
+	}
+	if dnsServers[0] != "10.0.9.10" || dnsServers[1] != "10.0.9.11" {
+		t.Fatalf("dns servers mismatch, got %#v", dnsServers)
+	}
+}
+
+func TestSanitizeDNS_PreservesExplicitUserSettings(t *testing.T) {
+	t.Setenv("DNS_IPS", "10.0.9.10")
+	t.Setenv("DNS_PORT", "53")
+
+	composeYaml := `version: '3.8'
+services:
+  app:
+    image: nginx:alpine
+    dns:
+      - 1.1.1.1
+    dns_search:
+      - custom.internal
+`
+
+	sanitizer := NewComposeSanitizer("test-deployment")
+	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("Failed to sanitize YAML: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitizedYaml), &result); err != nil {
+		t.Fatalf("Failed to parse sanitized YAML: %v", err)
+	}
+
+	services := result["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+
+	dnsSearch := app["dns_search"].([]interface{})
+	if len(dnsSearch) != 1 || dnsSearch[0] != "custom.internal" {
+		t.Fatalf("dns_search should preserve user value, got %#v", dnsSearch)
+	}
+
+	dnsServers := app["dns"].([]interface{})
+	if len(dnsServers) != 1 || dnsServers[0] != "1.1.1.1" {
+		t.Fatalf("dns should preserve user value, got %#v", dnsServers)
+	}
+}
