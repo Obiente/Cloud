@@ -20,6 +20,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/stripe"
 
 	"errors"
+
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"

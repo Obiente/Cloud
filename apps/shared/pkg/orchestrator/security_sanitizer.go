@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,43 +174,12 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	}
 }
 
-// sanitizeDNS applies the platform DNS defaults that Compose deployments need.
-// We preserve explicit user DNS settings, but otherwise:
-// 1. clear dns_search to avoid unexpected search-domain suffixes
-// 2. inject DNS_IPS as nameservers when configured on the platform
+// sanitizeDNS applies safe DNS defaults for Compose deployments.
+// We preserve explicit user DNS settings and avoid forcing platform nameservers,
+// because public *.my.obiente.cloud records should resolve through normal DNS.
 func (cs *ComposeSanitizer) sanitizeDNS(service map[string]interface{}) {
 	if _, exists := service["dns_search"]; !exists {
 		service["dns_search"] = []interface{}{}
-	}
-
-	if _, exists := service["dns"]; exists {
-		return
-	}
-
-	dnsIPsEnv := strings.TrimSpace(os.Getenv("DNS_IPS"))
-	if dnsIPsEnv == "" {
-		return
-	}
-
-	dnsPort := strings.TrimSpace(os.Getenv("DNS_PORT"))
-	if dnsPort != "" && dnsPort != "53" {
-		return
-	}
-
-	dnsServers := make([]interface{}, 0)
-	for _, rawIP := range strings.Split(dnsIPsEnv, ",") {
-		ip := strings.TrimSpace(rawIP)
-		if ip == "" {
-			continue
-		}
-		if parsed := net.ParseIP(ip); parsed == nil {
-			continue
-		}
-		dnsServers = append(dnsServers, ip)
-	}
-
-	if len(dnsServers) > 0 {
-		service["dns"] = dnsServers
 	}
 }
 

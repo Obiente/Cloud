@@ -180,10 +180,7 @@ services:
 	}
 }
 
-func TestSanitizeDNS_AddsPlatformDefaults(t *testing.T) {
-	t.Setenv("DNS_IPS", "10.0.9.10, 10.0.9.11")
-	t.Setenv("DNS_PORT", "53")
-
+func TestSanitizeDNS_DefaultsSearchDomainOnly(t *testing.T) {
 	composeYaml := `version: '3.8'
 services:
   app:
@@ -212,22 +209,12 @@ services:
 		t.Fatalf("dns_search should default to an empty list, got %#v", dnsSearch)
 	}
 
-	dnsServers, ok := app["dns"].([]interface{})
-	if !ok {
-		t.Fatalf("dns should be present as a list, got %T", app["dns"])
-	}
-	if len(dnsServers) != 2 {
-		t.Fatalf("dns should contain 2 server IPs, got %#v", dnsServers)
-	}
-	if dnsServers[0] != "10.0.9.10" || dnsServers[1] != "10.0.9.11" {
-		t.Fatalf("dns servers mismatch, got %#v", dnsServers)
+	if _, ok := app["dns"]; ok {
+		t.Fatalf("dns should not be injected automatically, got %#v", app["dns"])
 	}
 }
 
 func TestSanitizeDNS_PreservesExplicitUserSettings(t *testing.T) {
-	t.Setenv("DNS_IPS", "10.0.9.10")
-	t.Setenv("DNS_PORT", "53")
-
 	composeYaml := `version: '3.8'
 services:
   app:
