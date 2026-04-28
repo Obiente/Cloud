@@ -821,16 +821,17 @@ func validateVersion(composeYaml string) []ValidationError {
 	return warnings
 }
 
-// validateNoHostPortMappings checks for host port bindings in compose files
-// Users must use the routing system instead of port mappings
+// validateNoHostPortMappings warns for host port bindings in compose files.
+// The deploy-time compose sanitizer removes host bindings and keeps the
+// container port as an expose hint for routing.
 func validateNoHostPortMappings(composeYaml string) []ValidationError {
-	var errors []ValidationError
+	var warnings []ValidationError
 
 	// Parse YAML to check for port mappings
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
 		// If we can't parse YAML, skip this check (YAML syntax errors will be caught elsewhere)
-		return errors
+		return warnings
 	}
 
 	lines := strings.Split(composeYaml, "\n")
@@ -865,7 +866,7 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 								portDesc = "port mapping"
 							}
 
-							message := fmt.Sprintf("Host port mappings are not supported. Found port mapping '%s' in service '%s'. Please use the routing configuration instead of port mappings in your compose file.", portDesc, serviceName)
+							message := fmt.Sprintf("Host port mapping '%s' in service '%s' will be ignored. Obiente Cloud routes traffic through routing rules, so only the container port will be used.", portDesc, serviceName)
 
 							// Calculate end column
 							endCol := colNum + 30
@@ -881,11 +882,11 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 								}
 							}
 
-							errors = append(errors, ValidationError{
+							warnings = append(warnings, ValidationError{
 								Line:        int32(lineNum),
 								Column:      colNum,
 								Message:     message,
-								Severity:    "error",
+								Severity:    "warning",
 								StartLine:   int32(lineNum),
 								EndLine:     int32(lineNum),
 								StartColumn: colNum,
@@ -898,7 +899,7 @@ func validateNoHostPortMappings(composeYaml string) []ValidationError {
 		}
 	}
 
-	return errors
+	return warnings
 }
 
 // hasHostPortBinding checks if a port binding includes a host port

@@ -252,6 +252,49 @@ services:
 	}
 }
 
+func TestSanitizeComposeYAML_MovesHostPortMappingsToExpose(t *testing.T) {
+	composeYaml := `version: '3.8'
+services:
+  gowhisper:
+    image: example/gowhisper:latest
+    ports:
+      - "${WHISPER_GO_PORT:-8080}:8080"
+      - "127.0.0.1:9000:9000/tcp"
+    expose:
+      - "7000"
+`
+
+	sanitizer := NewComposeSanitizer("test-deployment")
+	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("Failed to sanitize YAML: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitizedYaml), &result); err != nil {
+		t.Fatalf("Failed to parse sanitized YAML: %v", err)
+	}
+
+	services := result["services"].(map[string]interface{})
+	gowhisper := services["gowhisper"].(map[string]interface{})
+
+	if _, ok := gowhisper["ports"]; ok {
+		t.Fatalf("ports should be removed after sanitization, got %#v", gowhisper["ports"])
+	}
+
+	expose := gowhisper["expose"].([]interface{})
+	got := map[string]bool{}
+	for _, port := range expose {
+		got[port.(string)] = true
+	}
+
+	for _, want := range []string{"7000", "8080", "9000"} {
+		if !got[want] {
+			t.Fatalf("expected expose to contain %q, got %#v", want, expose)
+		}
+	}
+}
+
 func TestEnsureWritableBindDir_MakesDirectoryWritable(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "uploads")
 	if err := os.MkdirAll(dir, 0o755); err != nil {

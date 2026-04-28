@@ -93,8 +93,6 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	return string(sanitizedYaml), nil
 }
 
-
-
 // sanitizeService sanitizes a single service in the compose file
 func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) {
 	// Sanitize environment variables to ensure proper formatting
@@ -115,20 +113,18 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 		service["volumes"] = sanitizedVolumes
 	}
 
-	// Sanitize ports - remove host port bindings, keep only container ports
+	// Sanitize ports - remove host port publishing and keep container ports as
+	// expose hints so Obiente routing can still auto-detect the target port.
 	if ports, ok := service["ports"].([]interface{}); ok {
-		sanitizedPorts := []interface{}{}
+		exposedPorts := existingExposePorts(service["expose"])
 		for _, port := range ports {
-			if sanitized := cs.sanitizePortBinding(port); sanitized != nil {
-				sanitizedPorts = append(sanitizedPorts, sanitized)
+			if sanitized := cs.sanitizePortBinding(port); sanitized != "" {
+				exposedPorts = appendUniqueExposePort(exposedPorts, sanitized)
 			}
 		}
-		// If we have ports, keep them but without host bindings
-		// Otherwise, remove the ports field entirely to avoid conflicts
-		if len(sanitizedPorts) > 0 {
-			service["ports"] = sanitizedPorts
-		} else {
-			delete(service, "ports")
+		delete(service, "ports")
+		if len(exposedPorts) > 0 {
+			service["expose"] = exposedPorts
 		}
 	}
 
@@ -495,9 +491,10 @@ func (cs *ComposeSanitizer) sanitizeBindOptions(options string, volName string) 
 	return strings.Join(sanitizedParts, ",")
 }
 
-// sanitizePortBinding sanitizes port bindings to remove host ports
-// Returns container port only (no host binding) in Docker Compose format
-func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) interface{} {
+// sanitizePortBinding extracts the container port from a Compose port binding.
+// Host publishing is intentionally discarded because Obiente exposes services
+// through routing rules rather than host-level port bindings.
+func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) string {
 	var portStr string
 
 	switch v := port.(type) {
@@ -506,41 +503,54 @@ func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) interface{} {
 	case map[string]interface{}:
 		// Port mapping object format - keep only target (container) port
 		if target, ok := v["target"].(int); ok {
-			// Return in short format (just container port)
 			return fmt.Sprintf("%d", target)
 		}
 		if published, ok := v["published"].(int); ok {
-			// Use published as container port if target not specified
 			return fmt.Sprintf("%d", published)
 		}
-		return nil
+		return ""
 	default:
-		return nil
+		return ""
 	}
 
-	// Parse string format: "host_port:container_port" or "host_port:container_port/protocol" or "container_port" or "container_port/protocol"
-	if strings.Contains(portStr, ":") {
-		parts := strings.SplitN(portStr, ":", 2)
-		if len(parts) == 2 {
-			// Extract container port (may include protocol like "8080/tcp")
-			containerPart := strings.TrimSpace(parts[1])
-			if strings.Contains(containerPart, "/") {
-				// Has protocol specified
-				portParts := strings.Split(containerPart, "/")
-				return strings.TrimSpace(portParts[0]) // Return just port number
-			}
-			return containerPart // Return container port
+	portStr = strings.TrimSpace(portStr)
+	if portStr == "" {
+		return ""
+	}
+
+	// Parse string formats:
+	// - "host_port:container_port"
+	// - "host_ip:host_port:container_port"
+	// - "${PORT:-8080}:container_port"
+	// - "container_port"
+	// Use the last colon so env default expressions like ${PORT:-8080}:8080
+	// are parsed correctly.
+	if colon := strings.LastIndex(portStr, ":"); colon >= 0 {
+		portStr = strings.TrimSpace(portStr[colon+1:])
+	}
+
+	if slash := strings.Index(portStr, "/"); slash >= 0 {
+		portStr = strings.TrimSpace(portStr[:slash])
+	}
+
+	return portStr
+}
+
+func existingExposePorts(expose interface{}) []interface{} {
+	exposedPorts := []interface{}{}
+	if existing, ok := expose.([]interface{}); ok {
+		exposedPorts = append(exposedPorts, existing...)
+	}
+	return exposedPorts
+}
+
+func appendUniqueExposePort(exposedPorts []interface{}, port string) []interface{} {
+	for _, existing := range exposedPorts {
+		if fmt.Sprint(existing) == port {
+			return exposedPorts
 		}
 	}
-
-	// Already just container port - preserve protocol if specified
-	if strings.Contains(portStr, "/") {
-		// Format like "8080/tcp" - keep as is (no host binding)
-		return portStr
-	}
-
-	// Simple port number - return as is
-	return portStr
+	return append(exposedPorts, port)
 }
 
 // addServiceToNetwork adds a service to the deployment-specific network for isolation
@@ -549,14 +559,14 @@ func (cs *ComposeSanitizer) sanitizePortBinding(port interface{}) interface{} {
 func (cs *ComposeSanitizer) addServiceToNetwork(service map[string]interface{}) {
 	// Always ensure the service is connected to its deployment-specific network
 	deploymentNetworkName := fmt.Sprintf("deployment-%s", cs.deploymentID)
-	
+
 	networksVal, ok := service["networks"]
 	if !ok || networksVal == nil {
 		// No networks defined: connect ONLY to deployment network for isolation
 		service["networks"] = []string{deploymentNetworkName}
 		return
 	}
-	
+
 	// Service already has networks - merge deployment network in
 	switch networks := networksVal.(type) {
 	case []interface{}:
@@ -568,14 +578,14 @@ func (cs *ComposeSanitizer) addServiceToNetwork(service map[string]interface{}) 
 			}
 		}
 		service["networks"] = append(networks, deploymentNetworkName)
-		
+
 	case map[string]interface{}:
 		// Map-style networks: add deployment network key if missing
 		if _, exists := networks[deploymentNetworkName]; !exists {
 			// Empty config uses defaults for this network
 			networks[deploymentNetworkName] = map[string]interface{}{}
 		}
-		
+
 	default:
 		// Unexpected type: enforce isolation by resetting to deployment network only
 		service["networks"] = []string{deploymentNetworkName}
