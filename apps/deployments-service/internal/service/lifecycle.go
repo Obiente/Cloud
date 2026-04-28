@@ -769,9 +769,10 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		startReplicas = int(*dbDep.Replicas)
 	}
 	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
-		Replicas:    startReplicas,
-		MemoryBytes: startMemory,
-		CPUshares:   startCPU,
+		Replicas:            startReplicas,
+		MemoryBytes:         startMemory,
+		CPUshares:           startCPU,
+		ExcludeDeploymentID: deploymentID,
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}

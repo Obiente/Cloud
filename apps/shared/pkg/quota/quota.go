@@ -9,9 +9,10 @@ import (
 )
 
 type RequestedResources struct {
-	Replicas    int
-	MemoryBytes int64
-	CPUshares   int64
+	Replicas            int
+	MemoryBytes         int64
+	CPUshares           int64
+	ExcludeDeploymentID string
 }
 
 type Checker struct{}
@@ -23,13 +24,15 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 	// Ensure organization has a plan assigned (defaults to Starter plan)
 	// This is called when resources are requested, so it's a good place to ensure plan assignment
 	_ = organizations.EnsurePlanAssigned(organizationID)
-	
+
 	quota, err := c.getQuota(organizationID)
-	if err != nil { return fmt.Errorf("quota: load: %w", err) }
+	if err != nil {
+		return fmt.Errorf("quota: load: %w", err)
+	}
 
 	// Get plan limits first (these are the maximum boundary)
 	planDeployMax, planMem, planCPU := c.getPlanLimitsFromQuota(quota)
-	
+
 	// Get effective limits: use overrides if set, but cap them to plan limits
 	// Plan limits are the final boundary - org overrides cannot exceed them
 	effDeployMax := planDeployMax
@@ -38,45 +41,47 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 		if overrideDeployMax > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planDeployMax > 0 && overrideDeployMax > planDeployMax {
-			effDeployMax = planDeployMax
+				effDeployMax = planDeployMax
 			} else {
 				effDeployMax = overrideDeployMax
 			}
 		}
 		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 	}
-	
+
 	effMem := planMem
 	if quota.MemoryBytesOverride != nil {
 		overrideMem := *quota.MemoryBytesOverride
 		if overrideMem > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planMem > 0 && overrideMem > planMem {
-			effMem = planMem
+				effMem = planMem
 			} else {
 				effMem = overrideMem
 			}
 		}
 		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 	}
-	
+
 	effCPU := planCPU
 	if quota.CPUCoresOverride != nil {
 		overrideCPU := *quota.CPUCoresOverride
 		if overrideCPU > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planCPU > 0 && overrideCPU > planCPU {
-			effCPU = planCPU
+				effCPU = planCPU
 			} else {
 				effCPU = overrideCPU
 			}
 		}
 		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 	}
-	
+
 	// Zero means unlimited; allow if not set
-	curReplicas, curMemBytes, curCPUcores, err := c.currentAllocations(organizationID)
-	if err != nil { return fmt.Errorf("quota: current allocations: %w", err) }
+	curReplicas, curMemBytes, curCPUcores, err := c.currentAllocations(organizationID, req.ExcludeDeploymentID)
+	if err != nil {
+		return fmt.Errorf("quota: current allocations: %w", err)
+	}
 
 	if effDeployMax > 0 && curReplicas+req.Replicas > effDeployMax {
 		return fmt.Errorf("quota exceeded: replicas %d > max %d", curReplicas+req.Replicas, effDeployMax)
@@ -117,25 +122,34 @@ func (c *Checker) getPlanLimitsFromQuota(q *database.OrgQuota) (deploymentsMax i
 	return plan.DeploymentsMax, plan.MemoryBytes, plan.CPUCores
 }
 
-func (c *Checker) currentAllocations(orgID string) (replicas int, memBytes int64, cpuCores int, err error) {
+func (c *Checker) currentAllocations(orgID string, excludeDeploymentID string) (replicas int, memBytes int64, cpuCores int, err error) {
 	// Count running replicas from deployment locations
 	var count int64
-	if err = database.DB.Model(&database.DeploymentLocation{}).
+	locationQuery := database.DB.Model(&database.DeploymentLocation{}).
 		Where("deployment_locations.status = ?", "running").
 		Joins("JOIN deployments d ON d.id = deployment_locations.deployment_id").
-		Where("d.organization_id = ?", orgID).
-		Count(&count).Error; err != nil {
+		Where("d.organization_id = ?", orgID)
+	if excludeDeploymentID != "" {
+		locationQuery = locationQuery.Where("d.id <> ?", excludeDeploymentID)
+	}
+	if err = locationQuery.Count(&count).Error; err != nil {
 		return
 	}
 	// Sum memory and CPU across active deployments, multiplied by their replica count.
 	// Only count deployments that are running, building, or deploying (not stopped/failed).
 	// RUNNING=3, BUILDING=2, DEPLOYING=6
-	type agg struct{ Mem int64; CPU int64 }
+	type agg struct {
+		Mem int64
+		CPU int64
+	}
 	var a agg
-	if err = database.DB.Model(&database.Deployment{}).
+	deploymentQuery := database.DB.Model(&database.Deployment{}).
 		Select("COALESCE(SUM(COALESCE(memory_bytes,0) * COALESCE(replicas,1)),0) as mem, COALESCE(SUM(COALESCE(cpu_shares,0) * COALESCE(replicas,1)),0) as cpu").
-		Where("organization_id = ? AND deleted_at IS NULL AND status IN (2,3,6)", orgID).
-		Scan(&a).Error; err != nil {
+		Where("organization_id = ? AND deleted_at IS NULL AND status IN (2,3,6)", orgID)
+	if excludeDeploymentID != "" {
+		deploymentQuery = deploymentQuery.Where("id <> ?", excludeDeploymentID)
+	}
+	if err = deploymentQuery.Scan(&a).Error; err != nil {
 		return
 	}
 	// Convert Docker CPU shares to cores (1024 shares = 1 core)
@@ -203,5 +217,15 @@ func GetEffectiveLimits(organizationID string) (memoryBytes int64, cpuCores int,
 	return effMem, effCPU, nil
 }
 
-func valueOr(p *int, d int) int { if p == nil { return d }; return *p }
-func valueOr64(p *int64, d int64) int64 { if p == nil { return d }; return *p }
+func valueOr(p *int, d int) int {
+	if p == nil {
+		return d
+	}
+	return *p
+}
+func valueOr64(p *int64, d int64) int64 {
+	if p == nil {
+		return d
+	}
+	return *p
+}
