@@ -112,6 +112,17 @@ const isLoadingFile = ref(false);
 const isLoadingIntegrations = ref(false);
 const error = ref("");
 
+const isGitHubAuthError = (err: unknown) => {
+  const message = String((err as Error)?.message || err || "").toLowerCase();
+  return (
+    message.includes("unauthenticated") ||
+    message.includes("bad credentials") ||
+    message.includes("token expired") ||
+    message.includes("token may be expired") ||
+    message.includes("revoked")
+  );
+};
+
 const integrationOptions = computed(() =>
   availableIntegrations.value.map((i) => ({
     label: i.isUser
@@ -221,7 +232,9 @@ const refreshRepos = async () => {
     console.error("Failed to load repos:", err);
     const integration = availableIntegrations.value.find(i => i.id === selectedIntegrationId.value);
     const accountName = integration?.username || "the selected account";
-    error.value = `Failed to load repositories for ${accountName}. ${(err as Error).message || "Please ensure the GitHub account is properly connected."}`;
+    error.value = isGitHubAuthError(err)
+      ? `GitHub rejected the token for ${accountName}. Please reconnect this GitHub account in Settings > Integrations.`
+      : `Failed to load repositories for ${accountName}. ${(err as Error).message || "Please ensure the GitHub account is properly connected."}`;
     repos.value = [];
   } finally {
     isLoading.value = false;
@@ -234,8 +247,6 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
     branches.value = [];
     emit("update:modelValue", "");
     emit("update:branch", "");
-    // Emit empty integration ID when repo is cleared
-    emit("update:integrationId", "");
     return;
   }
 
@@ -343,7 +354,6 @@ watch(selectedRepo, async (newRepo, oldRepo) => {
     branches.value = [];
     selectedBranch.value = "";
     emit("update:branch", "");
-    emit("update:integrationId", "");
   }
 }, { immediate: true });
 
@@ -355,12 +365,14 @@ watch(() => props.organizationId, async () => {
 
 watch(selectedIntegrationId, async (newId, oldId) => {
   // Emit integration ID change to parent
-  emit("update:integrationId", newId || "");
+  if (newId) {
+    emit("update:integrationId", newId);
+  }
   // Refresh repos when integration changes
   if (newId && newId !== oldId) {
     await refreshRepos();
   }
-}, { immediate: true });
+});
 
 onMounted(async () => {
   await loadAvailableIntegrations();

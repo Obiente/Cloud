@@ -138,7 +138,7 @@
                 { label: 'Connect from GitHub', value: 'github' },
                 { label: 'Enter URL manually', value: 'manual' },
               ]"
-              @update:model-value="markConfigDirty"
+              @update:model-value="handleRepositorySourceChange"
             />
 
             <!-- GitHub Connection Card -->
@@ -670,6 +670,10 @@
   const userClearedRepository = ref(false);
   // Track if user is currently changing the repository (clicked "Change" button)
   const isChangingRepository = ref(false);
+  // Track if the user explicitly selected GitHub/manual during this edit session.
+  // Without this, deployment refreshes can overwrite the radio selection.
+  const userSelectedRepositorySource = ref(false);
+  const lastRepositorySourceDeploymentId = ref<string>("");
   // Track the saved repository URL from deployment
   const savedRepositoryUrl = ref<string>("");
 
@@ -755,6 +759,12 @@
   // Initialize from deployment
   watchEffect(() => {
     if (props.deployment && !isClearingRepository.value) {
+      const deploymentId = props.deployment.id || "";
+      if (deploymentId !== lastRepositorySourceDeploymentId.value) {
+        lastRepositorySourceDeploymentId.value = deploymentId;
+        userSelectedRepositorySource.value = false;
+      }
+
       // General settings
       localEnvironment.value = String(
         props.deployment.environment ?? EnvEnum.PRODUCTION
@@ -902,7 +912,11 @@
       // Determine repository source based on saved deployment data
       // Only use "Connect from GitHub" if the deployment was saved with a GitHub integration ID
       // Otherwise, always use "Enter URL manually" (even for GitHub URLs)
-      if (!isClearingRepository.value && !userClearedRepository.value) {
+      if (
+        !isClearingRepository.value &&
+        !userClearedRepository.value &&
+        !userSelectedRepositorySource.value
+      ) {
         const deploymentIntegrationId = props.deployment.githubIntegrationId ?? "";
         if (deploymentIntegrationId && deploymentIntegrationId.trim() !== "") {
           // Deployment was saved with GitHub integration - show "Connect from GitHub" mode
@@ -978,6 +992,13 @@
   };
 
   const handleIntegrationIdChange = (id: string) => {
+    // The picker emits an empty value during initial loading and when no
+    // integration is selected yet. Do not let that clear an existing choice;
+    // manual mode is responsible for intentional clearing.
+    if (!id && repositorySource.value === "github") {
+      return;
+    }
+
     if (githubIntegrationId.value !== id) {
       githubIntegrationId.value = id;
       markConfigDirty();
@@ -1038,6 +1059,11 @@
       }
     }
     
+    markConfigDirty();
+  };
+
+  const handleRepositorySourceChange = () => {
+    userSelectedRepositorySource.value = true;
     markConfigDirty();
   };
 
