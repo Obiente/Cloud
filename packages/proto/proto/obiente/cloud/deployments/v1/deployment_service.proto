@@ -307,6 +307,7 @@ message UpdateDeploymentRequest {
   optional string healthcheck_path = 26; // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
   optional int32 healthcheck_expected_status = 27; // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
   optional string healthcheck_custom_command = 28; // Custom command (used with HEALTHCHECK_CUSTOM)
+  optional bool auto_deploy = 29; // Automatically deploy when GitHub push webhooks arrive
 }
 
 message UpdateDeploymentResponse {
@@ -1008,6 +1009,7 @@ message Deployment {
   optional string healthcheck_path = 42; // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
   optional int32 healthcheck_expected_status = 43; // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
   optional string healthcheck_custom_command = 44; // Custom command (used with HEALTHCHECK_CUSTOM)
+  optional bool auto_deploy = 45; // Automatically deploy when GitHub push webhooks arrive
 }
 
 message ListDeploymentContainersRequest {

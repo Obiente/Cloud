@@ -23,6 +23,8 @@ Complete reference for all Obiente Cloud environment variables.
 | `GITHUB_CLIENT_SECRET`               | -                            | ✅ (GitHub)   | Server-side GitHub OAuth client secret                                                                              |
 | `NUXT_GITHUB_CLIENT_SECRET`          | -                            | ❌            | Alternative server-side source for the GitHub OAuth client secret                                                   |
 | `GITHUB_TOKEN_ENCRYPTION_KEY`        | -                            | Recommended   | Dedicated encryption key for stored GitHub access tokens                                                            |
+| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | GitHub webhook signing secret for automatic deployments                                                             |
+| `GITHUB_WEBHOOK_URL`                 | `${API_URL}/webhooks/github` | ❌            | Public webhook URL GitHub should call for automatic deployments                                                     |
 | `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
 | `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
@@ -212,6 +214,8 @@ DB_LOG_LEVEL=debug
 | `GITHUB_CLIENT_SECRET`         | string | -       | ✅          |
 | `NUXT_GITHUB_CLIENT_SECRET`    | string | -       | ❌          |
 | `GITHUB_TOKEN_ENCRYPTION_KEY`  | string | -       | Recommended |
+| `GITHUB_WEBHOOK_SECRET`        | string | -       | ✅ webhooks |
+| `GITHUB_WEBHOOK_URL`           | string | -       | ❌          |
 
 Use either:
 

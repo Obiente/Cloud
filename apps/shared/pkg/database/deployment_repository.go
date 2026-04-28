@@ -73,7 +73,7 @@ func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string
 	// For list queries, we don't cache individual items but could cache the list result
 	// However, lists are often filtered/paginated, so caching is less effective
 	// We'll rely on individual item caching from GetByID calls
-	
+
 	query := r.db.WithContext(ctx).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 
 	if filters != nil {
@@ -124,7 +124,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 			"name", "domain", "custom_domains", "type", "build_strategy",
 			"repository_url", "branch", "build_command", "install_command", "start_command",
 			"dockerfile_path", "compose_file_path", "build_path", "build_output_path",
-			"use_nginx", "nginx_config", "github_integration_id",
+			"use_nginx", "nginx_config", "github_integration_id", "auto_deploy",
 			"healthcheck_type", "healthcheck_port", "healthcheck_path", "healthcheck_expected_status", "healthcheck_custom_command",
 			"status", "health_status", "environment", "groups",
 			"image", "port", "replicas", "memory_bytes", "cpu_shares",
@@ -247,20 +247,20 @@ func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 func (r *DeploymentRepository) Count(ctx context.Context, organizationID string, filters *DeploymentFilters) (int64, error) {
 	query := r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("organization_id = ?", organizationID)
-	
+
 	// Apply additional filters if provided
 	if filters != nil {
 		// Apply status filter
 		if filters.Status != nil {
 			query = query.Where("status = ?", *filters.Status)
 		}
-		
+
 		// Apply user ID filter if provided and not in "include all" mode
 		if filters.UserID != "" && !filters.IncludeAll {
 			query = query.Where("created_by = ?", filters.UserID)
 		}
 	}
-	
+
 	var count int64
 	return count, query.Count(&count).Error
 }

@@ -28,6 +28,46 @@ type swarmConvergedTask struct {
 
 // Container operations for deployments
 
+const (
+	swarmMemoryReservationDivisor = int64(20)                // 5% of the memory limit
+	swarmMinMemoryReservation     = int64(32 * 1024 * 1024)  // 32MiB
+	swarmMaxMemoryReservation     = int64(128 * 1024 * 1024) // 128MiB
+
+	swarmCPUReservationFraction = 0.025 // 2.5% of the CPU limit
+	swarmMinCPUReservation      = 0.01
+	swarmMaxCPUReservation      = 0.10
+)
+
+func swarmMemoryReservation(limitBytes int64) int64 {
+	if limitBytes <= 0 {
+		return 0
+	}
+
+	reservation := limitBytes / swarmMemoryReservationDivisor
+	if reservation < swarmMinMemoryReservation {
+		return swarmMinMemoryReservation
+	}
+	if reservation > swarmMaxMemoryReservation {
+		return swarmMaxMemoryReservation
+	}
+	return reservation
+}
+
+func swarmCPUReservation(limitCores float64) float64 {
+	if limitCores <= 0 {
+		return 0
+	}
+
+	reservation := limitCores * swarmCPUReservationFraction
+	if reservation < swarmMinCPUReservation {
+		return swarmMinCPUReservation
+	}
+	if reservation > swarmMaxCPUReservation {
+		return swarmMaxCPUReservation
+	}
+	return reservation
+}
+
 func normalizeStartCommand(raw string) string {
 	cmd := strings.TrimSpace(raw)
 	for range 4 {
@@ -674,19 +714,12 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	cpuCores := float64(config.CPUShares) / 1024.0
 	args = append(args, "--limit-cpu", fmt.Sprintf("%.2f", cpuCores))
 
-	// Add resource reservations (minimal reservations for idle workloads)
-	// Reserve 25% of limit for memory (idle sites don't need much)
-	reserveMemory := config.Memory / 4 // Reserve 25% of limit
-	if reserveMemory < 32*1024*1024 {  // Minimum 32MB for idle sites
-		reserveMemory = 32 * 1024 * 1024
-	}
+	// Add small placement reservations for idle workloads. Limits still enforce
+	// runtime ceilings, but reservations should not consume the whole node.
+	reserveMemory := swarmMemoryReservation(config.Memory)
 	args = append(args, "--reserve-memory", fmt.Sprintf("%d", reserveMemory))
 
-	// Reserve minimal CPU (idle sites use almost no CPU)
-	reserveCPU := cpuCores / 4.0 // Reserve 25% of limit
-	if reserveCPU < 0.01 {       // Minimum 0.01 cores (10m) for idle workloads
-		reserveCPU = 0.01
-	}
+	reserveCPU := swarmCPUReservation(cpuCores)
 	args = append(args, "--reserve-cpu", fmt.Sprintf("%.2f", reserveCPU))
 
 	// Add restart policy
@@ -1329,17 +1362,12 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	cpuCores := float64(config.CPUShares) / 1024.0
 	args = append(args, "--limit-cpu", fmt.Sprintf("%.2f", cpuCores))
 
-	// Update resource reservations
-	reserveMemory := config.Memory / 4
-	if reserveMemory < 32*1024*1024 {
-		reserveMemory = 32 * 1024 * 1024
-	}
+	// Update small placement reservations for idle workloads. Limits still
+	// enforce runtime ceilings, but reservations should not consume the whole node.
+	reserveMemory := swarmMemoryReservation(config.Memory)
 	args = append(args, "--reserve-memory", fmt.Sprintf("%d", reserveMemory))
 
-	reserveCPU := cpuCores / 4.0
-	if reserveCPU < 0.01 {
-		reserveCPU = 0.01
-	}
+	reserveCPU := swarmCPUReservation(cpuCores)
 	args = append(args, "--reserve-cpu", fmt.Sprintf("%.2f", reserveCPU))
 
 	// Update restart policy

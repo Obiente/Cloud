@@ -764,7 +764,7 @@ services:
     image: ghcr.io/obiente/cloud-auth-service:latest
     environment:
       PORT: 3002
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
       DB_HOST: pgpool
       METRICS_DB_HOST: metrics-pgpool
     deploy:
@@ -905,7 +905,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
       DB_HOST: pgpool
       METRICS_DB_HOST: metrics-pgpool
       REDIS_URL: ${REDIS_URL:-redis://redis-1:6379}

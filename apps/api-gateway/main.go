@@ -53,6 +53,7 @@ var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.notifications.v1.NotificationService/": "notifications-service:3012",
 	"/obiente.cloud.databases.v1.DatabaseService/":         "databases-service:3014",
 	"/webhooks/stripe":                                     "billing-service:3004",
+	"/webhooks/github":                                     "deployments-service:3005",
 	"/dns/push":                                            "dns-service:8053",         // DNS delegation push endpoint
 	"/dns/push/batch":                                      "dns-service:8053",         // DNS delegation batch push endpoint
 	"/terminal/ws":                                         "deployments-service:3005", // Deployment terminals

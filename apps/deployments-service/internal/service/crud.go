@@ -188,6 +188,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	// Create deployment with minimal configuration
 	// Type and build strategy will be auto-detected when repository is configured
 	healthcheckTypeUnspecified := deploymentsv1.HealthCheckType_HEALTHCHECK_TYPE_UNSPECIFIED
+	autoDeploy := true
 	deployment := &deploymentsv1.Deployment{
 		Id:              id,
 		Name:            req.Msg.GetName(),
@@ -201,6 +202,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		Groups:          groups,                      // Set groups from request
 		Branch:          "main",                      // Default branch
 		HealthcheckType: &healthcheckTypeUnspecified, // Default to auto-detection
+		AutoDeploy:      &autoDeploy,
 		LastDeployedAt:  timestamppb.Now(),
 		BandwidthUsage:  0,
 		StorageUsage:    0,
@@ -353,6 +355,10 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		} else {
 			dbDeployment.GitHubIntegrationID = nil
 		}
+	}
+	if req.Msg.AutoDeploy != nil {
+		autoDeploy := req.Msg.GetAutoDeploy()
+		dbDeployment.AutoDeploy = &autoDeploy
 	}
 	if req.Msg.Branch != nil {
 		branch := req.Msg.GetBranch()
@@ -630,6 +636,13 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// NOTE: Do NOT update status fields on config save
 	// Status changes should only happen via explicit deploy/start/stop actions
 	// This allows users to save settings without triggering a build
+
+	autoDeployEnabled := dbDeployment.AutoDeploy == nil || *dbDeployment.AutoDeploy
+	if autoDeployEnabled && dbDeployment.RepositoryURL != nil && dbDeployment.GitHubIntegrationID != nil {
+		if err := s.ensureGitHubWebhookForDeployment(ctx, dbDeployment); err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to configure GitHub auto-deploy webhook: %w", err))
+		}
+	}
 
 	// Save changes to database
 	if err := s.repo.Update(ctx, dbDeployment); err != nil {

@@ -61,6 +61,8 @@ Recommended for self-hosted deployments:
 
 ```bash
 GITHUB_TOKEN_ENCRYPTION_KEY=base64_or_high_entropy_secret
+GITHUB_WEBHOOK_SECRET=your_github_webhook_signing_secret
+GITHUB_WEBHOOK_URL=https://api.your-domain.example/webhooks/github
 ```
 
 Notes:
@@ -68,6 +70,8 @@ Notes:
 - `NUXT_PUBLIC_GITHUB_CLIENT_ID` is safe to expose to the browser
 - `GITHUB_CLIENT_SECRET` and `NUXT_GITHUB_CLIENT_SECRET` must stay server-side only
 - If you do not provide `GITHUB_TOKEN_ENCRYPTION_KEY`, Obiente falls back to other service secrets, but a dedicated key is the safest setup
+- `GITHUB_WEBHOOK_SECRET` must match the secret configured on GitHub webhooks for automatic deployments
+- `GITHUB_WEBHOOK_URL` is optional when `API_URL` is a public URL; otherwise set it explicitly
 
 ## OAuth Scopes
 
@@ -100,6 +104,8 @@ The server:
 
 This is important for load-balanced and reverse-proxied deployments because the callback URL must reflect the public origin GitHub sees.
 
+When a deployment is saved with a connected GitHub repository, `deployments-service` automatically creates or refreshes a repository `push` webhook. GitHub calls `/webhooks/github`, and Obiente matches the pushed repository and branch to deployments that have `github_integration_id` set.
+
 ## Connecting A Personal Account
 
 1. Open `Settings -> Integrations`
@@ -123,13 +129,13 @@ Use organization connections when repository access should belong to the organiz
 Once a repository is connected:
 
 1. Configure the repository and branch on a deployment
-2. Enable automatic deploys
+2. Leave **Auto Deploy** enabled, or turn it back on in deployment settings
 3. Obiente creates or updates the GitHub webhook
 
 Webhook endpoint:
 
 ```text
-https://YOUR-DOMAIN/api/webhooks/github
+https://YOUR-API-DOMAIN/webhooks/github
 ```
 
 ## Troubleshooting
@@ -189,7 +195,9 @@ Check:
 
 - the connection includes `admin:repo_hook`
 - the repository allows webhook management
-- GitHub can reach `https://YOUR-DOMAIN/api/webhooks/github`
+- `GITHUB_WEBHOOK_SECRET` is set on `deployments-service`
+- `GITHUB_WEBHOOK_URL` is set, or `API_URL` points at the public API gateway
+- GitHub can reach `https://YOUR-API-DOMAIN/webhooks/github`
 
 ## Security Notes
 

@@ -279,6 +279,7 @@ export function useDeploymentActions(organizationId: string = "default") {
              healthcheckPath?: string;
              healthcheckExpectedStatus?: number;
              healthcheckCustomCommand?: string;
+             autoDeploy?: boolean;
            }
          ) => {
            if (isProcessing.value) return;
@@ -342,6 +343,9 @@ export function useDeploymentActions(organizationId: string = "default") {
             }
             if (updates.healthcheckCustomCommand !== undefined) {
               request.healthcheckCustomCommand = updates.healthcheckCustomCommand === null || updates.healthcheckCustomCommand === "" ? "" : updates.healthcheckCustomCommand;
+            }
+            if (updates.autoDeploy !== undefined) {
+              request.autoDeploy = updates.autoDeploy;
             }
 
             // Per-deployment resource limits

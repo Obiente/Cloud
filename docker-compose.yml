@@ -121,7 +121,7 @@ services:
     container_name: obiente-auth-service
     environment:
       PORT: 3002
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
     depends_on:
       postgres:
         condition: service_healthy
@@ -229,7 +229,7 @@ services:
     container_name: obiente-deployments-service
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy

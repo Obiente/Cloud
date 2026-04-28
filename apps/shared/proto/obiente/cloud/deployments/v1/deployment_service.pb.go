@@ -796,6 +796,7 @@ type UpdateDeploymentRequest struct {
 	HealthcheckPath           *string          `protobuf:"bytes,26,opt,name=healthcheck_path,json=healthcheckPath,proto3,oneof" json:"healthcheck_path,omitempty"`                                                    // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
 	HealthcheckExpectedStatus *int32           `protobuf:"varint,27,opt,name=healthcheck_expected_status,json=healthcheckExpectedStatus,proto3,oneof" json:"healthcheck_expected_status,omitempty"`                   // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
 	HealthcheckCustomCommand  *string          `protobuf:"bytes,28,opt,name=healthcheck_custom_command,json=healthcheckCustomCommand,proto3,oneof" json:"healthcheck_custom_command,omitempty"`                       // Custom command (used with HEALTHCHECK_CUSTOM)
+	AutoDeploy                *bool            `protobuf:"varint,29,opt,name=auto_deploy,json=autoDeploy,proto3,oneof" json:"auto_deploy,omitempty"`                                                                  // Automatically deploy when GitHub push webhooks arrive
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -1024,6 +1025,13 @@ func (x *UpdateDeploymentRequest) GetHealthcheckCustomCommand() string {
 		return *x.HealthcheckCustomCommand
 	}
 	return ""
+}
+
+func (x *UpdateDeploymentRequest) GetAutoDeploy() bool {
+	if x != nil && x.AutoDeploy != nil {
+		return *x.AutoDeploy
+	}
+	return false
 }
 
 type UpdateDeploymentResponse struct {
@@ -7031,6 +7039,7 @@ type Deployment struct {
 	HealthcheckPath           *string          `protobuf:"bytes,42,opt,name=healthcheck_path,json=healthcheckPath,proto3,oneof" json:"healthcheck_path,omitempty"`                                                    // HTTP path (default: "/", used with HEALTHCHECK_HTTP)
 	HealthcheckExpectedStatus *int32           `protobuf:"varint,43,opt,name=healthcheck_expected_status,json=healthcheckExpectedStatus,proto3,oneof" json:"healthcheck_expected_status,omitempty"`                   // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
 	HealthcheckCustomCommand  *string          `protobuf:"bytes,44,opt,name=healthcheck_custom_command,json=healthcheckCustomCommand,proto3,oneof" json:"healthcheck_custom_command,omitempty"`                       // Custom command (used with HEALTHCHECK_CUSTOM)
+	AutoDeploy                *bool            `protobuf:"varint,45,opt,name=auto_deploy,json=autoDeploy,proto3,oneof" json:"auto_deploy,omitempty"`                                                                  // Automatically deploy when GitHub push webhooks arrive
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -7371,6 +7380,13 @@ func (x *Deployment) GetHealthcheckCustomCommand() string {
 		return *x.HealthcheckCustomCommand
 	}
 	return ""
+}
+
+func (x *Deployment) GetAutoDeploy() bool {
+	if x != nil && x.AutoDeploy != nil {
+		return *x.AutoDeploy
+	}
+	return false
 }
 
 type ListDeploymentContainersRequest struct {
@@ -8803,7 +8819,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x15GetDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"\xee\r\n" +
+	"deployment\"\xa4\x0e\n" +
 	"\x17UpdateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
@@ -8835,7 +8851,9 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x10healthcheck_port\x18\x19 \x01(\x05H\x14R\x0fhealthcheckPort\x88\x01\x01\x12.\n" +
 	"\x10healthcheck_path\x18\x1a \x01(\tH\x15R\x0fhealthcheckPath\x88\x01\x01\x12C\n" +
 	"\x1bhealthcheck_expected_status\x18\x1b \x01(\x05H\x16R\x19healthcheckExpectedStatus\x88\x01\x01\x12A\n" +
-	"\x1ahealthcheck_custom_command\x18\x1c \x01(\tH\x17R\x18healthcheckCustomCommand\x88\x01\x01B\a\n" +
+	"\x1ahealthcheck_custom_command\x18\x1c \x01(\tH\x17R\x18healthcheckCustomCommand\x88\x01\x01\x12$\n" +
+	"\vauto_deploy\x18\x1d \x01(\bH\x18R\n" +
+	"autoDeploy\x88\x01\x01B\a\n" +
 	"\x05_nameB\x11\n" +
 	"\x0f_repository_urlB\x18\n" +
 	"\x16_github_integration_idB\t\n" +
@@ -8861,7 +8879,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x11_healthcheck_portB\x13\n" +
 	"\x11_healthcheck_pathB\x1e\n" +
 	"\x1c_healthcheck_expected_statusB\x1d\n" +
-	"\x1b_healthcheck_custom_command\"d\n" +
+	"\x1b_healthcheck_custom_commandB\x0e\n" +
+	"\f_auto_deploy\"d\n" +
 	"\x18UpdateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
@@ -9416,7 +9435,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\xf5\x13\n" +
+	"\x13_storage_cost_cents\"\xab\x14\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -9467,7 +9486,9 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x10healthcheck_port\x18) \x01(\x05H\x15R\x0fhealthcheckPort\x88\x01\x01\x12.\n" +
 	"\x10healthcheck_path\x18* \x01(\tH\x16R\x0fhealthcheckPath\x88\x01\x01\x12C\n" +
 	"\x1bhealthcheck_expected_status\x18+ \x01(\x05H\x17R\x19healthcheckExpectedStatus\x88\x01\x01\x12A\n" +
-	"\x1ahealthcheck_custom_command\x18, \x01(\tH\x18R\x18healthcheckCustomCommand\x88\x01\x01\x1a:\n" +
+	"\x1ahealthcheck_custom_command\x18, \x01(\tH\x18R\x18healthcheckCustomCommand\x88\x01\x01\x12$\n" +
+	"\vauto_deploy\x18- \x01(\bH\x19R\n" +
+	"autoDeploy\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
@@ -9498,7 +9519,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x11_healthcheck_portB\x13\n" +
 	"\x11_healthcheck_pathB\x1e\n" +
 	"\x1c_healthcheck_expected_statusB\x1d\n" +
-	"\x1b_healthcheck_custom_command\"o\n" +
+	"\x1b_healthcheck_custom_commandB\x0e\n" +
+	"\f_auto_deploy\"o\n" +
 	"\x1fListDeploymentContainersRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"u\n" +

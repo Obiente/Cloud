@@ -29,6 +29,7 @@ type Deployment struct {
 	UseNginx            *bool   `gorm:"column:use_nginx;default:false" json:"use_nginx"`                 // Use nginx for static deployments
 	NginxConfig         *string `gorm:"column:nginx_config;type:text" json:"nginx_config"`               // Custom nginx configuration (optional, uses default if empty)
 	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
+	AutoDeploy          *bool   `gorm:"column:auto_deploy;default:true" json:"auto_deploy"`              // Automatically deploy on GitHub push webhooks
 
 	// Health check configuration
 	HealthcheckType           *int32     `gorm:"column:healthcheck_type" json:"healthcheck_type"`                               // Type of health check (HealthCheckType enum)

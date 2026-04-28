@@ -130,6 +130,7 @@ func main() {
 
 	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
 	mux.HandleFunc("/terminal/ws", deploymentService.HandleTerminalWebSocket)
+	mux.HandleFunc("/webhooks/github", deploymentService.HandleGitHubWebhook)
 
 	// Health check endpoint with replica ID
 	mux.HandleFunc("/health", health.HandleHealth("deployments-service", func() (bool, string, map[string]interface{}) {

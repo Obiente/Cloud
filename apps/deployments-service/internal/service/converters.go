@@ -56,6 +56,9 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	if db.GitHubIntegrationID != nil {
 		deployment.GithubIntegrationId = proto.String(*db.GitHubIntegrationID)
 	}
+	if db.AutoDeploy != nil {
+		deployment.AutoDeploy = proto.Bool(*db.AutoDeploy)
+	}
 	if db.BuildCommand != nil {
 		deployment.BuildCommand = proto.String(*db.BuildCommand)
 	}
@@ -176,6 +179,10 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 	if protoDep.GithubIntegrationId != nil {
 		integrationID := protoDep.GetGithubIntegrationId()
 		db.GitHubIntegrationID = &integrationID
+	}
+	if protoDep.AutoDeploy != nil {
+		autoDeploy := protoDep.GetAutoDeploy()
+		db.AutoDeploy = &autoDeploy
 	}
 	if protoDep.BuildCommand != nil {
 		buildCmd := protoDep.GetBuildCommand()

@@ -208,6 +208,36 @@
             </OuiStack>
           </OuiStack>
 
+          <OuiCard
+            v-if="showAutoDeployToggle"
+            variant="outline"
+            class="border-default bg-surface-subtle/40"
+          >
+            <OuiCardBody>
+              <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
+                <OuiStack gap="xs" class="flex-1 min-w-0">
+                  <OuiText size="sm" weight="semibold">
+                    Auto Deploy
+                  </OuiText>
+                  <OuiText size="xs" color="tertiary">
+                    Deploy this service automatically when GitHub receives a push
+                    on the selected branch.
+                  </OuiText>
+                </OuiStack>
+                <OuiFlex align="center" gap="sm">
+                  <OuiText size="xs" color="tertiary">
+                    {{ autoDeploy ? "On" : "Off" }}
+                  </OuiText>
+                  <OuiSwitch
+                    v-model="autoDeploy"
+                    size="md"
+                    @update:model-value="markConfigDirty"
+                  />
+                </OuiFlex>
+              </OuiFlex>
+            </OuiCardBody>
+          </OuiCard>
+
           <!-- Build Strategy -->
           <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect
@@ -498,6 +528,7 @@
   import { useConnectClient } from "~/lib/connect-client";
   import GitHubRepoPicker from "./GitHubRepoPicker.vue";
   import OuiRadioGroup from "~/components/oui/RadioGroup.vue";
+  import OuiSwitch from "~/components/oui/Switch.vue";
   import CustomDomainManager from "./CustomDomainManager.vue";
 
   interface Props {
@@ -528,6 +559,7 @@
   const repositorySource = ref<"github" | "manual">("manual");
   const selectedGitHubRepo = ref("");
   const githubIntegrationId = ref<string>("");
+  const autoDeploy = ref(props.deployment.autoDeploy ?? true);
   const isGitHubConnected = ref(false);
   const repositoryUrlError = ref("");
   const githubRepoError = ref("");
@@ -790,6 +822,7 @@
         config.healthcheckPath = props.deployment.healthcheckPath ?? "/";
         config.healthcheckExpectedStatus = props.deployment.healthcheckExpectedStatus ? String(props.deployment.healthcheckExpectedStatus) : "";
         config.healthcheckCustomCommand = props.deployment.healthcheckCustomCommand ?? "";
+        autoDeploy.value = props.deployment.autoDeploy ?? true;
         config.cpuLimit =
           props.deployment.cpuLimit !== undefined &&
           props.deployment.cpuLimit !== null
@@ -842,6 +875,7 @@
           config.healthcheckPath === (props.deployment.healthcheckPath ?? "/") &&
           config.healthcheckExpectedStatus === (props.deployment.healthcheckExpectedStatus ? String(props.deployment.healthcheckExpectedStatus) : "") &&
           config.healthcheckCustomCommand === (props.deployment.healthcheckCustomCommand ?? "") &&
+          autoDeploy.value === (props.deployment.autoDeploy ?? true) &&
           config.cpuLimit === (props.deployment.cpuLimit !== undefined && props.deployment.cpuLimit !== null ? String(props.deployment.cpuLimit) : "") &&
           config.memoryLimit === (props.deployment.memoryLimit !== undefined && props.deployment.memoryLimit !== null ? mbBigintToGbString(props.deployment.memoryLimit) : "") &&
           buildStrategy.value === (props.deployment.buildStrategy ?? BuildStrategy.BUILD_STRATEGY_UNSPECIFIED);
@@ -1211,6 +1245,10 @@
     return currentUrl === savedUrl;
   });
 
+  const showAutoDeployToggle = computed(() => {
+    return repositorySource.value === "github" || !!githubIntegrationId.value;
+  });
+
   const resetNginxConfig = () => {
     config.nginxConfig = "";
     markConfigDirty();
@@ -1364,6 +1402,7 @@
         healthcheckPort: config.healthcheckPort ? Number(config.healthcheckPort) : 0,
         healthcheckExpectedStatus: config.healthcheckExpectedStatus ? Number(config.healthcheckExpectedStatus) : 0,
         healthcheckCustomCommand: config.healthcheckCustomCommand?.trim() || "",
+        autoDeploy: autoDeploy.value,
 
         // Per-deployment limits: send numbers; 0 clears override on backend
         cpuLimit:

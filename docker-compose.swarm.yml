@@ -278,7 +278,7 @@ services:
     image: ghcr.io/obiente/cloud-auth-service:latest
     environment:
       PORT: 3002
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
     deploy:
       mode: replicated
       replicas: 2
@@ -416,7 +416,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-swarm-orchestrator, *common-dns-delegation, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-swarm-orchestrator, *common-dns-delegation, *common-notifications]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente:/var/lib/obiente

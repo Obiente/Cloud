@@ -272,7 +272,7 @@ services:
       dockerfile: apps/auth-service/Dockerfile
     environment:
       PORT: 3002
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
     deploy:
       mode: replicated
       replicas: 1
@@ -416,7 +416,7 @@ services:
       dockerfile: apps/deployments-service/Dockerfile
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
       ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
