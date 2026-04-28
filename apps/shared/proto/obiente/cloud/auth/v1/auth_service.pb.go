@@ -344,9 +344,11 @@ func (x *User) GetRoles() []string {
 // GitHub Integration Messages
 type ConnectGitHubRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"` // GitHub OAuth access token
-	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`                          // GitHub username
-	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`                                // Granted OAuth scopes
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`    // GitHub OAuth access token
+	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`                             // GitHub username
+	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`                                   // Granted OAuth scopes
+	RefreshToken  string                 `protobuf:"bytes,4,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"` // GitHub OAuth refresh token, when expiring user tokens are enabled
+	ExpiresIn     int32                  `protobuf:"varint,5,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`         // Access token expiry in seconds, when provided by GitHub
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -400,6 +402,20 @@ func (x *ConnectGitHubRequest) GetScope() string {
 		return x.Scope
 	}
 	return ""
+}
+
+func (x *ConnectGitHubRequest) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *ConnectGitHubRequest) GetExpiresIn() int32 {
+	if x != nil {
+		return x.ExpiresIn
+	}
+	return 0
 }
 
 type ConnectGitHubResponse struct {
@@ -626,9 +642,11 @@ func (x *GetGitHubStatusResponse) GetUsername() string {
 type ConnectOrganizationGitHubRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
-	AccessToken    string                 `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"` // GitHub OAuth access token
-	Username       string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`                          // GitHub username
-	Scope          string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`                                // Granted OAuth scopes
+	AccessToken    string                 `protobuf:"bytes,2,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`    // GitHub OAuth access token
+	Username       string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`                             // GitHub username
+	Scope          string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`                                   // Granted OAuth scopes
+	RefreshToken   string                 `protobuf:"bytes,5,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"` // GitHub OAuth refresh token, when expiring user tokens are enabled
+	ExpiresIn      int32                  `protobuf:"varint,6,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`         // Access token expiry in seconds, when provided by GitHub
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -689,6 +707,20 @@ func (x *ConnectOrganizationGitHubRequest) GetScope() string {
 		return x.Scope
 	}
 	return ""
+}
+
+func (x *ConnectOrganizationGitHubRequest) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubRequest) GetExpiresIn() int32 {
+	if x != nil {
+		return x.ExpiresIn
+	}
+	return 0
 }
 
 type ConnectOrganizationGitHubResponse struct {
@@ -1299,11 +1331,14 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\x06locale\x18\v \x01(\tR\x06locale\x129\n" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
-	"\x05roles\x18\r \x03(\tR\x05roles\"k\n" +
+	"\x05roles\x18\r \x03(\tR\x05roles\"\xaf\x01\n" +
 	"\x14ConnectGitHubRequest\x12!\n" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x14\n" +
-	"\x05scope\x18\x03 \x01(\tR\x05scope\"M\n" +
+	"\x05scope\x18\x03 \x01(\tR\x05scope\x12#\n" +
+	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\x12\x1d\n" +
+	"\n" +
+	"expires_in\x18\x05 \x01(\x05R\texpiresIn\"M\n" +
 	"\x15ConnectGitHubResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\"\x19\n" +
@@ -1313,12 +1348,15 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\x16GetGitHubStatusRequest\"S\n" +
 	"\x17GetGitHubStatusResponse\x12\x1c\n" +
 	"\tconnected\x18\x01 \x01(\bR\tconnected\x12\x1a\n" +
-	"\busername\x18\x02 \x01(\tR\busername\"\xa0\x01\n" +
+	"\busername\x18\x02 \x01(\tR\busername\"\xe4\x01\n" +
 	" ConnectOrganizationGitHubRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12!\n" +
 	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x14\n" +
-	"\x05scope\x18\x04 \x01(\tR\x05scope\"Y\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\x12#\n" +
+	"\rrefresh_token\x18\x05 \x01(\tR\frefreshToken\x12\x1d\n" +
+	"\n" +
+	"expires_in\x18\x06 \x01(\x05R\texpiresIn\"Y\n" +
 	"!ConnectOrganizationGitHubResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\"N\n" +

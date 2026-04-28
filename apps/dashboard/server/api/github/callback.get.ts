@@ -98,6 +98,9 @@ export default defineEventHandler(async (event) => {
 
     let tokenResponse: {
       access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      refresh_token_expires_in?: number;
       token_type?: string;
       scope?: string;
       error?: string;
@@ -333,6 +336,8 @@ export default defineEventHandler(async (event) => {
           const request = create(ConnectOrganizationGitHubRequestSchema, {
             organizationId: orgId,
             accessToken: tokenResponse.access_token,
+            refreshToken: tokenResponse.refresh_token || "",
+            expiresIn: tokenResponse.expires_in || 0,
             username: userResponse.login,
             scope: tokenResponse.scope || "",
           });
@@ -345,6 +350,8 @@ export default defineEventHandler(async (event) => {
           // Connect as user
           const request = create(ConnectGitHubRequestSchema, {
             accessToken: tokenResponse.access_token,
+            refreshToken: tokenResponse.refresh_token || "",
+            expiresIn: tokenResponse.expires_in || 0,
             username: userResponse.login,
             scope: tokenResponse.scope || "",
           });
@@ -371,6 +378,8 @@ export default defineEventHandler(async (event) => {
               const request = create(ConnectOrganizationGitHubRequestSchema, {
                 organizationId: orgId,
                 accessToken: tokenResponse.access_token,
+                refreshToken: tokenResponse.refresh_token || "",
+                expiresIn: tokenResponse.expires_in || 0,
                 username: userResponse.login,
                 scope: tokenResponse.scope || "",
               });
@@ -382,6 +391,8 @@ export default defineEventHandler(async (event) => {
             } else {
               const request = create(ConnectGitHubRequestSchema, {
                 accessToken: tokenResponse.access_token,
+                refreshToken: tokenResponse.refresh_token || "",
+                expiresIn: tokenResponse.expires_in || 0,
                 username: userResponse.login,
                 scope: tokenResponse.scope || "",
               });

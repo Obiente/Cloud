@@ -2,9 +2,15 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
 	"strings"
+	"time"
 
 	githubclient "deployments-service/internal/github"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
@@ -16,6 +22,8 @@ import (
 	"connectrpc.com/connect"
 	"gorm.io/gorm"
 )
+
+const githubTokenRefreshSkew = 5 * time.Minute
 
 // containsAuthError checks if an error message indicates authentication failure
 func containsAuthError(errMsg string) bool {
@@ -40,16 +48,16 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err == nil {
 			// Verify user has access to this integration
 			if integration.UserID != nil && *integration.UserID == user.Id {
-				return decryptStoredGitHubToken(integration.Token)
+				return getUsableGitHubToken(&integration)
 			}
 			if integration.OrganizationID != nil {
 				// Check if user is member of the organization
 				if isSuperAdmin {
-					return decryptStoredGitHubToken(integration.Token)
+					return getUsableGitHubToken(&integration)
 				}
 				var member database.OrganizationMember
 				if err := database.DB.Where("organization_id = ? AND user_id = ?", *integration.OrganizationID, user.Id).First(&member).Error; err == nil {
-					return decryptStoredGitHubToken(integration.Token)
+					return getUsableGitHubToken(&integration)
 				}
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -63,11 +71,11 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		var orgIntegration database.GitHubIntegration
 		if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
 			if isSuperAdmin {
-				return decryptStoredGitHubToken(orgIntegration.Token)
+				return getUsableGitHubToken(&orgIntegration)
 			}
 			var member database.OrganizationMember
 			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
-				return decryptStoredGitHubToken(orgIntegration.Token)
+				return getUsableGitHubToken(&orgIntegration)
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
@@ -78,7 +86,7 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 	// Fall back to user token
 	var userIntegration database.GitHubIntegration
 	if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
-		return decryptStoredGitHubToken(userIntegration.Token)
+		return getUsableGitHubToken(&userIntegration)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Log unexpected errors, but ignore "record not found"
 		return "", fmt.Errorf("failed to get user integration: %w", err)
@@ -93,7 +101,7 @@ func getGitHubIntegrationTokenByID(integrationID string) (string, error) {
 		return "", err
 	}
 
-	return decryptStoredGitHubToken(integration.Token)
+	return getUsableGitHubToken(&integration)
 }
 
 func decryptStoredGitHubToken(token string) (string, error) {
@@ -106,6 +114,139 @@ func decryptStoredGitHubToken(token string) (string, error) {
 	}
 
 	return tokenCipher.DecryptString(token)
+}
+
+func encryptStoredGitHubToken(token string) (string, error) {
+	tokenCipher, err := sharedsecrets.NewTokenCipherFromEnv()
+	if err != nil {
+		return "", fmt.Errorf("GitHub token encryption is not configured: %w", err)
+	}
+	return tokenCipher.EncryptString(token)
+}
+
+func getUsableGitHubToken(integration *database.GitHubIntegration) (string, error) {
+	if integration == nil {
+		return "", fmt.Errorf("GitHub integration is nil")
+	}
+
+	if integration.TokenExpiresAt == nil || integration.RefreshToken == nil || time.Until(*integration.TokenExpiresAt) > githubTokenRefreshSkew {
+		return decryptStoredGitHubToken(integration.Token)
+	}
+
+	token, err := refreshGitHubIntegrationToken(integration)
+	if err != nil {
+		// Return a helpful error, but do not hide a working token if we are only
+		// refreshing early. Once expired, callers should fail and prompt reconnect.
+		if time.Now().Before(*integration.TokenExpiresAt) {
+			if currentToken, decryptErr := decryptStoredGitHubToken(integration.Token); decryptErr == nil {
+				return currentToken, nil
+			}
+		}
+		return "", err
+	}
+
+	return token, nil
+}
+
+type githubRefreshResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int32  `json:"expires_in"`
+	Scope        string `json:"scope"`
+	TokenType    string `json:"token_type"`
+	Error        string `json:"error"`
+	Description  string `json:"error_description"`
+}
+
+func refreshGitHubIntegrationToken(integration *database.GitHubIntegration) (string, error) {
+	clientID := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_ID"))
+	if clientID == "" {
+		clientID = strings.TrimSpace(os.Getenv("NUXT_PUBLIC_GITHUB_CLIENT_ID"))
+	}
+	clientSecret := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_SECRET"))
+	if clientSecret == "" {
+		clientSecret = strings.TrimSpace(os.Getenv("NUXT_GITHUB_CLIENT_SECRET"))
+	}
+	if clientID == "" || clientSecret == "" {
+		return "", fmt.Errorf("GitHub OAuth refresh is not configured")
+	}
+	if integration.RefreshToken == nil || strings.TrimSpace(*integration.RefreshToken) == "" {
+		return "", fmt.Errorf("GitHub refresh token is not available")
+	}
+
+	refreshToken, err := decryptStoredGitHubToken(*integration.RefreshToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt GitHub refresh token: %w", err)
+	}
+
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest(http.MethodPost, "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GitHub token refresh request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub token refresh failed: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var refreshResp githubRefreshResponse
+	if err := json.Unmarshal(body, &refreshResp); err != nil {
+		return "", fmt.Errorf("failed to decode GitHub token refresh response: %w", err)
+	}
+	if refreshResp.Error != "" {
+		if refreshResp.Description != "" {
+			return "", fmt.Errorf("GitHub token refresh failed: %s: %s", refreshResp.Error, refreshResp.Description)
+		}
+		return "", fmt.Errorf("GitHub token refresh failed: %s", refreshResp.Error)
+	}
+	if strings.TrimSpace(refreshResp.AccessToken) == "" {
+		return "", fmt.Errorf("GitHub token refresh returned no access token")
+	}
+
+	encryptedAccessToken, err := encryptStoredGitHubToken(refreshResp.AccessToken)
+	if err != nil {
+		return "", err
+	}
+
+	updates := map[string]interface{}{
+		"token":      encryptedAccessToken,
+		"updated_at": time.Now(),
+	}
+
+	if strings.TrimSpace(refreshResp.RefreshToken) != "" {
+		encryptedRefreshToken, err := encryptStoredGitHubToken(refreshResp.RefreshToken)
+		if err != nil {
+			return "", err
+		}
+		updates["refresh_token"] = encryptedRefreshToken
+	}
+	if refreshResp.ExpiresIn > 0 {
+		expiresAt := time.Now().Add(time.Duration(refreshResp.ExpiresIn) * time.Second)
+		updates["token_expires_at"] = &expiresAt
+	}
+	if strings.TrimSpace(refreshResp.Scope) != "" {
+		updates["scope"] = refreshResp.Scope
+	}
+
+	if err := database.DB.Model(&database.GitHubIntegration{}).Where("id = ?", integration.ID).Updates(updates).Error; err != nil {
+		return "", fmt.Errorf("failed to persist refreshed GitHub token: %w", err)
+	}
+
+	return refreshResp.AccessToken, nil
 }
 
 // ListGitHubRepos lists GitHub repositories for the authenticated user or organization

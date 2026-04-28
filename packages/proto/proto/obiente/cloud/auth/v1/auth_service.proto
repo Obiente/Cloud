@@ -79,6 +79,8 @@ message ConnectGitHubRequest {
   string access_token = 1; // GitHub OAuth access token
   string username = 2;     // GitHub username
   string scope = 3;        // Granted OAuth scopes
+  string refresh_token = 4; // GitHub OAuth refresh token, when expiring user tokens are enabled
+  int32 expires_in = 5;     // Access token expiry in seconds, when provided by GitHub
 }
 
 message ConnectGitHubResponse {
@@ -105,6 +107,8 @@ message ConnectOrganizationGitHubRequest {
   string access_token = 2; // GitHub OAuth access token
   string username = 3;     // GitHub username
   string scope = 4;        // Granted OAuth scopes
+  string refresh_token = 5; // GitHub OAuth refresh token, when expiring user tokens are enabled
+  int32 expires_in = 6;     // Access token expiry in seconds, when provided by GitHub
 }
 
 message ConnectOrganizationGitHubResponse {

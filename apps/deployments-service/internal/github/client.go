@@ -75,7 +75,7 @@ func (c *Client) ListRepos(ctx context.Context, page, perPage int) ([]GitHubRepo
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
@@ -110,7 +110,7 @@ func (c *Client) ListBranches(ctx context.Context, repoFullName string) ([]GitHu
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
@@ -145,7 +145,7 @@ func (c *Client) GetFile(ctx context.Context, repoFullName, branch, path string)
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
@@ -190,7 +190,7 @@ func (c *Client) ListHooks(ctx context.Context, repoFullName string) ([]GitHubHo
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
@@ -229,7 +229,7 @@ func (c *Client) CreateHook(ctx context.Context, repoFullName string, hook Creat
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")
@@ -269,7 +269,7 @@ func (c *Client) UpdateHook(ctx context.Context, repoFullName string, hookID int
 	}
 
 	if c.token != "" {
-		req.Header.Set("Authorization", "token "+c.token)
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("Content-Type", "application/json")

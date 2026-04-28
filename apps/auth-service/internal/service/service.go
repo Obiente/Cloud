@@ -183,14 +183,20 @@ func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt GitHub token: %w", err))
 	}
+	encryptedRefreshToken, tokenExpiresAt, err := s.prepareGitHubTokenMetadata(req.Msg.GetRefreshToken(), req.Msg.GetExpiresIn(), now)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 
 	integration := database.GitHubIntegration{
 		ID:             uuid.New().String(),
 		UserID:         &userID,
 		OrganizationID: nil,
 		Token:          encryptedToken,
+		RefreshToken:   encryptedRefreshToken,
 		Username:       req.Msg.GetUsername(),
 		Scope:          req.Msg.GetScope(),
+		TokenExpiresAt: tokenExpiresAt,
 		ConnectedAt:    now,
 		UpdatedAt:      now,
 	}
@@ -284,14 +290,20 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to encrypt GitHub token: %w", err))
 	}
+	encryptedRefreshToken, tokenExpiresAt, err := s.prepareGitHubTokenMetadata(req.Msg.GetRefreshToken(), req.Msg.GetExpiresIn(), now)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 
 	integration := database.GitHubIntegration{
 		ID:             uuid.New().String(),
 		UserID:         nil,
 		OrganizationID: &orgID,
 		Token:          encryptedToken,
+		RefreshToken:   encryptedRefreshToken,
 		Username:       req.Msg.GetUsername(),
 		Scope:          req.Msg.GetScope(),
+		TokenExpiresAt: tokenExpiresAt,
 		ConnectedAt:    now,
 		UpdatedAt:      now,
 	}
@@ -415,17 +427,41 @@ func (s *Service) encryptGitHubToken(token string) (string, error) {
 	return s.tokenCipher.EncryptString(token)
 }
 
+func (s *Service) prepareGitHubTokenMetadata(refreshToken string, expiresIn int32, now time.Time) (*string, *time.Time, error) {
+	var encryptedRefreshToken *string
+	if strings.TrimSpace(refreshToken) != "" {
+		if s.tokenCipher == nil {
+			return nil, nil, fmt.Errorf("failed to encrypt GitHub refresh token: GitHub token encryption is not configured")
+		}
+		encrypted, err := s.tokenCipher.EncryptString(refreshToken)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encrypt GitHub refresh token: %w", err)
+		}
+		encryptedRefreshToken = &encrypted
+	}
+
+	var tokenExpiresAt *time.Time
+	if expiresIn > 0 {
+		expiresAt := now.Add(time.Duration(expiresIn) * time.Second)
+		tokenExpiresAt = &expiresAt
+	}
+
+	return encryptedRefreshToken, tokenExpiresAt, nil
+}
+
 func (s *Service) upsertGitHubIntegration(conflictColumn string, integration database.GitHubIntegration) error {
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: conflictColumn}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"token":           integration.Token,
-			"username":        integration.Username,
-			"scope":           integration.Scope,
-			"updated_at":      integration.UpdatedAt,
-			"connected_at":    integration.ConnectedAt,
-			"user_id":         integration.UserID,
-			"organization_id": integration.OrganizationID,
+			"token":            integration.Token,
+			"refresh_token":    integration.RefreshToken,
+			"username":         integration.Username,
+			"scope":            integration.Scope,
+			"token_expires_at": integration.TokenExpiresAt,
+			"updated_at":       integration.UpdatedAt,
+			"connected_at":     integration.ConnectedAt,
+			"user_id":          integration.UserID,
+			"organization_id":  integration.OrganizationID,
 		}),
 	}).Create(&integration).Error
 }
