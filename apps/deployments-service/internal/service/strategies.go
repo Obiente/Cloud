@@ -95,12 +95,12 @@ func (s *RailpackStrategy) Detect(ctx context.Context, repoPath string) (bool, e
 
 	// Check for pattern-based indicators
 	patterns := []string{
-		"*.csproj",    // C#/.NET
-		"*.fsproj",    // F#
-		"*.sln",       // .NET Solution
-		"*.vbproj",    // VB.NET
-		"*.cabal",     // Haskell
-		"stack.yaml",  // Haskell Stack
+		"*.csproj",     // C#/.NET
+		"*.fsproj",     // F#
+		"*.sln",        // .NET Solution
+		"*.vbproj",     // VB.NET
+		"*.cabal",      // Haskell
+		"stack.yaml",   // Haskell Stack
 		"package.yaml", // Haskell
 	}
 
@@ -255,7 +255,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	// Use buildWorkDir (which includes BuildPath if set) instead of buildDir
 	cmd := exec.CommandContext(ctx, railpackPath, "build", buildWorkDir, "--name", imageName)
-	
+
 	// Prepare environment variables - add RAILPACK_* vars to config.EnvVars before converting
 	// This ensures they override any existing values
 	railpackEnvVars := make(map[string]string)
@@ -277,7 +277,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 		railpackEnvVars["RAILPACK_START_CMD"] = config.StartCommand
 		writeBuildLog("   🚀 Start command: %s", config.StartCommand)
 	}
-	
+
 	envVars := getEnvAsStringSlice(railpackEnvVars)
 
 	// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
@@ -1711,6 +1711,14 @@ func (s *DockerfileStrategy) Detect(ctx context.Context, repoPath string) (bool,
 func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
 	logger.Info("[Dockerfile] Building deployment %s", deployment.ID)
 
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if config.LogWriter != nil {
+			config.LogWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Dockerfile] %s", msg)
+	}
+
 	buildDir, err := ensureBuildDir(deployment.ID)
 	if err != nil {
 		return &BuildResult{Success: false, Error: err}, err
@@ -1729,13 +1737,36 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		dockerfile = "Dockerfile"
 	}
 
-	// Ensure dockerfile path is relative to buildDir
-	dockerfilePath := filepath.Join(buildDir, dockerfile)
-	if !fileExists(dockerfilePath) {
-		return &BuildResult{Success: false, Error: fmt.Errorf("dockerfile not found at path: %s", dockerfile)}, nil
+	contextPath, err := cleanRelativeRepoPath(config.BuildPath)
+	if err != nil {
+		return &BuildResult{Success: false, Error: fmt.Errorf("invalid build context root: %w", err)}, nil
+	}
+	contextDir := filepath.Join(buildDir, contextPath)
+	contextInfo, err := os.Stat(contextDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &BuildResult{Success: false, Error: fmt.Errorf("build context root not found at path: %s", contextPath)}, nil
+		}
+		return &BuildResult{Success: false, Error: fmt.Errorf("failed to inspect build context root: %w", err)}, nil
+	}
+	if !contextInfo.IsDir() {
+		return &BuildResult{Success: false, Error: fmt.Errorf("build context root is not a directory: %s", contextPath)}, nil
+	}
+	writeBuildLog("   📁 Docker build context: %s", contextPath)
+
+	dockerfilePathValue, err := cleanRelativeRepoPath(dockerfile)
+	if err != nil {
+		return &BuildResult{Success: false, Error: fmt.Errorf("invalid Dockerfile path: %w", err)}, nil
 	}
 
-	if err := buildDockerImage(ctx, buildDir, imageName, dockerfile, config.LogWriter, config.LogWriterErr); err != nil {
+	// Ensure dockerfile path is relative to buildDir
+	dockerfilePath := filepath.Join(buildDir, dockerfilePathValue)
+	if !fileExists(dockerfilePath) {
+		return &BuildResult{Success: false, Error: fmt.Errorf("dockerfile not found at path: %s", dockerfilePathValue)}, nil
+	}
+	writeBuildLog("   🐳 Dockerfile: %s", dockerfilePathValue)
+
+	if err := buildDockerImage(ctx, contextDir, imageName, dockerfilePath, config.LogWriter, config.LogWriterErr); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
 
@@ -1756,6 +1787,26 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		Port:           port,
 		Success:        true,
 	}, nil
+}
+
+func cleanRelativeRepoPath(rawPath string) (string, error) {
+	path := strings.TrimSpace(rawPath)
+	if path == "" {
+		return ".", nil
+	}
+	if strings.Contains(path, "\x00") {
+		return "", fmt.Errorf("path contains invalid null byte")
+	}
+	if filepath.IsAbs(path) {
+		return "", fmt.Errorf("path must be relative to the repository root")
+	}
+
+	cleaned := filepath.Clean(path)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path cannot leave the repository root")
+	}
+
+	return cleaned, nil
 }
 
 func (s *DockerfileStrategy) detectPortFromDockerfile(dockerfilePath string, defaultPort int) int {
@@ -1963,7 +2014,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	writeBuildLog("🔨 Building with Railpack...")
 	writeBuildLog("   Expected image name: %s", railpackImageName)
-	
+
 	// Use Railpack to build - Railpack is a CLI tool that builds images
 	// Check if railpack is available, if not use the RailpackStrategy approach
 	railpackPath := "/usr/local/bin/railpack"
@@ -2008,7 +2059,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		writeBuildLog("✅ Railpack build completed (via RailpackStrategy)")
 		writeBuildLog("   Original expected name: %s", oldImageName)
 		writeBuildLog("   Actual image name: %s", railpackImageName)
-		
+
 		// Verify the image exists
 		verifyCmd := exec.CommandContext(ctx, "docker", "image", "inspect", railpackImageName)
 		verifyOutput, verifyErr := verifyCmd.CombinedOutput()
@@ -2023,14 +2074,14 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		}
 		writeBuildLog("   ✅ Image verified: %s", railpackImageName)
 	}
-	
+
 	if usingRailpackCLI {
 		// Use railpack CLI directly
 		writeBuildLog("📦 Using railpack CLI at: %s", railpackPath)
 		writeBuildLog("📁 Build directory: %s", buildWorkDir)
 		// Use buildWorkDir (which includes BuildPath if set) instead of buildDir
 		cmd := exec.CommandContext(ctx, railpackPath, "build", buildWorkDir, "--name", railpackImageName)
-		
+
 		// Prepare environment variables - add RAILPACK_* vars to config.EnvVars before converting
 		// This ensures they override any existing values
 		railpackEnvVars := make(map[string]string)
@@ -2052,7 +2103,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 			railpackEnvVars["RAILPACK_START_CMD"] = config.StartCommand
 			writeBuildLog("   🚀 Start command: %s", config.StartCommand)
 		}
-		
+
 		envVars := getEnvAsStringSlice(railpackEnvVars)
 
 		// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
@@ -2193,9 +2244,9 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", config.LogWriter, config.LogWriterErr); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
-	
+
 	writeBuildLog("✅ Created minimal nginx image")
-	
+
 	// Clean up Railpack image (optional - we could keep it for caching)
 	// exec.CommandContext(ctx, "docker", "rmi", railpackImageName).Run()
 
@@ -2238,7 +2289,7 @@ func (s *StaticStrategy) findOutputDir(repoPath string) string {
 func (s *StaticStrategy) generateStaticDockerfile(sourceImage string, sourcePath string, nginxConfig string) string {
 	// Multi-stage Dockerfile that copies files directly from the built Railpack image
 	// This is much more reliable than extracting files manually
-	
+
 	// Always use nginx for static deployments
 	// Use nginx with custom or default config
 	nginxConfContent := nginxConfig

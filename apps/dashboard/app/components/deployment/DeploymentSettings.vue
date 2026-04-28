@@ -308,20 +308,21 @@
           </OuiGrid>
 
           <!-- Build Path Configuration -->
-          <OuiGrid :cols="{ sm: 1, md: 2 }"
+          <OuiGrid :cols="{ sm: 1, md: showBuildOutputPathConfig ? 2 : 1 }"
            
-            :cols-md="2"
+            :cols-md="showBuildOutputPathConfig ? 2 : 1"
             gap="md"
             v-if="showBuildPathConfig"
           >
             <OuiInput
               v-model="config.buildPath"
-              label="Build Path"
-              placeholder=". (repository root)"
-              helper-text="Working directory for build command (relative to repo root, e.g., 'frontend', 'packages/web'). Defaults to repository root."
+              :label="buildPathLabel"
+              :placeholder="buildPathPlaceholder"
+              :helper-text="buildPathHelperText"
               @update:model-value="markConfigDirty"
             />
             <OuiInput
+              v-if="showBuildOutputPathConfig"
               v-model="config.buildOutputPath"
               label="Build Output Path"
               placeholder="Auto-detect (dist, build, public, etc.)"
@@ -1248,8 +1249,31 @@
     return (
       buildStrategy.value === BuildStrategy.STATIC_SITE ||
       buildStrategy.value === BuildStrategy.RAILPACK ||
-      buildStrategy.value === BuildStrategy.NIXPACKS
+      buildStrategy.value === BuildStrategy.NIXPACKS ||
+      buildStrategy.value === BuildStrategy.DOCKERFILE
     );
+  });
+
+  const showBuildOutputPathConfig = computed(() => {
+    return buildStrategy.value === BuildStrategy.STATIC_SITE;
+  });
+
+  const buildPathLabel = computed(() => {
+    return buildStrategy.value === BuildStrategy.DOCKERFILE
+      ? "Build Context Root"
+      : "Build Path";
+  });
+
+  const buildPathPlaceholder = computed(() => {
+    return buildStrategy.value === BuildStrategy.DOCKERFILE
+      ? ". (repository root)"
+      : ". (repository root)";
+  });
+
+  const buildPathHelperText = computed(() => {
+    return buildStrategy.value === BuildStrategy.DOCKERFILE
+      ? "Directory sent to docker build as the build context, relative to repo root (e.g., '.', 'backend', 'apps/web'). Dockerfile Path stays relative to repo root."
+      : "Working directory for build command (relative to repo root, e.g., 'frontend', 'packages/web'). Defaults to repository root.";
   });
 
   // Show repository connected card if:
