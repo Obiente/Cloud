@@ -61,6 +61,10 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
 	}
 
+	// docker stack deploy does not accept Compose's top-level project name.
+	// Obiente controls the stack/project name with the deployment ID instead.
+	delete(compose, "name")
+
 	// Sanitize services
 	if services, ok := compose["services"].(map[string]interface{}); ok {
 		for serviceName, serviceData := range services {

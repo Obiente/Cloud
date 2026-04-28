@@ -252,6 +252,29 @@ services:
 	}
 }
 
+func TestSanitizeComposeYAML_RemovesTopLevelName(t *testing.T) {
+	composeYaml := `name: upstream-project
+services:
+  app:
+    image: nginx:alpine
+`
+
+	sanitizer := NewComposeSanitizer("test-deployment")
+	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("Failed to sanitize YAML: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitizedYaml), &result); err != nil {
+		t.Fatalf("Failed to parse sanitized YAML: %v", err)
+	}
+
+	if _, ok := result["name"]; ok {
+		t.Fatalf("top-level name should be removed for docker stack deploy, got %#v", result["name"])
+	}
+}
+
 func TestSanitizeComposeYAML_MovesHostPortMappingsToExpose(t *testing.T) {
 	composeYaml := `version: '3.8'
 services:
