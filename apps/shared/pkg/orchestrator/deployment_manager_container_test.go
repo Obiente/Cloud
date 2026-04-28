@@ -83,3 +83,12 @@ func TestSwarmCPUReservation(t *testing.T) {
 		})
 	}
 }
+
+func TestSwarmDisableHealthcheckArgs(t *testing.T) {
+	t.Parallel()
+
+	got := swarmDisableHealthcheckArgs()
+	if len(got) != 1 || got[0] != "--no-healthcheck" {
+		t.Fatalf("swarmDisableHealthcheckArgs() = %#v, want [--no-healthcheck]", got)
+	}
+}

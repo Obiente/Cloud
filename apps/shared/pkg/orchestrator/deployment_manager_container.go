@@ -68,6 +68,13 @@ func swarmCPUReservation(limitCores float64) float64 {
 	return reservation
 }
 
+func swarmDisableHealthcheckArgs() []string {
+	// Docker service health checks are disabled with a flag, not with
+	// "--health-cmd NONE". The latter becomes CMD-SHELL "NONE" and fails at
+	// runtime with "/bin/sh: NONE: not found".
+	return []string{"--no-healthcheck"}
+}
+
 func normalizeStartCommand(raw string) string {
 	cmd := strings.TrimSpace(raw)
 	for range 4 {
@@ -702,6 +709,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		}
 	} else {
 		logger.Info("[DeploymentManager] Health check explicitly disabled for Swarm service %s", swarmServiceName)
+		args = append(args, swarmDisableHealthcheckArgs()...)
 	}
 
 	// Add resource limits
@@ -1351,8 +1359,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		}
 	} else {
 		logger.Info("[DeploymentManager] Health check explicitly disabled for Swarm service %s", swarmServiceName)
-		// Remove healthcheck by setting it to NONE
-		args = append(args, "--health-cmd", "NONE")
+		args = append(args, swarmDisableHealthcheckArgs()...)
 	}
 
 	// Update resource limits
