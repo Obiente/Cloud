@@ -166,7 +166,15 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: organizationToProto(org)}), nil
 }
 
-func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organizationsv1.GetOrganizationRequest]) (*connect.Response[organizationsv1.GetOrganizationResponse], error) {
+func (s *Service) GetOrganization(ctx context.Context, req *connect.Request[organizationsv1.GetOrganizationRequest]) (*connect.Response[organizationsv1.GetOrganizationResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if err := common.VerifyOrgAccess(ctx, req.Msg.GetOrganizationId(), user); err != nil {
+		return nil, err
+	}
+
 	var r database.Organization
 	if err := database.DB.First(&r, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))

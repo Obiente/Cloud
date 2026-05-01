@@ -551,8 +551,12 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 		}
 	}
 
-	// Send notification before deletion
-	s.notifyVPSDeleted(ctx, &vps)
+	// Send notification best-effort; deletion should not block on notification delivery.
+	go func(vpsSnapshot database.VPSInstance) {
+		notifyCtx, cancel := s.detachedContext(10 * time.Second)
+		defer cancel()
+		s.notifyVPSDeleted(notifyCtx, &vpsSnapshot)
+	}(vps)
 
 	// Clear IP addresses before soft-deleting to prevent stale IPs showing on new VPS with same VM ID
 	if err := database.DB.Model(&vps).Updates(map[string]interface{}{
@@ -563,8 +567,12 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 		logger.Warn("[VPS Service] Failed to clear IP addresses for VPS %s: %v (continuing with deletion)", vpsID, err)
 	}
 
-	// Delete from database (soft delete - sets deleted_at timestamp)
-	if err := database.DB.Delete(&vps).Error; err != nil {
+	// Soft delete the VPS record. VPSInstance uses *time.Time for DeletedAt,
+	// so set deleted_at explicitly instead of relying on GORM's gorm.DeletedAt hook.
+	now := time.Now()
+	if err := database.DB.Model(&database.VPSInstance{}).
+		Where("id = ?", vps.ID).
+		Update("deleted_at", &now).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS: %w", err))
 	}
 

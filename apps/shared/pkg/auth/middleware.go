@@ -490,6 +490,11 @@ func GetUserFromContext(ctx context.Context) (*authv1.User, error) {
 	return userInfo, nil
 }
 
+// WithUser creates a context with the provided authenticated user.
+func WithUser(ctx context.Context, userInfo *authv1.User) context.Context {
+	return context.WithValue(ctx, userInfoKey, userInfo)
+}
+
 // UserIDFromContext extracts user ID from context
 // When DISABLE_AUTH=true, returns mock dev user ID if no user is in context
 func UserIDFromContext(ctx context.Context) (string, bool) {
