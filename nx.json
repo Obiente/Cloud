@@ -59,8 +59,7 @@
         "buildTarget": "docker:build",
         "runTarget": "docker:run"
       }
-    },
-    "@obiente-lab/nx-go"
+    }
   ],
   "targetDefaults": {
     "@nx/js:tsc": {
@@ -87,6 +86,11 @@
       "cache": true,
       "dependsOn": ["^build"],
       "inputs": ["production", "^production"]
+    },
+    "test": {
+      "cache": true,
+      "dependsOn": ["^test"],
+      "inputs": ["default", "^production"]
     },
     "build-deps": {
       "cache": true,
