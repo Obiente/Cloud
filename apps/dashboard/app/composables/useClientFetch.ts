@@ -1,3 +1,5 @@
+import { computed, watch, type ComputedRef } from "vue";
+
 /**
  * Optimized data fetching composable
  * Uses SSR for initial load, then client-side fetching for subsequent navigations
@@ -13,6 +15,7 @@ export function useClientFetch<T>(
     default?: () => T;
     server?: boolean;
     lazy?: boolean;
+    preserveDataOnKeyChange?: boolean;
   } = {}
 ) {
   // Check if we're in a client-side navigation context
@@ -20,27 +23,44 @@ export function useClientFetch<T>(
   // On client navigation, use client-side for instant navigation
   const isInitialSSR = import.meta.server;
   const isClientNav = import.meta.client && !isInitialSSR;
-  
+
   // Determine if we should use server-side fetching
   // - Use server on initial SSR (unless explicitly disabled)
   // - Use client on navigation (faster, no server round-trip)
   const shouldUseServer = options.server !== false && isInitialSSR;
-  
+
   // Always use lazy mode for non-blocking navigation
   // Pages render immediately, data loads in background
   // If lazy is explicitly set to false, respect it (but this is not recommended)
   const shouldBeLazy = options.lazy !== false;
-  
-  return useAsyncData<T>(
-    typeof key === 'function' ? key() : key,
+
+  const { preserveDataOnKeyChange, ...asyncDataOptions } = options;
+  const asyncDataKey = typeof key === "function" ? computed(key) : key;
+
+  const asyncData = useAsyncData<T>(
+    asyncDataKey,
     fn,
     {
-      ...options,
+      ...asyncDataOptions,
       // Use server only on initial SSR load
       server: shouldUseServer,
       // Always lazy for non-blocking navigation
       lazy: shouldBeLazy,
     }
   );
-}
 
+  if (import.meta.client && typeof key === "function" && preserveDataOnKeyChange !== true) {
+    const dynamicKey = asyncDataKey as ComputedRef<string>;
+    watch(
+      dynamicKey,
+      (newKey, oldKey) => {
+        if (newKey !== oldKey) {
+          asyncData.data.value = options.default ? options.default() : (undefined as T);
+        }
+      },
+      { flush: "sync" }
+    );
+  }
+
+  return asyncData;
+}

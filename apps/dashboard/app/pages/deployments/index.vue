@@ -527,7 +527,9 @@
   // Custom refresh function that preserves existing data during fetch
   const refreshDeploymentsWithoutClearing = async () => {
     try {
-      const response = await client.listDeployments({});
+      const response = await client.listDeployments({
+        organizationId: organizationId.value || undefined,
+      });
       // Only update if we got a successful response
       deployments.value = response.deployments;
       listError.value = null;
