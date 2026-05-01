@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "audit-service",
+  "root": "apps/audit-service",
+  "projectType": "application",
+  "implicitDependencies": ["shared"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "/usr/local/go/bin/go test -count=1 ./..."
+      }
+    }
+  }
+}

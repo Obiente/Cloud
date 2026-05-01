@@ -107,9 +107,9 @@ func (r *BuildStrategyRegistry) AutoDetect(ctx context.Context, repoPath string)
 	detectionOrder := []deploymentsv1.BuildStrategy{
 		deploymentsv1.BuildStrategy_COMPOSE_REPO, // Check for docker-compose.yml in repo first
 		deploymentsv1.BuildStrategy_DOCKERFILE,   // Then Dockerfile
+		deploymentsv1.BuildStrategy_STATIC_SITE,  // Static sites before Railpack fallback
 		deploymentsv1.BuildStrategy_RAILPACK,     // Then Railpack (default for most languages)
-		deploymentsv1.BuildStrategy_NIXPACKS,     // Then generic Nixpacks (fallback)
-		deploymentsv1.BuildStrategy_STATIC_SITE,  // Finally static
+		deploymentsv1.BuildStrategy_NIXPACKS,     // Finally generic Nixpacks (fallback)
 	}
 
 	for _, strategyType := range detectionOrder {
@@ -140,7 +140,7 @@ func (r *BuildStrategyRegistry) InferDeploymentType(ctx context.Context, buildSt
 	case deploymentsv1.BuildStrategy_STATIC_SITE:
 		return deploymentsv1.DeploymentType_STATIC
 
-	case deploymentsv1.BuildStrategy_PLAIN_COMPOSE, deploymentsv1.BuildStrategy_DOCKERFILE:
+	case deploymentsv1.BuildStrategy_PLAIN_COMPOSE, deploymentsv1.BuildStrategy_COMPOSE_REPO, deploymentsv1.BuildStrategy_DOCKERFILE:
 		return deploymentsv1.DeploymentType_DOCKER
 
 	case deploymentsv1.BuildStrategy_RAILPACK, deploymentsv1.BuildStrategy_NIXPACKS:

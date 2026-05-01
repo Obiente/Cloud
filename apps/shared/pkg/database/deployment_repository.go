@@ -246,7 +246,7 @@ func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 
 func (r *DeploymentRepository) Count(ctx context.Context, organizationID string, filters *DeploymentFilters) (int64, error) {
 	query := r.db.WithContext(ctx).Model(&Deployment{}).
-		Where("organization_id = ?", organizationID)
+		Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 
 	// Apply additional filters if provided
 	if filters != nil {
