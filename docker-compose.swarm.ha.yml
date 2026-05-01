@@ -673,9 +673,9 @@ services:
         limits:
           cpus: "2"
           memory: 512M
-      reservations:
-        cpus: "0.5"
-        memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"

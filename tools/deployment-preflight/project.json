@@ -1,0 +1,65 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "deployment-preflight",
+  "root": "tools/deployment-preflight",
+  "projectType": "application",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/**/*",
+        "{workspaceRoot}/docker-compose*.yml",
+        "{workspaceRoot}/scripts/merge-compose-files.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "tools/deployment-preflight/validate-compose.sh all"
+      }
+    },
+    "test-compose": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/**/*",
+        "{workspaceRoot}/docker-compose.yml",
+        "{workspaceRoot}/docker-compose.base.yml",
+        "{workspaceRoot}/scripts/merge-compose-files.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "tools/deployment-preflight/validate-compose.sh compose"
+      }
+    },
+    "test-compose-runtime": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/**/*",
+        "{workspaceRoot}/docker-compose.yml",
+        "{workspaceRoot}/docker-compose.base.yml",
+        "{workspaceRoot}/scripts/merge-compose-files.sh",
+        "{workspaceRoot}/apps/**/Dockerfile",
+        "{workspaceRoot}/apps/**/*.go",
+        "{workspaceRoot}/apps/**/go.mod",
+        "{workspaceRoot}/apps/**/go.sum"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "tools/deployment-preflight/validate-compose.sh runtime-compose"
+      }
+    },
+    "test-swarm-config": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/**/*",
+        "{workspaceRoot}/docker-compose.swarm*.yml",
+        "{workspaceRoot}/docker-compose.dashboard.yml",
+        "{workspaceRoot}/docker-compose.vps-gateway.yml",
+        "{workspaceRoot}/docker-compose.base.yml",
+        "{workspaceRoot}/scripts/merge-compose-files.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "tools/deployment-preflight/validate-compose.sh swarm-config"
+      }
+    }
+  }
+}
