@@ -159,7 +159,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         2 * 1024 * 1024 * 1024,  // 2 GB
 			DiskBytes:           20 * 1024 * 1024 * 1024, // 20 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			MinimumPaymentCents: 1000,                    // $10 minimum payment required
+			MinimumPaymentCents: 10,                      // $0.10 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
@@ -171,7 +171,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         4 * 1024 * 1024 * 1024,  // 4 GB
 			DiskBytes:           40 * 1024 * 1024 * 1024, // 40 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			MinimumPaymentCents: 5000,                    // $50 minimum payment required
+			MinimumPaymentCents: 50,                      // $0.50 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
@@ -183,29 +183,23 @@ func InitVPSCatalog() error {
 			MemoryBytes:         8 * 1024 * 1024 * 1024,  // 8 GB
 			DiskBytes:           80 * 1024 * 1024 * 1024, // 80 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			MinimumPaymentCents: 10000,                   // $100 minimum payment required
+			MinimumPaymentCents: 100,                     // $1.00 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
 	}
 
-	// Upsert sizes
+	// Seed missing sizes only. Superadmin catalog changes are production data and
+	// must not be reset by a service restart.
 	for _, size := range defaultSizes {
 		var existing VPSSizeCatalog
 		if err := DB.Where("id = ?", size.ID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// Create new
 				if err := DB.Create(&size).Error; err != nil {
 					return fmt.Errorf("failed to create size %s: %w", size.ID, err)
 				}
 			} else {
 				return fmt.Errorf("failed to check size %s: %w", size.ID, err)
-			}
-		} else {
-			// Update existing
-			size.CreatedAt = existing.CreatedAt
-			if err := DB.Save(&size).Error; err != nil {
-				return fmt.Errorf("failed to update size %s: %w", size.ID, err)
 			}
 		}
 	}
@@ -246,23 +240,16 @@ func InitVPSCatalog() error {
 		},
 	}
 
-	// Upsert regions
+	// Seed missing regions only for the same reason as sizes.
 	for _, region := range defaultRegions {
 		var existing VPSRegionCatalog
 		if err := DB.Where("id = ?", region.ID).First(&existing).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// Create new
 				if err := DB.Create(&region).Error; err != nil {
 					return fmt.Errorf("failed to create region %s: %w", region.ID, err)
 				}
 			} else {
 				return fmt.Errorf("failed to check region %s: %w", region.ID, err)
-			}
-		} else {
-			// Update existing
-			region.CreatedAt = existing.CreatedAt
-			if err := DB.Save(&region).Error; err != nil {
-				return fmt.Errorf("failed to update region %s: %w", region.ID, err)
 			}
 		}
 	}

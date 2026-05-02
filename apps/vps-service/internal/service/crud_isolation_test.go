@@ -3,12 +3,14 @@ package vps
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 	"google.golang.org/protobuf/proto"
@@ -113,10 +115,55 @@ func TestVPSServiceTenantIsolation(t *testing.T) {
 	}
 }
 
+func TestCreateVPSUsesCatalogMinimumPayment(t *testing.T) {
+	db := newVPSServiceTestDB(t)
+	service := &Service{
+		permissionChecker: auth.NewPermissionChecker(),
+		quotaChecker:      quota.NewChecker(),
+	}
+
+	seedVPSServiceIsolationData(t, db)
+	if err := db.Create(&database.VPSSizeCatalog{
+		ID:                  "medium",
+		Name:                "Medium VPS",
+		CPUCores:            2,
+		MemoryBytes:         2 * 1024 * 1024 * 1024,
+		DiskBytes:           20 * 1024 * 1024 * 1024,
+		MinimumPaymentCents: 10,
+		Available:           true,
+		Region:              "",
+	}).Error; err != nil {
+		t.Fatalf("seed VPS size catalog: %v", err)
+	}
+
+	ctx := auth.WithUser(context.Background(), &authv1.User{
+		Id:    "user-org-a",
+		Email: "user-org-a@example.com",
+	})
+
+	_, err := service.CreateVPS(ctx, connect.NewRequest(&vpsv1.CreateVPSRequest{
+		OrganizationId: "org-a",
+		Name:           "Medium VPS",
+		Region:         "eu-west-1",
+		Size:           "medium",
+		Image:          vpsv1.VPSImage_UBUNTU_24_04,
+	}))
+	if err == nil {
+		t.Fatal("create VPS succeeded, want minimum-payment permission error")
+	}
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("create VPS code = %v, want %v: %v", connect.CodeOf(err), connect.CodePermissionDenied, err)
+	}
+	if message := err.Error(); !strings.Contains(message, "$0.10") || strings.Contains(message, "$10.00") {
+		t.Fatalf("create VPS error = %q, want current catalog minimum $0.10 and not stale $10.00", message)
+	}
+}
+
 func newVPSServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	dbName := "file:vps_service_" + strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()) + "?mode=memory&cache=shared"
+	db, err := gorm.Open(sqlite.Open(dbName), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
@@ -127,6 +174,9 @@ func newVPSServiceTestDB(t *testing.T) *gorm.DB {
 		&database.OrganizationMember{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
+		&database.OrgQuota{},
+		&database.OrganizationPlan{},
+		&database.VPSSizeCatalog{},
 	); err != nil {
 		t.Fatalf("migrate sqlite db: %v", err)
 	}
