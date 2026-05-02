@@ -283,7 +283,7 @@
     },
   });
 
-  const { refresh: refreshOrganizations } = await useClientFetch(
+  const { refresh: refreshOrganizations } = useClientFetch(
     "organizations",
     async () => {
       if (!user.isAuthenticated) return [];
@@ -294,6 +294,7 @@
     },
     {
       watch: [() => user.isAuthenticated],
+      server: false,
     }
   );
 
