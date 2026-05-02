@@ -98,10 +98,10 @@
                     variant="outline"
                     size="sm"
                     @click="redeploy"
-                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    :disabled="commandBusy || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
                     class="gap-1.5"
                   >
-                    <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING }" />
+                    <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': operationKind === 'redeploy' || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING }" />
                     <span class="hidden sm:inline">Redeploy</span>
                   </OuiButton>
                   <OuiButton
@@ -109,11 +109,11 @@
                     variant="outline"
                     size="sm"
                     @click="restart"
-                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    :disabled="commandBusy || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
                     class="gap-1.5"
                     title="Restart without rebuilding"
                   >
-                    <ArrowPathIcon class="h-3.5 w-3.5" />
+                    <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': operationKind === 'restart' }" />
                     <span class="hidden sm:inline">Restart</span>
                   </OuiButton>
                   <OuiButton
@@ -122,11 +122,11 @@
                     color="danger"
                     size="sm"
                     @click="stop"
-                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    :disabled="commandBusy || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
                     class="gap-1.5"
                   >
                     <StopIcon class="h-3.5 w-3.5" />
-                    <span class="hidden sm:inline">Stop</span>
+                    <span class="hidden sm:inline">{{ operationKind === "stop" ? "Stopping" : "Stop" }}</span>
                   </OuiButton>
                   <OuiButton
                     v-else-if="!hasRunningContainers && (containerStats.totalCount > 0 || deployment.status === DeploymentStatusEnum.STOPPED)"
@@ -134,17 +134,45 @@
                     color="success"
                     size="sm"
                     @click="start"
-                    :disabled="isProcessing || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
+                    :disabled="commandBusy || deployment.status === DeploymentStatusEnum.BUILDING || deployment.status === DeploymentStatusEnum.DEPLOYING"
                     class="gap-1.5"
                   >
-                    <PlayIcon class="h-3.5 w-3.5" />
-                    <span class="hidden sm:inline">Start</span>
+                    <ArrowPathIcon v-if="operationKind === 'start'" class="h-3.5 w-3.5 animate-spin" />
+                    <PlayIcon v-else class="h-3.5 w-3.5" />
+                    <span class="hidden sm:inline">{{ operationKind === "start" ? "Starting" : "Start" }}</span>
                   </OuiButton>
                 </OuiFlex>
               </OuiFlex>
             </OuiCardBody>
           </OuiCard>
         </Transition>
+
+        <OuiCard
+          v-if="activeOperation || operationError"
+          variant="outline"
+          :class="operationError ? 'border-danger/30 bg-danger/5' : 'border-warning/30 bg-warning/5'"
+        >
+          <OuiCardBody>
+            <OuiFlex align="start" gap="sm">
+              <ArrowPathIcon
+                v-if="activeOperation"
+                class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-warning"
+              />
+              <ExclamationTriangleIcon
+                v-else
+                class="mt-0.5 h-4 w-4 shrink-0 text-danger"
+              />
+              <OuiStack gap="xs" class="min-w-0">
+                <OuiText size="sm" weight="medium">
+                  {{ activeOperation?.label || "Command failed" }}
+                </OuiText>
+                <OuiText size="sm" color="tertiary">
+                  {{ operationError || activeOperation?.description }}
+                </OuiText>
+              </OuiStack>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
 
         <!-- Tabbed Content -->
         <OuiStack gap="sm">
@@ -252,6 +280,7 @@
     ChartBarIcon,
     CubeIcon,
     ClockIcon,
+    ExclamationTriangleIcon,
   } from "@heroicons/vue/24/outline";
   import {
     DeploymentService,
@@ -603,38 +632,124 @@
     }
   );
 
+  type DeploymentOperationKind = "start" | "stop" | "redeploy" | "restart";
+  type TrackedDeploymentOperation = {
+    kind: DeploymentOperationKind;
+    label: string;
+    description: string;
+    targetStatuses: DeploymentStatus[];
+    timeoutId?: ReturnType<typeof setTimeout>;
+  };
+
+  const activeOperation = ref<TrackedDeploymentOperation | null>(null);
+  const operationError = ref<string | null>(null);
+  const operationKind = computed(() => activeOperation.value?.kind ?? deploymentActions.currentOperation.value);
   const isProcessing = computed(() => deploymentActions.isProcessing.value);
+  const commandBusy = computed(() => isProcessing.value || activeOperation.value !== null);
+
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
+
+  const clearOperationTimeout = () => {
+    if (activeOperation.value?.timeoutId) {
+      clearTimeout(activeOperation.value.timeoutId);
+    }
+  };
+
+  const finishTrackedOperation = () => {
+    clearOperationTimeout();
+    activeOperation.value = null;
+  };
+
+  const beginTrackedOperation = (operation: Omit<TrackedDeploymentOperation, "timeoutId">) => {
+    clearOperationTimeout();
+    operationError.value = null;
+    activeOperation.value = {
+      ...operation,
+      timeoutId: setTimeout(() => {
+        if (activeOperation.value?.kind !== operation.kind) return;
+        operationError.value = `${operation.label} is taking longer than expected. The page is still refreshing; check the logs or refresh if the state does not settle.`;
+        finishTrackedOperation();
+      }, 90_000),
+    };
+  };
+
+  const hasReachedOperationTarget = () => {
+    const operation = activeOperation.value;
+    if (!operation) return false;
+
+    const status = deployment.value?.status;
+    if (operation.targetStatuses.includes(status)) return true;
+
+    if (operation.kind === "stop" && containerStats.value.totalCount > 0) {
+      return containerStats.value.runningCount === 0;
+    }
+
+    if ((operation.kind === "start" || operation.kind === "restart") && containerStats.value.totalCount > 0) {
+      return containerStats.value.runningCount === containerStats.value.totalCount;
+    }
+
+    return false;
+  };
+
+  const refreshAfterCommand = async () => {
+    await Promise.allSettled([
+      refreshDeployment(true),
+      loadContainers(),
+    ]);
+    startPolling();
+  };
+
+  const runDeploymentCommand = async (
+    operation: Omit<TrackedDeploymentOperation, "timeoutId">,
+    command: () => Promise<unknown>,
+    failureMessage: string
+  ) => {
+    if (!localDeployment.value || commandBusy.value) return;
+    beginTrackedOperation(operation);
+    try {
+      await command();
+      await refreshAfterCommand();
+      if (hasReachedOperationTarget()) {
+        finishTrackedOperation();
+      }
+    } catch (error: unknown) {
+      console.error(failureMessage, error);
+      operationError.value = getErrorMessage(error, failureMessage);
+      finishTrackedOperation();
+    }
+  };
 
   function openDomain() {
     window.open(`https://${deployment.value.domain}`, "_blank");
   }
 
   async function start() {
-    if (!localDeployment.value || isProcessing.value) return;
-    try {
-      await deploymentActions.startDeployment(id.value, localDeployment.value);
-      // Immediately refresh to get updated status
-      await refreshDeployment();
-      await loadContainers();
-      // Start polling to catch status changes as containers start
-      startPolling();
-    } catch (error: unknown) {
-      console.error("Failed to start deployment:", error);
-    }
+    await runDeploymentCommand(
+      {
+        kind: "start",
+        label: "Starting deployment",
+        description: "The command was sent. Waiting for the backend to report running containers.",
+        targetStatuses: [DeploymentStatus.RUNNING],
+      },
+      () => deploymentActions.startDeployment(id.value, localDeployment.value),
+      "Failed to start deployment."
+    );
   }
 
   async function stop() {
-    if (!localDeployment.value || isProcessing.value) return;
-    try {
-      await deploymentActions.stopDeployment(id.value, localDeployment.value);
-      // Immediately refresh to get updated status
-      await refreshDeployment();
-      await loadContainers();
-      // Start polling to catch status changes as containers stop
-      startPolling();
-    } catch (error: unknown) {
-      console.error("Failed to stop deployment:", error);
-    }
+    await runDeploymentCommand(
+      {
+        kind: "stop",
+        label: "Stopping deployment",
+        description: "The command was sent. Waiting for the backend to confirm the containers stopped.",
+        targetStatuses: [DeploymentStatus.STOPPED],
+      },
+      () => deploymentActions.stopDeployment(id.value, localDeployment.value),
+      "Failed to stop deployment."
+    );
   }
 
   const metricsRef = ref<{
@@ -671,6 +786,7 @@
       // Check if we should continue polling
       const status = deployment.value?.status;
       const shouldPoll =
+        activeOperation.value !== null ||
         status === DeploymentStatus.BUILDING ||
         status === DeploymentStatus.DEPLOYING ||
         // Also poll if containers are partially running (transitioning)
@@ -697,6 +813,12 @@
           refreshDeployment(true), // silent = true to prevent pending state
           loadContainers(),
         ]);
+        if (deployment.value?.status === DeploymentStatus.FAILED && activeOperation.value) {
+          operationError.value = `${activeOperation.value.label} failed. Check the logs or builds tab for the backend error details.`;
+          finishTrackedOperation();
+        } else if (hasReachedOperationTarget()) {
+          finishTrackedOperation();
+        }
       } catch (error) {
         console.error("Failed to poll deployment status:", error);
       } finally {
@@ -723,6 +845,7 @@
     () => {
       const status = deployment.value?.status;
       const shouldPoll =
+        activeOperation.value !== null ||
         status === DeploymentStatus.BUILDING ||
         status === DeploymentStatus.DEPLOYING ||
         (containerStats.value.totalCount > 0 &&
@@ -740,27 +863,37 @@
 
   // Stop polling when component unmounts
   onUnmounted(() => {
+    clearOperationTimeout();
     stopPolling();
   });
 
   async function redeploy() {
-    if (!localDeployment.value) return;
-
     // Switch to builds tab to monitor progress
     activeTab.value = "builds";
 
-    // Trigger the redeployment
-    await deploymentActions.redeployDeployment(id.value, localDeployment.value);
+    await runDeploymentCommand(
+      {
+        kind: "redeploy",
+        label: "Redeploying",
+        description: "A new build/deploy command was sent. Waiting for the backend to report the final deployment state.",
+        targetStatuses: [DeploymentStatus.RUNNING],
+      },
+      () => deploymentActions.redeployDeployment(id.value, localDeployment.value),
+      "Failed to redeploy."
+    );
   }
 
   async function restart() {
-    if (!localDeployment.value) return;
-
-    // Restart deployment (restart containers without rebuilding)
-    await deploymentActions.reloadDeployment(id.value, localDeployment.value);
-
-    // Refresh deployment data to get updated status
-    await refreshDeployment();
+    await runDeploymentCommand(
+      {
+        kind: "restart",
+        label: "Restarting deployment",
+        description: "The restart command was sent. Waiting for the backend to report healthy running containers.",
+        targetStatuses: [DeploymentStatus.RUNNING],
+      },
+      () => deploymentActions.reloadDeployment(id.value, localDeployment.value),
+      "Failed to restart deployment."
+    );
   }
 
   async function handleComposeSave(composeYaml: string) {

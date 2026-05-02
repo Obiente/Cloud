@@ -8,6 +8,8 @@ import { useOrganizationsStore } from "~/stores/organizations";
 export function useDeploymentActions(organizationId: string = "default") {
   const client = useConnectClient(DeploymentService);
   const isProcessing = ref(false);
+  const currentOperation = ref<"start" | "stop" | "redeploy" | "restart" | "delete" | "update" | "create" | null>(null);
+  const operationError = ref<string | null>(null);
   const orgsStore = useOrganizationsStore();
 
   const getOrgId = () => {
@@ -44,17 +46,40 @@ export function useDeploymentActions(organizationId: string = "default") {
     return null;
   };
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
+
+  const beginOperation = (operation: typeof currentOperation.value) => {
+    if (isProcessing.value) return false;
+    isProcessing.value = true;
+    currentOperation.value = operation;
+    operationError.value = null;
+    return true;
+  };
+
+  const finishOperation = () => {
+    isProcessing.value = false;
+    currentOperation.value = null;
+  };
+
   /**
-   * Start a stopped deployment
+   * Start a stopped deployment. The UI moves into a transitional state, but the
+   * final status must come from the backend response or follow-up refreshes.
    */
   const startDeployment = async (
     deploymentId: string,
     deployments: Deployment | Deployment[] | null | undefined
   ) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("start")) return;
 
-    // Optimistic update
+    const previousDeployment = Array.isArray(deployments)
+      ? deployments.find((d) => d.id === deploymentId)
+      : (deployments as Deployment)?.id === deploymentId
+      ? (deployments as Deployment)
+      : null;
+    const previousStatus = previousDeployment?.status;
     const deployment = updateDeploymentStatus(
       deployments,
       deploymentId,
@@ -67,24 +92,20 @@ export function useDeploymentActions(organizationId: string = "default") {
         deploymentId,
       });
 
-      // Simulate transition to RUNNING after a delay
-      // (In real app, this would be handled by server via WebSocket/polling)
-      setTimeout(() => {
-        if (deployment) {
-          deployment.status = DeploymentStatus.RUNNING;
-        }
-      }, 2000);
+      if (deployment && res.deployment) {
+        Object.assign(deployment, res.deployment);
+      }
 
       return res.deployment;
     } catch (error) {
       console.error("Failed to start deployment:", error);
-      // Revert optimistic update
       if (deployment) {
-        deployment.status = DeploymentStatus.STOPPED;
+        deployment.status = previousStatus ?? DeploymentStatus.STOPPED;
       }
+      operationError.value = getErrorMessage(error, "Failed to start deployment.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
@@ -95,15 +116,13 @@ export function useDeploymentActions(organizationId: string = "default") {
     deploymentId: string,
     deployments: Deployment | Deployment[] | null | undefined
   ) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("stop")) return;
 
-    // Optimistic update
-    const deployment = updateDeploymentStatus(
-      deployments,
-      deploymentId,
-      DeploymentStatus.STOPPED
-    );
+    const deployment = Array.isArray(deployments)
+      ? deployments.find((d) => d.id === deploymentId)
+      : (deployments as Deployment)?.id === deploymentId
+      ? (deployments as Deployment)
+      : null;
 
     try {
       const res = await client.stopDeployment({
@@ -119,13 +138,10 @@ export function useDeploymentActions(organizationId: string = "default") {
       return res.deployment;
     } catch (error) {
       console.error("Failed to stop deployment:", error);
-      // Revert optimistic update
-      if (deployment) {
-        deployment.status = DeploymentStatus.RUNNING;
-      }
+      operationError.value = getErrorMessage(error, "Failed to stop deployment.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
@@ -136,10 +152,14 @@ export function useDeploymentActions(organizationId: string = "default") {
     deploymentId: string,
     deployments: Deployment | Deployment[] | null | undefined
   ) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("redeploy")) return;
 
-    // Optimistic update
+    const previousDeployment = Array.isArray(deployments)
+      ? deployments.find((d) => d.id === deploymentId)
+      : (deployments as Deployment)?.id === deploymentId
+      ? (deployments as Deployment)
+      : null;
+    const previousStatus = previousDeployment?.status;
     const deployment = updateDeploymentStatus(
       deployments,
       deploymentId,
@@ -156,23 +176,20 @@ export function useDeploymentActions(organizationId: string = "default") {
         deploymentId,
       });
 
-      // Update with server response after a delay
-      setTimeout(() => {
-        if (deployment) {
-          deployment.status = DeploymentStatus.RUNNING;
-        }
-      }, 2000);
+      if (deployment && "deployment" in res && res.deployment) {
+        Object.assign(deployment, res.deployment);
+      }
 
       return res;
     } catch (error) {
       console.error("Failed to redeploy:", error);
-      // Revert optimistic update
       if (deployment) {
-        deployment.status = DeploymentStatus.FAILED;
+        deployment.status = previousStatus ?? DeploymentStatus.FAILED;
       }
+      operationError.value = getErrorMessage(error, "Failed to redeploy.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
@@ -184,8 +201,7 @@ export function useDeploymentActions(organizationId: string = "default") {
     deploymentId: string,
     deployments: Deployment | Deployment[] | null | undefined
   ) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("restart")) return;
 
     // Optimistic update - keep current status but show it's reloading
     const deployment = Array.isArray(deployments)
@@ -212,9 +228,10 @@ export function useDeploymentActions(organizationId: string = "default") {
       return res.deployment;
     } catch (error) {
       console.error("Failed to reload deployment:", error);
+      operationError.value = getErrorMessage(error, "Failed to restart deployment.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
@@ -225,8 +242,7 @@ export function useDeploymentActions(organizationId: string = "default") {
     deploymentId: string,
     deployments?: Deployment | Deployment[]
   ) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("delete")) return;
 
     try {
       const res = await client.deleteDeployment({
@@ -245,9 +261,10 @@ export function useDeploymentActions(organizationId: string = "default") {
       return res;
     } catch (error) {
       console.error("Failed to delete deployment:", error);
+      operationError.value = getErrorMessage(error, "Failed to delete deployment.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
@@ -282,8 +299,7 @@ export function useDeploymentActions(organizationId: string = "default") {
              autoDeploy?: boolean;
            }
          ) => {
-           if (isProcessing.value) return;
-           isProcessing.value = true;
+           if (!beginOperation("update")) return;
 
            try {
              // Build request object, only including fields that are explicitly provided
@@ -380,9 +396,10 @@ export function useDeploymentActions(organizationId: string = "default") {
              return res.deployment;
            } catch (error) {
              console.error("Failed to update deployment:", error);
+             operationError.value = getErrorMessage(error, "Failed to update deployment.");
              throw error;
            } finally {
-             isProcessing.value = false;
+             finishOperation();
            }
          };
 
@@ -394,8 +411,7 @@ export function useDeploymentActions(organizationId: string = "default") {
            environment?: number;
            groups?: string[];
          }) => {
-    if (isProcessing.value) return;
-    isProcessing.value = true;
+    if (!beginOperation("create")) return;
 
     try {
              const res = await client.createDeployment({
@@ -408,14 +424,17 @@ export function useDeploymentActions(organizationId: string = "default") {
       return res.deployment;
     } catch (error) {
       console.error("Failed to create deployment:", error);
+      operationError.value = getErrorMessage(error, "Failed to create deployment.");
       throw error;
     } finally {
-      isProcessing.value = false;
+      finishOperation();
     }
   };
 
   return {
     isProcessing,
+    currentOperation,
+    operationError,
     startDeployment,
     stopDeployment,
     redeployDeployment,

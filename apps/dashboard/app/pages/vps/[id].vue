@@ -134,11 +134,12 @@
               color="success"
               size="sm"
               @click="handleStart"
-              :disabled="isActioning"
+              :disabled="isActioning || isOperationActive"
               class="gap-1.5"
             >
-              <PlayIcon class="h-3.5 w-3.5" />
-              <span class="hidden sm:inline">Start</span>
+              <ArrowPathIcon v-if="activeOperation?.kind === 'start'" class="h-3.5 w-3.5 animate-spin" />
+              <PlayIcon v-else class="h-3.5 w-3.5" />
+              <span class="hidden sm:inline">{{ activeOperation?.kind === "start" ? "Starting" : "Start" }}</span>
             </OuiButton>
             <OuiButton
               v-if="vps.status === VPSStatus.RUNNING"
@@ -146,25 +147,52 @@
               color="danger"
               size="sm"
               @click="handleStop"
-              :disabled="isActioning"
+              :disabled="isActioning || isOperationActive"
               class="gap-1.5"
             >
               <StopIcon class="h-3.5 w-3.5" />
-              <span class="hidden sm:inline">Stop</span>
+              <span class="hidden sm:inline">{{ activeOperation?.kind === "stop" ? "Stopping" : "Stop" }}</span>
             </OuiButton>
             <OuiButton
               v-if="vps.status === VPSStatus.RUNNING"
               variant="outline"
               size="sm"
               @click="handleReboot"
-              :disabled="isActioning"
+              :disabled="isActioning || isOperationActive"
               class="gap-1.5"
             >
-              <ArrowPathIcon class="h-3.5 w-3.5" />
-              <span class="hidden sm:inline">Reboot</span>
+              <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': activeOperation?.kind === 'reboot' }" />
+              <span class="hidden sm:inline">{{ activeOperation?.kind === "reboot" ? "Rebooting" : "Reboot" }}</span>
             </OuiButton>
           </template>
         </ResourceHeader>
+
+        <OuiCard
+          v-if="activeOperation || operationError"
+          variant="outline"
+          :class="operationError ? 'border-danger/30 bg-danger/5' : 'border-warning/30 bg-warning/5'"
+        >
+          <OuiCardBody>
+            <OuiFlex align="start" gap="sm">
+              <ArrowPathIcon
+                v-if="activeOperation"
+                class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-warning"
+              />
+              <ExclamationTriangleIcon
+                v-else
+                class="mt-0.5 h-4 w-4 shrink-0 text-danger"
+              />
+              <OuiStack gap="xs" class="min-w-0">
+                <OuiText size="sm" weight="medium">
+                  {{ activeOperation?.label || "Command failed" }}
+                </OuiText>
+                <OuiText size="sm" color="tertiary">
+                  {{ operationError || activeOperation?.description }}
+                </OuiText>
+              </OuiStack>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
 
         <!-- Tabbed Content -->
         <ResourceTabs ref="tabsRef" :tabs="tabs" default-tab="overview">
@@ -1710,7 +1738,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, defineAsyncComponent } from "vue";
+import { computed, ref, watch, nextTick, defineAsyncComponent, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
@@ -1736,6 +1764,7 @@ import {
   ChartBarIcon,
   ServerStackIcon,
   GlobeAltIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/vue/24/outline";
 import {
   VPSService,
@@ -1749,6 +1778,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useDialog } from "~/composables/useDialog";
+import { useResourceOperation } from "~/composables/useResourceOperation";
 import { useSuperAdmin } from "~/composables/useSuperAdmin";
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiByte from "~/components/oui/Byte.vue";
@@ -1812,6 +1842,15 @@ const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
 const { showAlert, showConfirm } = useDialog();
+const {
+  activeOperation,
+  operationError,
+  isOperationActive,
+  beginOperation,
+  finishOperation,
+  failOperation,
+  getErrorMessage,
+} = useResourceOperation();
 const orgsStore = useOrganizationsStore();
 const superAdmin = useSuperAdmin();
 
@@ -1825,6 +1864,7 @@ const configClient = useConnectClient(VPSConfigService);
 const accessError = ref<Error | null>(null);
 const isActioning = ref(false);
 const isRefreshing = ref(false);
+let operationPollingInterval: ReturnType<typeof setInterval> | null = null;
 
 // Computed error hint message
 const errorHint = computed(() => {
@@ -2073,6 +2113,44 @@ const refreshVPS = async () => {
     isRefreshing.value = false;
   }
 };
+
+const stopOperationPolling = () => {
+  if (operationPollingInterval) {
+    clearInterval(operationPollingInterval);
+    operationPollingInterval = null;
+  }
+};
+
+const hasReachedOperationTarget = () => {
+  const operation = activeOperation.value;
+  if (!operation || !vps.value) return false;
+  if (operation.kind === "start") return vps.value.status === VPSStatus.RUNNING;
+  if (operation.kind === "stop") return vps.value.status === VPSStatus.STOPPED;
+  if (operation.kind === "reboot") return vps.value.status === VPSStatus.RUNNING;
+  return false;
+};
+
+const startOperationPolling = () => {
+  stopOperationPolling();
+  operationPollingInterval = setInterval(async () => {
+    if (!activeOperation.value) {
+      stopOperationPolling();
+      return;
+    }
+    await refreshVPS();
+    if (vps.value?.status === VPSStatus.FAILED) {
+      failOperation(`${activeOperation.value.label} failed. Check VPS logs for backend details.`);
+      stopOperationPolling();
+      return;
+    }
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+      stopOperationPolling();
+    }
+  }, 3_000);
+};
+
+onUnmounted(stopOperationPolling);
 
 // SSH Keys Management
 const sshKeys = ref<
@@ -2872,6 +2950,12 @@ async function handleStart() {
   if (!confirmed) return;
 
   isActioning.value = true;
+  beginOperation({
+    kind: "start",
+    label: "Starting VPS",
+    description: "The command was sent. Waiting for the backend to report the VPS is running.",
+    failureMessage: "Failed to start VPS",
+  });
   try {
     await client.startVPS({
       organizationId: orgId.value,
@@ -2879,9 +2963,14 @@ async function handleStart() {
     });
     toast.success("VPS instance started", "The VPS instance is starting up.");
     await refreshVPS();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? (err as Error).message : "Unknown error";
+    const message = getErrorMessage(err, "Unknown error");
+    failOperation(message);
     toast.error("Failed to start VPS", message);
   } finally {
     isActioning.value = false;
@@ -2897,6 +2986,12 @@ async function handleStop() {
   if (!confirmed) return;
 
   isActioning.value = true;
+  beginOperation({
+    kind: "stop",
+    label: "Stopping VPS",
+    description: "The command was sent. Waiting for the backend to confirm the VPS stopped.",
+    failureMessage: "Failed to stop VPS",
+  });
   try {
     await client.stopVPS({
       organizationId: orgId.value,
@@ -2904,9 +2999,14 @@ async function handleStop() {
     });
     toast.success("VPS instance stopped", "The VPS instance has been stopped.");
     await refreshVPS();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? (err as Error).message : "Unknown error";
+    const message = getErrorMessage(err, "Unknown error");
+    failOperation(message);
     toast.error("Failed to stop VPS", message);
   } finally {
     isActioning.value = false;
@@ -2936,6 +3036,12 @@ async function performReboot() {
   if (!vps.value) return;
 
   isActioning.value = true;
+  beginOperation({
+    kind: "reboot",
+    label: "Rebooting VPS",
+    description: "The command was sent. Waiting for the backend to report the VPS is running again.",
+    failureMessage: "Failed to reboot VPS",
+  });
   try {
     await client.rebootVPS({
       organizationId: orgId.value,
@@ -2951,9 +3057,14 @@ async function performReboot() {
       toast.success("VPS instance rebooting");
     }
     await refreshVPS();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? (err as Error).message : "Unknown error";
+    const message = getErrorMessage(err, "Unknown error");
+    failOperation(message);
     toast.error("Failed to reboot VPS", message);
   } finally {
     isActioning.value = false;

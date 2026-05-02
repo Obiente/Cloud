@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useOrganizationId } from "~/composables/useOrganizationId";
@@ -249,7 +249,8 @@ const adminClient = useConnectClient(AdminService);
 const vpsClient = useConnectClient(VPSService);
 const gameserverClient = useConnectClient(GameServerService);
 
-if (!orgs.value.length) {
+async function loadOrganizations() {
+  if (orgs.value.length) return;
   try {
     const res = await orgClient.listOrganizations({});
     orgStore.setOrganizations(res.organizations || []);
@@ -257,6 +258,10 @@ if (!orgs.value.length) {
     console.error("Failed to load organizations", e);
   }
 }
+
+onMounted(() => {
+  loadOrganizations();
+});
 
 const orgItems = computed(() =>
   (orgs.value || []).map((o) => ({
@@ -275,7 +280,7 @@ const selectedOrg = computed({
   },
 });
 
-const { data: bindingsData, refresh: refreshBindings } = await useClientFetch(
+const { data: bindingsData, refresh: refreshBindings } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-bindings-${organizationId.value}`
@@ -288,12 +293,12 @@ const { data: bindingsData, refresh: refreshBindings } = await useClientFetch(
     });
     return res.bindings || [];
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const bindings = computed(() => bindingsData.value || []);
 
 // Get current user's member record for permission checks
-const { data: membersData } = await useClientFetch(
+const { data: membersData } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-bindings-members-${organizationId.value}`
@@ -306,7 +311,7 @@ const { data: membersData } = await useClientFetch(
     });
     return res.members || [];
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const members = computed(() => membersData.value || []);
 
@@ -334,7 +339,7 @@ const currentMemberRecord = computed(
 );
 
 // Fetch user's permissions for the current organization
-const { data: userPermissionsData } = await useClientFetch(
+const { data: userPermissionsData } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-bindings-permissions-${organizationId.value}`
@@ -351,7 +356,7 @@ const { data: userPermissionsData } = await useClientFetch(
       return [] as string[];
     }
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const userPermissions = computed(() => userPermissionsData.value || []);
 
@@ -384,7 +389,7 @@ const canCreateBindings = computed(() => {
   return hasPermission("admin.bindings.create") || hasPermission("admin.bindings.*") || hasPermission("admin.*");
 });
 
-const { data: roleOptionsData, refresh: refreshRoleOptions } = await useClientFetch(
+const { data: roleOptionsData, refresh: refreshRoleOptions } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-roles-${organizationId.value}`
@@ -405,7 +410,7 @@ const { data: roleOptionsData, refresh: refreshRoleOptions } = await useClientFe
       permissionsJson: r.permissionsJson || "[]"
     }));
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const roleLabelMap = computed(() => {
   const map = new Map<string, string>();
@@ -416,7 +421,7 @@ const roleItems = computed(() =>
   (roleOptionsData.value || []).map((r) => ({ label: r.name, value: r.id }))
 );
 
-const { data: memberOptionsData, refresh: refreshMemberOptions } = await useClientFetch(
+const { data: memberOptionsData, refresh: refreshMemberOptions } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-members-${organizationId.value}`
@@ -436,7 +441,7 @@ const { data: memberOptionsData, refresh: refreshMemberOptions } = await useClie
       label: m.user?.name || m.user?.email || m.id,
     }));
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const memberLabelMap = computed(() => {
   const map = new Map<string, string>();
@@ -531,7 +536,7 @@ function clearResourceScope() {
 }
 
 const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
-  await useClientFetch(
+  useClientFetch(
     () =>
       organizationId.value
         ? `admin-binding-deployments-${organizationId.value}`
@@ -547,7 +552,7 @@ const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
         name: d.name || d.id,
       }));
     },
-    { watch: [selectedOrg] }
+    { watch: [selectedOrg], server: false }
   );
 const deploymentItems = computed(() =>
   (deploymentOptionsData.value || []).map((d) => ({
@@ -557,7 +562,7 @@ const deploymentItems = computed(() =>
 );
 
 // Load VPS instances for combobox
-const { data: vpsOptionsData, refresh: refreshVPSOptions } = await useClientFetch(
+const { data: vpsOptionsData, refresh: refreshVPSOptions } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-vps-${organizationId.value}`
@@ -575,7 +580,7 @@ const { data: vpsOptionsData, refresh: refreshVPSOptions } = await useClientFetc
       name: v.name || v.id,
     }));
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const vpsItems = computed(() =>
   (vpsOptionsData.value || []).map((v) => ({
@@ -585,7 +590,7 @@ const vpsItems = computed(() =>
 );
 
 // Load game server instances for combobox
-const { data: gameserverOptionsData, refresh: refreshGameserverOptions } = await useClientFetch(
+const { data: gameserverOptionsData, refresh: refreshGameserverOptions } = useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-gameservers-${organizationId.value}`
@@ -601,7 +606,7 @@ const { data: gameserverOptionsData, refresh: refreshGameserverOptions } = await
       name: gs.name || gs.id,
     }));
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false }
 );
 const gameserverItems = computed(() =>
   (gameserverOptionsData.value || []).map((gs) => ({
@@ -699,7 +704,7 @@ watch(
     gameserverId.value = "";
     await refreshAll();
   },
-  { immediate: true }
+  { immediate: false }
 );
 
 async function create() {

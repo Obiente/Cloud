@@ -233,14 +233,23 @@ async function loadUsers() {
     console.error("Failed to load users:", error);
     const { toast } = useToast();
     toast.error((error as Error | undefined)?.message || "Failed to load users");
-    throw error;
+    return {
+      users: [],
+      pagination: {
+        page: pagination.value.page,
+        perPage: pagination.value.perPage,
+        total: 0,
+        totalPages: 0,
+      },
+    };
   }
 }
 
 // Use client-side fetching for non-blocking navigation
 const { data: usersData, pending: loading } = useClientFetch(
   () => `superadmin-users-${pagination.value.page}-${search.value}`,
-  loadUsers
+  loadUsers,
+  { server: false }
 );
 
 // Update refs when data is loaded
@@ -279,7 +288,4 @@ const getUserActions = (row: UserInfo): Action[] => {
     },
   ];
 };
-
-await loadUsers();
 </script>
-

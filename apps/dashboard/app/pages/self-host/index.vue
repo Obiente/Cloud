@@ -571,10 +571,18 @@ const selectedOrg = computed({
   },
 });
 
-// Load organizations if not already loaded
-if (!organizations.value.length && auth.isAuthenticated) {
-  const res = await orgClient.listOrganizations({ onlyMine: true });
-  auth.setOrganizations(res.organizations || []);
+async function loadOrganizations() {
+  if (organizations.value.length || !auth.isAuthenticated) return;
+  try {
+    const res = await orgClient.listOrganizations({ onlyMine: true });
+    auth.setOrganizations(res.organizations || []);
+  } catch (err: unknown) {
+    console.error("Failed to load organizations:", err);
+    error.value =
+      err instanceof Error
+        ? err.message
+        : "Unable to load organizations right now.";
+  }
 }
 
 // Get current user identifiers (similar to billing page)
@@ -595,7 +603,7 @@ const currentUserIdentifiers = computed(() => {
 });
 
 // Get current member record for permission checks
-const { data: membersData } = await useClientFetch(
+const { data: membersData } = useClientFetch(
   () =>
     selectedOrg.value ? `org-members-${selectedOrg.value}` : "org-members-none",
   async () => {
@@ -629,7 +637,7 @@ const currentUserIsOwner = computed(() => {
 
 // Billing account
 const { data: billingAccountData, refresh: refreshBillingAccount } =
-  await useClientFetch(
+  useClientFetch(
     () => (selectedOrg.value ? `billing-${selectedOrg.value}` : "billing-none"),
     async () => {
       if (!selectedOrg.value) return null;
@@ -1022,6 +1030,7 @@ watch(selectedOrg, () => {
 
 // Load on mount
 onMounted(() => {
+  loadOrganizations();
   if (selectedOrg.value) {
     loadSubscriptionStatus();
     loadAPIKey();

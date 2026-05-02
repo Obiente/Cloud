@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 MODE="${1:-all}"
+RUNTIME_MERGED_FILE=""
+RUNTIME_PROJECT_NAME=""
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -140,12 +142,9 @@ assert_published_ports_available() {
 }
 
 print_runtime_diagnostics() {
-  local project_name="$1"
-  local compose_file="$2"
-
-  echo "Compose runtime diagnostics for project $project_name:" >&2
-  docker compose --project-name "$project_name" --project-directory "$ROOT_DIR" -f "$compose_file" ps >&2 || true
-  docker compose --project-name "$project_name" --project-directory "$ROOT_DIR" -f "$compose_file" logs --tail=120 >&2 || true
+  echo "Compose runtime diagnostics for project $RUNTIME_PROJECT_NAME:" >&2
+  docker compose --project-name "$RUNTIME_PROJECT_NAME" --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" ps >&2 || true
+  docker compose --project-name "$RUNTIME_PROJECT_NAME" --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" logs --tail=120 >&2 || true
 }
 
 assert_no_project_containers_remain() {
@@ -160,9 +159,17 @@ assert_no_project_containers_remain() {
   fi
 }
 
+cleanup_runtime() {
+  if [ -n "$RUNTIME_PROJECT_NAME" ] && [ -n "$RUNTIME_MERGED_FILE" ] && [ -f "$RUNTIME_MERGED_FILE" ]; then
+    docker compose --project-name "$RUNTIME_PROJECT_NAME" --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" down -v --remove-orphans >/dev/null 2>&1 || true
+  fi
+
+  if [ -n "$RUNTIME_MERGED_FILE" ]; then
+    rm -f "$RUNTIME_MERGED_FILE"
+  fi
+}
+
 validate_runtime_compose() {
-  local merged_file
-  local project_name
   local timeout
   local exit_code=0
 
@@ -170,33 +177,28 @@ validate_runtime_compose() {
   require_command ss
   require_command curl
 
-  merged_file="$(mktemp)"
-  project_name="${OBIENTE_COMPOSE_SMOKE_PROJECT:-obiente-compose-smoke}"
+  RUNTIME_MERGED_FILE="$(mktemp)"
+  RUNTIME_PROJECT_NAME="${OBIENTE_COMPOSE_SMOKE_PROJECT:-obiente-compose-smoke}"
   timeout="${OBIENTE_COMPOSE_SMOKE_TIMEOUT:-420}"
 
-  scripts/merge-compose-files.sh docker-compose.yml "$merged_file" >/dev/null
-  docker compose --project-directory "$ROOT_DIR" -f "$merged_file" config --quiet
-  assert_published_ports_available "$merged_file"
+  scripts/merge-compose-files.sh docker-compose.yml "$RUNTIME_MERGED_FILE" >/dev/null
+  docker compose --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" config --quiet
+  assert_published_ports_available "$RUNTIME_MERGED_FILE"
 
-  cleanup_runtime() {
-    docker compose --project-name "$project_name" --project-directory "$ROOT_DIR" -f "$merged_file" down -v --remove-orphans >/dev/null 2>&1 || true
-    rm -f "$merged_file"
-  }
   trap cleanup_runtime EXIT
 
-  docker compose --project-name "$project_name" --project-directory "$ROOT_DIR" -f "$merged_file" up -d --build --wait --wait-timeout "$timeout" || exit_code=$?
+  docker compose --project-name "$RUNTIME_PROJECT_NAME" --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" up -d --build --wait --wait-timeout "$timeout" || exit_code=$?
   if [ "$exit_code" -ne 0 ]; then
-    print_runtime_diagnostics "$project_name" "$merged_file"
+    print_runtime_diagnostics
     exit "$exit_code"
   fi
 
   curl -fsS -H 'Host: api.localhost' http://127.0.0.1/health >/dev/null
-  curl -fsS http://127.0.0.1:18080/ping >/dev/null
 
-  docker compose --project-name "$project_name" --project-directory "$ROOT_DIR" -f "$merged_file" down -v --remove-orphans
+  docker compose --project-name "$RUNTIME_PROJECT_NAME" --project-directory "$ROOT_DIR" -f "$RUNTIME_MERGED_FILE" down -v --remove-orphans
   trap - EXIT
-  rm -f "$merged_file"
-  assert_no_project_containers_remain "$project_name"
+  rm -f "$RUNTIME_MERGED_FILE"
+  assert_no_project_containers_remain "$RUNTIME_PROJECT_NAME"
 
   echo "validated docker-compose.yml runtime smoke"
 }

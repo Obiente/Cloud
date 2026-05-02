@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { AdminService, OrganizationService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import RoleManager, { type Role } from "~/components/admin/RoleManager.vue";
@@ -29,7 +29,8 @@ const { orgs, currentOrgId } = storeToRefs(orgStore);
 const orgClient = useConnectClient(OrganizationService);
 const adminClient = useConnectClient(AdminService);
 
-if (!orgs.value.length) {
+async function loadOrganizations() {
+  if (orgs.value.length) return;
   try {
     const res = await orgClient.listOrganizations({});
     orgStore.setOrganizations(res.organizations || []);
@@ -38,6 +39,10 @@ if (!orgs.value.length) {
   }
 }
 
+onMounted(() => {
+  loadOrganizations();
+});
+
 const selectedOrg = computed({
   get: () => currentOrgId.value || "",
   set: (id: string) => {
@@ -45,7 +50,7 @@ const selectedOrg = computed({
   },
 });
 
-const { data: permissionsCatalog, error: permissionsError } = await useClientFetch(
+const { data: permissionsCatalogData, error: permissionsError } = useClientFetch(
   "admin-permissions",
   async () => {
     try {
@@ -60,10 +65,13 @@ const { data: permissionsCatalog, error: permissionsError } = await useClientFet
       console.error("[Roles] Failed to load permissions:", e);
       throw e;
     }
-  }
+  },
+  { server: false, default: () => [] }
 );
 
-const { data: roles, refresh: refreshRoles } = await useClientFetch(
+const permissionsCatalog = computed(() => permissionsCatalogData.value || []);
+
+const { data: rolesData, refresh: refreshRoles } = useClientFetch(
   () =>
     selectedOrg.value
       ? `admin-roles-${selectedOrg.value}`
@@ -79,8 +87,10 @@ const { data: roles, refresh: refreshRoles } = await useClientFetch(
       permissionsJson: r.permissionsJson,
     })) as Role[];
   },
-  { watch: [selectedOrg] }
+  { watch: [selectedOrg], server: false, default: () => [] }
 );
+
+const roles = computed(() => rolesData.value || []);
 
 async function createRole(data: { name: string; permissionsJson: string; organizationId?: string }) {
   if (!data.organizationId) throw new Error("Organization ID is required");

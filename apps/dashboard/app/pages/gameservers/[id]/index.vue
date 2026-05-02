@@ -60,11 +60,11 @@
                   variant="outline"
                   size="sm"
                   class="gap-1.5"
-                  :disabled="isActionDisabled(gameServer.status)"
+                  :disabled="isOperationActive || isActionDisabled(gameServer.status)"
                   @click="restartServer"
                 >
-                  <ArrowPathIcon class="h-3.5 w-3.5" />
-                  <span class="hidden sm:inline">Restart</span>
+                  <ArrowPathIcon class="h-3.5 w-3.5" :class="{ 'animate-spin': activeOperation?.kind === 'restart' }" />
+                  <span class="hidden sm:inline">{{ activeOperation?.kind === "restart" ? "Restarting" : "Restart" }}</span>
                 </OuiButton>
                 <OuiButton
                   :color="gameServer.status === 'RUNNING' ? 'danger' : 'success'"
@@ -72,7 +72,7 @@
                   size="sm"
                   class="gap-1.5"
                   :loading="isStarting || isStopping || isRestarting"
-                  :disabled="isActionDisabled(gameServer.status)"
+                  :disabled="isOperationActive || isActionDisabled(gameServer.status)"
                   @click="toggleServerStatus"
                 >
                   <template v-if="gameServer.status === 'RUNNING'">
@@ -101,6 +101,33 @@
                   </template>
                 </OuiButton>
               </OuiFlex>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
+
+        <OuiCard
+          v-if="activeOperation || operationError"
+          variant="outline"
+          :class="operationError ? 'border-danger/30 bg-danger/5' : 'border-warning/30 bg-warning/5'"
+        >
+          <OuiCardBody>
+            <OuiFlex align="start" gap="sm">
+              <ArrowPathIcon
+                v-if="activeOperation"
+                class="mt-0.5 h-4 w-4 shrink-0 animate-spin text-warning"
+              />
+              <ExclamationTriangleIcon
+                v-else
+                class="mt-0.5 h-4 w-4 shrink-0 text-danger"
+              />
+              <OuiStack gap="xs" class="min-w-0">
+                <OuiText size="sm" weight="medium">
+                  {{ activeOperation?.label || "Command failed" }}
+                </OuiText>
+                <OuiText size="sm" color="tertiary">
+                  {{ operationError || activeOperation?.description }}
+                </OuiText>
+              </OuiStack>
             </OuiFlex>
           </OuiCardBody>
         </OuiCard>
@@ -552,6 +579,7 @@ import {
   ShieldCheckIcon,
   PuzzlePieceIcon,
   GlobeAmericasIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/vue/24/outline";
 
 import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -573,6 +601,7 @@ const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLog
 const MinecraftModsBrowser = defineAsyncComponent(() => import("~/components/gameserver/MinecraftModsBrowser.vue"));
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
+import { useResourceOperation } from "~/composables/useResourceOperation";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService, GameType } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
@@ -590,6 +619,15 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
+const {
+  activeOperation,
+  operationError,
+  isOperationActive,
+  beginOperation,
+  finishOperation,
+  failOperation,
+  getErrorMessage,
+} = useResourceOperation();
 const orgsStore = useOrganizationsStore();
 const client = useConnectClient(GameServerService);
 const superadminClient = useConnectClient(SuperadminService);
@@ -736,6 +774,7 @@ const isStopping = ref(false);
 const isRestarting = ref(false);
 const isDeleting = ref(false);
 const showDeleteDialog = ref(false);
+let operationPollingInterval: ReturnType<typeof setInterval> | null = null;
 
 // Tabs definition
 const isMinecraft = computed(() => {
@@ -993,6 +1032,42 @@ const loadGameServer = async () => {
   await loadUsage();
 };
 
+const stopOperationPolling = () => {
+  if (operationPollingInterval) {
+    clearInterval(operationPollingInterval);
+    operationPollingInterval = null;
+  }
+};
+
+const hasReachedOperationTarget = () => {
+  const operation = activeOperation.value;
+  if (!operation || !gameServer.value) return false;
+  if (operation.kind === "start") return gameServer.value.status === "RUNNING";
+  if (operation.kind === "stop") return gameServer.value.status === "STOPPED";
+  if (operation.kind === "restart") return gameServer.value.status === "RUNNING";
+  return false;
+};
+
+const startOperationPolling = () => {
+  stopOperationPolling();
+  operationPollingInterval = setInterval(async () => {
+    if (!activeOperation.value) {
+      stopOperationPolling();
+      return;
+    }
+    await loadGameServer();
+    if (gameServer.value?.status === "FAILED") {
+      failOperation(`${activeOperation.value.label} failed. Check the logs tab for backend details.`);
+      stopOperationPolling();
+      return;
+    }
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+      stopOperationPolling();
+    }
+  }, 3_000);
+};
+
 // Load usage data
 const loadUsage = async () => {
   if (!gameServer.value) return;
@@ -1103,6 +1178,7 @@ watch(
 
 // Clean up on unmount
 onUnmounted(() => {
+  stopOperationPolling();
   stopStreaming();
 });
 
@@ -1132,11 +1208,22 @@ const toggleServerStatus = async () => {
 const startServer = async () => {
   if (!gameServer.value) return;
   isStarting.value = true;
+  beginOperation({
+    kind: "start",
+    label: "Starting game server",
+    description: "The command was sent. Waiting for the backend to report the server is running.",
+    failureMessage: "Failed to start game server",
+  });
   try {
     await client.startGameServer({
       gameServerId: gameServerId.value,
     });
     await loadGameServer();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
     toast.success("Game server started");
   } catch (error: unknown) {
     // Extract error message from backend
@@ -1154,6 +1241,7 @@ const startServer = async () => {
     }
     
     const description = hint ? `${hint}\n\nError: ${errorMessage}` : errorMessage;
+    failOperation(description);
     toast.error("Failed to start game server", description);
   } finally {
     isStarting.value = false;
@@ -1163,14 +1251,27 @@ const startServer = async () => {
 const stopServer = async () => {
   if (!gameServer.value) return;
   isStopping.value = true;
+  beginOperation({
+    kind: "stop",
+    label: "Stopping game server",
+    description: "The command was sent. Waiting for the backend to confirm the server stopped.",
+    failureMessage: "Failed to stop game server",
+  });
   try {
     await client.stopGameServer({
       gameServerId: gameServerId.value,
     });
     await loadGameServer();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
     toast.success("Game server stopped");
-  } catch (error) {
-    toast.error("Failed to stop game server");
+  } catch (error: unknown) {
+    const message = getErrorMessage(error, "Failed to stop game server");
+    failOperation(message);
+    toast.error("Failed to stop game server", message);
   } finally {
     isStopping.value = false;
   }
@@ -1179,14 +1280,27 @@ const stopServer = async () => {
 const restartServer = async () => {
   if (!gameServer.value) return;
   isRestarting.value = true;
+  beginOperation({
+    kind: "restart",
+    label: "Restarting game server",
+    description: "The command was sent. Waiting for the backend to report the server is running again.",
+    failureMessage: "Failed to restart game server",
+  });
   try {
     await client.restartGameServer({
       gameServerId: gameServerId.value,
     });
     await loadGameServer();
+    if (hasReachedOperationTarget()) {
+      finishOperation();
+    } else {
+      startOperationPolling();
+    }
     toast.success("Game server restarted");
-  } catch (error) {
-    toast.error("Failed to restart game server");
+  } catch (error: unknown) {
+    const message = getErrorMessage(error, "Failed to restart game server");
+    failOperation(message);
+    toast.error("Failed to restart game server", message);
   } finally {
     isRestarting.value = false;
   }

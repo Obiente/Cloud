@@ -640,14 +640,15 @@ async function loadVPS() {
   } catch (error: unknown) {
     console.error("Failed to load VPS:", error);
     toast.error((error as Error | undefined)?.message || "Failed to load VPS");
-    throw error;
+    return null;
   }
 }
 
 // Use client-side fetching for non-blocking navigation
 const { data: vpsData, pending: loading } = useClientFetch(
   () => `superadmin-vps-${vpsId.value}`,
-  loadVPS
+  loadVPS,
+  { server: false }
 );
 
 // Update refs when data is loaded
@@ -877,7 +878,4 @@ function goToVPSPage() {
   // The regular VPS page will automatically switch to the correct organization if needed
   router.push(`/vps/${vps.value.id}`);
 }
-
-await loadVPS();
 </script>
-

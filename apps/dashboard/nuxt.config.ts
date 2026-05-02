@@ -22,8 +22,12 @@ if (
 }
 
 export default defineNuxtConfig({
-  // Disable devtools in production builds
-  devtools: { enabled: process.env.NODE_ENV !== "production" },
+  // Disable devtools in production builds and deterministic browser tests.
+  devtools: {
+    enabled:
+      process.env.NUXT_DEVTOOLS_ENABLED !== "false" &&
+      process.env.NODE_ENV !== "production",
+  },
   vite: {
     // @ts-ignore - Type conflict between Vite versions (@types/node@20 vs @types/node@24) in dependency tree
     plugins: [tailwindcss()],

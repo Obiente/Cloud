@@ -74,17 +74,30 @@
     activeTab.value = route.query.tab;
   }
 
-  if (!organizations.value.length && auth.isAuthenticated) {
-    // Only show user's own organizations in the select, even for superadmins
-    const res = await orgClient.listOrganizations({ onlyMine: true });
-    auth.setOrganizations(res.organizations || []);
-    // Ensure target org is set after organizations are loaded
-    if (targetOrgId) {
-      auth.switchOrganization(targetOrgId);
+  async function loadOrganizations() {
+    if (organizations.value.length || !auth.isAuthenticated) return;
+    try {
+      // Only show user's own organizations in the select, even for superadmins
+      const res = await orgClient.listOrganizations({ onlyMine: true });
+      auth.setOrganizations(res.organizations || []);
+      // Ensure target org is set after organizations are loaded
+      if (targetOrgId) {
+        auth.switchOrganization(targetOrgId);
+      }
+    } catch (e: unknown) {
+      console.error("Failed to load organizations:", e);
+      error.value =
+        e instanceof Error
+          ? e.message
+          : "Unable to load organizations right now.";
     }
   }
 
-  const { data: membersData, refresh: refreshMembers } = await useClientFetch(
+  onMounted(() => {
+    loadOrganizations();
+  });
+
+  const { data: membersData, refresh: refreshMembers } = useClientFetch(
     () =>
       organizationId.value
         ? `org-members-${organizationId.value}`
@@ -97,7 +110,7 @@
       });
       return res.members || [];
     },
-    { watch: [selectedOrg] }
+    { watch: [selectedOrg], server: false }
   );
   const members = computed(() => membersData.value || []);
 
@@ -120,7 +133,7 @@
   );
 
   const { data: roleCatalogData, refresh: refreshRoleCatalog } =
-    await useClientFetch(
+    useClientFetch(
       () =>
         organizationId.value
           ? `org-role-catalog-${organizationId.value}`
@@ -133,7 +146,7 @@
         });
         return (res.roles || []).map((r) => ({ id: r.id, name: r.name, permissionsJson: r.permissionsJson || "[]" }));
       },
-      { watch: [selectedOrg] }
+      { watch: [selectedOrg], server: false }
     );
 
   const roleDisplayMap = computed(() => {
@@ -196,7 +209,7 @@
   );
 
   // Fetch user's permissions for the current organization
-  const { data: userPermissionsData } = await useClientFetch(
+  const { data: userPermissionsData } = useClientFetch(
     () =>
       organizationId.value
         ? `org-permissions-${organizationId.value}`
@@ -213,7 +226,7 @@
         return [] as string[];
       }
     },
-    { watch: [selectedOrg] }
+    { watch: [selectedOrg], server: false }
   );
   const userPermissions = computed(() => userPermissionsData.value || []);
 
@@ -280,8 +293,16 @@
 
   async function syncOrganizations() {
     if (!auth.isAuthenticated) return;
-    const res = await orgClient.listOrganizations({});
-    auth.setOrganizations(res.organizations || []);
+    try {
+      const res = await orgClient.listOrganizations({});
+      auth.setOrganizations(res.organizations || []);
+    } catch (e: unknown) {
+      console.error("Failed to sync organizations:", e);
+      error.value =
+        e instanceof Error
+          ? e.message
+          : "Unable to refresh organizations right now.";
+    }
   }
 
   // Refresh current organization to get plan info
@@ -572,7 +593,7 @@
   });
 
   // Fetch usage data
-  const { data: usageData, refresh: refreshUsage } = await useClientFetch(
+  const { data: usageData, refresh: refreshUsage } = useClientFetch(
     () =>
       selectedOrg.value
         ? `org-usage-${selectedOrg.value}`
@@ -593,13 +614,13 @@
         return null;
       }
     },
-    { watch: [selectedOrg] }
+    { watch: [selectedOrg], server: false }
   );
 
   const usage = computed(() => usageData.value);
   
   // Fetch credit transactions (billing history)
-  const { data: creditLogData, refresh: refreshCreditLog } = await useClientFetch(
+  const { data: creditLogData, refresh: refreshCreditLog } = useClientFetch(
     () =>
       selectedOrg.value
         ? `org-credit-log-${selectedOrg.value}`
@@ -613,7 +634,7 @@
       });
       return res;
     },
-    { watch: [selectedOrg] }
+    { watch: [selectedOrg], server: false }
   );
 
   const billingHistory = computed(() => {
@@ -634,7 +655,7 @@
 
   // Fetch billing account
   const { data: billingAccountData, refresh: refreshBillingAccount } =
-    await useClientFetch(
+    useClientFetch(
       () =>
         selectedOrg.value
           ? `billing-account-${selectedOrg.value}`
@@ -658,7 +679,7 @@
 
   // Fetch payment methods
   const { data: paymentMethodsData, refresh: refreshPaymentMethods } =
-    await useClientFetch(
+    useClientFetch(
       () =>
         selectedOrg.value
           ? `payment-methods-${selectedOrg.value}`
@@ -682,7 +703,7 @@
 
   // Fetch invoices
   const { data: invoicesData, refresh: refreshInvoices } =
-    await useClientFetch(
+    useClientFetch(
       () =>
         selectedOrg.value
           ? `invoices-${selectedOrg.value}`
