@@ -1,7 +1,9 @@
 import {
   clearGitHubAppInstallStateCookie,
+  encodeGitHubAppInstallState,
   decodeGitHubAppInstallState,
   getGitHubAppInstallStateCookie,
+  setGitHubAppInstallStateCookie,
   verifyGitHubAppInstallState,
 } from "../../../utils/githubAppInstallState";
 
@@ -22,24 +24,6 @@ export default defineEventHandler(async (event) => {
       )}`
     );
 
-  const installationId = Number.parseInt(installationIdValue, 10);
-  if (!Number.isFinite(installationId) || installationId <= 0) {
-    return redirectToSettings("missing_installation");
-  }
-  if (!setupCode && state) {
-    return redirectToSettings("missing_user_authorization");
-  }
-
-  if (!state) {
-    clearGitHubAppInstallStateCookie(event);
-    return sendRedirect(
-      event,
-      `/settings?tab=integrations&provider=github&success=true&installationUpdated=true&installationId=${encodeURIComponent(
-        String(installationId)
-      )}`
-    );
-  }
-
   if (!verifyGitHubAppInstallState(getGitHubAppInstallStateCookie(event), state)) {
     clearGitHubAppInstallStateCookie(event);
     return redirectToSettings("invalid_state");
@@ -57,6 +41,47 @@ export default defineEventHandler(async (event) => {
   if (!stateData.orgId) {
     return redirectToSettings("missing_organization");
   }
+
+  const installationIdFromQuery = Number.parseInt(installationIdValue, 10);
+  const installationIdFromState = Number.parseInt(
+    stateData.installationId || "",
+    10
+  );
+  const installationId = Number.isFinite(installationIdFromQuery) && installationIdFromQuery > 0
+    ? installationIdFromQuery
+    : installationIdFromState;
+  if (!Number.isFinite(installationId) || installationId <= 0) {
+    clearGitHubAppInstallStateCookie(event);
+    return redirectToSettings("missing_installation");
+  }
+
+  if (!setupCode) {
+    const config = useRuntimeConfig(event);
+    const clientId =
+      (config.githubAppClientId as string) ||
+      process.env.GITHUB_APP_CLIENT_ID ||
+      "";
+    if (!clientId) {
+      clearGitHubAppInstallStateCookie(event);
+      return redirectToSettings("github_app_client_not_configured");
+    }
+
+    const authState = encodeGitHubAppInstallState({
+      random: crypto.randomUUID().replace(/-/g, ""),
+      orgId: stateData.orgId,
+      installationId: String(installationId),
+      repositorySelection: setupAction || stateData.repositorySelection || "",
+    });
+    setGitHubAppInstallStateCookie(event, authState);
+
+    const authUrl = new URL("https://github.com/login/oauth/authorize");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("state", authState);
+    authUrl.searchParams.set("redirect_uri", getGitHubAppCallbackUrl(event));
+    return sendRedirect(event, authUrl.toString());
+  }
+
+  clearGitHubAppInstallStateCookie(event);
 
   const isAuthDisabled = process.env.DISABLE_AUTH === "true";
   const { getServerToken } = await import("../../../utils/serverAuth");
@@ -95,7 +120,7 @@ export default defineEventHandler(async (event) => {
       installationId: BigInt(installationId),
       accountLogin: "",
       accountType: "Organization",
-      repositorySelection: setupAction || "",
+      repositorySelection: setupAction || stateData.repositorySelection || "",
       setupCode,
     });
 
@@ -125,3 +150,27 @@ export default defineEventHandler(async (event) => {
     return redirectToSettings(err?.message || "github_app_install_failed");
   }
 });
+
+function getGitHubAppCallbackUrl(event: any): string {
+  const requestUrl = new URL(
+    event.node.req.url || "/",
+    `http://${event.node.req.headers.host || "localhost:3000"}`
+  );
+  const forwardedProto = event.node.req.headers["x-forwarded-proto"];
+  const forwardedHost = event.node.req.headers["x-forwarded-host"];
+  const protocolHeader = Array.isArray(forwardedProto)
+    ? forwardedProto[0]
+    : forwardedProto;
+  const hostHeader = Array.isArray(forwardedHost)
+    ? forwardedHost[0]
+    : forwardedHost;
+  const protocol =
+    protocolHeader || (requestUrl.protocol === "https:" ? "https" : "http");
+  const host =
+    hostHeader?.split(",")[0]?.trim() ||
+    event.node.req.headers.host ||
+    requestUrl.host ||
+    "localhost:3000";
+
+  return `${protocol}://${host}/api/github/app/callback`;
+}

@@ -196,6 +196,7 @@ export default defineNuxtConfig({
       process.env.NUXT_API_HOST_INTERNAL ||
       process.env.NUXT_PUBLIC_API_HOST ||
       "http://api.localhost",
+    githubAppClientId: process.env.GITHUB_APP_CLIENT_ID || "",
     session: {
       password: sessionPassword,
       cookie: {

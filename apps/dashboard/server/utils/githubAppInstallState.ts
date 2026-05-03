@@ -9,6 +9,8 @@ const GITHUB_APP_INSTALL_STATE_MAX_AGE_SECONDS = 10 * 60;
 export interface GitHubAppInstallState {
   random: string;
   orgId: string;
+  installationId?: string;
+  repositorySelection?: string;
 }
 
 export function encodeGitHubAppInstallState(state: GitHubAppInstallState): string {
@@ -34,9 +36,11 @@ export function decodeGitHubAppInstallState(state: string): GitHubAppInstallStat
     });
   }
 
-  const { random, orgId } = parsed as {
+  const { random, orgId, installationId, repositorySelection } = parsed as {
     random?: unknown;
     orgId?: unknown;
+    installationId?: unknown;
+    repositorySelection?: unknown;
   };
 
   if (typeof random !== "string" || random.length < 16) {
@@ -53,7 +57,18 @@ export function decodeGitHubAppInstallState(state: string): GitHubAppInstallStat
     });
   }
 
-  return { random, orgId };
+  return {
+    random,
+    orgId,
+    installationId:
+      typeof installationId === "string" && installationId.length > 0
+        ? installationId
+        : undefined,
+    repositorySelection:
+      typeof repositorySelection === "string" && repositorySelection.length > 0
+        ? repositorySelection
+        : undefined,
+  };
 }
 
 export function getGitHubAppInstallStateCookie(event: H3Event): string | undefined {
