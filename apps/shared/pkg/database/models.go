@@ -52,16 +52,17 @@ type Deployment struct {
 	CreatedBy                 string     `gorm:"column:created_by;index" json:"created_by"`
 
 	// Runtime/resource config for quotas/orchestrator
-	Image             *string `gorm:"column:image" json:"image"`
-	Port              *int32  `gorm:"column:port" json:"port"`
-	Replicas          *int32  `gorm:"column:replicas" json:"replicas"`
-	MemoryBytes       *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
-	CPUShares         *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
-	EnvVars           string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"`                     // Legacy: Stored as JSON object {"KEY": "value"} for backward compatibility
-	EnvFileContent    string  `gorm:"column:env_file_content;type:text" json:"env_file_content"`      // Raw .env file content with comments
-	ComposeYaml       string  `gorm:"column:compose_yaml;type:text" json:"compose_yaml"`              // Docker Compose YAML content
-	BuildArgs         string  `gorm:"column:build_args;type:jsonb" json:"build_args"`                 // Docker build args for Dockerfile deployments
-	DockerfileVolumes string  `gorm:"column:dockerfile_volumes;type:jsonb" json:"dockerfile_volumes"` // Persistent volume mounts for Dockerfile deployments
+	Image                  *string `gorm:"column:image" json:"image"`
+	Port                   *int32  `gorm:"column:port" json:"port"`
+	Replicas               *int32  `gorm:"column:replicas" json:"replicas"`
+	MemoryBytes            *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
+	CPUShares              *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
+	EnvVars                string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"`                                 // Legacy: Stored as JSON object {"KEY": "value"} for backward compatibility
+	EnvFileContent         string  `gorm:"column:env_file_content;type:text" json:"env_file_content"`                  // Raw .env file content with comments
+	ComposeYaml            string  `gorm:"column:compose_yaml;type:text" json:"compose_yaml"`                          // Docker Compose YAML content
+	BuildArgs              string  `gorm:"column:build_args;type:jsonb" json:"build_args"`                             // Docker build args for Dockerfile deployments
+	DockerfileVolumes      string  `gorm:"column:dockerfile_volumes;type:jsonb" json:"dockerfile_volumes"`             // Persistent volume mounts for Dockerfile deployments
+	DockerfileBuildOptions string  `gorm:"column:dockerfile_build_options;type:jsonb" json:"dockerfile_build_options"` // Additional Docker build options for Dockerfile deployments
 }
 
 func (Deployment) TableName() string {

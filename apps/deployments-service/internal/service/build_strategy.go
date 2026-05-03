@@ -35,26 +35,35 @@ type BuildStrategy interface {
 
 // BuildConfig contains configuration for building a deployment
 type BuildConfig struct {
-	DeploymentID    string
-	RepositoryURL   string
-	Branch          string
-	GitHubToken     string // GitHub token for authenticating with private repositories
-	BuildCommand    string
-	InstallCommand  string
-	StartCommand    string // Start command for running the application
-	DockerfilePath  string // Path to Dockerfile (relative to repo root, defaults to "Dockerfile")
-	ComposeFilePath string // Path to compose file (relative to repo root, auto-detected if empty)
-	BuildPath       string // Working directory for build (relative to repo root, defaults to ".")
-	BuildOutputPath string // Path to built output files (relative to repo root, auto-detected if empty)
-	UseNginx        bool   // Use nginx for static deployments
-	NginxConfig     string // Custom nginx configuration (optional, uses default if empty)
-	EnvVars         map[string]string
-	BuildArgs       map[string]string
-	Port            int
-	MemoryBytes     int64
-	CPUShares       int64
-	LogWriter       io.Writer // Optional writer for build logs (stdout)
-	LogWriterErr    io.Writer // Optional writer for build logs (stderr)
+	DeploymentID           string
+	RepositoryURL          string
+	Branch                 string
+	GitHubToken            string // GitHub token for authenticating with private repositories
+	BuildCommand           string
+	InstallCommand         string
+	StartCommand           string // Start command for running the application
+	DockerfilePath         string // Path to Dockerfile (relative to repo root, defaults to "Dockerfile")
+	ComposeFilePath        string // Path to compose file (relative to repo root, auto-detected if empty)
+	BuildPath              string // Working directory for build (relative to repo root, defaults to ".")
+	BuildOutputPath        string // Path to built output files (relative to repo root, auto-detected if empty)
+	UseNginx               bool   // Use nginx for static deployments
+	NginxConfig            string // Custom nginx configuration (optional, uses default if empty)
+	EnvVars                map[string]string
+	BuildArgs              map[string]string
+	DockerfileBuildOptions DockerfileBuildOptions
+	Port                   int
+	MemoryBytes            int64
+	CPUShares              int64
+	LogWriter              io.Writer // Optional writer for build logs (stdout)
+	LogWriterErr           io.Writer // Optional writer for build logs (stderr)
+}
+
+type DockerfileBuildOptions struct {
+	Target   string            `json:"target,omitempty"`
+	Platform string            `json:"platform,omitempty"`
+	NoCache  bool              `json:"no_cache,omitempty"`
+	Pull     bool              `json:"pull,omitempty"`
+	Labels   map[string]string `json:"labels,omitempty"`
 }
 
 // BuildResult contains the result of a build operation
@@ -446,8 +455,8 @@ func getEnvAsStringSlice(envVars map[string]string) []string {
 }
 
 // buildDockerImage builds a Docker image from a directory
-func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, buildArgs map[string]string, logWriter, logWriterErr io.Writer) error {
-	args, err := dockerBuildCommandArgs(dir, imageName, dockerfile, buildArgs)
+func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, buildArgs map[string]string, buildOptions DockerfileBuildOptions, logWriter, logWriterErr io.Writer) error {
+	args, err := dockerBuildCommandArgs(dir, imageName, dockerfile, buildArgs, buildOptions)
 	if err != nil {
 		return err
 	}
@@ -469,7 +478,7 @@ func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, bu
 	return cmd.Run()
 }
 
-func dockerBuildCommandArgs(dir, imageName, dockerfile string, buildArgs map[string]string) ([]string, error) {
+func dockerBuildCommandArgs(dir, imageName, dockerfile string, buildArgs map[string]string, buildOptions DockerfileBuildOptions) ([]string, error) {
 	args := []string{"build", "-t", imageName}
 	if dockerfile != "" {
 		// If dockerfile is a relative path, make it absolute relative to dir
@@ -491,6 +500,30 @@ func dockerBuildCommandArgs(dir, imageName, dockerfile string, buildArgs map[str
 	for _, key := range keys {
 		value := sanitizedBuildArgs[key]
 		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	sanitizedBuildOptions, err := sanitizeDockerfileBuildOptions(buildOptions)
+	if err != nil {
+		return nil, err
+	}
+	if sanitizedBuildOptions.Target != "" {
+		args = append(args, "--target", sanitizedBuildOptions.Target)
+	}
+	if sanitizedBuildOptions.Platform != "" {
+		args = append(args, "--platform", sanitizedBuildOptions.Platform)
+	}
+	if sanitizedBuildOptions.NoCache {
+		args = append(args, "--no-cache")
+	}
+	if sanitizedBuildOptions.Pull {
+		args = append(args, "--pull")
+	}
+	labelKeys := make([]string, 0, len(sanitizedBuildOptions.Labels))
+	for key := range sanitizedBuildOptions.Labels {
+		labelKeys = append(labelKeys, key)
+	}
+	sort.Strings(labelKeys)
+	for _, key := range labelKeys {
+		args = append(args, "--label", fmt.Sprintf("%s=%s", key, sanitizedBuildOptions.Labels[key]))
 	}
 	args = append(args, dir)
 	return args, nil
@@ -728,4 +761,19 @@ func parseDockerfileVolumesForOrchestrator(raw string) []orchestrator.Deployment
 		})
 	}
 	return volumes
+}
+
+func parseStoredDockerfileBuildOptions(raw string) DockerfileBuildOptions {
+	if strings.TrimSpace(raw) == "" {
+		return DockerfileBuildOptions{}
+	}
+	var options DockerfileBuildOptions
+	if err := json.Unmarshal([]byte(raw), &options); err != nil {
+		return DockerfileBuildOptions{}
+	}
+	options, err := sanitizeDockerfileBuildOptions(options)
+	if err != nil {
+		return DockerfileBuildOptions{}
+	}
+	return options
 }

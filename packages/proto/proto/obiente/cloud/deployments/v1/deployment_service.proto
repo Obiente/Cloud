@@ -310,6 +310,7 @@ message UpdateDeploymentRequest {
   optional bool auto_deploy = 29; // Automatically deploy when GitHub push webhooks arrive
   map<string, string> build_args = 30; // Docker build args for Dockerfile deployments
   repeated DockerfileVolume dockerfile_volumes = 31; // Persistent volume mounts for Dockerfile deployments
+  optional DockerfileBuildOptions dockerfile_build_options = 32; // Additional Docker build options for Dockerfile deployments
 }
 
 message UpdateDeploymentResponse {
@@ -1014,12 +1015,21 @@ message Deployment {
   optional bool auto_deploy = 45; // Automatically deploy when GitHub push webhooks arrive
   map<string, string> build_args = 46; // Docker build args for Dockerfile deployments
   repeated DockerfileVolume dockerfile_volumes = 47; // Persistent volume mounts for Dockerfile deployments
+  optional DockerfileBuildOptions dockerfile_build_options = 48; // Additional Docker build options for Dockerfile deployments
 }
 
 message DockerfileVolume {
   string name = 1; // Safe persistent volume name, scoped to this deployment
   string mount_path = 2; // Absolute path inside the container (e.g., "/data")
   bool read_only = 3; // Mount the volume read-only
+}
+
+message DockerfileBuildOptions {
+  optional string target = 1; // Dockerfile stage target
+  optional string platform = 2; // Build platform (for example linux/amd64)
+  optional bool no_cache = 3; // Build without cache
+  optional bool pull = 4; // Always attempt to pull newer base images
+  map<string, string> labels = 5; // Image labels to apply during build
 }
 
 message ListDeploymentContainersRequest {

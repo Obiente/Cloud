@@ -1766,7 +1766,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 	}
 	writeBuildLog("   🐳 Dockerfile: %s", dockerfilePathValue)
 
-	if err := buildDockerImage(ctx, contextDir, imageName, dockerfilePath, config.BuildArgs, config.LogWriter, config.LogWriterErr); err != nil {
+	if err := buildDockerImage(ctx, contextDir, imageName, dockerfilePath, config.BuildArgs, config.DockerfileBuildOptions, config.LogWriter, config.LogWriterErr); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
 
@@ -2241,7 +2241,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
 	// Build final minimal nginx image
-	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", nil, config.LogWriter, config.LogWriterErr); err != nil {
+	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", nil, DockerfileBuildOptions{}, config.LogWriter, config.LogWriterErr); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
 

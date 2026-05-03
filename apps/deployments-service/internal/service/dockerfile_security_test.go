@@ -54,7 +54,7 @@ func TestDockerBuildCommandArgsKeepsBuildArgValuesAtomic(t *testing.T) {
 
 	got, err := dockerBuildCommandArgs("/tmp/repo", "registry.example/app:latest", "deploy/Dockerfile", map[string]string{
 		"SAFE_ARG": "value; touch /tmp/owned && echo $HOME",
-	})
+	}, DockerfileBuildOptions{})
 	if err != nil {
 		t.Fatalf("dockerBuildCommandArgs returned error: %v", err)
 	}
@@ -72,8 +72,56 @@ func TestDockerBuildCommandArgsKeepsBuildArgValuesAtomic(t *testing.T) {
 		t.Fatalf("dockerBuildCommandArgs() = %#v, want %#v", got, want)
 	}
 
-	if _, err := dockerBuildCommandArgs("/tmp/repo", "image", "", map[string]string{"--add-host": "host.docker.internal:host-gateway"}); err == nil {
+	if _, err := dockerBuildCommandArgs("/tmp/repo", "image", "", map[string]string{"--add-host": "host.docker.internal:host-gateway"}, DockerfileBuildOptions{}); err == nil {
 		t.Fatal("dockerBuildCommandArgs returned nil error for unsafe build arg key")
+	}
+}
+
+func TestDockerBuildCommandArgsIncludesSanitizedBuildOptions(t *testing.T) {
+	t.Parallel()
+
+	got, err := dockerBuildCommandArgs("/tmp/repo", "image", "Dockerfile", map[string]string{}, DockerfileBuildOptions{
+		Target:   "runtime",
+		Platform: "linux/amd64",
+		NoCache:  true,
+		Pull:     true,
+		Labels: map[string]string{
+			"org.opencontainers.image.source": "https://example.com/repo",
+		},
+	})
+	if err != nil {
+		t.Fatalf("dockerBuildCommandArgs returned error: %v", err)
+	}
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{"--target\nruntime", "--platform\nlinux/amd64", "--no-cache", "--pull", "--label\norg.opencontainers.image.source=https://example.com/repo"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("dockerBuildCommandArgs() = %#v, want to contain %q", got, want)
+		}
+	}
+}
+
+func TestSanitizeDockerfileBuildOptionsRejectsUnsafeInput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		options DockerfileBuildOptions
+	}{
+		{name: "target flag injection", options: DockerfileBuildOptions{Target: "--build-arg"}},
+		{name: "target slash", options: DockerfileBuildOptions{Target: "runtime/stage"}},
+		{name: "platform shell", options: DockerfileBuildOptions{Platform: "linux/amd64;touch /tmp/owned"}},
+		{name: "platform absolute", options: DockerfileBuildOptions{Platform: "/linux/amd64"}},
+		{name: "label shell", options: DockerfileBuildOptions{Labels: map[string]string{"bad;label": "value"}}},
+		{name: "label newline", options: DockerfileBuildOptions{Labels: map[string]string{"safe.label": "bad\nvalue"}}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := sanitizeDockerfileBuildOptions(tc.options); err == nil {
+				t.Fatalf("sanitizeDockerfileBuildOptions(%#v) returned nil error", tc.options)
+			}
+		})
 	}
 }
 

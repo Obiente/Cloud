@@ -286,26 +286,27 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		}
 
 		buildConfig := &BuildConfig{
-			DeploymentID:    deploymentID,
-			RepositoryURL:   repoURL,
-			Branch:          dbDeployment.Branch,
-			GitHubToken:     githubToken,
-			BuildCommand:    buildCmd,
-			InstallCommand:  installCmd,
-			StartCommand:    startCmd,
-			DockerfilePath:  dockerfilePath,
-			ComposeFilePath: composeFilePath,
-			BuildPath:       buildPath,
-			BuildOutputPath: buildOutputPath,
-			UseNginx:        useNginx, // Always true for static deployments
-			NginxConfig:     nginxConfig,
-			EnvVars:         parseEnvVars(dbDeployment.EnvVars),
-			BuildArgs:       parseEnvVars(dbDeployment.BuildArgs),
-			Port:            port,
-			MemoryBytes:     memoryBytes,
-			CPUShares:       cpuShares,
-			LogWriter:       streamer,                  // Stream stdout
-			LogWriterErr:    NewStderrWriter(streamer), // Stream stderr
+			DeploymentID:           deploymentID,
+			RepositoryURL:          repoURL,
+			Branch:                 dbDeployment.Branch,
+			GitHubToken:            githubToken,
+			BuildCommand:           buildCmd,
+			InstallCommand:         installCmd,
+			StartCommand:           startCmd,
+			DockerfilePath:         dockerfilePath,
+			ComposeFilePath:        composeFilePath,
+			BuildPath:              buildPath,
+			BuildOutputPath:        buildOutputPath,
+			UseNginx:               useNginx, // Always true for static deployments
+			NginxConfig:            nginxConfig,
+			EnvVars:                parseEnvVars(dbDeployment.EnvVars),
+			BuildArgs:              parseEnvVars(dbDeployment.BuildArgs),
+			DockerfileBuildOptions: parseStoredDockerfileBuildOptions(dbDeployment.DockerfileBuildOptions),
+			Port:                   port,
+			MemoryBytes:            memoryBytes,
+			CPUShares:              cpuShares,
+			LogWriter:              streamer,                  // Stream stdout
+			LogWriterErr:           NewStderrWriter(streamer), // Stream stderr
 		}
 
 		// Write initial build message

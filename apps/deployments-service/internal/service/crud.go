@@ -496,6 +496,14 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		data, _ := json.Marshal(volumes)
 		dbDeployment.DockerfileVolumes = string(data)
 	}
+	if req.Msg.DockerfileBuildOptions != nil {
+		buildOptions, err := sanitizeProtoDockerfileBuildOptions(req.Msg.GetDockerfileBuildOptions())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		data, _ := json.Marshal(buildOptions)
+		dbDeployment.DockerfileBuildOptions = string(data)
+	}
 
 	if req.Msg.Port != nil {
 		port := req.Msg.GetPort()
@@ -696,6 +704,85 @@ func isSafeBuildArgName(name string) bool {
 	}
 	for i, r := range name {
 		if r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (i > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func sanitizeProtoDockerfileBuildOptions(options *deploymentsv1.DockerfileBuildOptions) (DockerfileBuildOptions, error) {
+	if options == nil {
+		return DockerfileBuildOptions{}, nil
+	}
+	return sanitizeDockerfileBuildOptions(DockerfileBuildOptions{
+		Target:   options.GetTarget(),
+		Platform: options.GetPlatform(),
+		NoCache:  options.GetNoCache(),
+		Pull:     options.GetPull(),
+		Labels:   options.GetLabels(),
+	})
+}
+
+func sanitizeDockerfileBuildOptions(options DockerfileBuildOptions) (DockerfileBuildOptions, error) {
+	sanitized := DockerfileBuildOptions{
+		Target:   strings.TrimSpace(options.Target),
+		Platform: strings.TrimSpace(options.Platform),
+		NoCache:  options.NoCache,
+		Pull:     options.Pull,
+		Labels:   make(map[string]string),
+	}
+	if sanitized.Target != "" && !isSafeDockerfileBuildTarget(sanitized.Target) {
+		return DockerfileBuildOptions{}, fmt.Errorf("invalid Dockerfile target %q: use letters, numbers, dots, dashes, and underscores", sanitized.Target)
+	}
+	if sanitized.Platform != "" && !isSafeDockerPlatform(sanitized.Platform) {
+		return DockerfileBuildOptions{}, fmt.Errorf("invalid Docker platform %q: use values like linux/amd64 or linux/arm64/v8", sanitized.Platform)
+	}
+	for key, value := range options.Labels {
+		key = strings.TrimSpace(key)
+		if !isSafeDockerLabelName(key) {
+			return DockerfileBuildOptions{}, fmt.Errorf("invalid Docker image label %q", key)
+		}
+		if strings.ContainsAny(value, "\x00\r\n") {
+			return DockerfileBuildOptions{}, fmt.Errorf("invalid value for Docker image label %q: values cannot contain null bytes or newlines", key)
+		}
+		sanitized.Labels[key] = value
+	}
+	return sanitized, nil
+}
+
+func isSafeDockerfileBuildTarget(target string) bool {
+	if target == "" || len(target) > 128 || strings.HasPrefix(target, "-") || strings.HasPrefix(target, ".") {
+		return false
+	}
+	for _, r := range target {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isSafeDockerPlatform(platform string) bool {
+	if platform == "" || len(platform) > 64 || strings.HasPrefix(platform, "/") || strings.Contains(platform, "//") {
+		return false
+	}
+	for _, r := range platform {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == '/' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isSafeDockerLabelName(name string) bool {
+	if name == "" || len(name) > 128 || strings.HasPrefix(name, "-") || strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".") {
+		return false
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == '/' {
 			continue
 		}
 		return false

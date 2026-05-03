@@ -137,6 +137,7 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	}
 	deployment.BuildArgs = parseJSONStringMap(db.BuildArgs)
 	deployment.DockerfileVolumes = parseDockerfileVolumesToProto(db.DockerfileVolumes)
+	deployment.DockerfileBuildOptions = parseDockerfileBuildOptionsToProto(db.DockerfileBuildOptions)
 
 	// Convert timestamps
 	if !db.LastDeployedAt.IsZero() {
@@ -300,6 +301,7 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		db.BuildArgs = "{}"
 	}
 	db.DockerfileVolumes = marshalDockerfileVolumes(protoDep.GetDockerfileVolumes())
+	db.DockerfileBuildOptions = marshalDockerfileBuildOptions(protoDep.GetDockerfileBuildOptions())
 
 	return db
 }
@@ -347,6 +349,43 @@ func marshalDockerfileVolumes(volumes []*deploymentsv1.DockerfileVolume) string 
 	data, err := json.Marshal(volumes)
 	if err != nil {
 		return "[]"
+	}
+	return string(data)
+}
+
+func parseDockerfileBuildOptionsToProto(raw string) *deploymentsv1.DockerfileBuildOptions {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var options deploymentsv1.DockerfileBuildOptions
+	if err := json.Unmarshal([]byte(raw), &options); err == nil {
+		return &options
+	}
+	var stored DockerfileBuildOptions
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return nil
+	}
+	protoOptions := &deploymentsv1.DockerfileBuildOptions{
+		NoCache: proto.Bool(stored.NoCache),
+		Pull:    proto.Bool(stored.Pull),
+		Labels:  stored.Labels,
+	}
+	if strings.TrimSpace(stored.Target) != "" {
+		protoOptions.Target = proto.String(stored.Target)
+	}
+	if strings.TrimSpace(stored.Platform) != "" {
+		protoOptions.Platform = proto.String(stored.Platform)
+	}
+	return protoOptions
+}
+
+func marshalDockerfileBuildOptions(options *deploymentsv1.DockerfileBuildOptions) string {
+	if options == nil {
+		return "{}"
+	}
+	data, err := json.Marshal(options)
+	if err != nil {
+		return "{}"
 	}
 	return string(data)
 }

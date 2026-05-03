@@ -333,6 +333,11 @@ func addDockerfileBuildArgsAndVolumes(db *gorm.DB) error {
 			return err
 		}
 	}
+	if !db.Migrator().HasColumn("deployments", "dockerfile_build_options") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN dockerfile_build_options JSONB DEFAULT '{}'::jsonb").Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
