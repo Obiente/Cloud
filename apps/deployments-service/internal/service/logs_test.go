@@ -105,6 +105,23 @@ func TestMergeDeploymentLogLinesAppliesTailAfterDedupe(t *testing.T) {
 	}
 }
 
+func TestBuildLogStreamingActiveStatusClassifiers(t *testing.T) {
+	t.Parallel()
+
+	if !isBuildStreamingActive(int32(deploymentsv1.BuildStatus_BUILD_PENDING)) || !isBuildStreamingActive(int32(deploymentsv1.BuildStatus_BUILD_BUILDING)) {
+		t.Fatal("expected pending and building build statuses to stream")
+	}
+	if isBuildStreamingActive(int32(deploymentsv1.BuildStatus_BUILD_SUCCESS)) || isBuildStreamingActive(int32(deploymentsv1.BuildStatus_BUILD_FAILED)) {
+		t.Fatal("expected completed build statuses not to stream by themselves")
+	}
+	if !isDeploymentBuildLogStreamingActiveStatus(int32(deploymentsv1.DeploymentStatus_BUILDING)) || !isDeploymentBuildLogStreamingActiveStatus(int32(deploymentsv1.DeploymentStatus_DEPLOYING)) {
+		t.Fatal("expected building and deploying deployment statuses to keep build logs streaming")
+	}
+	if isDeploymentBuildLogStreamingActiveStatus(int32(deploymentsv1.DeploymentStatus_RUNNING)) || isDeploymentBuildLogStreamingActiveStatus(int32(deploymentsv1.DeploymentStatus_FAILED)) {
+		t.Fatal("expected terminal deployment statuses not to keep build logs streaming")
+	}
+}
+
 func testLogLine(ts time.Time, line string) *deploymentsv1.DeploymentLogLine {
 	return &deploymentsv1.DeploymentLogLine{
 		DeploymentId: "dep-123",

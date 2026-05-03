@@ -1131,10 +1131,11 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 
 	if latestBuild != nil {
 		localBuildID := buildStreamer.CurrentBuildID()
-		if isBuildStreamingActive(latestBuild.Status) && latestBuild.ID != "" && latestBuild.ID != localBuildID {
+		streamingActive := isBuildStreamingActive(latestBuild.Status) || s.isDeploymentBuildLogStreamingActive(ctx, deploymentID)
+		if streamingActive && latestBuild.ID != "" && latestBuild.ID != localBuildID {
 			return s.streamRemoteBuildLogs(ctx, stream, deploymentID, latestBuild.ID)
 		}
-		if !isBuildStreamingActive(latestBuild.Status) {
+		if !streamingActive {
 			_, err := s.streamRemoteBuildLogsSnapshot(ctx, stream, deploymentID, latestBuild.ID)
 			return err
 		}
@@ -1175,6 +1176,21 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 
 func isBuildStreamingActive(status int32) bool {
 	return status == int32(deploymentsv1.BuildStatus_BUILD_PENDING) || status == int32(deploymentsv1.BuildStatus_BUILD_BUILDING)
+}
+
+func isDeploymentBuildLogStreamingActiveStatus(status int32) bool {
+	return status == int32(deploymentsv1.DeploymentStatus_BUILDING) || status == int32(deploymentsv1.DeploymentStatus_DEPLOYING)
+}
+
+func (s *Service) isDeploymentBuildLogStreamingActive(ctx context.Context, deploymentID string) bool {
+	if s.repo == nil {
+		return false
+	}
+	deployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil || deployment == nil {
+		return false
+	}
+	return isDeploymentBuildLogStreamingActiveStatus(deployment.Status)
 }
 
 func buildLogEntryToProto(deploymentID string, logEntry *database.BuildLog) *deploymentsv1.DeploymentLogLine {
@@ -1267,6 +1283,10 @@ func (s *Service) streamRemoteBuildLogs(ctx context.Context, stream *connect.Ser
 		}
 
 		if isBuildStreamingActive(build.Status) {
+			drainingSince = time.Time{}
+			continue
+		}
+		if s.isDeploymentBuildLogStreamingActive(ctx, deploymentID) {
 			drainingSince = time.Time{}
 			continue
 		}

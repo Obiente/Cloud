@@ -5,6 +5,7 @@ import { useConnectClient } from "~/lib/connect-client";
 export interface BuildProgressOptions {
   deploymentId: string;
   organizationId: string;
+  shouldContinue?: () => boolean;
 }
 
 /**
@@ -19,6 +20,8 @@ export function useBuildProgress(options: BuildProgressOptions) {
   let streamController: AbortController | null = null;
   let animationFrameId: number | null = null;
   let incrementalProgressIntervalId: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let stopRequested = false;
   let lastLogUpdateTime = ref(Date.now());
 
   // Build phase patterns and their progress percentages
@@ -253,12 +256,17 @@ export function useBuildProgress(options: BuildProgressOptions) {
       phase: "Finalizing image",
     },
     {
-      pattern: /sending tarball/i,
+      pattern: /sending tarball|📤 Pushing image to registry|pushing image/i,
       progress: 80,
       phase: "Uploading image",
     },
     {
-      pattern: /Successfully built image|Loaded image/i,
+      pattern: /🔐 Authenticating with registry|authenticated with registry/i,
+      progress: 84,
+      phase: "Authenticating with registry",
+    },
+    {
+      pattern: /Successfully built image|Loaded image|Image pushed to registry successfully/i,
       progress: 85,
       phase: "Image ready",
     },
@@ -706,12 +714,11 @@ export function useBuildProgress(options: BuildProgressOptions) {
         return;
       }
       
-      // If no logs received for 3 seconds, start slowly incrementing
+      // If no logs received for 3 seconds, keep visibly moving. Build systems
+      // can be quiet while pulling base images, compiling, or waiting on Swarm.
       const timeSinceLastLog = Date.now() - lastLogUpdateTime.value;
       if (timeSinceLastLog >= 3000 && targetProgress.value < 90) {
-        // Slowly increment: 0.1% per second (after 3 second delay)
-        // This gives a sense of progress even during quiet periods
-        const increment = Math.min(0.1, (90 - targetProgress.value) / 100);
+        const increment = Math.min(0.5, (90 - targetProgress.value) / 40);
         targetProgress.value = Math.min(90, targetProgress.value + increment);
         animateProgress();
       }
@@ -730,9 +737,14 @@ export function useBuildProgress(options: BuildProgressOptions) {
       return;
     }
 
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+    }
+    stopRequested = false;
     isStreaming.value = true;
-    targetProgress.value = 0;
-    progress.value = 0;
+    targetProgress.value = 2;
+    progress.value = 2;
     isFailed.value = false;
     lastLogUpdateTime.value = Date.now();
     currentPhase.value = "Starting deployment...";
@@ -775,10 +787,23 @@ export function useBuildProgress(options: BuildProgressOptions) {
       isStreaming.value = false;
       streamController = null;
       stopIncrementalProgress();
+      if (!stopRequested && !isFailed.value && options.shouldContinue?.()) {
+        reconnectTimeoutId = setTimeout(() => {
+          reconnectTimeoutId = null;
+          if (!stopRequested && options.shouldContinue?.()) {
+            startStreaming();
+          }
+        }, 1500);
+      }
     }
   };
 
   const stopStreaming = () => {
+    stopRequested = true;
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+    }
     if (streamController) {
       streamController.abort();
       streamController = null;
@@ -798,6 +823,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
     lastLogUpdateTime.value = Date.now();
     currentPhase.value = "Starting deployment...";
     stopStreaming();
+    stopRequested = false;
   };
 
   // Note: Auto-start is handled by the caller, not here
@@ -818,4 +844,3 @@ export function useBuildProgress(options: BuildProgressOptions) {
     reset,
   };
 }
-

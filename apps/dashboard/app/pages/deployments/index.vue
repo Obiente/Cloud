@@ -604,6 +604,13 @@
       const progress = useBuildProgress({
         deploymentId,
         organizationId: effectiveOrgId.value,
+        shouldContinue: () =>
+          (deployments.value ?? []).some(
+            (deployment) =>
+              deployment.id === deploymentId &&
+              (deployment.status === DeploymentStatus.BUILDING ||
+                deployment.status === DeploymentStatus.DEPLOYING)
+          ),
       });
       buildProgressMap.set(deploymentId, progress);
     }
