@@ -63,6 +63,55 @@ func TestDeploymentRepositoryTenantIsolation(t *testing.T) {
 	})
 }
 
+func TestNormalizeDeploymentJSONFieldsDefaultsEmptyValues(t *testing.T) {
+	t.Parallel()
+
+	deployment := &Deployment{}
+	normalizeDeploymentJSONFields(deployment)
+
+	if deployment.CustomDomains != "[]" {
+		t.Fatalf("CustomDomains = %q, want []", deployment.CustomDomains)
+	}
+	if deployment.Groups != "[]" {
+		t.Fatalf("Groups = %q, want []", deployment.Groups)
+	}
+	if deployment.EnvVars != "{}" {
+		t.Fatalf("EnvVars = %q, want {}", deployment.EnvVars)
+	}
+	if deployment.BuildArgs != "{}" {
+		t.Fatalf("BuildArgs = %q, want {}", deployment.BuildArgs)
+	}
+	if deployment.DockerfileVolumes != "[]" {
+		t.Fatalf("DockerfileVolumes = %q, want []", deployment.DockerfileVolumes)
+	}
+	if deployment.DockerfileBuildOptions != "{}" {
+		t.Fatalf("DockerfileBuildOptions = %q, want {}", deployment.DockerfileBuildOptions)
+	}
+}
+
+func TestNormalizeDeploymentJSONFieldsPreservesExistingValues(t *testing.T) {
+	t.Parallel()
+
+	deployment := &Deployment{
+		CustomDomains:          `["example.com"]`,
+		Groups:                 `["prod"]`,
+		EnvVars:                `{"APP_ENV":"production"}`,
+		BuildArgs:              `{"NODE_VERSION":"22"}`,
+		DockerfileVolumes:      `[{"name":"data","mount_path":"/data"}]`,
+		DockerfileBuildOptions: `{"target":"runtime"}`,
+	}
+	normalizeDeploymentJSONFields(deployment)
+
+	if deployment.CustomDomains != `["example.com"]` ||
+		deployment.Groups != `["prod"]` ||
+		deployment.EnvVars != `{"APP_ENV":"production"}` ||
+		deployment.BuildArgs != `{"NODE_VERSION":"22"}` ||
+		deployment.DockerfileVolumes != `[{"name":"data","mount_path":"/data"}]` ||
+		deployment.DockerfileBuildOptions != `{"target":"runtime"}` {
+		t.Fatalf("normalizeDeploymentJSONFields changed existing values: %#v", deployment)
+	}
+}
+
 func newDeploymentRepositoryTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

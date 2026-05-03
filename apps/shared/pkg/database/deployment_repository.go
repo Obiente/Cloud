@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -116,6 +117,7 @@ func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string
 
 func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deployment) error {
 	deployment.LastDeployedAt = time.Now()
+	normalizeDeploymentJSONFields(deployment)
 
 	// Use Select to explicitly update fields, including zero values like empty strings
 	if err := r.db.WithContext(ctx).
@@ -150,6 +152,25 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 	}
 
 	return nil
+}
+
+func normalizeDeploymentJSONFields(deployment *Deployment) {
+	if deployment == nil {
+		return
+	}
+	deployment.CustomDomains = defaultJSONValue(deployment.CustomDomains, "[]")
+	deployment.Groups = defaultJSONValue(deployment.Groups, "[]")
+	deployment.EnvVars = defaultJSONValue(deployment.EnvVars, "{}")
+	deployment.BuildArgs = defaultJSONValue(deployment.BuildArgs, "{}")
+	deployment.DockerfileVolumes = defaultJSONValue(deployment.DockerfileVolumes, "[]")
+	deployment.DockerfileBuildOptions = defaultJSONValue(deployment.DockerfileBuildOptions, "{}")
+}
+
+func defaultJSONValue(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 // UpdateEnvVars updates only the environment variables fields
