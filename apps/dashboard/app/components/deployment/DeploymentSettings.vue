@@ -666,16 +666,52 @@
       const line = rawLine.trim();
       if (!line || line.startsWith("#")) continue;
       const separatorIndex = line.indexOf("=");
-      if (separatorIndex <= 0) continue;
+      if (separatorIndex <= 0) {
+        throw new Error(`Invalid build arg "${line}". Use NAME=value.`);
+      }
       const key = line.slice(0, separatorIndex).trim();
-      if (!key || /[\s=]/.test(key)) continue;
-      args[key] = line.slice(separatorIndex + 1);
+      const value = line.slice(separatorIndex + 1);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+        throw new Error(`Invalid build arg name "${key}". Use letters, numbers, and underscores, and start with a letter or underscore.`);
+      }
+      if (/[\u0000\r\n]/.test(value)) {
+        throw new Error(`Invalid value for build arg "${key}". Values cannot contain null bytes or newlines.`);
+      }
+      args[key] = value;
     }
     return args;
   };
 
+  const normalizeContainerMountPath = (mountPath: string): string | null => {
+    if (!mountPath.startsWith("/") || mountPath.includes("\u0000") || mountPath.includes(":")) {
+      return null;
+    }
+    const segments: string[] = [];
+    for (const segment of mountPath.split("/")) {
+      if (!segment || segment === ".") continue;
+      if (segment === "..") {
+        segments.pop();
+        continue;
+      }
+      segments.push(segment);
+    }
+    const normalized = `/${segments.join("/")}`;
+    const blocked =
+      normalized === "/" ||
+      normalized === "/proc" ||
+      normalized.startsWith("/proc/") ||
+      normalized === "/sys" ||
+      normalized.startsWith("/sys/") ||
+      normalized === "/dev" ||
+      normalized.startsWith("/dev/") ||
+      normalized === "/var/run/docker.sock" ||
+      normalized === "/run/docker.sock";
+    return blocked ? null : normalized;
+  };
+
   const parseDockerfileVolumes = (text: string): DockerfileVolume[] => {
     const volumes: DockerfileVolume[] = [];
+    const seenMounts = new Set<string>();
     for (const rawLine of text.split(/\r?\n/)) {
       const line = rawLine.trim();
       if (!line || line.startsWith("#")) continue;
@@ -684,19 +720,24 @@
         throw new Error(`Invalid volume "${line}". Use name:/container/path[:ro].`);
       }
       const [name, mountPath, mode] = parts;
-      if (!name || !/^[A-Za-z0-9_.-]+$/.test(name)) {
+      if (!name || name.length > 64 || !/^[A-Za-z0-9_.-]+$/.test(name) || name === "." || name === "..") {
         throw new Error(`Invalid volume name "${name}". Use letters, numbers, dots, dashes, or underscores.`);
       }
-      if (!mountPath?.startsWith("/")) {
-        throw new Error(`Invalid mount path "${mountPath}". Use an absolute container path.`);
+      const normalizedMountPath = normalizeContainerMountPath(mountPath || "");
+      if (!normalizedMountPath) {
+        throw new Error(`Invalid mount path "${mountPath}". Use an absolute container path outside /proc, /sys, /dev, and the Docker socket.`);
+      }
+      if (seenMounts.has(normalizedMountPath)) {
+        throw new Error(`Duplicate mount path "${normalizedMountPath}".`);
       }
       if (mode && mode !== "ro" && mode !== "rw") {
         throw new Error(`Invalid volume mode "${mode}". Use ro or rw.`);
       }
+      seenMounts.add(normalizedMountPath);
       volumes.push({
         $typeName: "obiente.cloud.deployments.v1.DockerfileVolume",
         name,
-        mountPath,
+        mountPath: normalizedMountPath,
         readOnly: mode === "ro",
       });
     }
