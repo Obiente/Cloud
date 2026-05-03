@@ -336,20 +336,20 @@ type MonthlyBill struct {
 
 func (MonthlyBill) TableName() string { return "monthly_bills" }
 
-// GitHubIntegration stores GitHub OAuth tokens for users and organizations
+// GitHubIntegration stores GitHub App installations for Obiente workspaces.
 type GitHubIntegration struct {
 	ID                      string     `gorm:"primaryKey" json:"id"`
 	UserID                  *string    `gorm:"index;uniqueIndex:idx_user_github" json:"user_id"`        // Zitadel user ID (nullable)
 	OrganizationID          *string    `gorm:"index;uniqueIndex:idx_org_github" json:"organization_id"` // Organization ID (nullable)
-	Token                   string     `gorm:"column:token" json:"token"`                               // Encrypted GitHub OAuth access token
-	RefreshToken            *string    `gorm:"column:refresh_token" json:"refresh_token"`               // OAuth refresh token, when expiring user tokens are enabled
+	Token                   string     `gorm:"column:token" json:"token"`                               // Legacy OAuth access token; unused for GitHub App installs
+	RefreshToken            *string    `gorm:"column:refresh_token" json:"refresh_token"`               // Legacy OAuth refresh token; unused for GitHub App installs
 	Username                string     `gorm:"column:username" json:"username"`                         // GitHub username or GitHub App account login
-	Scope                   string     `gorm:"column:scope" json:"scope"`                               // Granted OAuth scopes or GitHub App permission summary
-	AuthType                string     `gorm:"column:auth_type;default:'oauth'" json:"auth_type"`       // oauth or github_app
+	Scope                   string     `gorm:"column:scope" json:"scope"`                               // GitHub App permission/repository selection summary
+	AuthType                string     `gorm:"column:auth_type;default:'github_app'" json:"auth_type"`  // github_app
 	GitHubAppInstallationID *int64     `gorm:"column:github_app_installation_id;uniqueIndex" json:"github_app_installation_id"`
 	GitHubAppAccountLogin   *string    `gorm:"column:github_app_account_login" json:"github_app_account_login"`
 	GitHubAppAccountType    *string    `gorm:"column:github_app_account_type" json:"github_app_account_type"`
-	TokenExpiresAt          *time.Time `gorm:"column:token_expires_at" json:"token_expires_at"` // Token expiration time (if applicable)
+	TokenExpiresAt          *time.Time `gorm:"column:token_expires_at" json:"token_expires_at"` // Legacy OAuth token expiration time
 	ConnectedAt             time.Time  `gorm:"column:connected_at" json:"connected_at"`
 	UpdatedAt               time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }

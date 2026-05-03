@@ -701,14 +701,13 @@
 
     if (
       lower.includes("github webhook permission denied") ||
-      lower.includes("resource not accessible by integration") ||
-      (lower.includes("admin:repo_hook") && lower.includes("webhook"))
+      lower.includes("resource not accessible by integration")
     ) {
-      return "GitHub connected successfully, but this account cannot manage webhooks for the selected repository. Use a GitHub account with Admin access to the repository, approve the OAuth app for the organization, then reconnect GitHub and save again.";
+      return "GitHub App connected successfully, but the installation cannot access this repository. Update the GitHub App installation repository access, then save again.";
     }
 
-    if (lower.includes("github token expired") || lower.includes("could not be refreshed")) {
-      return "GitHub needs to be reconnected before auto deploy can be configured. Reconnect the account in Settings > Integrations, then save again.";
+    if (lower.includes("github app") || lower.includes("legacy github integration")) {
+      return "GitHub needs a workspace app installation before auto deploy can be configured. Install or update the GitHub App in Settings > Integrations, then save again.";
     }
 
     return message || "Failed to save settings. Please try again.";

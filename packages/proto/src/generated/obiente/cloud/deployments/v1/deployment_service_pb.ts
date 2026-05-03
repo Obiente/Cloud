@@ -1466,7 +1466,7 @@ export type GitHubIntegrationOption = Message<"obiente.cloud.deployments.v1.GitH
   obienteOrgName: string;
 
   /**
-   * oauth or github_app
+   * github_app
    *
    * @generated from field: string auth_type = 6;
    */

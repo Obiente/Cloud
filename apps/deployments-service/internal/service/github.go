@@ -2,20 +2,13 @@ package deployments
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
 	"strings"
-	"time"
 
 	githubclient "deployments-service/internal/github"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	sharedsecrets "github.com/obiente/cloud/apps/shared/pkg/secrets"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
@@ -23,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const githubTokenRefreshSkew = 5 * time.Minute
+const githubAppReconnectMessage = "Legacy GitHub integrations are no longer supported; install the GitHub App for this Obiente workspace"
 
 // containsAuthError checks if an error message indicates authentication failure
 func containsAuthError(errMsg string) bool {
@@ -116,182 +109,35 @@ func getGitHubClientForIntegration(ctx context.Context, integration *database.Gi
 	if integration == nil {
 		return nil, false, fmt.Errorf("GitHub integration is nil")
 	}
-	if githubIntegrationUsesApp(*integration) {
-		if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
-			return nil, false, fmt.Errorf("GitHub App installation ID is missing")
-		}
-		client, err := githubclient.NewInstallationClient(ctx, *integration.GitHubAppInstallationID)
-		return client, true, err
+	if !githubIntegrationUsesApp(*integration) {
+		return nil, false, fmt.Errorf(githubAppReconnectMessage)
 	}
-
-	token, err := getUsableGitHubToken(integration)
-	if err != nil {
-		return nil, false, err
+	if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+		return nil, false, fmt.Errorf("GitHub App installation ID is missing")
 	}
-	return githubclient.NewClient(token), false, nil
+	client, err := githubclient.NewInstallationClient(ctx, *integration.GitHubAppInstallationID)
+	return client, true, err
 }
 
 func githubIntegrationUsesApp(integration database.GitHubIntegration) bool {
 	return strings.EqualFold(strings.TrimSpace(integration.AuthType), "github_app") || integration.GitHubAppInstallationID != nil
 }
 
-func decryptStoredGitHubToken(token string) (string, error) {
-	tokenCipher, err := sharedsecrets.NewTokenCipherFromEnv()
-	if err != nil {
-		if !sharedsecrets.IsEncryptedString(token) {
-			return token, nil
-		}
-		return "", fmt.Errorf("GitHub token decryption is not configured: %w", err)
-	}
-
-	return tokenCipher.DecryptString(token)
-}
-
-func encryptStoredGitHubToken(token string) (string, error) {
-	tokenCipher, err := sharedsecrets.NewTokenCipherFromEnv()
-	if err != nil {
-		return "", fmt.Errorf("GitHub token encryption is not configured: %w", err)
-	}
-	return tokenCipher.EncryptString(token)
-}
-
 func getUsableGitHubToken(integration *database.GitHubIntegration) (string, error) {
 	if integration == nil {
 		return "", fmt.Errorf("GitHub integration is nil")
 	}
-	if githubIntegrationUsesApp(*integration) {
-		if integration.GitHubAppInstallationID == nil {
-			return "", fmt.Errorf("GitHub App installation ID is missing")
-		}
-		return githubclient.CreateInstallationToken(context.Background(), *integration.GitHubAppInstallationID)
+	if !githubIntegrationUsesApp(*integration) {
+		return "", fmt.Errorf(githubAppReconnectMessage)
 	}
-
-	if integration.TokenExpiresAt == nil || time.Until(*integration.TokenExpiresAt) > githubTokenRefreshSkew {
-		return decryptStoredGitHubToken(integration.Token)
+	if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+		return "", fmt.Errorf("GitHub App installation ID is missing")
 	}
-
-	if integration.RefreshToken == nil || strings.TrimSpace(*integration.RefreshToken) == "" {
-		return "", fmt.Errorf("GitHub token expired or is expiring and no refresh token is available; reconnect required")
-	}
-
-	token, err := refreshGitHubIntegrationToken(integration)
-	if err != nil {
-		// Return a helpful error, but do not hide a working token if we are only
-		// refreshing early. Once expired, callers should fail and prompt reconnect.
-		if time.Now().Before(*integration.TokenExpiresAt) {
-			if currentToken, decryptErr := decryptStoredGitHubToken(integration.Token); decryptErr == nil {
-				return currentToken, nil
-			}
-		}
-		return "", err
-	}
-
-	return token, nil
+	return githubclient.CreateInstallationToken(context.Background(), *integration.GitHubAppInstallationID)
 }
 
 func isMissingGitHubIntegrationError(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "no github integration found")
-}
-
-type githubRefreshResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int32  `json:"expires_in"`
-	Scope        string `json:"scope"`
-	TokenType    string `json:"token_type"`
-	Error        string `json:"error"`
-	Description  string `json:"error_description"`
-}
-
-func refreshGitHubIntegrationToken(integration *database.GitHubIntegration) (string, error) {
-	clientID := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_ID"))
-	if clientID == "" {
-		clientID = strings.TrimSpace(os.Getenv("NUXT_PUBLIC_GITHUB_CLIENT_ID"))
-	}
-	clientSecret := strings.TrimSpace(os.Getenv("GITHUB_CLIENT_SECRET"))
-	if clientSecret == "" {
-		clientSecret = strings.TrimSpace(os.Getenv("NUXT_GITHUB_CLIENT_SECRET"))
-	}
-	if clientID == "" || clientSecret == "" {
-		return "", fmt.Errorf("GitHub OAuth refresh is not configured")
-	}
-	if integration.RefreshToken == nil || strings.TrimSpace(*integration.RefreshToken) == "" {
-		return "", fmt.Errorf("GitHub refresh token is not available")
-	}
-
-	refreshToken, err := decryptStoredGitHubToken(*integration.RefreshToken)
-	if err != nil {
-		return "", fmt.Errorf("failed to decrypt GitHub refresh token: %w", err)
-	}
-
-	form := url.Values{}
-	form.Set("client_id", clientID)
-	form.Set("client_secret", clientSecret)
-	form.Set("grant_type", "refresh_token")
-	form.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequest(http.MethodPost, "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("GitHub token refresh request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub token refresh failed: %d - %s", resp.StatusCode, string(body))
-	}
-
-	var refreshResp githubRefreshResponse
-	if err := json.Unmarshal(body, &refreshResp); err != nil {
-		return "", fmt.Errorf("failed to decode GitHub token refresh response: %w", err)
-	}
-	if refreshResp.Error != "" {
-		if refreshResp.Description != "" {
-			return "", fmt.Errorf("GitHub token refresh failed: %s: %s", refreshResp.Error, refreshResp.Description)
-		}
-		return "", fmt.Errorf("GitHub token refresh failed: %s", refreshResp.Error)
-	}
-	if strings.TrimSpace(refreshResp.AccessToken) == "" {
-		return "", fmt.Errorf("GitHub token refresh returned no access token")
-	}
-
-	encryptedAccessToken, err := encryptStoredGitHubToken(refreshResp.AccessToken)
-	if err != nil {
-		return "", err
-	}
-
-	updates := map[string]interface{}{
-		"token":      encryptedAccessToken,
-		"updated_at": time.Now(),
-	}
-
-	if strings.TrimSpace(refreshResp.RefreshToken) != "" {
-		encryptedRefreshToken, err := encryptStoredGitHubToken(refreshResp.RefreshToken)
-		if err != nil {
-			return "", err
-		}
-		updates["refresh_token"] = encryptedRefreshToken
-	}
-	if refreshResp.ExpiresIn > 0 {
-		expiresAt := time.Now().Add(time.Duration(refreshResp.ExpiresIn) * time.Second)
-		updates["token_expires_at"] = &expiresAt
-	}
-	if strings.TrimSpace(refreshResp.Scope) != "" {
-		updates["scope"] = refreshResp.Scope
-	}
-
-	if err := database.DB.Model(&database.GitHubIntegration{}).Where("id = ?", integration.ID).Updates(updates).Error; err != nil {
-		return "", fmt.Errorf("failed to persist refreshed GitHub token: %w", err)
-	}
-
-	return refreshResp.AccessToken, nil
 }
 
 // ListGitHubRepos lists GitHub repositories for the authenticated user or organization
@@ -316,7 +162,7 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 		}), nil
 	}
 
-	ghClient, isAppInstall, err := getGitHubClientForIntegration(ctx, integration)
+	ghClient, _, err := getGitHubClientForIntegration(ctx, integration)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or could not be refreshed. Please reconnect your GitHub account: %w", err))
 	}
@@ -329,18 +175,13 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 		perPage = 30
 	}
 
-	var repos []githubclient.GitHubRepo
-	if isAppInstall {
-		repos, err = ghClient.ListInstallationRepos(ctx, page, perPage)
-	} else {
-		repos, err = ghClient.ListRepos(ctx, page, perPage)
-	}
+	repos, err := ghClient.ListInstallationRepos(ctx, page, perPage)
 	if err != nil {
 		// Check if error is due to authentication failure (expired/revoked token)
 		errMsg := err.Error()
 		if containsAuthError(errMsg) {
 			// Return proper error code so frontend can prompt user to reconnect
-			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or revoked. Please reconnect your GitHub account: %w", err))
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub App installation is unavailable or cannot access this repository. Update or reinstall the GitHub App for this Obiente workspace: %w", err))
 		}
 		// For other errors, return empty list (backward compatibility)
 		return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
@@ -467,13 +308,6 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 
 	// If orgID is provided, filter by that organization
 	if orgID != "" {
-		// Get user's GitHub integration
-		var userIntegration database.GitHubIntegration
-		if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
-			integrations = append(integrations, userIntegration)
-		}
-		// Ignore "record not found" errors - user may not have an integration
-
 		// Get organization's GitHub integration (if user is member)
 		var member database.OrganizationMember
 		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
@@ -486,14 +320,6 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 		// Ignore "record not found" errors - user may not be a member
 	} else {
 		// Get all integrations user has access to
-		// User's personal integration
-		var userIntegration database.GitHubIntegration
-		if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
-			integrations = append(integrations, userIntegration)
-		}
-		// Ignore "record not found" errors - user may not have an integration
-
-		// All organization integrations where user is a member
 		var orgMemberships []database.OrganizationMember
 		database.DB.Where("user_id = ?", user.Id).Find(&orgMemberships)
 
@@ -548,7 +374,7 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 func githubIntegrationOptionAuthType(integration database.GitHubIntegration) string {
 	authType := strings.TrimSpace(integration.AuthType)
 	if authType == "" {
-		return "oauth"
+		return "github_app"
 	}
 	return authType
 }

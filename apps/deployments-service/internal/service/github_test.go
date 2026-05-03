@@ -3,67 +3,32 @@ package deployments
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 )
 
-func TestGetUsableGitHubTokenUsesNonExpiringStoredToken(t *testing.T) {
-	token, err := getUsableGitHubToken(&database.GitHubIntegration{
-		Token: "gho_current",
-	})
-	if err != nil {
-		t.Fatalf("expected token to be usable: %v", err)
-	}
-	if token != "gho_current" {
-		t.Fatalf("expected stored token, got %q", token)
-	}
-}
-
-func TestGetUsableGitHubTokenUsesStoredTokenWhenExpiryIsOutsideSkew(t *testing.T) {
-	expiresAt := time.Now().Add(githubTokenRefreshSkew + time.Minute)
-
-	token, err := getUsableGitHubToken(&database.GitHubIntegration{
-		Token:          "gho_current",
-		TokenExpiresAt: &expiresAt,
-	})
-	if err != nil {
-		t.Fatalf("expected token to be usable: %v", err)
-	}
-	if token != "gho_current" {
-		t.Fatalf("expected stored token, got %q", token)
-	}
-}
-
-func TestGetUsableGitHubTokenRequiresRefreshTokenForExpiredToken(t *testing.T) {
-	expiresAt := time.Now().Add(-time.Minute)
-
+func TestGetUsableGitHubTokenRejectsLegacyIntegration(t *testing.T) {
 	_, err := getUsableGitHubToken(&database.GitHubIntegration{
-		Token:          "gho_expired",
-		TokenExpiresAt: &expiresAt,
+		AuthType: "oauth",
+		Token:    "gho_current",
 	})
 	if err == nil {
-		t.Fatal("expected expired token without refresh token to fail")
+		t.Fatal("expected legacy integration to fail")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "reconnect") {
-		t.Fatalf("expected reconnect error, got %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "github app") {
+		t.Fatalf("expected GitHub App reinstall guidance, got %v", err)
 	}
 }
 
-func TestGetUsableGitHubTokenRequiresRefreshTokenForExpiringToken(t *testing.T) {
-	expiresAt := time.Now().Add(githubTokenRefreshSkew - time.Minute)
-	refreshToken := " "
-
+func TestGetUsableGitHubTokenRequiresAppInstallationID(t *testing.T) {
 	_, err := getUsableGitHubToken(&database.GitHubIntegration{
-		Token:          "gho_expiring",
-		RefreshToken:   &refreshToken,
-		TokenExpiresAt: &expiresAt,
+		AuthType: "github_app",
 	})
 	if err == nil {
-		t.Fatal("expected expiring token without refresh token to fail")
+		t.Fatal("expected missing installation ID to fail")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "reconnect") {
-		t.Fatalf("expected reconnect error, got %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "installation id") {
+		t.Fatalf("expected installation ID error, got %v", err)
 	}
 }
 

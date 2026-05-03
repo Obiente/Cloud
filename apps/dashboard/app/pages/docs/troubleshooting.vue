@@ -54,14 +54,14 @@ const faqItems = [
   },
   {
     value: "github-linking",
-    label: "GitHub OAuth returns successfully, but no account appears",
+    label: "GitHub App installs successfully, but no installation appears",
     content: `
       <p class="text-sm text-secondary mb-3">This is usually a backend configuration issue, not a browser issue.</p>
       <ul class="list-disc list-inside space-y-1 text-sm text-secondary">
-        <li>Verify the dashboard has a GitHub client ID and secret at runtime</li>
-        <li>Verify the GitHub OAuth callback URL exactly matches <code>/api/github/callback</code> on your public dashboard host</li>
-        <li>Verify <code>auth-service</code> can encrypt stored GitHub tokens</li>
-        <li>Redeploy <code>dashboard</code> and <code>auth-service</code> after changing any GitHub or encryption secret</li>
+        <li>Verify the dashboard has <code>NUXT_PUBLIC_GITHUB_APP_SLUG</code> at runtime</li>
+        <li>Verify the GitHub App setup URL exactly matches <code>/api/github/app/callback</code> on your public dashboard host</li>
+        <li>Verify backend services have <code>GITHUB_APP_ID</code> and the GitHub App private key</li>
+        <li>Redeploy <code>dashboard</code>, <code>auth-service</code>, and <code>deployments-service</code> after changing GitHub App settings</li>
       </ul>
       <p class="text-sm text-secondary mt-3">If the callback lands back on Settings but the list is still empty, inspect the auth-service logs.</p>
     `,

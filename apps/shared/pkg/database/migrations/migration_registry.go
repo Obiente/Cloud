@@ -67,6 +67,7 @@ func RegisterDeploymentsMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
 	registry.Register("2026_05_03_001", "Add Dockerfile build args and volumes to deployments", addDockerfileBuildArgsAndVolumes)
 	registry.Register("2026_05_03_002", "Add GitHub App installation metadata to integrations", addGitHubAppInstallationMetadata)
+	registry.Register("2026_05_03_003", "Default GitHub integrations to app installs", defaultGitHubIntegrationsToApp)
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
 }
@@ -347,7 +348,7 @@ func addGitHubAppInstallationMetadata(db *gorm.DB) error {
 		name string
 		sql  string
 	}{
-		{"auth_type", "ALTER TABLE github_integrations ADD COLUMN auth_type VARCHAR(32) DEFAULT 'oauth'"},
+		{"auth_type", "ALTER TABLE github_integrations ADD COLUMN auth_type VARCHAR(32) DEFAULT 'github_app'"},
 		{"github_app_installation_id", "ALTER TABLE github_integrations ADD COLUMN github_app_installation_id BIGINT"},
 		{"github_app_account_login", "ALTER TABLE github_integrations ADD COLUMN github_app_account_login VARCHAR(255)"},
 		{"github_app_account_type", "ALTER TABLE github_integrations ADD COLUMN github_app_account_type VARCHAR(64)"},
@@ -362,6 +363,21 @@ func addGitHubAppInstallationMetadata(db *gorm.DB) error {
 	}
 
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_github_integrations_app_installation_id ON github_integrations(github_app_installation_id) WHERE github_app_installation_id IS NOT NULL").Error
+}
+
+func defaultGitHubIntegrationsToApp(db *gorm.DB) error {
+	if !db.Migrator().HasColumn("github_integrations", "auth_type") {
+		return nil
+	}
+	if err := db.Exec("ALTER TABLE github_integrations ALTER COLUMN auth_type SET DEFAULT 'github_app'").Error; err != nil {
+		return err
+	}
+	return db.Exec(`
+		UPDATE github_integrations
+		SET auth_type = 'github_app'
+		WHERE github_app_installation_id IS NOT NULL
+			AND (auth_type IS NULL OR auth_type = '' OR auth_type = 'oauth')
+	`).Error
 }
 
 // addRegionToNodeMetadata adds the region column to node_metadata table for multi-region DNS routing

@@ -149,7 +149,7 @@ const integrationLabel = (integration?: {
   if (integration.authType === "github_app") {
     return `${integration.obienteOrgName || integration.obienteOrgId || "Organization"} (GitHub App: ${integration.githubAppAccountLogin || integration.username || "installed"})`;
   }
-  return `${integration.obienteOrgName || integration.obienteOrgId || "Organization"} (${integration.username || "OAuth"})`;
+  return `${integration.obienteOrgName || integration.obienteOrgId || "Workspace"} (${integration.username || "GitHub App"})`;
 };
 
 const repoOptions = computed(() =>
@@ -177,7 +177,7 @@ const loadAvailableIntegrations = async () => {
       id: i.id,
       username: i.username,
       isUser: i.isUser,
-      authType: i.authType || "oauth",
+      authType: i.authType || "github_app",
       obienteOrgId: i.obienteOrgId || undefined,
       obienteOrgName: i.obienteOrgName || undefined,
       githubAppAccountLogin: i.githubAppAccountLogin || undefined,

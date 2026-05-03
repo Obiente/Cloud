@@ -20,27 +20,13 @@ service AuthService {
   // Update user profile information
   rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
   
-  // GitHub Integration
-  // Connect GitHub account by storing OAuth token
-  rpc ConnectGitHub(ConnectGitHubRequest) returns (ConnectGitHubResponse);
-  
-  // Disconnect GitHub account
-  rpc DisconnectGitHub(DisconnectGitHubRequest) returns (DisconnectGitHubResponse);
-  
-  // Get GitHub connection status
-  rpc GetGitHubStatus(GetGitHubStatusRequest) returns (GetGitHubStatusResponse);
-  
-  // Organization GitHub Integration
-  // Connect organization GitHub account by storing OAuth token
-  rpc ConnectOrganizationGitHub(ConnectOrganizationGitHubRequest) returns (ConnectOrganizationGitHubResponse);
-
-  // Connect organization GitHub App installation
+  // Connect GitHub App installation to an Obiente organization/workspace
   rpc ConnectOrganizationGitHubApp(ConnectOrganizationGitHubAppRequest) returns (ConnectOrganizationGitHubAppResponse);
   
-  // Disconnect organization GitHub account
-  rpc DisconnectOrganizationGitHub(DisconnectOrganizationGitHubRequest) returns (DisconnectOrganizationGitHubResponse);
+  // Disconnect GitHub App installation from an Obiente organization/workspace
+  rpc DisconnectOrganizationGitHubApp(DisconnectOrganizationGitHubAppRequest) returns (DisconnectOrganizationGitHubAppResponse);
   
-  // List all GitHub integrations (user and organizations)
+  // List GitHub App integrations available to the user
   rpc ListGitHubIntegrations(ListGitHubIntegrationsRequest) returns (ListGitHubIntegrationsResponse);
 }
 
@@ -77,48 +63,7 @@ message User {
   repeated string roles = 13;
 }
 
-// GitHub Integration Messages
-message ConnectGitHubRequest {
-  string access_token = 1; // GitHub OAuth access token
-  string username = 2;     // GitHub username
-  string scope = 3;        // Granted OAuth scopes
-  string refresh_token = 4; // GitHub OAuth refresh token, when expiring user tokens are enabled
-  int32 expires_in = 5;     // Access token expiry in seconds, when provided by GitHub
-}
-
-message ConnectGitHubResponse {
-  bool success = 1;
-  string username = 2; // GitHub username
-}
-
-message DisconnectGitHubRequest {}
-
-message DisconnectGitHubResponse {
-  bool success = 1;
-}
-
-message GetGitHubStatusRequest {}
-
-message GetGitHubStatusResponse {
-  bool connected = 1;
-  string username = 2; // GitHub username if connected
-}
-
-// Organization GitHub Integration Messages
-message ConnectOrganizationGitHubRequest {
-  string organization_id = 1;
-  string access_token = 2; // GitHub OAuth access token
-  string username = 3;     // GitHub username
-  string scope = 4;        // Granted OAuth scopes
-  string refresh_token = 5; // GitHub OAuth refresh token, when expiring user tokens are enabled
-  int32 expires_in = 6;     // Access token expiry in seconds, when provided by GitHub
-}
-
-message ConnectOrganizationGitHubResponse {
-  bool success = 1;
-  string username = 2; // GitHub username
-}
-
+// GitHub App Integration Messages
 message ConnectOrganizationGitHubAppRequest {
   string organization_id = 1;
   int64 installation_id = 2;
@@ -133,11 +78,11 @@ message ConnectOrganizationGitHubAppResponse {
   int64 installation_id = 3;
 }
 
-message DisconnectOrganizationGitHubRequest {
+message DisconnectOrganizationGitHubAppRequest {
   string organization_id = 1;
 }
 
-message DisconnectOrganizationGitHubResponse {
+message DisconnectOrganizationGitHubAppResponse {
   bool success = 1;
 }
 
@@ -147,11 +92,11 @@ message GitHubIntegrationInfo {
   string id = 1;
   string username = 2;
   string scope = 3;
-  bool is_user = 4; // true if user integration, false if organization
-  string organization_id = 5; // Only set if is_user is false
-  string organization_name = 6; // Only set if is_user is false
+  bool is_user = 4; // legacy field; GitHub App integrations are organization/workspace scoped
+  string organization_id = 5;
+  string organization_name = 6;
   google.protobuf.Timestamp connected_at = 7;
-  string auth_type = 8; // oauth or github_app
+  string auth_type = 8; // github_app
   int64 github_app_installation_id = 9;
   string github_app_account_login = 10;
   string github_app_account_type = 11;

@@ -196,7 +196,6 @@ export default defineNuxtConfig({
       process.env.NUXT_API_HOST_INTERNAL ||
       process.env.NUXT_PUBLIC_API_HOST ||
       "http://api.localhost",
-    githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
       password: sessionPassword,
       cookie: {
@@ -225,7 +224,6 @@ export default defineNuxtConfig({
         process.env.ZITADEL_URL ||
         "http://localhost:8080",
       oidcClientId: "339499954043158530",
-      githubClientId: "",
       githubAppSlug: process.env.NUXT_PUBLIC_GITHUB_APP_SLUG || process.env.GITHUB_APP_SLUG || "",
       stripePublishableKey: "",
     },

@@ -1,7 +1,7 @@
 import {
-  encodeGitHubOAuthState,
-  setGitHubOAuthStateCookie,
-} from "../../../utils/githubOAuth";
+  encodeGitHubAppInstallState,
+  setGitHubAppInstallStateCookie,
+} from "../../../utils/githubAppInstallState";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -32,12 +32,11 @@ export default defineEventHandler(async (event) => {
     );
   }
 
-  const state = encodeGitHubOAuthState({
+  const state = encodeGitHubAppInstallState({
     random: crypto.randomUUID().replace(/-/g, ""),
-    type: "organization",
     orgId,
   });
-  setGitHubOAuthStateCookie(event, state);
+  setGitHubAppInstallStateCookie(event, state);
 
   const installUrl = new URL(
     `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new`

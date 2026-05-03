@@ -1,9 +1,9 @@
 import {
-  clearGitHubOAuthStateCookie,
-  decodeGitHubOAuthState,
-  getGitHubOAuthStateCookie,
-  verifyGitHubOAuthState,
-} from "../../../utils/githubOAuth";
+  clearGitHubAppInstallStateCookie,
+  decodeGitHubAppInstallState,
+  getGitHubAppInstallStateCookie,
+  verifyGitHubAppInstallState,
+} from "../../../utils/githubAppInstallState";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!state) {
-    clearGitHubOAuthStateCookie(event);
+    clearGitHubAppInstallStateCookie(event);
     return sendRedirect(
       event,
       `/settings?tab=integrations&provider=github&success=true&installationUpdated=true&installationId=${encodeURIComponent(
@@ -36,21 +36,21 @@ export default defineEventHandler(async (event) => {
     );
   }
 
-  if (!verifyGitHubOAuthState(getGitHubOAuthStateCookie(event), state)) {
-    clearGitHubOAuthStateCookie(event);
+  if (!verifyGitHubAppInstallState(getGitHubAppInstallStateCookie(event), state)) {
+    clearGitHubAppInstallStateCookie(event);
     return redirectToSettings("invalid_state");
   }
 
-  let stateData: ReturnType<typeof decodeGitHubOAuthState>;
+  let stateData: ReturnType<typeof decodeGitHubAppInstallState>;
   try {
-    stateData = decodeGitHubOAuthState(state);
+    stateData = decodeGitHubAppInstallState(state);
   } catch {
-    clearGitHubOAuthStateCookie(event);
+    clearGitHubAppInstallStateCookie(event);
     return redirectToSettings("invalid_state");
   }
-  clearGitHubOAuthStateCookie(event);
+  clearGitHubAppInstallStateCookie(event);
 
-  if (stateData.type !== "organization" || !stateData.orgId) {
+  if (!stateData.orgId) {
     return redirectToSettings("missing_organization");
   }
 

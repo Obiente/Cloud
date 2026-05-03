@@ -18,16 +18,10 @@ Complete reference for all Obiente Cloud environment variables.
 | `SUPPORT_EMAIL`                      | -                            | ❌            | Support contact displayed in email footers                                                                          |
 | `SUPERADMIN_EMAILS`                  | -                            | ❌            | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
 | `SELF_HOSTED`                        | `false`                      | ❌            | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
-| `NUXT_PUBLIC_GITHUB_CLIENT_ID`       | -                            | ✅ (GitHub)   | Public GitHub OAuth client ID used by the dashboard                                                                 |
-| `GITHUB_CLIENT_ID`                   | -                            | ❌            | Alternative server-side source for the GitHub OAuth client ID                                                       |
-| `GITHUB_CLIENT_SECRET`               | -                            | ✅ (GitHub)   | Server-side GitHub OAuth client secret                                                                              |
-| `NUXT_GITHUB_CLIENT_SECRET`          | -                            | ❌            | Alternative server-side source for the GitHub OAuth client secret                                                   |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`        | -                            | Recommended   | Dedicated encryption key for stored GitHub access tokens                                                            |
-| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Random signing secret you generate and also configure on GitHub webhooks. Example: `openssl rand -hex 32`           |
-| `GITHUB_WEBHOOK_URL`                 | `${API_URL}/webhooks/github` | ❌            | Public webhook URL GitHub should call for automatic deployments                                                     |
-| `GITHUB_APP_SLUG`                    | -                            | ✅ (org app)  | GitHub App slug used to start organization-level app installs                                                       |
-| `NUXT_PUBLIC_GITHUB_APP_SLUG`        | `${GITHUB_APP_SLUG}`         | ✅ (org app)  | Public GitHub App slug exposed to the dashboard                                                                     |
-| `GITHUB_APP_ID`                      | -                            | ✅ (org app)  | GitHub App ID used to mint installation tokens                                                                      |
+| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (GitHub)   | Random signing secret you generate and configure on the GitHub App. Example: `openssl rand -hex 32`                 |
+| `GITHUB_APP_SLUG`                    | -                            | ✅ (GitHub)   | GitHub App slug used to start workspace app installs                                                                |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`        | `${GITHUB_APP_SLUG}`         | ✅ (GitHub)   | Public GitHub App slug exposed to the dashboard                                                                     |
+| `GITHUB_APP_ID`                      | -                            | ✅ (GitHub)   | GitHub App ID used to mint installation tokens                                                                      |
 | `GITHUB_APP_PRIVATE_KEY`             | -                            | ❌            | GitHub App private key PEM. Prefer base64 or file path for deployment envs                                           |
 | `GITHUB_APP_PRIVATE_KEY_BASE64`      | -                            | ✅ (org app)  | Base64-encoded GitHub App private key PEM                                                                           |
 | `GITHUB_APP_PRIVATE_KEY_PATH`        | -                            | ❌            | Path to GitHub App private key PEM                                                                                  |
@@ -211,49 +205,42 @@ LOG_LEVEL=warn
 DB_LOG_LEVEL=debug
 ```
 
-### GitHub OAuth Configuration
+### GitHub App Configuration
 
-| Variable                       | Type   | Default | Required    |
-| ------------------------------ | ------ | ------- | ----------- |
-| `NUXT_PUBLIC_GITHUB_CLIENT_ID` | string | -       | ✅          |
-| `GITHUB_CLIENT_ID`             | string | -       | ❌          |
-| `GITHUB_CLIENT_SECRET`         | string | -       | ✅          |
-| `NUXT_GITHUB_CLIENT_SECRET`    | string | -       | ❌          |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`  | string | -       | Recommended |
-| `GITHUB_WEBHOOK_SECRET`        | string | -       | ✅ webhooks |
-| `GITHUB_WEBHOOK_URL`           | string | -       | ❌          |
-| `GITHUB_APP_SLUG`              | string | -       | ✅ org app  |
-| `NUXT_PUBLIC_GITHUB_APP_SLUG`  | string | -       | ✅ org app  |
-| `GITHUB_APP_ID`                | string | -       | ✅ org app  |
-| `GITHUB_APP_PRIVATE_KEY`       | string | -       | ❌          |
-| `GITHUB_APP_PRIVATE_KEY_BASE64`| string | -       | ✅ org app  |
-| `GITHUB_APP_PRIVATE_KEY_PATH`  | string | -       | ❌          |
+| Variable                        | Type   | Default | Required |
+| ------------------------------- | ------ | ------- | -------- |
+| `GITHUB_APP_SLUG`               | string | -       | ✅       |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`   | string | -       | ✅       |
+| `GITHUB_APP_ID`                 | string | -       | ✅       |
+| `GITHUB_APP_PRIVATE_KEY`        | string | -       | ❌       |
+| `GITHUB_APP_PRIVATE_KEY_BASE64` | string | -       | ✅       |
+| `GITHUB_APP_PRIVATE_KEY_PATH`   | string | -       | ❌       |
+| `GITHUB_WEBHOOK_SECRET`         | string | -       | ✅       |
 
-Use either:
+Use:
 
 ```bash
-NUXT_PUBLIC_GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
+GITHUB_APP_SLUG=...
+NUXT_PUBLIC_GITHUB_APP_SLUG=...
+GITHUB_APP_ID=...
+GITHUB_APP_PRIVATE_KEY_BASE64=...
+GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
 
-or the fallback pair:
+Encode the GitHub App private key with:
 
 ```bash
-GITHUB_CLIENT_ID=...
-NUXT_GITHUB_CLIENT_SECRET=...
+GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 -w0 path/to/private-key.pem)"
 ```
 
-Recommended:
-
-```bash
-GITHUB_TOKEN_ENCRYPTION_KEY=your_dedicated_secret
-```
+On macOS, use `base64 < path/to/private-key.pem | tr -d '\n'`.
 
 Notes:
 
-- `NUXT_PUBLIC_GITHUB_CLIENT_ID` is exposed to the browser
-- `GITHUB_CLIENT_SECRET` and `NUXT_GITHUB_CLIENT_SECRET` must remain server-side only
-- If `GITHUB_TOKEN_ENCRYPTION_KEY` is not set, Obiente may derive encryption from other service secrets, but a dedicated key is safer and easier to reason about
+- `NUXT_PUBLIC_GITHUB_APP_SLUG` is exposed to the browser
+- `GITHUB_APP_PRIVATE_KEY_BASE64` must remain server-side only
+- The GitHub App setup URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
+- The GitHub App webhook URL is `https://YOUR-API-DOMAIN/webhooks/github`
 
 ### Redis Configuration
 

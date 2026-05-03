@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	githubclient "deployments-service/internal/github"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -240,6 +239,7 @@ func (s *Service) notifyGitHubAutoDeployStarted(ctx context.Context, deployment 
 }
 
 func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployment *database.Deployment) error {
+	_ = ctx
 	if deployment == nil || deployment.RepositoryURL == nil || deployment.GitHubIntegrationID == nil {
 		return nil
 	}
@@ -249,77 +249,21 @@ func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployme
 		return nil
 	}
 
-	webhookURL, err := resolveGitHubWebhookURL()
-	if err != nil {
-		return err
-	}
-
 	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 	if webhookSecret == "" {
 		return fmt.Errorf("GITHUB_WEBHOOK_SECRET is required to enable automatic GitHub deployments")
 	}
 
-	githubToken, err := s.getGitHubToken(ctx, deployment.OrganizationID, *deployment.GitHubIntegrationID)
-	if err != nil {
-		return fmt.Errorf("failed to get GitHub integration token: %w", err)
-	}
-
 	var integration database.GitHubIntegration
-	if err := database.DB.Where("id = ?", *deployment.GitHubIntegrationID).First(&integration).Error; err == nil && githubIntegrationUsesApp(integration) {
-		logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; skipping repository webhook creation", repoFullName)
-		return nil
+	if err := database.DB.Where("id = ?", *deployment.GitHubIntegrationID).First(&integration).Error; err != nil {
+		return fmt.Errorf("failed to load GitHub App integration: %w", err)
+	}
+	if !githubIntegrationUsesApp(integration) {
+		return fmt.Errorf(githubAppReconnectMessage)
 	}
 
-	client := githubclient.NewClient(githubToken)
-	hooks, err := client.ListHooks(ctx, repoFullName)
-	if err != nil {
-		return fmt.Errorf("failed to list GitHub webhooks for %s: %w", repoFullName, err)
-	}
-
-	hookRequest := githubclient.CreateHookRequest{
-		Name:   "web",
-		Active: true,
-		Events: []string{"push"},
-		Config: map[string]string{
-			"url":          webhookURL,
-			"content_type": "json",
-			"secret":       webhookSecret,
-		},
-	}
-
-	for _, hook := range hooks {
-		if strings.EqualFold(strings.TrimSpace(hook.Config.URL), webhookURL) {
-			if _, err := client.UpdateHook(ctx, repoFullName, hook.ID, hookRequest); err != nil {
-				return fmt.Errorf("failed to update GitHub webhook for %s: %w", repoFullName, err)
-			}
-			logger.Info("[GitHubWebhook] Webhook already existed and was refreshed for %s -> %s", repoFullName, webhookURL)
-			return nil
-		}
-	}
-
-	_, err = client.CreateHook(ctx, repoFullName, hookRequest)
-	if err != nil {
-		return fmt.Errorf("failed to create GitHub webhook for %s: %w", repoFullName, err)
-	}
-
-	logger.Info("[GitHubWebhook] Created webhook for %s -> %s", repoFullName, webhookURL)
+	logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; repository webhook creation is not used", repoFullName)
 	return nil
-}
-
-func resolveGitHubWebhookURL() (string, error) {
-	if explicitURL := strings.TrimSpace(os.Getenv("GITHUB_WEBHOOK_URL")); explicitURL != "" {
-		return strings.TrimRight(explicitURL, "/"), nil
-	}
-
-	apiURL := strings.TrimSpace(os.Getenv("API_URL"))
-	if apiURL == "" {
-		apiURL = strings.TrimSpace(os.Getenv("NUXT_PUBLIC_API_HOST"))
-	}
-	if apiURL == "" {
-		return "", fmt.Errorf("GITHUB_WEBHOOK_URL or API_URL must be set to a public API URL")
-	}
-
-	return strings.TrimRight(apiURL, "/") + "/webhooks/github", nil
 }
 
 func verifyGitHubWebhookSignature(body []byte, signatureHeader string) error {

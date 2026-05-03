@@ -3331,7 +3331,7 @@ type GitHubIntegrationOption struct {
 	IsUser                  bool                   `protobuf:"varint,3,opt,name=is_user,json=isUser,proto3" json:"is_user,omitempty"`                          // true if user integration, false if organization
 	ObienteOrgId            string                 `protobuf:"bytes,4,opt,name=obiente_org_id,json=obienteOrgId,proto3" json:"obiente_org_id,omitempty"`       // Obiente cloud organization ID (only set if is_user is false)
 	ObienteOrgName          string                 `protobuf:"bytes,5,opt,name=obiente_org_name,json=obienteOrgName,proto3" json:"obiente_org_name,omitempty"` // Obiente cloud organization name (only set if is_user is false)
-	AuthType                string                 `protobuf:"bytes,6,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"`                     // oauth or github_app
+	AuthType                string                 `protobuf:"bytes,6,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"`                     // github_app
 	GithubAppInstallationId int64                  `protobuf:"varint,7,opt,name=github_app_installation_id,json=githubAppInstallationId,proto3" json:"github_app_installation_id,omitempty"`
 	GithubAppAccountLogin   string                 `protobuf:"bytes,8,opt,name=github_app_account_login,json=githubAppAccountLogin,proto3" json:"github_app_account_login,omitempty"`
 	GithubAppAccountType    string                 `protobuf:"bytes,9,opt,name=github_app_account_type,json=githubAppAccountType,proto3" json:"github_app_account_type,omitempty"`

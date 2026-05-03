@@ -155,34 +155,37 @@ CORS_ORIGIN=http://localhost:3000
 PUBLIC_HTTPS_PORT=2443
 ```
 
-### GitHub Account Linking Fails
+### GitHub App Installation Fails
 
-**Problem**: GitHub OAuth redirects back, but the account is not linked or the settings page still shows no connected accounts.
+**Problem**: GitHub redirects back, but the app installation is not linked or the settings page still shows no connected installations.
 
 **Check:**
 
 ```bash
 # Dashboard runtime env
-echo "$NUXT_PUBLIC_GITHUB_CLIENT_ID"
-echo "$GITHUB_CLIENT_SECRET"
+echo "$NUXT_PUBLIC_GITHUB_APP_SLUG"
 
-# Recommended dedicated encryption key
-echo "$GITHUB_TOKEN_ENCRYPTION_KEY"
+# Backend runtime env
+echo "$GITHUB_APP_ID"
+echo "$GITHUB_APP_PRIVATE_KEY_BASE64"
+echo "$GITHUB_WEBHOOK_SECRET"
 ```
 
 **Common causes:**
 
-1. Missing GitHub OAuth credentials in the dashboard runtime
-2. Callback URL mismatch in the GitHub OAuth app
-3. `auth-service` cannot encrypt the GitHub token
+1. Missing GitHub App slug in the dashboard runtime
+2. Setup URL mismatch in the GitHub App
+3. Missing or mismatched GitHub App private key in the backend
 4. Dashboard or auth-service was not redeployed after secret changes
 
 **Fix:**
 
 ```bash
-NUXT_PUBLIC_GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GITHUB_TOKEN_ENCRYPTION_KEY=...
+NUXT_PUBLIC_GITHUB_APP_SLUG=...
+GITHUB_APP_SLUG=...
+GITHUB_APP_ID=...
+GITHUB_APP_PRIVATE_KEY_BASE64=...
+GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
 
 Then redeploy:

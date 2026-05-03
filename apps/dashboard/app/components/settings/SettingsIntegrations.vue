@@ -38,10 +38,10 @@
                 <OuiStack gap="none" class="min-w-0">
                   <OuiFlex align="center" gap="sm" wrap="wrap">
                     <OuiText size="sm" weight="medium">@{{ integration.username }}</OuiText>
-                    <OuiBadge :variant="integration.isUser ? 'primary' : 'secondary'" size="xs">
-                      {{ integration.isUser ? 'Personal' : integration.authType === 'github_app' ? 'GitHub App' : 'Organization OAuth' }}
+                    <OuiBadge variant="secondary" size="xs">
+                      GitHub App
                     </OuiBadge>
-                    <OuiBadge v-if="!integration.isUser && integration.organizationName" variant="secondary" size="xs">
+                    <OuiBadge v-if="integration.organizationName" variant="secondary" size="xs">
                       {{ integration.organizationName }}
                     </OuiBadge>
                   </OuiFlex>
@@ -87,50 +87,31 @@
             <OuiText size="sm" weight="semibold">Connect GitHub</OuiText>
 
             <OuiStack gap="sm">
-              <OuiRadioGroup
-                v-model="connectionType"
-                :options="[
-                  { label: 'Personal Account', value: 'user' },
-                  { label: 'Organization', value: 'organization' },
-                ]"
+              <OuiSelect
+                v-model="selectedOrgId"
+                :items="organizationOptions"
+                placeholder="Select an Obiente workspace"
               />
-
-              <OuiStack v-if="connectionType === 'organization'" gap="xs">
-                <OuiSelect
-                  v-model="selectedOrgId"
-                  :items="organizationOptions"
-                  placeholder="Select an organization"
-                />
-                <OuiText size="xs" color="tertiary">
-                  Organization installs use the Obiente GitHub App so the GitHub organization owner can choose which repositories this Obiente organization can access.
-                </OuiText>
-              </OuiStack>
+              <OuiText size="xs" color="tertiary">
+                Install the Obiente GitHub App for the selected workspace. Personal accounts use the same workspace-scoped install flow.
+              </OuiText>
 
               <OuiAlert
-                v-if="connectionType === 'user' && integrations.some((i) => i.isUser)"
+                v-if="selectedOrgId && integrations.some((i) => i.organizationId === selectedOrgId)"
                 variant="warning"
               >
                 <OuiText size="xs">
-                  Personal account already connected ({{ integrations.find((i) => i.isUser)?.username }}). This will update the existing connection.
-                </OuiText>
-              </OuiAlert>
-
-              <OuiAlert
-                v-if="connectionType === 'organization' && selectedOrgId && integrations.some((i) => !i.isUser && i.organizationId === selectedOrgId)"
-                variant="warning"
-              >
-                <OuiText size="xs">
-                  This organization already has a connection ({{ integrations.find((i) => !i.isUser && i.organizationId === selectedOrgId)?.username }}). This will update it.
+                  This workspace already has a GitHub App installation ({{ integrations.find((i) => i.organizationId === selectedOrgId)?.username }}). This will update it.
                 </OuiText>
               </OuiAlert>
 
               <OuiButton
                 @click="connectGitHub"
-                :disabled="isConnecting || (connectionType === 'organization' && !selectedOrgId)"
+                :disabled="isConnecting || !selectedOrgId"
                 variant="solid"
                 size="sm"
               >
-                {{ isConnecting ? "Connecting..." : connectionType === "organization" ? "Install GitHub App" : "Connect GitHub" }}
+                {{ isConnecting ? "Connecting..." : "Install GitHub App" }}
               </OuiButton>
             </OuiStack>
           </OuiStack>
@@ -180,7 +161,6 @@ const isConnecting = ref(false);
 const isDisconnecting = ref(false);
 const error = ref("");
 const successMessage = ref("");
-const connectionType = ref<"user" | "organization">("user");
 const selectedOrgId = ref<string>("");
 
 const organizationOptions = computed(() => {
@@ -198,7 +178,7 @@ onMounted(async () => {
 
   const provider = route.query.provider;
   if (provider === "github") {
-    // Handle OAuth callback results (success/error)
+    // Handle GitHub App install callback results (success/error)
     const success = route.query.success;
     const errorParam = route.query.error;
     const username = route.query.username;
@@ -215,8 +195,8 @@ onMounted(async () => {
       successMessage.value = installationUpdated
         ? "GitHub App installation updated. Repository access changes are now available."
         : orgId
-        ? `Successfully connected GitHub organization to ${orgId}`
-        : `Successfully connected GitHub account: ${username}`;
+        ? `Successfully connected GitHub App to ${orgId}`
+        : `Successfully connected GitHub App installation: ${username || installationId}`;
       await loadIntegrations({ preserveFeedback: true });
       // Clean up URL
       router.replace({ query: { tab: route.query.tab } });
@@ -275,7 +255,7 @@ const loadIntegrations = async (
       id: i.id,
       username: i.username || "Unknown",
       scope: i.scope || "",
-      authType: i.authType || "oauth",
+      authType: i.authType || "github_app",
       isUser: i.isUser || false,
       organizationId: i.organizationId || undefined,
       organizationName: i.organizationName || undefined,
@@ -305,50 +285,31 @@ const connectGitHub = () => {
   isConnecting.value = true;
 
   const config = useRuntimeConfig();
-  if (connectionType.value === "user" && (!config.public.githubClientId || config.public.githubClientId === "")) {
-    error.value =
-      "GitHub Client ID not configured. Please set NUXT_PUBLIC_GITHUB_CLIENT_ID in your .env file.";
+  if (!selectedOrgId.value) {
+    error.value = "Select a workspace before connecting GitHub.";
     isConnecting.value = false;
     return;
   }
 
-  if (connectionType.value === "organization" && !selectedOrgId.value) {
-    error.value = "Select an organization before connecting GitHub.";
-    isConnecting.value = false;
-    return;
-  }
-
-  if (connectionType.value === "organization" && !config.public.githubAppSlug) {
+  if (!config.public.githubAppSlug) {
     error.value =
       "GitHub App is not configured. Please set NUXT_PUBLIC_GITHUB_APP_SLUG or GITHUB_APP_SLUG.";
     isConnecting.value = false;
     return;
   }
 
-  const connectUrl = new URL(
-    connectionType.value === "organization"
-      ? "/api/github/app/install"
-      : "/api/github/connect",
-    window.location.origin
-  );
-  connectUrl.searchParams.set("type", connectionType.value);
-  if (connectionType.value === "organization" && selectedOrgId.value) {
-    connectUrl.searchParams.set("orgId", selectedOrgId.value);
-  }
+  const connectUrl = new URL("/api/github/app/install", window.location.origin);
+  connectUrl.searchParams.set("orgId", selectedOrgId.value);
 
   window.location.href = connectUrl.toString();
 };
 
 const formatScopes = (scope: string): string => {
   if (!scope) return "None";
-  // Common GitHub scopes with readable names
   const scopeMap: Record<string, string> = {
-    repo: "Repository access",
     github_app: "GitHub App",
-    "read:user": "Read user info",
-    "admin:repo_hook": "Manage webhooks",
-    "read:org": "Read organization",
-    "write:org": "Write organization",
+    "github_app:all": "GitHub App: all repositories",
+    "github_app:selected": "GitHub App: selected repositories",
   };
 
   const scopes = scope.split(" ").filter((s) => s.trim());
@@ -367,11 +328,9 @@ const handleAvatarError = (event: Event) => {
 const disconnectIntegration = async (
   integration: (typeof integrations.value)[0]
 ) => {
-  const accountName = integration.isUser
-    ? `your personal account (${integration.username})`
-    : `organization ${
-        integration.organizationName || integration.organizationId
-      } (${integration.username})`;
+  const accountName = `workspace ${
+    integration.organizationName || integration.organizationId
+  } (${integration.username})`;
 
   const { showConfirm } = useDialog();
   const confirmed = await showConfirm({
@@ -394,21 +353,17 @@ const disconnectIntegration = async (
     const { useConnectClient } = await import("~/lib/connect-client");
     const {
       AuthService,
-      DisconnectGitHubRequestSchema,
-      DisconnectOrganizationGitHubRequestSchema,
+      DisconnectOrganizationGitHubAppRequestSchema,
     } = await import("@obiente/proto");
     const { create } = await import("@bufbuild/protobuf");
 
     const client = useConnectClient(AuthService);
 
-    if (integration.isUser) {
-      const request = create(DisconnectGitHubRequestSchema, {});
-      await client.disconnectGitHub(request);
-    } else if (integration.organizationId) {
-      const request = create(DisconnectOrganizationGitHubRequestSchema, {
+    if (integration.organizationId) {
+      const request = create(DisconnectOrganizationGitHubAppRequestSchema, {
         organizationId: integration.organizationId,
       });
-      await client.disconnectOrganizationGitHub(request);
+      await client.disconnectOrganizationGitHubApp(request);
     }
 
     // Reload integrations list

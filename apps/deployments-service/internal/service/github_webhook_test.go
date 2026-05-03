@@ -51,25 +51,3 @@ func TestBranchFromGitHubRef(t *testing.T) {
 		t.Fatalf("expected tag ref to be ignored, got %q", got)
 	}
 }
-
-func TestResolveGitHubWebhookURL(t *testing.T) {
-	t.Setenv("GITHUB_WEBHOOK_URL", "")
-	t.Setenv("API_URL", "https://api.example.com/")
-
-	got, err := resolveGitHubWebhookURL()
-	if err != nil {
-		t.Fatalf("expected webhook URL from API_URL: %v", err)
-	}
-	if got != "https://api.example.com/webhooks/github" {
-		t.Fatalf("unexpected webhook URL %q", got)
-	}
-
-	t.Setenv("GITHUB_WEBHOOK_URL", "https://hooks.example.com/github/")
-	got, err = resolveGitHubWebhookURL()
-	if err != nil {
-		t.Fatalf("expected explicit webhook URL: %v", err)
-	}
-	if got != "https://hooks.example.com/github" {
-		t.Fatalf("unexpected explicit webhook URL %q", got)
-	}
-}
