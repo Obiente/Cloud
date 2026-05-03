@@ -5,6 +5,9 @@ import (
 	"encoding/binary"
 	"testing"
 	"time"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestParseTimestampedDockerLogLine(t *testing.T) {
@@ -56,6 +59,57 @@ func TestReadDockerContainerLogLinesParsesFramesAndPartialLines(t *testing.T) {
 	}
 	if lines[2].line != "error line" || !lines[2].stderr {
 		t.Fatalf("expected stderr frame to be preserved, got line=%q stderr=%v", lines[2].line, lines[2].stderr)
+	}
+}
+
+func TestMergeDeploymentLogLinesCombinesPersistedAndSnapshot(t *testing.T) {
+	base := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	persisted := []*deploymentsv1.DeploymentLogLine{
+		testLogLine(base.Add(1*time.Second), "one"),
+		testLogLine(base.Add(3*time.Second), "three"),
+	}
+	snapshot := []*deploymentsv1.DeploymentLogLine{
+		testLogLine(base.Add(2*time.Second), "two"),
+		testLogLine(base.Add(3*time.Second), "three"),
+		testLogLine(base.Add(4*time.Second), "four"),
+	}
+
+	got := mergeDeploymentLogLines(10, persisted, snapshot)
+	if len(got) != 4 {
+		t.Fatalf("expected 4 merged lines, got %d", len(got))
+	}
+	for i, want := range []string{"one", "two", "three", "four"} {
+		if got[i].Line != want {
+			t.Fatalf("merged line %d = %q, want %q", i, got[i].Line, want)
+		}
+	}
+}
+
+func TestMergeDeploymentLogLinesAppliesTailAfterDedupe(t *testing.T) {
+	base := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	got := mergeDeploymentLogLines(2,
+		[]*deploymentsv1.DeploymentLogLine{
+			testLogLine(base.Add(1*time.Second), "one"),
+			testLogLine(base.Add(2*time.Second), "two"),
+		},
+		[]*deploymentsv1.DeploymentLogLine{
+			testLogLine(base.Add(2*time.Second), "two"),
+			testLogLine(base.Add(3*time.Second), "three"),
+		},
+	)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 tailed lines, got %d", len(got))
+	}
+	if got[0].Line != "two" || got[1].Line != "three" {
+		t.Fatalf("expected tail [two three], got [%s %s]", got[0].Line, got[1].Line)
+	}
+}
+
+func testLogLine(ts time.Time, line string) *deploymentsv1.DeploymentLogLine {
+	return &deploymentsv1.DeploymentLogLine{
+		DeploymentId: "dep-123",
+		Line:         line,
+		Timestamp:    timestamppb.New(ts),
 	}
 }
 

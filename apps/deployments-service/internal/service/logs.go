@@ -50,17 +50,16 @@ func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[de
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load deployment logs: %w", err))
 	}
-	if len(persistedLogs) == 0 {
-		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, "", lines)
-		if snapshotErr == nil && len(snapshotLogs) > 0 {
-			_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "swarm_service_snapshot", snapshotLogs)
-			persistedLogs = snapshotLogs
-		}
+	snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, "", lines)
+	if snapshotErr == nil && len(snapshotLogs) > 0 {
+		_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "swarm_service_snapshot", snapshotLogs)
+		persistedLogs = mergeDeploymentLogLines(int(lines), persistedLogs, snapshotLogs)
 	}
 	if len(persistedLogs) == 0 && s.manager != nil {
 		if liveLogs, liveErr := s.manager.GetDeploymentLogs(ctx, deploymentID, fmt.Sprintf("%d", lines)); liveErr == nil && strings.TrimSpace(liveLogs) != "" {
-			persistedLogs = parseDockerServiceLogOutput(deploymentID, liveLogs)
-			_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "manager_snapshot", persistedLogs)
+			managerLogs := parseDockerServiceLogOutput(deploymentID, liveLogs)
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, "", "", "manager_snapshot", managerLogs)
+			persistedLogs = mergeDeploymentLogLines(int(lines), persistedLogs, managerLogs)
 		}
 	}
 	if len(persistedLogs) == 0 {
@@ -111,20 +110,23 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	}
 
 	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, int(tail))
-	if err == nil {
-		for _, line := range persistedLogs {
-			if sendErr := stream.Send(line); sendErr != nil {
-				return sendErr
-			}
-		}
+	if err != nil {
+		log.Printf("[StreamDeploymentLogs] Failed to load persisted logs for %s: %v", deploymentID, err)
+		persistedLogs = nil
 	}
+	sentInitialHistory := false
 
 	if containerID == "" {
-		liveTail := tail
-		if len(persistedLogs) > 0 {
-			liveTail = 0
+		snapshotLogs, snapshotErr := s.fetchSwarmServiceLogsSnapshot(ctx, deploymentID, serviceName, tail)
+		if snapshotErr == nil && len(snapshotLogs) > 0 {
+			_ = s.persistDeploymentLogLines(ctx, deploymentID, serviceName, "", "swarm_service_snapshot", snapshotLogs)
+			persistedLogs = mergeDeploymentLogLines(int(tail), persistedLogs, snapshotLogs)
 		}
-		streamedSwarmLogs, swarmStreamErr := s.streamSwarmServiceLogs(ctx, stream, deploymentID, serviceName, liveTail)
+		if err := sendDeploymentLogLines(stream, persistedLogs); err != nil {
+			return err
+		}
+		sentInitialHistory = true
+		streamedSwarmLogs, swarmStreamErr := s.streamSwarmServiceLogs(ctx, stream, deploymentID, serviceName, 0)
 		if streamedSwarmLogs {
 			return swarmStreamErr
 		}
@@ -158,6 +160,12 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			return connect.NewError(connect.CodeNotFound, err)
 		}
 		return nil
+	}
+
+	if !sentInitialHistory {
+		if err := sendDeploymentLogLines(stream, persistedLogs); err != nil {
+			return err
+		}
 	}
 
 	// Check if we need to forward to another node
@@ -543,19 +551,36 @@ func (s *Service) streamSwarmServiceLogs(ctx context.Context, stream *connect.Se
 		close(logChan)
 	}()
 
+	var persistBatch []*deploymentsv1.DeploymentLogLine
+	flushPersistBatch := func() {
+		if len(persistBatch) == 0 {
+			return
+		}
+		_ = s.persistDeploymentLogLines(context.Background(), deploymentID, serviceName, "", "swarm_service_live", persistBatch)
+		persistBatch = nil
+	}
+	defer flushPersistBatch()
+
 	for {
 		select {
 		case <-ctx.Done():
+			flushPersistBatch()
 			return true, nil
 		case line, ok := <-logChan:
 			if !ok {
+				flushPersistBatch()
 				return true, nil
 			}
 			if sendErr := stream.Send(line); sendErr != nil {
 				if ctx.Err() != nil {
+					flushPersistBatch()
 					return true, nil
 				}
 				return true, sendErr
+			}
+			persistBatch = append(persistBatch, line)
+			if len(persistBatch) >= 100 {
+				flushPersistBatch()
 			}
 		}
 	}
@@ -630,7 +655,11 @@ func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymen
 	if s.runtimeLogsRepo == nil {
 		return nil, nil
 	}
-	logs, err := s.runtimeLogsRepo.GetRecentLogsExcludingSources(ctx, deploymentID, limit, diagnosticRuntimeLogSources)
+	queryLimit := limit
+	if queryLimit > 0 {
+		queryLimit *= 3
+	}
+	logs, err := s.runtimeLogsRepo.GetRecentLogsExcludingSources(ctx, deploymentID, queryLimit, diagnosticRuntimeLogSources)
 	if err != nil {
 		return nil, err
 	}
@@ -645,7 +674,7 @@ func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymen
 			LogLevel:     commonv1.LogLevel(entry.LogLevel),
 		})
 	}
-	return protoLogs, nil
+	return mergeDeploymentLogLines(limit, protoLogs), nil
 }
 
 func (s *Service) loadPersistedDiagnosticDeploymentLogLines(ctx context.Context, deploymentID string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
@@ -697,6 +726,51 @@ func (s *Service) persistDeploymentLogLines(ctx context.Context, deploymentID, s
 	}
 
 	return s.runtimeLogsRepo.AddLogsBatch(ctx, entries)
+}
+
+func sendDeploymentLogLines(stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], lines []*deploymentsv1.DeploymentLogLine) error {
+	for _, line := range lines {
+		if line == nil {
+			continue
+		}
+		if err := stream.Send(line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeDeploymentLogLines(limit int, groups ...[]*deploymentsv1.DeploymentLogLine) []*deploymentsv1.DeploymentLogLine {
+	seen := make(map[string]struct{})
+	merged := make([]*deploymentsv1.DeploymentLogLine, 0)
+	for _, group := range groups {
+		for _, line := range group {
+			if line == nil || strings.TrimSpace(line.Line) == "" {
+				continue
+			}
+			key := deploymentLogLineKey(line)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged = append(merged, line)
+		}
+	}
+	sortDeploymentLogLines(merged)
+	if limit > 0 && len(merged) > limit {
+		merged = merged[len(merged)-limit:]
+	}
+	return merged
+}
+
+func deploymentLogLineKey(line *deploymentsv1.DeploymentLogLine) string {
+	ts := int64(0)
+	nanos := int32(0)
+	if line.Timestamp != nil {
+		ts = line.Timestamp.Seconds
+		nanos = line.Timestamp.Nanos
+	}
+	return fmt.Sprintf("%d.%09d|%t|%s", ts, nanos, line.Stderr, line.Line)
 }
 
 func (s *Service) fetchSwarmServiceLogsSnapshot(ctx context.Context, deploymentID, serviceName string, tail int32) ([]*deploymentsv1.DeploymentLogLine, error) {
