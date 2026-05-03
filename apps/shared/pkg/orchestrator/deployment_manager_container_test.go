@@ -96,6 +96,61 @@ func TestSwarmDisableHealthcheckArgs(t *testing.T) {
 	}
 }
 
+func TestSwarmEnvUpdateArgsRemovesStaleEnv(t *testing.T) {
+	t.Parallel()
+
+	got := swarmEnvUpdateArgs(
+		[]string{"APP_ENV", "OLD_SECRET", "PORT"},
+		[]string{"APP_ENV=production", "PORT=3000", "NEW_FLAG=true"},
+	)
+	want := []string{
+		"--env-rm", "OLD_SECRET",
+		"--env-add", "APP_ENV=production",
+		"--env-add", "PORT=3000",
+		"--env-add", "NEW_FLAG=true",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmEnvUpdateArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseSwarmServiceEnvNames(t *testing.T) {
+	t.Parallel()
+
+	got := parseSwarmServiceEnvNames([]byte(`["PORT=3000","APP_ENV=production","PORT=4000","MALFORMED"]`))
+	want := []string{"APP_ENV", "PORT"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("parseSwarmServiceEnvNames() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwarmStartCommandUpdateArgsClearsStaleCommand(t *testing.T) {
+	t.Parallel()
+
+	got := swarmStartCommandUpdateArgs(nil)
+	want := []string{"--entrypoint", "", "--args", ""}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmStartCommandUpdateArgs(nil) = %#v, want %#v", got, want)
+	}
+
+	empty := "  "
+	got = swarmStartCommandUpdateArgs(&empty)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmStartCommandUpdateArgs(empty) = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwarmStartCommandUpdateArgsSetsShellCommandAtomically(t *testing.T) {
+	t.Parallel()
+
+	start := "npm run start && echo ready"
+	got := swarmStartCommandUpdateArgs(&start)
+	want := []string{"--entrypoint", "sh", "--args", "-c npm run start && echo ready"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmStartCommandUpdateArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestDockerfileVolumeSanitizers(t *testing.T) {
 	t.Parallel()
 

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	containerpath "path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -124,6 +125,60 @@ func existingSwarmServiceMountTargets(ctx context.Context, serviceName string) [
 	return targets
 }
 
+func existingSwarmServiceEnvNames(ctx context.Context, serviceName string) []string {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.ContainerSpec.Env}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Debug("[DeploymentManager] Failed to inspect env for service %s: %v", serviceName, err)
+		return nil
+	}
+	return parseSwarmServiceEnvNames(output)
+}
+
+func parseSwarmServiceEnvNames(output []byte) []string {
+	var env []string
+	if err := json.Unmarshal(bytes.TrimSpace(output), &env); err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(env))
+	seen := make(map[string]struct{}, len(env))
+	for _, entry := range env {
+		name, _, ok := strings.Cut(entry, "=")
+		name = strings.TrimSpace(name)
+		if !ok || name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func swarmEnvUpdateArgs(existingEnvNames []string, desiredEnv []string) []string {
+	desiredNames := make(map[string]struct{}, len(desiredEnv))
+	for _, entry := range desiredEnv {
+		name, _, ok := strings.Cut(entry, "=")
+		if ok && name != "" {
+			desiredNames[name] = struct{}{}
+		}
+	}
+
+	args := make([]string, 0, len(existingEnvNames)*2+len(desiredEnv)*2)
+	for _, name := range existingEnvNames {
+		if _, keep := desiredNames[name]; !keep {
+			args = append(args, "--env-rm", name)
+		}
+	}
+	for _, entry := range desiredEnv {
+		args = append(args, "--env-add", entry)
+	}
+	return args
+}
+
 func swarmMemoryReservation(limitBytes int64) int64 {
 	if limitBytes <= 0 {
 		return 0
@@ -228,6 +283,26 @@ func buildStartCommandParts(raw string) (entrypoint []string, args []string) {
 	}
 
 	return []string{"sh"}, []string{"-c", startCommand}
+}
+
+func swarmStartCommandUpdateArgs(startCommand *string) []string {
+	if startCommand == nil || strings.TrimSpace(*startCommand) == "" {
+		return []string{"--entrypoint", "", "--args", ""}
+	}
+
+	entrypoint, startArgs := buildStartCommandParts(*startCommand)
+	args := make([]string, 0, 4)
+	if len(entrypoint) > 0 {
+		args = append(args, "--entrypoint", entrypoint[0])
+	} else {
+		args = append(args, "--entrypoint", "")
+	}
+	if len(startArgs) > 0 {
+		args = append(args, "--args", strings.Join(startArgs, " "))
+	} else {
+		args = append(args, "--args", "")
+	}
+	return args
 }
 
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
@@ -1382,13 +1457,9 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--label-add", fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Update environment variables
-	// Remove all existing env vars first (we'll add them back)
-	// Note: docker service update doesn't have a direct way to remove all env vars,
-	// so we'll add the new ones and they'll replace the old ones
-	for _, e := range env {
-		args = append(args, "--env-add", e)
-	}
+	// Update environment variables. Swarm retains keys that are not explicitly
+	// removed, so remove stale keys before applying the desired set.
+	args = append(args, swarmEnvUpdateArgs(existingSwarmServiceEnvNames(ctx, swarmServiceName), env)...)
 
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
@@ -1517,21 +1588,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Update image
 	args = append(args, "--image", config.Image)
 
-	// Update start command when provided.
-	// Use an explicit sh entrypoint so image-level entrypoint wrappers do not nest.
-	if config.StartCommand != nil && *config.StartCommand != "" {
-		entrypoint, startArgs := buildStartCommandParts(*config.StartCommand)
-		if len(entrypoint) > 0 {
-			args = append(args, "--entrypoint", entrypoint[0])
-		} else {
-			// Clear any previously forced shell entrypoint so direct executable
-			// commands like "./out" run using the image's normal process model.
-			args = append(args, "--entrypoint", "")
-		}
-		for _, arg := range startArgs {
-			args = append(args, "--args", arg)
-		}
-	}
+	args = append(args, swarmStartCommandUpdateArgs(config.StartCommand)...)
 
 	// Add service name
 	args = append(args, swarmServiceName)

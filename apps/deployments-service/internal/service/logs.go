@@ -46,7 +46,7 @@ func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, int(lines))
+	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, "", int(lines))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load deployment logs: %w", err))
 	}
@@ -109,7 +109,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 		tail = 200
 	}
 
-	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, int(tail))
+	persistedLogs, err := s.loadPersistedDeploymentLogLines(ctx, deploymentID, serviceName, int(tail))
 	if err != nil {
 		log.Printf("[StreamDeploymentLogs] Failed to load persisted logs for %s: %v", deploymentID, err)
 		persistedLogs = nil
@@ -651,7 +651,7 @@ var diagnosticRuntimeLogSources = []string{
 	"manual_restart_verification_failed",
 }
 
-func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymentID string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
+func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymentID, serviceName string, limit int) ([]*deploymentsv1.DeploymentLogLine, error) {
 	if s.runtimeLogsRepo == nil {
 		return nil, nil
 	}
@@ -659,7 +659,7 @@ func (s *Service) loadPersistedDeploymentLogLines(ctx context.Context, deploymen
 	if queryLimit > 0 {
 		queryLimit *= 3
 	}
-	logs, err := s.runtimeLogsRepo.GetRecentLogsExcludingSources(ctx, deploymentID, queryLimit, diagnosticRuntimeLogSources)
+	logs, err := s.runtimeLogsRepo.GetRecentLogsForServiceExcludingSources(ctx, deploymentID, serviceName, queryLimit, diagnosticRuntimeLogSources)
 	if err != nil {
 		return nil, err
 	}
