@@ -1118,6 +1118,8 @@ const exampleWebDeployment: Deployment = {
   groups: ["web"],
   containerIds: ["container-1", "container-2"],
   envVars: {},
+  buildArgs: {},
+  dockerfileVolumes: [],
   $typeName: "obiente.cloud.deployments.v1.Deployment" as const,
 };
 
