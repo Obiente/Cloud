@@ -161,6 +161,26 @@ func swarmDisableHealthcheckArgs() []string {
 	return []string{"--no-healthcheck"}
 }
 
+func safeHealthcheckPath(rawPath string) string {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" || len(rawPath) > 2048 || !strings.HasPrefix(rawPath, "/") || strings.Contains(rawPath, "\x00") {
+		return "/"
+	}
+	for _, r := range rawPath {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '/' || r == '.' || r == '-' || r == '_' || r == '~' || r == '%' {
+			continue
+		}
+		return "/"
+	}
+	return rawPath
+}
+
+func httpHealthcheckCommand(port int, rawPath string, expectedStatus int) string {
+	path := safeHealthcheckPath(rawPath)
+	return fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, port, path, expectedStatus, port, path, expectedStatus)
+}
+
 func normalizeStartCommand(raw string) string {
 	cmd := strings.TrimSpace(raw)
 	for range 4 {
@@ -414,7 +434,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 				expectedStatus = int(*config.HealthcheckExpectedStatus)
 			}
 			// HTTP check: curl the endpoint and check status code
-			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+			healthCheckCmd := httpHealthcheckCommand(effectiveHealthCheckPort, path, expectedStatus)
 			healthcheck = &container.HealthConfig{
 				Test:        []string{"CMD-SHELL", healthCheckCmd},
 				Interval:    30 * time.Second,
@@ -759,7 +779,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 				if config.HealthcheckExpectedStatus != nil && *config.HealthcheckExpectedStatus > 0 {
 					expectedStatus = int(*config.HealthcheckExpectedStatus)
 				}
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+				healthCheckCmd := httpHealthcheckCommand(effectiveHealthCheckPort, path, expectedStatus)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",
@@ -1417,7 +1437,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 				if config.HealthcheckExpectedStatus != nil && *config.HealthcheckExpectedStatus > 0 {
 					expectedStatus = int(*config.HealthcheckExpectedStatus)
 				}
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, effectiveHealthCheckPort, path, expectedStatus, effectiveHealthCheckPort, path, expectedStatus)
+				healthCheckCmd := httpHealthcheckCommand(effectiveHealthCheckPort, path, expectedStatus)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",

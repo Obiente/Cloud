@@ -448,7 +448,10 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		}
 	}
 	if req.Msg.HealthcheckPath != nil {
-		hcPath := req.Msg.GetHealthcheckPath()
+		hcPath, ok := cleanHealthcheckPath(req.Msg.GetHealthcheckPath())
+		if !ok {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid healthcheck path %q: use an absolute path with only letters, numbers, slash, dot, dash, underscore, tilde, or percent", req.Msg.GetHealthcheckPath()))
+		}
 		if hcPath != "" {
 			dbDeployment.HealthcheckPath = &hcPath
 		} else {
@@ -763,6 +766,24 @@ func cleanDockerfileMountPath(mountPath string) (string, bool) {
 		return "", false
 	}
 	return cleaned, true
+}
+
+func cleanHealthcheckPath(rawPath string) (string, bool) {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return "", true
+	}
+	if len(rawPath) > 2048 || !strings.HasPrefix(rawPath, "/") || strings.Contains(rawPath, "\x00") {
+		return "", false
+	}
+	for _, r := range rawPath {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '/' || r == '.' || r == '-' || r == '_' || r == '~' || r == '%' {
+			continue
+		}
+		return "", false
+	}
+	return rawPath, true
 }
 
 // DeleteDeployment deletes a deployment

@@ -1,6 +1,9 @@
 package orchestrator
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSwarmMemoryReservation(t *testing.T) {
 	t.Parallel()
@@ -154,5 +157,22 @@ func TestDockerfileVolumeSanitizers(t *testing.T) {
 				t.Fatalf("sanitizeContainerMountPath(%q) = %q, want empty", mount, got)
 			}
 		})
+	}
+}
+
+func TestHTTPHealthcheckCommandUsesSafePath(t *testing.T) {
+	t.Parallel()
+
+	got := httpHealthcheckCommand(3000, "/health", 204)
+	if !strings.Contains(got, "http://localhost:3000/health") {
+		t.Fatalf("httpHealthcheckCommand() = %q, want health URL", got)
+	}
+	if !strings.Contains(got, `"204"`) {
+		t.Fatalf("httpHealthcheckCommand() = %q, want expected status", got)
+	}
+
+	injected := httpHealthcheckCommand(3000, "/health'; touch /tmp/owned; '", 200)
+	if strings.Contains(injected, "touch /tmp/owned") || !strings.Contains(injected, "http://localhost:3000/") {
+		t.Fatalf("httpHealthcheckCommand() did not neutralize unsafe path: %q", injected)
 	}
 }

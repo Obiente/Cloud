@@ -125,3 +125,37 @@ func TestSanitizeDockerfileVolumesRejectsUnsafeInput(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanHealthcheckPathRejectsShellInjection(t *testing.T) {
+	t.Parallel()
+
+	valid := []string{"", "/", "/health", "/api/v1/ready", "/health-check_1.0~ok%20"}
+	for _, path := range valid {
+		path := path
+		t.Run("valid "+path, func(t *testing.T) {
+			t.Parallel()
+			if _, ok := cleanHealthcheckPath(path); !ok {
+				t.Fatalf("cleanHealthcheckPath(%q) rejected valid path", path)
+			}
+		})
+	}
+
+	invalid := []string{
+		"health",
+		"/health;curl evil",
+		"/health' || touch /tmp/owned || '",
+		"/health$(touch /tmp/owned)",
+		"/health?debug=true",
+		"/health value",
+		"/health\x00bad",
+	}
+	for _, path := range invalid {
+		path := path
+		t.Run("invalid "+path, func(t *testing.T) {
+			t.Parallel()
+			if _, ok := cleanHealthcheckPath(path); ok {
+				t.Fatalf("cleanHealthcheckPath(%q) returned ok", path)
+			}
+		})
+	}
+}

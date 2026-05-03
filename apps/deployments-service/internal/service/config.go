@@ -67,7 +67,10 @@ func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Requ
 	envFileContent := req.Msg.GetEnvFileContent()
 
 	// Parse to generate env_vars map for backward compatibility with existing code
-	envVarsMap := parseEnvFileToMap(envFileContent)
+	envVarsMap, err := parseEnvFileToMap(envFileContent)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 
 	// Marshal env vars to JSON
 	envJSON, err := json.Marshal(envVarsMap)
@@ -100,10 +103,10 @@ func parseEnvVars(envVarsJSON string) map[string]string {
 
 // parseEnvFileToMap parses a .env file content and extracts key-value pairs (ignores comments)
 // Used internally to maintain backward compatibility with EnvVars JSON field
-func parseEnvFileToMap(envFileContent string) map[string]string {
+func parseEnvFileToMap(envFileContent string) (map[string]string, error) {
 	envMap := make(map[string]string)
 	if envFileContent == "" {
-		return envMap
+		return envMap, nil
 	}
 
 	lines := strings.Split(envFileContent, "\n")
@@ -121,6 +124,12 @@ func parseEnvFileToMap(envFileContent string) map[string]string {
 
 		key := strings.TrimSpace(trimmed[:equalIndex])
 		value := strings.TrimSpace(trimmed[equalIndex+1:])
+		if !isSafeBuildArgName(key) {
+			return nil, fmt.Errorf("invalid environment variable name %q: use letters, numbers, and underscores, and start with a letter or underscore", key)
+		}
+		if strings.ContainsAny(value, "\x00\r\n") {
+			return nil, fmt.Errorf("invalid value for environment variable %q: values cannot contain null bytes or newlines", key)
+		}
 
 		// Remove quotes if present
 		if len(value) >= 2 {
@@ -132,5 +141,5 @@ func parseEnvFileToMap(envFileContent string) map[string]string {
 		envMap[key] = value
 	}
 
-	return envMap
+	return envMap, nil
 }
