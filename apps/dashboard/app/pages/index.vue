@@ -1120,6 +1120,7 @@ const exampleWebDeployment: Deployment = {
   envVars: {},
   buildArgs: {},
   dockerfileVolumes: [],
+  dockerfileBuildOptions: undefined,
   $typeName: "obiente.cloud.deployments.v1.Deployment" as const,
 };
 
