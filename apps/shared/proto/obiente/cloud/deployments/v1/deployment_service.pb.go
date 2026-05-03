@@ -3325,14 +3325,18 @@ func (x *ListAvailableGitHubIntegrationsRequest) GetOrganizationId() string {
 }
 
 type GitHubIntegrationOption struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Username       string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	IsUser         bool                   `protobuf:"varint,3,opt,name=is_user,json=isUser,proto3" json:"is_user,omitempty"`                          // true if user integration, false if organization
-	ObienteOrgId   string                 `protobuf:"bytes,4,opt,name=obiente_org_id,json=obienteOrgId,proto3" json:"obiente_org_id,omitempty"`       // Obiente cloud organization ID (only set if is_user is false)
-	ObienteOrgName string                 `protobuf:"bytes,5,opt,name=obiente_org_name,json=obienteOrgName,proto3" json:"obiente_org_name,omitempty"` // Obiente cloud organization name (only set if is_user is false)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Id                      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Username                string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	IsUser                  bool                   `protobuf:"varint,3,opt,name=is_user,json=isUser,proto3" json:"is_user,omitempty"`                          // true if user integration, false if organization
+	ObienteOrgId            string                 `protobuf:"bytes,4,opt,name=obiente_org_id,json=obienteOrgId,proto3" json:"obiente_org_id,omitempty"`       // Obiente cloud organization ID (only set if is_user is false)
+	ObienteOrgName          string                 `protobuf:"bytes,5,opt,name=obiente_org_name,json=obienteOrgName,proto3" json:"obiente_org_name,omitempty"` // Obiente cloud organization name (only set if is_user is false)
+	AuthType                string                 `protobuf:"bytes,6,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"`                     // oauth or github_app
+	GithubAppInstallationId int64                  `protobuf:"varint,7,opt,name=github_app_installation_id,json=githubAppInstallationId,proto3" json:"github_app_installation_id,omitempty"`
+	GithubAppAccountLogin   string                 `protobuf:"bytes,8,opt,name=github_app_account_login,json=githubAppAccountLogin,proto3" json:"github_app_account_login,omitempty"`
+	GithubAppAccountType    string                 `protobuf:"bytes,9,opt,name=github_app_account_type,json=githubAppAccountType,proto3" json:"github_app_account_type,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *GitHubIntegrationOption) Reset() {
@@ -3396,6 +3400,34 @@ func (x *GitHubIntegrationOption) GetObienteOrgId() string {
 func (x *GitHubIntegrationOption) GetObienteOrgName() string {
 	if x != nil {
 		return x.ObienteOrgName
+	}
+	return ""
+}
+
+func (x *GitHubIntegrationOption) GetAuthType() string {
+	if x != nil {
+		return x.AuthType
+	}
+	return ""
+}
+
+func (x *GitHubIntegrationOption) GetGithubAppInstallationId() int64 {
+	if x != nil {
+		return x.GithubAppInstallationId
+	}
+	return 0
+}
+
+func (x *GitHubIntegrationOption) GetGithubAppAccountLogin() string {
+	if x != nil {
+		return x.GithubAppAccountLogin
+	}
+	return ""
+}
+
+func (x *GitHubIntegrationOption) GetGithubAppAccountType() string {
+	if x != nil {
+		return x.GithubAppAccountType
 	}
 	return ""
 }
@@ -9243,13 +9275,17 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\bencoding\x18\x02 \x01(\tR\bencoding\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x03R\x04size\"Q\n" +
 	"&ListAvailableGitHubIntegrationsRequest\x12'\n" +
-	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\xae\x01\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\xf8\x02\n" +
 	"\x17GitHubIntegrationOption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x17\n" +
 	"\ais_user\x18\x03 \x01(\bR\x06isUser\x12$\n" +
 	"\x0eobiente_org_id\x18\x04 \x01(\tR\fobienteOrgId\x12(\n" +
-	"\x10obiente_org_name\x18\x05 \x01(\tR\x0eobienteOrgName\"\x84\x01\n" +
+	"\x10obiente_org_name\x18\x05 \x01(\tR\x0eobienteOrgName\x12\x1b\n" +
+	"\tauth_type\x18\x06 \x01(\tR\bauthType\x12;\n" +
+	"\x1agithub_app_installation_id\x18\a \x01(\x03R\x17githubAppInstallationId\x127\n" +
+	"\x18github_app_account_login\x18\b \x01(\tR\x15githubAppAccountLogin\x125\n" +
+	"\x17github_app_account_type\x18\t \x01(\tR\x14githubAppAccountType\"\x84\x01\n" +
 	"'ListAvailableGitHubIntegrationsResponse\x12Y\n" +
 	"\fintegrations\x18\x01 \x03(\v25.obiente.cloud.deployments.v1.GitHubIntegrationOptionR\fintegrations\"\x93\x01\n" +
 	"\x1bStreamTerminalOutputRequest\x12'\n" +

@@ -695,6 +695,25 @@
     }
   };
 
+  const formatConfigSaveError = (err: unknown) => {
+    const message = String((err as Error)?.message || err || "");
+    const lower = message.toLowerCase();
+
+    if (
+      lower.includes("github webhook permission denied") ||
+      lower.includes("resource not accessible by integration") ||
+      (lower.includes("admin:repo_hook") && lower.includes("webhook"))
+    ) {
+      return "GitHub connected successfully, but this account cannot manage webhooks for the selected repository. Use a GitHub account with Admin access to the repository, approve the OAuth app for the organization, then reconnect GitHub and save again.";
+    }
+
+    if (lower.includes("github token expired") || lower.includes("could not be refreshed")) {
+      return "GitHub needs to be reconnected before auto deploy can be configured. Reconnect the account in Settings > Integrations, then save again.";
+    }
+
+    return message || "Failed to save settings. Please try again.";
+  };
+
   const formatBuildArgs = (args?: Record<string, string>) =>
     Object.entries(args || {})
       .map(([key, value]) => `${key}=${value}`)
@@ -1772,8 +1791,7 @@
       }, 3000);
     } catch (err: unknown) {
       console.error("Failed to save config:", err);
-      configError.value =
-        (err as Error).message || "Failed to save settings. Please try again.";
+      configError.value = formatConfigSaveError(err);
     } finally {
       isSaving.value = false;
     }

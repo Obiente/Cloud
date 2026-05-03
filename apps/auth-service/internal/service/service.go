@@ -196,6 +196,7 @@ func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1
 		RefreshToken:   encryptedRefreshToken,
 		Username:       req.Msg.GetUsername(),
 		Scope:          req.Msg.GetScope(),
+		AuthType:       "oauth",
 		TokenExpiresAt: tokenExpiresAt,
 		ConnectedAt:    now,
 		UpdatedAt:      now,
@@ -303,6 +304,7 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 		RefreshToken:   encryptedRefreshToken,
 		Username:       req.Msg.GetUsername(),
 		Scope:          req.Msg.GetScope(),
+		AuthType:       "oauth",
 		TokenExpiresAt: tokenExpiresAt,
 		ConnectedAt:    now,
 		UpdatedAt:      now,
@@ -315,6 +317,70 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 	return connect.NewResponse(&authv1.ConnectOrganizationGitHubResponse{
 		Success:  true,
 		Username: req.Msg.GetUsername(),
+	}), nil
+}
+
+func (s *Service) ConnectOrganizationGitHubApp(ctx context.Context, req *connect.Request[authv1.ConnectOrganizationGitHubAppRequest]) (*connect.Response[authv1.ConnectOrganizationGitHubAppResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+	if req.Msg.GetInstallationId() <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("installation_id is required"))
+	}
+
+	if err := s.verifyOrgAdminPermission(ctx, orgID, user); err != nil {
+		return nil, err
+	}
+	if s.db == nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("database not initialized"))
+	}
+
+	now := time.Now()
+	accountLogin := strings.TrimSpace(req.Msg.GetAccountLogin())
+	if accountLogin == "" {
+		accountLogin = fmt.Sprintf("installation-%d", req.Msg.GetInstallationId())
+	}
+	accountType := strings.TrimSpace(req.Msg.GetAccountType())
+	if accountType == "" {
+		accountType = "Organization"
+	}
+	installationID := req.Msg.GetInstallationId()
+	scope := "github_app"
+	if selection := strings.TrimSpace(req.Msg.GetRepositorySelection()); selection != "" {
+		scope += ":" + selection
+	}
+
+	integration := database.GitHubIntegration{
+		ID:                      uuid.New().String(),
+		UserID:                  nil,
+		OrganizationID:          &orgID,
+		Token:                   "",
+		RefreshToken:            nil,
+		Username:                accountLogin,
+		Scope:                   scope,
+		AuthType:                "github_app",
+		GitHubAppInstallationID: &installationID,
+		GitHubAppAccountLogin:   &accountLogin,
+		GitHubAppAccountType:    &accountType,
+		TokenExpiresAt:          nil,
+		ConnectedAt:             now,
+		UpdatedAt:               now,
+	}
+
+	if err := s.upsertGitHubIntegration("organization_id", integration); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save GitHub App integration: %w", err))
+	}
+
+	return connect.NewResponse(&authv1.ConnectOrganizationGitHubAppResponse{
+		Success:        true,
+		AccountLogin:   accountLogin,
+		InstallationId: installationID,
 	}), nil
 }
 
@@ -397,6 +463,16 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 			Scope:       integration.Scope,
 			IsUser:      isUser,
 			ConnectedAt: timestamppb.New(integration.ConnectedAt),
+			AuthType:    githubIntegrationAuthType(integration),
+		}
+		if integration.GitHubAppInstallationID != nil {
+			info.GithubAppInstallationId = *integration.GitHubAppInstallationID
+		}
+		if integration.GitHubAppAccountLogin != nil {
+			info.GithubAppAccountLogin = *integration.GitHubAppAccountLogin
+		}
+		if integration.GitHubAppAccountType != nil {
+			info.GithubAppAccountType = *integration.GitHubAppAccountType
 		}
 
 		if !isUser && integration.OrganizationID != nil {
@@ -414,6 +490,14 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 	return connect.NewResponse(&authv1.ListGitHubIntegrationsResponse{
 		Integrations: protoIntegrations,
 	}), nil
+}
+
+func githubIntegrationAuthType(integration database.GitHubIntegration) string {
+	authType := strings.TrimSpace(integration.AuthType)
+	if authType == "" {
+		return "oauth"
+	}
+	return authType
 }
 
 func (s *Service) encryptGitHubToken(token string) (string, error) {
@@ -453,15 +537,19 @@ func (s *Service) upsertGitHubIntegration(conflictColumn string, integration dat
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: conflictColumn}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"token":            integration.Token,
-			"refresh_token":    integration.RefreshToken,
-			"username":         integration.Username,
-			"scope":            integration.Scope,
-			"token_expires_at": integration.TokenExpiresAt,
-			"updated_at":       integration.UpdatedAt,
-			"connected_at":     integration.ConnectedAt,
-			"user_id":          integration.UserID,
-			"organization_id":  integration.OrganizationID,
+			"token":                      integration.Token,
+			"refresh_token":              integration.RefreshToken,
+			"username":                   integration.Username,
+			"scope":                      integration.Scope,
+			"auth_type":                  integration.AuthType,
+			"github_app_installation_id": integration.GitHubAppInstallationID,
+			"github_app_account_login":   integration.GitHubAppAccountLogin,
+			"github_app_account_type":    integration.GitHubAppAccountType,
+			"token_expires_at":           integration.TokenExpiresAt,
+			"updated_at":                 integration.UpdatedAt,
+			"connected_at":               integration.ConnectedAt,
+			"user_id":                    integration.UserID,
+			"organization_id":            integration.OrganizationID,
 		}),
 	}).Create(&integration).Error
 }

@@ -544,6 +544,10 @@ message GitHubIntegrationOption {
   bool is_user = 3; // true if user integration, false if organization
   string obiente_org_id = 4; // Obiente cloud organization ID (only set if is_user is false)
   string obiente_org_name = 5; // Obiente cloud organization name (only set if is_user is false)
+  string auth_type = 6; // oauth or github_app
+  int64 github_app_installation_id = 7;
+  string github_app_account_login = 8;
+  string github_app_account_type = 9;
 }
 
 message ListAvailableGitHubIntegrationsResponse {

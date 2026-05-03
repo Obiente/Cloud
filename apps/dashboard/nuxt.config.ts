@@ -226,6 +226,7 @@ export default defineNuxtConfig({
         "http://localhost:8080",
       oidcClientId: "339499954043158530",
       githubClientId: "",
+      githubAppSlug: process.env.NUXT_PUBLIC_GITHUB_APP_SLUG || process.env.GITHUB_APP_SLUG || "",
       stripePublishableKey: "",
     },
   },

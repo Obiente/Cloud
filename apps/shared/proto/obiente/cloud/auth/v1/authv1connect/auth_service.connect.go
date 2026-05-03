@@ -56,6 +56,9 @@ const (
 	// AuthServiceConnectOrganizationGitHubProcedure is the fully-qualified name of the AuthService's
 	// ConnectOrganizationGitHub RPC.
 	AuthServiceConnectOrganizationGitHubProcedure = "/obiente.cloud.auth.v1.AuthService/ConnectOrganizationGitHub"
+	// AuthServiceConnectOrganizationGitHubAppProcedure is the fully-qualified name of the AuthService's
+	// ConnectOrganizationGitHubApp RPC.
+	AuthServiceConnectOrganizationGitHubAppProcedure = "/obiente.cloud.auth.v1.AuthService/ConnectOrganizationGitHubApp"
 	// AuthServiceDisconnectOrganizationGitHubProcedure is the fully-qualified name of the AuthService's
 	// DisconnectOrganizationGitHub RPC.
 	AuthServiceDisconnectOrganizationGitHubProcedure = "/obiente.cloud.auth.v1.AuthService/DisconnectOrganizationGitHub"
@@ -85,6 +88,8 @@ type AuthServiceClient interface {
 	// Organization GitHub Integration
 	// Connect organization GitHub account by storing OAuth token
 	ConnectOrganizationGitHub(context.Context, *connect.Request[v1.ConnectOrganizationGitHubRequest]) (*connect.Response[v1.ConnectOrganizationGitHubResponse], error)
+	// Connect organization GitHub App installation
+	ConnectOrganizationGitHubApp(context.Context, *connect.Request[v1.ConnectOrganizationGitHubAppRequest]) (*connect.Response[v1.ConnectOrganizationGitHubAppResponse], error)
 	// Disconnect organization GitHub account
 	DisconnectOrganizationGitHub(context.Context, *connect.Request[v1.DisconnectOrganizationGitHubRequest]) (*connect.Response[v1.DisconnectOrganizationGitHubResponse], error)
 	// List all GitHub integrations (user and organizations)
@@ -150,6 +155,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("ConnectOrganizationGitHub")),
 			connect.WithClientOptions(opts...),
 		),
+		connectOrganizationGitHubApp: connect.NewClient[v1.ConnectOrganizationGitHubAppRequest, v1.ConnectOrganizationGitHubAppResponse](
+			httpClient,
+			baseURL+AuthServiceConnectOrganizationGitHubAppProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ConnectOrganizationGitHubApp")),
+			connect.WithClientOptions(opts...),
+		),
 		disconnectOrganizationGitHub: connect.NewClient[v1.DisconnectOrganizationGitHubRequest, v1.DisconnectOrganizationGitHubResponse](
 			httpClient,
 			baseURL+AuthServiceDisconnectOrganizationGitHubProcedure,
@@ -175,6 +186,7 @@ type authServiceClient struct {
 	disconnectGitHub             *connect.Client[v1.DisconnectGitHubRequest, v1.DisconnectGitHubResponse]
 	getGitHubStatus              *connect.Client[v1.GetGitHubStatusRequest, v1.GetGitHubStatusResponse]
 	connectOrganizationGitHub    *connect.Client[v1.ConnectOrganizationGitHubRequest, v1.ConnectOrganizationGitHubResponse]
+	connectOrganizationGitHubApp *connect.Client[v1.ConnectOrganizationGitHubAppRequest, v1.ConnectOrganizationGitHubAppResponse]
 	disconnectOrganizationGitHub *connect.Client[v1.DisconnectOrganizationGitHubRequest, v1.DisconnectOrganizationGitHubResponse]
 	listGitHubIntegrations       *connect.Client[v1.ListGitHubIntegrationsRequest, v1.ListGitHubIntegrationsResponse]
 }
@@ -219,6 +231,12 @@ func (c *authServiceClient) ConnectOrganizationGitHub(ctx context.Context, req *
 	return c.connectOrganizationGitHub.CallUnary(ctx, req)
 }
 
+// ConnectOrganizationGitHubApp calls
+// obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHubApp.
+func (c *authServiceClient) ConnectOrganizationGitHubApp(ctx context.Context, req *connect.Request[v1.ConnectOrganizationGitHubAppRequest]) (*connect.Response[v1.ConnectOrganizationGitHubAppResponse], error) {
+	return c.connectOrganizationGitHubApp.CallUnary(ctx, req)
+}
+
 // DisconnectOrganizationGitHub calls
 // obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub.
 func (c *authServiceClient) DisconnectOrganizationGitHub(ctx context.Context, req *connect.Request[v1.DisconnectOrganizationGitHubRequest]) (*connect.Response[v1.DisconnectOrganizationGitHubResponse], error) {
@@ -251,6 +269,8 @@ type AuthServiceHandler interface {
 	// Organization GitHub Integration
 	// Connect organization GitHub account by storing OAuth token
 	ConnectOrganizationGitHub(context.Context, *connect.Request[v1.ConnectOrganizationGitHubRequest]) (*connect.Response[v1.ConnectOrganizationGitHubResponse], error)
+	// Connect organization GitHub App installation
+	ConnectOrganizationGitHubApp(context.Context, *connect.Request[v1.ConnectOrganizationGitHubAppRequest]) (*connect.Response[v1.ConnectOrganizationGitHubAppResponse], error)
 	// Disconnect organization GitHub account
 	DisconnectOrganizationGitHub(context.Context, *connect.Request[v1.DisconnectOrganizationGitHubRequest]) (*connect.Response[v1.DisconnectOrganizationGitHubResponse], error)
 	// List all GitHub integrations (user and organizations)
@@ -312,6 +332,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("ConnectOrganizationGitHub")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceConnectOrganizationGitHubAppHandler := connect.NewUnaryHandler(
+		AuthServiceConnectOrganizationGitHubAppProcedure,
+		svc.ConnectOrganizationGitHubApp,
+		connect.WithSchema(authServiceMethods.ByName("ConnectOrganizationGitHubApp")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceDisconnectOrganizationGitHubHandler := connect.NewUnaryHandler(
 		AuthServiceDisconnectOrganizationGitHubProcedure,
 		svc.DisconnectOrganizationGitHub,
@@ -342,6 +368,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetGitHubStatusHandler.ServeHTTP(w, r)
 		case AuthServiceConnectOrganizationGitHubProcedure:
 			authServiceConnectOrganizationGitHubHandler.ServeHTTP(w, r)
+		case AuthServiceConnectOrganizationGitHubAppProcedure:
+			authServiceConnectOrganizationGitHubAppHandler.ServeHTTP(w, r)
 		case AuthServiceDisconnectOrganizationGitHubProcedure:
 			authServiceDisconnectOrganizationGitHubHandler.ServeHTTP(w, r)
 		case AuthServiceListGitHubIntegrationsProcedure:
@@ -385,6 +413,10 @@ func (UnimplementedAuthServiceHandler) GetGitHubStatus(context.Context, *connect
 
 func (UnimplementedAuthServiceHandler) ConnectOrganizationGitHub(context.Context, *connect.Request[v1.ConnectOrganizationGitHubRequest]) (*connect.Response[v1.ConnectOrganizationGitHubResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ConnectOrganizationGitHubApp(context.Context, *connect.Request[v1.ConnectOrganizationGitHubAppRequest]) (*connect.Response[v1.ConnectOrganizationGitHubAppResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHubApp is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) DisconnectOrganizationGitHub(context.Context, *connect.Request[v1.DisconnectOrganizationGitHubRequest]) (*connect.Response[v1.DisconnectOrganizationGitHubResponse], error) {

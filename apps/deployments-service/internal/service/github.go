@@ -35,9 +35,17 @@ func containsAuthError(errMsg string) bool {
 
 // getGitHubToken retrieves a GitHub token for the authenticated user or organization
 func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationID string) (string, error) {
+	integration, err := s.getGitHubIntegration(ctx, orgID, integrationID)
+	if err != nil {
+		return "", err
+	}
+	return getUsableGitHubToken(integration)
+}
+
+func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integrationID string) (*database.GitHubIntegration, error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
-		return "", fmt.Errorf("authentication required")
+		return nil, fmt.Errorf("authentication required")
 	}
 
 	isSuperAdmin := auth.IsSuperadmin(ctx, user)
@@ -48,21 +56,21 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err == nil {
 			// Verify user has access to this integration
 			if integration.UserID != nil && *integration.UserID == user.Id {
-				return getUsableGitHubToken(&integration)
+				return &integration, nil
 			}
 			if integration.OrganizationID != nil {
 				// Check if user is member of the organization
 				if isSuperAdmin {
-					return getUsableGitHubToken(&integration)
+					return &integration, nil
 				}
 				var member database.OrganizationMember
 				if err := database.DB.Where("organization_id = ? AND user_id = ?", *integration.OrganizationID, user.Id).First(&member).Error; err == nil {
-					return getUsableGitHubToken(&integration)
+					return &integration, nil
 				}
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
-			return "", fmt.Errorf("failed to get integration: %w", err)
+			return nil, fmt.Errorf("failed to get integration: %w", err)
 		}
 	}
 
@@ -71,28 +79,28 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		var orgIntegration database.GitHubIntegration
 		if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
 			if isSuperAdmin {
-				return getUsableGitHubToken(&orgIntegration)
+				return &orgIntegration, nil
 			}
 			var member database.OrganizationMember
 			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
-				return getUsableGitHubToken(&orgIntegration)
+				return &orgIntegration, nil
 			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
-			return "", fmt.Errorf("failed to get organization integration: %w", err)
+			return nil, fmt.Errorf("failed to get organization integration: %w", err)
 		}
 	}
 
 	// Fall back to user token
 	var userIntegration database.GitHubIntegration
 	if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
-		return getUsableGitHubToken(&userIntegration)
+		return &userIntegration, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Log unexpected errors, but ignore "record not found"
-		return "", fmt.Errorf("failed to get user integration: %w", err)
+		return nil, fmt.Errorf("failed to get user integration: %w", err)
 	}
 
-	return "", fmt.Errorf("no GitHub integration found for user or organization")
+	return nil, fmt.Errorf("no GitHub integration found for user or organization")
 }
 
 func getGitHubIntegrationTokenByID(integrationID string) (string, error) {
@@ -102,6 +110,29 @@ func getGitHubIntegrationTokenByID(integrationID string) (string, error) {
 	}
 
 	return getUsableGitHubToken(&integration)
+}
+
+func getGitHubClientForIntegration(ctx context.Context, integration *database.GitHubIntegration) (*githubclient.Client, bool, error) {
+	if integration == nil {
+		return nil, false, fmt.Errorf("GitHub integration is nil")
+	}
+	if githubIntegrationUsesApp(*integration) {
+		if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+			return nil, false, fmt.Errorf("GitHub App installation ID is missing")
+		}
+		client, err := githubclient.NewInstallationClient(ctx, *integration.GitHubAppInstallationID)
+		return client, true, err
+	}
+
+	token, err := getUsableGitHubToken(integration)
+	if err != nil {
+		return nil, false, err
+	}
+	return githubclient.NewClient(token), false, nil
+}
+
+func githubIntegrationUsesApp(integration database.GitHubIntegration) bool {
+	return strings.EqualFold(strings.TrimSpace(integration.AuthType), "github_app") || integration.GitHubAppInstallationID != nil
 }
 
 func decryptStoredGitHubToken(token string) (string, error) {
@@ -128,9 +159,19 @@ func getUsableGitHubToken(integration *database.GitHubIntegration) (string, erro
 	if integration == nil {
 		return "", fmt.Errorf("GitHub integration is nil")
 	}
+	if githubIntegrationUsesApp(*integration) {
+		if integration.GitHubAppInstallationID == nil {
+			return "", fmt.Errorf("GitHub App installation ID is missing")
+		}
+		return githubclient.CreateInstallationToken(context.Background(), *integration.GitHubAppInstallationID)
+	}
 
-	if integration.TokenExpiresAt == nil || integration.RefreshToken == nil || time.Until(*integration.TokenExpiresAt) > githubTokenRefreshSkew {
+	if integration.TokenExpiresAt == nil || time.Until(*integration.TokenExpiresAt) > githubTokenRefreshSkew {
 		return decryptStoredGitHubToken(integration.Token)
+	}
+
+	if integration.RefreshToken == nil || strings.TrimSpace(*integration.RefreshToken) == "" {
+		return "", fmt.Errorf("GitHub token expired or is expiring and no refresh token is available; reconnect required")
 	}
 
 	token, err := refreshGitHubIntegrationToken(integration)
@@ -146,6 +187,10 @@ func getUsableGitHubToken(integration *database.GitHubIntegration) (string, erro
 	}
 
 	return token, nil
+}
+
+func isMissingGitHubIntegrationError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "no github integration found")
 }
 
 type githubRefreshResponse struct {
@@ -258,16 +303,23 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 
 	orgID := req.Msg.GetOrganizationId()
 	integrationID := req.Msg.GetIntegrationId()
-	ghToken, err := s.getGitHubToken(ctx, orgID, integrationID)
+	integration, err := s.getGitHubIntegration(ctx, orgID, integrationID)
 	if err != nil {
-		// Return empty list if no GitHub integration is found
+		if !isMissingGitHubIntegrationError(err) {
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or could not be refreshed. Please reconnect your GitHub account: %w", err))
+		}
+
+		// Return empty list only when the user has not connected GitHub yet.
 		return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
 			Repos: []*deploymentsv1.GitHubRepo{},
 			Total: 0,
 		}), nil
 	}
 
-	ghClient := githubclient.NewClient(ghToken)
+	ghClient, isAppInstall, err := getGitHubClientForIntegration(ctx, integration)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or could not be refreshed. Please reconnect your GitHub account: %w", err))
+	}
 	page := int(req.Msg.GetPage())
 	if page < 1 {
 		page = 1
@@ -277,7 +329,12 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 		perPage = 30
 	}
 
-	repos, err := ghClient.ListRepos(ctx, page, perPage)
+	var repos []githubclient.GitHubRepo
+	if isAppInstall {
+		repos, err = ghClient.ListInstallationRepos(ctx, page, perPage)
+	} else {
+		repos, err = ghClient.ListRepos(ctx, page, perPage)
+	}
 	if err != nil {
 		// Check if error is due to authentication failure (expired/revoked token)
 		errMsg := err.Error()
@@ -454,6 +511,16 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 		option := &deploymentsv1.GitHubIntegrationOption{
 			Id:       integration.ID,
 			Username: integration.Username,
+			AuthType: githubIntegrationOptionAuthType(integration),
+		}
+		if integration.GitHubAppInstallationID != nil {
+			option.GithubAppInstallationId = *integration.GitHubAppInstallationID
+		}
+		if integration.GitHubAppAccountLogin != nil {
+			option.GithubAppAccountLogin = *integration.GitHubAppAccountLogin
+		}
+		if integration.GitHubAppAccountType != nil {
+			option.GithubAppAccountType = *integration.GitHubAppAccountType
 		}
 
 		if integration.UserID != nil {
@@ -476,4 +543,12 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 	return connect.NewResponse(&deploymentsv1.ListAvailableGitHubIntegrationsResponse{
 		Integrations: protoIntegrations,
 	}), nil
+}
+
+func githubIntegrationOptionAuthType(integration database.GitHubIntegration) string {
+	authType := strings.TrimSpace(integration.AuthType)
+	if authType == "" {
+		return "oauth"
+	}
+	return authType
 }

@@ -23,8 +23,14 @@ Complete reference for all Obiente Cloud environment variables.
 | `GITHUB_CLIENT_SECRET`               | -                            | ✅ (GitHub)   | Server-side GitHub OAuth client secret                                                                              |
 | `NUXT_GITHUB_CLIENT_SECRET`          | -                            | ❌            | Alternative server-side source for the GitHub OAuth client secret                                                   |
 | `GITHUB_TOKEN_ENCRYPTION_KEY`        | -                            | Recommended   | Dedicated encryption key for stored GitHub access tokens                                                            |
-| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | GitHub webhook signing secret for automatic deployments                                                             |
+| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Random signing secret you generate and also configure on GitHub webhooks. Example: `openssl rand -hex 32`           |
 | `GITHUB_WEBHOOK_URL`                 | `${API_URL}/webhooks/github` | ❌            | Public webhook URL GitHub should call for automatic deployments                                                     |
+| `GITHUB_APP_SLUG`                    | -                            | ✅ (org app)  | GitHub App slug used to start organization-level app installs                                                       |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`        | `${GITHUB_APP_SLUG}`         | ✅ (org app)  | Public GitHub App slug exposed to the dashboard                                                                     |
+| `GITHUB_APP_ID`                      | -                            | ✅ (org app)  | GitHub App ID used to mint installation tokens                                                                      |
+| `GITHUB_APP_PRIVATE_KEY`             | -                            | ❌            | GitHub App private key PEM. Prefer base64 or file path for deployment envs                                           |
+| `GITHUB_APP_PRIVATE_KEY_BASE64`      | -                            | ✅ (org app)  | Base64-encoded GitHub App private key PEM                                                                           |
+| `GITHUB_APP_PRIVATE_KEY_PATH`        | -                            | ❌            | Path to GitHub App private key PEM                                                                                  |
 | `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
 | `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
@@ -216,6 +222,12 @@ DB_LOG_LEVEL=debug
 | `GITHUB_TOKEN_ENCRYPTION_KEY`  | string | -       | Recommended |
 | `GITHUB_WEBHOOK_SECRET`        | string | -       | ✅ webhooks |
 | `GITHUB_WEBHOOK_URL`           | string | -       | ❌          |
+| `GITHUB_APP_SLUG`              | string | -       | ✅ org app  |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`  | string | -       | ✅ org app  |
+| `GITHUB_APP_ID`                | string | -       | ✅ org app  |
+| `GITHUB_APP_PRIVATE_KEY`       | string | -       | ❌          |
+| `GITHUB_APP_PRIVATE_KEY_BASE64`| string | -       | ✅ org app  |
+| `GITHUB_APP_PRIVATE_KEY_PATH`  | string | -       | ❌          |
 
 Use either:
 

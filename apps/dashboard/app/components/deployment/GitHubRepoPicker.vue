@@ -36,8 +36,7 @@
       size="xs"
       color="tertiary"
     >
-      Using account: {{ availableIntegrations[0]?.username }} 
-      {{ availableIntegrations[0]?.isUser ? '(Personal)' : `(${availableIntegrations[0]?.obienteOrgName || 'Organization'})` }}
+      Using account: {{ integrationLabel(availableIntegrations[0]) }}
     </OuiText>
 
     <OuiCombobox
@@ -103,8 +102,11 @@ const availableIntegrations = ref<Array<{
   id: string;
   username: string;
   isUser: boolean;
+  authType?: string;
   obienteOrgId?: string;
   obienteOrgName?: string;
+  githubAppAccountLogin?: string;
+  githubAppAccountType?: string;
 }>>([]);
 const isLoading = ref(false);
 const isLoadingBranches = ref(false);
@@ -119,18 +121,36 @@ const isGitHubAuthError = (err: unknown) => {
     message.includes("bad credentials") ||
     message.includes("token expired") ||
     message.includes("token may be expired") ||
+    message.includes("could not be refreshed") ||
+    message.includes("reconnect required") ||
     message.includes("revoked")
   );
 };
 
 const integrationOptions = computed(() =>
   availableIntegrations.value.map((i) => ({
-    label: i.isUser
-      ? `Personal (${i.username})`
-      : `${i.obienteOrgName || i.obienteOrgId} (${i.username})`,
+    label: integrationLabel(i),
     value: i.id,
   }))
 );
+
+const integrationLabel = (integration?: {
+  username?: string;
+  isUser?: boolean;
+  authType?: string;
+  obienteOrgId?: string;
+  obienteOrgName?: string;
+  githubAppAccountLogin?: string;
+}) => {
+  if (!integration) return "";
+  if (integration.isUser) {
+    return `Personal (${integration.username || "GitHub"})`;
+  }
+  if (integration.authType === "github_app") {
+    return `${integration.obienteOrgName || integration.obienteOrgId || "Organization"} (GitHub App: ${integration.githubAppAccountLogin || integration.username || "installed"})`;
+  }
+  return `${integration.obienteOrgName || integration.obienteOrgId || "Organization"} (${integration.username || "OAuth"})`;
+};
 
 const repoOptions = computed(() =>
   repos.value.map((r) => ({
@@ -157,13 +177,23 @@ const loadAvailableIntegrations = async () => {
       id: i.id,
       username: i.username,
       isUser: i.isUser,
+      authType: i.authType || "oauth",
       obienteOrgId: i.obienteOrgId || undefined,
       obienteOrgName: i.obienteOrgName || undefined,
+      githubAppAccountLogin: i.githubAppAccountLogin || undefined,
+      githubAppAccountType: i.githubAppAccountType || undefined,
     }));
 
-    // Auto-select first integration if available and none selected
+    // Auto-select the organization installation first for organization deployments.
     if (availableIntegrations.value.length > 0 && !selectedIntegrationId.value) {
-      const firstIntegration = availableIntegrations.value[0];
+      const firstIntegration =
+        availableIntegrations.value.find(
+          (i) => i.authType === "github_app" && i.obienteOrgId === props.organizationId
+        ) ||
+        availableIntegrations.value.find(
+          (i) => !i.isUser && i.obienteOrgId === props.organizationId
+        ) ||
+        availableIntegrations.value[0];
       if (firstIntegration) {
         selectedIntegrationId.value = firstIntegration.id;
         // Always emit integration ID when it's set (critical for private repos)

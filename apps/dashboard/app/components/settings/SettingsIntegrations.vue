@@ -39,7 +39,7 @@
                   <OuiFlex align="center" gap="sm" wrap="wrap">
                     <OuiText size="sm" weight="medium">@{{ integration.username }}</OuiText>
                     <OuiBadge :variant="integration.isUser ? 'primary' : 'secondary'" size="xs">
-                      {{ integration.isUser ? 'Personal' : 'Organization' }}
+                      {{ integration.isUser ? 'Personal' : integration.authType === 'github_app' ? 'GitHub App' : 'Organization OAuth' }}
                     </OuiBadge>
                     <OuiBadge v-if="!integration.isUser && integration.organizationName" variant="secondary" size="xs">
                       {{ integration.organizationName }}
@@ -101,6 +101,9 @@
                   :items="organizationOptions"
                   placeholder="Select an organization"
                 />
+                <OuiText size="xs" color="tertiary">
+                  Organization installs use the Obiente GitHub App so the GitHub organization owner can choose which repositories this Obiente organization can access.
+                </OuiText>
               </OuiStack>
 
               <OuiAlert
@@ -127,7 +130,7 @@
                 variant="solid"
                 size="sm"
               >
-                {{ isConnecting ? "Connecting..." : "Connect GitHub" }}
+                {{ isConnecting ? "Connecting..." : connectionType === "organization" ? "Install GitHub App" : "Connect GitHub" }}
               </OuiButton>
             </OuiStack>
           </OuiStack>
@@ -162,9 +165,13 @@ const integrations = ref<
     id: string;
     username: string;
     scope: string;
+    authType: string;
     isUser: boolean;
     organizationId?: string;
     organizationName?: string;
+    githubAppInstallationId?: bigint;
+    githubAppAccountLogin?: string;
+    githubAppAccountType?: string;
     connectedAt?: { seconds: number; nanos: number };
   }>
 >([]);
@@ -196,14 +203,18 @@ onMounted(async () => {
     const errorParam = route.query.error;
     const username = route.query.username;
     const orgId = route.query.orgId;
+    const installationId = route.query.installationId;
+    const installationUpdated = route.query.installationUpdated;
 
-    if (success === "true" && username) {
+    if (success === "true" && (username || installationId)) {
       handledCallback = true;
       // Successfully connected - reload integrations with a small delay to ensure backend processed it
       await new Promise((resolve) => setTimeout(resolve, 500));
       error.value = "";
       // Show success message briefly
-      successMessage.value = orgId
+      successMessage.value = installationUpdated
+        ? "GitHub App installation updated. Repository access changes are now available."
+        : orgId
         ? `Successfully connected GitHub organization to ${orgId}`
         : `Successfully connected GitHub account: ${username}`;
       await loadIntegrations({ preserveFeedback: true });
@@ -264,9 +275,13 @@ const loadIntegrations = async (
       id: i.id,
       username: i.username || "Unknown",
       scope: i.scope || "",
+      authType: i.authType || "oauth",
       isUser: i.isUser || false,
       organizationId: i.organizationId || undefined,
       organizationName: i.organizationName || undefined,
+      githubAppInstallationId: i.githubAppInstallationId || undefined,
+      githubAppAccountLogin: i.githubAppAccountLogin || undefined,
+      githubAppAccountType: i.githubAppAccountType || undefined,
       connectedAt: i.connectedAt
         ? {
             seconds: Number(i.connectedAt.seconds || 0),
@@ -290,9 +305,7 @@ const connectGitHub = () => {
   isConnecting.value = true;
 
   const config = useRuntimeConfig();
-  const githubClientId = config.public.githubClientId;
-
-  if (!githubClientId || githubClientId === "") {
+  if (connectionType.value === "user" && (!config.public.githubClientId || config.public.githubClientId === "")) {
     error.value =
       "GitHub Client ID not configured. Please set NUXT_PUBLIC_GITHUB_CLIENT_ID in your .env file.";
     isConnecting.value = false;
@@ -305,7 +318,19 @@ const connectGitHub = () => {
     return;
   }
 
-  const connectUrl = new URL("/api/github/connect", window.location.origin);
+  if (connectionType.value === "organization" && !config.public.githubAppSlug) {
+    error.value =
+      "GitHub App is not configured. Please set NUXT_PUBLIC_GITHUB_APP_SLUG or GITHUB_APP_SLUG.";
+    isConnecting.value = false;
+    return;
+  }
+
+  const connectUrl = new URL(
+    connectionType.value === "organization"
+      ? "/api/github/app/install"
+      : "/api/github/connect",
+    window.location.origin
+  );
   connectUrl.searchParams.set("type", connectionType.value);
   if (connectionType.value === "organization" && selectedOrgId.value) {
     connectUrl.searchParams.set("orgId", selectedOrgId.value);
@@ -319,6 +344,7 @@ const formatScopes = (scope: string): string => {
   // Common GitHub scopes with readable names
   const scopeMap: Record<string, string> = {
     repo: "Repository access",
+    github_app: "GitHub App",
     "read:user": "Read user info",
     "admin:repo_hook": "Manage webhooks",
     "read:org": "Read organization",

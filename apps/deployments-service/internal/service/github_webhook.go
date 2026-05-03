@@ -264,6 +264,12 @@ func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployme
 		return fmt.Errorf("failed to get GitHub integration token: %w", err)
 	}
 
+	var integration database.GitHubIntegration
+	if err := database.DB.Where("id = ?", *deployment.GitHubIntegrationID).First(&integration).Error; err == nil && githubIntegrationUsesApp(integration) {
+		logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; skipping repository webhook creation", repoFullName)
+		return nil
+	}
+
 	client := githubclient.NewClient(githubToken)
 	hooks, err := client.ListHooks(ctx, repoFullName)
 	if err != nil {

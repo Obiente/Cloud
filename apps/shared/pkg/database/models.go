@@ -338,16 +338,20 @@ func (MonthlyBill) TableName() string { return "monthly_bills" }
 
 // GitHubIntegration stores GitHub OAuth tokens for users and organizations
 type GitHubIntegration struct {
-	ID             string     `gorm:"primaryKey" json:"id"`
-	UserID         *string    `gorm:"index;uniqueIndex:idx_user_github" json:"user_id"`        // Zitadel user ID (nullable)
-	OrganizationID *string    `gorm:"index;uniqueIndex:idx_org_github" json:"organization_id"` // Organization ID (nullable)
-	Token          string     `gorm:"column:token" json:"token"`                               // Encrypted GitHub access token
-	RefreshToken   *string    `gorm:"column:refresh_token" json:"refresh_token"`               // Refresh token (if using GitHub Apps with expiring tokens)
-	Username       string     `gorm:"column:username" json:"username"`                         // GitHub username
-	Scope          string     `gorm:"column:scope" json:"scope"`                               // Granted OAuth scopes
-	TokenExpiresAt *time.Time `gorm:"column:token_expires_at" json:"token_expires_at"`         // Token expiration time (if applicable)
-	ConnectedAt    time.Time  `gorm:"column:connected_at" json:"connected_at"`
-	UpdatedAt      time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	ID                      string     `gorm:"primaryKey" json:"id"`
+	UserID                  *string    `gorm:"index;uniqueIndex:idx_user_github" json:"user_id"`        // Zitadel user ID (nullable)
+	OrganizationID          *string    `gorm:"index;uniqueIndex:idx_org_github" json:"organization_id"` // Organization ID (nullable)
+	Token                   string     `gorm:"column:token" json:"token"`                               // Encrypted GitHub OAuth access token
+	RefreshToken            *string    `gorm:"column:refresh_token" json:"refresh_token"`               // OAuth refresh token, when expiring user tokens are enabled
+	Username                string     `gorm:"column:username" json:"username"`                         // GitHub username or GitHub App account login
+	Scope                   string     `gorm:"column:scope" json:"scope"`                               // Granted OAuth scopes or GitHub App permission summary
+	AuthType                string     `gorm:"column:auth_type;default:'oauth'" json:"auth_type"`       // oauth or github_app
+	GitHubAppInstallationID *int64     `gorm:"column:github_app_installation_id;uniqueIndex" json:"github_app_installation_id"`
+	GitHubAppAccountLogin   *string    `gorm:"column:github_app_account_login" json:"github_app_account_login"`
+	GitHubAppAccountType    *string    `gorm:"column:github_app_account_type" json:"github_app_account_type"`
+	TokenExpiresAt          *time.Time `gorm:"column:token_expires_at" json:"token_expires_at"` // Token expiration time (if applicable)
+	ConnectedAt             time.Time  `gorm:"column:connected_at" json:"connected_at"`
+	UpdatedAt               time.Time  `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (GitHubIntegration) TableName() string { return "github_integrations" }

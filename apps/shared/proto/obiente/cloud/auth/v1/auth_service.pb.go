@@ -775,6 +775,142 @@ func (x *ConnectOrganizationGitHubResponse) GetUsername() string {
 	return ""
 }
 
+type ConnectOrganizationGitHubAppRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId      string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	InstallationId      int64                  `protobuf:"varint,2,opt,name=installation_id,json=installationId,proto3" json:"installation_id,omitempty"`
+	AccountLogin        string                 `protobuf:"bytes,3,opt,name=account_login,json=accountLogin,proto3" json:"account_login,omitempty"`
+	AccountType         string                 `protobuf:"bytes,4,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
+	RepositorySelection string                 `protobuf:"bytes,5,opt,name=repository_selection,json=repositorySelection,proto3" json:"repository_selection,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) Reset() {
+	*x = ConnectOrganizationGitHubAppRequest{}
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConnectOrganizationGitHubAppRequest) ProtoMessage() {}
+
+func (x *ConnectOrganizationGitHubAppRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConnectOrganizationGitHubAppRequest.ProtoReflect.Descriptor instead.
+func (*ConnectOrganizationGitHubAppRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetInstallationId() int64 {
+	if x != nil {
+		return x.InstallationId
+	}
+	return 0
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetAccountLogin() string {
+	if x != nil {
+		return x.AccountLogin
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetAccountType() string {
+	if x != nil {
+		return x.AccountType
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetRepositorySelection() string {
+	if x != nil {
+		return x.RepositorySelection
+	}
+	return ""
+}
+
+type ConnectOrganizationGitHubAppResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	AccountLogin   string                 `protobuf:"bytes,2,opt,name=account_login,json=accountLogin,proto3" json:"account_login,omitempty"`
+	InstallationId int64                  `protobuf:"varint,3,opt,name=installation_id,json=installationId,proto3" json:"installation_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ConnectOrganizationGitHubAppResponse) Reset() {
+	*x = ConnectOrganizationGitHubAppResponse{}
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConnectOrganizationGitHubAppResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConnectOrganizationGitHubAppResponse) ProtoMessage() {}
+
+func (x *ConnectOrganizationGitHubAppResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConnectOrganizationGitHubAppResponse.ProtoReflect.Descriptor instead.
+func (*ConnectOrganizationGitHubAppResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ConnectOrganizationGitHubAppResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ConnectOrganizationGitHubAppResponse) GetAccountLogin() string {
+	if x != nil {
+		return x.AccountLogin
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubAppResponse) GetInstallationId() int64 {
+	if x != nil {
+		return x.InstallationId
+	}
+	return 0
+}
+
 type DisconnectOrganizationGitHubRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
@@ -784,7 +920,7 @@ type DisconnectOrganizationGitHubRequest struct {
 
 func (x *DisconnectOrganizationGitHubRequest) Reset() {
 	*x = DisconnectOrganizationGitHubRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +932,7 @@ func (x *DisconnectOrganizationGitHubRequest) String() string {
 func (*DisconnectOrganizationGitHubRequest) ProtoMessage() {}
 
 func (x *DisconnectOrganizationGitHubRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +945,7 @@ func (x *DisconnectOrganizationGitHubRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use DisconnectOrganizationGitHubRequest.ProtoReflect.Descriptor instead.
 func (*DisconnectOrganizationGitHubRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{13}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DisconnectOrganizationGitHubRequest) GetOrganizationId() string {
@@ -828,7 +964,7 @@ type DisconnectOrganizationGitHubResponse struct {
 
 func (x *DisconnectOrganizationGitHubResponse) Reset() {
 	*x = DisconnectOrganizationGitHubResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -840,7 +976,7 @@ func (x *DisconnectOrganizationGitHubResponse) String() string {
 func (*DisconnectOrganizationGitHubResponse) ProtoMessage() {}
 
 func (x *DisconnectOrganizationGitHubResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -853,7 +989,7 @@ func (x *DisconnectOrganizationGitHubResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use DisconnectOrganizationGitHubResponse.ProtoReflect.Descriptor instead.
 func (*DisconnectOrganizationGitHubResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{14}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DisconnectOrganizationGitHubResponse) GetSuccess() bool {
@@ -871,7 +1007,7 @@ type ListGitHubIntegrationsRequest struct {
 
 func (x *ListGitHubIntegrationsRequest) Reset() {
 	*x = ListGitHubIntegrationsRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -883,7 +1019,7 @@ func (x *ListGitHubIntegrationsRequest) String() string {
 func (*ListGitHubIntegrationsRequest) ProtoMessage() {}
 
 func (x *ListGitHubIntegrationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -896,25 +1032,29 @@ func (x *ListGitHubIntegrationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitHubIntegrationsRequest.ProtoReflect.Descriptor instead.
 func (*ListGitHubIntegrationsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{15}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{17}
 }
 
 type GitHubIntegrationInfo struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Username         string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Scope            string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
-	IsUser           bool                   `protobuf:"varint,4,opt,name=is_user,json=isUser,proto3" json:"is_user,omitempty"`                              // true if user integration, false if organization
-	OrganizationId   string                 `protobuf:"bytes,5,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`       // Only set if is_user is false
-	OrganizationName string                 `protobuf:"bytes,6,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"` // Only set if is_user is false
-	ConnectedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=connected_at,json=connectedAt,proto3" json:"connected_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Id                      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Username                string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Scope                   string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	IsUser                  bool                   `protobuf:"varint,4,opt,name=is_user,json=isUser,proto3" json:"is_user,omitempty"`                              // true if user integration, false if organization
+	OrganizationId          string                 `protobuf:"bytes,5,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`       // Only set if is_user is false
+	OrganizationName        string                 `protobuf:"bytes,6,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"` // Only set if is_user is false
+	ConnectedAt             *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=connected_at,json=connectedAt,proto3" json:"connected_at,omitempty"`
+	AuthType                string                 `protobuf:"bytes,8,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"` // oauth or github_app
+	GithubAppInstallationId int64                  `protobuf:"varint,9,opt,name=github_app_installation_id,json=githubAppInstallationId,proto3" json:"github_app_installation_id,omitempty"`
+	GithubAppAccountLogin   string                 `protobuf:"bytes,10,opt,name=github_app_account_login,json=githubAppAccountLogin,proto3" json:"github_app_account_login,omitempty"`
+	GithubAppAccountType    string                 `protobuf:"bytes,11,opt,name=github_app_account_type,json=githubAppAccountType,proto3" json:"github_app_account_type,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *GitHubIntegrationInfo) Reset() {
 	*x = GitHubIntegrationInfo{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +1066,7 @@ func (x *GitHubIntegrationInfo) String() string {
 func (*GitHubIntegrationInfo) ProtoMessage() {}
 
 func (x *GitHubIntegrationInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +1079,7 @@ func (x *GitHubIntegrationInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHubIntegrationInfo.ProtoReflect.Descriptor instead.
 func (*GitHubIntegrationInfo) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *GitHubIntegrationInfo) GetId() string {
@@ -991,6 +1131,34 @@ func (x *GitHubIntegrationInfo) GetConnectedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *GitHubIntegrationInfo) GetAuthType() string {
+	if x != nil {
+		return x.AuthType
+	}
+	return ""
+}
+
+func (x *GitHubIntegrationInfo) GetGithubAppInstallationId() int64 {
+	if x != nil {
+		return x.GithubAppInstallationId
+	}
+	return 0
+}
+
+func (x *GitHubIntegrationInfo) GetGithubAppAccountLogin() string {
+	if x != nil {
+		return x.GithubAppAccountLogin
+	}
+	return ""
+}
+
+func (x *GitHubIntegrationInfo) GetGithubAppAccountType() string {
+	if x != nil {
+		return x.GithubAppAccountType
+	}
+	return ""
+}
+
 type ListGitHubIntegrationsResponse struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Integrations  []*GitHubIntegrationInfo `protobuf:"bytes,1,rep,name=integrations,proto3" json:"integrations,omitempty"`
@@ -1000,7 +1168,7 @@ type ListGitHubIntegrationsResponse struct {
 
 func (x *ListGitHubIntegrationsResponse) Reset() {
 	*x = ListGitHubIntegrationsResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1012,7 +1180,7 @@ func (x *ListGitHubIntegrationsResponse) String() string {
 func (*ListGitHubIntegrationsResponse) ProtoMessage() {}
 
 func (x *ListGitHubIntegrationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1025,7 +1193,7 @@ func (x *ListGitHubIntegrationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGitHubIntegrationsResponse.ProtoReflect.Descriptor instead.
 func (*ListGitHubIntegrationsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListGitHubIntegrationsResponse) GetIntegrations() []*GitHubIntegrationInfo {
@@ -1054,7 +1222,7 @@ type UpdateUserProfileRequest struct {
 
 func (x *UpdateUserProfileRequest) Reset() {
 	*x = UpdateUserProfileRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1234,7 @@ func (x *UpdateUserProfileRequest) String() string {
 func (*UpdateUserProfileRequest) ProtoMessage() {}
 
 func (x *UpdateUserProfileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1247,7 @@ func (x *UpdateUserProfileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserProfileRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUserProfileRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *UpdateUserProfileRequest) GetGivenName() string {
@@ -1126,7 +1294,7 @@ type UpdateUserProfileResponse struct {
 
 func (x *UpdateUserProfileResponse) Reset() {
 	*x = UpdateUserProfileResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1138,7 +1306,7 @@ func (x *UpdateUserProfileResponse) String() string {
 func (*UpdateUserProfileResponse) ProtoMessage() {}
 
 func (x *UpdateUserProfileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1151,7 +1319,7 @@ func (x *UpdateUserProfileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserProfileResponse.ProtoReflect.Descriptor instead.
 func (*UpdateUserProfileResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{19}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *UpdateUserProfileResponse) GetUser() *User {
@@ -1173,7 +1341,7 @@ type LoginRequest struct {
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1185,7 +1353,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1198,7 +1366,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{20}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *LoginRequest) GetEmail() string {
@@ -1235,7 +1403,7 @@ type LoginResponse struct {
 
 func (x *LoginResponse) Reset() {
 	*x = LoginResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1247,7 +1415,7 @@ func (x *LoginResponse) String() string {
 func (*LoginResponse) ProtoMessage() {}
 
 func (x *LoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1260,7 +1428,7 @@ func (x *LoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
 func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{21}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LoginResponse) GetSuccess() bool {
@@ -1359,12 +1527,22 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"expires_in\x18\x06 \x01(\x05R\texpiresIn\"Y\n" +
 	"!ConnectOrganizationGitHubResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1a\n" +
-	"\busername\x18\x02 \x01(\tR\busername\"N\n" +
+	"\busername\x18\x02 \x01(\tR\busername\"\xf2\x01\n" +
+	"#ConnectOrganizationGitHubAppRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12'\n" +
+	"\x0finstallation_id\x18\x02 \x01(\x03R\x0einstallationId\x12#\n" +
+	"\raccount_login\x18\x03 \x01(\tR\faccountLogin\x12!\n" +
+	"\faccount_type\x18\x04 \x01(\tR\vaccountType\x121\n" +
+	"\x14repository_selection\x18\x05 \x01(\tR\x13repositorySelection\"\x8e\x01\n" +
+	"$ConnectOrganizationGitHubAppResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
+	"\raccount_login\x18\x02 \x01(\tR\faccountLogin\x12'\n" +
+	"\x0finstallation_id\x18\x03 \x01(\x03R\x0einstallationId\"N\n" +
 	"#DisconnectOrganizationGitHubRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"@\n" +
 	"$DisconnectOrganizationGitHubResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x1f\n" +
-	"\x1dListGitHubIntegrationsRequest\"\x87\x02\n" +
+	"\x1dListGitHubIntegrationsRequest\"\xd1\x03\n" +
 	"\x15GitHubIntegrationInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x14\n" +
@@ -1372,7 +1550,12 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\ais_user\x18\x04 \x01(\bR\x06isUser\x12'\n" +
 	"\x0forganization_id\x18\x05 \x01(\tR\x0eorganizationId\x12+\n" +
 	"\x11organization_name\x18\x06 \x01(\tR\x10organizationName\x12=\n" +
-	"\fconnected_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vconnectedAt\"r\n" +
+	"\fconnected_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vconnectedAt\x12\x1b\n" +
+	"\tauth_type\x18\b \x01(\tR\bauthType\x12;\n" +
+	"\x1agithub_app_installation_id\x18\t \x01(\x03R\x17githubAppInstallationId\x127\n" +
+	"\x18github_app_account_login\x18\n" +
+	" \x01(\tR\x15githubAppAccountLogin\x125\n" +
+	"\x17github_app_account_type\x18\v \x01(\tR\x14githubAppAccountType\"r\n" +
 	"\x1eListGitHubIntegrationsResponse\x12P\n" +
 	"\fintegrations\x18\x01 \x03(\v2,.obiente.cloud.auth.v1.GitHubIntegrationInfoR\fintegrations\"\x98\x02\n" +
 	"\x18UpdateUserProfileRequest\x12\"\n" +
@@ -1401,7 +1584,8 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12\x1d\n" +
 	"\n" +
 	"expires_in\x18\x04 \x01(\x05R\texpiresIn\x12\x18\n" +
-	"\amessage\x18\x05 \x01(\tR\amessage2\xc0\t\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage2\xda\n" +
+	"\n" +
 	"\vAuthService\x12p\n" +
 	"\x0fGetPublicConfig\x12-.obiente.cloud.auth.v1.GetPublicConfigRequest\x1a..obiente.cloud.auth.v1.GetPublicConfigResponse\x12R\n" +
 	"\x05Login\x12#.obiente.cloud.auth.v1.LoginRequest\x1a$.obiente.cloud.auth.v1.LoginResponse\x12m\n" +
@@ -1411,6 +1595,7 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\x10DisconnectGitHub\x12..obiente.cloud.auth.v1.DisconnectGitHubRequest\x1a/.obiente.cloud.auth.v1.DisconnectGitHubResponse\x12p\n" +
 	"\x0fGetGitHubStatus\x12-.obiente.cloud.auth.v1.GetGitHubStatusRequest\x1a..obiente.cloud.auth.v1.GetGitHubStatusResponse\x12\x8e\x01\n" +
 	"\x19ConnectOrganizationGitHub\x127.obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest\x1a8.obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse\x12\x97\x01\n" +
+	"\x1cConnectOrganizationGitHubApp\x12:.obiente.cloud.auth.v1.ConnectOrganizationGitHubAppRequest\x1a;.obiente.cloud.auth.v1.ConnectOrganizationGitHubAppResponse\x12\x97\x01\n" +
 	"\x1cDisconnectOrganizationGitHub\x12:.obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest\x1a;.obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse\x12\x85\x01\n" +
 	"\x16ListGitHubIntegrations\x124.obiente.cloud.auth.v1.ListGitHubIntegrationsRequest\x1a5.obiente.cloud.auth.v1.ListGitHubIntegrationsResponseBIZGgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1;authv1b\x06proto3"
 
@@ -1426,7 +1611,7 @@ func file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescData
 }
 
-var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_obiente_cloud_auth_v1_auth_service_proto_goTypes = []any{
 	(*GetPublicConfigRequest)(nil),               // 0: obiente.cloud.auth.v1.GetPublicConfigRequest
 	(*GetPublicConfigResponse)(nil),              // 1: obiente.cloud.auth.v1.GetPublicConfigResponse
@@ -1441,46 +1626,50 @@ var file_obiente_cloud_auth_v1_auth_service_proto_goTypes = []any{
 	(*GetGitHubStatusResponse)(nil),              // 10: obiente.cloud.auth.v1.GetGitHubStatusResponse
 	(*ConnectOrganizationGitHubRequest)(nil),     // 11: obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest
 	(*ConnectOrganizationGitHubResponse)(nil),    // 12: obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
-	(*DisconnectOrganizationGitHubRequest)(nil),  // 13: obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
-	(*DisconnectOrganizationGitHubResponse)(nil), // 14: obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
-	(*ListGitHubIntegrationsRequest)(nil),        // 15: obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
-	(*GitHubIntegrationInfo)(nil),                // 16: obiente.cloud.auth.v1.GitHubIntegrationInfo
-	(*ListGitHubIntegrationsResponse)(nil),       // 17: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
-	(*UpdateUserProfileRequest)(nil),             // 18: obiente.cloud.auth.v1.UpdateUserProfileRequest
-	(*UpdateUserProfileResponse)(nil),            // 19: obiente.cloud.auth.v1.UpdateUserProfileResponse
-	(*LoginRequest)(nil),                         // 20: obiente.cloud.auth.v1.LoginRequest
-	(*LoginResponse)(nil),                        // 21: obiente.cloud.auth.v1.LoginResponse
-	(*timestamppb.Timestamp)(nil),                // 22: google.protobuf.Timestamp
+	(*ConnectOrganizationGitHubAppRequest)(nil),  // 13: obiente.cloud.auth.v1.ConnectOrganizationGitHubAppRequest
+	(*ConnectOrganizationGitHubAppResponse)(nil), // 14: obiente.cloud.auth.v1.ConnectOrganizationGitHubAppResponse
+	(*DisconnectOrganizationGitHubRequest)(nil),  // 15: obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
+	(*DisconnectOrganizationGitHubResponse)(nil), // 16: obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
+	(*ListGitHubIntegrationsRequest)(nil),        // 17: obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
+	(*GitHubIntegrationInfo)(nil),                // 18: obiente.cloud.auth.v1.GitHubIntegrationInfo
+	(*ListGitHubIntegrationsResponse)(nil),       // 19: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
+	(*UpdateUserProfileRequest)(nil),             // 20: obiente.cloud.auth.v1.UpdateUserProfileRequest
+	(*UpdateUserProfileResponse)(nil),            // 21: obiente.cloud.auth.v1.UpdateUserProfileResponse
+	(*LoginRequest)(nil),                         // 22: obiente.cloud.auth.v1.LoginRequest
+	(*LoginResponse)(nil),                        // 23: obiente.cloud.auth.v1.LoginResponse
+	(*timestamppb.Timestamp)(nil),                // 24: google.protobuf.Timestamp
 }
 var file_obiente_cloud_auth_v1_auth_service_proto_depIdxs = []int32{
 	4,  // 0: obiente.cloud.auth.v1.GetCurrentUserResponse.user:type_name -> obiente.cloud.auth.v1.User
-	22, // 1: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	22, // 2: obiente.cloud.auth.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	22, // 3: obiente.cloud.auth.v1.GitHubIntegrationInfo.connected_at:type_name -> google.protobuf.Timestamp
-	16, // 4: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.auth.v1.GitHubIntegrationInfo
+	24, // 1: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	24, // 2: obiente.cloud.auth.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	24, // 3: obiente.cloud.auth.v1.GitHubIntegrationInfo.connected_at:type_name -> google.protobuf.Timestamp
+	18, // 4: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.auth.v1.GitHubIntegrationInfo
 	4,  // 5: obiente.cloud.auth.v1.UpdateUserProfileResponse.user:type_name -> obiente.cloud.auth.v1.User
 	0,  // 6: obiente.cloud.auth.v1.AuthService.GetPublicConfig:input_type -> obiente.cloud.auth.v1.GetPublicConfigRequest
-	20, // 7: obiente.cloud.auth.v1.AuthService.Login:input_type -> obiente.cloud.auth.v1.LoginRequest
+	22, // 7: obiente.cloud.auth.v1.AuthService.Login:input_type -> obiente.cloud.auth.v1.LoginRequest
 	2,  // 8: obiente.cloud.auth.v1.AuthService.GetCurrentUser:input_type -> obiente.cloud.auth.v1.GetCurrentUserRequest
-	18, // 9: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:input_type -> obiente.cloud.auth.v1.UpdateUserProfileRequest
+	20, // 9: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:input_type -> obiente.cloud.auth.v1.UpdateUserProfileRequest
 	5,  // 10: obiente.cloud.auth.v1.AuthService.ConnectGitHub:input_type -> obiente.cloud.auth.v1.ConnectGitHubRequest
 	7,  // 11: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:input_type -> obiente.cloud.auth.v1.DisconnectGitHubRequest
 	9,  // 12: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:input_type -> obiente.cloud.auth.v1.GetGitHubStatusRequest
 	11, // 13: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest
-	13, // 14: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
-	15, // 15: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:input_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
-	1,  // 16: obiente.cloud.auth.v1.AuthService.GetPublicConfig:output_type -> obiente.cloud.auth.v1.GetPublicConfigResponse
-	21, // 17: obiente.cloud.auth.v1.AuthService.Login:output_type -> obiente.cloud.auth.v1.LoginResponse
-	3,  // 18: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
-	19, // 19: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:output_type -> obiente.cloud.auth.v1.UpdateUserProfileResponse
-	6,  // 20: obiente.cloud.auth.v1.AuthService.ConnectGitHub:output_type -> obiente.cloud.auth.v1.ConnectGitHubResponse
-	8,  // 21: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:output_type -> obiente.cloud.auth.v1.DisconnectGitHubResponse
-	10, // 22: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:output_type -> obiente.cloud.auth.v1.GetGitHubStatusResponse
-	12, // 23: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
-	14, // 24: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
-	17, // 25: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:output_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
-	16, // [16:26] is the sub-list for method output_type
-	6,  // [6:16] is the sub-list for method input_type
+	13, // 14: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHubApp:input_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubAppRequest
+	15, // 15: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
+	17, // 16: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:input_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
+	1,  // 17: obiente.cloud.auth.v1.AuthService.GetPublicConfig:output_type -> obiente.cloud.auth.v1.GetPublicConfigResponse
+	23, // 18: obiente.cloud.auth.v1.AuthService.Login:output_type -> obiente.cloud.auth.v1.LoginResponse
+	3,  // 19: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
+	21, // 20: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:output_type -> obiente.cloud.auth.v1.UpdateUserProfileResponse
+	6,  // 21: obiente.cloud.auth.v1.AuthService.ConnectGitHub:output_type -> obiente.cloud.auth.v1.ConnectGitHubResponse
+	8,  // 22: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:output_type -> obiente.cloud.auth.v1.DisconnectGitHubResponse
+	10, // 23: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:output_type -> obiente.cloud.auth.v1.GetGitHubStatusResponse
+	12, // 24: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
+	14, // 25: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHubApp:output_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubAppResponse
+	16, // 26: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
+	19, // 27: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:output_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
+	17, // [17:28] is the sub-list for method output_type
+	6,  // [6:17] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1491,14 +1680,14 @@ func file_obiente_cloud_auth_v1_auth_service_proto_init() {
 	if File_obiente_cloud_auth_v1_auth_service_proto != nil {
 		return
 	}
-	file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[18].OneofWrappers = []any{}
+	file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc), len(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

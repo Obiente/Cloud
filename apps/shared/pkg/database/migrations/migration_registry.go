@@ -66,6 +66,7 @@ func RegisterDeploymentsMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
 	registry.Register("2026_05_03_001", "Add Dockerfile build args and volumes to deployments", addDockerfileBuildArgsAndVolumes)
+	registry.Register("2026_05_03_002", "Add GitHub App installation metadata to integrations", addGitHubAppInstallationMetadata)
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
 }
@@ -339,6 +340,28 @@ func addDockerfileBuildArgsAndVolumes(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+func addGitHubAppInstallationMetadata(db *gorm.DB) error {
+	columns := []struct {
+		name string
+		sql  string
+	}{
+		{"auth_type", "ALTER TABLE github_integrations ADD COLUMN auth_type VARCHAR(32) DEFAULT 'oauth'"},
+		{"github_app_installation_id", "ALTER TABLE github_integrations ADD COLUMN github_app_installation_id BIGINT"},
+		{"github_app_account_login", "ALTER TABLE github_integrations ADD COLUMN github_app_account_login VARCHAR(255)"},
+		{"github_app_account_type", "ALTER TABLE github_integrations ADD COLUMN github_app_account_type VARCHAR(64)"},
+	}
+
+	for _, column := range columns {
+		if !db.Migrator().HasColumn("github_integrations", column.name) {
+			if err := db.Exec(column.sql).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_github_integrations_app_installation_id ON github_integrations(github_app_installation_id) WHERE github_app_installation_id IS NOT NULL").Error
 }
 
 // addRegionToNodeMetadata adds the region column to node_metadata table for multi-region DNS routing

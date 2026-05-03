@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -100,6 +101,43 @@ func (c *Client) ListRepos(ctx context.Context, page, perPage int) ([]GitHubRepo
 	}
 
 	return repos, nil
+}
+
+func (c *Client) ListInstallationRepos(ctx context.Context, page, perPage int) ([]GitHubRepo, error) {
+	url := fmt.Sprintf("%s/installation/repositories?page=%d&per_page=%d", c.baseURL, page, perPage)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("github app authentication failed (installation may be suspended, revoked, or missing repository access): %d - %s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var payload struct {
+		Repositories []GitHubRepo `json:"repositories"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("failed to decode installation repos: %w", err)
+	}
+
+	return payload.Repositories, nil
 }
 
 func (c *Client) ListBranches(ctx context.Context, repoFullName string) ([]GitHubBranch, error) {
@@ -203,7 +241,7 @@ func (c *Client) ListHooks(ctx context.Context, repoFullName string) ([]GitHubHo
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return nil, fmt.Errorf("github authentication failed (token may be expired, revoked, or missing admin:repo_hook scope): %d - %s", resp.StatusCode, string(body))
+			return nil, formatGitHubWebhookAuthError(resp.StatusCode, body)
 		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
@@ -243,7 +281,7 @@ func (c *Client) CreateHook(ctx context.Context, repoFullName string, hook Creat
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return nil, fmt.Errorf("github authentication failed (token may be expired, revoked, or missing admin:repo_hook scope): %d - %s", resp.StatusCode, string(body))
+			return nil, formatGitHubWebhookAuthError(resp.StatusCode, body)
 		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
@@ -283,7 +321,7 @@ func (c *Client) UpdateHook(ctx context.Context, repoFullName string, hookID int
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return nil, fmt.Errorf("github authentication failed (token may be expired, revoked, or missing admin:repo_hook scope): %d - %s", resp.StatusCode, string(body))
+			return nil, formatGitHubWebhookAuthError(resp.StatusCode, body)
 		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
@@ -294,4 +332,14 @@ func (c *Client) UpdateHook(ctx context.Context, repoFullName string, hookID int
 	}
 
 	return &updated, nil
+}
+
+func formatGitHubWebhookAuthError(statusCode int, body []byte) error {
+	bodyText := strings.TrimSpace(string(body))
+	lowerBody := strings.ToLower(bodyText)
+	if strings.Contains(lowerBody, "resource not accessible by integration") {
+		return fmt.Errorf("github webhook permission denied: the connected GitHub account can access this repository but cannot manage its webhooks. Make sure the OAuth app is approved for the organization, the connection includes admin:repo_hook, and the GitHub user has Admin access to the repository: %d - %s", statusCode, bodyText)
+	}
+
+	return fmt.Errorf("github authentication failed (token may be expired, revoked, missing admin:repo_hook scope, or missing repository Admin access): %d - %s", statusCode, bodyText)
 }

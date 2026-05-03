@@ -63,6 +63,17 @@ Recommended for self-hosted deployments:
 GITHUB_TOKEN_ENCRYPTION_KEY=base64_or_high_entropy_secret
 GITHUB_WEBHOOK_SECRET=your_github_webhook_signing_secret
 GITHUB_WEBHOOK_URL=https://api.your-domain.example/webhooks/github
+GITHUB_APP_SLUG=your-obiente-github-app-slug
+NUXT_PUBLIC_GITHUB_APP_SLUG=your-obiente-github-app-slug
+GITHUB_APP_ID=123456
+GITHUB_APP_PRIVATE_KEY_BASE64=base64_encoded_private_key_pem
+```
+
+Generate the webhook secret yourself, then use the same value in both Obiente and
+the GitHub webhook configuration. GitHub does not generate this secret for you.
+
+```bash
+openssl rand -hex 32
 ```
 
 Notes:
@@ -70,7 +81,7 @@ Notes:
 - `NUXT_PUBLIC_GITHUB_CLIENT_ID` is safe to expose to the browser
 - `GITHUB_CLIENT_SECRET` and `NUXT_GITHUB_CLIENT_SECRET` must stay server-side only
 - If you do not provide `GITHUB_TOKEN_ENCRYPTION_KEY`, Obiente falls back to other service secrets, but a dedicated key is the safest setup
-- `GITHUB_WEBHOOK_SECRET` must match the secret configured on GitHub webhooks for automatic deployments
+- `GITHUB_WEBHOOK_SECRET` is a random value you create; it must match the secret configured on GitHub webhooks for automatic deployments
 - `GITHUB_WEBHOOK_URL` is optional when `API_URL` is a public URL; otherwise set it explicitly
 
 ## OAuth Scopes
@@ -86,6 +97,63 @@ Why:
 - `repo`: access public and private repositories
 - `read:user`: identify the connected GitHub identity
 - `admin:repo_hook`: create and manage webhooks for auto-deploy
+
+GitHub also requires the connected user to have **Admin** access on each
+repository where Obiente should create or update webhooks. Read, triage, write,
+or maintain access can be enough to list or clone a repository, but it is not
+enough to manage repository webhooks.
+
+## GitHub App Organization Installs
+
+For Obiente organization-level connections, prefer the GitHub App install flow.
+The GitHub organization owner installs the Obiente GitHub App on all
+repositories or selected repositories, and Obiente stores the installation ID on
+the Obiente organization.
+
+Configure the GitHub App with:
+
+- setup URL: `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
+- enable **Redirect on update**
+- webhook URL: `https://YOUR-API-DOMAIN/webhooks/github`
+- webhook secret: the same value as `GITHUB_WEBHOOK_SECRET`
+- repository permissions:
+  - Metadata: read
+  - Contents: read
+- subscribe to the `push` webhook event
+- keep **Request user authorization (OAuth) during installation** disabled
+
+Then set:
+
+```bash
+GITHUB_APP_SLUG=your-github-app-slug
+NUXT_PUBLIC_GITHUB_APP_SLUG=your-github-app-slug
+GITHUB_APP_ID=123456
+GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 -w0 path/to/private-key.pem)"
+```
+
+On macOS, use:
+
+```bash
+GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 < path/to/private-key.pem | tr -d '\n')"
+```
+
+The setup URL uses the dashboard domain, not the API domain. If your dashboard
+is served from `https://obiente.cloud`, use:
+
+```text
+https://obiente.cloud/api/github/app/callback
+```
+
+If your dashboard is served from `https://dashboard.example.com`, use:
+
+```text
+https://dashboard.example.com/api/github/app/callback
+```
+
+Enable **Redirect on update** so GitHub sends users back to Obiente after they
+add or remove repositories from the installation. Obiente uses the live
+installation token permissions when listing repos, so repository selection
+changes become visible after the update redirect.
 
 ## How The Connection Flow Works
 
@@ -137,6 +205,15 @@ Webhook endpoint:
 ```text
 https://YOUR-API-DOMAIN/webhooks/github
 ```
+
+Webhook secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Save the generated value as `GITHUB_WEBHOOK_SECRET` and paste the same value into
+the GitHub webhook **Secret** field.
 
 ## Troubleshooting
 
@@ -194,10 +271,17 @@ Check:
 Check:
 
 - the connection includes `admin:repo_hook`
+- the connected GitHub user has **Admin** access on the selected repository
+- the GitHub OAuth app is approved/allowed for the repository's organization
 - the repository allows webhook management
 - `GITHUB_WEBHOOK_SECRET` is set on `deployments-service`
 - `GITHUB_WEBHOOK_URL` is set, or `API_URL` points at the public API gateway
 - GitHub can reach `https://YOUR-API-DOMAIN/webhooks/github`
+
+If GitHub returns `Resource not accessible by integration` after a fresh
+connection, the token is usually valid but cannot administer webhooks for that
+repository. Reconnect after the organization owner approves the OAuth app and
+the connected GitHub user has repository Admin access.
 
 ## Security Notes
 
