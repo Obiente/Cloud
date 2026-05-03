@@ -268,19 +268,41 @@ type dockerServicePSRow struct {
 
 func captureSwarmTaskDiagnostics(ctx context.Context, deploymentID string) ([]swarmTaskDiagnosticLine, error) {
 	stackName := fmt.Sprintf("deploy-%s", deploymentID)
-	listCmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=com.docker.stack.namespace=%s", stackName), "--format", "{{.Name}}")
-	listOutput, err := listCmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("list services for stack %s: %w", stackName, err)
+	serviceNames := make([]string, 0)
+	seenServices := make(map[string]struct{})
+	addServices := func(output []byte) {
+		for _, rawLine := range strings.Split(string(output), "\n") {
+			serviceName := strings.TrimSpace(rawLine)
+			if serviceName == "" {
+				continue
+			}
+			if _, exists := seenServices[serviceName]; exists {
+				continue
+			}
+			seenServices[serviceName] = struct{}{}
+			serviceNames = append(serviceNames, serviceName)
+		}
 	}
 
-	serviceNames := make([]string, 0)
-	for _, rawLine := range strings.Split(string(listOutput), "\n") {
-		serviceName := strings.TrimSpace(rawLine)
-		if serviceName == "" {
-			continue
+	stackListCmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=com.docker.stack.namespace=%s", stackName), "--format", "{{.Name}}")
+	stackListOutput, stackErr := stackListCmd.Output()
+	if stackErr == nil {
+		addServices(stackListOutput)
+	}
+
+	deploymentListCmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=cloud.obiente.deployment_id=%s", deploymentID), "--format", "{{.Name}}")
+	deploymentListOutput, deploymentErr := deploymentListCmd.Output()
+	if deploymentErr == nil {
+		addServices(deploymentListOutput)
+	}
+
+	if len(serviceNames) == 0 {
+		if stackErr != nil {
+			return nil, fmt.Errorf("list services for stack %s: %w", stackName, stackErr)
 		}
-		serviceNames = append(serviceNames, serviceName)
+		if deploymentErr != nil {
+			return nil, fmt.Errorf("list services for deployment %s: %w", deploymentID, deploymentErr)
+		}
 	}
 
 	lines := make([]swarmTaskDiagnosticLine, 0)

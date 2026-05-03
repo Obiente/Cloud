@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -2002,50 +2004,164 @@ func resolvePathWithinVolume(volumePath, requested string) (string, error) {
 
 // verifyContainersRunning verifies that at least one container for the deployment is actually running
 func (s *Service) verifyContainersRunning(ctx context.Context, deploymentID string) error {
-	// Get deployment locations
-	// Validate and refresh locations to ensure we have valid container IDs
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return fmt.Errorf("failed to validate deployment locations: %w", err)
+	deadline := time.Now().Add(45 * time.Second)
+	var lastErr error
+	var lastStoppedSummary string
+	var lastSwarmSummary string
+
+	for attempt := 1; ; attempt++ {
+		locations, err := database.ValidateAndRefreshLocations(deploymentID)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to validate deployment locations: %w", err)
+		} else if len(locations) == 0 {
+			lastErr = fmt.Errorf("no containers found for deployment %s", deploymentID)
+		} else {
+			runningCount, stoppedSummary := s.countRunningDeploymentLocations(ctx, locations)
+			lastStoppedSummary = stoppedSummary
+			if runningCount > 0 {
+				log.Printf("[verifyContainersRunning] Verified %d running container(s) for deployment %s", runningCount, deploymentID)
+				return nil
+			}
+			lastErr = fmt.Errorf("no running containers found for deployment %s (%d containers found but all are stopped)", deploymentID, len(locations))
+		}
+
+		if running, summary := deploymentHasRunningSwarmTask(ctx, deploymentID); summary != "" {
+			lastSwarmSummary = summary
+			if running {
+				log.Printf("[verifyContainersRunning] Verified running Swarm task for deployment %s", deploymentID)
+				return nil
+			}
+		}
+
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			break
+		}
+		if attempt == 1 {
+			log.Printf("[verifyContainersRunning] Deployment %s not running yet, waiting for scheduler convergence", deploymentID)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
 	}
 
-	if len(locations) == 0 {
-		return fmt.Errorf("no containers found for deployment %s", deploymentID)
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
+	return formatContainerVerificationError(lastErr, lastStoppedSummary, lastSwarmSummary)
+}
 
-	// Check if we have a manager to inspect containers
+func (s *Service) countRunningDeploymentLocations(ctx context.Context, locations []database.DeploymentLocation) (int, string) {
 	if s.manager == nil {
-		// If no manager, we can't verify, so assume OK if locations exist
 		log.Printf("[verifyContainersRunning] Warning: No manager available to verify containers, assuming OK")
-		return nil
+		return len(locations), ""
 	}
 
-	// Get Docker client to inspect containers
 	dcli, err := docker.New()
 	if err != nil {
-		return fmt.Errorf("failed to create docker client: %w", err)
+		return 0, fmt.Sprintf("failed to create docker client: %v", err)
 	}
 	defer dcli.Close()
 
 	var runningCount int
+	summaries := make([]string, 0, len(locations))
 	for _, location := range locations {
 		containerInfo, err := dcli.ContainerInspect(ctx, location.ContainerID)
 		if err != nil {
-			log.Printf("[verifyContainersRunning] Warning: Failed to inspect container %s: %v", location.ContainerID[:12], err)
+			log.Printf("[verifyContainersRunning] Warning: Failed to inspect container %s: %v", shortenContainerID(location.ContainerID), err)
+			summaries = append(summaries, fmt.Sprintf("%s inspect failed: %v", shortenContainerID(location.ContainerID), err))
 			continue
 		}
 
 		if containerInfo.State.Running {
 			runningCount++
+			continue
+		}
+		if containerInfo.State != nil {
+			summaries = append(summaries, fmt.Sprintf("%s status=%s exit_code=%d error=%q oom_killed=%t", shortenContainerID(location.ContainerID), containerInfo.State.Status, containerInfo.State.ExitCode, containerInfo.State.Error, containerInfo.State.OOMKilled))
 		}
 	}
 
-	if runningCount == 0 {
-		return fmt.Errorf("no running containers found for deployment %s (%d containers found but all are stopped)", deploymentID, len(locations))
+	return runningCount, strings.Join(summaries, "; ")
+}
+
+func deploymentHasRunningSwarmTask(ctx context.Context, deploymentID string) (bool, string) {
+	services := deploymentSwarmServiceNames(ctx, deploymentID)
+	if len(services) == 0 {
+		return false, ""
 	}
 
-	log.Printf("[verifyContainersRunning] Verified %d running container(s) for deployment %s", runningCount, deploymentID)
-	return nil
+	summaries := make([]string, 0, len(services))
+	for _, serviceName := range services {
+		cmd := exec.CommandContext(ctx, "docker", "service", "ps", serviceName, "--format", "{{.Name}}\t{{.CurrentState}}\t{{.Error}}", "--no-trunc")
+		output, err := cmd.Output()
+		if err != nil {
+			summaries = append(summaries, fmt.Sprintf("%s: failed to inspect tasks: %v", serviceName, err))
+			continue
+		}
+		for _, rawLine := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			line := strings.TrimSpace(rawLine)
+			if line == "" {
+				continue
+			}
+			parts := strings.SplitN(line, "\t", 3)
+			currentState := ""
+			taskErr := ""
+			if len(parts) > 1 {
+				currentState = parts[1]
+			}
+			if len(parts) > 2 {
+				taskErr = parts[2]
+			}
+			summaries = append(summaries, fmt.Sprintf("%s: %s", serviceName, line))
+			if isSwarmTaskRunning(currentState) && strings.TrimSpace(taskErr) == "" {
+				return true, strings.Join(summaries, "; ")
+			}
+		}
+	}
+
+	return false, strings.Join(summaries, "; ")
+}
+
+func deploymentSwarmServiceNames(ctx context.Context, deploymentID string) []string {
+	cmd := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", fmt.Sprintf("label=cloud.obiente.deployment_id=%s", deploymentID), "--format", "{{.Name}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	serviceNames := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, rawLine := range strings.Split(string(output), "\n") {
+		serviceName := strings.TrimSpace(rawLine)
+		if serviceName == "" {
+			continue
+		}
+		if _, ok := seen[serviceName]; ok {
+			continue
+		}
+		seen[serviceName] = struct{}{}
+		serviceNames = append(serviceNames, serviceName)
+	}
+	return serviceNames
+}
+
+func isSwarmTaskRunning(currentState string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(currentState)), "running")
+}
+
+func formatContainerVerificationError(baseErr error, stoppedSummary, swarmSummary string) error {
+	if baseErr == nil {
+		baseErr = fmt.Errorf("deployment did not report a running container before the verification timeout")
+	}
+	parts := []string{baseErr.Error()}
+	if stoppedSummary != "" {
+		parts = append(parts, "containers: "+stoppedSummary)
+	}
+	if swarmSummary != "" {
+		parts = append(parts, "swarm tasks: "+swarmSummary)
+	}
+	return errors.New(strings.Join(parts, " | "))
 }
 
 func fileInfoToProto(fi docker.FileInfo, volumeName string) *deploymentsv1.ContainerFile {
