@@ -3,12 +3,14 @@ package deployments
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -288,31 +290,10 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		buf := make([]byte, 4096)
-		for {
-			n, readErr := reader.Read(buf)
-			if n > 0 {
-				// Docker logs can contain invalid UTF-8 sequences (binary data).
-				// Sanitize to valid UTF-8 before sending to protobuf, which requires valid UTF-8.
-				// Invalid sequences are replaced with the Unicode replacement character (U+FFFD).
-				sanitizedLine := strings.ToValidUTF8(string(buf[:n]), "")
-				// Detect log level from content (container logs can also have structured log levels)
-				logLevel := detectLogLevelFromContent(sanitizedLine, false)
-				line := &deploymentsv1.DeploymentLogLine{
-					DeploymentId: deploymentID,
-					Line:         sanitizedLine,
-					Timestamp:    timestamppb.Now(),
-					Stderr:       false, // Container logs don't distinguish stderr/stdout in this context
-					LogLevel:     logLevel,
-				}
-				if !safeSend(line) {
-					return
-				}
-			}
-			if readErr != nil {
-				return
-			}
-		}
+		_ = readDockerContainerLogLines(reader, func(line *dockerLogLine) bool {
+			protoLine := dockerLogLineToProto(deploymentID, line)
+			return safeSend(protoLine)
+		})
 	}()
 
 	// Stream Docker events
@@ -359,6 +340,127 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			if sendErr := stream.Send(line); sendErr != nil {
 				return sendErr
 			}
+		}
+	}
+}
+
+type dockerLogLine struct {
+	line      string
+	timestamp time.Time
+	stderr    bool
+}
+
+type dockerLogLineBuffer struct {
+	data []byte
+}
+
+func (b *dockerLogLineBuffer) appendFrame(payload []byte, stderr bool, emit func(*dockerLogLine) bool) bool {
+	b.data = append(b.data, payload...)
+	for {
+		newline := bytes.IndexByte(b.data, '\n')
+		if newline < 0 {
+			return true
+		}
+		rawLine := string(b.data[:newline])
+		b.data = b.data[newline+1:]
+		if !emitDockerLogLine(rawLine, stderr, emit) {
+			return false
+		}
+	}
+}
+
+func (b *dockerLogLineBuffer) flush(stderr bool, emit func(*dockerLogLine) bool) bool {
+	if len(b.data) == 0 {
+		return true
+	}
+	rawLine := string(b.data)
+	b.data = nil
+	return emitDockerLogLine(rawLine, stderr, emit)
+}
+
+func emitDockerLogLine(rawLine string, stderr bool, emit func(*dockerLogLine) bool) bool {
+	rawLine = strings.TrimRight(rawLine, "\r")
+	if strings.TrimSpace(rawLine) == "" {
+		return true
+	}
+	timestamp, line := parseTimestampedDockerLogLine(strings.ToValidUTF8(rawLine, ""))
+	return emit(&dockerLogLine{
+		line:      line,
+		timestamp: timestamp,
+		stderr:    stderr,
+	})
+}
+
+func dockerLogLineToProto(deploymentID string, line *dockerLogLine) *deploymentsv1.DeploymentLogLine {
+	if line == nil {
+		return nil
+	}
+	return &deploymentsv1.DeploymentLogLine{
+		DeploymentId: deploymentID,
+		Line:         line.line,
+		Timestamp:    timestamppb.New(line.timestamp),
+		Stderr:       line.stderr,
+		LogLevel:     detectLogLevelFromContent(line.line, line.stderr),
+	}
+}
+
+func readDockerContainerLogLines(reader io.Reader, emit func(*dockerLogLine) bool) error {
+	stdoutBuffer := &dockerLogLineBuffer{}
+	stderrBuffer := &dockerLogLineBuffer{}
+	header := make([]byte, 8)
+
+	for {
+		_, err := io.ReadFull(reader, header)
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				stdoutBuffer.flush(false, emit)
+				stderrBuffer.flush(true, emit)
+				return nil
+			}
+			return err
+		}
+
+		streamType := header[0]
+		frameSize := binary.BigEndian.Uint32(header[4:])
+		if (streamType != 1 && streamType != 2) || frameSize == 0 || frameSize > 16*1024*1024 {
+			return readPlainDockerLogLines(io.MultiReader(bytes.NewReader(header), reader), emit)
+		}
+
+		payload := make([]byte, frameSize)
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				return nil
+			}
+			return err
+		}
+
+		stderr := streamType == 2
+		buffer := stdoutBuffer
+		if stderr {
+			buffer = stderrBuffer
+		}
+		if !buffer.appendFrame(payload, stderr, emit) {
+			return nil
+		}
+	}
+}
+
+func readPlainDockerLogLines(reader io.Reader, emit func(*dockerLogLine) bool) error {
+	buffer := &dockerLogLineBuffer{}
+	chunk := make([]byte, 32*1024)
+	for {
+		n, err := reader.Read(chunk)
+		if n > 0 {
+			if !buffer.appendFrame(chunk[:n], false, emit) {
+				return nil
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				buffer.flush(false, emit)
+				return nil
+			}
+			return err
 		}
 	}
 }
@@ -517,6 +619,10 @@ func (s *Service) fetchSwarmServiceLogsSnapshot(ctx context.Context, deploymentI
 		}
 		combined = append(combined, parseDockerServiceLogOutput(deploymentID, string(output))...)
 	}
+	sortDeploymentLogLines(combined)
+	if tail > 0 && len(combined) > int(tail) {
+		combined = combined[len(combined)-int(tail):]
+	}
 	return combined, nil
 }
 
@@ -575,7 +681,22 @@ func parseDockerServiceLogOutput(deploymentID, output string) []*deploymentsv1.D
 			LogLevel:     detectLogLevelFromContent(line, false),
 		})
 	}
+	sortDeploymentLogLines(lines)
 	return lines
+}
+
+func sortDeploymentLogLines(lines []*deploymentsv1.DeploymentLogLine) {
+	sort.SliceStable(lines, func(i, j int) bool {
+		left := time.Time{}
+		right := time.Time{}
+		if lines[i] != nil && lines[i].Timestamp != nil {
+			left = lines[i].Timestamp.AsTime()
+		}
+		if lines[j] != nil && lines[j].Timestamp != nil {
+			right = lines[j].Timestamp.AsTime()
+		}
+		return left.Before(right)
+	})
 }
 
 func parseTimestampedDockerLogLine(rawLine string) (time.Time, string) {

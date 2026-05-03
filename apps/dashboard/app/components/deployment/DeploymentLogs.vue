@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from "vue";
 import { ArrowPathIcon, EllipsisVerticalIcon, CommandLineIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService, type StreamDeploymentLogsRequest } from "@obiente/proto";
@@ -131,7 +131,7 @@ const effectiveOrgId = computed(
 const auth = useAuth();
 
 const client = useConnectClient(DeploymentService);
-const logs = ref<LogLine[]>([]);
+const logs = shallowRef<LogLine[]>([]);
 const isFollowing = ref(false);
 const isLoading = ref(false);
 const tailLines = ref(200);
@@ -139,6 +139,12 @@ const showTimestamps = ref(true);
 const logsComponent = ref<any>(null);
 let streamController: AbortController | null = null;
 let isAborting = false; // Track if we're intentionally aborting
+let streamRunId = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let flushTimer: ReturnType<typeof requestAnimationFrame> | null = null;
+let pendingLogs: LogLine[] = [];
+const seenLogKeys = new Set<string>();
+const maxLogLines = 10000;
 
 // Search / filter
 const searchQuery = ref("");
@@ -205,21 +211,77 @@ const handleTailChange = (value: string | number) => {
 
 const clearLogs = () => {
   logs.value = [];
+  pendingLogs = [];
+  seenLogKeys.clear();
 };
 
 const toggleFollow = () => {
   if (isFollowing.value) {
     stopStream();
   } else {
-    startStream();
+    startStream(true);
   }
 };
 
-const startStream = async () => {
+const logKey = (log: LogLine) => `${log.timestamp}|${log.stderr ? "1" : "0"}|${log.line}`;
+
+const flushPendingLogs = () => {
+  flushTimer = null;
+  if (pendingLogs.length === 0) return;
+
+  const batch = pendingLogs;
+  pendingLogs = [];
+
+  let nextLogs = logs.value.length > 0 ? logs.value.slice() : [];
+  let outOfOrder = false;
+  const lastExisting = nextLogs[nextLogs.length - 1];
+  const lastExistingTime = lastExisting ? Date.parse(lastExisting.timestamp) : Number.NEGATIVE_INFINITY;
+
+  for (const log of batch) {
+    const key = logKey(log);
+    if (seenLogKeys.has(key)) continue;
+    seenLogKeys.add(key);
+    if (Date.parse(log.timestamp) < lastExistingTime) {
+      outOfOrder = true;
+    }
+    nextLogs.push(log);
+  }
+
+  if (outOfOrder) {
+    nextLogs.sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  }
+
+  if (nextLogs.length > maxLogLines) {
+    const removed = nextLogs.length - maxLogLines;
+    for (const log of nextLogs.slice(0, removed)) {
+      seenLogKeys.delete(logKey(log));
+    }
+    nextLogs = nextLogs.slice(-maxLogLines);
+  }
+
+  logs.value = nextLogs;
+};
+
+const queueLog = (log: LogLine) => {
+  pendingLogs.push(log);
+  if (flushTimer === null) {
+    flushTimer = requestAnimationFrame(flushPendingLogs);
+  }
+};
+
+const startStream = async (resetLogs = false) => {
   if (isFollowing.value) return;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const runId = ++streamRunId;
   isFollowing.value = true;
   isLoading.value = true;
-  logs.value = [];
+  isAborting = false;
+  if (resetLogs) {
+    clearLogs();
+  }
 
   let hasReceivedLogs = false;
 
@@ -270,9 +332,10 @@ const startStream = async () => {
     isLoading.value = false;
 
     for await (const update of stream) {
+      if (runId !== streamRunId) return;
       if (update.line) {
         hasReceivedLogs = true;
-          logs.value.push({
+        queueLog({
           line: update.line,
           timestamp: update.timestamp
             ? new Date(
@@ -316,7 +379,7 @@ const startStream = async () => {
     // or if it's a real error before receiving any logs
     if (!isBenignError || !hasReceivedLogs) {
       console.error("Log stream error:", error);
-      logs.value.push({
+      queueLog({
         line: `[error] Failed to stream logs: ${(error as Error).message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
@@ -327,13 +390,26 @@ const startStream = async () => {
       console.debug("Stream ended with benign error:", (error as Error).message);
     }
   } finally {
-    isLoading.value = false;
-    isFollowing.value = false;
+    if (runId === streamRunId) {
+      isLoading.value = false;
+      isFollowing.value = false;
+      streamController = null;
+      if (!isAborting) {
+        reconnectTimer = setTimeout(() => {
+          startStream(false);
+        }, hasReceivedLogs ? 1000 : 3000);
+      }
+    }
     isAborting = false; // Reset abort flag
   }
 };
 
 const stopStream = () => {
+  streamRunId++;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   if (streamController) {
     isAborting = true; // Mark that we're intentionally aborting
     streamController.abort();
@@ -344,7 +420,7 @@ const stopStream = () => {
 
 const restartStream = () => {
   stopStream();
-  setTimeout(() => startStream(), 100);
+  setTimeout(() => startStream(false), 100);
 };
 
 // Handle service change
@@ -363,29 +439,34 @@ const onServiceChange = (container: { containerId: string; serviceName?: string 
   // Wait a brief moment to let the abort error be handled silently
   // Clear logs after a short delay to avoid race conditions
   setTimeout(() => {
-    logs.value = [];
+    clearLogs();
     
     // Always auto-follow when service changes
-    startStream();
+    startStream(false);
   }, 50);
 };
 
 onMounted(() => {
   // Auto-start following if deployment is running
-  startStream();
+  startStream(true);
 });
 
 onUnmounted(() => {
   stopStream();
+  if (flushTimer !== null) {
+    cancelAnimationFrame(flushTimer);
+    flushTimer = null;
+  }
 });
 
 watch(() => props.deploymentId, () => {
+  const wasFollowing = isFollowing.value;
   stopStream();
-  logs.value = [];
+  clearLogs();
   selectedService.value = ""; // Reset to default
   selectedContainer.value = null;
-  if (isFollowing.value) {
-    startStream();
+  if (wasFollowing) {
+    startStream(false);
   }
 });
 </script>
