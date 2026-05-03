@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { type Deployment, DeploymentStatus } from "@obiente/proto";
+import { type Deployment, type DockerfileVolume, DeploymentStatus } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { timestamp } from "@obiente/proto/utils";
@@ -294,10 +294,12 @@ export function useDeploymentActions(organizationId: string = "default") {
              healthcheckType?: number;
              healthcheckPort?: number;
              healthcheckPath?: string;
-             healthcheckExpectedStatus?: number;
-             healthcheckCustomCommand?: string;
-             autoDeploy?: boolean;
-           }
+	             healthcheckExpectedStatus?: number;
+	             healthcheckCustomCommand?: string;
+	             autoDeploy?: boolean;
+	             buildArgs?: Record<string, string>;
+	             dockerfileVolumes?: DockerfileVolume[];
+	           }
          ) => {
            if (!beginOperation("update")) return;
 
@@ -360,11 +362,17 @@ export function useDeploymentActions(organizationId: string = "default") {
             if (updates.healthcheckCustomCommand !== undefined) {
               request.healthcheckCustomCommand = updates.healthcheckCustomCommand === null || updates.healthcheckCustomCommand === "" ? "" : updates.healthcheckCustomCommand;
             }
-            if (updates.autoDeploy !== undefined) {
-              request.autoDeploy = updates.autoDeploy;
-            }
+	            if (updates.autoDeploy !== undefined) {
+	              request.autoDeploy = updates.autoDeploy;
+	            }
+	            if (updates.buildArgs !== undefined) {
+	              request.buildArgs = updates.buildArgs;
+	            }
+	            if (updates.dockerfileVolumes !== undefined) {
+	              request.dockerfileVolumes = updates.dockerfileVolumes;
+	            }
 
-            // Per-deployment resource limits
+	            // Per-deployment resource limits
             // Semantics: 0 clears override (backend falls back to defaults capped by plan)
             if (updates.cpuLimit !== undefined) {
               const raw = updates.cpuLimit;

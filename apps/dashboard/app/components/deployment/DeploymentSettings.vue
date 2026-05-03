@@ -709,6 +709,11 @@
     return blocked ? null : normalized;
   };
 
+  const isSafeHealthcheckPath = (path: string): boolean => {
+    if (!path) return true;
+    return path.length <= 2048 && /^\/[A-Za-z0-9/._~%-]*$/.test(path);
+  };
+
   const parseDockerfileVolumes = (text: string): DockerfileVolume[] => {
     const volumes: DockerfileVolume[] = [];
     const seenMounts = new Set<string>();
@@ -1537,6 +1542,12 @@
         isSaving.value = false;
         return;
       }
+    }
+
+    if (config.healthcheckType === 3 && !isSafeHealthcheckPath(config.healthcheckPath?.trim() || "/")) {
+      configError.value = "HTTP healthcheck path must start with / and only use letters, numbers, slash, dot, dash, underscore, tilde, or percent.";
+      isSaving.value = false;
+      return;
     }
 
     isSaving.value = true;
