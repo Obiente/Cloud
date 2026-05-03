@@ -349,6 +349,7 @@ type ConnectOrganizationGitHubAppRequest struct {
 	AccountLogin        string                 `protobuf:"bytes,3,opt,name=account_login,json=accountLogin,proto3" json:"account_login,omitempty"`
 	AccountType         string                 `protobuf:"bytes,4,opt,name=account_type,json=accountType,proto3" json:"account_type,omitempty"`
 	RepositorySelection string                 `protobuf:"bytes,5,opt,name=repository_selection,json=repositorySelection,proto3" json:"repository_selection,omitempty"`
+	SetupCode           string                 `protobuf:"bytes,6,opt,name=setup_code,json=setupCode,proto3" json:"setup_code,omitempty"` // one-time GitHub App user authorization code used to verify installer access
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -414,6 +415,13 @@ func (x *ConnectOrganizationGitHubAppRequest) GetAccountType() string {
 func (x *ConnectOrganizationGitHubAppRequest) GetRepositorySelection() string {
 	if x != nil {
 		return x.RepositorySelection
+	}
+	return ""
+}
+
+func (x *ConnectOrganizationGitHubAppRequest) GetSetupCode() string {
+	if x != nil {
+		return x.SetupCode
 	}
 	return ""
 }
@@ -1066,13 +1074,15 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\x06locale\x18\v \x01(\tR\x06locale\x129\n" +
 	"\n" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
-	"\x05roles\x18\r \x03(\tR\x05roles\"\xf2\x01\n" +
+	"\x05roles\x18\r \x03(\tR\x05roles\"\x91\x02\n" +
 	"#ConnectOrganizationGitHubAppRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12'\n" +
 	"\x0finstallation_id\x18\x02 \x01(\x03R\x0einstallationId\x12#\n" +
 	"\raccount_login\x18\x03 \x01(\tR\faccountLogin\x12!\n" +
 	"\faccount_type\x18\x04 \x01(\tR\vaccountType\x121\n" +
-	"\x14repository_selection\x18\x05 \x01(\tR\x13repositorySelection\"\x8e\x01\n" +
+	"\x14repository_selection\x18\x05 \x01(\tR\x13repositorySelection\x12\x1d\n" +
+	"\n" +
+	"setup_code\x18\x06 \x01(\tR\tsetupCode\"\x8e\x01\n" +
 	"$ConnectOrganizationGitHubAppResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\raccount_login\x18\x02 \x01(\tR\faccountLogin\x12'\n" +

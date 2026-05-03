@@ -22,6 +22,8 @@ Complete reference for all Obiente Cloud environment variables.
 | `GITHUB_APP_SLUG`                    | -                            | ✅ (GitHub)   | GitHub App slug used to start workspace app installs                                                                |
 | `NUXT_PUBLIC_GITHUB_APP_SLUG`        | `${GITHUB_APP_SLUG}`         | ✅ (GitHub)   | Public GitHub App slug exposed to the dashboard                                                                     |
 | `GITHUB_APP_ID`                      | -                            | ✅ (GitHub)   | GitHub App ID used to mint installation tokens                                                                      |
+| `GITHUB_APP_CLIENT_ID`               | -                            | ✅ (GitHub)   | GitHub App client ID used to verify the installer with a one-time setup code                                        |
+| `GITHUB_APP_CLIENT_SECRET`           | -                            | ✅ (GitHub)   | GitHub App client secret used server-side for setup-code exchange                                                   |
 | `GITHUB_APP_PRIVATE_KEY`             | -                            | ❌            | GitHub App private key PEM. Prefer base64 or file path for deployment envs                                           |
 | `GITHUB_APP_PRIVATE_KEY_BASE64`      | -                            | ✅ (org app)  | Base64-encoded GitHub App private key PEM                                                                           |
 | `GITHUB_APP_PRIVATE_KEY_PATH`        | -                            | ❌            | Path to GitHub App private key PEM                                                                                  |
@@ -212,6 +214,8 @@ DB_LOG_LEVEL=debug
 | `GITHUB_APP_SLUG`               | string | -       | ✅       |
 | `NUXT_PUBLIC_GITHUB_APP_SLUG`   | string | -       | ✅       |
 | `GITHUB_APP_ID`                 | string | -       | ✅       |
+| `GITHUB_APP_CLIENT_ID`          | string | -       | ✅       |
+| `GITHUB_APP_CLIENT_SECRET`      | string | -       | ✅       |
 | `GITHUB_APP_PRIVATE_KEY`        | string | -       | ❌       |
 | `GITHUB_APP_PRIVATE_KEY_BASE64` | string | -       | ✅       |
 | `GITHUB_APP_PRIVATE_KEY_PATH`   | string | -       | ❌       |
@@ -223,6 +227,8 @@ Use:
 GITHUB_APP_SLUG=...
 NUXT_PUBLIC_GITHUB_APP_SLUG=...
 GITHUB_APP_ID=...
+GITHUB_APP_CLIENT_ID=...
+GITHUB_APP_CLIENT_SECRET=...
 GITHUB_APP_PRIVATE_KEY_BASE64=...
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
@@ -238,8 +244,10 @@ On macOS, use `base64 < path/to/private-key.pem | tr -d '\n'`.
 Notes:
 
 - `NUXT_PUBLIC_GITHUB_APP_SLUG` is exposed to the browser
+- `GITHUB_APP_CLIENT_SECRET` must remain server-side only
 - `GITHUB_APP_PRIVATE_KEY_BASE64` must remain server-side only
 - The GitHub App setup URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
+- The GitHub App callback URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - The GitHub App webhook URL is `https://YOUR-API-DOMAIN/webhooks/github`
 
 ### Redis Configuration

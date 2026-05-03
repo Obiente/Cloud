@@ -167,6 +167,8 @@ echo "$NUXT_PUBLIC_GITHUB_APP_SLUG"
 
 # Backend runtime env
 echo "$GITHUB_APP_ID"
+echo "$GITHUB_APP_CLIENT_ID"
+echo "$GITHUB_APP_CLIENT_SECRET"
 echo "$GITHUB_APP_PRIVATE_KEY_BASE64"
 echo "$GITHUB_WEBHOOK_SECRET"
 ```
@@ -175,8 +177,10 @@ echo "$GITHUB_WEBHOOK_SECRET"
 
 1. Missing GitHub App slug in the dashboard runtime
 2. Setup URL mismatch in the GitHub App
-3. Missing or mismatched GitHub App private key in the backend
-4. Dashboard or auth-service was not redeployed after secret changes
+3. Missing GitHub App client ID/secret for setup-code verification
+4. Missing or mismatched GitHub App private key in the backend
+5. The app was installed directly in GitHub instead of from `Settings -> Integrations`
+6. Dashboard or auth-service was not redeployed after secret changes
 
 **Fix:**
 
@@ -184,6 +188,8 @@ echo "$GITHUB_WEBHOOK_SECRET"
 NUXT_PUBLIC_GITHUB_APP_SLUG=...
 GITHUB_APP_SLUG=...
 GITHUB_APP_ID=...
+GITHUB_APP_CLIENT_ID=...
+GITHUB_APP_CLIENT_SECRET=...
 GITHUB_APP_PRIVATE_KEY_BASE64=...
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```

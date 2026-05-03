@@ -29,8 +29,9 @@ Use these values:
 
 - `Homepage URL`: your public dashboard URL
 - `Setup URL`: `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
+- `Callback URL`: `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - Enable **Redirect on update**
-- Disable **Request user authorization (OAuth) during installation**
+- Enable **Request user authorization (OAuth) during installation**
 - `Webhook URL`: `https://YOUR-API-DOMAIN/webhooks/github`
 - `Webhook secret`: the same value as `GITHUB_WEBHOOK_SECRET`
 
@@ -66,6 +67,8 @@ Set these in production:
 GITHUB_APP_SLUG=your-github-app-slug
 NUXT_PUBLIC_GITHUB_APP_SLUG=your-github-app-slug
 GITHUB_APP_ID=123456
+GITHUB_APP_CLIENT_ID=your-github-app-client-id
+GITHUB_APP_CLIENT_SECRET=your-github-app-client-secret
 GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 -w0 path/to/private-key.pem)"
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
@@ -79,6 +82,7 @@ GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 < path/to/private-key.pem | tr -d '\n')"
 Notes:
 
 - `NUXT_PUBLIC_GITHUB_APP_SLUG` is safe to expose to the browser
+- `GITHUB_APP_CLIENT_SECRET` is used only to exchange the one-time setup code and must stay server-side
 - `GITHUB_APP_PRIVATE_KEY_BASE64` must stay server-side only
 - `GITHUB_WEBHOOK_SECRET` must match the secret configured on the GitHub App
 - Enable **Redirect on update** so repository selection changes return users to Obiente
@@ -94,6 +98,11 @@ Notes:
 
 Personal Obiente accounts are also represented as an Obiente workspace, so they
 use this same install flow.
+
+The dashboard sends users through GitHub's target-selection install URL so
+existing GitHub App installations can be selected and returned to Obiente with
+the workspace state. If the app is already installed on a GitHub account, choose
+that account from GitHub's install target picker and save/update the installation.
 
 ## Auto-Deploy Webhooks
 
@@ -140,7 +149,8 @@ Check:
 
 - The repository was included in the GitHub App installation
 - The app has `Contents: read`
-- The user returned through the setup callback after updating repository access
+- The user returned through the setup callback after installing or updating repository access
+- The install flow was started from `Settings -> Integrations` for the correct Obiente workspace
 
 ### Auto-deploy does not trigger
 
@@ -155,6 +165,9 @@ Check:
 ## Security Notes
 
 - No GitHub user tokens are stored or refreshed
+- The one-time GitHub App user authorization code is exchanged server-side and discarded
+- The installer's user token is used only to confirm the installation is visible to that GitHub user
+- Installation IDs are verified with GitHub before persistence and are not trusted from query strings alone
 - Installation state is validated server-side with a short-lived cookie
 - GitHub App installation tokens are minted on demand
 - Webhook payloads are verified with `X-Hub-Signature-256`

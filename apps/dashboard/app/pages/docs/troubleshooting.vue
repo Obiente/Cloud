@@ -60,7 +60,9 @@ const faqItems = [
       <ul class="list-disc list-inside space-y-1 text-sm text-secondary">
         <li>Verify the dashboard has <code>NUXT_PUBLIC_GITHUB_APP_SLUG</code> at runtime</li>
         <li>Verify the GitHub App setup URL exactly matches <code>/api/github/app/callback</code> on your public dashboard host</li>
-        <li>Verify backend services have <code>GITHUB_APP_ID</code> and the GitHub App private key</li>
+        <li>Verify the GitHub App callback URL also points to <code>/api/github/app/callback</code></li>
+        <li>Verify backend services have <code>GITHUB_APP_ID</code>, <code>GITHUB_APP_CLIENT_ID</code>, <code>GITHUB_APP_CLIENT_SECRET</code>, and the GitHub App private key</li>
+        <li>Start the install from <code>Settings -> Integrations</code> so GitHub returns the selected installation to the correct Obiente workspace</li>
         <li>Redeploy <code>dashboard</code>, <code>auth-service</code>, and <code>deployments-service</code> after changing GitHub App settings</li>
       </ul>
       <p class="text-sm text-secondary mt-3">If the callback lands back on Settings but the list is still empty, inspect the auth-service logs.</p>

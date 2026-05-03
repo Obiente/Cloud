@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
   const state = typeof query.state === "string" ? query.state : "";
   const installationIdValue =
     typeof query.installation_id === "string" ? query.installation_id : "";
+  const setupCode = typeof query.code === "string" ? query.code : "";
   const setupAction =
     typeof query.setup_action === "string" ? query.setup_action : "";
 
@@ -24,6 +25,9 @@ export default defineEventHandler(async (event) => {
   const installationId = Number.parseInt(installationIdValue, 10);
   if (!Number.isFinite(installationId) || installationId <= 0) {
     return redirectToSettings("missing_installation");
+  }
+  if (!setupCode && state) {
+    return redirectToSettings("missing_user_authorization");
   }
 
   if (!state) {
@@ -92,6 +96,7 @@ export default defineEventHandler(async (event) => {
       accountLogin: "",
       accountType: "Organization",
       repositorySelection: setupAction || "",
+      setupCode,
     });
 
     try {

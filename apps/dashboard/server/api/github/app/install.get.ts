@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   setGitHubAppInstallStateCookie(event, state);
 
   const installUrl = new URL(
-    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new`
+    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/select_target`
   );
   installUrl.searchParams.set("state", state);
 

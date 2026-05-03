@@ -2,12 +2,23 @@ package auth
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	"github.com/obiente/cloud/apps/shared/pkg/zitadel"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -178,18 +189,26 @@ func (s *Service) ConnectOrganizationGitHubApp(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("database not initialized"))
 	}
 
-	now := time.Now()
-	accountLogin := strings.TrimSpace(req.Msg.GetAccountLogin())
-	if accountLogin == "" {
-		accountLogin = fmt.Sprintf("installation-%d", req.Msg.GetInstallationId())
+	installationID := req.Msg.GetInstallationId()
+	installation, err := verifyGitHubAppInstallation(ctx, installationID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to verify GitHub App installation: %w", err))
 	}
-	accountType := strings.TrimSpace(req.Msg.GetAccountType())
+	if err := verifyGitHubAppInstallationForUser(ctx, req.Msg.GetSetupCode(), installationID); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("failed to verify GitHub installer access: %w", err))
+	}
+
+	now := time.Now()
+	accountLogin := strings.TrimSpace(installation.Account.Login)
+	if accountLogin == "" {
+		accountLogin = fmt.Sprintf("installation-%d", installationID)
+	}
+	accountType := strings.TrimSpace(installation.Account.Type)
 	if accountType == "" {
 		accountType = "Organization"
 	}
-	installationID := req.Msg.GetInstallationId()
 	scope := "github_app"
-	if selection := strings.TrimSpace(req.Msg.GetRepositorySelection()); selection != "" {
+	if selection := strings.TrimSpace(installation.RepositorySelection); selection != "" {
 		scope += ":" + selection
 	}
 
@@ -219,6 +238,258 @@ func (s *Service) ConnectOrganizationGitHubApp(ctx context.Context, req *connect
 		AccountLogin:   accountLogin,
 		InstallationId: installationID,
 	}), nil
+}
+
+type githubAppInstallation struct {
+	ID                  int64  `json:"id"`
+	RepositorySelection string `json:"repository_selection"`
+	Account             struct {
+		Login string `json:"login"`
+		Type  string `json:"type"`
+	} `json:"account"`
+}
+
+type githubAppUserTokenResponse struct {
+	AccessToken      string `json:"access_token"`
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
+type githubUserInstallationsResponse struct {
+	Installations []struct {
+		ID int64 `json:"id"`
+	} `json:"installations"`
+}
+
+func verifyGitHubAppInstallation(ctx context.Context, installationID int64) (*githubAppInstallation, error) {
+	if installationID <= 0 {
+		return nil, fmt.Errorf("installation_id is required")
+	}
+
+	appJWT, err := createGitHubAppJWT(time.Now())
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("https://api.github.com/app/installations/%d", installationID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GitHub App installation verification request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub App installation verification failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var installation githubAppInstallation
+	if err := json.Unmarshal(body, &installation); err != nil {
+		return nil, fmt.Errorf("failed to decode GitHub App installation response: %w", err)
+	}
+	if installation.ID != installationID {
+		return nil, fmt.Errorf("GitHub App installation ID mismatch")
+	}
+
+	return &installation, nil
+}
+
+func verifyGitHubAppInstallationForUser(ctx context.Context, setupCode string, installationID int64) error {
+	setupCode = strings.TrimSpace(setupCode)
+	if setupCode == "" {
+		return fmt.Errorf("GitHub App user authorization code is required")
+	}
+
+	userToken, err := exchangeGitHubAppUserCode(ctx, setupCode)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(userToken) == "" {
+		return fmt.Errorf("GitHub App user authorization returned no access token")
+	}
+
+	for page := 1; page <= 10; page++ {
+		found, hasMore, err := userCanAccessGitHubInstallation(ctx, userToken, installationID, page)
+		if err != nil {
+			return err
+		}
+		if found {
+			return nil
+		}
+		if !hasMore {
+			break
+		}
+	}
+
+	return fmt.Errorf("GitHub user is not associated with installation %d", installationID)
+}
+
+func exchangeGitHubAppUserCode(ctx context.Context, setupCode string) (string, error) {
+	clientID := strings.TrimSpace(os.Getenv("GITHUB_APP_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("GITHUB_APP_CLIENT_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		return "", fmt.Errorf("GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET are required for secure GitHub App installation verification")
+	}
+
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("code", setupCode)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://github.com/login/oauth/access_token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GitHub App user authorization token request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub App user authorization token request failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var tokenResp githubAppUserTokenResponse
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("failed to decode GitHub App user authorization response: %w", err)
+	}
+	if tokenResp.Error != "" {
+		if tokenResp.ErrorDescription != "" {
+			return "", fmt.Errorf("GitHub App user authorization failed: %s: %s", tokenResp.Error, tokenResp.ErrorDescription)
+		}
+		return "", fmt.Errorf("GitHub App user authorization failed: %s", tokenResp.Error)
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+func userCanAccessGitHubInstallation(ctx context.Context, userToken string, installationID int64, page int) (bool, bool, error) {
+	reqURL := fmt.Sprintf("https://api.github.com/user/installations?per_page=100&page=%d", page)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return false, false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, false, fmt.Errorf("GitHub user installation lookup failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return false, false, fmt.Errorf("GitHub user installation lookup failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var installationsResp githubUserInstallationsResponse
+	if err := json.Unmarshal(body, &installationsResp); err != nil {
+		return false, false, fmt.Errorf("failed to decode GitHub user installations response: %w", err)
+	}
+
+	for _, installation := range installationsResp.Installations {
+		if installation.ID == installationID {
+			return true, false, nil
+		}
+	}
+
+	return false, len(installationsResp.Installations) == 100, nil
+}
+
+func createGitHubAppJWT(now time.Time) (string, error) {
+	appID := strings.TrimSpace(os.Getenv("GITHUB_APP_ID"))
+	if appID == "" {
+		return "", fmt.Errorf("GITHUB_APP_ID is required for GitHub App installations")
+	}
+
+	key, err := loadGitHubAppPrivateKey()
+	if err != nil {
+		return "", err
+	}
+
+	header, err := json.Marshal(map[string]string{
+		"alg": "RS256",
+		"typ": "JWT",
+	})
+	if err != nil {
+		return "", err
+	}
+	claims, err := json.Marshal(map[string]interface{}{
+		"iat": now.Add(-time.Minute).Unix(),
+		"exp": now.Add(9 * time.Minute).Unix(),
+		"iss": appID,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	unsigned := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
+	digest := sha256.Sum256([]byte(unsigned))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
+	if err != nil {
+		return "", fmt.Errorf("failed to sign GitHub App JWT: %w", err)
+	}
+
+	return unsigned + "." + base64.RawURLEncoding.EncodeToString(signature), nil
+}
+
+func loadGitHubAppPrivateKey() (*rsa.PrivateKey, error) {
+	keyPEM := strings.TrimSpace(os.Getenv("GITHUB_APP_PRIVATE_KEY"))
+	if keyPEM == "" {
+		if encoded := strings.TrimSpace(os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64")); encoded != "" {
+			decoded, err := base64.StdEncoding.DecodeString(encoded)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode GITHUB_APP_PRIVATE_KEY_BASE64: %w", err)
+			}
+			keyPEM = string(decoded)
+		}
+	}
+	if keyPEM == "" {
+		if path := strings.TrimSpace(os.Getenv("GITHUB_APP_PRIVATE_KEY_PATH")); path != "" {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read GITHUB_APP_PRIVATE_KEY_PATH: %w", err)
+			}
+			keyPEM = string(data)
+		}
+	}
+	if keyPEM == "" {
+		return nil, fmt.Errorf("GITHUB_APP_PRIVATE_KEY, GITHUB_APP_PRIVATE_KEY_BASE64, or GITHUB_APP_PRIVATE_KEY_PATH is required for GitHub App installations")
+	}
+
+	keyPEM = strings.ReplaceAll(keyPEM, `\n`, "\n")
+	block, _ := pem.Decode([]byte(keyPEM))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode GitHub App private key PEM")
+	}
+
+	if key, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
+		return key, nil
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse GitHub App private key: %w", err)
+	}
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("GitHub App private key must be an RSA private key")
+	}
+	return key, nil
 }
 
 func (s *Service) DisconnectOrganizationGitHubApp(ctx context.Context, req *connect.Request[authv1.DisconnectOrganizationGitHubAppRequest]) (*connect.Response[authv1.DisconnectOrganizationGitHubAppResponse], error) {

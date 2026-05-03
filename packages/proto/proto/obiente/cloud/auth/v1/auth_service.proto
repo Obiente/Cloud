@@ -70,6 +70,7 @@ message ConnectOrganizationGitHubAppRequest {
   string account_login = 3;
   string account_type = 4;
   string repository_selection = 5;
+  string setup_code = 6; // one-time GitHub App user authorization code used to verify installer access
 }
 
 message ConnectOrganizationGitHubAppResponse {

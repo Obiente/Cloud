@@ -30,19 +30,32 @@
             <OuiFlex justify="between" align="center" gap="md">
               <OuiFlex align="center" gap="sm" class="flex-1 min-w-0">
                 <img
-                  :src="`https://avatars.githubusercontent.com/${integration.username}`"
-                  :alt="integration.username"
+                  v-if="getGitHubAvatarLogin(integration)"
+                  :src="`https://avatars.githubusercontent.com/${getGitHubAvatarLogin(integration)}`"
+                  :alt="getGitHubAccountLogin(integration)"
                   class="h-8 w-8 rounded-full border border-default shrink-0"
                   @error="handleAvatarError"
                 />
+                <div
+                  v-else
+                  class="h-8 w-8 rounded-full border border-default bg-surface-secondary flex items-center justify-center shrink-0"
+                >
+                  <Icon name="uil:github" class="h-4 w-4 text-text-tertiary" />
+                </div>
                 <OuiStack gap="none" class="min-w-0">
                   <OuiFlex align="center" gap="sm" wrap="wrap">
-                    <OuiText size="sm" weight="medium">@{{ integration.username }}</OuiText>
+                    <OuiFlex align="center" gap="xs" class="min-w-0">
+                      <Icon :name="getGitHubAccountIcon(integration)" class="h-4 w-4 text-text-secondary shrink-0" />
+                      <OuiText size="sm" weight="medium">@{{ getGitHubAccountLogin(integration) }}</OuiText>
+                    </OuiFlex>
                     <OuiBadge variant="secondary" size="xs">
                       GitHub App
                     </OuiBadge>
-                    <OuiBadge v-if="integration.organizationName" variant="secondary" size="xs">
-                      {{ integration.organizationName }}
+                    <OuiBadge variant="secondary" size="xs">
+                      {{ getGitHubAccountTypeLabel(integration) }}
+                    </OuiBadge>
+                    <OuiBadge v-if="getWorkspaceName(integration)" variant="secondary" size="xs">
+                      {{ getWorkspaceName(integration) }}
                     </OuiBadge>
                   </OuiFlex>
                   <OuiText size="xs" color="tertiary">
@@ -101,7 +114,7 @@
                 variant="warning"
               >
                 <OuiText size="xs">
-                  This workspace already has a GitHub App installation ({{ integrations.find((i) => i.organizationId === selectedOrgId)?.username }}). This will update it.
+                  This workspace already has a GitHub App installation ({{ formatIntegrationTarget(integrations.find((i) => i.organizationId === selectedOrgId)) }}). This will update it.
                 </OuiText>
               </OuiAlert>
 
@@ -316,6 +329,59 @@ const formatScopes = (scope: string): string => {
   return scopes.map((s) => scopeMap[s] || s).join(", ");
 };
 
+type GitHubIntegration = (typeof integrations.value)[0];
+
+const isInstallationFallback = (value?: string): boolean => {
+  return /^installation-\d+$/i.test((value || "").trim());
+};
+
+const getGitHubAvatarLogin = (integration?: GitHubIntegration): string => {
+  const login =
+    integration?.githubAppAccountLogin || integration?.username || "";
+  return isInstallationFallback(login) ? "" : login;
+};
+
+const getGitHubAccountLogin = (integration?: GitHubIntegration): string => {
+  const login =
+    integration?.githubAppAccountLogin || integration?.username || "";
+  if (!login || isInstallationFallback(login)) {
+    return "Unknown GitHub account";
+  }
+  return login;
+};
+
+const getGitHubAccountType = (integration?: GitHubIntegration): string => {
+  return (integration?.githubAppAccountType || "").toLowerCase();
+};
+
+const getGitHubAccountIcon = (integration?: GitHubIntegration): string => {
+  const accountType = getGitHubAccountType(integration);
+  if (accountType === "user") return "uil:user";
+  if (accountType === "organization") return "uil:building";
+  return "uil:github";
+};
+
+const getGitHubAccountTypeLabel = (integration?: GitHubIntegration): string => {
+  const accountType = getGitHubAccountType(integration);
+  if (accountType === "user") return "GitHub user";
+  if (accountType === "organization") return "GitHub organization";
+  return "GitHub account";
+};
+
+const getWorkspaceName = (integration?: GitHubIntegration): string => {
+  return integration?.organizationName || integration?.organizationId || "";
+};
+
+const formatIntegrationTarget = (
+  integration?: GitHubIntegration
+): string => {
+  if (!integration) return "unknown GitHub account";
+
+  const account = getGitHubAccountLogin(integration);
+  const workspace = getWorkspaceName(integration);
+  return workspace ? `${account} for ${workspace}` : account;
+};
+
 const handleAvatarError = (event: Event) => {
   // Fallback to a default GitHub icon if avatar fails to load
   const target = event.target as HTMLImageElement;
@@ -328,9 +394,7 @@ const handleAvatarError = (event: Event) => {
 const disconnectIntegration = async (
   integration: (typeof integrations.value)[0]
 ) => {
-  const accountName = `workspace ${
-    integration.organizationName || integration.organizationId
-  } (${integration.username})`;
+  const accountName = formatIntegrationTarget(integration);
 
   const { showConfirm } = useDialog();
   const confirmed = await showConfirm({
