@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { type Deployment, type DockerfileVolume, DeploymentStatus } from "@obiente/proto";
+import { type Deployment, type DockerfileBuildOptions, type DockerfileVolume, DeploymentStatus } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { timestamp } from "@obiente/proto/utils";
@@ -299,6 +299,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 	             autoDeploy?: boolean;
 	             buildArgs?: Record<string, string>;
 	             dockerfileVolumes?: DockerfileVolume[];
+	             dockerfileBuildOptions?: DockerfileBuildOptions;
 	           }
          ) => {
            if (!beginOperation("update")) return;
@@ -370,6 +371,9 @@ export function useDeploymentActions(organizationId: string = "default") {
 	            }
 	            if (updates.dockerfileVolumes !== undefined) {
 	              request.dockerfileVolumes = updates.dockerfileVolumes;
+	            }
+	            if (updates.dockerfileBuildOptions !== undefined) {
+	              request.dockerfileBuildOptions = updates.dockerfileBuildOptions;
 	            }
 
 	            // Per-deployment resource limits

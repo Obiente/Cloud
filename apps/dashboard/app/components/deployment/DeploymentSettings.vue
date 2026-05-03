@@ -291,6 +291,40 @@
           </OuiGrid>
 
           <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
+            <OuiInput
+              v-model="config.dockerfileTarget"
+              label="Build Target"
+              placeholder="runtime"
+              helper-text="Optional Dockerfile stage passed to docker build as --target."
+              @update:model-value="markConfigDirty"
+            />
+            <OuiInput
+              v-model="config.dockerfilePlatform"
+              label="Build Platform"
+              placeholder="linux/amd64"
+              helper-text="Optional platform passed to docker build as --platform."
+              @update:model-value="markConfigDirty"
+            />
+          </OuiGrid>
+
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
+            <OuiFlex align="center" justify="between" gap="md">
+              <OuiStack gap="2xs">
+                <OuiText size="sm" weight="medium">No Cache</OuiText>
+                <OuiText size="xs" color="tertiary">Pass --no-cache to docker build.</OuiText>
+              </OuiStack>
+              <OuiSwitch v-model="config.dockerfileNoCache" size="md" @update:model-value="markConfigDirty" />
+            </OuiFlex>
+            <OuiFlex align="center" justify="between" gap="md">
+              <OuiStack gap="2xs">
+                <OuiText size="sm" weight="medium">Pull Base Images</OuiText>
+                <OuiText size="xs" color="tertiary">Pass --pull to docker build.</OuiText>
+              </OuiStack>
+              <OuiSwitch v-model="config.dockerfilePull" size="md" @update:model-value="markConfigDirty" />
+            </OuiFlex>
+          </OuiGrid>
+
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
             <OuiTextarea
               v-model="config.buildArgsText"
               label="Build Args"
@@ -299,6 +333,17 @@
               :rows="5"
               @update:model-value="markConfigDirty"
             />
+            <OuiTextarea
+              v-model="config.dockerfileLabelsText"
+              label="Image Labels"
+              placeholder="org.opencontainers.image.source=https://example.com/repo"
+              helper-text="One label=value per line. These are passed to docker build as --label."
+              :rows="5"
+              @update:model-value="markConfigDirty"
+            />
+          </OuiGrid>
+
+          <OuiGrid :cols="{ sm: 1 }" gap="md" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
             <OuiTextarea
               v-model="config.dockerfileVolumesText"
               label="Persistent Volumes"
@@ -534,7 +579,7 @@
 <script setup lang="ts">
   import { ref, reactive, watchEffect, computed, watch, onMounted } from "vue";
   import { LinkIcon, TrashIcon, PencilIcon } from "@heroicons/vue/24/outline";
-  import { type Deployment, type DockerfileVolume, type UpdateDeploymentRequest } from "@obiente/proto";
+  import { type Deployment, type DockerfileBuildOptions, type DockerfileVolume, type UpdateDeploymentRequest } from "@obiente/proto";
   import {
     DeploymentType,
     Environment as EnvEnum,
@@ -655,6 +700,11 @@
       .map(([key, value]) => `${key}=${value}`)
       .join("\n");
 
+  const formatDockerfileLabels = (labels?: Record<string, string>) =>
+    Object.entries(labels || {})
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n");
+
   const formatDockerfileVolumes = (volumes?: DockerfileVolume[]) =>
     (volumes || [])
       .map((volume) => `${volume.name}:${volume.mountPath}${volume.readOnly ? ":ro" : ""}`)
@@ -680,6 +730,53 @@
       args[key] = value;
     }
     return args;
+  };
+
+  const parseDockerfileLabels = (text: string): Record<string, string> => {
+    const labels: Record<string, string> = {};
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const separatorIndex = line.indexOf("=");
+      if (separatorIndex <= 0) {
+        throw new Error(`Invalid image label "${line}". Use label=value.`);
+      }
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1);
+      if (!/^[A-Za-z0-9][A-Za-z0-9_.\/-]{0,127}$/.test(key) || key.endsWith(".")) {
+        throw new Error(`Invalid image label "${key}".`);
+      }
+      if (/[\u0000\r\n]/.test(value)) {
+        throw new Error(`Invalid value for image label "${key}". Values cannot contain null bytes or newlines.`);
+      }
+      labels[key] = value;
+    }
+    return labels;
+  };
+
+  const isSafeDockerfileTarget = (target: string): boolean =>
+    !target || (/^[A-Za-z0-9_.-]{1,128}$/.test(target) && !target.startsWith("-") && !target.startsWith("."));
+
+  const isSafeDockerPlatform = (platform: string): boolean =>
+    !platform || (platform.length <= 64 && !platform.startsWith("/") && !platform.includes("//") && /^[A-Za-z0-9_.\/-]+$/.test(platform));
+
+  const buildDockerfileBuildOptions = (): DockerfileBuildOptions => {
+    const target = config.dockerfileTarget.trim();
+    const platform = config.dockerfilePlatform.trim();
+    if (!isSafeDockerfileTarget(target)) {
+      throw new Error(`Invalid Dockerfile target "${target}".`);
+    }
+    if (!isSafeDockerPlatform(platform)) {
+      throw new Error(`Invalid Docker platform "${platform}". Use values like linux/amd64 or linux/arm64/v8.`);
+    }
+    return {
+      $typeName: "obiente.cloud.deployments.v1.DockerfileBuildOptions",
+      target: target || undefined,
+      platform: platform || undefined,
+      noCache: config.dockerfileNoCache,
+      pull: config.dockerfilePull,
+      labels: parseDockerfileLabels(config.dockerfileLabelsText || ""),
+    };
   };
 
   const normalizeContainerMountPath = (mountPath: string): string | null => {
@@ -756,7 +853,12 @@
     buildCommand: getInitialValue("buildCommand"),
     startCommand: getInitialValue("startCommand"),
     dockerfilePath: getInitialValue("dockerfilePath"),
+    dockerfileTarget: props.deployment.dockerfileBuildOptions?.target ?? "",
+    dockerfilePlatform: props.deployment.dockerfileBuildOptions?.platform ?? "",
+    dockerfileNoCache: props.deployment.dockerfileBuildOptions?.noCache ?? false,
+    dockerfilePull: props.deployment.dockerfileBuildOptions?.pull ?? false,
     buildArgsText: formatBuildArgs(props.deployment.buildArgs),
+    dockerfileLabelsText: formatDockerfileLabels(props.deployment.dockerfileBuildOptions?.labels),
     dockerfileVolumesText: formatDockerfileVolumes(props.deployment.dockerfileVolumes),
     composeFilePath: getInitialValue("composeFilePath"),
     buildPath: getInitialValue("buildPath"),
@@ -944,7 +1046,12 @@
         config.buildCommand = props.deployment.buildCommand ?? "";
         config.startCommand = props.deployment.startCommand ?? "";
         config.dockerfilePath = props.deployment.dockerfilePath ?? "";
+        config.dockerfileTarget = props.deployment.dockerfileBuildOptions?.target ?? "";
+        config.dockerfilePlatform = props.deployment.dockerfileBuildOptions?.platform ?? "";
+        config.dockerfileNoCache = props.deployment.dockerfileBuildOptions?.noCache ?? false;
+        config.dockerfilePull = props.deployment.dockerfileBuildOptions?.pull ?? false;
         config.buildArgsText = formatBuildArgs(props.deployment.buildArgs);
+        config.dockerfileLabelsText = formatDockerfileLabels(props.deployment.dockerfileBuildOptions?.labels);
         config.dockerfileVolumesText = formatDockerfileVolumes(props.deployment.dockerfileVolumes);
         config.composeFilePath = props.deployment.composeFilePath ?? "";
         config.buildPath = props.deployment.buildPath ?? "";
@@ -999,7 +1106,12 @@
           config.buildCommand === (props.deployment.buildCommand ?? "") &&
           config.startCommand === (props.deployment.startCommand ?? "") &&
           config.dockerfilePath === (props.deployment.dockerfilePath ?? "") &&
+          config.dockerfileTarget === (props.deployment.dockerfileBuildOptions?.target ?? "") &&
+          config.dockerfilePlatform === (props.deployment.dockerfileBuildOptions?.platform ?? "") &&
+          config.dockerfileNoCache === (props.deployment.dockerfileBuildOptions?.noCache ?? false) &&
+          config.dockerfilePull === (props.deployment.dockerfileBuildOptions?.pull ?? false) &&
           config.buildArgsText === formatBuildArgs(props.deployment.buildArgs) &&
+          config.dockerfileLabelsText === formatDockerfileLabels(props.deployment.dockerfileBuildOptions?.labels) &&
           config.dockerfileVolumesText === formatDockerfileVolumes(props.deployment.dockerfileVolumes) &&
           config.composeFilePath === (props.deployment.composeFilePath ?? "") &&
           config.buildPath === (props.deployment.buildPath ?? "") &&
@@ -1556,6 +1668,7 @@
 
     try {
       const dockerfileVolumes = parseDockerfileVolumes(config.dockerfileVolumesText || "");
+      const dockerfileBuildOptions = buildDockerfileBuildOptions();
       const updates: Partial<UpdateDeploymentRequest> = {
         branch:
           config.branch !== undefined && config.branch !== null
@@ -1578,6 +1691,7 @@
         nginxConfig: config.nginxConfig?.trim() || "",
         buildArgs: parseBuildArgs(config.buildArgsText || ""),
         dockerfileVolumes,
+        dockerfileBuildOptions,
 
         // Healthcheck configuration
         healthcheckType: config.healthcheckType || 0,
