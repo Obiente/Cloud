@@ -41,6 +41,7 @@ interface Props {
   selectedInfoText?: string; // Custom text for selected info, defaults to "Viewing: {service}"
   style?: string | Record<string, string>;
   disabled?: boolean;
+  includeAllOption?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -50,6 +51,7 @@ const props = withDefaults(defineProps<Props>(), {
   showSelectedInfo: false,
   style: () => ({ minWidth: "200px" }),
   disabled: false,
+  includeAllOption: false,
 });
 
 const emit = defineEmits<{
@@ -70,25 +72,24 @@ const selectedValue = ref<string>(props.modelValue || "");
 // Container options for select dropdown
 const containerOptions = computed(() => {
   const options: Array<{ label: string; value: string }> = [];
+
+  if (props.includeAllOption) {
+    options.push({ label: "All services", value: "" });
+  }
   
   // Add first container as default option if containers exist
   if (containers.value.length > 0) {
-    const firstContainer = containers.value[0];
-    if (firstContainer) {
-      const firstLabel = formatContainerLabel(firstContainer);
-      options.push({ label: firstLabel, value: "" });
-      
-      // Add remaining containers
-      for (let i = 1; i < containers.value.length; i++) {
-        const container = containers.value[i];
-        if (container) {
-          const label = formatContainerLabel(container);
-          const value = container.serviceName || container.containerId;
-          options.push({ label, value });
-        }
+    for (let i = 0; i < containers.value.length; i++) {
+      const container = containers.value[i];
+      if (container) {
+        const label = formatContainerLabel(container);
+        const value = props.includeAllOption
+          ? (container.serviceName || container.containerId)
+          : (i === 0 ? "" : (container.serviceName || container.containerId));
+        options.push({ label, value });
       }
     }
-  } else {
+  } else if (!props.includeAllOption) {
     // No containers available - show placeholder option
     options.push({ label: "No containers available", value: "" });
   }
@@ -123,6 +124,9 @@ const formatContainerLabel = (container: { containerId: string; serviceName?: st
 // Selected container info
 const selectedContainer = computed(() => {
   if (!selectedValue.value) {
+    if (props.includeAllOption) {
+      return null;
+    }
     // Return first container if no value selected (default)
     return containers.value.length > 0 ? containers.value[0] : null;
   }
@@ -135,6 +139,9 @@ const selectedContainer = computed(() => {
 
 const selectedLabel = computed(() => {
   if (!selectedValue.value) {
+    if (props.includeAllOption) {
+      return "All services";
+    }
     // Return first container's name with status if no selection
     if (containers.value.length > 0) {
       const firstContainer = containers.value[0];
@@ -223,6 +230,11 @@ const loadContainers = async () => {
     // Emit initial selection after containers load
     // Use nextTick to ensure parent components are ready
     nextTick(() => {
+      if (props.includeAllOption && (!props.modelValue || props.modelValue === "")) {
+        emit("change", null);
+        return;
+      }
+
       // If no explicit modelValue was provided (or it's empty string), emit the first container
       if (!props.modelValue || props.modelValue === "") {
         const firstContainer = containers.value[0] || null;
@@ -274,4 +286,3 @@ onMounted(() => {
   loadContainers();
 });
 </script>
-

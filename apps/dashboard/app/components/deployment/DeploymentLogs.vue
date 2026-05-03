@@ -12,6 +12,7 @@
               :organization-id="effectiveOrgId"
               :model-value="selectedService"
               :show-label="false"
+              :include-all-option="true"
               placeholder="All services"
               :style="{ minWidth: '160px' }"
               @change="onServiceChange"
@@ -284,6 +285,7 @@ const startStream = async (resetLogs = false) => {
   }
 
   let hasReceivedLogs = false;
+  let reconnectAllowed = true;
 
   try {
     // Wait for auth to be ready before making the request
@@ -362,6 +364,11 @@ const startStream = async (resetLogs = false) => {
       return;
     }
 
+    const errorMessage = (error as Error).message || "";
+    if (errorMessage.toLowerCase().includes("authentication required")) {
+      reconnectAllowed = false;
+    }
+
     // Suppress benign errors if we successfully received logs:
     // - "missing trailer": Connect/gRPC-Web quirk where streams end without HTTP trailers
     // - "missing EndStreamResponse": Connect/gRPC-Web quirk where streams end without explicit end marker
@@ -380,21 +387,21 @@ const startStream = async (resetLogs = false) => {
     if (!isBenignError || !hasReceivedLogs) {
       console.error("Log stream error:", error);
       queueLog({
-        line: `[error] Failed to stream logs: ${(error as Error).message}`,
+        line: `[error] Failed to stream logs: ${errorMessage}`,
         timestamp: new Date().toISOString(),
         stderr: true,
         logLevel: 5, // ERROR
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
-      console.debug("Stream ended with benign error:", (error as Error).message);
+      console.debug("Stream ended with benign error:", errorMessage);
     }
   } finally {
     if (runId === streamRunId) {
       isLoading.value = false;
       isFollowing.value = false;
       streamController = null;
-      if (!isAborting) {
+      if (!isAborting && reconnectAllowed) {
         reconnectTimer = setTimeout(() => {
           startStream(false);
         }, hasReceivedLogs ? 1000 : 3000);

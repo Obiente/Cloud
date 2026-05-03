@@ -119,6 +119,17 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 		}
 	}
 
+	if containerID == "" {
+		liveTail := tail
+		if len(persistedLogs) > 0 {
+			liveTail = 0
+		}
+		streamedSwarmLogs, swarmStreamErr := s.streamSwarmServiceLogs(ctx, stream, deploymentID, serviceName, liveTail)
+		if streamedSwarmLogs {
+			return swarmStreamErr
+		}
+	}
+
 	// Find container by container_id or service_name, or use first if neither specified
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
@@ -422,8 +433,11 @@ func readDockerContainerLogLines(reader io.Reader, emit func(*dockerLogLine) boo
 
 		streamType := header[0]
 		frameSize := binary.BigEndian.Uint32(header[4:])
-		if (streamType != 1 && streamType != 2) || frameSize == 0 || frameSize > 16*1024*1024 {
+		if (streamType != 1 && streamType != 2) || frameSize > 16*1024*1024 {
 			return readPlainDockerLogLines(io.MultiReader(bytes.NewReader(header), reader), emit)
+		}
+		if frameSize == 0 {
+			continue
 		}
 
 		payload := make([]byte, frameSize)
@@ -461,6 +475,88 @@ func readPlainDockerLogLines(reader io.Reader, emit func(*dockerLogLine) bool) e
 				return nil
 			}
 			return err
+		}
+	}
+}
+
+func (s *Service) streamSwarmServiceLogs(ctx context.Context, stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], deploymentID, serviceName string, tail int32) (bool, error) {
+	serviceNames, err := listSwarmServiceNames(ctx, deploymentID, serviceName)
+	if err != nil || len(serviceNames) == 0 {
+		return false, nil
+	}
+
+	logChan := make(chan *deploymentsv1.DeploymentLogLine, 100)
+	var wg sync.WaitGroup
+	started := 0
+
+	for _, swarmServiceName := range serviceNames {
+		args := []string{"service", "logs", "--timestamps", "--tail", fmt.Sprintf("%d", tail), "--raw", "--follow", swarmServiceName}
+		cmd := exec.CommandContext(ctx, "docker", args...)
+
+		stdout, stdoutErr := cmd.StdoutPipe()
+		if stdoutErr != nil {
+			continue
+		}
+		stderr, stderrErr := cmd.StderrPipe()
+		if stderrErr != nil {
+			continue
+		}
+		if startErr := cmd.Start(); startErr != nil {
+			continue
+		}
+		started++
+
+		sendLine := func(line *dockerLogLine) bool {
+			select {
+			case logChan <- dockerLogLineToProto(deploymentID, line):
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			_ = readPlainDockerLogLines(stdout, sendLine)
+		}()
+		go func() {
+			defer wg.Done()
+			_ = readPlainDockerLogLines(stderr, func(line *dockerLogLine) bool {
+				line.stderr = true
+				return sendLine(line)
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			if waitErr := cmd.Wait(); waitErr != nil && ctx.Err() == nil {
+				log.Printf("[StreamDeploymentLogs] docker service logs failed for %s: %v", swarmServiceName, waitErr)
+			}
+		}()
+	}
+	if started == 0 {
+		return false, nil
+	}
+
+	go func() {
+		wg.Wait()
+		close(logChan)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return true, nil
+		case line, ok := <-logChan:
+			if !ok {
+				return true, nil
+			}
+			if sendErr := stream.Send(line); sendErr != nil {
+				if ctx.Err() != nil {
+					return true, nil
+				}
+				return true, sendErr
+			}
 		}
 	}
 }
