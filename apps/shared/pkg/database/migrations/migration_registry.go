@@ -65,6 +65,7 @@ func RegisterDeploymentsMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_005", "Add start_command column to deployments", addStartCommandColumn)
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
+	registry.Register("2026_05_03_001", "Add Dockerfile build args and volumes to deployments", addDockerfileBuildArgsAndVolumes)
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
 }
@@ -321,6 +322,20 @@ func addBuildPathsAndNginxConfig(db *gorm.DB) error {
 	return nil
 }
 
+func addDockerfileBuildArgsAndVolumes(db *gorm.DB) error {
+	if !db.Migrator().HasColumn("deployments", "build_args") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN build_args JSONB DEFAULT '{}'::jsonb").Error; err != nil {
+			return err
+		}
+	}
+	if !db.Migrator().HasColumn("deployments", "dockerfile_volumes") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN dockerfile_volumes JSONB DEFAULT '[]'::jsonb").Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // addRegionToNodeMetadata adds the region column to node_metadata table for multi-region DNS routing
 func addRegionToNodeMetadata(db *gorm.DB) error {
 	// Check if column already exists
@@ -566,8 +581,8 @@ func ensureDelegatedDNSRecordsConstraint(db *gorm.DB) error {
 	}
 
 	// Check if columns exist
-	if !db.Migrator().HasColumn("delegated_dns_records", "domain") || 
-	   !db.Migrator().HasColumn("delegated_dns_records", "record_type") {
+	if !db.Migrator().HasColumn("delegated_dns_records", "domain") ||
+		!db.Migrator().HasColumn("delegated_dns_records", "record_type") {
 		// Columns don't exist yet, will be created by AutoMigrate
 		return nil
 	}
@@ -724,11 +739,11 @@ func migrateOrganizationMemberRoles(db *gorm.DB) error {
 			WHERE LOWER(role) = LOWER(?) 
 			AND role != ?
 		`, newRoleID, oldRole, newRoleID)
-		
+
 		if result.Error != nil {
 			return fmt.Errorf("failed to migrate role %s to %s: %w", oldRole, newRoleID, result.Error)
 		}
-		
+
 		if result.RowsAffected > 0 {
 			logger.Info("Migrated %d organization members from role '%s' to '%s'", result.RowsAffected, oldRole, newRoleID)
 		}

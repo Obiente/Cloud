@@ -135,6 +135,8 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	} else {
 		deployment.EnvVars = make(map[string]string)
 	}
+	deployment.BuildArgs = parseJSONStringMap(db.BuildArgs)
+	deployment.DockerfileVolumes = parseDockerfileVolumesToProto(db.DockerfileVolumes)
 
 	// Convert timestamps
 	if !db.LastDeployedAt.IsZero() {
@@ -291,6 +293,60 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 	} else {
 		db.EnvVars = "{}"
 	}
+	if len(protoDep.GetBuildArgs()) > 0 {
+		buildArgsJSON, _ := json.Marshal(protoDep.GetBuildArgs())
+		db.BuildArgs = string(buildArgsJSON)
+	} else {
+		db.BuildArgs = "{}"
+	}
+	db.DockerfileVolumes = marshalDockerfileVolumes(protoDep.GetDockerfileVolumes())
 
 	return db
+}
+
+func parseJSONStringMap(raw string) map[string]string {
+	values := make(map[string]string)
+	if strings.TrimSpace(raw) == "" {
+		return values
+	}
+	_ = json.Unmarshal([]byte(raw), &values)
+	return values
+}
+
+func parseDockerfileVolumesToProto(raw string) []*deploymentsv1.DockerfileVolume {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var volumes []*deploymentsv1.DockerfileVolume
+	if err := json.Unmarshal([]byte(raw), &volumes); err == nil {
+		return volumes
+	}
+	var stored []struct {
+		Name      string `json:"name"`
+		MountPath string `json:"mount_path"`
+		ReadOnly  bool   `json:"read_only"`
+	}
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return nil
+	}
+	volumes = make([]*deploymentsv1.DockerfileVolume, 0, len(stored))
+	for _, volume := range stored {
+		volumes = append(volumes, &deploymentsv1.DockerfileVolume{
+			Name:      volume.Name,
+			MountPath: volume.MountPath,
+			ReadOnly:  volume.ReadOnly,
+		})
+	}
+	return volumes
+}
+
+func marshalDockerfileVolumes(volumes []*deploymentsv1.DockerfileVolume) string {
+	if len(volumes) == 0 {
+		return "[]"
+	}
+	data, err := json.Marshal(volumes)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }

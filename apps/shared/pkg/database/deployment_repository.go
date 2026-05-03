@@ -128,7 +128,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 			"healthcheck_type", "healthcheck_port", "healthcheck_path", "healthcheck_expected_status", "healthcheck_custom_command",
 			"status", "health_status", "environment", "groups",
 			"image", "port", "replicas", "memory_bytes", "cpu_shares",
-			"env_vars", "env_file_content", "compose_yaml",
+			"env_vars", "env_file_content", "compose_yaml", "build_args", "dockerfile_volumes",
 			"build_time", "size", "storage_bytes", "bandwidth_usage",
 			"last_deployed_at", "updated_at",
 		).

@@ -49,6 +49,7 @@ type DeploymentConfig struct {
 	CPUShares    int64
 	Replicas     int
 	StartCommand *string // Optional start command to override container CMD
+	Volumes      []DeploymentVolume
 
 	// Health check configuration
 	HealthcheckType           *int32  // Type of health check (HealthCheckType enum: DISABLED, TCP, HTTP, CUSTOM)
@@ -57,6 +58,12 @@ type DeploymentConfig struct {
 	HealthcheckExpectedStatus *int32  // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
 	HealthcheckCustomCommand  *string // Custom command (sanitized, used with HEALTHCHECK_CUSTOM)
 	TargetNodeID              string
+}
+
+type DeploymentVolume struct {
+	Name      string
+	MountPath string
+	ReadOnly  bool
 }
 
 func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*DeploymentManager, error) {

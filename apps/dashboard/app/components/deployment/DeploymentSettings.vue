@@ -290,6 +290,25 @@
             />
           </OuiGrid>
 
+          <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md" v-if="buildStrategy === BuildStrategy.DOCKERFILE">
+            <OuiTextarea
+              v-model="config.buildArgsText"
+              label="Build Args"
+              placeholder="NODE_VERSION=22&#10;APP_ENV=production"
+              helper-text="One KEY=value per line. These are passed to docker build as --build-arg."
+              :rows="5"
+              @update:model-value="markConfigDirty"
+            />
+            <OuiTextarea
+              v-model="config.dockerfileVolumesText"
+              label="Persistent Volumes"
+              placeholder="data:/data&#10;uploads:/app/uploads:ro"
+              helper-text="One name:/container/path[:ro] per line. Names are scoped to this deployment and stored under Obiente-managed volume storage."
+              :rows="5"
+              @update:model-value="markConfigDirty"
+            />
+          </OuiGrid>
+
           <!-- Compose file path input -->
           <OuiGrid :cols="{ sm: 1 }"
            
@@ -515,7 +534,7 @@
 <script setup lang="ts">
   import { ref, reactive, watchEffect, computed, watch, onMounted } from "vue";
   import { LinkIcon, TrashIcon, PencilIcon } from "@heroicons/vue/24/outline";
-  import { type Deployment, type UpdateDeploymentRequest } from "@obiente/proto";
+  import { type Deployment, type DockerfileVolume, type UpdateDeploymentRequest } from "@obiente/proto";
   import {
     DeploymentType,
     Environment as EnvEnum,
@@ -631,6 +650,59 @@
     }
   };
 
+  const formatBuildArgs = (args?: Record<string, string>) =>
+    Object.entries(args || {})
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n");
+
+  const formatDockerfileVolumes = (volumes?: DockerfileVolume[]) =>
+    (volumes || [])
+      .map((volume) => `${volume.name}:${volume.mountPath}${volume.readOnly ? ":ro" : ""}`)
+      .join("\n");
+
+  const parseBuildArgs = (text: string): Record<string, string> => {
+    const args: Record<string, string> = {};
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const separatorIndex = line.indexOf("=");
+      if (separatorIndex <= 0) continue;
+      const key = line.slice(0, separatorIndex).trim();
+      if (!key || /[\s=]/.test(key)) continue;
+      args[key] = line.slice(separatorIndex + 1);
+    }
+    return args;
+  };
+
+  const parseDockerfileVolumes = (text: string): DockerfileVolume[] => {
+    const volumes: DockerfileVolume[] = [];
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const parts = line.split(":");
+      if (parts.length < 2 || parts.length > 3) {
+        throw new Error(`Invalid volume "${line}". Use name:/container/path[:ro].`);
+      }
+      const [name, mountPath, mode] = parts;
+      if (!name || !/^[A-Za-z0-9_.-]+$/.test(name)) {
+        throw new Error(`Invalid volume name "${name}". Use letters, numbers, dots, dashes, or underscores.`);
+      }
+      if (!mountPath?.startsWith("/")) {
+        throw new Error(`Invalid mount path "${mountPath}". Use an absolute container path.`);
+      }
+      if (mode && mode !== "ro" && mode !== "rw") {
+        throw new Error(`Invalid volume mode "${mode}". Use ro or rw.`);
+      }
+      volumes.push({
+        $typeName: "obiente.cloud.deployments.v1.DockerfileVolume",
+        name,
+        mountPath,
+        readOnly: mode === "ro",
+      });
+    }
+    return volumes;
+  };
+
   const config = reactive({
     repositoryUrl: getInitialValue("repositoryUrl"),
     branch: getInitialValue("branch"),
@@ -638,6 +710,8 @@
     buildCommand: getInitialValue("buildCommand"),
     startCommand: getInitialValue("startCommand"),
     dockerfilePath: getInitialValue("dockerfilePath"),
+    buildArgsText: formatBuildArgs(props.deployment.buildArgs),
+    dockerfileVolumesText: formatDockerfileVolumes(props.deployment.dockerfileVolumes),
     composeFilePath: getInitialValue("composeFilePath"),
     buildPath: getInitialValue("buildPath"),
     buildOutputPath: getInitialValue("buildOutputPath"),
@@ -824,6 +898,8 @@
         config.buildCommand = props.deployment.buildCommand ?? "";
         config.startCommand = props.deployment.startCommand ?? "";
         config.dockerfilePath = props.deployment.dockerfilePath ?? "";
+        config.buildArgsText = formatBuildArgs(props.deployment.buildArgs);
+        config.dockerfileVolumesText = formatDockerfileVolumes(props.deployment.dockerfileVolumes);
         config.composeFilePath = props.deployment.composeFilePath ?? "";
         config.buildPath = props.deployment.buildPath ?? "";
         config.buildOutputPath = props.deployment.buildOutputPath ?? "";
@@ -877,6 +953,8 @@
           config.buildCommand === (props.deployment.buildCommand ?? "") &&
           config.startCommand === (props.deployment.startCommand ?? "") &&
           config.dockerfilePath === (props.deployment.dockerfilePath ?? "") &&
+          config.buildArgsText === formatBuildArgs(props.deployment.buildArgs) &&
+          config.dockerfileVolumesText === formatDockerfileVolumes(props.deployment.dockerfileVolumes) &&
           config.composeFilePath === (props.deployment.composeFilePath ?? "") &&
           config.buildPath === (props.deployment.buildPath ?? "") &&
           config.buildOutputPath === (props.deployment.buildOutputPath ?? "") &&
@@ -1425,6 +1503,7 @@
     configSuccess.value = false;
 
     try {
+      const dockerfileVolumes = parseDockerfileVolumes(config.dockerfileVolumesText || "");
       const updates: Partial<UpdateDeploymentRequest> = {
         branch:
           config.branch !== undefined && config.branch !== null
@@ -1445,6 +1524,8 @@
         buildOutputPath: config.buildOutputPath?.trim() || "",
         useNginx: true, // Always use nginx for static deployments
         nginxConfig: config.nginxConfig?.trim() || "",
+        buildArgs: parseBuildArgs(config.buildArgsText || ""),
+        dockerfileVolumes,
 
         // Healthcheck configuration
         healthcheckType: config.healthcheckType || 0,

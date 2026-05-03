@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	containerpath "path"
 	"strings"
 	"time"
 
@@ -476,6 +477,22 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			dbDeployment.HealthcheckCustomCommand = nil
 		}
 	}
+	if req.Msg.BuildArgs != nil {
+		buildArgs, err := sanitizeBuildArgs(req.Msg.GetBuildArgs())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		data, _ := json.Marshal(buildArgs)
+		dbDeployment.BuildArgs = string(data)
+	}
+	if req.Msg.DockerfileVolumes != nil {
+		volumes, err := sanitizeDockerfileVolumes(req.Msg.GetDockerfileVolumes())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		data, _ := json.Marshal(volumes)
+		dbDeployment.DockerfileVolumes = string(data)
+	}
 
 	if req.Msg.Port != nil {
 		port := req.Msg.GetPort()
@@ -653,6 +670,99 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	protoDeployment := dbDeploymentToProto(dbDeployment)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentResponse{Deployment: protoDeployment})
 	return res, nil
+}
+
+func sanitizeBuildArgs(args map[string]string) (map[string]string, error) {
+	sanitized := make(map[string]string)
+	for key, value := range args {
+		key = strings.TrimSpace(key)
+		if !isSafeBuildArgName(key) {
+			return nil, fmt.Errorf("invalid build arg name %q: use letters, numbers, and underscores, and start with a letter or underscore", key)
+		}
+		if strings.ContainsAny(value, "\x00\r\n") {
+			return nil, fmt.Errorf("invalid value for build arg %q: values cannot contain null bytes or newlines", key)
+		}
+		sanitized[key] = value
+	}
+	return sanitized, nil
+}
+
+func isSafeBuildArgName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, r := range name {
+		if r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (i > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func sanitizeDockerfileVolumes(volumes []*deploymentsv1.DockerfileVolume) ([]map[string]interface{}, error) {
+	sanitized := make([]map[string]interface{}, 0, len(volumes))
+	seenMounts := make(map[string]struct{})
+	for _, volume := range volumes {
+		if volume == nil {
+			continue
+		}
+		name := strings.TrimSpace(volume.GetName())
+		mountPath, ok := cleanDockerfileMountPath(volume.GetMountPath())
+		if !isSafeDockerfileVolumeName(name) {
+			return nil, fmt.Errorf("invalid volume name %q: use letters, numbers, dots, dashes, or underscores", name)
+		}
+		if !ok {
+			return nil, fmt.Errorf("invalid mount path %q: use an absolute container path outside /proc, /sys, /dev, and the Docker socket", volume.GetMountPath())
+		}
+		if _, exists := seenMounts[mountPath]; exists {
+			return nil, fmt.Errorf("duplicate mount path %q", mountPath)
+		}
+		seenMounts[mountPath] = struct{}{}
+		sanitized = append(sanitized, map[string]interface{}{
+			"name":       name,
+			"mount_path": mountPath,
+			"read_only":  volume.GetReadOnly(),
+		})
+	}
+	return sanitized, nil
+}
+
+func isSafeDockerfileVolumeName(name string) bool {
+	if name == "" || len(name) > 64 || name == "." || name == ".." {
+		return false
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isSafeContainerMountPath(path string) bool {
+	_, ok := cleanDockerfileMountPath(path)
+	return ok
+}
+
+func cleanDockerfileMountPath(mountPath string) (string, bool) {
+	mountPath = strings.TrimSpace(mountPath)
+	if mountPath == "" || !strings.HasPrefix(mountPath, "/") || strings.Contains(mountPath, "\x00") || strings.Contains(mountPath, ":") {
+		return "", false
+	}
+	cleaned := containerpath.Clean(mountPath)
+	if cleaned == "/" || cleaned == "." ||
+		cleaned == "/proc" || strings.HasPrefix(cleaned, "/proc/") ||
+		cleaned == "/sys" || strings.HasPrefix(cleaned, "/sys/") ||
+		cleaned == "/dev" || strings.HasPrefix(cleaned, "/dev/") ||
+		cleaned == "/var/run/docker.sock" || cleaned == "/run/docker.sock" {
+		return "", false
+	}
+	if strings.Contains(cleaned, "\x00") || strings.Contains(cleaned, ":") {
+		return "", false
+	}
+	return cleaned, true
 }
 
 // DeleteDeployment deletes a deployment

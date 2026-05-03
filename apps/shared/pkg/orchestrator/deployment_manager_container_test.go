@@ -92,3 +92,67 @@ func TestSwarmDisableHealthcheckArgs(t *testing.T) {
 		t.Fatalf("swarmDisableHealthcheckArgs() = %#v, want [--no-healthcheck]", got)
 	}
 }
+
+func TestDockerfileVolumeSanitizers(t *testing.T) {
+	t.Parallel()
+
+	validNames := []string{"data", "uploads.v1", "cache-dir", "_private"}
+	for _, name := range validNames {
+		name := name
+		t.Run("valid name "+name, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeVolumeName(name); got != name {
+				t.Fatalf("sanitizeVolumeName(%q) = %q, want %q", name, got, name)
+			}
+		})
+	}
+
+	invalidNames := []string{"", ".", "..", "../host", "data/slash", "bad name", "bad:mode", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	for _, name := range invalidNames {
+		name := name
+		t.Run("invalid name "+name, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeVolumeName(name); got != "" {
+				t.Fatalf("sanitizeVolumeName(%q) = %q, want empty", name, got)
+			}
+		})
+	}
+
+	validMounts := map[string]string{
+		"/data":          "/data",
+		" /app/uploads/": "/app/uploads",
+	}
+	for input, want := range validMounts {
+		input, want := input, want
+		t.Run("valid mount "+input, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeContainerMountPath(input); got != want {
+				t.Fatalf("sanitizeContainerMountPath(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+
+	invalidMounts := []string{
+		"",
+		"data",
+		"/",
+		"/proc",
+		"/proc/self",
+		"/sys/kernel",
+		"/dev/shm",
+		"/app/../proc/self",
+		"/var/run/docker.sock",
+		"/run/docker.sock",
+		"/data:rw",
+		"/data\x00evil",
+	}
+	for _, mount := range invalidMounts {
+		mount := mount
+		t.Run("invalid mount "+mount, func(t *testing.T) {
+			t.Parallel()
+			if got := sanitizeContainerMountPath(mount); got != "" {
+				t.Fatalf("sanitizeContainerMountPath(%q) = %q, want empty", mount, got)
+			}
+		})
+	}
+}

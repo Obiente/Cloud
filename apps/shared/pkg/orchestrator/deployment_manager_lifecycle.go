@@ -376,6 +376,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				CPUShares:                 cpuShares,
 				Replicas:                  replicas,
 				StartCommand:              deployment.StartCommand,
+				Volumes:                   parseStoredDockerfileVolumes(deployment.DockerfileVolumes),
 				HealthcheckType:           deployment.HealthcheckType,
 				HealthcheckPort:           deployment.HealthcheckPort,
 				HealthcheckPath:           deployment.HealthcheckPath,
@@ -508,6 +509,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					CPUShares:                 cpuShares,
 					Replicas:                  replicas,
 					StartCommand:              deployment.StartCommand,
+					Volumes:                   parseStoredDockerfileVolumes(deployment.DockerfileVolumes),
 					HealthcheckType:           deployment.HealthcheckType,
 					HealthcheckPort:           deployment.HealthcheckPort,
 					HealthcheckPath:           deployment.HealthcheckPath,
@@ -854,6 +856,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		CPUShares:                 cpuShares,
 		Replicas:                  replicas,
 		StartCommand:              deployment.StartCommand,
+		Volumes:                   parseStoredDockerfileVolumes(deployment.DockerfileVolumes),
 		HealthcheckType:           deployment.HealthcheckType,
 		HealthcheckPort:           deployment.HealthcheckPort,
 		HealthcheckPath:           deployment.HealthcheckPath,
@@ -873,6 +876,33 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 
 	logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s with updated configs", deploymentID)
 	return nil
+}
+
+func parseStoredDockerfileVolumes(raw string) []DeploymentVolume {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var stored []DeploymentVolume
+	if err := json.Unmarshal([]byte(raw), &stored); err == nil {
+		return stored
+	}
+	var snakeCaseStored []struct {
+		Name      string `json:"name"`
+		MountPath string `json:"mount_path"`
+		ReadOnly  bool   `json:"read_only"`
+	}
+	if err := json.Unmarshal([]byte(raw), &snakeCaseStored); err != nil {
+		return nil
+	}
+	volumes := make([]DeploymentVolume, 0, len(snakeCaseStored))
+	for _, volume := range snakeCaseStored {
+		volumes = append(volumes, DeploymentVolume{
+			Name:      volume.Name,
+			MountPath: volume.MountPath,
+			ReadOnly:  volume.ReadOnly,
+		})
+	}
+	return volumes
 }
 
 // ScaleDeployment changes the number of replicas for a deployment

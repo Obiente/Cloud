@@ -300,6 +300,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			UseNginx:        useNginx, // Always true for static deployments
 			NginxConfig:     nginxConfig,
 			EnvVars:         parseEnvVars(dbDeployment.EnvVars),
+			BuildArgs:       parseEnvVars(dbDeployment.BuildArgs),
 			Port:            port,
 			MemoryBytes:     memoryBytes,
 			CPUShares:       cpuShares,
@@ -916,6 +917,7 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 					Memory:                    memory,
 					CPUShares:                 cpuShares,
 					Replicas:                  replicas,
+					Volumes:                   parseDockerfileVolumesForOrchestrator(dbDep.DockerfileVolumes),
 					HealthcheckType:           dbDep.HealthcheckType,
 					HealthcheckPort:           dbDep.HealthcheckPort,
 					HealthcheckPath:           dbDep.HealthcheckPath,

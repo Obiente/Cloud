@@ -3,10 +3,13 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/netip"
 	"os"
 	"os/exec"
+	containerpath "path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +40,89 @@ const (
 	swarmMinCPUReservation      = 0.01
 	swarmMaxCPUReservation      = 0.10
 )
+
+func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
+	binds := make([]string, 0, len(volumes))
+	mountFlags := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		name := sanitizeVolumeName(volume.Name)
+		mountPath := sanitizeContainerMountPath(volume.MountPath)
+		if name == "" || mountPath == "" {
+			continue
+		}
+
+		hostPath := filepath.Join("/var/lib/obiente/volumes", deploymentID, name)
+		if err := os.MkdirAll(hostPath, 0o755); err != nil {
+			logger.Warn("[DeploymentManager] Failed to create volume directory %s: %v", hostPath, err)
+			continue
+		}
+
+		bind := fmt.Sprintf("%s:%s", hostPath, mountPath)
+		mountFlag := fmt.Sprintf("type=bind,src=%s,dst=%s", hostPath, mountPath)
+		if volume.ReadOnly {
+			bind += ":ro"
+			mountFlag += ",readonly"
+		}
+		binds = append(binds, bind)
+		mountFlags = append(mountFlags, mountFlag)
+	}
+	return binds, mountFlags
+}
+
+func sanitizeVolumeName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 64 || name == "." || name == ".." {
+		return ""
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return ""
+	}
+	return name
+}
+
+func sanitizeContainerMountPath(mountPath string) string {
+	mountPath = strings.TrimSpace(mountPath)
+	if mountPath == "" || !strings.HasPrefix(mountPath, "/") || strings.Contains(mountPath, "\x00") || strings.Contains(mountPath, ":") {
+		return ""
+	}
+	cleaned := containerpath.Clean(mountPath)
+	if cleaned == "/" || cleaned == "." ||
+		cleaned == "/proc" || strings.HasPrefix(cleaned, "/proc/") ||
+		cleaned == "/sys" || strings.HasPrefix(cleaned, "/sys/") ||
+		cleaned == "/dev" || strings.HasPrefix(cleaned, "/dev/") ||
+		cleaned == "/var/run/docker.sock" || cleaned == "/run/docker.sock" {
+		return ""
+	}
+	return cleaned
+}
+
+func existingSwarmServiceMountTargets(ctx context.Context, serviceName string) []string {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.ContainerSpec.Mounts}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Debug("[DeploymentManager] Failed to inspect mounts for service %s: %v", serviceName, err)
+		return nil
+	}
+	var mounts []struct {
+		Target string `json:"Target"`
+		Source string `json:"Source"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output), &mounts); err != nil {
+		logger.Debug("[DeploymentManager] Failed to parse mounts for service %s: %v", serviceName, err)
+		return nil
+	}
+	obienteVolumePrefix := filepath.Join("/var/lib/obiente/volumes")
+	targets := make([]string, 0, len(mounts))
+	for _, mount := range mounts {
+		if mount.Target != "" && strings.HasPrefix(mount.Source, obienteVolumePrefix) {
+			targets = append(targets, mount.Target)
+		}
+	}
+	return targets
+}
 
 func swarmMemoryReservation(limitBytes int64) int64 {
 	if limitBytes <= 0 {
@@ -411,11 +497,10 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	nanoCPUs := int64(cpuCores * 1e9)
 
 	// Host configuration
-	// SECURITY: No volumes or bind mounts are configured here by default
-	// If volumes are needed in the future, they MUST be sanitized through ComposeSanitizer
-	// to ensure they are contained within the user's safe directory structure
+	binds, _ := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
+		Binds:        binds,
 		RestartPolicy: container.RestartPolicy{
 			Name: "unless-stopped",
 		},
@@ -625,6 +710,11 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Add environment variables
 	for _, e := range env {
 		args = append(args, "--env", e)
+	}
+
+	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	for _, mountFlag := range mountFlags {
+		args = append(args, "--mount", mountFlag)
 	}
 
 	// Add health check based on configuration
@@ -1278,6 +1368,14 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// so we'll add the new ones and they'll replace the old ones
 	for _, e := range env {
 		args = append(args, "--env-add", e)
+	}
+
+	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
+		args = append(args, "--mount-rm", target)
+	}
+	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	for _, mountFlag := range mountFlags {
+		args = append(args, "--mount-add", mountFlag)
 	}
 
 	// Update health check based on configuration

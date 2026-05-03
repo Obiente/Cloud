@@ -118,6 +118,7 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 				Memory:                    memory,
 				CPUShares:                 cpuShares,
 				Replicas:                  replicas,
+				Volumes:                   parseDockerfileVolumesForOrchestrator(dbDep.DockerfileVolumes),
 				HealthcheckType:           dbDep.HealthcheckType,
 				HealthcheckPort:           dbDep.HealthcheckPort,
 				HealthcheckPath:           dbDep.HealthcheckPath,

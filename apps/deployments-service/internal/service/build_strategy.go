@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -48,6 +49,7 @@ type BuildConfig struct {
 	UseNginx        bool   // Use nginx for static deployments
 	NginxConfig     string // Custom nginx configuration (optional, uses default if empty)
 	EnvVars         map[string]string
+	BuildArgs       map[string]string
 	Port            int
 	MemoryBytes     int64
 	CPUShares       int64
@@ -444,17 +446,11 @@ func getEnvAsStringSlice(envVars map[string]string) []string {
 }
 
 // buildDockerImage builds a Docker image from a directory
-func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, logWriter, logWriterErr io.Writer) error {
-	args := []string{"build", "-t", imageName}
-	if dockerfile != "" {
-		// If dockerfile is a relative path, make it absolute relative to dir
-		// If it's already absolute, use it as-is
-		if !filepath.IsAbs(dockerfile) {
-			dockerfile = filepath.Join(dir, dockerfile)
-		}
-		args = append(args, "-f", dockerfile)
+func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, buildArgs map[string]string, logWriter, logWriterErr io.Writer) error {
+	args, err := dockerBuildCommandArgs(dir, imageName, dockerfile, buildArgs)
+	if err != nil {
+		return err
 	}
-	args = append(args, dir)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 
@@ -471,6 +467,33 @@ func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, lo
 	}
 
 	return cmd.Run()
+}
+
+func dockerBuildCommandArgs(dir, imageName, dockerfile string, buildArgs map[string]string) ([]string, error) {
+	args := []string{"build", "-t", imageName}
+	if dockerfile != "" {
+		// If dockerfile is a relative path, make it absolute relative to dir
+		// If it's already absolute, use it as-is
+		if !filepath.IsAbs(dockerfile) {
+			dockerfile = filepath.Join(dir, dockerfile)
+		}
+		args = append(args, "-f", dockerfile)
+	}
+	sanitizedBuildArgs, err := sanitizeBuildArgs(buildArgs)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(sanitizedBuildArgs))
+	for key := range sanitizedBuildArgs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		value := sanitizedBuildArgs[key]
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	args = append(args, dir)
+	return args, nil
 }
 
 // getImageSize gets the size of a Docker image in bytes
@@ -588,10 +611,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			}
 		}
 
-		envVars := make(map[string]string)
-		if deployment.EnvVars != "" {
-			// Parse env vars from JSON (implement parseEnvVars if needed)
-		}
+		envVars := parseEnvVars(deployment.EnvVars)
 
 		memory := int64(512 * 1024 * 1024) // Default 512MB
 		if deployment.MemoryBytes != nil {
@@ -665,6 +685,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			CPUShares:                 cpuShares,
 			Replicas:                  1,
 			StartCommand:              startCmd, // Pass start command to override container CMD
+			Volumes:                   parseDockerfileVolumesForOrchestrator(deployment.DockerfileVolumes),
 			HealthcheckType:           deployment.HealthcheckType,
 			HealthcheckPort:           deployment.HealthcheckPort,
 			HealthcheckPath:           deployment.HealthcheckPath,
@@ -684,4 +705,27 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 	}
 
 	return fmt.Errorf("build result contains neither image nor compose yaml")
+}
+
+func parseDockerfileVolumesForOrchestrator(raw string) []orchestrator.DeploymentVolume {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var stored []struct {
+		Name      string `json:"name"`
+		MountPath string `json:"mount_path"`
+		ReadOnly  bool   `json:"read_only"`
+	}
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return nil
+	}
+	volumes := make([]orchestrator.DeploymentVolume, 0, len(stored))
+	for _, volume := range stored {
+		volumes = append(volumes, orchestrator.DeploymentVolume{
+			Name:      volume.Name,
+			MountPath: volume.MountPath,
+			ReadOnly:  volume.ReadOnly,
+		})
+	}
+	return volumes
 }
