@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
     );
   }
 
-  const state = encodeGitHubAppInstallState({
+  const state = encodeGitHubAppInstallState(event, {
     random: crypto.randomUUID().replace(/-/g, ""),
     orgId,
   });

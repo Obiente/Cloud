@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
       )}`
     );
 
-  if (!verifyGitHubAppInstallState(getGitHubAppInstallStateCookie(event), state)) {
+  if (!verifyGitHubAppInstallState(event, getGitHubAppInstallStateCookie(event), state)) {
     clearGitHubAppInstallStateCookie(event);
     return redirectToSettings("invalid_state");
   }
@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
       return redirectToSettings("github_app_client_not_configured");
     }
 
-    const authState = encodeGitHubAppInstallState({
+    const authState = encodeGitHubAppInstallState(event, {
       random: crypto.randomUUID().replace(/-/g, ""),
       orgId: stateData.orgId,
       installationId: String(installationId),

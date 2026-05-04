@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { H3Event } from "h3";
 import { createError, deleteCookie, getCookie, setCookie } from "h3";
 
@@ -13,15 +13,23 @@ export interface GitHubAppInstallState {
   repositorySelection?: string;
 }
 
-export function encodeGitHubAppInstallState(state: GitHubAppInstallState): string {
-  return Buffer.from(JSON.stringify(state), "utf-8").toString("base64");
+export function encodeGitHubAppInstallState(
+  event: H3Event,
+  state: GitHubAppInstallState
+): string {
+  const payload = Buffer.from(JSON.stringify(state), "utf-8").toString(
+    "base64url"
+  );
+  const signature = signGitHubAppInstallState(event, payload);
+  return `${payload}.${signature}`;
 }
 
 export function decodeGitHubAppInstallState(state: string): GitHubAppInstallState {
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(Buffer.from(state, "base64").toString("utf-8"));
+    const payload = state.includes(".") ? state.split(".")[0] || "" : state;
+    parsed = JSON.parse(Buffer.from(payload, "base64").toString("utf-8"));
   } catch {
     throw createError({
       statusCode: 400,
@@ -94,18 +102,62 @@ export function clearGitHubAppInstallStateCookie(event: H3Event): void {
 }
 
 export function verifyGitHubAppInstallState(
+  event: H3Event,
   expectedState: string | undefined,
   actualState: string | undefined
 ): boolean {
-  if (!expectedState || !actualState) {
+  if (!actualState) {
     return false;
   }
 
-  const expected = Buffer.from(expectedState, "utf-8");
-  const actual = Buffer.from(actualState, "utf-8");
-  if (expected.length !== actual.length) {
+  if (expectedState) {
+    const expected = Buffer.from(expectedState, "utf-8");
+    const actual = Buffer.from(actualState, "utf-8");
+    if (expected.length === actual.length && timingSafeEqual(expected, actual)) {
+      return true;
+    }
+  }
+
+  return verifySignedGitHubAppInstallState(event, actualState);
+}
+
+function signGitHubAppInstallState(event: H3Event, payload: string): string {
+  return createHmac("sha256", getGitHubAppInstallStateSecret(event))
+    .update(payload)
+    .digest("base64url");
+}
+
+function verifySignedGitHubAppInstallState(
+  event: H3Event,
+  state: string
+): boolean {
+  const [payload, signature, extra] = state.split(".");
+  if (!payload || !signature || extra !== undefined) {
     return false;
   }
 
-  return timingSafeEqual(expected, actual);
+  const expectedSignature = signGitHubAppInstallState(event, payload);
+  const expected = Buffer.from(expectedSignature, "utf-8");
+  const actual = Buffer.from(signature, "utf-8");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+function getGitHubAppInstallStateSecret(event: H3Event): string {
+  const config = useRuntimeConfig(event);
+  const secret =
+    config.session?.password ||
+    process.env.NUXT_SESSION_PASSWORD ||
+    process.env.SESSION_SECRET ||
+    process.env.SECRET ||
+    "";
+
+  if (typeof secret !== "string" || secret.length < 32) {
+    throw createError({
+      statusCode: 500,
+      statusMessage:
+        "GitHub App install state signing requires NUXT_SESSION_PASSWORD or another strong server secret",
+    });
+  }
+
+  return secret;
 }
