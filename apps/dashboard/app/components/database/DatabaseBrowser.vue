@@ -943,7 +943,7 @@ const tableColumns = computed<TableColumn[]>(() => {
     cols.push({
       key: col.name,
       label: col.name,
-      minWidth: getColumnWidth(col.name, col.dataType),
+      minWidth: getColumnMinWidth(col.name, col.dataType),
       defaultWidth: getColumnWidth(col.name, col.dataType),
       sortable: true,
     });
@@ -1020,6 +1020,29 @@ function getColumnWidth(name: string, dataType: string): number {
     return 120;
   }
   return 180;
+}
+
+function getColumnMinWidth(name: string, dataType: string): number {
+  const normalizedType = dataType.toLowerCase();
+  const normalizedName = name.toLowerCase();
+
+  if (normalizedName === "id") {
+    return 72;
+  }
+  if (normalizedName.endsWith("_id") || normalizedType.includes("uuid")) {
+    return 96;
+  }
+  if (
+    normalizedType.includes("int") ||
+    normalizedType.includes("numeric") ||
+    normalizedType.includes("decimal") ||
+    normalizedType.includes("float") ||
+    normalizedType.includes("double") ||
+    normalizedType.includes("bool")
+  ) {
+    return 72;
+  }
+  return 96;
 }
 
 function selectTable(table: SchemaTable) {
@@ -1169,7 +1192,32 @@ function normalizeCellValue(value: any): any {
   if (value instanceof Uint8Array) {
     return new TextDecoder().decode(value);
   }
+  if (typeof value === "string") {
+    const bytes = parseByteArrayString(value);
+    if (bytes) {
+      return String.fromCharCode(...bytes);
+    }
+  }
   return value;
+}
+
+function parseByteArrayString(value: string): number[] | null {
+  const trimmed = value.trim();
+  if (!/^\[(\d+\s*)+\]$/.test(trimmed)) {
+    return null;
+  }
+
+  const bytes = trimmed
+    .slice(1, -1)
+    .trim()
+    .split(/\s+/)
+    .map((part) => Number(part));
+
+  if (!bytes.length || bytes.some((byte) => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+    return null;
+  }
+
+  return bytes;
 }
 
 function openCellDetail(row: Record<string, any>, column: { name: string; dataType: string }) {
@@ -1663,6 +1711,7 @@ onUnmounted(() => {
   display: flex;
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
   border: 0;
   border-radius: 0.375rem;
@@ -1672,8 +1721,13 @@ onUnmounted(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.75rem;
   line-height: 1.35;
+  overflow: hidden;
   padding: 0.25rem 0.375rem;
   text-align: left;
+}
+
+.db-cell-value > span {
+  min-width: 0;
 }
 
 .db-cell-value:hover {
