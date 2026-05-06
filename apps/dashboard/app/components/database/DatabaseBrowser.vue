@@ -185,16 +185,67 @@
       <!-- Right pane: Data / Structure -->
       <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; min-width: 0">
         <template v-if="selectedTableName">
-          <OuiTabs v-model="activeDataTab" :tabs="dataTabs" content-class="p-0" style="flex: 1; display: flex; flex-direction: column">
+          <div class="db-workbench-header">
+            <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+              <OuiStack gap="xs" class="min-w-0">
+                <OuiFlex align="center" gap="sm" wrap="wrap">
+                  <TableCellsIcon class="h-5 w-5 text-primary" />
+                  <OuiText as="h3" size="lg" weight="semibold" class="font-mono truncate">
+                    {{ selectedTableName }}
+                  </OuiText>
+                  <OuiBadge v-if="primaryKeyColumns.length" color="primary" size="xs">
+                    PK {{ primaryKeyColumns.join(', ') }}
+                  </OuiBadge>
+                </OuiFlex>
+                <OuiFlex gap="md" align="center" wrap="wrap">
+                  <OuiText size="xs" color="tertiary">
+                    {{ selectedTable?.columns.length ?? 0 }} columns
+                  </OuiText>
+                  <OuiText size="xs" color="tertiary">
+                    {{ selectedTable?.indexes.length ?? 0 }} indexes
+                  </OuiText>
+                  <OuiText size="xs" color="tertiary">
+                    {{ selectedTable?.foreignKeys.length ?? 0 }} foreign keys
+                  </OuiText>
+                  <OuiText size="xs" color="tertiary">
+                    {{ dataResponse?.totalRows ?? selectedTable?.rowCount ?? 0 }} rows
+                  </OuiText>
+                </OuiFlex>
+              </OuiStack>
+              <OuiFlex gap="xs" align="center" wrap="wrap">
+                <OuiButton variant="ghost" color="secondary" size="sm" @click="copyTableName">
+                  <ClipboardDocumentIcon class="h-3.5 w-3.5" />
+                  Copy name
+                </OuiButton>
+                <OuiButton variant="ghost" color="secondary" size="sm" @click="loadTableData" :loading="dataLoading">
+                  <ArrowPathIcon class="h-3.5 w-3.5" />
+                  Refresh
+                </OuiButton>
+                <OuiButton color="success" size="sm" @click="startInsertRow">
+                  <PlusIcon class="h-3.5 w-3.5" />
+                  Add row
+                </OuiButton>
+              </OuiFlex>
+            </OuiFlex>
+          </div>
+
+          <OuiTabs v-model="activeDataTab" :tabs="dataTabs" content-class="p-0" style="flex: 1; display: flex; flex-direction: column; min-height: 0">
             <!-- Data tab -->
             <template #data>
               <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden">
                 <!-- Data toolbar -->
-                <OuiFlex align="center" gap="sm" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--oui-border-default); background: var(--oui-surface-base)">
-                  <OuiButton variant="ghost" color="secondary" size="sm" @click="loadTableData" :loading="dataLoading">
-                    <ArrowPathIcon style="width: 0.875rem; height: 0.875rem" />
-                    Refresh
-                  </OuiButton>
+                <OuiFlex align="center" gap="sm" wrap="wrap" class="db-grid-toolbar">
+                  <OuiInput
+                    v-model="dataFilter"
+                    placeholder="Search visible rows..."
+                    clearable
+                    size="sm"
+                    class="db-grid-search"
+                  >
+                    <template #prefix>
+                      <MagnifyingGlassIcon class="h-3.5 w-3.5 text-secondary" />
+                    </template>
+                  </OuiInput>
                   <OuiButton
                     v-if="pendingEdits.size > 0"
                     color="primary"
@@ -214,37 +265,43 @@
                     Discard
                   </OuiButton>
                   <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem">
-                    <OuiButton variant="ghost" color="success" size="sm" @click="startInsertRow">
-                      <PlusIcon style="width: 0.875rem; height: 0.875rem" />
-                      Add Row
-                    </OuiButton>
                     <OuiText size="xs" color="tertiary">
-                      {{ dataResponse?.totalRows ?? 0 }} total rows
+                      Showing {{ filteredDataRows.length }} of {{ dataRows.length }} loaded rows
                     </OuiText>
                   </div>
                 </OuiFlex>
 
                 <!-- Data grid -->
-                <div style="flex: 1; overflow: auto">
+                <div class="db-grid-shell">
                   <OuiTable
                     v-if="dataResponse"
                     :columns="tableColumns"
-                    :rows="dataRows"
+                    :rows="filteredDataRows"
                     :sortable="true"
                     :resizable="true"
                     row-key="__rowIdx"
                     empty-text="No data"
+                    wrapper-class="db-table-wrapper"
+                    table-class="db-data-table"
+                    header-class="db-table-header"
+                    cell-class="db-table-cell"
                     @sort="handleTableSort"
                   >
-                    <template #cell-__rowNum="{ index }">
-                      {{ (dataPage - 1) * dataPerPage + index + 1 }}
+                    <template #cell-__rowNum="{ row }">
+                      {{ (dataPage - 1) * dataPerPage + Number(row.__rowIdx) + 1 }}
                     </template>
-                    <template v-for="col in dataResponse.columns" :key="col.name" #[`cell-${col.name}`]="{ row, index }">
+                    <template v-for="col in dataResponse.columns" :key="col.name" #[`header-${col.name}`]>
+                      <div class="db-column-heading">
+                        <span class="truncate">{{ col.name }}</span>
+                        <span class="db-column-type">{{ col.dataType }}</span>
+                      </div>
+                    </template>
+                    <template v-for="col in dataResponse.columns" :key="col.name" #[`cell-${col.name}`]="{ row }">
                       <!-- Editing -->
                       <input
-                        v-if="editingCell && editingCell.row === index && editingCell.col === col.name"
+                        v-if="editingCell && editingCell.row === Number(row.__rowIdx) && editingCell.col === col.name"
                         v-model="editingCell.value"
-                        style="width: 100%; background: transparent; border: none; border-bottom: 1px solid var(--oui-primary); font-size: 0.75rem; padding: 0.25rem 0; outline: none; font-family: monospace"
+                        class="db-cell-input"
                         @keydown.enter="confirmCellEdit"
                         @keydown.escape="cancelCellEdit"
                         @blur="confirmCellEdit"
@@ -252,28 +309,35 @@
                       />
                       <!-- Display -->
                       <template v-else>
-                        <span
-                          v-if="row[col.name] === null"
-                          style="color: var(--oui-text-secondary); font-style: italic"
-                          @dblclick="startCellEdit(index, col.name, row[col.name])"
-                        >NULL</span>
-                        <span
-                          v-else
-                          style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; font-family: monospace"
-                          :style="{ background: hasEdit(index, col.name) ? 'var(--oui-warning-alpha-10)' : 'transparent' }"
-                          @dblclick="startCellEdit(index, col.name, row[col.name])"
-                        >{{ row[col.name] }}</span>
+                        <button
+                          type="button"
+                          class="db-cell-value"
+                          :class="{ 'db-cell-edited': hasEdit(Number(row.__rowIdx), col.name) }"
+                          :title="formatCellValue(row[col.name])"
+                          @click="openCellDetail(row, col)"
+                          @dblclick.stop="startCellEdit(Number(row.__rowIdx), col.name, row[col.name])"
+                        >
+                          <span v-if="row[col.name] === null" class="db-null">NULL</span>
+                          <span v-else-if="isBooleanValue(row[col.name])" class="db-boolean">
+                            <span class="db-boolean-dot" :class="isTruthyBoolean(row[col.name]) ? 'is-true' : 'is-false'" />
+                            {{ String(row[col.name]) }}
+                          </span>
+                          <span v-else-if="isJsonColumn(col.dataType)" class="db-json">
+                            {{ formatJsonPreview(row[col.name]) }}
+                          </span>
+                          <span v-else class="truncate">{{ row[col.name] }}</span>
+                        </button>
                       </template>
                     </template>
-                    <template #cell-__actions="{ index }">
-                      <OuiButton variant="ghost" size="sm" color="danger" @click="deleteRow(index)" title="Delete row">
+                    <template #cell-__actions="{ row }">
+                      <OuiButton variant="ghost" size="sm" color="danger" @click="deleteRow(Number(row.__rowIdx))" title="Delete row">
                         <TrashIcon style="width: 0.875rem; height: 0.875rem" />
                       </OuiButton>
                     </template>
                   </OuiTable>
 
                   <!-- Insert row form -->
-                  <div v-if="insertingRow && dataResponse" style="padding: 0.75rem; background: var(--oui-success-alpha-5); border-bottom: 1px solid var(--oui-border-default)">
+                  <div v-if="insertingRow && dataResponse" class="db-insert-row">
                     <OuiFlex align="center" gap="sm" wrap="wrap">
                       <div v-for="col in dataResponse.columns" :key="col.name" style="min-width: 120px">
                         <OuiInput
@@ -586,6 +650,25 @@
       :database-type="databaseType"
       @created="refreshSchema"
     />
+
+    <!-- Cell Detail Dialog -->
+    <OuiDialog v-model:open="cellDetailOpen" title="Cell Value">
+      <OuiStack v-if="cellDetail" gap="md">
+        <OuiFlex gap="sm" align="center" wrap="wrap">
+          <OuiBadge color="primary" size="sm">{{ cellDetail.column.name }}</OuiBadge>
+          <OuiText size="xs" color="tertiary" class="font-mono">{{ cellDetail.column.dataType }}</OuiText>
+          <OuiBadge v-if="cellDetail.value === null" color="tertiary" size="xs">NULL</OuiBadge>
+        </OuiFlex>
+        <pre class="db-cell-detail">{{ formatCellValue(cellDetail.value) }}</pre>
+      </OuiStack>
+      <template #footer>
+        <OuiButton variant="ghost" @click="cellDetailOpen = false">Close</OuiButton>
+        <OuiButton color="primary" @click="copyCellValue" :disabled="!cellDetail">
+          <ClipboardDocumentIcon class="h-3.5 w-3.5" />
+          Copy value
+        </OuiButton>
+      </template>
+    </OuiDialog>
   </OuiStack>
 </template>
 
@@ -800,6 +883,7 @@ const dataPage = ref(1);
 const dataPerPage = ref(50);
 const dataSortColumn = ref<string | null>(null);
 const dataSortDirection = ref<"ASC" | "DESC">("ASC");
+const dataFilter = ref("");
 
 // Per page options for OuiSelect
 const perPageOptions = [
@@ -817,6 +901,8 @@ const savingEdits = ref(false);
 // Insert row
 const insertingRow = ref(false);
 const newRowValues = ref<Record<string, string>>({});
+const cellDetailOpen = ref(false);
+const cellDetail = ref<{ column: { name: string; dataType: string }; value: any } | null>(null);
 
 const filteredTables = computed(() => {
   if (!searchQuery.value) return schemaTables.value;
@@ -827,6 +913,24 @@ const filteredTables = computed(() => {
 const selectedTable = computed(() => {
   if (!selectedTableName.value) return null;
   return schemaTables.value.find((t: SchemaTable) => t.name === selectedTableName.value) || null;
+});
+
+const primaryKeyColumns = computed(() => {
+  return selectedTable.value?.columns
+    .filter((column: SchemaColumn) => column.isPrimaryKey)
+    .map((column: SchemaColumn) => column.name) || [];
+});
+
+const filteredDataRows = computed(() => {
+  const q = dataFilter.value.trim().toLowerCase();
+  if (!q) return dataRows.value;
+
+  return dataRows.value.filter((row) => {
+    return Object.entries(row).some(([key, value]) => {
+      if (key.startsWith("__")) return false;
+      return formatCellValue(value).toLowerCase().includes(q);
+    });
+  });
 });
 
 // Table columns for OuiTable
@@ -976,6 +1080,83 @@ function cancelCellEdit() {
 
 function hasEdit(rowIdx: number, colName: string): boolean {
   return pendingEdits.value.has(`${rowIdx}:${colName}`);
+}
+
+function isBooleanValue(value: any): boolean {
+  if (typeof value === "boolean") return true;
+  if (typeof value !== "string") return false;
+  const normalized = value.toLowerCase();
+  return normalized === "true" || normalized === "false" || normalized === "t" || normalized === "f";
+}
+
+function isTruthyBoolean(value: any): boolean {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value).toLowerCase();
+  return normalized === "true" || normalized === "t" || normalized === "1";
+}
+
+function isJsonColumn(dataType: string): boolean {
+  const normalized = dataType.toLowerCase();
+  return normalized.includes("json");
+}
+
+function formatJsonPreview(value: any): string {
+  if (value === null || value === undefined) return "NULL";
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return JSON.stringify(parsed);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatCellValue(value: any): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+  const stringValue = String(value);
+  try {
+    const parsed = JSON.parse(stringValue);
+    if (parsed && typeof parsed === "object") {
+      return JSON.stringify(parsed, null, 2);
+    }
+  } catch {
+    // Plain strings are expected most of the time.
+  }
+  return stringValue;
+}
+
+function openCellDetail(row: Record<string, any>, column: { name: string; dataType: string }) {
+  cellDetail.value = {
+    column,
+    value: row[column.name],
+  };
+  cellDetailOpen.value = true;
+}
+
+async function copyCellValue() {
+  if (!cellDetail.value) return;
+  try {
+    await navigator.clipboard.writeText(formatCellValue(cellDetail.value.value));
+    toast.success("Cell value copied");
+  } catch {
+    toast.error("Failed to copy cell value");
+  }
+}
+
+async function copyTableName() {
+  if (!selectedTableName.value) return;
+  try {
+    await navigator.clipboard.writeText(selectedTableName.value);
+    toast.success("Table name copied");
+  } catch {
+    toast.error("Failed to copy table name");
+  }
 }
 
 function discardEdits() {
@@ -1376,3 +1557,199 @@ onUnmounted(() => {
 });
 </script>
 
+<style scoped>
+.db-workbench-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--oui-border-default);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--oui-surface-base) 82%, transparent), var(--oui-surface-base)),
+    var(--oui-surface-base);
+}
+
+.db-grid-toolbar {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--oui-border-default);
+  background: var(--oui-surface-base);
+}
+
+.db-grid-search {
+  width: min(24rem, 100%);
+}
+
+.db-grid-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--oui-surface-overlay);
+}
+
+.db-insert-row {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--oui-border-default);
+  background: color-mix(in srgb, var(--oui-accent-success) 8%, var(--oui-surface-base));
+}
+
+.db-column-heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  line-height: 1.15;
+}
+
+.db-column-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--oui-text-tertiary);
+  text-transform: none;
+}
+
+.db-cell-input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--oui-accent-primary);
+  outline: none;
+  background: transparent;
+  padding: 0.25rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.db-cell-value {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  padding: 0.25rem 0.375rem;
+  text-align: left;
+}
+
+.db-cell-value:hover {
+  background: var(--oui-surface-hover);
+}
+
+.db-cell-edited {
+  background: color-mix(in srgb, var(--oui-accent-warning) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--oui-accent-warning);
+}
+
+.db-null {
+  color: var(--oui-text-tertiary);
+  font-style: italic;
+}
+
+.db-json {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--oui-accent-info);
+}
+
+.db-boolean {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.db-boolean-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--oui-text-muted);
+}
+
+.db-boolean-dot.is-true {
+  background: var(--oui-accent-success);
+}
+
+.db-boolean-dot.is-false {
+  background: var(--oui-text-muted);
+}
+
+.db-cell-detail {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--oui-border-default);
+  border-radius: 0.5rem;
+  background: var(--oui-surface-base);
+  padding: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+:deep(.db-table-wrapper) {
+  height: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+:deep(.db-data-table) {
+  min-width: max-content;
+}
+
+:deep(.db-data-table thead) {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+:deep(.db-table-header) {
+  background: var(--oui-surface-base);
+  color: var(--oui-text-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+  border-bottom: 1px solid var(--oui-border-default);
+  vertical-align: bottom;
+}
+
+:deep(.db-table-cell) {
+  border-right: 1px solid color-mix(in srgb, var(--oui-border-default) 60%, transparent);
+  vertical-align: middle;
+}
+
+:deep(.db-data-table tbody tr:hover) {
+  background: color-mix(in srgb, var(--oui-accent-primary) 7%, transparent);
+}
+
+:deep(.db-data-table th:first-child),
+:deep(.db-data-table td:first-child) {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--oui-surface-base);
+  color: var(--oui-text-tertiary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:deep(.db-data-table thead th:first-child) {
+  z-index: 6;
+}
+
+:deep(.db-data-table th:last-child),
+:deep(.db-data-table td:last-child) {
+  position: sticky;
+  right: 0;
+  z-index: 4;
+  background: var(--oui-surface-base);
+  border-left: 1px solid var(--oui-border-default);
+}
+
+:deep(.db-data-table thead th:last-child) {
+  z-index: 6;
+}
+</style>

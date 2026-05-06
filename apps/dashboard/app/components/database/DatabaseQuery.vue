@@ -119,94 +119,150 @@
       </OuiCardHeader>
 
       <OuiCardBody class="p-0">
-        <!-- Monaco Editor -->
-        <div class="relative border-b border-border-default" :style="{ height: editorHeight + 'px' }">
-          <!-- Loading indicator -->
-          <Transition name="fade">
-            <div
-              v-if="editorLoading"
-              class="absolute inset-0 flex items-center justify-center bg-surface-base z-10"
+        <div class="query-workbench">
+          <aside class="query-schema-rail">
+            <div class="query-schema-header">
+              <OuiText size="xs" weight="semibold" transform="uppercase" color="tertiary">
+                Schema
+              </OuiText>
+              <OuiBadge color="tertiary" size="xs">{{ tables.length }}</OuiBadge>
+            </div>
+            <OuiInput
+              v-model="schemaSearch"
+              placeholder="Find table..."
+              clearable
+              size="sm"
+              class="mb-2"
             >
-              <div class="flex flex-col items-center gap-3">
-                <div class="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                <OuiText size="sm" color="tertiary">Loading editor...</OuiText>
+              <template #prefix>
+                <TableCellsIcon class="h-3.5 w-3.5 text-secondary" />
+              </template>
+            </OuiInput>
+            <div class="query-schema-list">
+              <div
+                v-for="table in filteredSchemaTables"
+                :key="table.name"
+                class="query-schema-table"
+              >
+                <button
+                  type="button"
+                  class="query-schema-table-trigger"
+                  @click="insertIdentifier(table.name)"
+                >
+                  <TableCellsIcon class="h-3.5 w-3.5 shrink-0 text-secondary" />
+                  <span class="truncate font-mono">{{ table.name }}</span>
+                  <span class="ml-auto text-[10px] text-text-tertiary">{{ table.columns.length }}</span>
+                </button>
+                <div class="query-schema-columns">
+                  <button
+                    v-for="column in table.columns.slice(0, 8)"
+                    :key="column.name"
+                    type="button"
+                    class="query-schema-column"
+                    @click="insertIdentifier(column.name)"
+                  >
+                    <span class="truncate">{{ column.name }}</span>
+                    <span class="query-column-type">{{ column.dataType }}</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </Transition>
-          <OuiFileEditor
-            ref="editorRef"
-            v-model="activeTab.content"
-            language="sql"
-            :height="editorHeight + 'px'"
-            :minimap="{ enabled: false }"
-            :folding="false"
-            container-class="w-full border-0 rounded-none"
-            @vue:mounted="onEditorMounted"
-          />
-          <!-- Resize handle -->
-          <div
-            class="absolute bottom-0 left-0 right-0 h-1 cursor-row-resize bg-transparent hover:bg-primary/30 active:bg-primary/50 transition-colors"
-            @mousedown="startResize"
-          />
-        </div>
+          </aside>
 
-        <!-- Toolbar -->
-        <div class="flex items-center justify-between px-4 py-2.5 bg-surface-base">
-          <OuiFlex gap="md" align="center">
-            <OuiFlex gap="xs" align="center">
-              <OuiText color="tertiary" size="xs">Limit:</OuiText>
-              <select
-                v-model="maxRows"
-                class="text-xs bg-surface-overlay border border-border-default rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
-              >
-                <option value="100">100</option>
-                <option value="500">500</option>
-                <option value="1000">1,000</option>
-                <option value="5000">5,000</option>
-                <option value="10000">10,000</option>
-              </select>
-            </OuiFlex>
-            <div class="h-4 w-px bg-border-default" />
-            <OuiFlex gap="xs" align="center" class="text-secondary">
-              <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Ctrl</kbd>
-              <span class="text-[10px]">+</span>
-              <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Enter</kbd>
-              <OuiText size="xs" color="tertiary" class="ml-1">Execute</OuiText>
-            </OuiFlex>
-          </OuiFlex>
+          <section class="query-editor-pane">
+            <!-- Monaco Editor -->
+            <div class="relative border-b border-border-default" :style="{ height: editorHeight + 'px' }">
+              <!-- Loading indicator -->
+              <Transition name="fade">
+                <div
+                  v-if="editorLoading"
+                  class="absolute inset-0 flex items-center justify-center bg-surface-base z-10"
+                >
+                  <div class="flex flex-col items-center gap-3">
+                    <div class="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    <OuiText size="sm" color="tertiary">Loading editor...</OuiText>
+                  </div>
+                </div>
+              </Transition>
+              <OuiFileEditor
+                ref="editorRef"
+                v-model="activeTab.content"
+                language="sql"
+                :height="editorHeight + 'px'"
+                :minimap="{ enabled: false }"
+                :folding="false"
+                container-class="w-full border-0 rounded-none"
+                @vue:mounted="onEditorMounted"
+              />
+              <!-- Resize handle -->
+              <div
+                class="absolute bottom-0 left-0 right-0 h-1 cursor-row-resize bg-transparent hover:bg-primary/30 active:bg-primary/50 transition-colors"
+                @mousedown="startResize"
+              />
+            </div>
 
-          <OuiFlex gap="sm">
-            <OuiButton
-              v-if="activeTab.results"
-              variant="ghost"
-              color="secondary"
-              size="sm"
-              @click="exportResults('csv')"
-            >
-              <ArrowDownTrayIcon class="h-3.5 w-3.5" />
-              CSV
-            </OuiButton>
-            <OuiButton
-              v-if="activeTab.results"
-              variant="ghost"
-              color="secondary"
-              size="sm"
-              @click="exportResults('json')"
-            >
-              <ArrowDownTrayIcon class="h-3.5 w-3.5" />
-              JSON
-            </OuiButton>
-            <OuiButton
-              color="primary"
-              size="sm"
-              :loading="executing"
-              :disabled="!activeTab.content.trim()"
-              @click="executeCurrentQuery()"
-            >
-              <PlayIcon class="h-3.5 w-3.5" />
-              Run Query
-            </OuiButton>
-          </OuiFlex>
+            <!-- Toolbar -->
+            <div class="query-editor-toolbar">
+              <OuiFlex gap="md" align="center" wrap="wrap">
+                <OuiFlex gap="xs" align="center">
+                  <OuiText color="tertiary" size="xs">Limit:</OuiText>
+                  <select
+                    v-model="maxRows"
+                    class="text-xs bg-surface-overlay border border-border-default rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  >
+                    <option value="100">100</option>
+                    <option value="500">500</option>
+                    <option value="1000">1,000</option>
+                    <option value="5000">5,000</option>
+                    <option value="10000">10,000</option>
+                  </select>
+                </OuiFlex>
+                <div class="h-4 w-px bg-border-default hidden sm:block" />
+                <OuiFlex gap="xs" align="center" class="text-secondary">
+                  <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Ctrl</kbd>
+                  <span class="text-[10px]">+</span>
+                  <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-surface-overlay border border-border-default rounded">Enter</kbd>
+                  <OuiText size="xs" color="tertiary" class="ml-1">Execute</OuiText>
+                </OuiFlex>
+                <OuiText v-if="activeTab.content.trim()" size="xs" color="tertiary">
+                  {{ activeTab.content.trim().split(/\s+/).length }} tokens
+                </OuiText>
+              </OuiFlex>
+
+              <OuiFlex gap="sm" wrap="wrap">
+                <OuiButton
+                  v-if="activeTab.results"
+                  variant="ghost"
+                  color="secondary"
+                  size="sm"
+                  @click="exportResults('csv')"
+                >
+                  <ArrowDownTrayIcon class="h-3.5 w-3.5" />
+                  CSV
+                </OuiButton>
+                <OuiButton
+                  v-if="activeTab.results"
+                  variant="ghost"
+                  color="secondary"
+                  size="sm"
+                  @click="exportResults('json')"
+                >
+                  <ArrowDownTrayIcon class="h-3.5 w-3.5" />
+                  JSON
+                </OuiButton>
+                <OuiButton
+                  color="primary"
+                  size="sm"
+                  :loading="executing"
+                  :disabled="!activeTab.content.trim()"
+                  @click="executeCurrentQuery()"
+                >
+                  <PlayIcon class="h-3.5 w-3.5" />
+                  Run Query
+                </OuiButton>
+              </OuiFlex>
+            </div>
+          </section>
         </div>
       </OuiCardBody>
     </OuiCard>
@@ -437,6 +493,7 @@ const executing = ref(false);
 const showHistory = ref(false);
 const showSnippets = ref(false);
 const editorLoading = ref(true);
+const schemaSearch = ref("");
 
 // SQL Snippets
 const sqlSnippets = computed(() => {
@@ -457,6 +514,16 @@ const sqlSnippets = computed(() => {
 // Query history
 const historyKey = computed(() => `db-query-history-${props.databaseId}`);
 const queryHistory = ref<string[]>([]);
+
+const filteredSchemaTables = computed(() => {
+  const q = schemaSearch.value.trim().toLowerCase();
+  if (!q) return tables.value;
+
+  return tables.value.filter((table) => {
+    return table.name.toLowerCase().includes(q) ||
+      table.columns.some((column) => column.name.toLowerCase().includes(q));
+  });
+});
 
 // Sort state
 const sortColumn = ref<string | null>(null);
@@ -599,6 +666,21 @@ function onEditorMounted() {
 function insertSnippet(code: string) {
   activeTab.value.content = code;
   showSnippets.value = false;
+}
+
+function insertIdentifier(identifier: string) {
+  const quoted = `"${identifier.replace(/"/g, "\"\"")}"`;
+  const editor = editorRef.value?.editor?.();
+
+  if (editor) {
+    editor.trigger("keyboard", "type", { text: quoted });
+    editor.focus();
+    return;
+  }
+
+  activeTab.value.content = activeTab.value.content
+    ? `${activeTab.value.content} ${quoted}`
+    : quoted;
 }
 
 // History management
@@ -2052,6 +2134,104 @@ watch(tables, () => {
 </script>
 
 <style scoped>
+.query-workbench {
+  display: grid;
+  grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr);
+  min-height: 24rem;
+  background: var(--oui-surface-base);
+}
+
+.query-schema-rail {
+  min-width: 0;
+  border-right: 1px solid var(--oui-border-default);
+  background: color-mix(in srgb, var(--oui-surface-base) 86%, var(--oui-surface-overlay));
+  padding: 0.75rem;
+}
+
+.query-schema-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.query-schema-list {
+  display: flex;
+  max-height: 25rem;
+  flex-direction: column;
+  gap: 0.375rem;
+  overflow: auto;
+  padding-right: 0.125rem;
+}
+
+.query-schema-table {
+  border: 1px solid var(--oui-border-muted);
+  border-radius: 0.5rem;
+  background: var(--oui-surface-base);
+  overflow: hidden;
+}
+
+.query-schema-table-trigger,
+.query-schema-column {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.query-schema-table-trigger {
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.query-schema-table-trigger:hover,
+.query-schema-column:hover {
+  background: var(--oui-surface-hover);
+}
+
+.query-schema-columns {
+  border-top: 1px solid var(--oui-border-muted);
+  padding: 0.25rem;
+}
+
+.query-schema-column {
+  justify-content: space-between;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.375rem 0.25rem 1.625rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  color: var(--oui-text-secondary);
+}
+
+.query-column-type {
+  max-width: 5.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--oui-text-tertiary);
+}
+
+.query-editor-pane {
+  min-width: 0;
+}
+
+.query-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--oui-border-default);
+  background: var(--oui-surface-base);
+  padding: 0.625rem 1rem;
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
@@ -2068,5 +2248,22 @@ watch(tables, () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 900px) {
+  .query-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .query-schema-rail {
+    max-height: 16rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--oui-border-default);
+  }
+
+  .query-editor-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
