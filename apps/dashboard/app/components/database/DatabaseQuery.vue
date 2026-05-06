@@ -888,6 +888,76 @@ function findTable(name: string) {
   return tables.value.find(t => t.name.toLowerCase() === name.toLowerCase());
 }
 
+function findView(name: string) {
+  return views.value.find(v => v.name.toLowerCase() === name.toLowerCase());
+}
+
+function cleanIdentifier(identifier: string) {
+  return identifier.trim().replace(/^[`"']|[`"']$/g, "");
+}
+
+function hasCompleteRelationName(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed || /,\s*$/.test(trimmed)) return false;
+
+  const [relationName] = trimmed.split(/\s+/);
+  if (!relationName) return false;
+
+  const cleanName = cleanIdentifier(relationName);
+  return !!findTable(cleanName) || !!findView(cleanName);
+}
+
+function getInsertableColumns(table: any) {
+  return table.columns.filter((col: any) => {
+    const dt = col.dataType.toLowerCase();
+    const hasGeneratedDefault = !!col.defaultValue || dt.includes("serial") || dt.includes("auto_increment");
+    return !col.isPrimaryKey || !hasGeneratedDefault;
+  });
+}
+
+function getSnippetDefaultForType(dataType: string, colName: string, isPostgres: boolean) {
+  const dt = dataType.toLowerCase();
+
+  if (dt.includes("serial") || dt.includes("auto_increment")) return "DEFAULT";
+  if (dt.includes("uuid")) return isPostgres ? "gen_random_uuid()" : "UUID()";
+  if (dt.includes("timestamp") || dt.includes("datetime")) return "NOW()";
+  if (dt.includes("date")) return "'2024-01-01'";
+  if (dt.includes("time")) return "'12:00:00'";
+  if (dt.includes("bool")) return "true";
+  if (dt.includes("int") || dt.includes("numeric") || dt.includes("decimal") || dt.includes("real") || dt.includes("double") || dt.includes("float")) return "0";
+  if (dt.includes("json")) return "'{}'";
+  if (dt.includes("bytea")) return "E'\\\\x00'";
+  if (dt.includes("blob")) return "X'00'";
+
+  return `'${colName}_value'`;
+}
+
+function buildInsertSnippet(table: any, isPostgres: boolean) {
+  const insertColumns = getInsertableColumns(table).slice(0, 8);
+  const columns = insertColumns.length > 0 ? insertColumns : table.columns.slice(0, 8);
+  const columnList = columns.map((col: any) => col.name).join(", ");
+  const valueList = columns.map((col: any, idx: number) => {
+    const hint = getSnippetDefaultForType(col.dataType, col.name, isPostgres);
+    return `\${${idx + 1}:${hint}}`;
+  }).join(", ");
+
+  return `INSERT INTO ${table.name} (${columnList})\nVALUES (${valueList});`;
+}
+
+function buildUpdateSnippet(table: any, isPostgres: boolean) {
+  const writableColumn = getInsertableColumns(table).find((col: any) => !col.isPrimaryKey) || table.columns.find((col: any) => !col.isPrimaryKey);
+  const keyColumn = table.columns.find((col: any) => col.isPrimaryKey) || table.columns[0];
+  const setHint = writableColumn ? getSnippetDefaultForType(writableColumn.dataType, writableColumn.name, isPostgres) : "value";
+  const keyHint = keyColumn ? getSnippetDefaultForType(keyColumn.dataType, keyColumn.name, isPostgres) : "id";
+
+  return `UPDATE ${table.name}\nSET ${writableColumn?.name || "column_name"} = \${1:${setHint}}\nWHERE ${keyColumn?.name || "id"} = \${2:${keyHint}};`;
+}
+
+function buildDeleteSnippet(table: any) {
+  const keyColumn = table.columns.find((col: any) => col.isPrimaryKey) || table.columns[0];
+  return `DELETE FROM ${table.name}\nWHERE ${keyColumn?.name || "id"} = \${1:value};`;
+}
+
 // Extract table name from INSERT INTO or UPDATE statement
 function extractTargetTable(text: string): string | null {
   // INSERT INTO table_name
@@ -941,11 +1011,13 @@ function registerSQLCompletionProvider(monacoInstance: any) {
     // After SELECT - column expressions
     SELECT_COLUMNS: ["DISTINCT", "ALL", "*", "CASE", "WHEN", "FROM"],
 
-    // After FROM - table sources and joins
-    FROM: ["WHERE", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "JOIN", "ORDER", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION", "INTERSECT", "EXCEPT"],
+    // Relation contexts only offer relations until one has actually been typed.
+    FROM: [],
+    AFTER_TABLE_SOURCE: ["WHERE", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL JOIN", "CROSS JOIN", "GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "UNION", "INTERSECT", "EXCEPT"],
 
     // After JOIN
-    JOIN: ["ON", "USING"],
+    JOIN: [],
+    AFTER_JOIN_TABLE: ["ON", "USING"],
 
     // After ON - conditions
     ON: ["AND", "OR", "WHERE", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "JOIN", "ORDER", "GROUP"],
@@ -964,6 +1036,7 @@ function registerSQLCompletionProvider(monacoInstance: any) {
 
     // After INSERT INTO
     INSERT_INTO: [], // Will suggest tables
+    INSERT_TABLE_READY: ["VALUES", "DEFAULT VALUES", "SELECT"],
 
     // After INSERT INTO table
     INSERT_COLUMNS: [], // Will suggest columns
@@ -973,6 +1046,7 @@ function registerSQLCompletionProvider(monacoInstance: any) {
 
     // After UPDATE
     UPDATE: [], // Will suggest tables
+    UPDATE_TABLE_READY: ["SET"],
 
     // After UPDATE table SET
     UPDATE_SET: ["WHERE"],
@@ -982,12 +1056,14 @@ function registerSQLCompletionProvider(monacoInstance: any) {
 
     // After DELETE FROM
     DELETE_FROM: ["WHERE", "RETURNING"],
+    DELETE_FROM_READY: ["WHERE", "RETURNING"],
 
     // DDL contexts
     CREATE: ["TABLE", "INDEX", "VIEW", "SCHEMA", "DATABASE", "SEQUENCE", "TRIGGER", "FUNCTION", "PROCEDURE", "TYPE", "EXTENSION"],
     ALTER: ["TABLE", "INDEX", "VIEW", "SCHEMA", "DATABASE", "SEQUENCE", "COLUMN"],
     DROP: ["TABLE", "INDEX", "VIEW", "SCHEMA", "DATABASE", "SEQUENCE", "TRIGGER", "FUNCTION", "CONSTRAINT", "COLUMN"],
     TRUNCATE: [], // Will suggest tables
+    TRUNCATE_TABLE_READY: ["CASCADE", "RESTART IDENTITY"],
   };
 
   const aggregateFunctions = ["COUNT", "SUM", "AVG", "MIN", "MAX", "ARRAY_AGG", "STRING_AGG", "JSON_AGG", "BOOL_AND", "BOOL_OR"];
@@ -1183,13 +1259,51 @@ function registerSQLCompletionProvider(monacoInstance: any) {
       // Context-specific suggestions
       switch (context) {
         case "START":
-          // Only statement starters - no tables, no functions
+          // Real schema-backed statement snippets first, then bare statement starters.
+          for (const t of tables.value.slice(0, 8)) {
+            suggestions.push({
+              label: `SELECT from ${t.name}`,
+              kind: monacoInstance.languages.CompletionItemKind.Snippet,
+              detail: `Working SELECT for ${t.name}`,
+              insertText: `SELECT *\nFROM ${t.name}\nLIMIT \${1:100};`,
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              sortText: "0" + t.name,
+              range,
+            });
+            suggestions.push({
+              label: `INSERT into ${t.name}`,
+              kind: monacoInstance.languages.CompletionItemKind.Snippet,
+              detail: `Working INSERT for ${t.name}`,
+              insertText: buildInsertSnippet(t, isPostgres),
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              sortText: "1" + t.name,
+              range,
+            });
+            suggestions.push({
+              label: `UPDATE ${t.name}`,
+              kind: monacoInstance.languages.CompletionItemKind.Snippet,
+              detail: `Working UPDATE for ${t.name}`,
+              insertText: buildUpdateSnippet(t, isPostgres),
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              sortText: "2" + t.name,
+              range,
+            });
+            suggestions.push({
+              label: `DELETE from ${t.name}`,
+              kind: monacoInstance.languages.CompletionItemKind.Snippet,
+              detail: `Working DELETE for ${t.name}`,
+              insertText: buildDeleteSnippet(t),
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              sortText: "3" + t.name,
+              range,
+            });
+          }
           for (const kw of validKeywords) {
             suggestions.push({
               label: kw,
               kind: monacoInstance.languages.CompletionItemKind.Keyword,
               insertText: kw + " ",
-              sortText: "0" + kw,
+              sortText: "9" + kw,
               range,
             });
           }
@@ -1266,9 +1380,9 @@ function registerSQLCompletionProvider(monacoInstance: any) {
 
         case "FROM":
         case "JOIN":
-        case "DELETE_FROM":
         case "TRUNCATE":
-          // Tables and views, then valid next keywords
+        case "DELETE_FROM":
+          // Only real relations are valid immediately after FROM/JOIN/TRUNCATE.
           for (const t of tables.value) {
             suggestions.push({
               label: t.name,
@@ -1290,13 +1404,18 @@ function registerSQLCompletionProvider(monacoInstance: any) {
               range,
             });
           }
-          // Valid keywords for this context
+          break;
+
+        case "AFTER_TABLE_SOURCE":
+        case "AFTER_JOIN_TABLE":
+        case "DELETE_FROM_READY":
+        case "TRUNCATE_TABLE_READY":
           for (const kw of validKeywords) {
             suggestions.push({
               label: kw,
               kind: monacoInstance.languages.CompletionItemKind.Keyword,
               insertText: kw + " ",
-              sortText: "2" + kw,
+              sortText: "0" + kw,
               range,
             });
           }
@@ -1317,6 +1436,33 @@ function registerSQLCompletionProvider(monacoInstance: any) {
           }
           break;
 
+        case "INSERT_TABLE_READY": {
+          const tableName = extractTargetTable(textBeforeCursor);
+          const table = tableName ? findTable(tableName) : null;
+          if (table) {
+            const insertColumns = getInsertableColumns(table);
+            suggestions.push({
+              label: "(column list) VALUES",
+              kind: monacoInstance.languages.CompletionItemKind.Snippet,
+              detail: `Insert ${insertColumns.length || table.columns.length} columns into ${table.name}`,
+              insertText: buildInsertSnippet(table, isPostgres).replace(/^INSERT\s+INTO\s+\S+\s*/i, ""),
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              sortText: "0columns",
+              range,
+            });
+          }
+          for (const kw of validKeywords) {
+            suggestions.push({
+              label: kw,
+              kind: monacoInstance.languages.CompletionItemKind.Keyword,
+              insertText: kw + " ",
+              sortText: "1" + kw,
+              range,
+            });
+          }
+          break;
+        }
+
         case "UPDATE":
           // Only tables
           for (const t of tables.value) {
@@ -1326,6 +1472,18 @@ function registerSQLCompletionProvider(monacoInstance: any) {
               detail: `Table (${t.columns.length} columns)`,
               insertText: t.name + " SET ",
               sortText: "0" + t.name,
+              range,
+            });
+          }
+          break;
+
+        case "UPDATE_TABLE_READY":
+          for (const kw of validKeywords) {
+            suggestions.push({
+              label: kw,
+              kind: monacoInstance.languages.CompletionItemKind.Keyword,
+              insertText: kw + " ",
+              sortText: "0" + kw,
               range,
             });
           }
@@ -1528,12 +1686,19 @@ function determineContext(text: string): string {
   if (lastKeyword === "FROM") {
     // Check if this is DELETE FROM
     const beforeFrom = cleaned.slice(0, cleaned.toUpperCase().lastIndexOf("FROM")).trim().toUpperCase();
-    if (beforeFrom.endsWith("DELETE")) return "DELETE_FROM";
-    return "FROM";
+    const afterFrom = cleaned.slice(cleaned.toUpperCase().lastIndexOf("FROM") + "FROM".length);
+    if (beforeFrom.endsWith("DELETE")) {
+      return hasCompleteRelationName(afterFrom) ? "DELETE_FROM_READY" : "DELETE_FROM";
+    }
+    return hasCompleteRelationName(afterFrom) ? "AFTER_TABLE_SOURCE" : "FROM";
   }
 
   // JOIN context
-  if (lastKeyword.includes("JOIN")) return "JOIN";
+  if (lastKeyword.includes("JOIN")) {
+    const joinIdx = cleaned.toUpperCase().lastIndexOf(lastKeyword);
+    const afterJoin = cleaned.slice(joinIdx + lastKeyword.length);
+    return hasCompleteRelationName(afterJoin) ? "AFTER_JOIN_TABLE" : "JOIN";
+  }
 
   // ON context (after JOIN ... ON)
   if (lastKeyword === "ON") return "ON";
@@ -1561,10 +1726,20 @@ function determineContext(text: string): string {
   if (lastKeyword === "HAVING") return "HAVING";
 
   // INSERT INTO
-  if (lastKeyword === "INSERT INTO" || lastKeyword === "INSERT") return "INSERT_INTO";
+  if (lastKeyword === "INSERT INTO" || lastKeyword === "INSERT") {
+    const insertIntoIdx = cleaned.toUpperCase().lastIndexOf("INSERT INTO");
+    if (insertIntoIdx >= 0) {
+      const afterInsertInto = cleaned.slice(insertIntoIdx + "INSERT INTO".length);
+      return hasCompleteRelationName(afterInsertInto) ? "INSERT_TABLE_READY" : "INSERT_INTO";
+    }
+    return "INSERT_INTO";
+  }
 
   // UPDATE
-  if (lastKeyword === "UPDATE") return "UPDATE";
+  if (lastKeyword === "UPDATE") {
+    const afterUpdate = cleaned.slice(cleaned.toUpperCase().lastIndexOf("UPDATE") + "UPDATE".length);
+    return hasCompleteRelationName(afterUpdate) ? "UPDATE_TABLE_READY" : "UPDATE";
+  }
 
   // SET (in UPDATE)
   if (lastKeyword === "SET") return "UPDATE_SET";
@@ -1579,7 +1754,10 @@ function determineContext(text: string): string {
   if (lastKeyword === "CREATE") return "CREATE";
   if (lastKeyword === "ALTER") return "ALTER";
   if (lastKeyword === "DROP") return "DROP";
-  if (lastKeyword === "TRUNCATE") return "TRUNCATE";
+  if (lastKeyword === "TRUNCATE") {
+    const afterTruncate = cleaned.slice(cleaned.toUpperCase().lastIndexOf("TRUNCATE") + "TRUNCATE".length);
+    return hasCompleteRelationName(afterTruncate) ? "TRUNCATE_TABLE_READY" : "TRUNCATE";
+  }
 
   // LIMIT, OFFSET, RETURNING are terminal - suggest statement starters
   if (lastKeyword === "LIMIT" || lastKeyword === "OFFSET" || lastKeyword === "RETURNING") return "START";
