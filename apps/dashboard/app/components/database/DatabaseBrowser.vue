@@ -75,7 +75,7 @@
                 </button>
 
                 <!-- Expanded columns -->
-                <div v-if="expandedTables.has(table.name)" class="ml-6 border-l border-border-default pl-2">
+                <div v-if="expandedTables.has(table.name) && !schemaSearchActive" class="ml-6 border-l border-border-default pl-2">
                   <OuiFlex v-for="col in table.columns" :key="col.name" align="center" gap="xs" class="py-0.5 text-[11px]">
                     <span v-if="col.isPrimaryKey" class="text-warning font-bold" title="Primary Key">PK</span>
                     <span v-else-if="isForeignKey(table, col.name)" class="text-info font-bold" title="Foreign Key">FK</span>
@@ -910,6 +910,8 @@ const filteredTables = computed(() => {
   return schemaTables.value.filter((t: SchemaTable) => t.name.toLowerCase().includes(q));
 });
 
+const schemaSearchActive = computed(() => searchQuery.value.trim().length > 0);
+
 const selectedTable = computed(() => {
   if (!selectedTableName.value) return null;
   return schemaTables.value.find((t: SchemaTable) => t.name === selectedTableName.value) || null;
@@ -1671,13 +1673,18 @@ onUnmounted(() => {
 }
 
 .db-schema-collapsible {
+  display: flex;
   min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .db-schema-list {
   display: flex;
+  height: 100%;
   min-height: 0;
-  max-height: calc(68vh - 12rem);
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.125rem;
   overflow-y: auto;
@@ -1686,12 +1693,15 @@ onUnmounted(() => {
 
 .db-schema-table {
   flex: 0 0 auto;
+  min-height: 1.75rem;
 }
 
 .db-schema-table-row {
   display: flex;
+  flex: 0 0 auto;
   width: 100%;
-  min-height: 1.625rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
   align-items: center;
   gap: 0.375rem;
   border: 0;
@@ -1705,7 +1715,10 @@ onUnmounted(() => {
 }
 
 .db-schema-collapsible :deep([data-part="content"]) {
+  display: flex;
   min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   overflow: hidden;
 }
 
