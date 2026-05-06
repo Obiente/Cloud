@@ -14,13 +14,13 @@
     />
 
     <!-- Main browser -->
-    <div v-else style="display: flex; min-height: 500px">
+    <div v-else class="db-browser-shell">
       <!-- Left pane: Schema tree -->
       <div
-        style="border-right: 1px solid var(--oui-border-default); flex-shrink: 0; overflow-y: auto; background: var(--oui-surface-base)"
+        class="db-schema-pane"
         :style="{ width: treePaneWidth + 'px' }"
       >
-        <div style="padding: 0.75rem">
+        <div class="db-schema-content">
           <OuiFlex justify="between" align="center" style="margin-bottom: 0.75rem">
             <OuiText size="xs" weight="semibold" transform="uppercase" color="tertiary">
               Schema
@@ -48,7 +48,7 @@
           </OuiInput>
 
           <!-- Tables section -->
-          <OuiCollapsible v-model:open="showTables" style="margin-bottom: 0.75rem">
+          <OuiCollapsible v-model:open="showTables" class="db-schema-collapsible">
             <template #trigger>
               <OuiFlex align="center" gap="xs" style="width: 100%; padding: 0.25rem 0">
                 <OuiText size="xs" weight="semibold" color="tertiary">
@@ -56,10 +56,10 @@
                 </OuiText>
               </OuiFlex>
             </template>
-            <div class="ml-2">
-              <div v-for="table in filteredTables" :key="table.name" class="mb-0.5">
+            <div class="db-schema-list">
+              <div v-for="table in filteredTables" :key="table.name" class="db-schema-table">
                 <button
-                  class="flex items-center gap-1.5 w-full text-left py-1 px-2 text-xs rounded transition-colors border-none cursor-pointer"
+                  class="db-schema-table-row"
                   :class="selectedTableName === table.name ? 'bg-primary/10 text-primary' : 'bg-transparent hover:bg-surface-hover'"
                   @click="selectTable(table)"
                   @contextmenu.prevent="openContextMenu($event, table)"
@@ -1647,6 +1647,68 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.db-browser-shell {
+  display: flex;
+  min-height: 500px;
+  height: min(68vh, 760px);
+}
+
+.db-schema-pane {
+  display: flex;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--oui-border-default);
+  background: var(--oui-surface-base);
+}
+
+.db-schema-content {
+  display: flex;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
+  padding: 0.75rem;
+}
+
+.db-schema-collapsible {
+  min-height: 0;
+}
+
+.db-schema-list {
+  display: flex;
+  min-height: 0;
+  max-height: calc(68vh - 12rem);
+  flex-direction: column;
+  gap: 0.125rem;
+  overflow-y: auto;
+  padding: 0.125rem 0.125rem 0.125rem 0.5rem;
+}
+
+.db-schema-table {
+  flex: 0 0 auto;
+}
+
+.db-schema-table-row {
+  display: flex;
+  width: 100%;
+  min-height: 1.625rem;
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.db-schema-collapsible :deep([data-part="content"]) {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .db-workbench-header {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--oui-border-default);
