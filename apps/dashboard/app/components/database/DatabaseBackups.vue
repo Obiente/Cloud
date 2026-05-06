@@ -3,6 +3,48 @@
     <OuiCard variant="outline">
       <OuiCardBody>
         <OuiStack gap="md">
+          <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="semibold">SQL Dumps</OuiText>
+              <OuiText size="xs" color="tertiary">
+                Export or import portable .sql dumps for PostgreSQL, MySQL, and MariaDB.
+              </OuiText>
+            </OuiStack>
+            <OuiFlex gap="sm" wrap="wrap">
+              <OuiButton
+                variant="outline"
+                size="sm"
+                :loading="exportingDump"
+                @click="handleExportDump"
+              >
+                <ArrowDownTrayIcon class="h-3.5 w-3.5" />
+                Export SQL
+              </OuiButton>
+              <OuiButton
+                color="primary"
+                size="sm"
+                :loading="importingDump"
+                @click="dumpFileInput?.click()"
+              >
+                <ArrowUpTrayIcon class="h-3.5 w-3.5" />
+                Import SQL
+              </OuiButton>
+              <input
+                ref="dumpFileInput"
+                type="file"
+                accept=".sql,.dump,text/sql,application/sql,text/plain"
+                class="hidden"
+                @change="handleImportDump"
+              />
+            </OuiFlex>
+          </OuiFlex>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
+
+    <OuiCard variant="outline">
+      <OuiCardBody>
+        <OuiStack gap="md">
           <OuiFlex justify="between" align="center">
             <OuiText size="sm" weight="semibold">Backups</OuiText>
             <OuiButton size="xs" @click="showCreateDialog = true">
@@ -106,9 +148,9 @@
 </template>
 
 <script setup lang="ts">
-import { PlusIcon } from "@heroicons/vue/24/outline";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon, PlusIcon } from "@heroicons/vue/24/outline";
 import { ref, onMounted } from "vue";
-import { DatabaseService, DatabaseBackupStatus, type DatabaseBackup } from "@obiente/proto";
+import { DatabaseService, DatabaseBackupStatus, DatabaseDumpFormat, type DatabaseBackup } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
@@ -128,6 +170,9 @@ const showCreateDialog = ref(false);
 const backupName = ref("");
 const backupDescription = ref("");
 const creating = ref(false);
+const exportingDump = ref(false);
+const importingDump = ref(false);
+const dumpFileInput = ref<HTMLInputElement | null>(null);
 
 async function loadBackups() {
   loading.value = true;
@@ -166,6 +211,66 @@ async function handleCreate() {
     toast.error("Failed to create backup", (err as Error).message);
   } finally {
     creating.value = false;
+  }
+}
+
+async function handleExportDump() {
+  exportingDump.value = true;
+  try {
+    if (!organizationId.value) return;
+    const res = await dbClient.exportDatabaseDump({
+      organizationId: organizationId.value,
+      databaseId: props.databaseId,
+      format: DatabaseDumpFormat.SQL,
+      includeSchema: true,
+      includeData: true,
+    });
+
+    const blob = new Blob([new TextDecoder().decode(res.dumpData)], {
+      type: res.contentType || "application/sql",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = res.fileName || `${props.databaseId}.sql`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    toast.success("SQL dump exported");
+  } catch (err: unknown) {
+    toast.error("Failed to export SQL dump", (err as Error).message);
+  } finally {
+    exportingDump.value = false;
+  }
+}
+
+async function handleImportDump(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  if (!confirm(`Import "${file.name}" into this database? Existing objects may be modified by the SQL in the dump.`)) {
+    return;
+  }
+
+  importingDump.value = true;
+  try {
+    if (!organizationId.value) return;
+    const data = new Uint8Array(await file.arrayBuffer());
+    const res = await dbClient.importDatabaseDump({
+      organizationId: organizationId.value,
+      databaseId: props.databaseId,
+      format: DatabaseDumpFormat.SQL,
+      dumpData: data,
+      dropExisting: false,
+    });
+    toast.success(res.message || "SQL dump imported");
+  } catch (err: unknown) {
+    toast.error("Failed to import SQL dump", (err as Error).message);
+  } finally {
+    importingDump.value = false;
   }
 }
 
@@ -234,4 +339,3 @@ onMounted(() => {
   loadBackups();
 });
 </script>
-

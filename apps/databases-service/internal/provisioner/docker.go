@@ -218,6 +218,18 @@ func (p *DockerProvisioner) ExecInDatabase(ctx context.Context, containerID stri
 	return p.client.ContainerExecRun(ctx, containerID, cmd)
 }
 
+// ExecInDatabaseWithInput runs a command inside a database container and writes
+// input to the command's stdin.
+func (p *DockerProvisioner) ExecInDatabaseWithInput(ctx context.Context, containerID string, cmd []string, input []byte) (string, error) {
+	return p.client.ContainerExecRunInput(ctx, containerID, cmd, input)
+}
+
+// ExecInDatabaseWithInputEnv runs a command inside a database container with
+// stdin and environment variables.
+func (p *DockerProvisioner) ExecInDatabaseWithInputEnv(ctx context.Context, containerID string, cmd []string, input []byte, env []string) (string, error) {
+	return p.client.ContainerExecRunInputEnv(ctx, containerID, cmd, input, env)
+}
+
 // getImageForType returns the Docker image for a database type
 func (p *DockerProvisioner) getImageForType(dbType DatabaseType, version string) string {
 	if version == "" {

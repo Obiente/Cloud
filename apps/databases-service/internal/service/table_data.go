@@ -144,7 +144,7 @@ func (s *Service) GetTableData(ctx context.Context, req *connect.Request[databas
 				IsNull:     val == nil,
 			}
 			if val != nil {
-				cellValue := fmt.Sprintf("%v", val)
+				cellValue := stringifyQueryValue(val)
 				cell.Value = &cellValue
 			}
 			cells[i] = cell

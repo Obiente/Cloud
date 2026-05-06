@@ -124,6 +124,10 @@ service DatabaseService {
 
   // Get DDL statement for a table
   rpc GetTableDDL(GetTableDDLRequest) returns (GetTableDDLResponse);
+
+  // SQL dump import/export
+  rpc ExportDatabaseDump(ExportDatabaseDumpRequest) returns (ExportDatabaseDumpResponse);
+  rpc ImportDatabaseDump(ImportDatabaseDumpRequest) returns (ImportDatabaseDumpResponse);
 }
 
 message ListDatabasesRequest {
@@ -572,6 +576,43 @@ enum DatabaseBackupStatus {
   BACKUP_DELETED = 5;
 }
 
+// SQL dump import/export messages
+enum DatabaseDumpFormat {
+  DATABASE_DUMP_FORMAT_UNSPECIFIED = 0;
+  SQL = 1;
+}
+
+message ExportDatabaseDumpRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  DatabaseDumpFormat format = 4;
+  bool include_schema = 5;
+  bool include_data = 6;
+}
+
+message ExportDatabaseDumpResponse {
+  string file_name = 1;
+  string content_type = 2;
+  bytes dump_data = 3;
+  int64 size_bytes = 4;
+}
+
+message ImportDatabaseDumpRequest {
+  string organization_id = 1;
+  string database_id = 2;
+  optional string database_name = 3;
+  DatabaseDumpFormat format = 4;
+  bytes dump_data = 5;
+  bool drop_existing = 6;
+}
+
+message ImportDatabaseDumpResponse {
+  bool success = 1;
+  string message = 2;
+  int64 size_bytes = 3;
+}
+
 // Metrics messages
 message GetDatabaseMetricsRequest {
   string organization_id = 1;
@@ -889,4 +930,3 @@ message GetTableDDLRequest {
 message GetTableDDLResponse {
   string ddl = 1;
 }
-

@@ -220,6 +220,53 @@ func (DatabaseBackupStatus) EnumDescriptor() ([]byte, []int) {
 	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{2}
 }
 
+// SQL dump import/export messages
+type DatabaseDumpFormat int32
+
+const (
+	DatabaseDumpFormat_DATABASE_DUMP_FORMAT_UNSPECIFIED DatabaseDumpFormat = 0
+	DatabaseDumpFormat_SQL                              DatabaseDumpFormat = 1
+)
+
+// Enum value maps for DatabaseDumpFormat.
+var (
+	DatabaseDumpFormat_name = map[int32]string{
+		0: "DATABASE_DUMP_FORMAT_UNSPECIFIED",
+		1: "SQL",
+	}
+	DatabaseDumpFormat_value = map[string]int32{
+		"DATABASE_DUMP_FORMAT_UNSPECIFIED": 0,
+		"SQL":                              1,
+	}
+)
+
+func (x DatabaseDumpFormat) Enum() *DatabaseDumpFormat {
+	p := new(DatabaseDumpFormat)
+	*p = x
+	return p
+}
+
+func (x DatabaseDumpFormat) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DatabaseDumpFormat) Descriptor() protoreflect.EnumDescriptor {
+	return file_obiente_cloud_databases_v1_database_service_proto_enumTypes[3].Descriptor()
+}
+
+func (DatabaseDumpFormat) Type() protoreflect.EnumType {
+	return &file_obiente_cloud_databases_v1_database_service_proto_enumTypes[3]
+}
+
+func (x DatabaseDumpFormat) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DatabaseDumpFormat.Descriptor instead.
+func (DatabaseDumpFormat) EnumDescriptor() ([]byte, []int) {
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{3}
+}
+
 type ListDatabasesRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
@@ -4433,6 +4480,302 @@ func (x *DatabaseBackup) GetErrorMessage() string {
 	return ""
 }
 
+type ExportDatabaseDumpRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DatabaseId     string                 `protobuf:"bytes,2,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	DatabaseName   *string                `protobuf:"bytes,3,opt,name=database_name,json=databaseName,proto3,oneof" json:"database_name,omitempty"`
+	Format         DatabaseDumpFormat     `protobuf:"varint,4,opt,name=format,proto3,enum=obiente.cloud.databases.v1.DatabaseDumpFormat" json:"format,omitempty"`
+	IncludeSchema  bool                   `protobuf:"varint,5,opt,name=include_schema,json=includeSchema,proto3" json:"include_schema,omitempty"`
+	IncludeData    bool                   `protobuf:"varint,6,opt,name=include_data,json=includeData,proto3" json:"include_data,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExportDatabaseDumpRequest) Reset() {
+	*x = ExportDatabaseDumpRequest{}
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportDatabaseDumpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportDatabaseDumpRequest) ProtoMessage() {}
+
+func (x *ExportDatabaseDumpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportDatabaseDumpRequest.ProtoReflect.Descriptor instead.
+func (*ExportDatabaseDumpRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *ExportDatabaseDumpRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ExportDatabaseDumpRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+func (x *ExportDatabaseDumpRequest) GetDatabaseName() string {
+	if x != nil && x.DatabaseName != nil {
+		return *x.DatabaseName
+	}
+	return ""
+}
+
+func (x *ExportDatabaseDumpRequest) GetFormat() DatabaseDumpFormat {
+	if x != nil {
+		return x.Format
+	}
+	return DatabaseDumpFormat_DATABASE_DUMP_FORMAT_UNSPECIFIED
+}
+
+func (x *ExportDatabaseDumpRequest) GetIncludeSchema() bool {
+	if x != nil {
+		return x.IncludeSchema
+	}
+	return false
+}
+
+func (x *ExportDatabaseDumpRequest) GetIncludeData() bool {
+	if x != nil {
+		return x.IncludeData
+	}
+	return false
+}
+
+type ExportDatabaseDumpResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FileName      string                 `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	DumpData      []byte                 `protobuf:"bytes,3,opt,name=dump_data,json=dumpData,proto3" json:"dump_data,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,4,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportDatabaseDumpResponse) Reset() {
+	*x = ExportDatabaseDumpResponse{}
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportDatabaseDumpResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportDatabaseDumpResponse) ProtoMessage() {}
+
+func (x *ExportDatabaseDumpResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportDatabaseDumpResponse.ProtoReflect.Descriptor instead.
+func (*ExportDatabaseDumpResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *ExportDatabaseDumpResponse) GetFileName() string {
+	if x != nil {
+		return x.FileName
+	}
+	return ""
+}
+
+func (x *ExportDatabaseDumpResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *ExportDatabaseDumpResponse) GetDumpData() []byte {
+	if x != nil {
+		return x.DumpData
+	}
+	return nil
+}
+
+func (x *ExportDatabaseDumpResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+type ImportDatabaseDumpRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DatabaseId     string                 `protobuf:"bytes,2,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
+	DatabaseName   *string                `protobuf:"bytes,3,opt,name=database_name,json=databaseName,proto3,oneof" json:"database_name,omitempty"`
+	Format         DatabaseDumpFormat     `protobuf:"varint,4,opt,name=format,proto3,enum=obiente.cloud.databases.v1.DatabaseDumpFormat" json:"format,omitempty"`
+	DumpData       []byte                 `protobuf:"bytes,5,opt,name=dump_data,json=dumpData,proto3" json:"dump_data,omitempty"`
+	DropExisting   bool                   `protobuf:"varint,6,opt,name=drop_existing,json=dropExisting,proto3" json:"drop_existing,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ImportDatabaseDumpRequest) Reset() {
+	*x = ImportDatabaseDumpRequest{}
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportDatabaseDumpRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportDatabaseDumpRequest) ProtoMessage() {}
+
+func (x *ImportDatabaseDumpRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportDatabaseDumpRequest.ProtoReflect.Descriptor instead.
+func (*ImportDatabaseDumpRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *ImportDatabaseDumpRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ImportDatabaseDumpRequest) GetDatabaseId() string {
+	if x != nil {
+		return x.DatabaseId
+	}
+	return ""
+}
+
+func (x *ImportDatabaseDumpRequest) GetDatabaseName() string {
+	if x != nil && x.DatabaseName != nil {
+		return *x.DatabaseName
+	}
+	return ""
+}
+
+func (x *ImportDatabaseDumpRequest) GetFormat() DatabaseDumpFormat {
+	if x != nil {
+		return x.Format
+	}
+	return DatabaseDumpFormat_DATABASE_DUMP_FORMAT_UNSPECIFIED
+}
+
+func (x *ImportDatabaseDumpRequest) GetDumpData() []byte {
+	if x != nil {
+		return x.DumpData
+	}
+	return nil
+}
+
+func (x *ImportDatabaseDumpRequest) GetDropExisting() bool {
+	if x != nil {
+		return x.DropExisting
+	}
+	return false
+}
+
+type ImportDatabaseDumpResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportDatabaseDumpResponse) Reset() {
+	*x = ImportDatabaseDumpResponse{}
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportDatabaseDumpResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportDatabaseDumpResponse) ProtoMessage() {}
+
+func (x *ImportDatabaseDumpResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportDatabaseDumpResponse.ProtoReflect.Descriptor instead.
+func (*ImportDatabaseDumpResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *ImportDatabaseDumpResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ImportDatabaseDumpResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ImportDatabaseDumpResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
 // Metrics messages
 type GetDatabaseMetricsRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -4447,7 +4790,7 @@ type GetDatabaseMetricsRequest struct {
 
 func (x *GetDatabaseMetricsRequest) Reset() {
 	*x = GetDatabaseMetricsRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[65]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4459,7 +4802,7 @@ func (x *GetDatabaseMetricsRequest) String() string {
 func (*GetDatabaseMetricsRequest) ProtoMessage() {}
 
 func (x *GetDatabaseMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[65]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4472,7 +4815,7 @@ func (x *GetDatabaseMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatabaseMetricsRequest.ProtoReflect.Descriptor instead.
 func (*GetDatabaseMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{65}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *GetDatabaseMetricsRequest) GetOrganizationId() string {
@@ -4519,7 +4862,7 @@ type GetDatabaseMetricsResponse struct {
 
 func (x *GetDatabaseMetricsResponse) Reset() {
 	*x = GetDatabaseMetricsResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[66]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4531,7 +4874,7 @@ func (x *GetDatabaseMetricsResponse) String() string {
 func (*GetDatabaseMetricsResponse) ProtoMessage() {}
 
 func (x *GetDatabaseMetricsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[66]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4544,7 +4887,7 @@ func (x *GetDatabaseMetricsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatabaseMetricsResponse.ProtoReflect.Descriptor instead.
 func (*GetDatabaseMetricsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{66}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetDatabaseMetricsResponse) GetMetrics() []*DatabaseMetric {
@@ -4564,7 +4907,7 @@ type StreamDatabaseMetricsRequest struct {
 
 func (x *StreamDatabaseMetricsRequest) Reset() {
 	*x = StreamDatabaseMetricsRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[67]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4576,7 +4919,7 @@ func (x *StreamDatabaseMetricsRequest) String() string {
 func (*StreamDatabaseMetricsRequest) ProtoMessage() {}
 
 func (x *StreamDatabaseMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[67]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4589,7 +4932,7 @@ func (x *StreamDatabaseMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamDatabaseMetricsRequest.ProtoReflect.Descriptor instead.
 func (*StreamDatabaseMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{67}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *StreamDatabaseMetricsRequest) GetOrganizationId() string {
@@ -4626,7 +4969,7 @@ type DatabaseMetric struct {
 
 func (x *DatabaseMetric) Reset() {
 	*x = DatabaseMetric{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[68]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4638,7 +4981,7 @@ func (x *DatabaseMetric) String() string {
 func (*DatabaseMetric) ProtoMessage() {}
 
 func (x *DatabaseMetric) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[68]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4651,7 +4994,7 @@ func (x *DatabaseMetric) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseMetric.ProtoReflect.Descriptor instead.
 func (*DatabaseMetric) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{68}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *DatabaseMetric) GetDatabaseId() string {
@@ -4747,7 +5090,7 @@ type ListDatabaseSizesRequest struct {
 
 func (x *ListDatabaseSizesRequest) Reset() {
 	*x = ListDatabaseSizesRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[69]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4759,7 +5102,7 @@ func (x *ListDatabaseSizesRequest) String() string {
 func (*ListDatabaseSizesRequest) ProtoMessage() {}
 
 func (x *ListDatabaseSizesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[69]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4772,7 +5115,7 @@ func (x *ListDatabaseSizesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDatabaseSizesRequest.ProtoReflect.Descriptor instead.
 func (*ListDatabaseSizesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{69}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListDatabaseSizesRequest) GetType() DatabaseType {
@@ -4791,7 +5134,7 @@ type ListDatabaseSizesResponse struct {
 
 func (x *ListDatabaseSizesResponse) Reset() {
 	*x = ListDatabaseSizesResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[70]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4803,7 +5146,7 @@ func (x *ListDatabaseSizesResponse) String() string {
 func (*ListDatabaseSizesResponse) ProtoMessage() {}
 
 func (x *ListDatabaseSizesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[70]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4816,7 +5159,7 @@ func (x *ListDatabaseSizesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDatabaseSizesResponse.ProtoReflect.Descriptor instead.
 func (*ListDatabaseSizesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{70}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListDatabaseSizesResponse) GetSizes() []*DatabaseSize {
@@ -4843,7 +5186,7 @@ type DatabaseSize struct {
 
 func (x *DatabaseSize) Reset() {
 	*x = DatabaseSize{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[71]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4855,7 +5198,7 @@ func (x *DatabaseSize) String() string {
 func (*DatabaseSize) ProtoMessage() {}
 
 func (x *DatabaseSize) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[71]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4868,7 +5211,7 @@ func (x *DatabaseSize) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseSize.ProtoReflect.Descriptor instead.
 func (*DatabaseSize) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{71}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *DatabaseSize) GetId() string {
@@ -4968,7 +5311,7 @@ type DatabaseInstance struct {
 
 func (x *DatabaseInstance) Reset() {
 	*x = DatabaseInstance{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[72]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4980,7 +5323,7 @@ func (x *DatabaseInstance) String() string {
 func (*DatabaseInstance) ProtoMessage() {}
 
 func (x *DatabaseInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[72]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4993,7 +5336,7 @@ func (x *DatabaseInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseInstance.ProtoReflect.Descriptor instead.
 func (*DatabaseInstance) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{72}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *DatabaseInstance) GetId() string {
@@ -5183,7 +5526,7 @@ type GetDatabaseUsageRequest struct {
 
 func (x *GetDatabaseUsageRequest) Reset() {
 	*x = GetDatabaseUsageRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[73]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5195,7 +5538,7 @@ func (x *GetDatabaseUsageRequest) String() string {
 func (*GetDatabaseUsageRequest) ProtoMessage() {}
 
 func (x *GetDatabaseUsageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[73]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5208,7 +5551,7 @@ func (x *GetDatabaseUsageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatabaseUsageRequest.ProtoReflect.Descriptor instead.
 func (*GetDatabaseUsageRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{73}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *GetDatabaseUsageRequest) GetDatabaseId() string {
@@ -5245,7 +5588,7 @@ type GetDatabaseUsageResponse struct {
 
 func (x *GetDatabaseUsageResponse) Reset() {
 	*x = GetDatabaseUsageResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[74]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5257,7 +5600,7 @@ func (x *GetDatabaseUsageResponse) String() string {
 func (*GetDatabaseUsageResponse) ProtoMessage() {}
 
 func (x *GetDatabaseUsageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[74]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5270,7 +5613,7 @@ func (x *GetDatabaseUsageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDatabaseUsageResponse.ProtoReflect.Descriptor instead.
 func (*GetDatabaseUsageResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{74}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetDatabaseUsageResponse) GetDatabaseId() string {
@@ -5327,7 +5670,7 @@ type DatabaseUsageMetrics struct {
 
 func (x *DatabaseUsageMetrics) Reset() {
 	*x = DatabaseUsageMetrics{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[75]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5339,7 +5682,7 @@ func (x *DatabaseUsageMetrics) String() string {
 func (*DatabaseUsageMetrics) ProtoMessage() {}
 
 func (x *DatabaseUsageMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[75]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5352,7 +5695,7 @@ func (x *DatabaseUsageMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DatabaseUsageMetrics.ProtoReflect.Descriptor instead.
 func (*DatabaseUsageMetrics) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{75}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *DatabaseUsageMetrics) GetCpuCoreSeconds() int64 {
@@ -5450,7 +5793,7 @@ type CreateTableRequest struct {
 
 func (x *CreateTableRequest) Reset() {
 	*x = CreateTableRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[76]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5462,7 +5805,7 @@ func (x *CreateTableRequest) String() string {
 func (*CreateTableRequest) ProtoMessage() {}
 
 func (x *CreateTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[76]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5475,7 +5818,7 @@ func (x *CreateTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTableRequest.ProtoReflect.Descriptor instead.
 func (*CreateTableRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{76}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *CreateTableRequest) GetOrganizationId() string {
@@ -5556,7 +5899,7 @@ type ColumnDefinition struct {
 
 func (x *ColumnDefinition) Reset() {
 	*x = ColumnDefinition{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[77]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5568,7 +5911,7 @@ func (x *ColumnDefinition) String() string {
 func (*ColumnDefinition) ProtoMessage() {}
 
 func (x *ColumnDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[77]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5581,7 +5924,7 @@ func (x *ColumnDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ColumnDefinition.ProtoReflect.Descriptor instead.
 func (*ColumnDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{77}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *ColumnDefinition) GetName() string {
@@ -5643,7 +5986,7 @@ type PrimaryKeyDefinition struct {
 
 func (x *PrimaryKeyDefinition) Reset() {
 	*x = PrimaryKeyDefinition{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[78]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5655,7 +5998,7 @@ func (x *PrimaryKeyDefinition) String() string {
 func (*PrimaryKeyDefinition) ProtoMessage() {}
 
 func (x *PrimaryKeyDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[78]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5668,7 +6011,7 @@ func (x *PrimaryKeyDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrimaryKeyDefinition.ProtoReflect.Descriptor instead.
 func (*PrimaryKeyDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{78}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PrimaryKeyDefinition) GetColumnNames() []string {
@@ -5697,7 +6040,7 @@ type IndexDefinition struct {
 
 func (x *IndexDefinition) Reset() {
 	*x = IndexDefinition{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[79]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5709,7 +6052,7 @@ func (x *IndexDefinition) String() string {
 func (*IndexDefinition) ProtoMessage() {}
 
 func (x *IndexDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[79]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5722,7 +6065,7 @@ func (x *IndexDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexDefinition.ProtoReflect.Descriptor instead.
 func (*IndexDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{79}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *IndexDefinition) GetName() string {
@@ -5767,7 +6110,7 @@ type ForeignKeyDefinition struct {
 
 func (x *ForeignKeyDefinition) Reset() {
 	*x = ForeignKeyDefinition{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5779,7 +6122,7 @@ func (x *ForeignKeyDefinition) String() string {
 func (*ForeignKeyDefinition) ProtoMessage() {}
 
 func (x *ForeignKeyDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5792,7 +6135,7 @@ func (x *ForeignKeyDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForeignKeyDefinition.ProtoReflect.Descriptor instead.
 func (*ForeignKeyDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{80}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ForeignKeyDefinition) GetName() string {
@@ -5847,7 +6190,7 @@ type CreateTableResponse struct {
 
 func (x *CreateTableResponse) Reset() {
 	*x = CreateTableResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[81]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5859,7 +6202,7 @@ func (x *CreateTableResponse) String() string {
 func (*CreateTableResponse) ProtoMessage() {}
 
 func (x *CreateTableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[81]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5872,7 +6215,7 @@ func (x *CreateTableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTableResponse.ProtoReflect.Descriptor instead.
 func (*CreateTableResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{81}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *CreateTableResponse) GetSuccess() bool {
@@ -5902,7 +6245,7 @@ type AlterTableRequest struct {
 
 func (x *AlterTableRequest) Reset() {
 	*x = AlterTableRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[82]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5914,7 +6257,7 @@ func (x *AlterTableRequest) String() string {
 func (*AlterTableRequest) ProtoMessage() {}
 
 func (x *AlterTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[82]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5927,7 +6270,7 @@ func (x *AlterTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterTableRequest.ProtoReflect.Descriptor instead.
 func (*AlterTableRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{82}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *AlterTableRequest) GetOrganizationId() string {
@@ -5984,7 +6327,7 @@ type AlterTableOperation struct {
 
 func (x *AlterTableOperation) Reset() {
 	*x = AlterTableOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5996,7 +6339,7 @@ func (x *AlterTableOperation) String() string {
 func (*AlterTableOperation) ProtoMessage() {}
 
 func (x *AlterTableOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6009,7 +6352,7 @@ func (x *AlterTableOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterTableOperation.ProtoReflect.Descriptor instead.
 func (*AlterTableOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{83}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *AlterTableOperation) GetOperation() isAlterTableOperation_Operation {
@@ -6153,7 +6496,7 @@ type AddColumnOperation struct {
 
 func (x *AddColumnOperation) Reset() {
 	*x = AddColumnOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[84]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6165,7 +6508,7 @@ func (x *AddColumnOperation) String() string {
 func (*AddColumnOperation) ProtoMessage() {}
 
 func (x *AddColumnOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[84]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6178,7 +6521,7 @@ func (x *AddColumnOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddColumnOperation.ProtoReflect.Descriptor instead.
 func (*AddColumnOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{84}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *AddColumnOperation) GetColumn() *ColumnDefinition {
@@ -6205,7 +6548,7 @@ type DropColumnOperation struct {
 
 func (x *DropColumnOperation) Reset() {
 	*x = DropColumnOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[85]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6217,7 +6560,7 @@ func (x *DropColumnOperation) String() string {
 func (*DropColumnOperation) ProtoMessage() {}
 
 func (x *DropColumnOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[85]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6230,7 +6573,7 @@ func (x *DropColumnOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropColumnOperation.ProtoReflect.Descriptor instead.
 func (*DropColumnOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{85}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *DropColumnOperation) GetColumnName() string {
@@ -6260,7 +6603,7 @@ type ModifyColumnOperation struct {
 
 func (x *ModifyColumnOperation) Reset() {
 	*x = ModifyColumnOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6272,7 +6615,7 @@ func (x *ModifyColumnOperation) String() string {
 func (*ModifyColumnOperation) ProtoMessage() {}
 
 func (x *ModifyColumnOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6285,7 +6628,7 @@ func (x *ModifyColumnOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModifyColumnOperation.ProtoReflect.Descriptor instead.
 func (*ModifyColumnOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{86}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *ModifyColumnOperation) GetColumnName() string {
@@ -6333,7 +6676,7 @@ type RenameColumnOperation struct {
 
 func (x *RenameColumnOperation) Reset() {
 	*x = RenameColumnOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[87]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6345,7 +6688,7 @@ func (x *RenameColumnOperation) String() string {
 func (*RenameColumnOperation) ProtoMessage() {}
 
 func (x *RenameColumnOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[87]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6358,7 +6701,7 @@ func (x *RenameColumnOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameColumnOperation.ProtoReflect.Descriptor instead.
 func (*RenameColumnOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{87}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *RenameColumnOperation) GetOldName() string {
@@ -6384,7 +6727,7 @@ type AddForeignKeyOperation struct {
 
 func (x *AddForeignKeyOperation) Reset() {
 	*x = AddForeignKeyOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[88]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6396,7 +6739,7 @@ func (x *AddForeignKeyOperation) String() string {
 func (*AddForeignKeyOperation) ProtoMessage() {}
 
 func (x *AddForeignKeyOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[88]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6409,7 +6752,7 @@ func (x *AddForeignKeyOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddForeignKeyOperation.ProtoReflect.Descriptor instead.
 func (*AddForeignKeyOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{88}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *AddForeignKeyOperation) GetForeignKey() *ForeignKeyDefinition {
@@ -6428,7 +6771,7 @@ type DropForeignKeyOperation struct {
 
 func (x *DropForeignKeyOperation) Reset() {
 	*x = DropForeignKeyOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[89]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6440,7 +6783,7 @@ func (x *DropForeignKeyOperation) String() string {
 func (*DropForeignKeyOperation) ProtoMessage() {}
 
 func (x *DropForeignKeyOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[89]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6453,7 +6796,7 @@ func (x *DropForeignKeyOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropForeignKeyOperation.ProtoReflect.Descriptor instead.
 func (*DropForeignKeyOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{89}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *DropForeignKeyOperation) GetConstraintName() string {
@@ -6473,7 +6816,7 @@ type AddUniqueConstraintOperation struct {
 
 func (x *AddUniqueConstraintOperation) Reset() {
 	*x = AddUniqueConstraintOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[90]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6485,7 +6828,7 @@ func (x *AddUniqueConstraintOperation) String() string {
 func (*AddUniqueConstraintOperation) ProtoMessage() {}
 
 func (x *AddUniqueConstraintOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[90]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6498,7 +6841,7 @@ func (x *AddUniqueConstraintOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddUniqueConstraintOperation.ProtoReflect.Descriptor instead.
 func (*AddUniqueConstraintOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{90}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *AddUniqueConstraintOperation) GetName() string {
@@ -6524,7 +6867,7 @@ type DropConstraintOperation struct {
 
 func (x *DropConstraintOperation) Reset() {
 	*x = DropConstraintOperation{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[91]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6536,7 +6879,7 @@ func (x *DropConstraintOperation) String() string {
 func (*DropConstraintOperation) ProtoMessage() {}
 
 func (x *DropConstraintOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[91]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6549,7 +6892,7 @@ func (x *DropConstraintOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropConstraintOperation.ProtoReflect.Descriptor instead.
 func (*DropConstraintOperation) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{91}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *DropConstraintOperation) GetConstraintName() string {
@@ -6569,7 +6912,7 @@ type AlterTableResponse struct {
 
 func (x *AlterTableResponse) Reset() {
 	*x = AlterTableResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[92]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6581,7 +6924,7 @@ func (x *AlterTableResponse) String() string {
 func (*AlterTableResponse) ProtoMessage() {}
 
 func (x *AlterTableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[92]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6594,7 +6937,7 @@ func (x *AlterTableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlterTableResponse.ProtoReflect.Descriptor instead.
 func (*AlterTableResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{92}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *AlterTableResponse) GetSuccess() bool {
@@ -6625,7 +6968,7 @@ type DropTableRequest struct {
 
 func (x *DropTableRequest) Reset() {
 	*x = DropTableRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[93]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6637,7 +6980,7 @@ func (x *DropTableRequest) String() string {
 func (*DropTableRequest) ProtoMessage() {}
 
 func (x *DropTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[93]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6650,7 +6993,7 @@ func (x *DropTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropTableRequest.ProtoReflect.Descriptor instead.
 func (*DropTableRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{93}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *DropTableRequest) GetOrganizationId() string {
@@ -6704,7 +7047,7 @@ type DropTableResponse struct {
 
 func (x *DropTableResponse) Reset() {
 	*x = DropTableResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[94]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6716,7 +7059,7 @@ func (x *DropTableResponse) String() string {
 func (*DropTableResponse) ProtoMessage() {}
 
 func (x *DropTableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[94]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6729,7 +7072,7 @@ func (x *DropTableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropTableResponse.ProtoReflect.Descriptor instead.
 func (*DropTableResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{94}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *DropTableResponse) GetSuccess() bool {
@@ -6752,7 +7095,7 @@ type RenameTableRequest struct {
 
 func (x *RenameTableRequest) Reset() {
 	*x = RenameTableRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[95]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6764,7 +7107,7 @@ func (x *RenameTableRequest) String() string {
 func (*RenameTableRequest) ProtoMessage() {}
 
 func (x *RenameTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[95]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6777,7 +7120,7 @@ func (x *RenameTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameTableRequest.ProtoReflect.Descriptor instead.
 func (*RenameTableRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{95}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *RenameTableRequest) GetOrganizationId() string {
@@ -6824,7 +7167,7 @@ type RenameTableResponse struct {
 
 func (x *RenameTableResponse) Reset() {
 	*x = RenameTableResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[96]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6836,7 +7179,7 @@ func (x *RenameTableResponse) String() string {
 func (*RenameTableResponse) ProtoMessage() {}
 
 func (x *RenameTableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[96]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6849,7 +7192,7 @@ func (x *RenameTableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameTableResponse.ProtoReflect.Descriptor instead.
 func (*RenameTableResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{96}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *RenameTableResponse) GetSuccess() bool {
@@ -6872,7 +7215,7 @@ type TruncateTableRequest struct {
 
 func (x *TruncateTableRequest) Reset() {
 	*x = TruncateTableRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[97]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6884,7 +7227,7 @@ func (x *TruncateTableRequest) String() string {
 func (*TruncateTableRequest) ProtoMessage() {}
 
 func (x *TruncateTableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[97]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6897,7 +7240,7 @@ func (x *TruncateTableRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateTableRequest.ProtoReflect.Descriptor instead.
 func (*TruncateTableRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{97}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *TruncateTableRequest) GetOrganizationId() string {
@@ -6945,7 +7288,7 @@ type TruncateTableResponse struct {
 
 func (x *TruncateTableResponse) Reset() {
 	*x = TruncateTableResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[98]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6957,7 +7300,7 @@ func (x *TruncateTableResponse) String() string {
 func (*TruncateTableResponse) ProtoMessage() {}
 
 func (x *TruncateTableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[98]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6970,7 +7313,7 @@ func (x *TruncateTableResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TruncateTableResponse.ProtoReflect.Descriptor instead.
 func (*TruncateTableResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{98}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *TruncateTableResponse) GetSuccess() bool {
@@ -7002,7 +7345,7 @@ type CreateIndexRequest struct {
 
 func (x *CreateIndexRequest) Reset() {
 	*x = CreateIndexRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[99]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7014,7 +7357,7 @@ func (x *CreateIndexRequest) String() string {
 func (*CreateIndexRequest) ProtoMessage() {}
 
 func (x *CreateIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[99]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7027,7 +7370,7 @@ func (x *CreateIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIndexRequest.ProtoReflect.Descriptor instead.
 func (*CreateIndexRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{99}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *CreateIndexRequest) GetOrganizationId() string {
@@ -7088,7 +7431,7 @@ type CreateIndexResponse struct {
 
 func (x *CreateIndexResponse) Reset() {
 	*x = CreateIndexResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[100]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7100,7 +7443,7 @@ func (x *CreateIndexResponse) String() string {
 func (*CreateIndexResponse) ProtoMessage() {}
 
 func (x *CreateIndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[100]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7113,7 +7456,7 @@ func (x *CreateIndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateIndexResponse.ProtoReflect.Descriptor instead.
 func (*CreateIndexResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{100}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *CreateIndexResponse) GetSuccess() bool {
@@ -7138,7 +7481,7 @@ type DropIndexRequest struct {
 
 func (x *DropIndexRequest) Reset() {
 	*x = DropIndexRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[101]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7150,7 +7493,7 @@ func (x *DropIndexRequest) String() string {
 func (*DropIndexRequest) ProtoMessage() {}
 
 func (x *DropIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[101]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7163,7 +7506,7 @@ func (x *DropIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropIndexRequest.ProtoReflect.Descriptor instead.
 func (*DropIndexRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{101}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *DropIndexRequest) GetOrganizationId() string {
@@ -7224,7 +7567,7 @@ type DropIndexResponse struct {
 
 func (x *DropIndexResponse) Reset() {
 	*x = DropIndexResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[102]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7236,7 +7579,7 @@ func (x *DropIndexResponse) String() string {
 func (*DropIndexResponse) ProtoMessage() {}
 
 func (x *DropIndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[102]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7249,7 +7592,7 @@ func (x *DropIndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DropIndexResponse.ProtoReflect.Descriptor instead.
 func (*DropIndexResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{102}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *DropIndexResponse) GetSuccess() bool {
@@ -7271,7 +7614,7 @@ type GetTableDDLRequest struct {
 
 func (x *GetTableDDLRequest) Reset() {
 	*x = GetTableDDLRequest{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[103]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7283,7 +7626,7 @@ func (x *GetTableDDLRequest) String() string {
 func (*GetTableDDLRequest) ProtoMessage() {}
 
 func (x *GetTableDDLRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[103]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7296,7 +7639,7 @@ func (x *GetTableDDLRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTableDDLRequest.ProtoReflect.Descriptor instead.
 func (*GetTableDDLRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{103}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *GetTableDDLRequest) GetOrganizationId() string {
@@ -7336,7 +7679,7 @@ type GetTableDDLResponse struct {
 
 func (x *GetTableDDLResponse) Reset() {
 	*x = GetTableDDLResponse{}
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[104]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7348,7 +7691,7 @@ func (x *GetTableDDLResponse) String() string {
 func (*GetTableDDLResponse) ProtoMessage() {}
 
 func (x *GetTableDDLResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[104]
+	mi := &file_obiente_cloud_databases_v1_database_service_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7361,7 +7704,7 @@ func (x *GetTableDDLResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTableDDLResponse.ProtoReflect.Descriptor instead.
 func (*GetTableDDLResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{104}
+	return file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *GetTableDDLResponse) GetDdl() string {
@@ -7801,7 +8144,36 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"\rerror_message\x18\t \x01(\tH\x02R\ferrorMessage\x88\x01\x01B\x0e\n" +
 	"\f_descriptionB\x0f\n" +
 	"\r_completed_atB\x10\n" +
-	"\x0e_error_message\"\x85\x02\n" +
+	"\x0e_error_message\"\xb3\x02\n" +
+	"\x19ExportDatabaseDumpRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1f\n" +
+	"\vdatabase_id\x18\x02 \x01(\tR\n" +
+	"databaseId\x12(\n" +
+	"\rdatabase_name\x18\x03 \x01(\tH\x00R\fdatabaseName\x88\x01\x01\x12F\n" +
+	"\x06format\x18\x04 \x01(\x0e2..obiente.cloud.databases.v1.DatabaseDumpFormatR\x06format\x12%\n" +
+	"\x0einclude_schema\x18\x05 \x01(\bR\rincludeSchema\x12!\n" +
+	"\finclude_data\x18\x06 \x01(\bR\vincludeDataB\x10\n" +
+	"\x0e_database_name\"\x98\x01\n" +
+	"\x1aExportDatabaseDumpResponse\x12\x1b\n" +
+	"\tfile_name\x18\x01 \x01(\tR\bfileName\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x1b\n" +
+	"\tdump_data\x18\x03 \x01(\fR\bdumpData\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\"\xab\x02\n" +
+	"\x19ImportDatabaseDumpRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1f\n" +
+	"\vdatabase_id\x18\x02 \x01(\tR\n" +
+	"databaseId\x12(\n" +
+	"\rdatabase_name\x18\x03 \x01(\tH\x00R\fdatabaseName\x88\x01\x01\x12F\n" +
+	"\x06format\x18\x04 \x01(\x0e2..obiente.cloud.databases.v1.DatabaseDumpFormatR\x06format\x12\x1b\n" +
+	"\tdump_data\x18\x05 \x01(\fR\bdumpData\x12#\n" +
+	"\rdrop_existing\x18\x06 \x01(\bR\fdropExistingB\x10\n" +
+	"\x0e_database_name\"o\n" +
+	"\x1aImportDatabaseDumpResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\"\x85\x02\n" +
 	"\x19GetDatabaseMetricsRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1f\n" +
 	"\vdatabase_id\x18\x02 \x01(\tR\n" +
@@ -8136,7 +8508,10 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"\x10BACKUP_COMPLETED\x10\x02\x12\x11\n" +
 	"\rBACKUP_FAILED\x10\x03\x12\x13\n" +
 	"\x0fBACKUP_DELETING\x10\x04\x12\x12\n" +
-	"\x0eBACKUP_DELETED\x10\x052\xd7#\n" +
+	"\x0eBACKUP_DELETED\x10\x05*C\n" +
+	"\x12DatabaseDumpFormat\x12$\n" +
+	" DATABASE_DUMP_FORMAT_UNSPECIFIED\x10\x00\x12\a\n" +
+	"\x03SQL\x10\x012\xe3%\n" +
 	"\x0fDatabaseService\x12t\n" +
 	"\rListDatabases\x120.obiente.cloud.databases.v1.ListDatabasesRequest\x1a1.obiente.cloud.databases.v1.ListDatabasesResponse\x12w\n" +
 	"\x0eCreateDatabase\x121.obiente.cloud.databases.v1.CreateDatabaseRequest\x1a2.obiente.cloud.databases.v1.CreateDatabaseResponse\x12n\n" +
@@ -8177,7 +8552,9 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"\rTruncateTable\x120.obiente.cloud.databases.v1.TruncateTableRequest\x1a1.obiente.cloud.databases.v1.TruncateTableResponse\x12n\n" +
 	"\vCreateIndex\x12..obiente.cloud.databases.v1.CreateIndexRequest\x1a/.obiente.cloud.databases.v1.CreateIndexResponse\x12h\n" +
 	"\tDropIndex\x12,.obiente.cloud.databases.v1.DropIndexRequest\x1a-.obiente.cloud.databases.v1.DropIndexResponse\x12n\n" +
-	"\vGetTableDDL\x12..obiente.cloud.databases.v1.GetTableDDLRequest\x1a/.obiente.cloud.databases.v1.GetTableDDLResponseBSZQgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1;databasesv1b\x06proto3"
+	"\vGetTableDDL\x12..obiente.cloud.databases.v1.GetTableDDLRequest\x1a/.obiente.cloud.databases.v1.GetTableDDLResponse\x12\x83\x01\n" +
+	"\x12ExportDatabaseDump\x125.obiente.cloud.databases.v1.ExportDatabaseDumpRequest\x1a6.obiente.cloud.databases.v1.ExportDatabaseDumpResponse\x12\x83\x01\n" +
+	"\x12ImportDatabaseDump\x125.obiente.cloud.databases.v1.ImportDatabaseDumpRequest\x1a6.obiente.cloud.databases.v1.ImportDatabaseDumpResponseBSZQgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1;databasesv1b\x06proto3"
 
 var (
 	file_obiente_cloud_databases_v1_database_service_proto_rawDescOnce sync.Once
@@ -8191,290 +8568,301 @@ func file_obiente_cloud_databases_v1_database_service_proto_rawDescGZIP() []byte
 	return file_obiente_cloud_databases_v1_database_service_proto_rawDescData
 }
 
-var file_obiente_cloud_databases_v1_database_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_obiente_cloud_databases_v1_database_service_proto_msgTypes = make([]protoimpl.MessageInfo, 108)
+var file_obiente_cloud_databases_v1_database_service_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_obiente_cloud_databases_v1_database_service_proto_msgTypes = make([]protoimpl.MessageInfo, 112)
 var file_obiente_cloud_databases_v1_database_service_proto_goTypes = []any{
 	(DatabaseType)(0),                         // 0: obiente.cloud.databases.v1.DatabaseType
 	(DatabaseStatus)(0),                       // 1: obiente.cloud.databases.v1.DatabaseStatus
 	(DatabaseBackupStatus)(0),                 // 2: obiente.cloud.databases.v1.DatabaseBackupStatus
-	(*ListDatabasesRequest)(nil),              // 3: obiente.cloud.databases.v1.ListDatabasesRequest
-	(*ListDatabasesResponse)(nil),             // 4: obiente.cloud.databases.v1.ListDatabasesResponse
-	(*CreateDatabaseRequest)(nil),             // 5: obiente.cloud.databases.v1.CreateDatabaseRequest
-	(*CreateDatabaseResponse)(nil),            // 6: obiente.cloud.databases.v1.CreateDatabaseResponse
-	(*GetDatabaseRequest)(nil),                // 7: obiente.cloud.databases.v1.GetDatabaseRequest
-	(*GetDatabaseResponse)(nil),               // 8: obiente.cloud.databases.v1.GetDatabaseResponse
-	(*UpdateDatabaseRequest)(nil),             // 9: obiente.cloud.databases.v1.UpdateDatabaseRequest
-	(*UpdateDatabaseResponse)(nil),            // 10: obiente.cloud.databases.v1.UpdateDatabaseResponse
-	(*DeleteDatabaseRequest)(nil),             // 11: obiente.cloud.databases.v1.DeleteDatabaseRequest
-	(*DeleteDatabaseResponse)(nil),            // 12: obiente.cloud.databases.v1.DeleteDatabaseResponse
-	(*StartDatabaseRequest)(nil),              // 13: obiente.cloud.databases.v1.StartDatabaseRequest
-	(*StartDatabaseResponse)(nil),             // 14: obiente.cloud.databases.v1.StartDatabaseResponse
-	(*StopDatabaseRequest)(nil),               // 15: obiente.cloud.databases.v1.StopDatabaseRequest
-	(*StopDatabaseResponse)(nil),              // 16: obiente.cloud.databases.v1.StopDatabaseResponse
-	(*SleepDatabaseRequest)(nil),              // 17: obiente.cloud.databases.v1.SleepDatabaseRequest
-	(*SleepDatabaseResponse)(nil),             // 18: obiente.cloud.databases.v1.SleepDatabaseResponse
-	(*RestartDatabaseRequest)(nil),            // 19: obiente.cloud.databases.v1.RestartDatabaseRequest
-	(*RestartDatabaseResponse)(nil),           // 20: obiente.cloud.databases.v1.RestartDatabaseResponse
-	(*StreamDatabaseStatusRequest)(nil),       // 21: obiente.cloud.databases.v1.StreamDatabaseStatusRequest
-	(*DatabaseStatusUpdate)(nil),              // 22: obiente.cloud.databases.v1.DatabaseStatusUpdate
-	(*GetDatabaseConnectionInfoRequest)(nil),  // 23: obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
-	(*GetDatabaseConnectionInfoResponse)(nil), // 24: obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
-	(*DatabaseConnectionInfo)(nil),            // 25: obiente.cloud.databases.v1.DatabaseConnectionInfo
-	(*ResetDatabasePasswordRequest)(nil),      // 26: obiente.cloud.databases.v1.ResetDatabasePasswordRequest
-	(*ResetDatabasePasswordResponse)(nil),     // 27: obiente.cloud.databases.v1.ResetDatabasePasswordResponse
-	(*GetDatabaseSchemaRequest)(nil),          // 28: obiente.cloud.databases.v1.GetDatabaseSchemaRequest
-	(*GetDatabaseSchemaResponse)(nil),         // 29: obiente.cloud.databases.v1.GetDatabaseSchemaResponse
-	(*ListTablesRequest)(nil),                 // 30: obiente.cloud.databases.v1.ListTablesRequest
-	(*ListTablesResponse)(nil),                // 31: obiente.cloud.databases.v1.ListTablesResponse
-	(*GetTableStructureRequest)(nil),          // 32: obiente.cloud.databases.v1.GetTableStructureRequest
-	(*GetTableStructureResponse)(nil),         // 33: obiente.cloud.databases.v1.GetTableStructureResponse
-	(*TableInfo)(nil),                         // 34: obiente.cloud.databases.v1.TableInfo
-	(*ColumnInfo)(nil),                        // 35: obiente.cloud.databases.v1.ColumnInfo
-	(*IndexInfo)(nil),                         // 36: obiente.cloud.databases.v1.IndexInfo
-	(*ForeignKeyInfo)(nil),                    // 37: obiente.cloud.databases.v1.ForeignKeyInfo
-	(*ViewInfo)(nil),                          // 38: obiente.cloud.databases.v1.ViewInfo
-	(*FunctionInfo)(nil),                      // 39: obiente.cloud.databases.v1.FunctionInfo
-	(*ProcedureInfo)(nil),                     // 40: obiente.cloud.databases.v1.ProcedureInfo
-	(*ParameterInfo)(nil),                     // 41: obiente.cloud.databases.v1.ParameterInfo
-	(*ExecuteQueryRequest)(nil),               // 42: obiente.cloud.databases.v1.ExecuteQueryRequest
-	(*ExecuteQueryResponse)(nil),              // 43: obiente.cloud.databases.v1.ExecuteQueryResponse
-	(*QueryResultColumn)(nil),                 // 44: obiente.cloud.databases.v1.QueryResultColumn
-	(*QueryResultRow)(nil),                    // 45: obiente.cloud.databases.v1.QueryResultRow
-	(*QueryResultCell)(nil),                   // 46: obiente.cloud.databases.v1.QueryResultCell
-	(*StreamQueryRequest)(nil),                // 47: obiente.cloud.databases.v1.StreamQueryRequest
-	(*GetTableDataRequest)(nil),               // 48: obiente.cloud.databases.v1.GetTableDataRequest
-	(*ColumnFilter)(nil),                      // 49: obiente.cloud.databases.v1.ColumnFilter
-	(*GetTableDataResponse)(nil),              // 50: obiente.cloud.databases.v1.GetTableDataResponse
-	(*UpdateTableRowRequest)(nil),             // 51: obiente.cloud.databases.v1.UpdateTableRowRequest
-	(*UpdateTableRowResponse)(nil),            // 52: obiente.cloud.databases.v1.UpdateTableRowResponse
-	(*InsertTableRowRequest)(nil),             // 53: obiente.cloud.databases.v1.InsertTableRowRequest
-	(*InsertTableRowResponse)(nil),            // 54: obiente.cloud.databases.v1.InsertTableRowResponse
-	(*DeleteTableRowsRequest)(nil),            // 55: obiente.cloud.databases.v1.DeleteTableRowsRequest
-	(*DeleteTableRowsResponse)(nil),           // 56: obiente.cloud.databases.v1.DeleteTableRowsResponse
-	(*ListBackupsRequest)(nil),                // 57: obiente.cloud.databases.v1.ListBackupsRequest
-	(*ListBackupsResponse)(nil),               // 58: obiente.cloud.databases.v1.ListBackupsResponse
-	(*CreateBackupRequest)(nil),               // 59: obiente.cloud.databases.v1.CreateBackupRequest
-	(*CreateBackupResponse)(nil),              // 60: obiente.cloud.databases.v1.CreateBackupResponse
-	(*GetBackupRequest)(nil),                  // 61: obiente.cloud.databases.v1.GetBackupRequest
-	(*GetBackupResponse)(nil),                 // 62: obiente.cloud.databases.v1.GetBackupResponse
-	(*DeleteBackupRequest)(nil),               // 63: obiente.cloud.databases.v1.DeleteBackupRequest
-	(*DeleteBackupResponse)(nil),              // 64: obiente.cloud.databases.v1.DeleteBackupResponse
-	(*RestoreBackupRequest)(nil),              // 65: obiente.cloud.databases.v1.RestoreBackupRequest
-	(*RestoreBackupResponse)(nil),             // 66: obiente.cloud.databases.v1.RestoreBackupResponse
-	(*DatabaseBackup)(nil),                    // 67: obiente.cloud.databases.v1.DatabaseBackup
-	(*GetDatabaseMetricsRequest)(nil),         // 68: obiente.cloud.databases.v1.GetDatabaseMetricsRequest
-	(*GetDatabaseMetricsResponse)(nil),        // 69: obiente.cloud.databases.v1.GetDatabaseMetricsResponse
-	(*StreamDatabaseMetricsRequest)(nil),      // 70: obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
-	(*DatabaseMetric)(nil),                    // 71: obiente.cloud.databases.v1.DatabaseMetric
-	(*ListDatabaseSizesRequest)(nil),          // 72: obiente.cloud.databases.v1.ListDatabaseSizesRequest
-	(*ListDatabaseSizesResponse)(nil),         // 73: obiente.cloud.databases.v1.ListDatabaseSizesResponse
-	(*DatabaseSize)(nil),                      // 74: obiente.cloud.databases.v1.DatabaseSize
-	(*DatabaseInstance)(nil),                  // 75: obiente.cloud.databases.v1.DatabaseInstance
-	(*GetDatabaseUsageRequest)(nil),           // 76: obiente.cloud.databases.v1.GetDatabaseUsageRequest
-	(*GetDatabaseUsageResponse)(nil),          // 77: obiente.cloud.databases.v1.GetDatabaseUsageResponse
-	(*DatabaseUsageMetrics)(nil),              // 78: obiente.cloud.databases.v1.DatabaseUsageMetrics
-	(*CreateTableRequest)(nil),                // 79: obiente.cloud.databases.v1.CreateTableRequest
-	(*ColumnDefinition)(nil),                  // 80: obiente.cloud.databases.v1.ColumnDefinition
-	(*PrimaryKeyDefinition)(nil),              // 81: obiente.cloud.databases.v1.PrimaryKeyDefinition
-	(*IndexDefinition)(nil),                   // 82: obiente.cloud.databases.v1.IndexDefinition
-	(*ForeignKeyDefinition)(nil),              // 83: obiente.cloud.databases.v1.ForeignKeyDefinition
-	(*CreateTableResponse)(nil),               // 84: obiente.cloud.databases.v1.CreateTableResponse
-	(*AlterTableRequest)(nil),                 // 85: obiente.cloud.databases.v1.AlterTableRequest
-	(*AlterTableOperation)(nil),               // 86: obiente.cloud.databases.v1.AlterTableOperation
-	(*AddColumnOperation)(nil),                // 87: obiente.cloud.databases.v1.AddColumnOperation
-	(*DropColumnOperation)(nil),               // 88: obiente.cloud.databases.v1.DropColumnOperation
-	(*ModifyColumnOperation)(nil),             // 89: obiente.cloud.databases.v1.ModifyColumnOperation
-	(*RenameColumnOperation)(nil),             // 90: obiente.cloud.databases.v1.RenameColumnOperation
-	(*AddForeignKeyOperation)(nil),            // 91: obiente.cloud.databases.v1.AddForeignKeyOperation
-	(*DropForeignKeyOperation)(nil),           // 92: obiente.cloud.databases.v1.DropForeignKeyOperation
-	(*AddUniqueConstraintOperation)(nil),      // 93: obiente.cloud.databases.v1.AddUniqueConstraintOperation
-	(*DropConstraintOperation)(nil),           // 94: obiente.cloud.databases.v1.DropConstraintOperation
-	(*AlterTableResponse)(nil),                // 95: obiente.cloud.databases.v1.AlterTableResponse
-	(*DropTableRequest)(nil),                  // 96: obiente.cloud.databases.v1.DropTableRequest
-	(*DropTableResponse)(nil),                 // 97: obiente.cloud.databases.v1.DropTableResponse
-	(*RenameTableRequest)(nil),                // 98: obiente.cloud.databases.v1.RenameTableRequest
-	(*RenameTableResponse)(nil),               // 99: obiente.cloud.databases.v1.RenameTableResponse
-	(*TruncateTableRequest)(nil),              // 100: obiente.cloud.databases.v1.TruncateTableRequest
-	(*TruncateTableResponse)(nil),             // 101: obiente.cloud.databases.v1.TruncateTableResponse
-	(*CreateIndexRequest)(nil),                // 102: obiente.cloud.databases.v1.CreateIndexRequest
-	(*CreateIndexResponse)(nil),               // 103: obiente.cloud.databases.v1.CreateIndexResponse
-	(*DropIndexRequest)(nil),                  // 104: obiente.cloud.databases.v1.DropIndexRequest
-	(*DropIndexResponse)(nil),                 // 105: obiente.cloud.databases.v1.DropIndexResponse
-	(*GetTableDDLRequest)(nil),                // 106: obiente.cloud.databases.v1.GetTableDDLRequest
-	(*GetTableDDLResponse)(nil),               // 107: obiente.cloud.databases.v1.GetTableDDLResponse
-	nil,                                       // 108: obiente.cloud.databases.v1.CreateDatabaseRequest.MetadataEntry
-	nil,                                       // 109: obiente.cloud.databases.v1.UpdateDatabaseRequest.MetadataEntry
-	nil,                                       // 110: obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
-	(*v1.Pagination)(nil),                     // 111: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),             // 112: google.protobuf.Timestamp
+	(DatabaseDumpFormat)(0),                   // 3: obiente.cloud.databases.v1.DatabaseDumpFormat
+	(*ListDatabasesRequest)(nil),              // 4: obiente.cloud.databases.v1.ListDatabasesRequest
+	(*ListDatabasesResponse)(nil),             // 5: obiente.cloud.databases.v1.ListDatabasesResponse
+	(*CreateDatabaseRequest)(nil),             // 6: obiente.cloud.databases.v1.CreateDatabaseRequest
+	(*CreateDatabaseResponse)(nil),            // 7: obiente.cloud.databases.v1.CreateDatabaseResponse
+	(*GetDatabaseRequest)(nil),                // 8: obiente.cloud.databases.v1.GetDatabaseRequest
+	(*GetDatabaseResponse)(nil),               // 9: obiente.cloud.databases.v1.GetDatabaseResponse
+	(*UpdateDatabaseRequest)(nil),             // 10: obiente.cloud.databases.v1.UpdateDatabaseRequest
+	(*UpdateDatabaseResponse)(nil),            // 11: obiente.cloud.databases.v1.UpdateDatabaseResponse
+	(*DeleteDatabaseRequest)(nil),             // 12: obiente.cloud.databases.v1.DeleteDatabaseRequest
+	(*DeleteDatabaseResponse)(nil),            // 13: obiente.cloud.databases.v1.DeleteDatabaseResponse
+	(*StartDatabaseRequest)(nil),              // 14: obiente.cloud.databases.v1.StartDatabaseRequest
+	(*StartDatabaseResponse)(nil),             // 15: obiente.cloud.databases.v1.StartDatabaseResponse
+	(*StopDatabaseRequest)(nil),               // 16: obiente.cloud.databases.v1.StopDatabaseRequest
+	(*StopDatabaseResponse)(nil),              // 17: obiente.cloud.databases.v1.StopDatabaseResponse
+	(*SleepDatabaseRequest)(nil),              // 18: obiente.cloud.databases.v1.SleepDatabaseRequest
+	(*SleepDatabaseResponse)(nil),             // 19: obiente.cloud.databases.v1.SleepDatabaseResponse
+	(*RestartDatabaseRequest)(nil),            // 20: obiente.cloud.databases.v1.RestartDatabaseRequest
+	(*RestartDatabaseResponse)(nil),           // 21: obiente.cloud.databases.v1.RestartDatabaseResponse
+	(*StreamDatabaseStatusRequest)(nil),       // 22: obiente.cloud.databases.v1.StreamDatabaseStatusRequest
+	(*DatabaseStatusUpdate)(nil),              // 23: obiente.cloud.databases.v1.DatabaseStatusUpdate
+	(*GetDatabaseConnectionInfoRequest)(nil),  // 24: obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
+	(*GetDatabaseConnectionInfoResponse)(nil), // 25: obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
+	(*DatabaseConnectionInfo)(nil),            // 26: obiente.cloud.databases.v1.DatabaseConnectionInfo
+	(*ResetDatabasePasswordRequest)(nil),      // 27: obiente.cloud.databases.v1.ResetDatabasePasswordRequest
+	(*ResetDatabasePasswordResponse)(nil),     // 28: obiente.cloud.databases.v1.ResetDatabasePasswordResponse
+	(*GetDatabaseSchemaRequest)(nil),          // 29: obiente.cloud.databases.v1.GetDatabaseSchemaRequest
+	(*GetDatabaseSchemaResponse)(nil),         // 30: obiente.cloud.databases.v1.GetDatabaseSchemaResponse
+	(*ListTablesRequest)(nil),                 // 31: obiente.cloud.databases.v1.ListTablesRequest
+	(*ListTablesResponse)(nil),                // 32: obiente.cloud.databases.v1.ListTablesResponse
+	(*GetTableStructureRequest)(nil),          // 33: obiente.cloud.databases.v1.GetTableStructureRequest
+	(*GetTableStructureResponse)(nil),         // 34: obiente.cloud.databases.v1.GetTableStructureResponse
+	(*TableInfo)(nil),                         // 35: obiente.cloud.databases.v1.TableInfo
+	(*ColumnInfo)(nil),                        // 36: obiente.cloud.databases.v1.ColumnInfo
+	(*IndexInfo)(nil),                         // 37: obiente.cloud.databases.v1.IndexInfo
+	(*ForeignKeyInfo)(nil),                    // 38: obiente.cloud.databases.v1.ForeignKeyInfo
+	(*ViewInfo)(nil),                          // 39: obiente.cloud.databases.v1.ViewInfo
+	(*FunctionInfo)(nil),                      // 40: obiente.cloud.databases.v1.FunctionInfo
+	(*ProcedureInfo)(nil),                     // 41: obiente.cloud.databases.v1.ProcedureInfo
+	(*ParameterInfo)(nil),                     // 42: obiente.cloud.databases.v1.ParameterInfo
+	(*ExecuteQueryRequest)(nil),               // 43: obiente.cloud.databases.v1.ExecuteQueryRequest
+	(*ExecuteQueryResponse)(nil),              // 44: obiente.cloud.databases.v1.ExecuteQueryResponse
+	(*QueryResultColumn)(nil),                 // 45: obiente.cloud.databases.v1.QueryResultColumn
+	(*QueryResultRow)(nil),                    // 46: obiente.cloud.databases.v1.QueryResultRow
+	(*QueryResultCell)(nil),                   // 47: obiente.cloud.databases.v1.QueryResultCell
+	(*StreamQueryRequest)(nil),                // 48: obiente.cloud.databases.v1.StreamQueryRequest
+	(*GetTableDataRequest)(nil),               // 49: obiente.cloud.databases.v1.GetTableDataRequest
+	(*ColumnFilter)(nil),                      // 50: obiente.cloud.databases.v1.ColumnFilter
+	(*GetTableDataResponse)(nil),              // 51: obiente.cloud.databases.v1.GetTableDataResponse
+	(*UpdateTableRowRequest)(nil),             // 52: obiente.cloud.databases.v1.UpdateTableRowRequest
+	(*UpdateTableRowResponse)(nil),            // 53: obiente.cloud.databases.v1.UpdateTableRowResponse
+	(*InsertTableRowRequest)(nil),             // 54: obiente.cloud.databases.v1.InsertTableRowRequest
+	(*InsertTableRowResponse)(nil),            // 55: obiente.cloud.databases.v1.InsertTableRowResponse
+	(*DeleteTableRowsRequest)(nil),            // 56: obiente.cloud.databases.v1.DeleteTableRowsRequest
+	(*DeleteTableRowsResponse)(nil),           // 57: obiente.cloud.databases.v1.DeleteTableRowsResponse
+	(*ListBackupsRequest)(nil),                // 58: obiente.cloud.databases.v1.ListBackupsRequest
+	(*ListBackupsResponse)(nil),               // 59: obiente.cloud.databases.v1.ListBackupsResponse
+	(*CreateBackupRequest)(nil),               // 60: obiente.cloud.databases.v1.CreateBackupRequest
+	(*CreateBackupResponse)(nil),              // 61: obiente.cloud.databases.v1.CreateBackupResponse
+	(*GetBackupRequest)(nil),                  // 62: obiente.cloud.databases.v1.GetBackupRequest
+	(*GetBackupResponse)(nil),                 // 63: obiente.cloud.databases.v1.GetBackupResponse
+	(*DeleteBackupRequest)(nil),               // 64: obiente.cloud.databases.v1.DeleteBackupRequest
+	(*DeleteBackupResponse)(nil),              // 65: obiente.cloud.databases.v1.DeleteBackupResponse
+	(*RestoreBackupRequest)(nil),              // 66: obiente.cloud.databases.v1.RestoreBackupRequest
+	(*RestoreBackupResponse)(nil),             // 67: obiente.cloud.databases.v1.RestoreBackupResponse
+	(*DatabaseBackup)(nil),                    // 68: obiente.cloud.databases.v1.DatabaseBackup
+	(*ExportDatabaseDumpRequest)(nil),         // 69: obiente.cloud.databases.v1.ExportDatabaseDumpRequest
+	(*ExportDatabaseDumpResponse)(nil),        // 70: obiente.cloud.databases.v1.ExportDatabaseDumpResponse
+	(*ImportDatabaseDumpRequest)(nil),         // 71: obiente.cloud.databases.v1.ImportDatabaseDumpRequest
+	(*ImportDatabaseDumpResponse)(nil),        // 72: obiente.cloud.databases.v1.ImportDatabaseDumpResponse
+	(*GetDatabaseMetricsRequest)(nil),         // 73: obiente.cloud.databases.v1.GetDatabaseMetricsRequest
+	(*GetDatabaseMetricsResponse)(nil),        // 74: obiente.cloud.databases.v1.GetDatabaseMetricsResponse
+	(*StreamDatabaseMetricsRequest)(nil),      // 75: obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
+	(*DatabaseMetric)(nil),                    // 76: obiente.cloud.databases.v1.DatabaseMetric
+	(*ListDatabaseSizesRequest)(nil),          // 77: obiente.cloud.databases.v1.ListDatabaseSizesRequest
+	(*ListDatabaseSizesResponse)(nil),         // 78: obiente.cloud.databases.v1.ListDatabaseSizesResponse
+	(*DatabaseSize)(nil),                      // 79: obiente.cloud.databases.v1.DatabaseSize
+	(*DatabaseInstance)(nil),                  // 80: obiente.cloud.databases.v1.DatabaseInstance
+	(*GetDatabaseUsageRequest)(nil),           // 81: obiente.cloud.databases.v1.GetDatabaseUsageRequest
+	(*GetDatabaseUsageResponse)(nil),          // 82: obiente.cloud.databases.v1.GetDatabaseUsageResponse
+	(*DatabaseUsageMetrics)(nil),              // 83: obiente.cloud.databases.v1.DatabaseUsageMetrics
+	(*CreateTableRequest)(nil),                // 84: obiente.cloud.databases.v1.CreateTableRequest
+	(*ColumnDefinition)(nil),                  // 85: obiente.cloud.databases.v1.ColumnDefinition
+	(*PrimaryKeyDefinition)(nil),              // 86: obiente.cloud.databases.v1.PrimaryKeyDefinition
+	(*IndexDefinition)(nil),                   // 87: obiente.cloud.databases.v1.IndexDefinition
+	(*ForeignKeyDefinition)(nil),              // 88: obiente.cloud.databases.v1.ForeignKeyDefinition
+	(*CreateTableResponse)(nil),               // 89: obiente.cloud.databases.v1.CreateTableResponse
+	(*AlterTableRequest)(nil),                 // 90: obiente.cloud.databases.v1.AlterTableRequest
+	(*AlterTableOperation)(nil),               // 91: obiente.cloud.databases.v1.AlterTableOperation
+	(*AddColumnOperation)(nil),                // 92: obiente.cloud.databases.v1.AddColumnOperation
+	(*DropColumnOperation)(nil),               // 93: obiente.cloud.databases.v1.DropColumnOperation
+	(*ModifyColumnOperation)(nil),             // 94: obiente.cloud.databases.v1.ModifyColumnOperation
+	(*RenameColumnOperation)(nil),             // 95: obiente.cloud.databases.v1.RenameColumnOperation
+	(*AddForeignKeyOperation)(nil),            // 96: obiente.cloud.databases.v1.AddForeignKeyOperation
+	(*DropForeignKeyOperation)(nil),           // 97: obiente.cloud.databases.v1.DropForeignKeyOperation
+	(*AddUniqueConstraintOperation)(nil),      // 98: obiente.cloud.databases.v1.AddUniqueConstraintOperation
+	(*DropConstraintOperation)(nil),           // 99: obiente.cloud.databases.v1.DropConstraintOperation
+	(*AlterTableResponse)(nil),                // 100: obiente.cloud.databases.v1.AlterTableResponse
+	(*DropTableRequest)(nil),                  // 101: obiente.cloud.databases.v1.DropTableRequest
+	(*DropTableResponse)(nil),                 // 102: obiente.cloud.databases.v1.DropTableResponse
+	(*RenameTableRequest)(nil),                // 103: obiente.cloud.databases.v1.RenameTableRequest
+	(*RenameTableResponse)(nil),               // 104: obiente.cloud.databases.v1.RenameTableResponse
+	(*TruncateTableRequest)(nil),              // 105: obiente.cloud.databases.v1.TruncateTableRequest
+	(*TruncateTableResponse)(nil),             // 106: obiente.cloud.databases.v1.TruncateTableResponse
+	(*CreateIndexRequest)(nil),                // 107: obiente.cloud.databases.v1.CreateIndexRequest
+	(*CreateIndexResponse)(nil),               // 108: obiente.cloud.databases.v1.CreateIndexResponse
+	(*DropIndexRequest)(nil),                  // 109: obiente.cloud.databases.v1.DropIndexRequest
+	(*DropIndexResponse)(nil),                 // 110: obiente.cloud.databases.v1.DropIndexResponse
+	(*GetTableDDLRequest)(nil),                // 111: obiente.cloud.databases.v1.GetTableDDLRequest
+	(*GetTableDDLResponse)(nil),               // 112: obiente.cloud.databases.v1.GetTableDDLResponse
+	nil,                                       // 113: obiente.cloud.databases.v1.CreateDatabaseRequest.MetadataEntry
+	nil,                                       // 114: obiente.cloud.databases.v1.UpdateDatabaseRequest.MetadataEntry
+	nil,                                       // 115: obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
+	(*v1.Pagination)(nil),                     // 116: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),             // 117: google.protobuf.Timestamp
 }
 var file_obiente_cloud_databases_v1_database_service_proto_depIdxs = []int32{
 	1,   // 0: obiente.cloud.databases.v1.ListDatabasesRequest.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
 	0,   // 1: obiente.cloud.databases.v1.ListDatabasesRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	75,  // 2: obiente.cloud.databases.v1.ListDatabasesResponse.databases:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	111, // 3: obiente.cloud.databases.v1.ListDatabasesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	80,  // 2: obiente.cloud.databases.v1.ListDatabasesResponse.databases:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	116, // 3: obiente.cloud.databases.v1.ListDatabasesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	0,   // 4: obiente.cloud.databases.v1.CreateDatabaseRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	108, // 5: obiente.cloud.databases.v1.CreateDatabaseRequest.metadata:type_name -> obiente.cloud.databases.v1.CreateDatabaseRequest.MetadataEntry
-	75,  // 6: obiente.cloud.databases.v1.CreateDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	25,  // 7: obiente.cloud.databases.v1.CreateDatabaseResponse.connection_info:type_name -> obiente.cloud.databases.v1.DatabaseConnectionInfo
-	75,  // 8: obiente.cloud.databases.v1.GetDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	109, // 9: obiente.cloud.databases.v1.UpdateDatabaseRequest.metadata:type_name -> obiente.cloud.databases.v1.UpdateDatabaseRequest.MetadataEntry
-	75,  // 10: obiente.cloud.databases.v1.UpdateDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	75,  // 11: obiente.cloud.databases.v1.StartDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	75,  // 12: obiente.cloud.databases.v1.StopDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	75,  // 13: obiente.cloud.databases.v1.SleepDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	75,  // 14: obiente.cloud.databases.v1.RestartDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	113, // 5: obiente.cloud.databases.v1.CreateDatabaseRequest.metadata:type_name -> obiente.cloud.databases.v1.CreateDatabaseRequest.MetadataEntry
+	80,  // 6: obiente.cloud.databases.v1.CreateDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	26,  // 7: obiente.cloud.databases.v1.CreateDatabaseResponse.connection_info:type_name -> obiente.cloud.databases.v1.DatabaseConnectionInfo
+	80,  // 8: obiente.cloud.databases.v1.GetDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	114, // 9: obiente.cloud.databases.v1.UpdateDatabaseRequest.metadata:type_name -> obiente.cloud.databases.v1.UpdateDatabaseRequest.MetadataEntry
+	80,  // 10: obiente.cloud.databases.v1.UpdateDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	80,  // 11: obiente.cloud.databases.v1.StartDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	80,  // 12: obiente.cloud.databases.v1.StopDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	80,  // 13: obiente.cloud.databases.v1.SleepDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	80,  // 14: obiente.cloud.databases.v1.RestartDatabaseResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
 	1,   // 15: obiente.cloud.databases.v1.DatabaseStatusUpdate.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
-	112, // 16: obiente.cloud.databases.v1.DatabaseStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	25,  // 17: obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse.connection_info:type_name -> obiente.cloud.databases.v1.DatabaseConnectionInfo
-	34,  // 18: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.tables:type_name -> obiente.cloud.databases.v1.TableInfo
-	38,  // 19: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.views:type_name -> obiente.cloud.databases.v1.ViewInfo
-	39,  // 20: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.functions:type_name -> obiente.cloud.databases.v1.FunctionInfo
-	40,  // 21: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.procedures:type_name -> obiente.cloud.databases.v1.ProcedureInfo
-	34,  // 22: obiente.cloud.databases.v1.ListTablesResponse.tables:type_name -> obiente.cloud.databases.v1.TableInfo
-	111, // 23: obiente.cloud.databases.v1.ListTablesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	34,  // 24: obiente.cloud.databases.v1.GetTableStructureResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
-	35,  // 25: obiente.cloud.databases.v1.TableInfo.columns:type_name -> obiente.cloud.databases.v1.ColumnInfo
-	36,  // 26: obiente.cloud.databases.v1.TableInfo.indexes:type_name -> obiente.cloud.databases.v1.IndexInfo
-	37,  // 27: obiente.cloud.databases.v1.TableInfo.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyInfo
-	41,  // 28: obiente.cloud.databases.v1.FunctionInfo.parameters:type_name -> obiente.cloud.databases.v1.ParameterInfo
-	41,  // 29: obiente.cloud.databases.v1.ProcedureInfo.parameters:type_name -> obiente.cloud.databases.v1.ParameterInfo
-	44,  // 30: obiente.cloud.databases.v1.ExecuteQueryResponse.columns:type_name -> obiente.cloud.databases.v1.QueryResultColumn
-	45,  // 31: obiente.cloud.databases.v1.ExecuteQueryResponse.rows:type_name -> obiente.cloud.databases.v1.QueryResultRow
-	112, // 32: obiente.cloud.databases.v1.ExecuteQueryResponse.executed_at:type_name -> google.protobuf.Timestamp
-	46,  // 33: obiente.cloud.databases.v1.QueryResultRow.cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
-	49,  // 34: obiente.cloud.databases.v1.GetTableDataRequest.filters:type_name -> obiente.cloud.databases.v1.ColumnFilter
-	44,  // 35: obiente.cloud.databases.v1.GetTableDataResponse.columns:type_name -> obiente.cloud.databases.v1.QueryResultColumn
-	45,  // 36: obiente.cloud.databases.v1.GetTableDataResponse.rows:type_name -> obiente.cloud.databases.v1.QueryResultRow
-	111, // 37: obiente.cloud.databases.v1.GetTableDataResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	46,  // 38: obiente.cloud.databases.v1.UpdateTableRowRequest.where_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
-	46,  // 39: obiente.cloud.databases.v1.UpdateTableRowRequest.set_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
-	46,  // 40: obiente.cloud.databases.v1.InsertTableRowRequest.cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
-	46,  // 41: obiente.cloud.databases.v1.DeleteTableRowsRequest.where_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
-	67,  // 42: obiente.cloud.databases.v1.ListBackupsResponse.backups:type_name -> obiente.cloud.databases.v1.DatabaseBackup
-	111, // 43: obiente.cloud.databases.v1.ListBackupsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	67,  // 44: obiente.cloud.databases.v1.CreateBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
-	67,  // 45: obiente.cloud.databases.v1.GetBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
-	75,  // 46: obiente.cloud.databases.v1.RestoreBackupResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
+	117, // 16: obiente.cloud.databases.v1.DatabaseStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	26,  // 17: obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse.connection_info:type_name -> obiente.cloud.databases.v1.DatabaseConnectionInfo
+	35,  // 18: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.tables:type_name -> obiente.cloud.databases.v1.TableInfo
+	39,  // 19: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.views:type_name -> obiente.cloud.databases.v1.ViewInfo
+	40,  // 20: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.functions:type_name -> obiente.cloud.databases.v1.FunctionInfo
+	41,  // 21: obiente.cloud.databases.v1.GetDatabaseSchemaResponse.procedures:type_name -> obiente.cloud.databases.v1.ProcedureInfo
+	35,  // 22: obiente.cloud.databases.v1.ListTablesResponse.tables:type_name -> obiente.cloud.databases.v1.TableInfo
+	116, // 23: obiente.cloud.databases.v1.ListTablesResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	35,  // 24: obiente.cloud.databases.v1.GetTableStructureResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
+	36,  // 25: obiente.cloud.databases.v1.TableInfo.columns:type_name -> obiente.cloud.databases.v1.ColumnInfo
+	37,  // 26: obiente.cloud.databases.v1.TableInfo.indexes:type_name -> obiente.cloud.databases.v1.IndexInfo
+	38,  // 27: obiente.cloud.databases.v1.TableInfo.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyInfo
+	42,  // 28: obiente.cloud.databases.v1.FunctionInfo.parameters:type_name -> obiente.cloud.databases.v1.ParameterInfo
+	42,  // 29: obiente.cloud.databases.v1.ProcedureInfo.parameters:type_name -> obiente.cloud.databases.v1.ParameterInfo
+	45,  // 30: obiente.cloud.databases.v1.ExecuteQueryResponse.columns:type_name -> obiente.cloud.databases.v1.QueryResultColumn
+	46,  // 31: obiente.cloud.databases.v1.ExecuteQueryResponse.rows:type_name -> obiente.cloud.databases.v1.QueryResultRow
+	117, // 32: obiente.cloud.databases.v1.ExecuteQueryResponse.executed_at:type_name -> google.protobuf.Timestamp
+	47,  // 33: obiente.cloud.databases.v1.QueryResultRow.cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
+	50,  // 34: obiente.cloud.databases.v1.GetTableDataRequest.filters:type_name -> obiente.cloud.databases.v1.ColumnFilter
+	45,  // 35: obiente.cloud.databases.v1.GetTableDataResponse.columns:type_name -> obiente.cloud.databases.v1.QueryResultColumn
+	46,  // 36: obiente.cloud.databases.v1.GetTableDataResponse.rows:type_name -> obiente.cloud.databases.v1.QueryResultRow
+	116, // 37: obiente.cloud.databases.v1.GetTableDataResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	47,  // 38: obiente.cloud.databases.v1.UpdateTableRowRequest.where_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
+	47,  // 39: obiente.cloud.databases.v1.UpdateTableRowRequest.set_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
+	47,  // 40: obiente.cloud.databases.v1.InsertTableRowRequest.cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
+	47,  // 41: obiente.cloud.databases.v1.DeleteTableRowsRequest.where_cells:type_name -> obiente.cloud.databases.v1.QueryResultCell
+	68,  // 42: obiente.cloud.databases.v1.ListBackupsResponse.backups:type_name -> obiente.cloud.databases.v1.DatabaseBackup
+	116, // 43: obiente.cloud.databases.v1.ListBackupsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	68,  // 44: obiente.cloud.databases.v1.CreateBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
+	68,  // 45: obiente.cloud.databases.v1.GetBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
+	80,  // 46: obiente.cloud.databases.v1.RestoreBackupResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
 	2,   // 47: obiente.cloud.databases.v1.DatabaseBackup.status:type_name -> obiente.cloud.databases.v1.DatabaseBackupStatus
-	112, // 48: obiente.cloud.databases.v1.DatabaseBackup.created_at:type_name -> google.protobuf.Timestamp
-	112, // 49: obiente.cloud.databases.v1.DatabaseBackup.completed_at:type_name -> google.protobuf.Timestamp
-	112, // 50: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	112, // 51: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
-	71,  // 52: obiente.cloud.databases.v1.GetDatabaseMetricsResponse.metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
-	112, // 53: obiente.cloud.databases.v1.DatabaseMetric.timestamp:type_name -> google.protobuf.Timestamp
-	0,   // 54: obiente.cloud.databases.v1.ListDatabaseSizesRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	74,  // 55: obiente.cloud.databases.v1.ListDatabaseSizesResponse.sizes:type_name -> obiente.cloud.databases.v1.DatabaseSize
-	0,   // 56: obiente.cloud.databases.v1.DatabaseSize.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	1,   // 57: obiente.cloud.databases.v1.DatabaseInstance.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
-	0,   // 58: obiente.cloud.databases.v1.DatabaseInstance.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	110, // 59: obiente.cloud.databases.v1.DatabaseInstance.metadata:type_name -> obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
-	112, // 60: obiente.cloud.databases.v1.DatabaseInstance.created_at:type_name -> google.protobuf.Timestamp
-	112, // 61: obiente.cloud.databases.v1.DatabaseInstance.updated_at:type_name -> google.protobuf.Timestamp
-	112, // 62: obiente.cloud.databases.v1.DatabaseInstance.last_started_at:type_name -> google.protobuf.Timestamp
-	112, // 63: obiente.cloud.databases.v1.DatabaseInstance.deleted_at:type_name -> google.protobuf.Timestamp
-	71,  // 64: obiente.cloud.databases.v1.DatabaseInstance.current_metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
-	78,  // 65: obiente.cloud.databases.v1.GetDatabaseUsageResponse.current:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
-	78,  // 66: obiente.cloud.databases.v1.GetDatabaseUsageResponse.estimated_monthly:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
-	80,  // 67: obiente.cloud.databases.v1.CreateTableRequest.columns:type_name -> obiente.cloud.databases.v1.ColumnDefinition
-	81,  // 68: obiente.cloud.databases.v1.CreateTableRequest.primary_key:type_name -> obiente.cloud.databases.v1.PrimaryKeyDefinition
-	83,  // 69: obiente.cloud.databases.v1.CreateTableRequest.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
-	82,  // 70: obiente.cloud.databases.v1.CreateTableRequest.indexes:type_name -> obiente.cloud.databases.v1.IndexDefinition
-	34,  // 71: obiente.cloud.databases.v1.CreateTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
-	86,  // 72: obiente.cloud.databases.v1.AlterTableRequest.operations:type_name -> obiente.cloud.databases.v1.AlterTableOperation
-	87,  // 73: obiente.cloud.databases.v1.AlterTableOperation.add_column:type_name -> obiente.cloud.databases.v1.AddColumnOperation
-	88,  // 74: obiente.cloud.databases.v1.AlterTableOperation.drop_column:type_name -> obiente.cloud.databases.v1.DropColumnOperation
-	89,  // 75: obiente.cloud.databases.v1.AlterTableOperation.modify_column:type_name -> obiente.cloud.databases.v1.ModifyColumnOperation
-	90,  // 76: obiente.cloud.databases.v1.AlterTableOperation.rename_column:type_name -> obiente.cloud.databases.v1.RenameColumnOperation
-	91,  // 77: obiente.cloud.databases.v1.AlterTableOperation.add_foreign_key:type_name -> obiente.cloud.databases.v1.AddForeignKeyOperation
-	92,  // 78: obiente.cloud.databases.v1.AlterTableOperation.drop_foreign_key:type_name -> obiente.cloud.databases.v1.DropForeignKeyOperation
-	93,  // 79: obiente.cloud.databases.v1.AlterTableOperation.add_unique:type_name -> obiente.cloud.databases.v1.AddUniqueConstraintOperation
-	94,  // 80: obiente.cloud.databases.v1.AlterTableOperation.drop_constraint:type_name -> obiente.cloud.databases.v1.DropConstraintOperation
-	80,  // 81: obiente.cloud.databases.v1.AddColumnOperation.column:type_name -> obiente.cloud.databases.v1.ColumnDefinition
-	83,  // 82: obiente.cloud.databases.v1.AddForeignKeyOperation.foreign_key:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
-	34,  // 83: obiente.cloud.databases.v1.AlterTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
-	82,  // 84: obiente.cloud.databases.v1.CreateIndexRequest.index:type_name -> obiente.cloud.databases.v1.IndexDefinition
-	3,   // 85: obiente.cloud.databases.v1.DatabaseService.ListDatabases:input_type -> obiente.cloud.databases.v1.ListDatabasesRequest
-	5,   // 86: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:input_type -> obiente.cloud.databases.v1.CreateDatabaseRequest
-	7,   // 87: obiente.cloud.databases.v1.DatabaseService.GetDatabase:input_type -> obiente.cloud.databases.v1.GetDatabaseRequest
-	9,   // 88: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:input_type -> obiente.cloud.databases.v1.UpdateDatabaseRequest
-	11,  // 89: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:input_type -> obiente.cloud.databases.v1.DeleteDatabaseRequest
-	13,  // 90: obiente.cloud.databases.v1.DatabaseService.StartDatabase:input_type -> obiente.cloud.databases.v1.StartDatabaseRequest
-	15,  // 91: obiente.cloud.databases.v1.DatabaseService.StopDatabase:input_type -> obiente.cloud.databases.v1.StopDatabaseRequest
-	17,  // 92: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:input_type -> obiente.cloud.databases.v1.SleepDatabaseRequest
-	19,  // 93: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:input_type -> obiente.cloud.databases.v1.RestartDatabaseRequest
-	21,  // 94: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:input_type -> obiente.cloud.databases.v1.StreamDatabaseStatusRequest
-	23,  // 95: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:input_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
-	26,  // 96: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:input_type -> obiente.cloud.databases.v1.ResetDatabasePasswordRequest
-	28,  // 97: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:input_type -> obiente.cloud.databases.v1.GetDatabaseSchemaRequest
-	30,  // 98: obiente.cloud.databases.v1.DatabaseService.ListTables:input_type -> obiente.cloud.databases.v1.ListTablesRequest
-	32,  // 99: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:input_type -> obiente.cloud.databases.v1.GetTableStructureRequest
-	42,  // 100: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:input_type -> obiente.cloud.databases.v1.ExecuteQueryRequest
-	47,  // 101: obiente.cloud.databases.v1.DatabaseService.StreamQuery:input_type -> obiente.cloud.databases.v1.StreamQueryRequest
-	48,  // 102: obiente.cloud.databases.v1.DatabaseService.GetTableData:input_type -> obiente.cloud.databases.v1.GetTableDataRequest
-	51,  // 103: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:input_type -> obiente.cloud.databases.v1.UpdateTableRowRequest
-	53,  // 104: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:input_type -> obiente.cloud.databases.v1.InsertTableRowRequest
-	55,  // 105: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:input_type -> obiente.cloud.databases.v1.DeleteTableRowsRequest
-	57,  // 106: obiente.cloud.databases.v1.DatabaseService.ListBackups:input_type -> obiente.cloud.databases.v1.ListBackupsRequest
-	59,  // 107: obiente.cloud.databases.v1.DatabaseService.CreateBackup:input_type -> obiente.cloud.databases.v1.CreateBackupRequest
-	61,  // 108: obiente.cloud.databases.v1.DatabaseService.GetBackup:input_type -> obiente.cloud.databases.v1.GetBackupRequest
-	63,  // 109: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:input_type -> obiente.cloud.databases.v1.DeleteBackupRequest
-	65,  // 110: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:input_type -> obiente.cloud.databases.v1.RestoreBackupRequest
-	68,  // 111: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:input_type -> obiente.cloud.databases.v1.GetDatabaseMetricsRequest
-	70,  // 112: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:input_type -> obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
-	72,  // 113: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:input_type -> obiente.cloud.databases.v1.ListDatabaseSizesRequest
-	76,  // 114: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:input_type -> obiente.cloud.databases.v1.GetDatabaseUsageRequest
-	79,  // 115: obiente.cloud.databases.v1.DatabaseService.CreateTable:input_type -> obiente.cloud.databases.v1.CreateTableRequest
-	85,  // 116: obiente.cloud.databases.v1.DatabaseService.AlterTable:input_type -> obiente.cloud.databases.v1.AlterTableRequest
-	96,  // 117: obiente.cloud.databases.v1.DatabaseService.DropTable:input_type -> obiente.cloud.databases.v1.DropTableRequest
-	98,  // 118: obiente.cloud.databases.v1.DatabaseService.RenameTable:input_type -> obiente.cloud.databases.v1.RenameTableRequest
-	100, // 119: obiente.cloud.databases.v1.DatabaseService.TruncateTable:input_type -> obiente.cloud.databases.v1.TruncateTableRequest
-	102, // 120: obiente.cloud.databases.v1.DatabaseService.CreateIndex:input_type -> obiente.cloud.databases.v1.CreateIndexRequest
-	104, // 121: obiente.cloud.databases.v1.DatabaseService.DropIndex:input_type -> obiente.cloud.databases.v1.DropIndexRequest
-	106, // 122: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:input_type -> obiente.cloud.databases.v1.GetTableDDLRequest
-	4,   // 123: obiente.cloud.databases.v1.DatabaseService.ListDatabases:output_type -> obiente.cloud.databases.v1.ListDatabasesResponse
-	6,   // 124: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:output_type -> obiente.cloud.databases.v1.CreateDatabaseResponse
-	8,   // 125: obiente.cloud.databases.v1.DatabaseService.GetDatabase:output_type -> obiente.cloud.databases.v1.GetDatabaseResponse
-	10,  // 126: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:output_type -> obiente.cloud.databases.v1.UpdateDatabaseResponse
-	12,  // 127: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:output_type -> obiente.cloud.databases.v1.DeleteDatabaseResponse
-	14,  // 128: obiente.cloud.databases.v1.DatabaseService.StartDatabase:output_type -> obiente.cloud.databases.v1.StartDatabaseResponse
-	16,  // 129: obiente.cloud.databases.v1.DatabaseService.StopDatabase:output_type -> obiente.cloud.databases.v1.StopDatabaseResponse
-	18,  // 130: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:output_type -> obiente.cloud.databases.v1.SleepDatabaseResponse
-	20,  // 131: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:output_type -> obiente.cloud.databases.v1.RestartDatabaseResponse
-	22,  // 132: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:output_type -> obiente.cloud.databases.v1.DatabaseStatusUpdate
-	24,  // 133: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:output_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
-	27,  // 134: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:output_type -> obiente.cloud.databases.v1.ResetDatabasePasswordResponse
-	29,  // 135: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:output_type -> obiente.cloud.databases.v1.GetDatabaseSchemaResponse
-	31,  // 136: obiente.cloud.databases.v1.DatabaseService.ListTables:output_type -> obiente.cloud.databases.v1.ListTablesResponse
-	33,  // 137: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:output_type -> obiente.cloud.databases.v1.GetTableStructureResponse
-	43,  // 138: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:output_type -> obiente.cloud.databases.v1.ExecuteQueryResponse
-	45,  // 139: obiente.cloud.databases.v1.DatabaseService.StreamQuery:output_type -> obiente.cloud.databases.v1.QueryResultRow
-	50,  // 140: obiente.cloud.databases.v1.DatabaseService.GetTableData:output_type -> obiente.cloud.databases.v1.GetTableDataResponse
-	52,  // 141: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:output_type -> obiente.cloud.databases.v1.UpdateTableRowResponse
-	54,  // 142: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:output_type -> obiente.cloud.databases.v1.InsertTableRowResponse
-	56,  // 143: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:output_type -> obiente.cloud.databases.v1.DeleteTableRowsResponse
-	58,  // 144: obiente.cloud.databases.v1.DatabaseService.ListBackups:output_type -> obiente.cloud.databases.v1.ListBackupsResponse
-	60,  // 145: obiente.cloud.databases.v1.DatabaseService.CreateBackup:output_type -> obiente.cloud.databases.v1.CreateBackupResponse
-	62,  // 146: obiente.cloud.databases.v1.DatabaseService.GetBackup:output_type -> obiente.cloud.databases.v1.GetBackupResponse
-	64,  // 147: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:output_type -> obiente.cloud.databases.v1.DeleteBackupResponse
-	66,  // 148: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:output_type -> obiente.cloud.databases.v1.RestoreBackupResponse
-	69,  // 149: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:output_type -> obiente.cloud.databases.v1.GetDatabaseMetricsResponse
-	71,  // 150: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:output_type -> obiente.cloud.databases.v1.DatabaseMetric
-	73,  // 151: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:output_type -> obiente.cloud.databases.v1.ListDatabaseSizesResponse
-	77,  // 152: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:output_type -> obiente.cloud.databases.v1.GetDatabaseUsageResponse
-	84,  // 153: obiente.cloud.databases.v1.DatabaseService.CreateTable:output_type -> obiente.cloud.databases.v1.CreateTableResponse
-	95,  // 154: obiente.cloud.databases.v1.DatabaseService.AlterTable:output_type -> obiente.cloud.databases.v1.AlterTableResponse
-	97,  // 155: obiente.cloud.databases.v1.DatabaseService.DropTable:output_type -> obiente.cloud.databases.v1.DropTableResponse
-	99,  // 156: obiente.cloud.databases.v1.DatabaseService.RenameTable:output_type -> obiente.cloud.databases.v1.RenameTableResponse
-	101, // 157: obiente.cloud.databases.v1.DatabaseService.TruncateTable:output_type -> obiente.cloud.databases.v1.TruncateTableResponse
-	103, // 158: obiente.cloud.databases.v1.DatabaseService.CreateIndex:output_type -> obiente.cloud.databases.v1.CreateIndexResponse
-	105, // 159: obiente.cloud.databases.v1.DatabaseService.DropIndex:output_type -> obiente.cloud.databases.v1.DropIndexResponse
-	107, // 160: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:output_type -> obiente.cloud.databases.v1.GetTableDDLResponse
-	123, // [123:161] is the sub-list for method output_type
-	85,  // [85:123] is the sub-list for method input_type
-	85,  // [85:85] is the sub-list for extension type_name
-	85,  // [85:85] is the sub-list for extension extendee
-	0,   // [0:85] is the sub-list for field type_name
+	117, // 48: obiente.cloud.databases.v1.DatabaseBackup.created_at:type_name -> google.protobuf.Timestamp
+	117, // 49: obiente.cloud.databases.v1.DatabaseBackup.completed_at:type_name -> google.protobuf.Timestamp
+	3,   // 50: obiente.cloud.databases.v1.ExportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
+	3,   // 51: obiente.cloud.databases.v1.ImportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
+	117, // 52: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	117, // 53: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	76,  // 54: obiente.cloud.databases.v1.GetDatabaseMetricsResponse.metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
+	117, // 55: obiente.cloud.databases.v1.DatabaseMetric.timestamp:type_name -> google.protobuf.Timestamp
+	0,   // 56: obiente.cloud.databases.v1.ListDatabaseSizesRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	79,  // 57: obiente.cloud.databases.v1.ListDatabaseSizesResponse.sizes:type_name -> obiente.cloud.databases.v1.DatabaseSize
+	0,   // 58: obiente.cloud.databases.v1.DatabaseSize.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	1,   // 59: obiente.cloud.databases.v1.DatabaseInstance.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
+	0,   // 60: obiente.cloud.databases.v1.DatabaseInstance.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	115, // 61: obiente.cloud.databases.v1.DatabaseInstance.metadata:type_name -> obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
+	117, // 62: obiente.cloud.databases.v1.DatabaseInstance.created_at:type_name -> google.protobuf.Timestamp
+	117, // 63: obiente.cloud.databases.v1.DatabaseInstance.updated_at:type_name -> google.protobuf.Timestamp
+	117, // 64: obiente.cloud.databases.v1.DatabaseInstance.last_started_at:type_name -> google.protobuf.Timestamp
+	117, // 65: obiente.cloud.databases.v1.DatabaseInstance.deleted_at:type_name -> google.protobuf.Timestamp
+	76,  // 66: obiente.cloud.databases.v1.DatabaseInstance.current_metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
+	83,  // 67: obiente.cloud.databases.v1.GetDatabaseUsageResponse.current:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
+	83,  // 68: obiente.cloud.databases.v1.GetDatabaseUsageResponse.estimated_monthly:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
+	85,  // 69: obiente.cloud.databases.v1.CreateTableRequest.columns:type_name -> obiente.cloud.databases.v1.ColumnDefinition
+	86,  // 70: obiente.cloud.databases.v1.CreateTableRequest.primary_key:type_name -> obiente.cloud.databases.v1.PrimaryKeyDefinition
+	88,  // 71: obiente.cloud.databases.v1.CreateTableRequest.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
+	87,  // 72: obiente.cloud.databases.v1.CreateTableRequest.indexes:type_name -> obiente.cloud.databases.v1.IndexDefinition
+	35,  // 73: obiente.cloud.databases.v1.CreateTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
+	91,  // 74: obiente.cloud.databases.v1.AlterTableRequest.operations:type_name -> obiente.cloud.databases.v1.AlterTableOperation
+	92,  // 75: obiente.cloud.databases.v1.AlterTableOperation.add_column:type_name -> obiente.cloud.databases.v1.AddColumnOperation
+	93,  // 76: obiente.cloud.databases.v1.AlterTableOperation.drop_column:type_name -> obiente.cloud.databases.v1.DropColumnOperation
+	94,  // 77: obiente.cloud.databases.v1.AlterTableOperation.modify_column:type_name -> obiente.cloud.databases.v1.ModifyColumnOperation
+	95,  // 78: obiente.cloud.databases.v1.AlterTableOperation.rename_column:type_name -> obiente.cloud.databases.v1.RenameColumnOperation
+	96,  // 79: obiente.cloud.databases.v1.AlterTableOperation.add_foreign_key:type_name -> obiente.cloud.databases.v1.AddForeignKeyOperation
+	97,  // 80: obiente.cloud.databases.v1.AlterTableOperation.drop_foreign_key:type_name -> obiente.cloud.databases.v1.DropForeignKeyOperation
+	98,  // 81: obiente.cloud.databases.v1.AlterTableOperation.add_unique:type_name -> obiente.cloud.databases.v1.AddUniqueConstraintOperation
+	99,  // 82: obiente.cloud.databases.v1.AlterTableOperation.drop_constraint:type_name -> obiente.cloud.databases.v1.DropConstraintOperation
+	85,  // 83: obiente.cloud.databases.v1.AddColumnOperation.column:type_name -> obiente.cloud.databases.v1.ColumnDefinition
+	88,  // 84: obiente.cloud.databases.v1.AddForeignKeyOperation.foreign_key:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
+	35,  // 85: obiente.cloud.databases.v1.AlterTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
+	87,  // 86: obiente.cloud.databases.v1.CreateIndexRequest.index:type_name -> obiente.cloud.databases.v1.IndexDefinition
+	4,   // 87: obiente.cloud.databases.v1.DatabaseService.ListDatabases:input_type -> obiente.cloud.databases.v1.ListDatabasesRequest
+	6,   // 88: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:input_type -> obiente.cloud.databases.v1.CreateDatabaseRequest
+	8,   // 89: obiente.cloud.databases.v1.DatabaseService.GetDatabase:input_type -> obiente.cloud.databases.v1.GetDatabaseRequest
+	10,  // 90: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:input_type -> obiente.cloud.databases.v1.UpdateDatabaseRequest
+	12,  // 91: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:input_type -> obiente.cloud.databases.v1.DeleteDatabaseRequest
+	14,  // 92: obiente.cloud.databases.v1.DatabaseService.StartDatabase:input_type -> obiente.cloud.databases.v1.StartDatabaseRequest
+	16,  // 93: obiente.cloud.databases.v1.DatabaseService.StopDatabase:input_type -> obiente.cloud.databases.v1.StopDatabaseRequest
+	18,  // 94: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:input_type -> obiente.cloud.databases.v1.SleepDatabaseRequest
+	20,  // 95: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:input_type -> obiente.cloud.databases.v1.RestartDatabaseRequest
+	22,  // 96: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:input_type -> obiente.cloud.databases.v1.StreamDatabaseStatusRequest
+	24,  // 97: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:input_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
+	27,  // 98: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:input_type -> obiente.cloud.databases.v1.ResetDatabasePasswordRequest
+	29,  // 99: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:input_type -> obiente.cloud.databases.v1.GetDatabaseSchemaRequest
+	31,  // 100: obiente.cloud.databases.v1.DatabaseService.ListTables:input_type -> obiente.cloud.databases.v1.ListTablesRequest
+	33,  // 101: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:input_type -> obiente.cloud.databases.v1.GetTableStructureRequest
+	43,  // 102: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:input_type -> obiente.cloud.databases.v1.ExecuteQueryRequest
+	48,  // 103: obiente.cloud.databases.v1.DatabaseService.StreamQuery:input_type -> obiente.cloud.databases.v1.StreamQueryRequest
+	49,  // 104: obiente.cloud.databases.v1.DatabaseService.GetTableData:input_type -> obiente.cloud.databases.v1.GetTableDataRequest
+	52,  // 105: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:input_type -> obiente.cloud.databases.v1.UpdateTableRowRequest
+	54,  // 106: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:input_type -> obiente.cloud.databases.v1.InsertTableRowRequest
+	56,  // 107: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:input_type -> obiente.cloud.databases.v1.DeleteTableRowsRequest
+	58,  // 108: obiente.cloud.databases.v1.DatabaseService.ListBackups:input_type -> obiente.cloud.databases.v1.ListBackupsRequest
+	60,  // 109: obiente.cloud.databases.v1.DatabaseService.CreateBackup:input_type -> obiente.cloud.databases.v1.CreateBackupRequest
+	62,  // 110: obiente.cloud.databases.v1.DatabaseService.GetBackup:input_type -> obiente.cloud.databases.v1.GetBackupRequest
+	64,  // 111: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:input_type -> obiente.cloud.databases.v1.DeleteBackupRequest
+	66,  // 112: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:input_type -> obiente.cloud.databases.v1.RestoreBackupRequest
+	73,  // 113: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:input_type -> obiente.cloud.databases.v1.GetDatabaseMetricsRequest
+	75,  // 114: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:input_type -> obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
+	77,  // 115: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:input_type -> obiente.cloud.databases.v1.ListDatabaseSizesRequest
+	81,  // 116: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:input_type -> obiente.cloud.databases.v1.GetDatabaseUsageRequest
+	84,  // 117: obiente.cloud.databases.v1.DatabaseService.CreateTable:input_type -> obiente.cloud.databases.v1.CreateTableRequest
+	90,  // 118: obiente.cloud.databases.v1.DatabaseService.AlterTable:input_type -> obiente.cloud.databases.v1.AlterTableRequest
+	101, // 119: obiente.cloud.databases.v1.DatabaseService.DropTable:input_type -> obiente.cloud.databases.v1.DropTableRequest
+	103, // 120: obiente.cloud.databases.v1.DatabaseService.RenameTable:input_type -> obiente.cloud.databases.v1.RenameTableRequest
+	105, // 121: obiente.cloud.databases.v1.DatabaseService.TruncateTable:input_type -> obiente.cloud.databases.v1.TruncateTableRequest
+	107, // 122: obiente.cloud.databases.v1.DatabaseService.CreateIndex:input_type -> obiente.cloud.databases.v1.CreateIndexRequest
+	109, // 123: obiente.cloud.databases.v1.DatabaseService.DropIndex:input_type -> obiente.cloud.databases.v1.DropIndexRequest
+	111, // 124: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:input_type -> obiente.cloud.databases.v1.GetTableDDLRequest
+	69,  // 125: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:input_type -> obiente.cloud.databases.v1.ExportDatabaseDumpRequest
+	71,  // 126: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:input_type -> obiente.cloud.databases.v1.ImportDatabaseDumpRequest
+	5,   // 127: obiente.cloud.databases.v1.DatabaseService.ListDatabases:output_type -> obiente.cloud.databases.v1.ListDatabasesResponse
+	7,   // 128: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:output_type -> obiente.cloud.databases.v1.CreateDatabaseResponse
+	9,   // 129: obiente.cloud.databases.v1.DatabaseService.GetDatabase:output_type -> obiente.cloud.databases.v1.GetDatabaseResponse
+	11,  // 130: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:output_type -> obiente.cloud.databases.v1.UpdateDatabaseResponse
+	13,  // 131: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:output_type -> obiente.cloud.databases.v1.DeleteDatabaseResponse
+	15,  // 132: obiente.cloud.databases.v1.DatabaseService.StartDatabase:output_type -> obiente.cloud.databases.v1.StartDatabaseResponse
+	17,  // 133: obiente.cloud.databases.v1.DatabaseService.StopDatabase:output_type -> obiente.cloud.databases.v1.StopDatabaseResponse
+	19,  // 134: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:output_type -> obiente.cloud.databases.v1.SleepDatabaseResponse
+	21,  // 135: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:output_type -> obiente.cloud.databases.v1.RestartDatabaseResponse
+	23,  // 136: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:output_type -> obiente.cloud.databases.v1.DatabaseStatusUpdate
+	25,  // 137: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:output_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
+	28,  // 138: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:output_type -> obiente.cloud.databases.v1.ResetDatabasePasswordResponse
+	30,  // 139: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:output_type -> obiente.cloud.databases.v1.GetDatabaseSchemaResponse
+	32,  // 140: obiente.cloud.databases.v1.DatabaseService.ListTables:output_type -> obiente.cloud.databases.v1.ListTablesResponse
+	34,  // 141: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:output_type -> obiente.cloud.databases.v1.GetTableStructureResponse
+	44,  // 142: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:output_type -> obiente.cloud.databases.v1.ExecuteQueryResponse
+	46,  // 143: obiente.cloud.databases.v1.DatabaseService.StreamQuery:output_type -> obiente.cloud.databases.v1.QueryResultRow
+	51,  // 144: obiente.cloud.databases.v1.DatabaseService.GetTableData:output_type -> obiente.cloud.databases.v1.GetTableDataResponse
+	53,  // 145: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:output_type -> obiente.cloud.databases.v1.UpdateTableRowResponse
+	55,  // 146: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:output_type -> obiente.cloud.databases.v1.InsertTableRowResponse
+	57,  // 147: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:output_type -> obiente.cloud.databases.v1.DeleteTableRowsResponse
+	59,  // 148: obiente.cloud.databases.v1.DatabaseService.ListBackups:output_type -> obiente.cloud.databases.v1.ListBackupsResponse
+	61,  // 149: obiente.cloud.databases.v1.DatabaseService.CreateBackup:output_type -> obiente.cloud.databases.v1.CreateBackupResponse
+	63,  // 150: obiente.cloud.databases.v1.DatabaseService.GetBackup:output_type -> obiente.cloud.databases.v1.GetBackupResponse
+	65,  // 151: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:output_type -> obiente.cloud.databases.v1.DeleteBackupResponse
+	67,  // 152: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:output_type -> obiente.cloud.databases.v1.RestoreBackupResponse
+	74,  // 153: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:output_type -> obiente.cloud.databases.v1.GetDatabaseMetricsResponse
+	76,  // 154: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:output_type -> obiente.cloud.databases.v1.DatabaseMetric
+	78,  // 155: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:output_type -> obiente.cloud.databases.v1.ListDatabaseSizesResponse
+	82,  // 156: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:output_type -> obiente.cloud.databases.v1.GetDatabaseUsageResponse
+	89,  // 157: obiente.cloud.databases.v1.DatabaseService.CreateTable:output_type -> obiente.cloud.databases.v1.CreateTableResponse
+	100, // 158: obiente.cloud.databases.v1.DatabaseService.AlterTable:output_type -> obiente.cloud.databases.v1.AlterTableResponse
+	102, // 159: obiente.cloud.databases.v1.DatabaseService.DropTable:output_type -> obiente.cloud.databases.v1.DropTableResponse
+	104, // 160: obiente.cloud.databases.v1.DatabaseService.RenameTable:output_type -> obiente.cloud.databases.v1.RenameTableResponse
+	106, // 161: obiente.cloud.databases.v1.DatabaseService.TruncateTable:output_type -> obiente.cloud.databases.v1.TruncateTableResponse
+	108, // 162: obiente.cloud.databases.v1.DatabaseService.CreateIndex:output_type -> obiente.cloud.databases.v1.CreateIndexResponse
+	110, // 163: obiente.cloud.databases.v1.DatabaseService.DropIndex:output_type -> obiente.cloud.databases.v1.DropIndexResponse
+	112, // 164: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:output_type -> obiente.cloud.databases.v1.GetTableDDLResponse
+	70,  // 165: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:output_type -> obiente.cloud.databases.v1.ExportDatabaseDumpResponse
+	72,  // 166: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:output_type -> obiente.cloud.databases.v1.ImportDatabaseDumpResponse
+	127, // [127:167] is the sub-list for method output_type
+	87,  // [87:127] is the sub-list for method input_type
+	87,  // [87:87] is the sub-list for extension type_name
+	87,  // [87:87] is the sub-list for extension extendee
+	0,   // [0:87] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_databases_v1_database_service_proto_init() }
@@ -8508,16 +8896,18 @@ func file_obiente_cloud_databases_v1_database_service_proto_init() {
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[62].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[64].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[65].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[67].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[69].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[72].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[73].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[75].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[76].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[77].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[78].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[79].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[80].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[81].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[82].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83].OneofWrappers = []any{
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[83].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[87].OneofWrappers = []any{
 		(*AlterTableOperation_AddColumn)(nil),
 		(*AlterTableOperation_DropColumn)(nil),
 		(*AlterTableOperation_ModifyColumn)(nil),
@@ -8527,21 +8917,21 @@ func file_obiente_cloud_databases_v1_database_service_proto_init() {
 		(*AlterTableOperation_AddUnique)(nil),
 		(*AlterTableOperation_DropConstraint)(nil),
 	}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[84].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[86].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[93].OneofWrappers = []any{}
-	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[95].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[88].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[90].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[97].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[99].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[101].OneofWrappers = []any{}
 	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[103].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[105].OneofWrappers = []any{}
+	file_obiente_cloud_databases_v1_database_service_proto_msgTypes[107].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_databases_v1_database_service_proto_rawDesc), len(file_obiente_cloud_databases_v1_database_service_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   108,
+			NumEnums:      4,
+			NumMessages:   112,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

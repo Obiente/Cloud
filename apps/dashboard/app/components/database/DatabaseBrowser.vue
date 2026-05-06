@@ -943,7 +943,8 @@ const tableColumns = computed<TableColumn[]>(() => {
     cols.push({
       key: col.name,
       label: col.name,
-      minWidth: 80,
+      minWidth: getColumnWidth(col.name, col.dataType),
+      defaultWidth: getColumnWidth(col.name, col.dataType),
       sortable: true,
     });
   }
@@ -991,6 +992,34 @@ function toggleTableExpand(name: string) {
 
 function isForeignKey(table: SchemaTable, colName: string): boolean {
   return table.foreignKeys.some((fk: SchemaForeignKey) => fk.fromColumns.includes(colName));
+}
+
+function getColumnWidth(name: string, dataType: string): number {
+  const normalizedType = dataType.toLowerCase();
+  const normalizedName = name.toLowerCase();
+
+  if (normalizedName === "id" || normalizedName.endsWith("_id") || normalizedType.includes("uuid")) {
+    return 220;
+  }
+  if (normalizedType.includes("json") || normalizedType.includes("text")) {
+    return 320;
+  }
+  if (normalizedType.includes("timestamp") || normalizedType.includes("date") || normalizedType.includes("time")) {
+    return 180;
+  }
+  if (normalizedType.includes("bool")) {
+    return 110;
+  }
+  if (
+    normalizedType.includes("int") ||
+    normalizedType.includes("numeric") ||
+    normalizedType.includes("decimal") ||
+    normalizedType.includes("float") ||
+    normalizedType.includes("double")
+  ) {
+    return 120;
+  }
+  return 180;
 }
 
 function selectTable(table: SchemaTable) {
@@ -1101,25 +1130,27 @@ function isJsonColumn(dataType: string): boolean {
 }
 
 function formatJsonPreview(value: any): string {
-  if (value === null || value === undefined) return "NULL";
+  const normalized = normalizeCellValue(value);
+  if (normalized === null || normalized === undefined) return "NULL";
   try {
-    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    const parsed = typeof normalized === "string" ? JSON.parse(normalized) : normalized;
     return JSON.stringify(parsed);
   } catch {
-    return String(value);
+    return String(normalized);
   }
 }
 
 function formatCellValue(value: any): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "object") {
+  const normalized = normalizeCellValue(value);
+  if (normalized === null || normalized === undefined) return "NULL";
+  if (typeof normalized === "object") {
     try {
-      return JSON.stringify(value, null, 2);
+      return JSON.stringify(normalized, null, 2);
     } catch {
-      return String(value);
+      return String(normalized);
     }
   }
-  const stringValue = String(value);
+  const stringValue = String(normalized);
   try {
     const parsed = JSON.parse(stringValue);
     if (parsed && typeof parsed === "object") {
@@ -1129,6 +1160,16 @@ function formatCellValue(value: any): string {
     // Plain strings are expected most of the time.
   }
   return stringValue;
+}
+
+function normalizeCellValue(value: any): any {
+  if (Array.isArray(value) && value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)) {
+    return String.fromCharCode(...value);
+  }
+  if (value instanceof Uint8Array) {
+    return new TextDecoder().decode(value);
+  }
+  return value;
 }
 
 function openCellDetail(row: Record<string, any>, column: { name: string; dataType: string }) {
@@ -1699,7 +1740,9 @@ onUnmounted(() => {
 }
 
 :deep(.db-data-table) {
-  min-width: max-content;
+  width: max-content !important;
+  min-width: 100%;
+  table-layout: fixed !important;
 }
 
 :deep(.db-data-table thead) {
@@ -1723,7 +1766,7 @@ onUnmounted(() => {
 }
 
 :deep(.db-data-table tbody tr:hover) {
-  background: color-mix(in srgb, var(--oui-accent-primary) 7%, transparent);
+  background: color-mix(in srgb, var(--oui-accent-primary) 4%, transparent);
 }
 
 :deep(.db-data-table th:first-child),
@@ -1747,6 +1790,9 @@ onUnmounted(() => {
   z-index: 4;
   background: var(--oui-surface-base);
   border-left: 1px solid var(--oui-border-default);
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
 }
 
 :deep(.db-data-table thead th:last-child) {

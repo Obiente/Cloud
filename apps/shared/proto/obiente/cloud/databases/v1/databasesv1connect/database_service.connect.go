@@ -147,6 +147,12 @@ const (
 	// DatabaseServiceGetTableDDLProcedure is the fully-qualified name of the DatabaseService's
 	// GetTableDDL RPC.
 	DatabaseServiceGetTableDDLProcedure = "/obiente.cloud.databases.v1.DatabaseService/GetTableDDL"
+	// DatabaseServiceExportDatabaseDumpProcedure is the fully-qualified name of the DatabaseService's
+	// ExportDatabaseDump RPC.
+	DatabaseServiceExportDatabaseDumpProcedure = "/obiente.cloud.databases.v1.DatabaseService/ExportDatabaseDump"
+	// DatabaseServiceImportDatabaseDumpProcedure is the fully-qualified name of the DatabaseService's
+	// ImportDatabaseDump RPC.
+	DatabaseServiceImportDatabaseDumpProcedure = "/obiente.cloud.databases.v1.DatabaseService/ImportDatabaseDump"
 )
 
 // DatabaseServiceClient is a client for the obiente.cloud.databases.v1.DatabaseService service.
@@ -215,6 +221,9 @@ type DatabaseServiceClient interface {
 	DropIndex(context.Context, *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error)
 	// Get DDL statement for a table
 	GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error)
+	// SQL dump import/export
+	ExportDatabaseDump(context.Context, *connect.Request[v1.ExportDatabaseDumpRequest]) (*connect.Response[v1.ExportDatabaseDumpResponse], error)
+	ImportDatabaseDump(context.Context, *connect.Request[v1.ImportDatabaseDumpRequest]) (*connect.Response[v1.ImportDatabaseDumpResponse], error)
 }
 
 // NewDatabaseServiceClient constructs a client for the obiente.cloud.databases.v1.DatabaseService
@@ -456,6 +465,18 @@ func NewDatabaseServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(databaseServiceMethods.ByName("GetTableDDL")),
 			connect.WithClientOptions(opts...),
 		),
+		exportDatabaseDump: connect.NewClient[v1.ExportDatabaseDumpRequest, v1.ExportDatabaseDumpResponse](
+			httpClient,
+			baseURL+DatabaseServiceExportDatabaseDumpProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("ExportDatabaseDump")),
+			connect.WithClientOptions(opts...),
+		),
+		importDatabaseDump: connect.NewClient[v1.ImportDatabaseDumpRequest, v1.ImportDatabaseDumpResponse](
+			httpClient,
+			baseURL+DatabaseServiceImportDatabaseDumpProcedure,
+			connect.WithSchema(databaseServiceMethods.ByName("ImportDatabaseDump")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -499,6 +520,8 @@ type databaseServiceClient struct {
 	createIndex               *connect.Client[v1.CreateIndexRequest, v1.CreateIndexResponse]
 	dropIndex                 *connect.Client[v1.DropIndexRequest, v1.DropIndexResponse]
 	getTableDDL               *connect.Client[v1.GetTableDDLRequest, v1.GetTableDDLResponse]
+	exportDatabaseDump        *connect.Client[v1.ExportDatabaseDumpRequest, v1.ExportDatabaseDumpResponse]
+	importDatabaseDump        *connect.Client[v1.ImportDatabaseDumpRequest, v1.ImportDatabaseDumpResponse]
 }
 
 // ListDatabases calls obiente.cloud.databases.v1.DatabaseService.ListDatabases.
@@ -692,6 +715,16 @@ func (c *databaseServiceClient) GetTableDDL(ctx context.Context, req *connect.Re
 	return c.getTableDDL.CallUnary(ctx, req)
 }
 
+// ExportDatabaseDump calls obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump.
+func (c *databaseServiceClient) ExportDatabaseDump(ctx context.Context, req *connect.Request[v1.ExportDatabaseDumpRequest]) (*connect.Response[v1.ExportDatabaseDumpResponse], error) {
+	return c.exportDatabaseDump.CallUnary(ctx, req)
+}
+
+// ImportDatabaseDump calls obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump.
+func (c *databaseServiceClient) ImportDatabaseDump(ctx context.Context, req *connect.Request[v1.ImportDatabaseDumpRequest]) (*connect.Response[v1.ImportDatabaseDumpResponse], error) {
+	return c.importDatabaseDump.CallUnary(ctx, req)
+}
+
 // DatabaseServiceHandler is an implementation of the obiente.cloud.databases.v1.DatabaseService
 // service.
 type DatabaseServiceHandler interface {
@@ -759,6 +792,9 @@ type DatabaseServiceHandler interface {
 	DropIndex(context.Context, *connect.Request[v1.DropIndexRequest]) (*connect.Response[v1.DropIndexResponse], error)
 	// Get DDL statement for a table
 	GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error)
+	// SQL dump import/export
+	ExportDatabaseDump(context.Context, *connect.Request[v1.ExportDatabaseDumpRequest]) (*connect.Response[v1.ExportDatabaseDumpResponse], error)
+	ImportDatabaseDump(context.Context, *connect.Request[v1.ImportDatabaseDumpRequest]) (*connect.Response[v1.ImportDatabaseDumpResponse], error)
 }
 
 // NewDatabaseServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -996,6 +1032,18 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 		connect.WithSchema(databaseServiceMethods.ByName("GetTableDDL")),
 		connect.WithHandlerOptions(opts...),
 	)
+	databaseServiceExportDatabaseDumpHandler := connect.NewUnaryHandler(
+		DatabaseServiceExportDatabaseDumpProcedure,
+		svc.ExportDatabaseDump,
+		connect.WithSchema(databaseServiceMethods.ByName("ExportDatabaseDump")),
+		connect.WithHandlerOptions(opts...),
+	)
+	databaseServiceImportDatabaseDumpHandler := connect.NewUnaryHandler(
+		DatabaseServiceImportDatabaseDumpProcedure,
+		svc.ImportDatabaseDump,
+		connect.WithSchema(databaseServiceMethods.ByName("ImportDatabaseDump")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.databases.v1.DatabaseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DatabaseServiceListDatabasesProcedure:
@@ -1074,6 +1122,10 @@ func NewDatabaseServiceHandler(svc DatabaseServiceHandler, opts ...connect.Handl
 			databaseServiceDropIndexHandler.ServeHTTP(w, r)
 		case DatabaseServiceGetTableDDLProcedure:
 			databaseServiceGetTableDDLHandler.ServeHTTP(w, r)
+		case DatabaseServiceExportDatabaseDumpProcedure:
+			databaseServiceExportDatabaseDumpHandler.ServeHTTP(w, r)
+		case DatabaseServiceImportDatabaseDumpProcedure:
+			databaseServiceImportDatabaseDumpHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1233,4 +1285,12 @@ func (UnimplementedDatabaseServiceHandler) DropIndex(context.Context, *connect.R
 
 func (UnimplementedDatabaseServiceHandler) GetTableDDL(context.Context, *connect.Request[v1.GetTableDDLRequest]) (*connect.Response[v1.GetTableDDLResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.GetTableDDL is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) ExportDatabaseDump(context.Context, *connect.Request[v1.ExportDatabaseDumpRequest]) (*connect.Response[v1.ExportDatabaseDumpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump is not implemented"))
+}
+
+func (UnimplementedDatabaseServiceHandler) ImportDatabaseDump(context.Context, *connect.Request[v1.ImportDatabaseDumpRequest]) (*connect.Response[v1.ImportDatabaseDumpResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump is not implemented"))
 }

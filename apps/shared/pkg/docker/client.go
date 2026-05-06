@@ -257,15 +257,15 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail str
 			opts.Tail = "500"
 		}
 	}
-	
+
 	// Log the exact parameters being sent to Docker API for debugging
 	containerIDShort := containerID
 	if len(containerID) > 12 {
 		containerIDShort = containerID[:12]
 	}
-	log.Printf("[ContainerLogs] Calling Docker API: containerID=%s, tail=%q, follow=%v, since=%v, until=%v", 
+	log.Printf("[ContainerLogs] Calling Docker API: containerID=%s, tail=%q, follow=%v, since=%v, until=%v",
 		containerIDShort, tail, follow, opts.Since, opts.Until)
-	
+
 	logs, err := c.api.ContainerLogs(ctx, containerID, opts)
 	if err != nil {
 		log.Printf("[ContainerLogs] Docker API error: %v", err)
@@ -416,6 +416,18 @@ type ContainerAttachOptions struct {
 
 // ContainerExecRun runs a command in the container and returns the output
 func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd []string) (string, error) {
+	return c.ContainerExecRunInput(ctx, containerID, cmd, nil)
+}
+
+// ContainerExecRunInput runs a command in the container, optionally writing data
+// to stdin, and returns stdout. Stderr is included in the returned error.
+func (c *Client) ContainerExecRunInput(ctx context.Context, containerID string, cmd []string, input []byte) (string, error) {
+	return c.ContainerExecRunInputEnv(ctx, containerID, cmd, input, nil)
+}
+
+// ContainerExecRunInputEnv runs a command in the container with optional stdin
+// and environment variables, and returns stdout. Stderr is included in errors.
+func (c *Client) ContainerExecRunInputEnv(ctx context.Context, containerID string, cmd []string, input []byte, env []string) (string, error) {
 	if c == nil || c.api == nil {
 		return "", ErrUninitialized
 	}
@@ -423,8 +435,10 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 	// Create exec configuration
 	execConfig := client.ExecCreateOptions{
 		Cmd:          cmd,
+		AttachStdin:  len(input) > 0,
 		AttachStdout: true,
 		AttachStderr: true,
+		Env:          env,
 	}
 
 	// Create exec instance
@@ -445,6 +459,7 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	outputDone := make(chan error, 1)
+	inputDone := make(chan error, 1)
 
 	go func() {
 		header := make([]byte, 8)
@@ -505,7 +520,23 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 		return "", fmt.Errorf("start exec: %w", err)
 	}
 
+	if len(input) > 0 {
+		go func() {
+			if _, err := attachResp.Conn.Write(input); err != nil {
+				inputDone <- err
+				return
+			}
+			inputDone <- attachResp.CloseWrite()
+		}()
+	} else {
+		inputDone <- nil
+	}
+
 	// Wait for output to complete
+	if err := <-inputDone; err != nil {
+		attachResp.Close()
+		return "", fmt.Errorf("write input: %w", err)
+	}
 	if err := <-outputDone; err != nil && err != io.EOF {
 		return "", fmt.Errorf("read output: %w", err)
 	}
@@ -544,7 +575,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 			return nil, fmt.Errorf("container is stopped and cannot be started automatically for file listing. The container may be in an error state or require manual intervention. Error: %w", err)
 		}
 		wasStarted = true
-		
+
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -565,7 +596,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 	output, err := c.ContainerExecRun(ctx, containerID, cmd)
 	if err != nil {
 		log.Printf("[ContainerListFiles] Command failed: %v, output (if any): %q", err, output)
-		
+
 		// Check if error is due to unsupported option (BusyBox)
 		errStr := err.Error()
 		if strings.Contains(errStr, "unrecognized option") || strings.Contains(errStr, "time-style") {
@@ -595,7 +626,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 
 	log.Printf("[ContainerListFiles] Command succeeded, output length: %d chars", len(output))
 	files := parseLsOutput(output, path)
-	
+
 	// Memory safety: Very high limit to allow normal operations while catching memory leaks
 	// With 2G memory limit, we can handle large directories, but still need a hard cap
 	// This limit is high enough that normal operations won't hit it, but a memory leak will
@@ -604,7 +635,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 		log.Printf("[ContainerListFiles] WARNING: Directory contains %d files (exceeds safety limit of %d). This may indicate a memory leak or misconfiguration. Limiting to %d files.", len(files), maxFilesLimit, maxFilesLimit)
 		files = files[:maxFilesLimit]
 	}
-	
+
 	return files, nil
 }
 
@@ -622,7 +653,7 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 		log.Printf("[ContainerReadFile] Invalid filePath detected: %q", filePath)
 		return nil, fmt.Errorf("invalid file path: %q", filePath)
 	}
-	
+
 	// Check if container is running
 	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
@@ -638,7 +669,7 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 			return nil, fmt.Errorf("failed to start stopped container for file read: %w", err)
 		}
 		wasStarted = true
-		
+
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -659,26 +690,26 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 	if err != nil {
 		log.Printf("[ContainerReadFile] cat command failed: %v", err)
 		errStr := err.Error()
-		
+
 		// Check if file doesn't exist
 		if strings.Contains(errStr, "No such file") || strings.Contains(errStr, "not found") {
 			return nil, fmt.Errorf("file not found: %q", filePath)
 		}
-		
+
 		// Check if it's a permission issue
 		if strings.Contains(errStr, "Permission denied") || strings.Contains(errStr, "EACCES") {
 			return nil, fmt.Errorf("permission denied reading file %q", filePath)
 		}
-		
+
 		// Check if it's a directory
 		if strings.Contains(errStr, "Is a directory") || strings.Contains(errStr, "EISDIR") {
 			return nil, fmt.Errorf("path is a directory, not a file: %q", filePath)
 		}
-		
+
 		// Return error with full context - the stderr should already be included in the error message
 		return nil, fmt.Errorf("failed to read file %q: %w", filePath, err)
 	}
-	
+
 	// Empty files are valid - return empty byte slice
 	return []byte(output), nil
 }
@@ -689,7 +720,7 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 	if c == nil || c.api == nil {
 		return container.InspectResponse{}, ErrUninitialized
 	}
-	
+
 	result, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return container.InspectResponse{}, err
@@ -715,7 +746,7 @@ func (c *Client) ContainerResize(ctx context.Context, containerID string, height
 	if c == nil || c.api == nil {
 		return ErrUninitialized
 	}
-	
+
 	_, err := c.api.ContainerResize(ctx, containerID, client.ContainerResizeOptions{
 		Height: uint(height),
 		Width:  uint(width),
@@ -746,7 +777,7 @@ func (c *Client) ContainerUploadFiles(ctx context.Context, containerID, destPath
 		}); err != nil {
 			return fmt.Errorf("write tar header: %w", err)
 		}
-		
+
 		if _, err := tarWriter.Write(content); err != nil {
 			return fmt.Errorf("write tar content: %w", err)
 		}
@@ -940,7 +971,7 @@ func (c *Client) ContainerStat(ctx context.Context, containerID, path string) (*
 	if base == "" {
 		base = "/"
 	}
-	
+
 	// Try GNU ls format first (--time-style=long-iso), fall back to BusyBox format (--full-time)
 	cmd := []string{"ls", "-ld", "--time-style=long-iso", path}
 	output, err := c.ContainerExecRun(ctx, containerID, cmd)
@@ -958,7 +989,7 @@ func (c *Client) ContainerStat(ctx context.Context, containerID, path string) (*
 			return nil, fmt.Errorf("failed to stat file %q: %w", path, err)
 		}
 	}
-	
+
 	infos := parseLsOutput(output, base)
 	if len(infos) == 0 {
 		return nil, fmt.Errorf("no metadata for path %s", path)
@@ -994,7 +1025,7 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		log.Printf("[parseLsOutput] Invalid basePath detected: %q, defaulting to /", basePath)
 		basePath = "/"
 	}
-	
+
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var files []FileInfo
 
@@ -1018,7 +1049,7 @@ func parseLsOutput(output, basePath string) []FileInfo {
 			log.Printf("[parseLsOutput] Skipping line with < 8 fields (%d): %q", len(parts), line)
 			continue
 		}
-		
+
 		// Log first few lines to debug parsing issues
 		if i < start+3 {
 			log.Printf("[parseLsOutput] Parsing line %d: %q, fields: %d", i, line, len(parts))
@@ -1036,7 +1067,7 @@ func parseLsOutput(output, basePath string) []FileInfo {
 
 		var size int64
 		if len(parts) > 4 {
-		fmt.Sscanf(parts[4], "%d", &size)
+			fmt.Sscanf(parts[4], "%d", &size)
 		}
 
 		// Determine where the filename starts based on timestamp format
@@ -1048,28 +1079,28 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		if len(parts) > 7 {
 			// Check if parts[7] looks like a timezone (starts with + or - and is 4-6 characters)
 			timezoneField := parts[7]
-			if (strings.HasPrefix(timezoneField, "+") || strings.HasPrefix(timezoneField, "-")) && 
-			   len(timezoneField) >= 5 && len(timezoneField) <= 6 {
+			if (strings.HasPrefix(timezoneField, "+") || strings.HasPrefix(timezoneField, "-")) &&
+				len(timezoneField) >= 5 && len(timezoneField) <= 6 {
 				// This is a timezone field, filename starts at index 8
 				nameStartIdx = 8
 			} else if len(parts) > 8 {
 				// Check parts[8] as well, in case format is different
 				nextField := parts[8]
 				// If parts[7] looks like a partial timestamp and parts[8] looks like timezone
-				if (strings.HasPrefix(nextField, "+") || strings.HasPrefix(nextField, "-")) && 
-				   len(nextField) >= 5 && len(nextField) <= 6 {
+				if (strings.HasPrefix(nextField, "+") || strings.HasPrefix(nextField, "-")) &&
+					len(nextField) >= 5 && len(nextField) <= 6 {
 					nameStartIdx = 9
 				}
 			}
 		}
-		
+
 		if len(parts) <= nameStartIdx {
 			log.Printf("[parseLsOutput] Not enough fields for filename: %d fields, need > %d", len(parts), nameStartIdx)
 			continue
 		}
 
 		rawName := strings.Join(parts[nameStartIdx:], " ")
-		
+
 		// Sanitize the raw name - remove any control characters or invalid path characters
 		rawName = strings.TrimSpace(rawName)
 		if rawName == "" {
@@ -1097,10 +1128,10 @@ func parseLsOutput(output, basePath string) []FileInfo {
 			// 1. GNU ls --time-style=long-iso: "2006-01-02 15:04"
 			// 2. BusyBox --full-time: "2006-01-02 15:04:05.123456 +0000" or "2006-01-02 15:04:05.123456"
 			// 3. Standard ls: "Jan 02 15:04" or "Jan 02 2006"
-			
+
 			// For long-iso or full-time, join date and time parts
 			timestamp := strings.Join(parts[5:7], " ")
-			
+
 			// Try GNU/BusyBox ISO format first (YYYY-MM-DD HH:MM:SS...)
 			if ts, err := time.Parse("2006-01-02 15:04:05.000000 -0700", timestamp); err == nil {
 				modifiedAt = ts
@@ -1188,15 +1219,15 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 
 	var volumes []VolumeMount
 	log.Printf("[GetContainerVolumes] Inspecting container %s, found %d mounts", containerID, len(containerInfo.Container.Mounts))
-	
+
 	for i, mount := range containerInfo.Container.Mounts {
 		log.Printf("[GetContainerVolumes] Mount %d: Type=%s, Name=%s, Source=%s, Destination=%s", i, mount.Type, mount.Name, mount.Source, mount.Destination)
-		
+
 		// Include Docker volumes (Type="volume") and Obiente Cloud bind mounts
 		// Obiente Cloud volumes are stored as bind mounts in /var/lib/obiente/volumes
 		isObienteVolume := mount.Type == "bind" && strings.HasPrefix(mount.Source, "/var/lib/obiente/volumes")
 		isDockerVolume := mount.Type == "volume"
-		
+
 		if isDockerVolume || isObienteVolume {
 			volumePath := mount.Source
 			log.Printf("[GetContainerVolumes] Processing volume mount: Name=%s, Source=%s", mount.Name, volumePath)
@@ -1220,12 +1251,12 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 					// Fallback: use the last component of the path
 					volumeName = filepath.Base(volumePath)
 				}
-				
+
 				// Use mount destination as the display name if volume name is still empty
 				if volumeName == "" {
 					volumeName = filepath.Base(mount.Destination)
 				}
-				
+
 				if _, err := os.Stat(volumePath); err == nil {
 					volumeMount := VolumeMount{
 						Name:       volumeName,
@@ -1245,7 +1276,7 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 			// Docker volumes are typically at /var/lib/docker/volumes/<name>/_data
 			// but mount.Source might point to the volume directory or the _data subdirectory
 			// For anonymous volumes, mount.Source is the direct path to the volume data
-			
+
 			isNamedVolume := mount.Name != ""
 			if isNamedVolume {
 				// Check if the path exists as-is
@@ -1305,7 +1336,7 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 						displayName = "anonymous-volume"
 					}
 				}
-				
+
 				volumeMount := VolumeMount{
 					Name:       displayName,
 					MountPoint: mount.Destination,
@@ -1360,13 +1391,13 @@ func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
 	var files []FileInfo
 	for _, entry := range entries {
 		entryPath := filepath.Join(resolvedPath, entry.Name())
-		
+
 		// Validate each entry path to prevent symlink attacks
 		if _, err := resolvePathWithinVolume(volumePath, entryPath); err != nil {
 			// Skip entries that escape the volume boundary (e.g., malicious symlinks)
 			continue
 		}
-		
+
 		info, err := os.Lstat(entryPath)
 		if err != nil {
 			continue
@@ -1540,7 +1571,7 @@ func (c *Client) SearchContainerFiles(ctx context.Context, containerID, rootPath
 	queryEscaped = strings.ReplaceAll(queryEscaped, `'`, `\'`)
 	queryEscaped = strings.ReplaceAll(queryEscaped, `$`, `\$`)
 	queryEscaped = strings.ReplaceAll(queryEscaped, "`", "\\`")
-	
+
 	// Build find command
 	var findCmd []string
 	if filesOnly {
@@ -1706,7 +1737,7 @@ func (c *Client) StatVolumeFile(volumePath, path string) (FileInfo, error) {
 		relativePath = "/"
 	}
 	filePath := "/" + strings.TrimPrefix(relativePath, "/")
-	
+
 	name := filepath.Base(filePath)
 	if name == "" || name == "." {
 		name = "/"
@@ -1757,7 +1788,7 @@ func (c *Client) Events(ctx context.Context, filterMap map[string][]string) (<-c
 			filterArgs.Add(key, value)
 		}
 	}
-	
+
 	eventsResult := c.api.Events(ctx, client.EventsListOptions{
 		Since:   "",
 		Until:   "",
