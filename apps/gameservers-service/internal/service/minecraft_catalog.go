@@ -321,6 +321,9 @@ func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.
 		if strings.EqualFold(version.ServerSide, "unsupported") {
 			continue
 		}
+		if !req.Msg.GetIncludePrereleases() && !isStableMinecraftVersion(version) {
+			continue
+		}
 		items = append(items, mapVersionToProto(version))
 	}
 
@@ -797,6 +800,7 @@ func (s *Service) discoverMinecraftInstallMetadataByFilename(ctx context.Context
 			ID:             "detected:" + filename,
 			ProjectID:      project.ID,
 			VersionNumber:  minecraftVersionFromFilename(filename),
+			VersionType:    "release",
 			ServerSide:     "required",
 			GameVersions:   project.GameVersions,
 			Loaders:        project.Loaders,
@@ -851,6 +855,9 @@ func (s *Service) detectInstalledProjectVersion(ctx context.Context, projectID, 
 	installedVersion := minecraftVersionFromFilename(filename)
 	for _, version := range versions {
 		if strings.EqualFold(version.ServerSide, "unsupported") {
+			continue
+		}
+		if !isStableMinecraftVersion(version) {
 			continue
 		}
 		if file := matchingVersionFile(version.Files, "", "", filename); file != nil && strings.EqualFold(file.Filename, filename) {
@@ -1107,6 +1114,9 @@ func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, server
 		if strings.EqualFold(version.ServerSide, "unsupported") {
 			continue
 		}
+		if !isStableMinecraftVersion(version) {
+			continue
+		}
 		if selectDownloadFile(version.Files) == nil {
 			continue
 		}
@@ -1190,7 +1200,23 @@ func mapVersionToProto(version modrinth.Version) *gameserversv1.MinecraftProject
 		PublishedAt:         published,
 		Changelog:           proto.String(version.Changelog),
 		Files:               files,
+		VersionType:         proto.String(firstNonEmpty(version.VersionType, "release")),
 	}
+}
+
+func isStableMinecraftVersion(version modrinth.Version) bool {
+	versionType := strings.ToLower(strings.TrimSpace(version.VersionType))
+	if versionType != "" && versionType != "release" {
+		return false
+	}
+
+	combined := strings.ToLower(version.VersionNumber + " " + version.Name)
+	for _, marker := range []string{"snapshot", "alpha", "beta", "rc", "pre-release", "prerelease"} {
+		if strings.Contains(combined, marker) {
+			return false
+		}
+	}
+	return true
 }
 
 func modrinthTypeToProto(value string) gameserversv1.MinecraftProjectType {

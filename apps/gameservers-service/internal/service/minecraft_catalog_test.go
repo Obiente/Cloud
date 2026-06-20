@@ -86,3 +86,50 @@ func TestMinecraftProjectMatchesFilename(t *testing.T) {
 		t.Fatal("did not expect ViaVersion to match ViaBackwards filename candidates")
 	}
 }
+
+func TestIsStableMinecraftVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version modrinth.Version
+		stable  bool
+	}{
+		{
+			name:    "release type is stable",
+			version: modrinth.Version{VersionType: "release", VersionNumber: "5.10.0"},
+			stable:  true,
+		},
+		{
+			name:    "missing type with normal version is stable",
+			version: modrinth.Version{VersionNumber: "5.10.0"},
+			stable:  true,
+		},
+		{
+			name:    "beta type is not stable",
+			version: modrinth.Version{VersionType: "beta", VersionNumber: "5.10.1"},
+			stable:  false,
+		},
+		{
+			name:    "alpha type is not stable",
+			version: modrinth.Version{VersionType: "alpha", VersionNumber: "5.10.1"},
+			stable:  false,
+		},
+		{
+			name:    "snapshot marker is not stable",
+			version: modrinth.Version{VersionType: "release", VersionNumber: "5.10.1-SNAPSHOT+1011"},
+			stable:  false,
+		},
+		{
+			name:    "release candidate marker is not stable",
+			version: modrinth.Version{VersionType: "release", Name: "v5.10.1-rc.1"},
+			stable:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isStableMinecraftVersion(tt.version); got != tt.stable {
+				t.Fatalf("expected stable=%v, got %v", tt.stable, got)
+			}
+		})
+	}
+}
