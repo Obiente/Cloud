@@ -64,6 +64,7 @@ MICROSERVICES=(
   "billing-service"
   "deployments-service"
   "dns-service"
+  "file-transfer-service"
   "gameservers-service"
   "notifications-service"
   "orchestrator-service"

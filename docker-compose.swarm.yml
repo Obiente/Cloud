@@ -575,6 +575,60 @@ services:
     networks:
       - obiente-network
 
+  file-transfer-service:
+    image: ghcr.io/obiente/cloud-file-transfer-service:latest
+    environment:
+      PORT: 3022
+      SFTP_PORT: 2222
+      FILE_TRANSFER_VOLUME_ROOT: /var/lib/obiente/volumes
+      SFTP_HOST_KEY_PATH: /var/lib/obiente/file-transfer/ssh_host_key
+      <<: [*common-database, *common-auth, *common-redis]
+    volumes:
+      - /var/lib/obiente/volumes:/var/lib/obiente/volumes
+      - file_transfer_host_key:/var/lib/obiente/file-transfer
+    ports:
+      - target: 2222
+        published: ${FILE_TRANSFER_SFTP_PUBLIC_PORT:-2223}
+        protocol: tcp
+        mode: host
+    deploy:
+      mode: global
+      update_config:
+        parallelism: 1
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+      labels:
+        - "cloud.obiente.service=file-transfer-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.file-transfer-service.rule=Host(`file-transfer-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.file-transfer-service.entrypoints=web"
+        - "traefik.http.services.file-transfer-service.loadbalancer.server.port=3022"
+        - "traefik.http.routers.file-transfer-service-secure.rule=Host(`file-transfer-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.file-transfer-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.file-transfer-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.file-transfer-service-secure.service=file-transfer-service"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3022/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    dns_search: []
+    networks:
+      - obiente-network
+
   # Orchestrator Service - Microservice for container orchestration and metrics
   orchestrator-service:
     image: ghcr.io/obiente/cloud-orchestrator-service:latest
@@ -1197,6 +1251,8 @@ volumes:
   grafana_data:
     driver: local
   registry_data:
+    driver: local
+  file_transfer_host_key:
     driver: local
 
 networks:
