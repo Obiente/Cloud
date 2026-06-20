@@ -180,6 +180,9 @@
             <template #files>
               <GameServerFiles :game-server-id="gameServerId" />
             </template>
+            <template #sftp>
+              <GameServerFileTransfer :game-server-id="gameServerId" />
+            </template>
             <template #mods>
               <MinecraftModsBrowser
                 :game-server-id="gameServerId"
@@ -572,6 +575,7 @@ import {
   GlobeAltIcon,
   ClipboardIcon,
   FolderIcon,
+  KeyIcon,
   ClipboardDocumentListIcon,
   DocumentCheckIcon,
   UserGroupIcon,
@@ -590,6 +594,7 @@ import OuiByte from "~/components/oui/Byte.vue";
 const GameServerMetrics = defineAsyncComponent(() => import("~/components/gameserver/GameServerMetrics.vue"));
 const GameServerLogs = defineAsyncComponent(() => import("~/components/gameserver/GameServerLogs.vue"));
 const GameServerFiles = defineAsyncComponent(() => import("~/components/gameserver/GameServerFiles.vue"));
+const GameServerFileTransfer = defineAsyncComponent(() => import("~/components/gameserver/GameServerFileTransfer.vue"));
 const GameServerSettings = defineAsyncComponent(() => import("~/components/gameserver/GameServerSettings.vue"));
 const GameServerOverview = defineAsyncComponent(() => import("~/components/gameserver/GameServerOverview.vue"));
 const GameServerHTTPRouting = defineAsyncComponent(() => import("~/components/gameserver/GameServerHTTPRouting.vue"));
@@ -819,6 +824,7 @@ const tabs = computed<TabItem[]>(() => {
     { id: "logs", label: "Logs", icon: DocumentTextIcon },
     { id: "metrics", label: "Metrics", icon: ChartBarIcon },
     { id: "files", label: "Files", icon: FolderIcon },
+    { id: "sftp", label: "SFTP", icon: KeyIcon },
   ];
 
   // Add Minecraft-specific tabs (but not mods/plugins for vanilla servers)

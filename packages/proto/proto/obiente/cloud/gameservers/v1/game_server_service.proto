@@ -131,6 +131,15 @@ service GameServerService {
   
   // Create a zip archive from files or folders
   rpc CreateGameServerFileArchive(CreateGameServerFileArchiveRequest) returns (CreateGameServerFileArchiveResponse);
+
+  // List SFTP credentials for large file transfers
+  rpc ListGameServerFileTransferCredentials(ListGameServerFileTransferCredentialsRequest) returns (ListGameServerFileTransferCredentialsResponse);
+
+  // Create an SFTP credential for large file transfers
+  rpc CreateGameServerFileTransferCredential(CreateGameServerFileTransferCredentialRequest) returns (CreateGameServerFileTransferCredentialResponse);
+
+  // Revoke an SFTP credential
+  rpc RevokeGameServerFileTransferCredential(RevokeGameServerFileTransferCredentialRequest) returns (RevokeGameServerFileTransferCredentialResponse);
   
   // Minecraft player lookup (proxies Mojang API to avoid CORS)
   // Get player UUID from username
@@ -666,6 +675,55 @@ message CreateGameServerFileArchiveResponse {
   obiente.cloud.common.v1.CreateServerFileArchiveResponse archive_response = 1; // Shared archive response
 }
 
+message GameServerFileTransferCredential {
+  string id = 1;
+  string name = 2;
+  string username = 3;
+  repeated string scopes = 4;
+  optional google.protobuf.Timestamp last_used_at = 5;
+  optional google.protobuf.Timestamp expires_at = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message GameServerFileTransferConnectionInfo {
+  string host = 1;
+  int32 port = 2;
+  string username = 3;
+  string protocol = 4;
+  string command = 5;
+}
+
+message ListGameServerFileTransferCredentialsRequest {
+  string game_server_id = 1;
+}
+
+message ListGameServerFileTransferCredentialsResponse {
+  repeated GameServerFileTransferCredential credentials = 1;
+  GameServerFileTransferConnectionInfo connection = 2;
+}
+
+message CreateGameServerFileTransferCredentialRequest {
+  string game_server_id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  optional google.protobuf.Timestamp expires_at = 4;
+}
+
+message CreateGameServerFileTransferCredentialResponse {
+  GameServerFileTransferCredential credential = 1;
+  string password = 2;
+  GameServerFileTransferConnectionInfo connection = 3;
+}
+
+message RevokeGameServerFileTransferCredentialRequest {
+  string game_server_id = 1;
+  string credential_id = 2;
+}
+
+message RevokeGameServerFileTransferCredentialResponse {
+  bool success = 1;
+}
+
 // Minecraft player lookup messages
 message GetMinecraftPlayerUUIDRequest {
   string username = 1; // Minecraft username
@@ -788,4 +846,3 @@ message InstallMinecraftProjectFileResponse {
   bool restart_required = 4;
   optional string message = 5;
 }
-

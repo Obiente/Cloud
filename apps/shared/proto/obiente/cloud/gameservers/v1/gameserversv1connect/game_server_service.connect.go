@@ -123,6 +123,15 @@ const (
 	// GameServerServiceCreateGameServerFileArchiveProcedure is the fully-qualified name of the
 	// GameServerService's CreateGameServerFileArchive RPC.
 	GameServerServiceCreateGameServerFileArchiveProcedure = "/obiente.cloud.gameservers.v1.GameServerService/CreateGameServerFileArchive"
+	// GameServerServiceListGameServerFileTransferCredentialsProcedure is the fully-qualified name of
+	// the GameServerService's ListGameServerFileTransferCredentials RPC.
+	GameServerServiceListGameServerFileTransferCredentialsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/ListGameServerFileTransferCredentials"
+	// GameServerServiceCreateGameServerFileTransferCredentialProcedure is the fully-qualified name of
+	// the GameServerService's CreateGameServerFileTransferCredential RPC.
+	GameServerServiceCreateGameServerFileTransferCredentialProcedure = "/obiente.cloud.gameservers.v1.GameServerService/CreateGameServerFileTransferCredential"
+	// GameServerServiceRevokeGameServerFileTransferCredentialProcedure is the fully-qualified name of
+	// the GameServerService's RevokeGameServerFileTransferCredential RPC.
+	GameServerServiceRevokeGameServerFileTransferCredentialProcedure = "/obiente.cloud.gameservers.v1.GameServerService/RevokeGameServerFileTransferCredential"
 	// GameServerServiceGetMinecraftPlayerUUIDProcedure is the fully-qualified name of the
 	// GameServerService's GetMinecraftPlayerUUID RPC.
 	GameServerServiceGetMinecraftPlayerUUIDProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftPlayerUUID"
@@ -208,6 +217,12 @@ type GameServerServiceClient interface {
 	ExtractGameServerFile(context.Context, *connect.Request[v1.ExtractGameServerFileRequest]) (*connect.Response[v1.ExtractGameServerFileResponse], error)
 	// Create a zip archive from files or folders
 	CreateGameServerFileArchive(context.Context, *connect.Request[v1.CreateGameServerFileArchiveRequest]) (*connect.Response[v1.CreateGameServerFileArchiveResponse], error)
+	// List SFTP credentials for large file transfers
+	ListGameServerFileTransferCredentials(context.Context, *connect.Request[v1.ListGameServerFileTransferCredentialsRequest]) (*connect.Response[v1.ListGameServerFileTransferCredentialsResponse], error)
+	// Create an SFTP credential for large file transfers
+	CreateGameServerFileTransferCredential(context.Context, *connect.Request[v1.CreateGameServerFileTransferCredentialRequest]) (*connect.Response[v1.CreateGameServerFileTransferCredentialResponse], error)
+	// Revoke an SFTP credential
+	RevokeGameServerFileTransferCredential(context.Context, *connect.Request[v1.RevokeGameServerFileTransferCredentialRequest]) (*connect.Response[v1.RevokeGameServerFileTransferCredentialResponse], error)
 	// Minecraft player lookup (proxies Mojang API to avoid CORS)
 	// Get player UUID from username
 	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
@@ -414,6 +429,24 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerFileArchive")),
 			connect.WithClientOptions(opts...),
 		),
+		listGameServerFileTransferCredentials: connect.NewClient[v1.ListGameServerFileTransferCredentialsRequest, v1.ListGameServerFileTransferCredentialsResponse](
+			httpClient,
+			baseURL+GameServerServiceListGameServerFileTransferCredentialsProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("ListGameServerFileTransferCredentials")),
+			connect.WithClientOptions(opts...),
+		),
+		createGameServerFileTransferCredential: connect.NewClient[v1.CreateGameServerFileTransferCredentialRequest, v1.CreateGameServerFileTransferCredentialResponse](
+			httpClient,
+			baseURL+GameServerServiceCreateGameServerFileTransferCredentialProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerFileTransferCredential")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeGameServerFileTransferCredential: connect.NewClient[v1.RevokeGameServerFileTransferCredentialRequest, v1.RevokeGameServerFileTransferCredentialResponse](
+			httpClient,
+			baseURL+GameServerServiceRevokeGameServerFileTransferCredentialProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("RevokeGameServerFileTransferCredential")),
+			connect.WithClientOptions(opts...),
+		),
 		getMinecraftPlayerUUID: connect.NewClient[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse](
 			httpClient,
 			baseURL+GameServerServiceGetMinecraftPlayerUUIDProcedure,
@@ -455,42 +488,45 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // gameServerServiceClient implements GameServerServiceClient.
 type gameServerServiceClient struct {
-	listGameServers                      *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
-	createGameServer                     *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
-	getGameServer                        *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
-	updateGameServer                     *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
-	deleteGameServer                     *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
-	startGameServer                      *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
-	stopGameServer                       *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
-	restartGameServer                    *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
-	getGameServerHTTPRoutes              *connect.Client[v1.GetGameServerHTTPRoutesRequest, v1.GetGameServerHTTPRoutesResponse]
-	upsertGameServerHTTPRoute            *connect.Client[v1.UpsertGameServerHTTPRouteRequest, v1.UpsertGameServerHTTPRouteResponse]
-	deleteGameServerHTTPRoute            *connect.Client[v1.DeleteGameServerHTTPRouteRequest, v1.DeleteGameServerHTTPRouteResponse]
-	getGameServerDomainVerificationToken *connect.Client[v1.GetGameServerDomainVerificationTokenRequest, v1.GetGameServerDomainVerificationTokenResponse]
-	verifyGameServerDomain               *connect.Client[v1.VerifyGameServerDomainRequest, v1.VerifyGameServerDomainResponse]
-	streamGameServerStatus               *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
-	getGameServerLogs                    *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
-	streamGameServerLogs                 *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
-	getGameServerMetrics                 *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
-	streamGameServerMetrics              *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
-	getGameServerUsage                   *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
-	listGameServerFiles                  *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
-	searchGameServerFiles                *connect.Client[v1.SearchGameServerFilesRequest, v1.SearchGameServerFilesResponse]
-	getGameServerFile                    *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
-	uploadGameServerFiles                *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
-	chunkUploadGameServerFiles           *connect.Client[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse]
-	deleteGameServerEntries              *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
-	createGameServerEntry                *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
-	writeGameServerFile                  *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
-	renameGameServerEntry                *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
-	extractGameServerFile                *connect.Client[v1.ExtractGameServerFileRequest, v1.ExtractGameServerFileResponse]
-	createGameServerFileArchive          *connect.Client[v1.CreateGameServerFileArchiveRequest, v1.CreateGameServerFileArchiveResponse]
-	getMinecraftPlayerUUID               *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
-	getMinecraftPlayerProfile            *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
-	listMinecraftProjects                *connect.Client[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse]
-	getMinecraftProjectVersions          *connect.Client[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse]
-	getMinecraftProject                  *connect.Client[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse]
-	installMinecraftProjectFile          *connect.Client[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse]
+	listGameServers                        *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
+	createGameServer                       *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
+	getGameServer                          *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
+	updateGameServer                       *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
+	deleteGameServer                       *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
+	startGameServer                        *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
+	stopGameServer                         *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
+	restartGameServer                      *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
+	getGameServerHTTPRoutes                *connect.Client[v1.GetGameServerHTTPRoutesRequest, v1.GetGameServerHTTPRoutesResponse]
+	upsertGameServerHTTPRoute              *connect.Client[v1.UpsertGameServerHTTPRouteRequest, v1.UpsertGameServerHTTPRouteResponse]
+	deleteGameServerHTTPRoute              *connect.Client[v1.DeleteGameServerHTTPRouteRequest, v1.DeleteGameServerHTTPRouteResponse]
+	getGameServerDomainVerificationToken   *connect.Client[v1.GetGameServerDomainVerificationTokenRequest, v1.GetGameServerDomainVerificationTokenResponse]
+	verifyGameServerDomain                 *connect.Client[v1.VerifyGameServerDomainRequest, v1.VerifyGameServerDomainResponse]
+	streamGameServerStatus                 *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
+	getGameServerLogs                      *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
+	streamGameServerLogs                   *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
+	getGameServerMetrics                   *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
+	streamGameServerMetrics                *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
+	getGameServerUsage                     *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
+	listGameServerFiles                    *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
+	searchGameServerFiles                  *connect.Client[v1.SearchGameServerFilesRequest, v1.SearchGameServerFilesResponse]
+	getGameServerFile                      *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
+	uploadGameServerFiles                  *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
+	chunkUploadGameServerFiles             *connect.Client[v1.ChunkUploadGameServerFilesRequest, v1.ChunkUploadGameServerFilesResponse]
+	deleteGameServerEntries                *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
+	createGameServerEntry                  *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
+	writeGameServerFile                    *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
+	renameGameServerEntry                  *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
+	extractGameServerFile                  *connect.Client[v1.ExtractGameServerFileRequest, v1.ExtractGameServerFileResponse]
+	createGameServerFileArchive            *connect.Client[v1.CreateGameServerFileArchiveRequest, v1.CreateGameServerFileArchiveResponse]
+	listGameServerFileTransferCredentials  *connect.Client[v1.ListGameServerFileTransferCredentialsRequest, v1.ListGameServerFileTransferCredentialsResponse]
+	createGameServerFileTransferCredential *connect.Client[v1.CreateGameServerFileTransferCredentialRequest, v1.CreateGameServerFileTransferCredentialResponse]
+	revokeGameServerFileTransferCredential *connect.Client[v1.RevokeGameServerFileTransferCredentialRequest, v1.RevokeGameServerFileTransferCredentialResponse]
+	getMinecraftPlayerUUID                 *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
+	getMinecraftPlayerProfile              *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
+	listMinecraftProjects                  *connect.Client[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse]
+	getMinecraftProjectVersions            *connect.Client[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse]
+	getMinecraftProject                    *connect.Client[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse]
+	installMinecraftProjectFile            *connect.Client[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse]
 }
 
 // ListGameServers calls obiente.cloud.gameservers.v1.GameServerService.ListGameServers.
@@ -653,6 +689,24 @@ func (c *gameServerServiceClient) CreateGameServerFileArchive(ctx context.Contex
 	return c.createGameServerFileArchive.CallUnary(ctx, req)
 }
 
+// ListGameServerFileTransferCredentials calls
+// obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials.
+func (c *gameServerServiceClient) ListGameServerFileTransferCredentials(ctx context.Context, req *connect.Request[v1.ListGameServerFileTransferCredentialsRequest]) (*connect.Response[v1.ListGameServerFileTransferCredentialsResponse], error) {
+	return c.listGameServerFileTransferCredentials.CallUnary(ctx, req)
+}
+
+// CreateGameServerFileTransferCredential calls
+// obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential.
+func (c *gameServerServiceClient) CreateGameServerFileTransferCredential(ctx context.Context, req *connect.Request[v1.CreateGameServerFileTransferCredentialRequest]) (*connect.Response[v1.CreateGameServerFileTransferCredentialResponse], error) {
+	return c.createGameServerFileTransferCredential.CallUnary(ctx, req)
+}
+
+// RevokeGameServerFileTransferCredential calls
+// obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential.
+func (c *gameServerServiceClient) RevokeGameServerFileTransferCredential(ctx context.Context, req *connect.Request[v1.RevokeGameServerFileTransferCredentialRequest]) (*connect.Response[v1.RevokeGameServerFileTransferCredentialResponse], error) {
+	return c.revokeGameServerFileTransferCredential.CallUnary(ctx, req)
+}
+
 // GetMinecraftPlayerUUID calls
 // obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID.
 func (c *gameServerServiceClient) GetMinecraftPlayerUUID(ctx context.Context, req *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error) {
@@ -752,6 +806,12 @@ type GameServerServiceHandler interface {
 	ExtractGameServerFile(context.Context, *connect.Request[v1.ExtractGameServerFileRequest]) (*connect.Response[v1.ExtractGameServerFileResponse], error)
 	// Create a zip archive from files or folders
 	CreateGameServerFileArchive(context.Context, *connect.Request[v1.CreateGameServerFileArchiveRequest]) (*connect.Response[v1.CreateGameServerFileArchiveResponse], error)
+	// List SFTP credentials for large file transfers
+	ListGameServerFileTransferCredentials(context.Context, *connect.Request[v1.ListGameServerFileTransferCredentialsRequest]) (*connect.Response[v1.ListGameServerFileTransferCredentialsResponse], error)
+	// Create an SFTP credential for large file transfers
+	CreateGameServerFileTransferCredential(context.Context, *connect.Request[v1.CreateGameServerFileTransferCredentialRequest]) (*connect.Response[v1.CreateGameServerFileTransferCredentialResponse], error)
+	// Revoke an SFTP credential
+	RevokeGameServerFileTransferCredential(context.Context, *connect.Request[v1.RevokeGameServerFileTransferCredentialRequest]) (*connect.Response[v1.RevokeGameServerFileTransferCredentialResponse], error)
 	// Minecraft player lookup (proxies Mojang API to avoid CORS)
 	// Get player UUID from username
 	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
@@ -953,6 +1013,24 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerFileArchive")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gameServerServiceListGameServerFileTransferCredentialsHandler := connect.NewUnaryHandler(
+		GameServerServiceListGameServerFileTransferCredentialsProcedure,
+		svc.ListGameServerFileTransferCredentials,
+		connect.WithSchema(gameServerServiceMethods.ByName("ListGameServerFileTransferCredentials")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceCreateGameServerFileTransferCredentialHandler := connect.NewUnaryHandler(
+		GameServerServiceCreateGameServerFileTransferCredentialProcedure,
+		svc.CreateGameServerFileTransferCredential,
+		connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerFileTransferCredential")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceRevokeGameServerFileTransferCredentialHandler := connect.NewUnaryHandler(
+		GameServerServiceRevokeGameServerFileTransferCredentialProcedure,
+		svc.RevokeGameServerFileTransferCredential,
+		connect.WithSchema(gameServerServiceMethods.ByName("RevokeGameServerFileTransferCredential")),
+		connect.WithHandlerOptions(opts...),
+	)
 	gameServerServiceGetMinecraftPlayerUUIDHandler := connect.NewUnaryHandler(
 		GameServerServiceGetMinecraftPlayerUUIDProcedure,
 		svc.GetMinecraftPlayerUUID,
@@ -1051,6 +1129,12 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceExtractGameServerFileHandler.ServeHTTP(w, r)
 		case GameServerServiceCreateGameServerFileArchiveProcedure:
 			gameServerServiceCreateGameServerFileArchiveHandler.ServeHTTP(w, r)
+		case GameServerServiceListGameServerFileTransferCredentialsProcedure:
+			gameServerServiceListGameServerFileTransferCredentialsHandler.ServeHTTP(w, r)
+		case GameServerServiceCreateGameServerFileTransferCredentialProcedure:
+			gameServerServiceCreateGameServerFileTransferCredentialHandler.ServeHTTP(w, r)
+		case GameServerServiceRevokeGameServerFileTransferCredentialProcedure:
+			gameServerServiceRevokeGameServerFileTransferCredentialHandler.ServeHTTP(w, r)
 		case GameServerServiceGetMinecraftPlayerUUIDProcedure:
 			gameServerServiceGetMinecraftPlayerUUIDHandler.ServeHTTP(w, r)
 		case GameServerServiceGetMinecraftPlayerProfileProcedure:
@@ -1190,6 +1274,18 @@ func (UnimplementedGameServerServiceHandler) ExtractGameServerFile(context.Conte
 
 func (UnimplementedGameServerServiceHandler) CreateGameServerFileArchive(context.Context, *connect.Request[v1.CreateGameServerFileArchiveRequest]) (*connect.Response[v1.CreateGameServerFileArchiveResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) ListGameServerFileTransferCredentials(context.Context, *connect.Request[v1.ListGameServerFileTransferCredentialsRequest]) (*connect.Response[v1.ListGameServerFileTransferCredentialsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) CreateGameServerFileTransferCredential(context.Context, *connect.Request[v1.CreateGameServerFileTransferCredentialRequest]) (*connect.Response[v1.CreateGameServerFileTransferCredentialResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) RevokeGameServerFileTransferCredential(context.Context, *connect.Request[v1.RevokeGameServerFileTransferCredentialRequest]) (*connect.Response[v1.RevokeGameServerFileTransferCredentialResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential is not implemented"))
 }
 
 func (UnimplementedGameServerServiceHandler) GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error) {

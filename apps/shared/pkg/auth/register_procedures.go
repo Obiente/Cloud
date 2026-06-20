@@ -166,19 +166,22 @@ func RegisterVPSServiceProcedures() {
 func RegisterGameServerServiceProcedures() {
 	public := []string{}
 	procedures := map[string]string{
-		"/obiente.cloud.gameservers.v1.GameServerService/ListGameServers":            "ListGameServers",
-		"/obiente.cloud.gameservers.v1.GameServerService/CreateGameServer":           "CreateGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServer":              "GetGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/UpdateGameServer":           "UpdateGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/DeleteGameServer":           "DeleteGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/StartGameServer":            "StartGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/StopGameServer":             "StopGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/RestartGameServer":          "RestartGameServer",
-		"/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerStatus":     "StreamGameServerStatus",
-		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerMetrics":       "GetGameServerMetrics",
-		"/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerMetrics":    "StreamGameServerMetrics",
-		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerUsage":         "GetGameServerUsage",
-		"/obiente.cloud.gameservers.v1.GameServerService/ChunkUploadGameServerFiles": "ChunkUploadGameServerFiles",
+		"/obiente.cloud.gameservers.v1.GameServerService/ListGameServers":                        "ListGameServers",
+		"/obiente.cloud.gameservers.v1.GameServerService/CreateGameServer":                       "CreateGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServer":                          "GetGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/UpdateGameServer":                       "UpdateGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/DeleteGameServer":                       "DeleteGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/StartGameServer":                        "StartGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/StopGameServer":                         "StopGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/RestartGameServer":                      "RestartGameServer",
+		"/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerStatus":                 "StreamGameServerStatus",
+		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerMetrics":                   "GetGameServerMetrics",
+		"/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerMetrics":                "StreamGameServerMetrics",
+		"/obiente.cloud.gameservers.v1.GameServerService/GetGameServerUsage":                     "GetGameServerUsage",
+		"/obiente.cloud.gameservers.v1.GameServerService/ChunkUploadGameServerFiles":             "ChunkUploadGameServerFiles",
+		"/obiente.cloud.gameservers.v1.GameServerService/ListGameServerFileTransferCredentials":  "ListGameServerFileTransferCredentials",
+		"/obiente.cloud.gameservers.v1.GameServerService/CreateGameServerFileTransferCredential": "CreateGameServerFileTransferCredential",
+		"/obiente.cloud.gameservers.v1.GameServerService/RevokeGameServerFileTransferCredential": "RevokeGameServerFileTransferCredential",
 	}
 
 	RegisterServiceProcedures("GameServerService", procedures, public)

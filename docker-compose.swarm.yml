@@ -531,6 +531,9 @@ services:
     image: ghcr.io/obiente/cloud-gameservers-service:latest
     environment:
       PORT: 3006
+      DOMAIN: ${DOMAIN:-localhost}
+      FILE_TRANSFER_PUBLIC_HOST: ${FILE_TRANSFER_PUBLIC_HOST:-}
+      FILE_TRANSFER_SFTP_PUBLIC_PORT: ${FILE_TRANSFER_SFTP_PUBLIC_PORT:-2223}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-notifications, *common-redis]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

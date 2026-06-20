@@ -81,6 +81,16 @@ func (r *FileTransferCredentialRepository) Create(ctx context.Context, credentia
 	return r.db.WithContext(ctx).Create(credential).Error
 }
 
+func (r *FileTransferCredentialRepository) ListActiveByResource(ctx context.Context, resourceType string, resourceID string, now time.Time) ([]*FileTransferCredential, error) {
+	resourceType = NormalizeFileTransferResourceType(resourceType)
+	var credentials []*FileTransferCredential
+	err := r.db.WithContext(ctx).
+		Where("resource_type = ? AND resource_id = ? AND revoked_at IS NULL AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)", resourceType, resourceID, now).
+		Order("created_at DESC").
+		Find(&credentials).Error
+	return credentials, err
+}
+
 func (r *FileTransferCredentialRepository) GetActiveBySecret(ctx context.Context, secret string, now time.Time) (*FileTransferCredential, error) {
 	var credential FileTransferCredential
 	err := r.db.WithContext(ctx).
@@ -97,6 +107,17 @@ func (r *FileTransferCredentialRepository) TouchLastUsed(ctx context.Context, id
 		Model(&FileTransferCredential{}).
 		Where("id = ?", id).
 		Update("last_used_at", usedAt).Error
+}
+
+func (r *FileTransferCredentialRepository) RevokeByResource(ctx context.Context, id string, resourceType string, resourceID string, revokedAt time.Time) error {
+	resourceType = NormalizeFileTransferResourceType(resourceType)
+	return r.db.WithContext(ctx).
+		Model(&FileTransferCredential{}).
+		Where("id = ? AND resource_type = ? AND resource_id = ? AND revoked_at IS NULL AND deleted_at IS NULL", id, resourceType, resourceID).
+		Updates(map[string]interface{}{
+			"revoked_at": revokedAt,
+			"updated_at": revokedAt,
+		}).Error
 }
 
 func GenerateFileTransferSecret() (string, error) {
