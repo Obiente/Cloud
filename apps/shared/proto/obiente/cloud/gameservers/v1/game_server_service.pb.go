@@ -6314,6 +6314,7 @@ type MinecraftProjectVersion struct {
 	PublishedAt         *timestamppb.Timestamp  `protobuf:"bytes,8,opt,name=published_at,json=publishedAt,proto3,oneof" json:"published_at,omitempty"`
 	Changelog           *string                 `protobuf:"bytes,9,opt,name=changelog,proto3,oneof" json:"changelog,omitempty"`
 	Files               []*MinecraftProjectFile `protobuf:"bytes,10,rep,name=files,proto3" json:"files,omitempty"`
+	VersionType         *string                 `protobuf:"bytes,11,opt,name=version_type,json=versionType,proto3,oneof" json:"version_type,omitempty"` // "release", "beta", "alpha"
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -6418,16 +6419,24 @@ func (x *MinecraftProjectVersion) GetFiles() []*MinecraftProjectFile {
 	return nil
 }
 
+func (x *MinecraftProjectVersion) GetVersionType() string {
+	if x != nil && x.VersionType != nil {
+		return *x.VersionType
+	}
+	return ""
+}
+
 type GetMinecraftProjectVersionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	GameVersions  []string               `protobuf:"bytes,3,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
-	Loaders       []string               `protobuf:"bytes,4,rep,name=loaders,proto3" json:"loaders,omitempty"`
-	ProjectType   MinecraftProjectType   `protobuf:"varint,5,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
-	Limit         *int32                 `protobuf:"varint,6,opt,name=limit,proto3,oneof" json:"limit,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId       string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	ProjectId          string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	GameVersions       []string               `protobuf:"bytes,3,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
+	Loaders            []string               `protobuf:"bytes,4,rep,name=loaders,proto3" json:"loaders,omitempty"`
+	ProjectType        MinecraftProjectType   `protobuf:"varint,5,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
+	Limit              *int32                 `protobuf:"varint,6,opt,name=limit,proto3,oneof" json:"limit,omitempty"`
+	IncludePrereleases *bool                  `protobuf:"varint,7,opt,name=include_prereleases,json=includePrereleases,proto3,oneof" json:"include_prereleases,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GetMinecraftProjectVersionsRequest) Reset() {
@@ -6500,6 +6509,13 @@ func (x *GetMinecraftProjectVersionsRequest) GetLimit() int32 {
 		return *x.Limit
 	}
 	return 0
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetIncludePrereleases() bool {
+	if x != nil && x.IncludePrereleases != nil {
+		return *x.IncludePrereleases
+	}
+	return false
 }
 
 type GetMinecraftProjectVersionsResponse struct {
@@ -7664,7 +7680,7 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\aprimary\x18\x05 \x01(\bR\aprimary\x1a9\n" +
 	"\vHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdb\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x94\x04\n" +
 	"\x17MinecraftProjectVersion\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
@@ -7676,10 +7692,12 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\fpublished_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x00R\vpublishedAt\x88\x01\x01\x12!\n" +
 	"\tchangelog\x18\t \x01(\tH\x01R\tchangelog\x88\x01\x01\x12H\n" +
 	"\x05files\x18\n" +
-	" \x03(\v22.obiente.cloud.gameservers.v1.MinecraftProjectFileR\x05filesB\x0f\n" +
+	" \x03(\v22.obiente.cloud.gameservers.v1.MinecraftProjectFileR\x05files\x12&\n" +
+	"\fversion_type\x18\v \x01(\tH\x02R\vversionType\x88\x01\x01B\x0f\n" +
 	"\r_published_atB\f\n" +
 	"\n" +
-	"_changelog\"\xa4\x02\n" +
+	"_changelogB\x0f\n" +
+	"\r_version_type\"\xf2\x02\n" +
 	"\"GetMinecraftProjectVersionsRequest\x12$\n" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x1d\n" +
 	"\n" +
@@ -7687,8 +7705,10 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\rgame_versions\x18\x03 \x03(\tR\fgameVersions\x12\x18\n" +
 	"\aloaders\x18\x04 \x03(\tR\aloaders\x12U\n" +
 	"\fproject_type\x18\x05 \x01(\x0e22.obiente.cloud.gameservers.v1.MinecraftProjectTypeR\vprojectType\x12\x19\n" +
-	"\x05limit\x18\x06 \x01(\x05H\x00R\x05limit\x88\x01\x01B\b\n" +
-	"\x06_limit\"x\n" +
+	"\x05limit\x18\x06 \x01(\x05H\x00R\x05limit\x88\x01\x01\x124\n" +
+	"\x13include_prereleases\x18\a \x01(\bH\x01R\x12includePrereleases\x88\x01\x01B\b\n" +
+	"\x06_limitB\x16\n" +
+	"\x14_include_prereleases\"x\n" +
 	"#GetMinecraftProjectVersionsResponse\x12Q\n" +
 	"\bversions\x18\x01 \x03(\v25.obiente.cloud.gameservers.v1.MinecraftProjectVersionR\bversions\"a\n" +
 	"\x1aGetMinecraftProjectRequest\x12$\n" +

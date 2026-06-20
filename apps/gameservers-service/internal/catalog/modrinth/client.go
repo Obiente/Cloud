@@ -96,6 +96,7 @@ type Version struct {
 	ProjectID      string
 	Name           string
 	VersionNumber  string
+	VersionType    string
 	GameVersions   []string
 	Loaders        []string
 	ServerSide     string
@@ -368,6 +369,7 @@ type versionResponse struct {
 	ProjectID     string        `json:"project_id"`
 	Name          string        `json:"name"`
 	VersionNumber string        `json:"version_number"`
+	VersionType   string        `json:"version_type"`
 	GameVersions  []string      `json:"game_versions"`
 	Loaders       []string      `json:"loaders"`
 	ServerSide    string        `json:"server_side"`
@@ -551,6 +553,7 @@ func mapVersion(resp versionResponse) Version {
 		ProjectID:     resp.ProjectID,
 		Name:          resp.Name,
 		VersionNumber: resp.VersionNumber,
+		VersionType:   resp.VersionType,
 		GameVersions:  resp.GameVersions,
 		Loaders:       resp.Loaders,
 		ServerSide:    resp.ServerSide,

@@ -599,7 +599,13 @@
         </OuiAlert>
 
         <OuiStack gap="xs">
-          <OuiText size="sm" weight="semibold">Select version</OuiText>
+          <OuiFlex align="center" justify="between" gap="md" class="flex-wrap">
+            <OuiText size="sm" weight="semibold">Select version</OuiText>
+            <OuiFlex align="center" gap="sm">
+              <OuiText size="xs" color="tertiary">Include prereleases</OuiText>
+              <OuiSwitch v-model="includePrereleaseVersions" size="sm" />
+            </OuiFlex>
+          </OuiFlex>
           <OuiSelect
             v-model="selectedVersionId"
             :disabled="isVersionsLoading || versionOptions.length === 0"
@@ -613,6 +619,14 @@
           >
             <OuiFlex wrap="wrap" gap="xs" align="center">
               <OuiBadge size="xs" variant="secondary">{{ selectedVersion.versionNumber }}</OuiBadge>
+              <OuiBadge
+                v-if="versionReleaseLabel(selectedVersion)"
+                size="xs"
+                :variant="isStableVersionOption(selectedVersion) ? 'success' : 'warning'"
+                tone="soft"
+              >
+                {{ versionReleaseLabel(selectedVersion) }}
+              </OuiBadge>
               <OuiBadge
                 v-for="loader in selectedVersion.loaders"
                 :key="`selected-version-loader-${loader}`"
@@ -749,6 +763,7 @@ import type {
 } from "@obiente/proto";
 import TabbedWindowGroup from "./TabbedWindowGroup.vue";
 import MinecraftProjectOverview from "./MinecraftProjectOverview.vue";
+import OuiSwitch from "~/components/oui/Switch.vue";
 
 interface OpenTab {
   id: string;
@@ -910,6 +925,7 @@ const selectedProject = ref<MinecraftProject | null>(null);
 const selectedInstalledFile = ref<InstalledMinecraftProjectFile | null>(null);
 const versionOptions = ref<MinecraftProjectVersion[]>([]);
 const selectedVersionId = ref<string>("");
+const includePrereleaseVersions = ref(false);
 const isVersionsLoading = ref(false);
 const isInstalling = ref(false);
 const loadMoreSentinel = ref<HTMLElement | null>(null);
@@ -968,6 +984,11 @@ watch(
   { deep: true }
 );
 watch(sortBy, () => refresh());
+watch(includePrereleaseVersions, () => {
+  if (installDialogOpen.value && selectedProject.value) {
+    fetchVersions(selectedProject.value.id);
+  }
+});
 watch(
   () => props.serverVersion,
   () => {
@@ -1258,6 +1279,10 @@ function formatBytes(bytes?: bigint | number | null) {
 
 function formatVersionOptionLabel(version: MinecraftProjectVersion) {
   const parts = [version.versionNumber || version.name || "Unnamed version"];
+  const releaseLabel = versionReleaseLabel(version);
+  if (releaseLabel && !isStableVersionOption(version)) {
+    parts.push(releaseLabel);
+  }
   const support = summarizeVersionSupport(version.gameVersions);
   if (support) {
     parts.push(support);
@@ -1266,6 +1291,22 @@ function formatVersionOptionLabel(version: MinecraftProjectVersion) {
     parts.push(version.loaders.slice(0, 3).join(", "));
   }
   return parts.join(" - ");
+}
+
+function versionReleaseLabel(version: MinecraftProjectVersion) {
+  const type = (version.versionType || "").trim().toLowerCase();
+  if (type === "alpha") return "Alpha";
+  if (type === "beta") return "Beta";
+  const combined = `${version.versionNumber || ""} ${version.name || ""}`.toLowerCase();
+  if (combined.includes("snapshot")) return "Snapshot";
+  if (combined.includes("alpha")) return "Alpha";
+  if (combined.includes("beta")) return "Beta";
+  if (combined.includes("rc")) return "RC";
+  return "";
+}
+
+function isStableVersionOption(version: MinecraftProjectVersion) {
+  return !versionReleaseLabel(version);
 }
 
 function summarizeVersionSupport(versions?: string[] | null) {
@@ -1371,6 +1412,7 @@ function closeInstallDialog() {
   selectedInstalledFile.value = null;
   versionOptions.value = [];
   selectedVersionId.value = "";
+  includePrereleaseVersions.value = false;
 }
 
 function projectFromInstalled(file: InstalledMinecraftProjectFile): MinecraftProject {
@@ -1676,6 +1718,7 @@ async function openInstallDialog(project: MinecraftProject, installedFile?: Inst
   installDialogOpen.value = true;
   versionOptions.value = [];
   selectedVersionId.value = "";
+  includePrereleaseVersions.value = false;
   await fetchVersions(project.id);
   if (installedFile?.latestVersionId) {
     selectedVersionId.value = installedFile.latestVersionId;
@@ -1695,7 +1738,8 @@ async function fetchVersions(projectId: string) {
       loaders: activeLoaderFilter.value ? [activeLoaderFilter.value] : [],
       gameVersions: activeVersionFilter.value ? [activeVersionFilter.value] : [],
       limit: 300,
-      });
+      includePrereleases: includePrereleaseVersions.value,
+    });
     versionOptions.value = response.versions ?? [];
     if (versionOptions.value.length && versionOptions.value[0]?.id) {
       selectedVersionId.value = versionOptions.value[0].id;
