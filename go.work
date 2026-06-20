@@ -8,6 +8,7 @@ use (
 	./apps/databases-service
 	./apps/deployments-service
 	./apps/dns-service
+	./apps/file-transfer-service
 	./apps/gameservers-service
 	./apps/notifications-service
 	./apps/orchestrator-service

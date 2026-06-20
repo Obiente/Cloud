@@ -50,6 +50,7 @@ func main() {
 
 	database.RegisterModels(
 		&database.GameServer{},
+		&database.FileTransferCredential{},
 	)
 
 	// Initialize database
