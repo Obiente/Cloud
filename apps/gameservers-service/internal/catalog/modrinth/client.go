@@ -3,6 +3,7 @@ package modrinth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,8 @@ const (
 	defaultUA      = "obiente-cloud-gameservers-service"
 	maxLimit       = 100
 )
+
+var ErrNotFound = errors.New("modrinth resource not found")
 
 // Client wraps the Modrinth REST API.
 type Client struct {
@@ -287,6 +290,49 @@ func (c *Client) GetVersion(ctx context.Context, versionID string) (*Version, er
 	return &version, nil
 }
 
+// GetVersionByFileHash returns the Modrinth version that owns a file hash.
+func (c *Client) GetVersionByFileHash(ctx context.Context, fileHash, algorithm string) (*Version, error) {
+	fileHash = strings.TrimSpace(fileHash)
+	if fileHash == "" {
+		return nil, fmt.Errorf("file hash is required")
+	}
+	algorithm = strings.TrimSpace(strings.ToLower(algorithm))
+	if algorithm == "" {
+		algorithm = "sha1"
+	}
+
+	values := url.Values{}
+	values.Set("algorithm", algorithm)
+	endpoint := fmt.Sprintf("%s/version_file/%s?%s", c.baseURL, url.PathEscape(fileHash), values.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+		return nil, fmt.Errorf("modrinth version file lookup failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload versionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode version file lookup: %w", err)
+	}
+
+	version := mapVersion(payload)
+	return &version, nil
+}
+
 // --- internal helpers ---
 
 type searchResponse struct {
@@ -332,24 +378,24 @@ type versionResponse struct {
 }
 
 type projectDetailResponse struct {
-	ID            string              `json:"id"`
-	Slug          string              `json:"slug"`
-	Title         string              `json:"title"`
-	Description   string              `json:"description"`
-	Body          string              `json:"body"`
-	ProjectType   string              `json:"project_type"`
-	IconURL       string              `json:"icon_url"`
-	Categories    []string            `json:"categories"`
-	Loaders       []string            `json:"loaders"`
-	GameVersions  []string            `json:"game_versions"`
-	Team          json.RawMessage     `json:"team"` // Can be array or string, handle dynamically
-	Downloads     int64               `json:"downloads"`
-	Rating        float64             `json:"rating"`
-	LatestVersion string              `json:"latest_version"`
-	ProjectURL    string              `json:"project_url"`
-	SourceURL     string              `json:"source_url"`
-	IssuesURL     string              `json:"issues_url"`
-	Gallery       json.RawMessage     `json:"gallery"` // Can be array of strings or objects, handle dynamically
+	ID            string          `json:"id"`
+	Slug          string          `json:"slug"`
+	Title         string          `json:"title"`
+	Description   string          `json:"description"`
+	Body          string          `json:"body"`
+	ProjectType   string          `json:"project_type"`
+	IconURL       string          `json:"icon_url"`
+	Categories    []string        `json:"categories"`
+	Loaders       []string        `json:"loaders"`
+	GameVersions  []string        `json:"game_versions"`
+	Team          json.RawMessage `json:"team"` // Can be array or string, handle dynamically
+	Downloads     int64           `json:"downloads"`
+	Rating        float64         `json:"rating"`
+	LatestVersion string          `json:"latest_version"`
+	ProjectURL    string          `json:"project_url"`
+	SourceURL     string          `json:"source_url"`
+	IssuesURL     string          `json:"issues_url"`
+	Gallery       json.RawMessage `json:"gallery"` // Can be array of strings or objects, handle dynamically
 }
 
 type galleryItem struct {

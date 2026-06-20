@@ -603,12 +603,30 @@
           <OuiSelect
             v-model="selectedVersionId"
             :disabled="isVersionsLoading || versionOptions.length === 0"
-            :items="versionOptions.map(v => ({
-              label: `${v.versionNumber} • ${v.gameVersions?.join(', ') || 'Any version'}`,
-              value: v.id,
-            }))"
+            :items="versionSelectItems"
             placeholder="Select a version"
           />
+          <OuiStack
+            v-if="selectedVersion"
+            gap="xs"
+            class="rounded-lg border border-border-muted bg-surface-muted/20 px-3 py-2"
+          >
+            <OuiFlex wrap="wrap" gap="xs" align="center">
+              <OuiBadge size="xs" variant="secondary">{{ selectedVersion.versionNumber }}</OuiBadge>
+              <OuiBadge
+                v-for="loader in selectedVersion.loaders"
+                :key="`selected-version-loader-${loader}`"
+                size="xs"
+                variant="secondary"
+                tone="soft"
+              >
+                {{ loader }}
+              </OuiBadge>
+            </OuiFlex>
+            <OuiText size="xs" color="tertiary" class="leading-relaxed break-words">
+              Supports {{ formatVersionSupport(selectedVersion.gameVersions) }}
+            </OuiText>
+          </OuiStack>
           <OuiText v-if="isVersionsLoading" size="xs" color="tertiary">
             Loading versions…
           </OuiText>
@@ -912,6 +930,15 @@ const installDialogTitle = computed(() =>
 const installLocationDescription = computed(() => {
   return projectType.value === MinecraftProjectType.PLUGIN ? "plugins directory" : "mods directory";
 });
+const selectedVersion = computed(() => {
+  return versionOptions.value.find((version) => version.id === selectedVersionId.value) || null;
+});
+const versionSelectItems = computed(() =>
+  versionOptions.value.map((version) => ({
+    label: formatVersionOptionLabel(version),
+    value: version.id,
+  }))
+);
 
 const debouncedSearch = useDebounceFn(() => refresh(), 350);
 const { stop: stopAutoLoadObserver } = useIntersectionObserver(
@@ -1227,6 +1254,44 @@ function formatBytes(bytes?: bigint | number | null) {
   if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${value} B`;
+}
+
+function formatVersionOptionLabel(version: MinecraftProjectVersion) {
+  const parts = [version.versionNumber || version.name || "Unnamed version"];
+  const support = summarizeVersionSupport(version.gameVersions);
+  if (support) {
+    parts.push(support);
+  }
+  if (version.loaders?.length) {
+    parts.push(version.loaders.slice(0, 3).join(", "));
+  }
+  return parts.join(" - ");
+}
+
+function summarizeVersionSupport(versions?: string[] | null) {
+  const normalized = normalizeMinecraftVersions(versions);
+  if (normalized.length === 0) return "Any Minecraft version";
+  if (normalized.length === 1) return normalized[0];
+  if (normalized.length <= 3) return normalized.join(", ");
+  return `${normalized[0]}-${normalized[normalized.length - 1]}`;
+}
+
+function formatVersionSupport(versions?: string[] | null) {
+  const normalized = normalizeMinecraftVersions(versions);
+  if (normalized.length === 0) return "any Minecraft version";
+  if (normalized.length <= 12) return normalized.join(", ");
+  return `${normalized.slice(0, 8).join(", ")} and ${normalized.length - 8} more through ${normalized[normalized.length - 1]}`;
+}
+
+function normalizeMinecraftVersions(versions?: string[] | null) {
+  const unique = Array.from(
+    new Set(
+      (versions || [])
+        .map((version) => version.replace(/^v/i, "").trim())
+        .filter(Boolean)
+    )
+  );
+  return unique.sort((a, b) => compareVersions(a, b));
 }
 
 function parseVersion(version: string): number[] {
