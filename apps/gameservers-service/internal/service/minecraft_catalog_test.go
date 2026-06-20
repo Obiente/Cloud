@@ -42,3 +42,47 @@ func TestFileHash(t *testing.T) {
 		t.Fatalf("unexpected hash %s", sum)
 	}
 }
+
+func TestMinecraftProjectNameCandidates(t *testing.T) {
+	tests := map[string]string{
+		"ViaBackwards-4.3.0.jar":                           "ViaBackwards",
+		"LuckPerms-Bukkit-5.4.30.jar":                      "LuckPerms",
+		"FastAsyncWorldEdit-Bukkit-2.4.1-SNAPSHOT-239.jar": "FastAsyncWorldEdit",
+		"CMILib1.5.9.7.jar":                                "CMILib",
+		"Jobs5.1.0.0.jar":                                  "Jobs",
+		"squaremap-paper-mc1.19-1.1.5.jar":                 "squaremap",
+		"worldguard-bukkit-7.0.7-dist.jar":                 "worldguard",
+	}
+
+	for filename, expected := range tests {
+		candidates := minecraftProjectNameCandidates(filename)
+		if len(candidates) == 0 || candidates[0] != expected {
+			t.Fatalf("expected first candidate %q for %s, got %#v", expected, filename, candidates)
+		}
+	}
+}
+
+func TestMinecraftVersionFromFilename(t *testing.T) {
+	tests := map[string]string{
+		"ViaBackwards-4.3.0.jar":           "4.3.0",
+		"CMILib1.5.9.7.jar":                "1.5.9.7",
+		"ProtocolLib.jar":                  "",
+		"squaremap-paper-mc1.19-1.1.5.jar": "1.1.5",
+	}
+
+	for filename, expected := range tests {
+		if got := minecraftVersionFromFilename(filename); got != expected {
+			t.Fatalf("expected version %q for %s, got %q", expected, filename, got)
+		}
+	}
+}
+
+func TestMinecraftProjectMatchesFilename(t *testing.T) {
+	candidates := minecraftProjectNameCandidates("ViaBackwards-4.3.0.jar")
+	if !minecraftProjectMatchesFilename(modrinth.Project{Slug: "viabackwards", Title: "ViaBackwards"}, candidates) {
+		t.Fatal("expected ViaBackwards to match filename candidates")
+	}
+	if minecraftProjectMatchesFilename(modrinth.Project{Slug: "viaversion", Title: "ViaVersion"}, candidates) {
+		t.Fatal("did not expect ViaVersion to match ViaBackwards filename candidates")
+	}
+}

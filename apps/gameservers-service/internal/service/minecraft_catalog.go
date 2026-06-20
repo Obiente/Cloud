@@ -697,8 +697,9 @@ func (s *Service) discoverMinecraftInstallMetadata(ctx context.Context, installD
 	if err != nil {
 		if !errors.Is(err, modrinth.ErrNotFound) {
 			logger.Warn("[MinecraftCatalog] Failed to identify installed file %s by hash: %v", filename, err)
+			return minecraftInstallMetadataEntry{}, false
 		}
-		return minecraftInstallMetadataEntry{}, false
+		return s.discoverMinecraftInstallMetadataByFilename(ctx, installRelDir, filename, projectType, sha1sum)
 	}
 	if version == nil || version.ProjectID == "" || version.ID == "" {
 		return minecraftInstallMetadataEntry{}, false
@@ -757,6 +758,113 @@ func (s *Service) discoverMinecraftInstallMetadata(ctx context.Context, installD
 	return entry, true
 }
 
+func (s *Service) discoverMinecraftInstallMetadataByFilename(ctx context.Context, installRelDir, filename string, projectType gameserversv1.MinecraftProjectType, sha1sum string) (minecraftInstallMetadataEntry, bool) {
+	candidates := minecraftProjectNameCandidates(filename)
+	if len(candidates) == 0 {
+		return minecraftInstallMetadataEntry{}, false
+	}
+
+	var project *modrinth.Project
+	for _, candidate := range candidates {
+		result, err := s.modClient.SearchProjects(ctx, modrinth.SearchParams{
+			Query:       candidate,
+			Limit:       5,
+			ProjectType: projectTypeToModrinth(projectType),
+		})
+		if err != nil {
+			logger.Warn("[MinecraftCatalog] Failed to search project for installed file %s using %q: %v", filename, candidate, err)
+			continue
+		}
+		for _, found := range result.Projects {
+			if !minecraftProjectMatchesFilename(found, candidates) {
+				continue
+			}
+			projectCopy := found
+			project = &projectCopy
+			break
+		}
+		if project != nil {
+			break
+		}
+	}
+	if project == nil || project.ID == "" {
+		return minecraftInstallMetadataEntry{}, false
+	}
+
+	version := s.detectInstalledProjectVersion(ctx, project.ID, filename)
+	if version == nil {
+		version = &modrinth.Version{
+			ID:             "detected:" + filename,
+			ProjectID:      project.ID,
+			VersionNumber:  minecraftVersionFromFilename(filename),
+			ServerSide:     "required",
+			GameVersions:   project.GameVersions,
+			Loaders:        project.Loaders,
+			DatePublished:  time.Now().UTC(),
+			PrimaryFileURL: "",
+		}
+	}
+	if version.ProjectID == "" {
+		version.ProjectID = project.ID
+	}
+	if version.VersionNumber == "" {
+		version.VersionNumber = minecraftVersionFromFilename(filename)
+	}
+
+	size := int64(0)
+	file := matchingVersionFile(version.Files, sha1sum, "sha1", filename)
+	if file != nil {
+		size = file.Size
+	}
+	hashes := map[string]string{"sha1": sha1sum}
+	if file != nil && len(file.Hashes) > 0 {
+		hashes = file.Hashes
+	}
+
+	entry := minecraftInstallMetadataEntry{
+		ProjectID:     project.ID,
+		ProjectSlug:   project.Slug,
+		Title:         firstNonEmpty(project.Title, filename),
+		IconURL:       project.IconURL,
+		ProjectType:   projectType,
+		VersionID:     version.ID,
+		VersionNumber: version.VersionNumber,
+		GameVersions:  firstNonEmptyStrings(version.GameVersions, project.GameVersions),
+		Loaders:       firstNonEmptyStrings(version.Loaders, project.Loaders),
+		Filename:      filename,
+		InstalledPath: filepath.Join(installRelDir, filename),
+		SizeBytes:     size,
+		Hashes:        hashes,
+		InstalledAt:   time.Now().UTC(),
+	}
+	logger.Info("[MinecraftCatalog] Matched existing installed file %s to Modrinth project %s by filename", filename, entry.ProjectID)
+	return entry, true
+}
+
+func (s *Service) detectInstalledProjectVersion(ctx context.Context, projectID, filename string) *modrinth.Version {
+	versions, err := s.modClient.GetProjectVersions(ctx, projectID, modrinth.VersionFilter{Limit: 100})
+	if err != nil {
+		logger.Warn("[MinecraftCatalog] Failed to inspect versions for detected file %s: %v", filename, err)
+		return nil
+	}
+
+	installedVersion := minecraftVersionFromFilename(filename)
+	for _, version := range versions {
+		if strings.EqualFold(version.ServerSide, "unsupported") {
+			continue
+		}
+		if file := matchingVersionFile(version.Files, "", "", filename); file != nil && strings.EqualFold(file.Filename, filename) {
+			versionCopy := version
+			return &versionCopy
+		}
+		if installedVersion != "" && strings.EqualFold(version.VersionNumber, installedVersion) {
+			versionCopy := version
+			return &versionCopy
+		}
+	}
+	return nil
+}
+
 func installedFileToProto(installRelDir, filename string, info os.FileInfo, projectType gameserversv1.MinecraftProjectType, meta minecraftInstallMetadataEntry, managed bool) *gameserversv1.InstalledMinecraftProjectFile {
 	relPath := filepath.Join(installRelDir, filename)
 	modifiedAt := timestamppb.New(info.ModTime())
@@ -789,9 +897,11 @@ func installedFileToProto(installRelDir, filename string, info os.FileInfo, proj
 }
 
 func matchingVersionFile(files []modrinth.VersionFile, expectedHash, algorithm, filename string) *modrinth.VersionFile {
-	for i := range files {
-		if strings.EqualFold(files[i].Hashes[algorithm], expectedHash) {
-			return &files[i]
+	if expectedHash != "" && algorithm != "" {
+		for i := range files {
+			if strings.EqualFold(files[i].Hashes[algorithm], expectedHash) {
+				return &files[i]
+			}
 		}
 	}
 	for i := range files {
@@ -800,6 +910,179 @@ func matchingVersionFile(files []modrinth.VersionFile, expectedHash, algorithm, 
 		}
 	}
 	return selectDownloadFile(files)
+}
+
+func minecraftProjectMatchesFilename(project modrinth.Project, candidates []string) bool {
+	keys := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if key := minecraftProjectKey(candidate); key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	for _, value := range []string{project.Slug, project.Title} {
+		if _, ok := keys[minecraftProjectKey(value)]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func minecraftProjectNameCandidates(filename string) []string {
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+	name = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(name, "_", "-"), " ", "-"))
+	if name == "" {
+		return nil
+	}
+
+	parts := strings.Split(name, "-")
+	for len(parts) > 1 && removableMinecraftFilenameToken(parts[len(parts)-1]) {
+		parts = parts[:len(parts)-1]
+	}
+	if len(parts) > 1 && minecraftLoaderToken(parts[len(parts)-1]) {
+		parts = parts[:len(parts)-1]
+	}
+
+	base := strings.Join(parts, "-")
+	base = stripInlineMinecraftVersionSuffix(base)
+	compact := strings.ReplaceAll(base, "-", "")
+
+	return dedupePreserveStrings([]string{
+		base,
+		compact,
+		strings.TrimSpace(parts[0]),
+	})
+}
+
+func minecraftVersionFromFilename(filename string) string {
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+	name = strings.ReplaceAll(strings.ReplaceAll(name, "_", "-"), " ", "-")
+	parts := strings.Split(name, "-")
+	for i := len(parts) - 1; i >= 0; i-- {
+		token := strings.TrimSpace(parts[i])
+		if minecraftVersionToken(token) {
+			return strings.TrimPrefix(strings.ToLower(token), "v")
+		}
+	}
+
+	suffix := trailingMinecraftVersion(name)
+	return strings.TrimPrefix(strings.ToLower(suffix), "v")
+}
+
+func removableMinecraftFilenameToken(token string) bool {
+	token = strings.Trim(strings.ToLower(token), ". ")
+	return token == "snapshot" ||
+		token == "dist" ||
+		token == "build" ||
+		allDigits(token) ||
+		minecraftLoaderToken(token) ||
+		minecraftVersionToken(token) ||
+		strings.HasPrefix(token, "build-") ||
+		strings.HasPrefix(token, "b") && allDigits(token[1:]) ||
+		strings.HasPrefix(token, "mc") && minecraftVersionToken(strings.TrimPrefix(token, "mc")) ||
+		strings.HasPrefix(token, "java") && allDigits(strings.TrimPrefix(token, "java"))
+}
+
+func minecraftLoaderToken(token string) bool {
+	switch strings.ToLower(strings.TrimSpace(token)) {
+	case "bukkit", "spigot", "paper", "purpur", "folia", "forge", "fabric", "quilt", "neoforge", "velocity", "waterfall":
+		return true
+	default:
+		return false
+	}
+}
+
+func stripInlineMinecraftVersionSuffix(value string) string {
+	suffix := trailingMinecraftVersion(value)
+	if suffix == "" {
+		return value
+	}
+	return strings.TrimRight(strings.TrimSuffix(value, suffix), "-_. ")
+}
+
+func trailingMinecraftVersion(value string) string {
+	end := len(value)
+	for end > 0 {
+		ch := value[end-1]
+		if (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == '_' || ch == '+' || ch == 'v' || ch == 'V' {
+			end--
+			continue
+		}
+		break
+	}
+	suffix := strings.Trim(value[end:], "-_. ")
+	if minecraftVersionToken(suffix) {
+		return suffix
+	}
+	return ""
+}
+
+func minecraftVersionToken(token string) bool {
+	token = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(token)), "v")
+	if token == "" {
+		return false
+	}
+	digitCount := 0
+	hasSeparator := false
+	for _, ch := range token {
+		switch {
+		case ch >= '0' && ch <= '9':
+			digitCount++
+		case ch == '.' || ch == '-' || ch == '_' || ch == '+':
+			hasSeparator = true
+		default:
+			return false
+		}
+	}
+	return digitCount > 0 && hasSeparator
+}
+
+func minecraftProjectKey(value string) string {
+	var builder strings.Builder
+	for _, ch := range strings.ToLower(value) {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+			builder.WriteRune(ch)
+		}
+	}
+	return builder.String()
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func firstNonEmptyStrings(values ...[]string) []string {
+	for _, value := range values {
+		if len(value) > 0 {
+			return value
+		}
+	}
+	return nil
+}
+
+func dedupePreserveStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		key := strings.ToLower(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, serverType string, projectType gameserversv1.MinecraftProjectType, serverVersion string) *modrinth.Version {
