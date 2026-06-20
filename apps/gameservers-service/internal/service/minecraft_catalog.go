@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -195,6 +196,7 @@ func (s *Service) ListInstalledMinecraftProjects(ctx context.Context, req *conne
 
 	serverVersion := minecraftServerVersion(dbGameServer.ServerVersion, env)
 	files := make([]*gameserversv1.InstalledMinecraftProjectFile, 0, len(entries))
+	metadataDirty := false
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
 			continue
@@ -207,6 +209,15 @@ func (s *Service) ListInstalledMinecraftProjects(ctx context.Context, req *conne
 		}
 
 		meta, managed := metadata.Files[entry.Name()]
+		if req.Msg.GetCheckUpdates() && !managed {
+			discoveredMeta, ok := s.discoverMinecraftInstallMetadata(ctx, installDir, profile.InstallDir, entry.Name(), projectType)
+			if ok {
+				meta = discoveredMeta
+				managed = true
+				metadata.Files[entry.Name()] = discoveredMeta
+				metadataDirty = true
+			}
+		}
 		file := installedFileToProto(profile.InstallDir, entry.Name(), info, projectType, meta, managed)
 		if req.Msg.GetCheckUpdates() && managed && meta.ProjectID != "" && meta.VersionID != "" {
 			if latest := s.latestCompatibleVersion(ctx, meta.ProjectID, serverType, projectType, serverVersion); latest != nil && latest.ID != meta.VersionID {
@@ -217,6 +228,11 @@ func (s *Service) ListInstalledMinecraftProjects(ctx context.Context, req *conne
 			}
 		}
 		files = append(files, file)
+	}
+	if metadataDirty {
+		if err := saveMinecraftInstallMetadata(installDir, metadata); err != nil {
+			logger.Warn("[MinecraftCatalog] Failed to persist discovered install metadata for %s: %v", dbGameServer.ID, err)
+		}
 	}
 
 	return connect.NewResponse(&gameserversv1.ListInstalledMinecraftProjectsResponse{
@@ -669,6 +685,78 @@ func (s *Service) upsertMinecraftInstallMetadata(installDir, filename, installed
 	return saveMinecraftInstallMetadata(installDir, metadata)
 }
 
+func (s *Service) discoverMinecraftInstallMetadata(ctx context.Context, installDir, installRelDir, filename string, projectType gameserversv1.MinecraftProjectType) (minecraftInstallMetadataEntry, bool) {
+	absPath := filepath.Join(installDir, filename)
+	sha1sum, err := fileHash(absPath, sha1.New())
+	if err != nil {
+		logger.Warn("[MinecraftCatalog] Failed to hash installed file %s: %v", filename, err)
+		return minecraftInstallMetadataEntry{}, false
+	}
+
+	version, err := s.modClient.GetVersionByFileHash(ctx, sha1sum, "sha1")
+	if err != nil {
+		if !errors.Is(err, modrinth.ErrNotFound) {
+			logger.Warn("[MinecraftCatalog] Failed to identify installed file %s by hash: %v", filename, err)
+		}
+		return minecraftInstallMetadataEntry{}, false
+	}
+	if version == nil || version.ProjectID == "" || version.ID == "" {
+		return minecraftInstallMetadataEntry{}, false
+	}
+
+	var project *modrinth.Project
+	if fetched, err := s.modClient.GetProject(ctx, version.ProjectID); err == nil {
+		project = fetched
+		if modrinthTypeToProto(project.ProjectType) != projectType {
+			return minecraftInstallMetadataEntry{}, false
+		}
+	} else {
+		logger.Warn("[MinecraftCatalog] Failed to fetch project metadata for discovered file %s: %v", filename, err)
+	}
+
+	file := matchingVersionFile(version.Files, sha1sum, "sha1", filename)
+	hashes := map[string]string{"sha1": sha1sum}
+	size := int64(0)
+	if file != nil {
+		size = file.Size
+		if len(file.Hashes) > 0 {
+			hashes = file.Hashes
+		}
+	}
+	info, err := os.Stat(absPath)
+	if err == nil && size == 0 {
+		size = info.Size()
+	}
+
+	title := filename
+	slug := ""
+	iconURL := ""
+	if project != nil {
+		title = firstNonEmpty(project.Title, filename)
+		slug = project.Slug
+		iconURL = project.IconURL
+	}
+
+	entry := minecraftInstallMetadataEntry{
+		ProjectID:     version.ProjectID,
+		ProjectSlug:   slug,
+		Title:         title,
+		IconURL:       iconURL,
+		ProjectType:   projectType,
+		VersionID:     version.ID,
+		VersionNumber: version.VersionNumber,
+		GameVersions:  version.GameVersions,
+		Loaders:       version.Loaders,
+		Filename:      filename,
+		InstalledPath: filepath.Join(installRelDir, filename),
+		SizeBytes:     size,
+		Hashes:        hashes,
+		InstalledAt:   time.Now().UTC(),
+	}
+	logger.Info("[MinecraftCatalog] Matched existing installed file %s to Modrinth project %s version %s", filename, entry.ProjectID, entry.VersionID)
+	return entry, true
+}
+
 func installedFileToProto(installRelDir, filename string, info os.FileInfo, projectType gameserversv1.MinecraftProjectType, meta minecraftInstallMetadataEntry, managed bool) *gameserversv1.InstalledMinecraftProjectFile {
 	relPath := filepath.Join(installRelDir, filename)
 	modifiedAt := timestamppb.New(info.ModTime())
@@ -698,6 +786,20 @@ func installedFileToProto(installRelDir, filename string, info os.FileInfo, proj
 		}
 	}
 	return file
+}
+
+func matchingVersionFile(files []modrinth.VersionFile, expectedHash, algorithm, filename string) *modrinth.VersionFile {
+	for i := range files {
+		if strings.EqualFold(files[i].Hashes[algorithm], expectedHash) {
+			return &files[i]
+		}
+	}
+	for i := range files {
+		if strings.EqualFold(files[i].Filename, filename) {
+			return &files[i]
+		}
+	}
+	return selectDownloadFile(files)
 }
 
 func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, serverType string, projectType gameserversv1.MinecraftProjectType, serverVersion string) *modrinth.Version {
@@ -1107,6 +1209,19 @@ func downloadAndVerify(ctx context.Context, url string, dest string, hashes map[
 	}
 
 	return os.Chmod(dest, 0o644)
+}
+
+func fileHash(path string, hasher hash.Hash) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
 func verifyHash(name string, hasher hash.Hash, expected string) error {
