@@ -151,6 +151,9 @@ service GameServerService {
   // Minecraft content catalog (Modrinth integration)
   rpc ListMinecraftProjects(ListMinecraftProjectsRequest) returns (ListMinecraftProjectsResponse);
 
+  // List mods/plugins currently present in the server data volume
+  rpc ListInstalledMinecraftProjects(ListInstalledMinecraftProjectsRequest) returns (ListInstalledMinecraftProjectsResponse);
+
   // Retrieve available versions/files for a specific project
   rpc GetMinecraftProjectVersions(GetMinecraftProjectVersionsRequest) returns (GetMinecraftProjectVersionsResponse);
 
@@ -158,6 +161,9 @@ service GameServerService {
 
   // Download and install a Minecraft mod/plugin directly onto the server
   rpc InstallMinecraftProjectFile(InstallMinecraftProjectFileRequest) returns (InstallMinecraftProjectFileResponse);
+
+  // Download a newer version and replace the previously managed mod/plugin jar
+  rpc UpdateMinecraftProjectFile(UpdateMinecraftProjectFileRequest) returns (UpdateMinecraftProjectFileResponse);
 }
 
 // Request/Response messages
@@ -789,6 +795,39 @@ message ListMinecraftProjectsResponse {
   optional string next_cursor = 3;
 }
 
+message InstalledMinecraftProjectFile {
+  string id = 1;
+  string filename = 2;
+  string installed_path = 3;
+  MinecraftProjectType project_type = 4;
+  int64 size_bytes = 5;
+  optional google.protobuf.Timestamp modified_at = 6;
+  bool managed = 7;
+  optional string project_id = 8;
+  optional string project_slug = 9;
+  optional string title = 10;
+  optional string icon_url = 11;
+  optional string version_id = 12;
+  optional string version_number = 13;
+  repeated string game_versions = 14;
+  repeated string loaders = 15;
+  optional google.protobuf.Timestamp installed_at = 16;
+  bool update_available = 17;
+  optional string latest_version_id = 18;
+  optional string latest_version_number = 19;
+  repeated string latest_game_versions = 20;
+}
+
+message ListInstalledMinecraftProjectsRequest {
+  string game_server_id = 1;
+  MinecraftProjectType project_type = 2;
+  optional bool check_updates = 3;
+}
+
+message ListInstalledMinecraftProjectsResponse {
+  repeated InstalledMinecraftProjectFile files = 1;
+}
+
 message MinecraftProjectFile {
   string filename = 1;
   string url = 2;
@@ -837,6 +876,9 @@ message InstallMinecraftProjectFileRequest {
   string project_id = 2;
   string version_id = 3;
   MinecraftProjectType project_type = 4;
+  optional string project_title = 5;
+  optional string project_slug = 6;
+  optional string project_icon_url = 7;
 }
 
 message InstallMinecraftProjectFileResponse {
@@ -845,4 +887,24 @@ message InstallMinecraftProjectFileResponse {
   string installed_path = 3;
   bool restart_required = 4;
   optional string message = 5;
+}
+
+message UpdateMinecraftProjectFileRequest {
+  string game_server_id = 1;
+  string project_id = 2;
+  string version_id = 3;
+  MinecraftProjectType project_type = 4;
+  string current_filename = 5;
+  optional string project_title = 6;
+  optional string project_slug = 7;
+  optional string project_icon_url = 8;
+}
+
+message UpdateMinecraftProjectFileResponse {
+  bool success = 1;
+  string filename = 2;
+  string installed_path = 3;
+  optional string replaced_filename = 4;
+  bool restart_required = 5;
+  optional string message = 6;
 }

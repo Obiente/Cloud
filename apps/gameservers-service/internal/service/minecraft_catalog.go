@@ -32,12 +32,34 @@ const (
 	defaultDataVolumePrefix = "/var/lib/obiente/volumes"
 	minecraftModsDir        = "/mods"
 	minecraftPluginsDir     = "/plugins"
+	minecraftMetadataFile   = ".obiente-minecraft-projects.json"
 	maxSearchLimit          = 50
 	maxVersionLimit         = 200 // Increased to allow fetching more versions
 )
 
 var downloadHTTPClient = &http.Client{
 	Timeout: 4 * time.Minute,
+}
+
+type minecraftInstallMetadata struct {
+	Files map[string]minecraftInstallMetadataEntry `json:"files"`
+}
+
+type minecraftInstallMetadataEntry struct {
+	ProjectID     string                             `json:"project_id"`
+	ProjectSlug   string                             `json:"project_slug,omitempty"`
+	Title         string                             `json:"title,omitempty"`
+	IconURL       string                             `json:"icon_url,omitempty"`
+	ProjectType   gameserversv1.MinecraftProjectType `json:"project_type"`
+	VersionID     string                             `json:"version_id"`
+	VersionNumber string                             `json:"version_number"`
+	GameVersions  []string                           `json:"game_versions,omitempty"`
+	Loaders       []string                           `json:"loaders,omitempty"`
+	Filename      string                             `json:"filename"`
+	InstalledPath string                             `json:"installed_path"`
+	SizeBytes     int64                              `json:"size_bytes,omitempty"`
+	Hashes        map[string]string                  `json:"hashes,omitempty"`
+	InstalledAt   time.Time                          `json:"installed_at"`
 }
 
 // ListMinecraftProjects integrates with Modrinth to surface mods/plugins.
@@ -127,6 +149,81 @@ func (s *Service) ListMinecraftProjects(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(resp), nil
 }
 
+// ListInstalledMinecraftProjects scans the server data volume for managed and unmanaged mod/plugin jars.
+func (s *Service) ListInstalledMinecraftProjects(ctx context.Context, req *connect.Request[gameserversv1.ListInstalledMinecraftProjectsRequest]) (*connect.Response[gameserversv1.ListInstalledMinecraftProjectsResponse], error) {
+	gameServerID := strings.TrimSpace(req.Msg.GetGameServerId())
+	if gameServerID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
+	}
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersRead); err != nil {
+		return nil, err
+	}
+
+	dbGameServer, err := s.repo.GetByID(ctx, gameServerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
+	}
+
+	env := parseEnvVars(dbGameServer.EnvVars)
+	serverType := strings.ToUpper(env["TYPE"])
+	projectType := req.Msg.GetProjectType()
+	if projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED {
+		projectType = defaultProjectType(serverType)
+		if projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED {
+			projectType = gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_MOD
+		}
+	}
+
+	_, installDir, profile, err := s.resolveMinecraftInstallDirectory(ctx, dbGameServer.ID, serverType, projectType)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	metadata, err := loadMinecraftInstallMetadata(installDir)
+	if err != nil {
+		logger.Warn("[MinecraftCatalog] Failed to load install metadata for %s: %v", dbGameServer.ID, err)
+		metadata = newMinecraftInstallMetadata()
+	}
+
+	entries, err := os.ReadDir(installDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return connect.NewResponse(&gameserversv1.ListInstalledMinecraftProjectsResponse{}), nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to scan %s: %w", profile.Description, err))
+	}
+
+	serverVersion := minecraftServerVersion(dbGameServer.ServerVersion, env)
+	files := make([]*gameserversv1.InstalledMinecraftProjectFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			logger.Warn("[MinecraftCatalog] Failed to stat installed file %s: %v", entry.Name(), err)
+			continue
+		}
+
+		meta, managed := metadata.Files[entry.Name()]
+		file := installedFileToProto(profile.InstallDir, entry.Name(), info, projectType, meta, managed)
+		if req.Msg.GetCheckUpdates() && managed && meta.ProjectID != "" && meta.VersionID != "" {
+			if latest := s.latestCompatibleVersion(ctx, meta.ProjectID, serverType, projectType, serverVersion); latest != nil && latest.ID != meta.VersionID {
+				file.UpdateAvailable = true
+				file.LatestVersionId = proto.String(latest.ID)
+				file.LatestVersionNumber = proto.String(latest.VersionNumber)
+				file.LatestGameVersions = latest.GameVersions
+			}
+		}
+		files = append(files, file)
+	}
+
+	return connect.NewResponse(&gameserversv1.ListInstalledMinecraftProjectsResponse{
+		Files: files,
+	}), nil
+}
+
 // GetMinecraftProjectVersions exposes version metadata for a project.
 func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.Request[gameserversv1.GetMinecraftProjectVersionsRequest]) (*connect.Response[gameserversv1.GetMinecraftProjectVersionsResponse], error) {
 	gameServerID := strings.TrimSpace(req.Msg.GetGameServerId())
@@ -157,26 +254,25 @@ func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.
 	if limit <= 0 || limit > maxVersionLimit {
 		limit = 100 // Increased default limit to show more versions
 	}
-	
-	// If limit is very high (>= 50) OR it's a plugin (plugins don't use loaders), don't auto-fill filters
-	// This allows the frontend to request all versions without strict filtering
-	skipAutoFill := limit >= 50 || projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN
+
+	// High-limit requests are used by broad pickers. Plugins should still support
+	// explicit game-version filters, but never get loader auto-filled.
+	skipAutoFill := limit >= 50
+	isPlugin := projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN
 
 	loaders := dedupeStrings(req.Msg.GetLoaders())
-	// Plugins don't use loaders, so don't filter by loader for plugins
-	if len(loaders) == 0 && !skipAutoFill {
+	if isPlugin {
+		loaders = nil
+	} else if len(loaders) == 0 && !skipAutoFill {
 		if inferred := loaderFromServerType(serverType); inferred != "" {
 			loaders = []string{inferred}
 		}
 	}
 
 	gameVersions := dedupeStrings(req.Msg.GetGameVersions())
-	// For plugins or when limit is high, don't auto-fill game version filter
 	if len(gameVersions) == 0 && !skipAutoFill {
-		if dbGameServer.ServerVersion != nil && *dbGameServer.ServerVersion != "" {
-			gameVersions = []string{normalizeVersionString(*dbGameServer.ServerVersion)}
-		} else if v := env["VERSION"]; v != "" {
-			gameVersions = []string{normalizeVersionString(v)}
+		if version := minecraftServerVersion(dbGameServer.ServerVersion, env); version != "" {
+			gameVersions = []string{version}
 		}
 	}
 
@@ -296,16 +392,9 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable files"))
 	}
 
-	dataPath, err := s.resolveGameServerVolume(ctx, dbGameServer.ID)
+	dataPath, installDir, _, err := s.resolveMinecraftInstallDirectory(ctx, dbGameServer.ID, serverType, projectType)
 	if err != nil {
-		logger.Warn("[MinecraftCatalog] Falling back to default data path for %s: %v", dbGameServer.ID, err)
-	}
-	if dataPath == "" {
-		dataPath = filepath.Join(defaultDataVolumePrefix, fmt.Sprintf("gameserver-%s-data", dbGameServer.ID))
-	}
-
-	if err := os.MkdirAll(dataPath, 0o755); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to prepare data path: %w", err))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 
 	targetRelPath := filepath.Join(profile.InstallDir, file.Filename)
@@ -314,12 +403,11 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid target path: %w", err))
 	}
 
-	if err := os.MkdirAll(filepath.Dir(targetAbsPath), 0o755); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to prepare directory: %w", err))
-	}
-
 	if err := downloadAndVerify(ctx, file.URL, targetAbsPath, file.Hashes); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to download file: %w", err))
+	}
+	if err := s.upsertMinecraftInstallMetadata(installDir, file.Filename, targetRelPath, projectType, req.Msg.GetProjectId(), req.Msg.GetProjectTitle(), req.Msg.GetProjectSlug(), req.Msg.GetProjectIconUrl(), version, file); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to record installation: %w", err))
 	}
 
 	logger.Info("[MinecraftCatalog] Installed %s (%s) to %s", file.Filename, profile.Description, targetAbsPath)
@@ -334,7 +422,332 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 	return connect.NewResponse(resp), nil
 }
 
+// UpdateMinecraftProjectFile installs the requested version and removes the replaced managed file.
+func (s *Service) UpdateMinecraftProjectFile(ctx context.Context, req *connect.Request[gameserversv1.UpdateMinecraftProjectFileRequest]) (*connect.Response[gameserversv1.UpdateMinecraftProjectFileResponse], error) {
+	gameServerID := strings.TrimSpace(req.Msg.GetGameServerId())
+	if gameServerID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game_server_id is required"))
+	}
+	if req.Msg.GetProjectId() == "" || req.Msg.GetVersionId() == "" || strings.TrimSpace(req.Msg.GetCurrentFilename()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("project_id, version_id, and current_filename are required"))
+	}
+	if err := s.checkGameServerPermission(ctx, gameServerID, auth.PermissionGameServersUpdate); err != nil {
+		return nil, err
+	}
+
+	dbGameServer, err := s.repo.GetByID(ctx, gameServerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
+	}
+
+	env := parseEnvVars(dbGameServer.EnvVars)
+	serverType := strings.ToUpper(env["TYPE"])
+	projectType := req.Msg.GetProjectType()
+	if projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED {
+		projectType = defaultProjectType(serverType)
+		if projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED {
+			projectType = gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_MOD
+		}
+	}
+
+	profile, err := buildInstallProfile(serverType, projectType)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	currentFilename := filepath.Base(strings.TrimSpace(req.Msg.GetCurrentFilename()))
+	if currentFilename != strings.TrimSpace(req.Msg.GetCurrentFilename()) || !strings.HasSuffix(strings.ToLower(currentFilename), ".jar") {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid current_filename"))
+	}
+
+	version, err := s.modClient.GetVersion(ctx, req.Msg.GetVersionId())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch version: %w", err))
+	}
+	if !strings.EqualFold(version.ProjectID, req.Msg.GetProjectId()) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version does not belong to project"))
+	}
+	if strings.EqualFold(version.ServerSide, "unsupported") {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("selected version is not server-compatible"))
+	}
+
+	file := selectDownloadFile(version.Files)
+	if file == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable files"))
+	}
+
+	dataPath, installDir, _, err := s.resolveMinecraftInstallDirectory(ctx, dbGameServer.ID, serverType, projectType)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	metadata, err := loadMinecraftInstallMetadata(installDir)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to read install metadata: %w", err))
+	}
+	currentMeta, ok := metadata.Files[currentFilename]
+	if !ok || currentMeta.ProjectID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("only managed files can be updated"))
+	}
+	if !strings.EqualFold(currentMeta.ProjectID, req.Msg.GetProjectId()) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("current file belongs to a different project"))
+	}
+
+	targetRelPath := filepath.Join(profile.InstallDir, file.Filename)
+	targetAbsPath, err := resolveWithinVolume(dataPath, targetRelPath)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid target path: %w", err))
+	}
+
+	if err := downloadAndVerify(ctx, file.URL, targetAbsPath, file.Hashes); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to download file: %w", err))
+	}
+	if err := s.upsertMinecraftInstallMetadata(installDir, file.Filename, targetRelPath, projectType, req.Msg.GetProjectId(), req.Msg.GetProjectTitle(), req.Msg.GetProjectSlug(), req.Msg.GetProjectIconUrl(), version, file); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to record installation: %w", err))
+	}
+	if currentFilename != file.Filename {
+		metadata, err = loadMinecraftInstallMetadata(installDir)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read updated install metadata: %w", err))
+		}
+		delete(metadata.Files, currentFilename)
+		if err := saveMinecraftInstallMetadata(installDir, metadata); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update install metadata: %w", err))
+		}
+		currentRelPath := filepath.Join(profile.InstallDir, currentFilename)
+		currentAbsPath, err := resolveWithinVolume(dataPath, currentRelPath)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid current path: %w", err))
+		}
+		if err := os.Remove(currentAbsPath); err != nil && !os.IsNotExist(err) {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to remove replaced file: %w", err))
+		}
+	}
+
+	logger.Info("[MinecraftCatalog] Updated %s to %s (%s)", currentFilename, file.Filename, profile.Description)
+
+	return connect.NewResponse(&gameserversv1.UpdateMinecraftProjectFileResponse{
+		Success:          true,
+		Filename:         file.Filename,
+		InstalledPath:    targetRelPath,
+		ReplacedFilename: proto.String(currentFilename),
+		RestartRequired:  true,
+		Message:          proto.String("File updated. Restart the server to apply changes."),
+	}), nil
+}
+
 // --- helpers ---
+
+func (s *Service) resolveMinecraftInstallDirectory(ctx context.Context, gameServerID, serverType string, projectType gameserversv1.MinecraftProjectType) (string, string, *installProfile, error) {
+	profile, err := buildInstallProfile(serverType, projectType)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	dataPath, err := s.resolveGameServerVolume(ctx, gameServerID)
+	if err != nil {
+		logger.Warn("[MinecraftCatalog] Falling back to default data path for %s: %v", gameServerID, err)
+	}
+	if dataPath == "" {
+		dataPath = filepath.Join(defaultDataVolumePrefix, fmt.Sprintf("gameserver-%s-data", gameServerID))
+	}
+
+	if err := os.MkdirAll(dataPath, 0o755); err != nil {
+		return "", "", nil, fmt.Errorf("failed to prepare data path: %w", err)
+	}
+
+	installDir, err := resolveWithinVolume(dataPath, profile.InstallDir)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("invalid install path: %w", err)
+	}
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return "", "", nil, fmt.Errorf("failed to prepare %s: %w", profile.Description, err)
+	}
+	return dataPath, installDir, profile, nil
+}
+
+func newMinecraftInstallMetadata() *minecraftInstallMetadata {
+	return &minecraftInstallMetadata{
+		Files: make(map[string]minecraftInstallMetadataEntry),
+	}
+}
+
+func loadMinecraftInstallMetadata(installDir string) (*minecraftInstallMetadata, error) {
+	path := filepath.Join(installDir, minecraftMetadataFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return newMinecraftInstallMetadata(), nil
+		}
+		return nil, err
+	}
+
+	var metadata minecraftInstallMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+	if metadata.Files == nil {
+		metadata.Files = make(map[string]minecraftInstallMetadataEntry)
+	}
+	return &metadata, nil
+}
+
+func saveMinecraftInstallMetadata(installDir string, metadata *minecraftInstallMetadata) error {
+	if metadata == nil {
+		metadata = newMinecraftInstallMetadata()
+	}
+	if metadata.Files == nil {
+		metadata.Files = make(map[string]minecraftInstallMetadataEntry)
+	}
+
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(installDir, minecraftMetadataFile)
+	tmp, err := os.CreateTemp(installDir, ".metadata-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString("\n"); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o644)
+}
+
+func (s *Service) upsertMinecraftInstallMetadata(installDir, filename, installedPath string, projectType gameserversv1.MinecraftProjectType, projectID, title, slug, iconURL string, version *modrinth.Version, file *modrinth.VersionFile) error {
+	metadata, err := loadMinecraftInstallMetadata(installDir)
+	if err != nil {
+		return err
+	}
+	if metadata.Files == nil {
+		metadata.Files = make(map[string]minecraftInstallMetadataEntry)
+	}
+
+	size := int64(0)
+	if file != nil {
+		size = file.Size
+	}
+	entry := minecraftInstallMetadataEntry{
+		ProjectID:     projectID,
+		ProjectSlug:   slug,
+		Title:         title,
+		IconURL:       iconURL,
+		ProjectType:   projectType,
+		VersionID:     version.ID,
+		VersionNumber: version.VersionNumber,
+		GameVersions:  version.GameVersions,
+		Loaders:       version.Loaders,
+		Filename:      filename,
+		InstalledPath: installedPath,
+		SizeBytes:     size,
+		InstalledAt:   time.Now().UTC(),
+	}
+	if file != nil && len(file.Hashes) > 0 {
+		entry.Hashes = file.Hashes
+	}
+
+	if existing, ok := metadata.Files[filename]; ok && !existing.InstalledAt.IsZero() {
+		entry.InstalledAt = existing.InstalledAt
+	}
+	metadata.Files[filename] = entry
+	return saveMinecraftInstallMetadata(installDir, metadata)
+}
+
+func installedFileToProto(installRelDir, filename string, info os.FileInfo, projectType gameserversv1.MinecraftProjectType, meta minecraftInstallMetadataEntry, managed bool) *gameserversv1.InstalledMinecraftProjectFile {
+	relPath := filepath.Join(installRelDir, filename)
+	modifiedAt := timestamppb.New(info.ModTime())
+	file := &gameserversv1.InstalledMinecraftProjectFile{
+		Id:            filename,
+		Filename:      filename,
+		InstalledPath: relPath,
+		ProjectType:   projectType,
+		SizeBytes:     info.Size(),
+		ModifiedAt:    modifiedAt,
+		Managed:       managed,
+		Title:         proto.String(filename),
+	}
+
+	if managed {
+		file.Id = meta.ProjectID
+		file.ProjectId = proto.String(meta.ProjectID)
+		file.ProjectSlug = proto.String(meta.ProjectSlug)
+		file.Title = proto.String(firstNonEmpty(meta.Title, filename))
+		file.IconUrl = proto.String(meta.IconURL)
+		file.VersionId = proto.String(meta.VersionID)
+		file.VersionNumber = proto.String(meta.VersionNumber)
+		file.GameVersions = meta.GameVersions
+		file.Loaders = meta.Loaders
+		if !meta.InstalledAt.IsZero() {
+			file.InstalledAt = timestamppb.New(meta.InstalledAt)
+		}
+	}
+	return file
+}
+
+func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, serverType string, projectType gameserversv1.MinecraftProjectType, serverVersion string) *modrinth.Version {
+	filter := modrinth.VersionFilter{
+		Limit: 25,
+	}
+	if serverVersion != "" {
+		filter.GameVersions = []string{serverVersion}
+	}
+	if projectType != gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN {
+		if loader := loaderFromServerType(serverType); loader != "" {
+			filter.Loaders = []string{loader}
+		}
+	}
+
+	versions, err := s.modClient.GetProjectVersions(ctx, projectID, filter)
+	if err != nil {
+		logger.Warn("[MinecraftCatalog] Failed to check updates for %s: %v", projectID, err)
+		return nil
+	}
+	for _, version := range versions {
+		if strings.EqualFold(version.ServerSide, "unsupported") {
+			continue
+		}
+		if selectDownloadFile(version.Files) == nil {
+			continue
+		}
+		return &version
+	}
+	return nil
+}
+
+func minecraftServerVersion(serverVersion *string, env map[string]string) string {
+	if serverVersion != nil && *serverVersion != "" {
+		return normalizeVersionString(*serverVersion)
+	}
+	if v := env["VERSION"]; v != "" {
+		return normalizeVersionString(v)
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
 
 func mapProjectToProto(project modrinth.Project) *gameserversv1.MinecraftProject {
 	proj := &gameserversv1.MinecraftProject{

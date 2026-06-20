@@ -2,6 +2,44 @@
   <OuiStack gap="lg">
     <OuiCard variant="outline" class="border-border-default/60">
       <OuiCardBody class="p-3 space-y-3">
+        <OuiFlex wrap="wrap" gap="sm" align="center" justify="between">
+          <OuiFlex gap="xs" class="rounded-lg border border-border-muted bg-surface-muted/30 p-1">
+            <OuiButton
+              size="sm"
+              :variant="activeView === 'browse' ? 'soft' : 'ghost'"
+              class="gap-2"
+              @click="activeView = 'browse'"
+            >
+              <MagnifyingGlassIcon class="w-4 h-4" />
+              Browse
+            </OuiButton>
+            <OuiButton
+              size="sm"
+              :variant="activeView === 'installed' ? 'soft' : 'ghost'"
+              class="gap-2"
+              @click="activeView = 'installed'"
+            >
+              <FolderIcon class="w-4 h-4" />
+              Installed
+              <OuiBadge v-if="installedFiles.length" size="xs" variant="secondary">
+                {{ installedFiles.length }}
+              </OuiBadge>
+            </OuiButton>
+          </OuiFlex>
+          <OuiButton
+            v-if="activeView === 'installed' && updateableInstalledFiles.length > 0"
+            size="sm"
+            color="primary"
+            class="gap-2"
+            :loading="isBulkUpdating"
+            @click="updateAllAvailable"
+          >
+            <ArrowPathIcon class="w-4 h-4" />
+            Update all
+          </OuiButton>
+        </OuiFlex>
+
+        <template v-if="activeView === 'browse'">
         <!-- Row 1: Search + Type badge -->
         <OuiFlex
           wrap="wrap"
@@ -158,18 +196,48 @@
             Clear
           </OuiButton>
         </OuiFlex>
+        </template>
+
+        <template v-else>
+          <OuiFlex
+            wrap="wrap"
+            gap="md"
+            align="center"
+            class="w-full bg-surface-muted/10 px-4 py-3 rounded-xl border border-border-muted/40"
+          >
+            <OuiBadge size="sm" variant="secondary">
+              <PuzzlePieceIcon v-if="projectType === MinecraftProjectType.PLUGIN" class="w-3.5 h-3.5" />
+              <CubeIcon v-else class="w-3.5 h-3.5" />
+              {{ projectTypeLabel }}
+            </OuiBadge>
+            <OuiText size="sm" color="tertiary">
+              {{ installedFiles.length }} installed, {{ updateableInstalledFiles.length }} updateable
+            </OuiText>
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              class="gap-1 whitespace-nowrap ml-auto"
+              :loading="isInstalledLoading"
+              @click="loadInstalledFiles"
+            >
+              <ArrowPathIcon class="w-3.5 h-3.5" :class="{ 'animate-spin': isInstalledLoading }" />
+              Refresh
+            </OuiButton>
+          </OuiFlex>
+        </template>
       </OuiCardBody>
     </OuiCard>
 
     <OuiAlert v-if="errorMessage" variant="error" :title="errorMessage">
       <OuiButton variant="ghost" size="sm" @click="refresh">Try again</OuiButton>
     </OuiAlert>
+    <OuiAlert v-if="installedErrorMessage" variant="error" :title="installedErrorMessage">
+      <OuiButton variant="ghost" size="sm" @click="loadInstalledFiles">Try again</OuiButton>
+    </OuiAlert>
 
-    <OuiStack gap="lg">
-      <OuiGrid :cols="{ sm: 1, md: 2, xl: 3 }"
-       
-       
-       
+    <OuiStack v-if="activeView === 'browse'" gap="lg">
+      <OuiGrid
+        :cols="{ sm: 1, md: 2, xl: 3 }"
         gap="lg"
         :class="[
           'transition-opacity duration-150',
@@ -183,8 +251,8 @@
           class="border-border-muted/70 hover:border-border-default transition"
         >
           <OuiCardBody>
-              <OuiStack gap="md">
-                <OuiFlex gap="md" align="start">
+            <OuiStack gap="md">
+              <OuiFlex gap="md" align="start">
                 <OuiAvatar
                   size="lg"
                   :src="project.iconUrl || undefined"
@@ -203,6 +271,13 @@
                       variant="secondary"
                     >
                       {{ typeLabel }}
+                    </OuiBadge>
+                    <OuiBadge
+                      v-if="getInstalledProject(project)"
+                      size="xs"
+                      :variant="getInstalledProject(project)?.updateAvailable ? 'warning' : 'success'"
+                    >
+                      {{ getInstalledProject(project)?.updateAvailable ? 'Update available' : 'Installed' }}
                     </OuiBadge>
                   </OuiFlex>
                   <OuiText size="sm" color="tertiary" :lineClamp="2">
@@ -314,10 +389,11 @@
                     class="gap-2"
                     variant="soft"
                     :loading="selectedProject?.id === project.id && installDialogOpen && isVersionsLoading"
-                    @click="openInstallDialog(project)"
+                    @click="openInstallDialog(project, getInstalledProject(project) || undefined)"
                   >
-                    <CloudArrowDownIcon class="w-4 h-4" />
-                    Install
+                    <ArrowPathIcon v-if="getInstalledProject(project)?.updateAvailable" class="w-4 h-4" />
+                    <CloudArrowDownIcon v-else class="w-4 h-4" />
+                    {{ getInstalledProject(project) ? 'Update' : 'Install' }}
                   </OuiButton>
                 </OuiFlex>
               </OuiFlex>
@@ -417,10 +493,109 @@
       />
     </OuiStack>
 
+    <OuiStack v-else gap="md">
+      <template v-if="isInstalledLoading && installedFiles.length === 0">
+        <OuiCard
+          v-for="index in 4"
+          :key="`installed-skeleton-${index}`"
+          class="pointer-events-none select-none border-border-muted/70 bg-surface-muted/30"
+        >
+          <OuiCardBody>
+            <OuiFlex gap="md" align="center">
+              <OuiSkeleton width="2.75rem" height="2.75rem" variant="rectangle" rounded />
+              <OuiStack gap="xs" class="flex-1">
+                <OuiSkeleton width="14rem" height="1rem" variant="text" />
+                <OuiSkeleton width="22rem" height="0.8rem" variant="text" />
+              </OuiStack>
+              <OuiSkeleton width="7rem" height="2rem" variant="rectangle" class="rounded-lg" />
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
+      </template>
+
+      <OuiCard
+        v-for="file in installedFiles"
+        :key="file.filename"
+        variant="default"
+        class="border-border-muted/70"
+      >
+        <OuiCardBody>
+          <OuiFlex wrap="wrap" gap="md" align="center">
+            <OuiAvatar
+              size="md"
+              :src="file.iconUrl || undefined"
+              class="bg-surface-muted shrink-0"
+              :alt="file.title || file.filename"
+            >
+              <PuzzlePieceIcon class="w-5 h-5 text-secondary" />
+            </OuiAvatar>
+            <OuiStack gap="xs" class="flex-1 min-w-[220px]">
+              <OuiFlex gap="sm" align="center" wrap="wrap">
+                <OuiText size="md" weight="semibold">{{ file.title || file.filename }}</OuiText>
+                <OuiBadge size="xs" :variant="file.managed ? 'success' : 'secondary'">
+                  {{ file.managed ? 'Managed' : 'Manual' }}
+                </OuiBadge>
+                <OuiBadge v-if="file.updateAvailable" size="xs" variant="warning">
+                  Update available
+                </OuiBadge>
+              </OuiFlex>
+              <OuiFlex gap="sm" wrap="wrap" align="center">
+                <OuiText size="xs" color="tertiary">{{ file.filename }}</OuiText>
+                <OuiText size="xs" color="tertiary">{{ formatBytes(file.sizeBytes) }}</OuiText>
+                <OuiText v-if="file.versionNumber" size="xs" color="tertiary">v{{ file.versionNumber }}</OuiText>
+                <OuiText v-if="file.latestVersionNumber" size="xs" color="tertiary">
+                  Latest v{{ file.latestVersionNumber }}
+                </OuiText>
+              </OuiFlex>
+            </OuiStack>
+            <OuiFlex gap="sm" class="ml-auto">
+              <OuiButton
+                v-if="file.managed && file.projectId"
+                size="sm"
+                variant="ghost"
+                class="gap-2"
+                @click="openInstalledDetails(file)"
+              >
+                <EyeIcon class="w-4 h-4" />
+                Details
+              </OuiButton>
+              <OuiButton
+                v-if="file.managed && file.projectId"
+                size="sm"
+                :variant="file.updateAvailable ? 'soft' : 'ghost'"
+                class="gap-2"
+                :loading="updatingFilename === file.filename"
+                @click="updateInstalledFile(file)"
+              >
+                <ArrowPathIcon class="w-4 h-4" />
+                {{ file.updateAvailable ? 'Update' : 'Reinstall' }}
+              </OuiButton>
+            </OuiFlex>
+          </OuiFlex>
+        </OuiCardBody>
+      </OuiCard>
+
+      <OuiFlex
+        v-if="!isInstalledLoading && installedFiles.length === 0"
+        direction="col"
+        align="center"
+        gap="sm"
+        class="text-center py-16"
+      >
+        <OuiBox class="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center">
+          <FolderIcon class="w-8 h-8 text-secondary" />
+        </OuiBox>
+        <OuiText size="lg" weight="semibold">Nothing installed yet</OuiText>
+        <OuiText color="tertiary">
+          Install from the catalog or upload jars into the {{ installLocationDescription }}.
+        </OuiText>
+      </OuiFlex>
+    </OuiStack>
+
     <OuiDialog v-model:open="installDialogOpen" :title="installDialogTitle">
       <OuiStack gap="md">
         <OuiAlert variant="muted" v-if="selectedProject">
-          Installing into <strong>{{ installLocationDescription }}</strong>. Restart the server after installation.
+          {{ selectedInstalledFile ? 'Updating' : 'Installing' }} into <strong>{{ installLocationDescription }}</strong>. Restart the server after changes.
         </OuiAlert>
 
         <OuiStack gap="xs">
@@ -451,7 +626,7 @@
           :disabled="!selectedVersionId"
           @click="installSelected"
         >
-          Install & Restart Later
+          {{ selectedInstalledFile ? 'Update & Restart Later' : 'Install & Restart Later' }}
         </OuiButton>
       </template>
     </OuiDialog>
@@ -482,7 +657,7 @@
           color="primary"
           size="lg"
           :loading="selectedProject?.id === activeTabData.project.id && isInstalling"
-          @click="openInstallDialog(activeTabData.project)"
+          @click="openInstallDialog(activeTabData.project, getInstalledProject(activeTabData.project) || undefined)"
           class="w-full gap-2"
         >
           <CloudArrowDownIcon class="w-5 h-5" />
@@ -517,7 +692,7 @@
           color="primary"
           size="lg"
           :loading="selectedProject?.id === activeTabData.project.id && isInstalling"
-          @click="openInstallDialog(activeTabData.project)"
+          @click="openInstallDialog(activeTabData.project, getInstalledProject(activeTabData.project) || undefined)"
           class="w-full gap-2"
         >
           <CloudArrowDownIcon class="w-5 h-5" />
@@ -530,16 +705,27 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ArrowPathIcon, CloudArrowDownIcon, CubeIcon, PuzzlePieceIcon, FolderIcon, MagnifyingGlassIcon, EyeIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowPathIcon,
+  CloudArrowDownIcon,
+  CubeIcon,
+  EyeIcon,
+  FolderIcon,
+  MagnifyingGlassIcon,
+  PuzzlePieceIcon,
+} from "@heroicons/vue/24/outline";
+import { create } from "@bufbuild/protobuf";
 import { useDebounceFn, useIntersectionObserver } from "@vueuse/core";
 import { randomTextWidthByType } from "~/composables/useSkeletonVariations";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import {
   GameServerService,
+  MinecraftProjectSchema,
   MinecraftProjectType,
 } from "@obiente/proto";
 import type {
+  InstalledMinecraftProjectFile,
   MinecraftProject,
   MinecraftProjectVersion,
 } from "@obiente/proto";
@@ -585,13 +771,19 @@ const client = useConnectClient(GameServerService);
 const { toast } = useToast();
 
 const projects = ref<MinecraftProject[]>([]);
+const installedFiles = ref<InstalledMinecraftProjectFile[]>([]);
 const cursor = ref<string | undefined>();
 const hasMore = ref(false);
 const isLoading = ref(false);
 const isLoadingMore = ref(false);
+const isInstalledLoading = ref(false);
+const isBulkUpdating = ref(false);
 const errorMessage = ref<string | null>(null);
+const installedErrorMessage = ref<string | null>(null);
 const hasLoadedOnce = ref(false);
 const isRefreshing = ref(false);
+const activeView = ref<"browse" | "installed">("installed");
+const updatingFilename = ref("");
 let skeletonIdCounter = 0;
 const initialSkeletons = ref<SkeletonCardState[]>(createSkeletonStates(INITIAL_SKELETON_COUNT));
 const infiniteSkeletons = ref<SkeletonCardState[]>([]);
@@ -697,6 +889,7 @@ const activeLoaderFilter = computed(() => {
 
 const installDialogOpen = ref(false);
 const selectedProject = ref<MinecraftProject | null>(null);
+const selectedInstalledFile = ref<InstalledMinecraftProjectFile | null>(null);
 const versionOptions = ref<MinecraftProjectVersion[]>([]);
 const selectedVersionId = ref<string>("");
 const isVersionsLoading = ref(false);
@@ -712,7 +905,9 @@ let tabCounter = 0;
 let detachedWindowCounter = 0;
 
 const installDialogTitle = computed(() =>
-  selectedProject.value ? `Install ${selectedProject.value.title}` : "Install content"
+  selectedProject.value
+    ? `${selectedInstalledFile.value ? "Update" : "Install"} ${selectedProject.value.title}`
+    : "Install content"
 );
 const installLocationDescription = computed(() => {
   return projectType.value === MinecraftProjectType.PLUGIN ? "plugins directory" : "mods directory";
@@ -753,18 +948,38 @@ watch(
       matchServerVersion.value = true;
     }
     refresh();
+    loadInstalledFiles();
   }
 );
 watch(
   () => props.serverType,
   () => {
     refresh();
+    loadInstalledFiles();
   }
+);
+
+const installedByProjectId = computed(() => {
+  const map = new Map<string, InstalledMinecraftProjectFile>();
+  for (const file of installedFiles.value) {
+    if (file.projectId) {
+      map.set(file.projectId, file);
+    }
+  }
+  return map;
+});
+
+const updateableInstalledFiles = computed(() =>
+  installedFiles.value.filter((file) => file.managed && file.projectId && file.updateAvailable && file.latestVersionId)
 );
 
 async function refresh() {
   cursor.value = undefined;
   await loadProjects({ reset: true });
+}
+
+async function refreshCatalogState() {
+  await Promise.all([loadProjects({ reset: true }), loadInstalledFiles()]);
 }
 
 async function loadMore() {
@@ -910,6 +1125,30 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
   }
 }
 
+async function loadInstalledFiles() {
+  if (!props.gameServerId) return;
+  isInstalledLoading.value = true;
+  installedErrorMessage.value = null;
+  try {
+    const response = await client.listInstalledMinecraftProjects({
+      gameServerId: props.gameServerId,
+      projectType: projectType.value,
+      checkUpdates: true,
+    });
+    installedFiles.value = response.files ?? [];
+  } catch (err: unknown) {
+    console.error(err);
+    installedErrorMessage.value = (err as Error | undefined)?.message ?? "Failed to load installed content";
+    toast.error("Failed to load installed content", installedErrorMessage.value || undefined);
+  } finally {
+    isInstalledLoading.value = false;
+  }
+}
+
+function getInstalledProject(project: MinecraftProject) {
+  return installedByProjectId.value.get(project.id) || null;
+}
+
 function formatProjectType(type: MinecraftProjectType | string | undefined | null) {
   // Handle both enum values and numeric values (protobuf can send numbers)
   // PLUGIN = 2, MOD = 1, UNSPECIFIED = 0
@@ -981,6 +1220,13 @@ function formatDownloads(downloads?: bigint | number | null) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
   return value.toString();
+}
+
+function formatBytes(bytes?: bigint | number | null) {
+  const value = typeof bytes === "bigint" ? Number(bytes) : bytes || 0;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${value} B`;
 }
 
 function parseVersion(version: string): number[] {
@@ -1057,8 +1303,37 @@ function getCompatibilityStatus(project: MinecraftProject): { label: string; var
 function closeInstallDialog() {
   installDialogOpen.value = false;
   selectedProject.value = null;
+  selectedInstalledFile.value = null;
   versionOptions.value = [];
   selectedVersionId.value = "";
+}
+
+function projectFromInstalled(file: InstalledMinecraftProjectFile): MinecraftProject {
+  return create(MinecraftProjectSchema, {
+    id: file.projectId || file.id,
+    slug: file.projectSlug || file.projectId || file.filename,
+    title: file.title || file.filename,
+    description: file.managed ? "Installed from Modrinth." : "Installed manually.",
+    projectType: file.projectType || projectType.value,
+    iconUrl: file.iconUrl || "",
+    categories: [],
+    loaders: file.loaders || [],
+    gameVersions: file.gameVersions || [],
+    authors: [],
+    downloads: 0n,
+    rating: 0,
+    latestVersionId: file.latestVersionId,
+    projectUrl: undefined,
+    sourceUrl: undefined,
+    issuesUrl: undefined,
+    body: undefined,
+    gallery: [],
+  });
+}
+
+function openInstalledDetails(file: InstalledMinecraftProjectFile) {
+  if (!file.projectId) return;
+  openOverview(projectFromInstalled(file));
 }
 
 function openOverview(project: MinecraftProject) {
@@ -1330,12 +1605,16 @@ function closeWindowGroup() {
   activeTabId.value = "";
 }
 
-async function openInstallDialog(project: MinecraftProject) {
+async function openInstallDialog(project: MinecraftProject, installedFile?: InstalledMinecraftProjectFile) {
   selectedProject.value = project;
+  selectedInstalledFile.value = installedFile || null;
   installDialogOpen.value = true;
   versionOptions.value = [];
   selectedVersionId.value = "";
   await fetchVersions(project.id);
+  if (installedFile?.latestVersionId) {
+    selectedVersionId.value = installedFile.latestVersionId;
+  }
 }
 
 async function fetchVersions(projectId: string) {
@@ -1372,28 +1651,83 @@ async function installSelected() {
   if (!selectedProject.value || !selectedVersionId.value) return;
   isInstalling.value = true;
   try {
-    await client.installMinecraftProjectFile({
-      gameServerId: props.gameServerId,
-      projectId: selectedProject.value.id,
-      versionId: selectedVersionId.value,
-      projectType: projectType.value,
-    });
-    toast.success(`${selectedProject.value.title} installed`, "Restart the server to enable it.");
+    if (selectedInstalledFile.value) {
+      await client.updateMinecraftProjectFile({
+        gameServerId: props.gameServerId,
+        projectId: selectedProject.value.id,
+        versionId: selectedVersionId.value,
+        projectType: projectType.value,
+        currentFilename: selectedInstalledFile.value.filename,
+        projectTitle: selectedProject.value.title,
+        projectSlug: selectedProject.value.slug,
+        projectIconUrl: selectedProject.value.iconUrl,
+      });
+      toast.success(`${selectedProject.value.title} updated`, "Restart the server to enable the new version.");
+    } else {
+      await client.installMinecraftProjectFile({
+        gameServerId: props.gameServerId,
+        projectId: selectedProject.value.id,
+        versionId: selectedVersionId.value,
+        projectType: projectType.value,
+        projectTitle: selectedProject.value.title,
+        projectSlug: selectedProject.value.slug,
+        projectIconUrl: selectedProject.value.iconUrl,
+      });
+      toast.success(`${selectedProject.value.title} installed`, "Restart the server to enable it.");
+    }
     closeInstallDialog();
+    await refreshCatalogState();
   } catch (err: unknown) {
     console.error(err);
-    toast.error("Failed to install", (err as Error | undefined)?.message || "Unknown error");
+    toast.error(selectedInstalledFile.value ? "Failed to update" : "Failed to install", (err as Error | undefined)?.message || "Unknown error");
   } finally {
     isInstalling.value = false;
   }
 }
 
+async function updateInstalledFile(file: InstalledMinecraftProjectFile) {
+  if (!file.projectId) return;
+  const targetVersionId = file.latestVersionId || file.versionId;
+  if (!targetVersionId) return;
+  updatingFilename.value = file.filename;
+  try {
+    await client.updateMinecraftProjectFile({
+      gameServerId: props.gameServerId,
+      projectId: file.projectId,
+      versionId: targetVersionId,
+      projectType: file.projectType || projectType.value,
+      currentFilename: file.filename,
+      projectTitle: file.title,
+      projectSlug: file.projectSlug,
+      projectIconUrl: file.iconUrl,
+    });
+    toast.success(`${file.title || file.filename} updated`, "Restart the server to apply the change.");
+    await loadInstalledFiles();
+  } catch (err: unknown) {
+    console.error(err);
+    toast.error("Failed to update", (err as Error | undefined)?.message || "Unknown error");
+  } finally {
+    updatingFilename.value = "";
+  }
+}
+
+async function updateAllAvailable() {
+  if (updateableInstalledFiles.value.length === 0) return;
+  isBulkUpdating.value = true;
+  try {
+    for (const file of updateableInstalledFiles.value) {
+      await updateInstalledFile(file);
+    }
+  } finally {
+    isBulkUpdating.value = false;
+  }
+}
+
 onMounted(() => {
-  loadProjects({ reset: true });
+  refreshCatalogState();
 });
 
 onBeforeUnmount(() => {
   stopAutoLoadObserver();
 });
 </script>
-
