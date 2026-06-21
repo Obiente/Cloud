@@ -397,7 +397,7 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 
 	version, err := s.modClient.GetVersion(ctx, req.Msg.GetVersionId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch version: %w", err))
+		return nil, modrinthFetchConnectError("failed to fetch version", err)
 	}
 	if !strings.EqualFold(version.ProjectID, req.Msg.GetProjectId()) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version does not belong to project"))
@@ -481,7 +481,7 @@ func (s *Service) UpdateMinecraftProjectFile(ctx context.Context, req *connect.R
 
 	version, err := s.modClient.GetVersion(ctx, req.Msg.GetVersionId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch version: %w", err))
+		return nil, modrinthFetchConnectError("failed to fetch version", err)
 	}
 	if !strings.EqualFold(version.ProjectID, req.Msg.GetProjectId()) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version does not belong to project"))
@@ -1217,6 +1217,18 @@ func isStableMinecraftVersion(version modrinth.Version) bool {
 		}
 	}
 	return true
+}
+
+func modrinthFetchConnectError(prefix string, err error) error {
+	var rateLimitErr *modrinth.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		message := "Modrinth is rate limiting plugin metadata requests. Try again shortly."
+		if rateLimitErr.RetryAfter > 0 {
+			message = fmt.Sprintf("Modrinth is rate limiting plugin metadata requests. Try again in about %s.", rateLimitErr.RetryAfter.Round(time.Second))
+		}
+		return connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("%s: %s", prefix, message))
+	}
+	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s: %w", prefix, err))
 }
 
 func modrinthTypeToProto(value string) gameserversv1.MinecraftProjectType {
