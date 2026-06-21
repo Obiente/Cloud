@@ -245,8 +245,8 @@
         ]"
       >
         <OuiCard
-          v-for="project in projects"
-          :key="project.id"
+          v-for="card in projectCards"
+          :key="card.project.id"
           variant="default"
           class="border-border-muted/70 hover:border-border-default transition"
         >
@@ -255,47 +255,47 @@
               <OuiFlex gap="md" align="start">
                 <OuiAvatar
                   size="lg"
-                  :src="project.iconUrl || undefined"
+                  :src="card.project.iconUrl || undefined"
                   class="bg-surface-muted shrink-0"
-                  :alt="project.title"
+                  :alt="card.project.title"
                 >
-                  <CubeIcon v-if="!project.iconUrl" class="w-5 h-5 text-secondary" />
+                  <CubeIcon v-if="!card.project.iconUrl" class="w-5 h-5 text-secondary" />
                 </OuiAvatar>
                 <OuiStack gap="xs" class="flex-1 min-w-0">
                   <OuiFlex align="center" gap="sm" wrap="wrap">
-                    <OuiText as="h3" size="lg" weight="semibold" truncate>{{ project.title }}</OuiText>
+                    <OuiText as="h3" size="lg" weight="semibold" truncate>{{ card.project.title }}</OuiText>
                     <OuiBadge
-                      v-for="typeLabel in getProjectTypeLabels(project)"
-                      :key="`project-type-${project.id}-${typeLabel}`"
+                      v-for="typeLabel in card.typeLabels"
+                      :key="`project-type-${card.project.id}-${typeLabel}`"
                       size="xs"
                       variant="secondary"
                     >
                       {{ typeLabel }}
                     </OuiBadge>
                     <OuiBadge
-                      v-if="getInstalledProject(project)"
+                      v-if="card.installedFile"
                       size="xs"
-                      :variant="getInstalledProject(project)?.updateAvailable ? 'warning' : 'success'"
+                      :variant="card.installedFile.updateAvailable ? 'warning' : 'success'"
                     >
-                      {{ getInstalledProject(project)?.updateAvailable ? 'Update available' : 'Installed' }}
+                      {{ card.installedFile.updateAvailable ? 'Update available' : 'Installed' }}
                     </OuiBadge>
                   </OuiFlex>
                   <OuiText size="sm" color="tertiary" :lineClamp="2">
-                    {{ project.description || "No description provided." }}
+                    {{ card.project.description || "No description provided." }}
                   </OuiText>
                 </OuiStack>
               </OuiFlex>
 
               <OuiStack gap="xs">
                 <OuiFlex
-                  v-if="(project.loaders?.length || 0) > 0"
+                  v-if="card.visibleLoaders.length > 0"
                   wrap="wrap"
                   gap="xs"
                   align="center"
                 >
                   <OuiBadge
-                    v-for="loader in (project.loaders || []).slice(0, 3)"
-                    :key="`loader-${project.id}-${loader}`"
+                    v-for="loader in card.visibleLoaders"
+                    :key="`loader-${card.project.id}-${loader}`"
                     size="xs"
                     variant="primary"
                     tone="soft"
@@ -303,24 +303,24 @@
                     {{ loader }}
                   </OuiBadge>
                   <OuiBadge
-                    v-if="(project.loaders?.length || 0) > 3"
+                    v-if="card.loaderOverflow > 0"
                     size="xs"
                     variant="primary"
                     tone="soft"
                   >
-                    +{{ (project.loaders?.length || 0) - 3 }}
+                    +{{ card.loaderOverflow }}
                   </OuiBadge>
                 </OuiFlex>
 
                 <OuiFlex
-                  v-if="displayableCategories(project).length > 0"
+                  v-if="card.visibleCategories.length > 0"
                   wrap="wrap"
                   gap="xs"
                   align="center"
                 >
                   <OuiBadge
-                    v-for="category in displayableCategories(project).slice(0, 4)"
-                    :key="`category-${project.id}-${category}`"
+                    v-for="category in card.visibleCategories"
+                    :key="`category-${card.project.id}-${category}`"
                     size="xs"
                     variant="secondary"
                     tone="soft"
@@ -328,17 +328,17 @@
                     {{ formatCategory(category) }}
                   </OuiBadge>
                   <OuiBadge
-                    v-if="displayableCategories(project).length > 4"
+                    v-if="card.categoryOverflow > 0"
                     size="xs"
                     variant="secondary"
                     tone="soft"
                   >
-                    +{{ displayableCategories(project).length - 4 }}
+                    +{{ card.categoryOverflow }}
                   </OuiBadge>
                 </OuiFlex>
 
                 <OuiFlex
-                  v-if="(project.gameVersions?.length || 0) > 0"
+                  v-if="card.versionRange"
                   wrap="wrap"
                   gap="xs"
                   align="center"
@@ -348,7 +348,7 @@
                     variant="secondary"
                     tone="soft"
                   >
-                    {{ formatVersionRange(project.gameVersions || []) }}
+                    {{ card.versionRange }}
                   </OuiBadge>
                 </OuiFlex>
               </OuiStack>
@@ -357,20 +357,20 @@
                 <OuiStack gap="xs">
                   <OuiText size="xs" color="tertiary">Downloads</OuiText>
                   <OuiText size="sm" weight="semibold" color="primary">
-                    {{ formatDownloads(project.downloads) }}
+                    {{ card.downloadsLabel }}
                   </OuiText>
                 </OuiStack>
-                <OuiStack gap="xs" v-if="activeVersionFilter && project.gameVersions && project.gameVersions.length > 0">
+                <OuiStack gap="xs" v-if="activeVersionFilter && card.versionRange">
                   <OuiText size="xs" color="tertiary">Compatibility</OuiText>
                   <OuiFlex gap="xs" align="center">
                     <OuiBadge
                       size="xs"
-                      :variant="getCompatibilityStatus(project).variant"
+                      :variant="card.compatibility.variant"
                     >
-                      {{ getCompatibilityStatus(project).label }}
+                      {{ card.compatibility.label }}
                     </OuiBadge>
-                    <OuiText v-if="getCompatibilityStatus(project).range" size="xs" color="tertiary">
-                      {{ getCompatibilityStatus(project).range }}
+                    <OuiText v-if="card.compatibility.range" size="xs" color="tertiary">
+                      {{ card.compatibility.range }}
                     </OuiText>
                   </OuiFlex>
                 </OuiStack>
@@ -379,7 +379,7 @@
                     size="sm"
                     variant="ghost"
                     class="gap-2"
-                    @click="openOverview(project)"
+                    @click="openOverview(card.project)"
                   >
                     <EyeIcon class="w-4 h-4" />
                     Details
@@ -388,12 +388,12 @@
                     size="sm"
                     class="gap-2"
                     variant="soft"
-                    :loading="selectedProject?.id === project.id && installDialogOpen && isVersionsLoading"
-                    @click="openInstallDialog(project, getInstalledProject(project) || undefined)"
+                    :loading="selectedProject?.id === card.project.id && installDialogOpen && isVersionsLoading"
+                    @click="openInstallDialog(card.project, card.installedFile || undefined)"
                   >
-                    <ArrowPathIcon v-if="getInstalledProject(project)?.updateAvailable" class="w-4 h-4" />
+                    <ArrowPathIcon v-if="card.installedFile?.updateAvailable" class="w-4 h-4" />
                     <CloudArrowDownIcon v-else class="w-4 h-4" />
-                    {{ getInstalledProject(project) ? 'Update' : 'Install' }}
+                    {{ card.installedFile ? 'Update' : 'Install' }}
                   </OuiButton>
                 </OuiFlex>
               </OuiFlex>
@@ -736,7 +736,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   ArrowPathIcon,
   CloudArrowDownIcon,
@@ -791,6 +791,19 @@ interface DetachedWindow {
   size: { width: number; height: number };
 }
 
+interface ProjectCardView {
+  project: MinecraftProject;
+  installedFile: InstalledMinecraftProjectFile | null;
+  typeLabels: string[];
+  visibleLoaders: string[];
+  loaderOverflow: number;
+  visibleCategories: string[];
+  categoryOverflow: number;
+  versionRange: string;
+  compatibility: { label: string; variant: "success" | "warning" | "secondary"; range?: string };
+  downloadsLabel: string;
+}
+
 const PAGE_SIZE = 18;
 const INITIAL_SKELETON_COUNT = 6;
 
@@ -803,8 +816,8 @@ const props = defineProps<{
 const client = useConnectClient(GameServerService);
 const { toast } = useToast();
 
-const projects = ref<MinecraftProject[]>([]);
-const installedFiles = ref<InstalledMinecraftProjectFile[]>([]);
+const projects = shallowRef<MinecraftProject[]>([]);
+const installedFiles = shallowRef<InstalledMinecraftProjectFile[]>([]);
 const cursor = ref<string | undefined>();
 const hasMore = ref(false);
 const isLoading = ref(false);
@@ -923,7 +936,7 @@ const activeLoaderFilter = computed(() => {
 const installDialogOpen = ref(false);
 const selectedProject = ref<MinecraftProject | null>(null);
 const selectedInstalledFile = ref<InstalledMinecraftProjectFile | null>(null);
-const versionOptions = ref<MinecraftProjectVersion[]>([]);
+const versionOptions = shallowRef<MinecraftProjectVersion[]>([]);
 const selectedVersionId = ref<string>("");
 const includePrereleaseVersions = ref(false);
 const isVersionsLoading = ref(false);
@@ -937,6 +950,8 @@ const windowPosition = ref({ x: 100, y: 100 });
 const windowSize = ref({ width: 800, height: 600 });
 let tabCounter = 0;
 let detachedWindowCounter = 0;
+let loadProjectsRequestId = 0;
+let loadInstalledRequestId = 0;
 
 const installDialogTitle = computed(() =>
   selectedProject.value
@@ -1015,6 +1030,25 @@ const installedByProjectId = computed(() => {
     }
   }
   return map;
+});
+
+const projectCards = computed<ProjectCardView[]>(() => {
+  const installed = installedByProjectId.value;
+  return projects.value.map((project) => {
+    const displayCategories = displayableCategories(project);
+    return {
+      project,
+      installedFile: installed.get(project.id) || null,
+      typeLabels: getProjectTypeLabels(project),
+      visibleLoaders: (project.loaders || []).slice(0, 3),
+      loaderOverflow: Math.max(0, (project.loaders?.length || 0) - 3),
+      visibleCategories: displayCategories.slice(0, 4),
+      categoryOverflow: Math.max(0, displayCategories.length - 4),
+      versionRange: (project.gameVersions?.length || 0) > 0 ? formatVersionRange(project.gameVersions || []) : "",
+      compatibility: getCompatibilityStatus(project),
+      downloadsLabel: formatDownloads(project.downloads),
+    };
+  });
 });
 
 const updateableInstalledFiles = computed(() =>
@@ -1134,9 +1168,12 @@ function createSkeletonState(): SkeletonCardState {
 
 async function loadProjects(opts: { reset?: boolean } = {}) {
   if (!props.gameServerId) return;
+  const requestId = ++loadProjectsRequestId;
   const isReset = Boolean(opts.reset);
   if (isReset) {
     isLoading.value = true;
+    isLoadingMore.value = false;
+    infiniteSkeletons.value = [];
     isRefreshing.value = hasLoadedOnce.value && projects.value.length > 0;
     if (!hasLoadedOnce.value || projects.value.length === 0) {
       projects.value = [];
@@ -1148,6 +1185,7 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
   try {
     const payload = buildQueryPayload(cursor.value);
     const response = await client.listMinecraftProjects(payload);
+    if (requestId !== loadProjectsRequestId) return;
     const fetchedProjects = response.projects ?? [];
     const fetchedCount = fetchedProjects.length;
     if (isReset) {
@@ -1162,10 +1200,12 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
       regenerateInfiniteSkeletons(fetchedCount);
     }
   } catch (err: unknown) {
+    if (requestId !== loadProjectsRequestId) return;
     console.error(err);
     errorMessage.value = (err as Error | undefined)?.message ?? "Failed to load catalog";
     toast.error("Failed to load Minecraft catalog", errorMessage.value || undefined);
   } finally {
+    if (requestId !== loadProjectsRequestId) return;
     if (isReset) {
       isLoading.value = false;
       isRefreshing.value = false;
@@ -1175,6 +1215,7 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
 
 async function loadInstalledFiles() {
   if (!props.gameServerId) return;
+  const requestId = ++loadInstalledRequestId;
   isInstalledLoading.value = true;
   installedErrorMessage.value = null;
   try {
@@ -1183,12 +1224,15 @@ async function loadInstalledFiles() {
       projectType: projectType.value,
       checkUpdates: true,
     });
+    if (requestId !== loadInstalledRequestId) return;
     installedFiles.value = response.files ?? [];
   } catch (err: unknown) {
+    if (requestId !== loadInstalledRequestId) return;
     console.error(err);
     installedErrorMessage.value = (err as Error | undefined)?.message ?? "Failed to load installed content";
     toast.error("Failed to load installed content", installedErrorMessage.value || undefined);
   } finally {
+    if (requestId !== loadInstalledRequestId) return;
     isInstalledLoading.value = false;
   }
 }
@@ -1794,8 +1838,9 @@ async function installSelected() {
   }
 }
 
-async function updateInstalledFile(file: InstalledMinecraftProjectFile) {
+async function updateInstalledFile(file: InstalledMinecraftProjectFile, opts: { refreshInstalled?: boolean } = {}) {
   if (!file.projectId) return;
+  const refreshInstalled = opts.refreshInstalled ?? true;
   const targetVersionId = file.latestVersionId || file.versionId;
   if (!targetVersionId) return;
   updatingFilename.value = file.filename;
@@ -1811,7 +1856,9 @@ async function updateInstalledFile(file: InstalledMinecraftProjectFile) {
       projectIconUrl: file.iconUrl,
     });
     toast.success(`${file.title || file.filename} updated`, "Restart the server to apply the change.");
-    await loadInstalledFiles();
+    if (refreshInstalled) {
+      await loadInstalledFiles();
+    }
   } catch (err: unknown) {
     console.error(err);
     toast.error("Failed to update", (err as Error | undefined)?.message || "Unknown error");
@@ -1824,9 +1871,11 @@ async function updateAllAvailable() {
   if (updateableInstalledFiles.value.length === 0) return;
   isBulkUpdating.value = true;
   try {
-    for (const file of updateableInstalledFiles.value) {
-      await updateInstalledFile(file);
+    const filesToUpdate = [...updateableInstalledFiles.value];
+    for (const file of filesToUpdate) {
+      await updateInstalledFile(file, { refreshInstalled: false });
     }
+    await loadInstalledFiles();
   } finally {
     isBulkUpdating.value = false;
   }

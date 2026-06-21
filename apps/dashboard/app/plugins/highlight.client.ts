@@ -4,51 +4,57 @@ export default defineNuxtPlugin({
   async setup() {
     if (typeof window === "undefined") return;
 
-    // Import highlight.js - handle both default and named exports for v11 compatibility
-    let highlightInstance: any;
-    try {
-      const hljs = await import("highlight.js");
-      // highlight.js v11 uses default export
-      highlightInstance = hljs.default || hljs;
-      
-      // If it's still not available, try named imports
-      if (!highlightInstance && (hljs as any).highlight) {
-        highlightInstance = hljs;
-      }
-    } catch (err) {
-      console.error("Failed to load highlight.js:", err);
-      return;
-    }
-    
-    if (!highlightInstance) {
-      console.error("highlight.js instance not available");
-      return;
-    }
-    
-    // Import and apply OUI theme utility
-    const { applyOUIThemeToHighlightJS } = await import("~/utils/highlight-theme");
-    
-    // Apply OUI theme to highlight.js
-    applyOUIThemeToHighlightJS();
+    let highlightInstance: any = null;
+    let highlightLoadPromise: Promise<any> | null = null;
 
-    // Make highlight.js available globally
-    (window as any).hljs = highlightInstance;
+    const ensureHighlight = async () => {
+      if (highlightInstance) return highlightInstance;
+      if (!highlightLoadPromise) {
+        highlightLoadPromise = Promise.all([
+          import("highlight.js"),
+          import("~/utils/highlight-theme"),
+        ])
+          .then(([hljs, theme]) => {
+            highlightInstance = hljs.default || hljs;
+            if (!highlightInstance && (hljs as any).highlight) {
+              highlightInstance = hljs;
+            }
+            if (!highlightInstance) {
+              throw new Error("highlight.js instance not available");
+            }
+            theme.applyOUIThemeToHighlightJS();
+            (window as any).hljs = highlightInstance;
+            return highlightInstance;
+          })
+          .catch((err) => {
+            highlightLoadPromise = null;
+            console.error("Failed to load highlight.js:", err);
+            return null;
+          });
+      }
+      return highlightLoadPromise;
+    };
 
     // Helper function to highlight code blocks
-    const highlightCodeBlocks = () => {
-      if (typeof window === "undefined" || !highlightInstance) return;
-      
-      document.querySelectorAll("pre code").forEach((block) => {
+    const highlightCodeBlocks = async () => {
+      if (typeof window === "undefined") return;
+      const blocks = Array.from(document.querySelectorAll("pre code:not(.hljs)"));
+      if (blocks.length === 0) return;
+
+      const highlighter = await ensureHighlight();
+      if (!highlighter) return;
+
+      blocks.forEach((block) => {
         // Only highlight if not already highlighted
         if (!block.classList.contains("hljs")) {
           // Use highlightElement if available, otherwise use highlight API
-          if (highlightInstance.highlightElement) {
-            highlightInstance.highlightElement(block as HTMLElement);
-          } else if (highlightInstance.highlight) {
+          if (highlighter.highlightElement) {
+            highlighter.highlightElement(block as HTMLElement);
+          } else if (highlighter.highlight) {
             const code = block.textContent || "";
             const language = block.className.match(/language-(\w+)/)?.[1] || "plaintext";
             try {
-              const result = highlightInstance.highlight(code, { language });
+              const result = highlighter.highlight(code, { language });
               block.innerHTML = result.value;
               block.classList.add("hljs");
             } catch {
@@ -66,9 +72,9 @@ export default defineNuxtPlugin({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", highlightCodeBlocks);
+            document.addEventListener("DOMContentLoaded", () => void highlightCodeBlocks(), { once: true });
           } else {
-            highlightCodeBlocks();
+            void highlightCodeBlocks();
           }
         });
       });
@@ -82,7 +88,7 @@ export default defineNuxtPlugin({
       const router = useRouter();
       if (router) {
         router.afterEach(() => {
-          setTimeout(highlightCodeBlocks, 100);
+          setTimeout(() => void highlightCodeBlocks(), 100);
         });
       }
     } catch {
@@ -90,4 +96,3 @@ export default defineNuxtPlugin({
     }
   },
 });
-
