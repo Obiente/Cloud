@@ -1,7 +1,12 @@
 import { appendResponseHeader } from "h3";
-import { getCurrentInstance, nextTick, onMounted, onUnmounted } from "vue";
 import type { User, UserSession } from "@obiente/types";
 import { useOrganizationsStore } from "~/stores/organizations";
+
+let clientAuthInitialized = false;
+let clientAuthInitScheduled = false;
+let clientTokenCheckInterval: ReturnType<typeof setInterval> | null = null;
+let sessionWatcherStarted = false;
+let tokenFetchInProgress = false;
 
 export const useAuth = () => {
   const serverEvent = import.meta.server ? useRequestEvent() : null;
@@ -489,193 +494,122 @@ export const useAuth = () => {
     return hasSession();
   };
 
-  // Track if token fetch is in progress to prevent concurrent calls
-  let tokenFetchInProgress = false;
-
-  watch(
-    () => sessionState.value,
-    async (newSession, oldSession) => {
-      // Prevent concurrent token fetches
-      if (tokenFetchInProgress) {
-        return;
-      }
-
-      // Only fetch token if session actually changed (not just on mount)
-      // Use deep equality check to prevent unnecessary triggers
-      if (newSession && newSession !== oldSession) {
-        // Check if session actually changed (compare user sub to avoid unnecessary updates)
-        const newUserSub = newSession?.user?.sub;
-        const oldUserSub = oldSession?.user?.sub;
-
-        // If user sub is the same and we have a token, skip
-        if (
-          newUserSub &&
-          oldUserSub &&
-          newUserSub === oldUserSub &&
-          accessToken.value
-        ) {
-          // Session object reference changed but user is the same - skip
+  if (import.meta.client && !sessionWatcherStarted) {
+    sessionWatcherStarted = true;
+    watch(
+      () => sessionState.value,
+      async (newSession, oldSession) => {
+        if (tokenFetchInProgress) {
           return;
         }
 
-        try {
-          if (import.meta.client) {
-            // Only fetch if we don't have a valid token already
+        if (newSession && newSession !== oldSession) {
+          const newUserSub = newSession?.user?.sub;
+          const oldUserSub = oldSession?.user?.sub;
+
+          if (
+            newUserSub &&
+            oldUserSub &&
+            newUserSub === oldUserSub &&
+            accessToken.value
+          ) {
+            return;
+          }
+
+          try {
             if (
-              !accessToken.value ||
-              (tokenExpiry.value && Date.now() >= tokenExpiry.value)
+              import.meta.client &&
+              (!accessToken.value ||
+                (tokenExpiry.value && Date.now() >= tokenExpiry.value))
             ) {
-              // Defer token fetch to avoid blocking during hydration
               tokenFetchInProgress = true;
 
-              // Use requestAnimationFrame to defer until after hydration
-              requestAnimationFrame(() => {
-                requestAnimationFrame(async () => {
-                  try {
-                    const response = await $fetch<{
-                      accessToken: string;
-                      expiresIn?: number;
-                    }>("/auth/token");
-                    if (response.accessToken) {
-                      accessToken.value = response.accessToken;
-                      if (response.expiresIn) {
-                        tokenExpiry.value =
-                          Date.now() + response.expiresIn * 1000 - 30000;
-                      }
+              requestAnimationFrame(async () => {
+                try {
+                  const response = await $fetch<{
+                    accessToken: string;
+                    expiresIn?: number;
+                  }>("/auth/token");
+                  if (response.accessToken) {
+                    accessToken.value = response.accessToken;
+                    if (response.expiresIn) {
+                      tokenExpiry.value =
+                        Date.now() + response.expiresIn * 1000 - 30000;
                     }
-                  } catch (e) {
-                    console.error(
-                      "[useAuth] Failed to fetch token after session update:",
-                      e
-                    );
-                  } finally {
-                    tokenFetchInProgress = false;
                   }
-                });
+                } catch (e) {
+                  console.error(
+                    "[useAuth] Failed to fetch token after session update:",
+                    e
+                  );
+                } finally {
+                  tokenFetchInProgress = false;
+                }
               });
             }
+          } catch (e) {
+            console.error(
+              "[useAuth] Failed to fetch token after session update:",
+              e
+            );
+            tokenFetchInProgress = false;
           }
-        } catch (e) {
-          console.error(
-            "[useAuth] Failed to fetch token after session update:",
-            e
-          );
-          tokenFetchInProgress = false;
+        } else if (!newSession && oldSession) {
+          accessToken.value = null;
+          tokenExpiry.value = null;
         }
-      } else if (!newSession && oldSession) {
-        // Session was cleared
-        accessToken.value = null;
-        tokenExpiry.value = null;
-      }
-    },
-    { immediate: false } // Don't run immediately - let onMounted handle initial fetch
-  );
-
-  // Initialize auth - defer heavy operations until after hydration to prevent Chrome freeze
-  // Use getCurrentInstance safely (may be null during hydration)
-  let instance: ReturnType<typeof getCurrentInstance> | null = null;
-  try {
-    instance = getCurrentInstance();
-  } catch (e) {
-    // getCurrentInstance may fail during hydration - treat as non-component context
-    instance = null;
+      },
+      { immediate: false }
+    );
   }
-
-  // Store interval ID for cleanup
-  let tokenCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   const initializeAuth = () => {
     if (import.meta.client) {
-      // Defer fetch() to avoid blocking during hydration
-      // Use multiple requestAnimationFrame calls to ensure hydration is fully complete
+      if (clientAuthInitialized) {
+        return;
+      }
+      clientAuthInitialized = true;
+
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          fetch()
-            .then(() => {
-              // fetch completed
-            })
-            .catch((err) => {
-              console.error("[useAuth] fetch() error:", err);
-            });
+        fetch().catch((err) => {
+          console.error("[useAuth] fetch() error:", err);
+        });
 
-          // Try silent auth first if no session exists (defer to avoid blocking hydration)
-          if (!sessionState.value || !user.value) {
-            // Use multiple deferrals to ensure hydration is complete
-            // requestAnimationFrame ensures DOM is ready, then setTimeout gives extra time
-            setTimeout(() => {
-              trySilentAuth()
-                .then((success) => {
-                  if (!success) {
-                    // Silent auth failed, but don't auto-open popup here
-                    // Let the middleware handle it if needed
-                  }
-                })
-                .catch((err) => {
-                  console.error("[useAuth] trySilentAuth error:", err);
-                });
-            }, 500); // Increased delay to ensure hydration completes
-          }
+        if (!sessionState.value || !user.value) {
+          setTimeout(() => {
+            trySilentAuth()
+              .then((success) => {
+                if (!success) {
+                  // Silent auth failed, but don't auto-open popup here
+                  // Let the middleware handle it if needed
+                }
+              })
+              .catch((err) => {
+                console.error("[useAuth] trySilentAuth error:", err);
+              });
+          }, 500);
+        }
 
-          tokenCheckInterval = setInterval(() => {
+        if (!clientTokenCheckInterval) {
+          clientTokenCheckInterval = setInterval(() => {
             if (tokenExpiry.value && Date.now() >= tokenExpiry.value) {
               refreshAccessToken(true).catch(console.error);
             }
           }, 60 * 1000);
-        });
+        }
       });
     } else {
-      // Server-side: just fetch
       fetch();
     }
   };
 
-  if (instance) {
-    // We're in a component context - use lifecycle hooks
-    onMounted(() => {
-      // Defer initialization until after hydration using multiple deferrals
-      // Use queueMicrotask to get out of the current execution context (microtask queue)
-      queueMicrotask(() => {
-        // Then use setTimeout to get to the next macrotask
-        setTimeout(() => {
-          // Then use requestAnimationFrame to ensure DOM is ready
-          requestAnimationFrame(() => {
-            // One more requestAnimationFrame to ensure hydration is fully complete
-            requestAnimationFrame(() => {
-              initializeAuth();
-            });
-          });
-        }, 0);
-      });
-    });
-
-    onUnmounted(() => {
-      if (tokenCheckInterval) {
-        clearInterval(tokenCheckInterval);
-        tokenCheckInterval = null;
-      }
-      // Clean up popup event listeners on unmount to prevent leaks
-      if (messageListenerActive) {
-        window.removeEventListener("message", messageListener);
-        messageListenerActive = false;
-      }
-      if (popupListenerActive) {
-        window.removeEventListener("storage", popupListener);
-        popupListenerActive = false;
-      }
-    });
-  } else {
-    // Not in component context (e.g., called from plugin) - defer initialization
-    if (import.meta.client) {
-      // Use requestAnimationFrame to defer until after hydration
-      requestAnimationFrame(() => {
-        nextTick(() => {
-          initializeAuth();
-        });
-      });
-    } else {
-      // Server-side: initialize immediately
-      initializeAuth();
+  if (import.meta.client) {
+    if (!clientAuthInitScheduled && !clientAuthInitialized) {
+      clientAuthInitScheduled = true;
+      setTimeout(initializeAuth, 0);
     }
+  } else {
+    initializeAuth();
   }
 
   // Create computed properties lazily to avoid triggering during initialization
