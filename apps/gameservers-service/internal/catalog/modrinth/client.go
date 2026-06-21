@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,9 +17,25 @@ const (
 	defaultBaseURL = "https://api.modrinth.com/v2"
 	defaultUA      = "obiente-cloud-gameservers-service"
 	maxLimit       = 100
+	maxAttempts    = 3
 )
 
 var ErrNotFound = errors.New("modrinth resource not found")
+
+// RateLimitError indicates Modrinth asked the client to slow down.
+type RateLimitError struct {
+	Operation  string
+	StatusCode int
+	RetryAfter time.Duration
+	Body       string
+}
+
+func (e *RateLimitError) Error() string {
+	if e.RetryAfter > 0 {
+		return fmt.Sprintf("%s rate limited: retry after %s", e.Operation, e.RetryAfter.Round(time.Second))
+	}
+	return fmt.Sprintf("%s rate limited", e.Operation)
+}
 
 // Client wraps the Modrinth REST API.
 type Client struct {
@@ -141,26 +158,13 @@ func (c *Client) SearchProjects(ctx context.Context, params SearchParams) (*Sear
 	}
 	values.Set("index", "relevance")
 
-	endpoint := fmt.Sprintf("%s/search?%s", c.baseURL, values.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.get(ctx, fmt.Sprintf("%s/search?%s", c.baseURL, values.Encode()), "modrinth search")
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
-		return nil, fmt.Errorf("modrinth search failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var payload searchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode search response: %w", err)
 	}
 
@@ -179,26 +183,9 @@ func (c *Client) SearchProjects(ctx context.Context, params SearchParams) (*Sear
 
 // GetProject returns full project details including body and gallery.
 func (c *Client) GetProject(ctx context.Context, projectID string) (*Project, error) {
-	endpoint := fmt.Sprintf("%s/project/%s", c.baseURL, projectID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.get(ctx, fmt.Sprintf("%s/project/%s", c.baseURL, projectID), "modrinth project")
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	var payload projectDetailResponse
@@ -231,26 +218,13 @@ func (c *Client) GetProjectVersions(ctx context.Context, projectID string, filte
 		}
 	}
 
-	endpoint := fmt.Sprintf("%s/project/%s/version?%s", c.baseURL, projectID, values.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.get(ctx, fmt.Sprintf("%s/project/%s/version?%s", c.baseURL, projectID, values.Encode()), "modrinth versions")
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
-		return nil, fmt.Errorf("modrinth versions failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var payload []versionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode versions: %w", err)
 	}
 
@@ -264,26 +238,13 @@ func (c *Client) GetProjectVersions(ctx context.Context, projectID string, filte
 
 // GetVersion fetches a single version by ID.
 func (c *Client) GetVersion(ctx context.Context, versionID string) (*Version, error) {
-	endpoint := fmt.Sprintf("%s/version/%s", c.baseURL, versionID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.get(ctx, fmt.Sprintf("%s/version/%s", c.baseURL, versionID), "modrinth version")
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
-		return nil, fmt.Errorf("modrinth version failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var payload versionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode version: %w", err)
 	}
 
@@ -304,29 +265,17 @@ func (c *Client) GetVersionByFileHash(ctx context.Context, fileHash, algorithm s
 
 	values := url.Values{}
 	values.Set("algorithm", algorithm)
-	endpoint := fmt.Sprintf("%s/version_file/%s?%s", c.baseURL, url.PathEscape(fileHash), values.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.get(ctx, fmt.Sprintf("%s/version_file/%s?%s", c.baseURL, url.PathEscape(fileHash), values.Encode()), "modrinth version file lookup")
 	if err != nil {
+		var httpErr *httpError
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+			return nil, ErrNotFound
+		}
 		return nil, err
-	}
-	req.Header.Set("User-Agent", c.userAgent)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
-		return nil, fmt.Errorf("modrinth version file lookup failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var payload versionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, fmt.Errorf("decode version file lookup: %w", err)
 	}
 
@@ -335,6 +284,109 @@ func (c *Client) GetVersionByFileHash(ctx context.Context, fileHash, algorithm s
 }
 
 // --- internal helpers ---
+
+type httpError struct {
+	Operation  string
+	StatusCode int
+	Body       string
+}
+
+func (e *httpError) Error() string {
+	return fmt.Sprintf("%s failed: status=%d body=%s", e.Operation, e.StatusCode, e.Body)
+}
+
+func (c *Client) get(ctx context.Context, endpoint, operation string) ([]byte, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		body, retryAfter, err := c.getOnce(ctx, endpoint, operation)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+
+		var rateLimitErr *RateLimitError
+		if !errors.As(err, &rateLimitErr) || attempt == maxAttempts-1 {
+			return nil, err
+		}
+		wait := retryDelay(attempt, retryAfter)
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *Client) getOnce(ctx context.Context, endpoint, operation string) ([]byte, time.Duration, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, 0, fmt.Errorf("read response: %w", err)
+		}
+		return body, 0, nil
+	}
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
+	body := strings.TrimSpace(string(bodyBytes))
+	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, retryAfter, &RateLimitError{
+			Operation:  operation,
+			StatusCode: resp.StatusCode,
+			RetryAfter: retryAfter,
+			Body:       body,
+		}
+	}
+	return nil, 0, &httpError{
+		Operation:  operation,
+		StatusCode: resp.StatusCode,
+		Body:       body,
+	}
+}
+
+func retryDelay(attempt int, retryAfter time.Duration) time.Duration {
+	if retryAfter > 0 {
+		if retryAfter > 5*time.Second {
+			return 5 * time.Second
+		}
+		return retryAfter
+	}
+	return time.Duration(attempt+1) * 500 * time.Millisecond
+}
+
+func parseRetryAfter(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds < 0 {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	if retryAt, err := http.ParseTime(value); err == nil {
+		if wait := time.Until(retryAt); wait > 0 {
+			return wait
+		}
+	}
+	return 0
+}
 
 type searchResponse struct {
 	Hits      []projectHit `json:"hits"`

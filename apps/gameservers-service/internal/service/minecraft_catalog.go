@@ -274,12 +274,8 @@ func (s *Service) GetMinecraftProjectVersions(ctx context.Context, req *connect.
 	// High-limit requests are used by broad pickers. Plugins should still support
 	// explicit game-version filters, but never get loader auto-filled.
 	skipAutoFill := limit >= 50
-	isPlugin := projectType == gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN
-
 	loaders := dedupeStrings(req.Msg.GetLoaders())
-	if isPlugin {
-		loaders = nil
-	} else if len(loaders) == 0 && !skipAutoFill {
+	if len(loaders) == 0 && !skipAutoFill {
 		if inferred := loaderFromServerType(serverType); inferred != "" {
 			loaders = []string{inferred}
 		}
@@ -397,7 +393,7 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 
 	version, err := s.modClient.GetVersion(ctx, req.Msg.GetVersionId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch version: %w", err))
+		return nil, modrinthFetchConnectError("failed to fetch version", err)
 	}
 	if !strings.EqualFold(version.ProjectID, req.Msg.GetProjectId()) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version does not belong to project"))
@@ -405,10 +401,14 @@ func (s *Service) InstallMinecraftProjectFile(ctx context.Context, req *connect.
 	if strings.EqualFold(version.ServerSide, "unsupported") {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("selected version is not server-compatible"))
 	}
+	serverVersion := minecraftServerVersion(dbGameServer.ServerVersion, env)
+	if err := validateMinecraftVersionCompatibility(*version, serverType, projectType, serverVersion); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
 
-	file := selectDownloadFile(version.Files)
+	file := selectDownloadFileForLoader(version.Files, loaderFromServerType(serverType))
 	if file == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable files"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable file compatible with %s", serverType))
 	}
 
 	dataPath, installDir, _, err := s.resolveMinecraftInstallDirectory(ctx, dbGameServer.ID, serverType, projectType)
@@ -481,7 +481,7 @@ func (s *Service) UpdateMinecraftProjectFile(ctx context.Context, req *connect.R
 
 	version, err := s.modClient.GetVersion(ctx, req.Msg.GetVersionId())
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch version: %w", err))
+		return nil, modrinthFetchConnectError("failed to fetch version", err)
 	}
 	if !strings.EqualFold(version.ProjectID, req.Msg.GetProjectId()) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("version does not belong to project"))
@@ -489,10 +489,14 @@ func (s *Service) UpdateMinecraftProjectFile(ctx context.Context, req *connect.R
 	if strings.EqualFold(version.ServerSide, "unsupported") {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("selected version is not server-compatible"))
 	}
+	serverVersion := minecraftServerVersion(dbGameServer.ServerVersion, env)
+	if err := validateMinecraftVersionCompatibility(*version, serverType, projectType, serverVersion); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
 
-	file := selectDownloadFile(version.Files)
+	file := selectDownloadFileForLoader(version.Files, loaderFromServerType(serverType))
 	if file == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable files"))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("version has no downloadable file compatible with %s", serverType))
 	}
 
 	dataPath, installDir, _, err := s.resolveMinecraftInstallDirectory(ctx, dbGameServer.ID, serverType, projectType)
@@ -1099,10 +1103,8 @@ func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, server
 	if serverVersion != "" {
 		filter.GameVersions = []string{serverVersion}
 	}
-	if projectType != gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN {
-		if loader := loaderFromServerType(serverType); loader != "" {
-			filter.Loaders = []string{loader}
-		}
+	if loaders := compatibleLoadersForServer(serverType, projectType); len(loaders) > 0 {
+		filter.Loaders = loaders
 	}
 
 	versions, err := s.modClient.GetProjectVersions(ctx, projectID, filter)
@@ -1117,7 +1119,10 @@ func (s *Service) latestCompatibleVersion(ctx context.Context, projectID, server
 		if !isStableMinecraftVersion(version) {
 			continue
 		}
-		if selectDownloadFile(version.Files) == nil {
+		if validateMinecraftVersionCompatibility(version, serverType, projectType, serverVersion) != nil {
+			continue
+		}
+		if selectDownloadFileForLoader(version.Files, loaderFromServerType(serverType)) == nil {
 			continue
 		}
 		return &version
@@ -1219,6 +1224,18 @@ func isStableMinecraftVersion(version modrinth.Version) bool {
 	return true
 }
 
+func modrinthFetchConnectError(prefix string, err error) error {
+	var rateLimitErr *modrinth.RateLimitError
+	if errors.As(err, &rateLimitErr) {
+		message := "Modrinth is rate limiting plugin metadata requests. Try again shortly."
+		if rateLimitErr.RetryAfter > 0 {
+			message = fmt.Sprintf("Modrinth is rate limiting plugin metadata requests. Try again in about %s.", rateLimitErr.RetryAfter.Round(time.Second))
+		}
+		return connect.NewError(connect.CodeResourceExhausted, fmt.Errorf("%s: %s", prefix, message))
+	}
+	return connect.NewError(connect.CodeInternal, fmt.Errorf("%s: %w", prefix, err))
+}
+
 func modrinthTypeToProto(value string) gameserversv1.MinecraftProjectType {
 	switch strings.ToLower(value) {
 	case "plugin":
@@ -1317,6 +1334,43 @@ func loaderFromServerType(serverType string) string {
 	}
 }
 
+func compatibleLoadersForServer(serverType string, projectType gameserversv1.MinecraftProjectType) []string {
+	loader := loaderFromServerType(serverType)
+	if loader == "" {
+		return nil
+	}
+	if projectType != gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN {
+		return []string{loader}
+	}
+	switch loader {
+	case "purpur":
+		return []string{"purpur", "paper", "spigot", "bukkit"}
+	case "paper":
+		return []string{"paper", "spigot", "bukkit"}
+	case "spigot":
+		return []string{"spigot", "bukkit"}
+	case "bukkit":
+		return []string{"bukkit"}
+	case "folia":
+		return []string{"folia", "paper", "spigot", "bukkit"}
+	case "waterfall":
+		return []string{"waterfall", "bungeecord"}
+	default:
+		return []string{loader}
+	}
+}
+
+func validateMinecraftVersionCompatibility(version modrinth.Version, serverType string, projectType gameserversv1.MinecraftProjectType, serverVersion string) error {
+	if serverVersion != "" && len(version.GameVersions) > 0 && !containsFold(version.GameVersions, serverVersion) {
+		return fmt.Errorf("selected version does not support Minecraft %s", serverVersion)
+	}
+	loaders := compatibleLoadersForServer(serverType, projectType)
+	if len(loaders) > 0 && len(version.Loaders) > 0 && !intersectsFold(version.Loaders, loaders) {
+		return fmt.Errorf("selected version does not support %s", strings.ToUpper(serverType))
+	}
+	return nil
+}
+
 type installProfile struct {
 	InstallDir  string
 	Description string
@@ -1365,21 +1419,125 @@ func isPluginCapableServer(serverType string) bool {
 }
 
 func selectDownloadFile(files []modrinth.VersionFile) *modrinth.VersionFile {
+	return selectDownloadFileForLoader(files, "")
+}
+
+func selectDownloadFileForLoader(files []modrinth.VersionFile, loader string) *modrinth.VersionFile {
 	if len(files) == 0 {
 		return nil
 	}
-	for _, file := range files {
-		if file.Primary {
-			return &file
+	preferred := strings.ToLower(strings.TrimSpace(loader))
+	if preferred != "" {
+		for i := range files {
+			if files[i].Primary && downloadFileMatchesLoader(files[i], preferred) {
+				return &files[i]
+			}
+		}
+		for i := range files {
+			if downloadFileMatchesLoader(files[i], preferred) {
+				return &files[i]
+			}
+		}
+		for i := range files {
+			if files[i].Primary && downloadFileCompatibleWithLoader(files[i], preferred) {
+				return &files[i]
+			}
+		}
+		for i := range files {
+			if downloadFileCompatibleWithLoader(files[i], preferred) {
+				return &files[i]
+			}
+		}
+		return nil
+	}
+	for i := range files {
+		if files[i].Primary {
+			return &files[i]
 		}
 	}
 	// fallback: prefer JAR files
-	for _, file := range files {
-		if strings.HasSuffix(strings.ToLower(file.Filename), ".jar") {
-			return &file
+	for i := range files {
+		if strings.HasSuffix(strings.ToLower(files[i].Filename), ".jar") {
+			return &files[i]
 		}
 	}
 	return &files[0]
+}
+
+func downloadFileMatchesLoader(file modrinth.VersionFile, loader string) bool {
+	name := strings.ToLower(file.Filename)
+	return strings.HasSuffix(name, ".jar") && strings.Contains(name, loader)
+}
+
+func downloadFileCompatibleWithLoader(file modrinth.VersionFile, loader string) bool {
+	name := strings.ToLower(file.Filename)
+	if !strings.HasSuffix(name, ".jar") {
+		return false
+	}
+	allowed := compatibleFilenameMarkersForLoader(loader)
+	for _, marker := range minecraftLoaderFilenameMarkers() {
+		if containsFold(allowed, marker) {
+			continue
+		}
+		if strings.Contains(name, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+func compatibleFilenameMarkersForLoader(loader string) []string {
+	switch loader {
+	case "purpur":
+		return []string{"purpur", "paper", "spigot", "bukkit"}
+	case "paper":
+		return []string{"paper", "spigot", "bukkit"}
+	case "spigot":
+		return []string{"spigot", "bukkit"}
+	case "folia":
+		return []string{"folia", "paper", "spigot", "bukkit"}
+	case "waterfall":
+		return []string{"waterfall", "bungeecord"}
+	default:
+		return []string{loader}
+	}
+}
+
+func minecraftLoaderFilenameMarkers() []string {
+	return []string{
+		"bukkit",
+		"spigot",
+		"paper",
+		"purpur",
+		"folia",
+		"velocity",
+		"waterfall",
+		"bungeecord",
+		"forge",
+		"neoforge",
+		"fabric",
+		"quilt",
+		"magma",
+		"catserver",
+	}
+}
+
+func containsFold(values []string, expected string) bool {
+	for _, value := range values {
+		if strings.EqualFold(value, expected) {
+			return true
+		}
+	}
+	return false
+}
+
+func intersectsFold(left, right []string) bool {
+	for _, l := range left {
+		if containsFold(right, l) {
+			return true
+		}
+	}
+	return false
 }
 
 func encodeCursor(offset int) string {

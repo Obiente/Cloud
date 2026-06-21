@@ -59,3 +59,61 @@ func TestGetVersionByFileHashNotFound(t *testing.T) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 }
+
+func TestGetVersionRetriesRateLimit(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`error code: 1015`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id":"version-id",
+			"project_id":"project-id",
+			"name":"Release",
+			"version_number":"1.0.0",
+			"version_type":"release",
+			"files":[{"hashes":{"sha1":"abc123"},"primary":true,"filename":"Plugin.jar","url":"https://example.test/plugin.jar","size":123}]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client())
+	client.baseURL = server.URL
+
+	version, err := client.GetVersion(context.Background(), "version-id")
+	if err != nil {
+		t.Fatalf("GetVersion returned error: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("expected 2 requests, got %d", requests)
+	}
+	if version.ID != "version-id" {
+		t.Fatalf("unexpected version: %#v", version)
+	}
+}
+
+func TestGetVersionReturnsRateLimitError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`error code: 1015`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client())
+	client.baseURL = server.URL
+
+	_, err := client.GetVersion(context.Background(), "version-id")
+	var rateLimitErr *RateLimitError
+	if !errors.As(err, &rateLimitErr) {
+		t.Fatalf("expected RateLimitError, got %v", err)
+	}
+	if rateLimitErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("unexpected status code %d", rateLimitErr.StatusCode)
+	}
+}
