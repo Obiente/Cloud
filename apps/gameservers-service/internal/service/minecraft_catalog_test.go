@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"gameservers-service/internal/catalog/modrinth"
+
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 )
 
 func TestMatchingVersionFilePrefersHash(t *testing.T) {
@@ -131,5 +133,66 @@ func TestIsStableMinecraftVersion(t *testing.T) {
 				t.Fatalf("expected stable=%v, got %v", tt.stable, got)
 			}
 		})
+	}
+}
+
+func TestValidateMinecraftVersionCompatibilityRejectsWrongLoader(t *testing.T) {
+	version := modrinth.Version{
+		VersionNumber: "5.10.0",
+		GameVersions:  []string{"1.21.5"},
+		Loaders:       []string{"velocity"},
+	}
+
+	err := validateMinecraftVersionCompatibility(version, "PAPER", gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN, "1.21.5")
+	if err == nil {
+		t.Fatal("expected Paper server to reject Velocity plugin version")
+	}
+}
+
+func TestValidateMinecraftVersionCompatibilityRejectsWrongGameVersion(t *testing.T) {
+	version := modrinth.Version{
+		VersionNumber: "5.10.0",
+		GameVersions:  []string{"1.20.1"},
+		Loaders:       []string{"paper"},
+	}
+
+	err := validateMinecraftVersionCompatibility(version, "PAPER", gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN, "1.21.5")
+	if err == nil {
+		t.Fatal("expected Minecraft 1.21.5 server to reject 1.20.1 plugin version")
+	}
+}
+
+func TestValidateMinecraftVersionCompatibilityAllowsPaperCompatiblePlugin(t *testing.T) {
+	version := modrinth.Version{
+		VersionNumber: "5.10.0",
+		GameVersions:  []string{"1.21.5"},
+		Loaders:       []string{"spigot"},
+	}
+
+	err := validateMinecraftVersionCompatibility(version, "PAPER", gameserversv1.MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN, "1.21.5")
+	if err != nil {
+		t.Fatalf("expected Paper server to accept Spigot-compatible plugin version: %v", err)
+	}
+}
+
+func TestSelectDownloadFileForLoaderPrefersMatchingJar(t *testing.T) {
+	files := []modrinth.VersionFile{
+		{Primary: true, Filename: "Plugin-Velocity.jar"},
+		{Filename: "Plugin-Paper.jar"},
+	}
+
+	file := selectDownloadFileForLoader(files, "paper")
+	if file == nil || file.Filename != "Plugin-Paper.jar" {
+		t.Fatalf("expected paper jar, got %#v", file)
+	}
+}
+
+func TestSelectDownloadFileForLoaderRejectsIncompatibleJar(t *testing.T) {
+	files := []modrinth.VersionFile{
+		{Primary: true, Filename: "Plugin-Velocity.jar"},
+	}
+
+	if file := selectDownloadFileForLoader(files, "paper"); file != nil {
+		t.Fatalf("expected no compatible paper jar, got %#v", file)
 	}
 }
