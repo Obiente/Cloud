@@ -43,7 +43,7 @@ services:
 
   # HAProxy - PostgreSQL connection pooler and load balancer
   pgpool:
-    image: bitnami/pgpool:4
+    image: soldevelo/pgpool:4
     environment:
       PGPOOL_BACKEND_NODES: 0:patroni-1:5432,1:patroni-2:5432,2:patroni-3:5432
       PGPOOL_SR_CHECK_USER: ${POSTGRES_USER:-obiente_postgres}
@@ -189,7 +189,7 @@ services:
 
   # PgPool for TimescaleDB - Connection pooler and load balancer
   metrics-pgpool:
-    image: bitnami/pgpool:4
+    image: soldevelo/pgpool:4
     environment:
       PGPOOL_BACKEND_NODES: 0:metrics-patroni-1:5432,1:metrics-patroni-2:5432,2:metrics-patroni-3:5432
       PGPOOL_SR_CHECK_USER: ${METRICS_DB_USER:-obiente_postgres}
