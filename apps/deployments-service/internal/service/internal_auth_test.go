@@ -7,51 +7,76 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 
 	"connectrpc.com/connect"
 )
 
 func TestInternalServiceAuthInterceptorSetsSystemPrincipal(t *testing.T) {
 	interceptor := NewInternalServiceAuthInterceptor("shared-secret")
-	called := false
-	next := func(ctx context.Context, _ connect.AnyRequest) (connect.AnyResponse, error) {
-		called = true
-		user, err := auth.GetUserFromContext(ctx)
-		if err != nil {
-			t.Fatalf("get internal principal: %v", err)
-		}
-		if user.Id != "system" {
-			t.Fatalf("internal principal = %q, want system", user.Id)
-		}
-		return connect.NewResponse(&deploymentsv1.TriggerDeploymentResponse{}), nil
-	}
 
-	req := connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{})
-	req.Header().Set(internalServiceSecretHeader, "shared-secret")
-	if _, err := interceptor.WrapUnary(next)(context.Background(), req); err != nil {
+	ctx, err := interceptor.authenticateForwardedTrigger(
+		context.Background(),
+		"shared-secret",
+		deploymentsv1connect.DeploymentServiceTriggerDeploymentProcedure,
+		"node-two",
+	)
+	if err != nil {
 		t.Fatalf("authenticate internal request: %v", err)
 	}
-	if !called {
-		t.Fatal("authenticated internal request did not reach handler")
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		t.Fatalf("get internal principal: %v", err)
+	}
+	if user.Id != "system" {
+		t.Fatalf("internal principal = %q, want system", user.Id)
 	}
 }
 
 func TestInternalServiceAuthInterceptorRejectsInvalidSecret(t *testing.T) {
 	interceptor := NewInternalServiceAuthInterceptor("shared-secret")
-	req := connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{})
-	req.Header().Set(internalServiceSecretHeader, "wrong-secret")
 
-	_, err := interceptor.WrapUnary(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) {
-		t.Fatal("invalid internal request reached handler")
-		return nil, nil
-	})(context.Background(), req)
+	_, err := interceptor.authenticateForwardedTrigger(
+		context.Background(),
+		"wrong-secret",
+		deploymentsv1connect.DeploymentServiceTriggerDeploymentProcedure,
+		"node-two",
+	)
 	if connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Fatalf("error code = %s, want %s", connect.CodeOf(err), connect.CodeUnauthenticated)
 	}
 }
 
+func TestInternalServiceAuthInterceptorRejectsOtherProcedures(t *testing.T) {
+	interceptor := NewInternalServiceAuthInterceptor("shared-secret")
+
+	_, err := interceptor.authenticateForwardedTrigger(
+		context.Background(),
+		"shared-secret",
+		deploymentsv1connect.DeploymentServiceDeleteDeploymentProcedure,
+		"node-two",
+	)
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("error code = %s, want %s", connect.CodeOf(err), connect.CodePermissionDenied)
+	}
+}
+
+func TestInternalServiceAuthInterceptorRequiresForwardingTarget(t *testing.T) {
+	interceptor := NewInternalServiceAuthInterceptor("shared-secret")
+
+	_, err := interceptor.authenticateForwardedTrigger(
+		context.Background(),
+		"shared-secret",
+		deploymentsv1connect.DeploymentServiceTriggerDeploymentProcedure,
+		"",
+	)
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("error code = %s, want %s", connect.CodeOf(err), connect.CodePermissionDenied)
+	}
+}
+
 func TestTriggerDeploymentForwardHeadersAuthenticatesSystemCall(t *testing.T) {
-	t.Setenv("INTERNAL_SERVICE_SECRET", "shared-secret")
+	t.Setenv(deploymentsInternalServiceSecretEnv, "shared-secret")
 	req := connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{})
 
 	headers, err := triggerDeploymentForwardHeaders(auth.WithSystemUser(context.Background()), req, "node-two")

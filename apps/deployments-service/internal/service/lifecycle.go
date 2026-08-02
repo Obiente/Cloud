@@ -34,9 +34,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has deploy permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	commitSHA := strings.TrimSpace(req.Msg.GetCommitSha())
-	if commitSHA != "" && !isGitHubCommitSHA(commitSHA) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid commit SHA"))
+	commitSHA, err := requestedDeploymentCommitSHA(ctx, req.Msg.GetCommitSha())
+	if err != nil {
+		return nil, err
 	}
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "deploy"); err != nil {
 		return nil, err
@@ -391,7 +391,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		var buildResult *BuildResult
 
 		// Handle compose-based deployments
-		if dbDeployment.ComposeYaml != "" {
+		if shouldDeployStoredCompose(dbDeployment) {
 			streamer.Write([]byte("🐳 Deploying Docker Compose configuration...\n"))
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
 				logger.Warn("[TriggerDeployment] Compose deployment failed: %v", err)
@@ -663,6 +663,28 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	return res, nil
 }
 
+func requestedDeploymentCommitSHA(ctx context.Context, value string) (string, error) {
+	commitSHA := strings.TrimSpace(value)
+	if commitSHA == "" {
+		return "", nil
+	}
+	if !isGitHubCommitSHA(commitSHA) {
+		return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid commit SHA"))
+	}
+
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil || userInfo == nil || userInfo.Id != "system" {
+		return "", connect.NewError(connect.CodePermissionDenied, fmt.Errorf("commit overrides are restricted to trusted deployment triggers"))
+	}
+	return commitSHA, nil
+}
+
+func shouldDeployStoredCompose(deployment *database.Deployment) bool {
+	return deployment != nil &&
+		deployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) &&
+		strings.TrimSpace(deployment.ComposeYaml) != ""
+}
+
 func triggerDeploymentForwardHeaders(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest], targetNodeID string) (map[string]string, error) {
 	headers := map[string]string{
 		orchestrator.ForwardTargetNodeHeader: targetNodeID,
@@ -670,9 +692,9 @@ func triggerDeploymentForwardHeaders(ctx context.Context, req *connect.Request[d
 
 	userInfo, _ := auth.GetUserFromContext(ctx)
 	if userInfo != nil && userInfo.Id == "system" {
-		secret := strings.TrimSpace(os.Getenv("INTERNAL_SERVICE_SECRET"))
+		secret := strings.TrimSpace(os.Getenv(deploymentsInternalServiceSecretEnv))
 		if secret == "" {
-			return nil, fmt.Errorf("INTERNAL_SERVICE_SECRET is required for cross-node automatic deployments")
+			return nil, fmt.Errorf("%s is required for cross-node automatic deployments", deploymentsInternalServiceSecretEnv)
 		}
 		headers[internalServiceSecretHeader] = secret
 		return headers, nil

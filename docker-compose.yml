@@ -222,6 +222,7 @@ services:
       dockerfile: apps/deployments-service/Dockerfile
     environment:
       PORT: 3005
+      DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
     depends_on:
       postgres:
