@@ -11,13 +11,6 @@ export default eventHandler(async (event) => {
 
   const { code_challenge, code_challenge_method } = await handlePKCE(event);
 
-  // Check for existing session cookie to determine if we should use silent auth
-  const { AUTH_COOKIE_NAME } = await import("../../utils/auth");
-  const sessionCookie = getCookie(event, AUTH_COOKIE_NAME);
-  // If no session cookie exists, try silent auth (check if user is logged into Zitadel)
-  // If session cookie exists, don't use prompt (let Zitadel use existing session)
-  const isSilent = !sessionCookie;
-
   const params = new URLSearchParams({
     client_id: OIDC.clientId,
     redirect_uri: config.public.requestHost + OIDC.redirectPath,
@@ -27,11 +20,10 @@ export default eventHandler(async (event) => {
     code_challenge_method: code_challenge_method!,
   });
 
-  // Use silent auth if no local session, otherwise let Zitadel handle it naturally
-  // NOT using prompt: "login" because that prevents session persistence
-  if (isSilent) {
-    params.set("prompt", "none");
-  }
-
+  // This route is opened by an explicit user action, so it must remain
+  // interactive. Omitting prompt lets Zitadel reuse a valid session or show its
+  // login UI. prompt=none is reserved for /auth/silent-check; with Login V2 it
+  // returns a raw "No active session found" response when the browser only has
+  // stale or unusable Zitadel sessions.
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);
 });
