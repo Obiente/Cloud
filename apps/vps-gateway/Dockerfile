@@ -3,8 +3,8 @@ ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS builder
 
 # Accept build arguments for multi-arch support
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+ARG TARGETARCH
+ARG TARGETOS
 
 WORKDIR /build
 
