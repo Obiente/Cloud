@@ -124,8 +124,17 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		buildCtx, buildCancel := s.detachedContext(0)
 		defer buildCancel()
+		buildToken := s.registerDeploymentBuild(deploymentID, buildCancel)
+		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
 		buildCtx = orchestrator.WithTargetNode(buildCtx, orchestrator.TargetNodeFromContext(ctx))
 		buildStartTime := time.Now()
+		previewStatusFinalized := false
+		s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING, "")
+		defer func() {
+			if !previewStatusFinalized {
+				s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, "The preview build ended before deployment completed.")
+			}
+		}()
 
 		// Get or create build log streamer
 		// Note: We do NOT close the streamer here because it should persist across builds
@@ -335,6 +344,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
 				logger.Warn("[TriggerDeployment] Failed to update build status: %v", err)
 				return
+			}
+			if status == 4 {
+				previewStatusFinalized = true
+				message := "Preview build failed."
+				if errorMsg != nil && strings.TrimSpace(*errorMsg) != "" {
+					message = *errorMsg
+				}
+				s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, message)
 			}
 
 			// Create notifications when build status changes from building/pending to success/failed
@@ -619,6 +636,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 			_ = s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, 3, int32(time.Since(buildStartTime).Seconds()), &runtimeFailureMsg)
+			previewStatusFinalized = true
+			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, runtimeFailureMsg)
 
 			deploymentName := dbDeployment.Name
 			if deploymentName == "" {
@@ -653,6 +672,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
+			previewStatusFinalized = true
+			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
 		}
 	}()
 

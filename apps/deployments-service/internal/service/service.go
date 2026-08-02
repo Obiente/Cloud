@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
@@ -14,7 +15,13 @@ import (
 	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 )
+
+type activeDeploymentBuild struct {
+	token  string
+	cancel context.CancelFunc
+}
 
 type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
@@ -27,6 +34,8 @@ type Service struct {
 	buildRegistry     *BuildStrategyRegistry
 	forwarder         *orchestrator.NodeForwarder
 	backgroundCtx     context.Context
+	activeBuildsMu    sync.Mutex
+	activeBuilds      map[string]activeDeploymentBuild
 }
 
 func NewService(backgroundCtx context.Context, repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) *Service {
@@ -41,6 +50,38 @@ func NewService(backgroundCtx context.Context, repo *database.DeploymentReposito
 		buildRegistry:     NewBuildStrategyRegistry(),
 		forwarder:         forwarder,
 		backgroundCtx:     backgroundCtx,
+		activeBuilds:      make(map[string]activeDeploymentBuild),
+	}
+}
+
+func (s *Service) registerDeploymentBuild(deploymentID string, cancel context.CancelFunc) string {
+	token := uuid.NewString()
+	s.activeBuildsMu.Lock()
+	if s.activeBuilds == nil {
+		s.activeBuilds = make(map[string]activeDeploymentBuild)
+	}
+	s.activeBuilds[deploymentID] = activeDeploymentBuild{token: token, cancel: cancel}
+	s.activeBuildsMu.Unlock()
+	return token
+}
+
+func (s *Service) unregisterDeploymentBuild(deploymentID, token string) {
+	s.activeBuildsMu.Lock()
+	defer s.activeBuildsMu.Unlock()
+	if current, ok := s.activeBuilds[deploymentID]; ok && current.token == token {
+		delete(s.activeBuilds, deploymentID)
+	}
+}
+
+func (s *Service) cancelDeploymentBuild(deploymentID string) {
+	s.activeBuildsMu.Lock()
+	current := s.activeBuilds[deploymentID]
+	if current.cancel != nil {
+		delete(s.activeBuilds, deploymentID)
+	}
+	s.activeBuildsMu.Unlock()
+	if current.cancel != nil {
+		current.cancel()
 	}
 }
 

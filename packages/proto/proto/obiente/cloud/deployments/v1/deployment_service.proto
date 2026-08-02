@@ -61,6 +61,25 @@ enum BuildStatus {
   BUILD_FAILED = 4;
 }
 
+enum PullRequestForkPolicy {
+  PULL_REQUEST_FORK_POLICY_UNSPECIFIED = 0;
+  PULL_REQUEST_FORK_DENY = 1;
+  PULL_REQUEST_FORK_REQUIRE_APPROVAL = 2;
+  PULL_REQUEST_FORK_ISOLATED = 3;
+}
+
+enum PullRequestDeploymentStatus {
+  PULL_REQUEST_DEPLOYMENT_STATUS_UNSPECIFIED = 0;
+  PULL_REQUEST_DEPLOYMENT_QUEUED = 1;
+  PULL_REQUEST_DEPLOYMENT_BUILDING = 2;
+  PULL_REQUEST_DEPLOYMENT_RUNNING = 3;
+  PULL_REQUEST_DEPLOYMENT_FAILED = 4;
+  PULL_REQUEST_DEPLOYMENT_SKIPPED = 5;
+  PULL_REQUEST_DEPLOYMENT_CLOSED = 6;
+  PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL = 7;
+  PULL_REQUEST_DEPLOYMENT_REJECTED = 8;
+}
+
 // Health check type for deployments
 enum HealthCheckType {
   HEALTHCHECK_TYPE_UNSPECIFIED = 0; // Auto-detect (TCP if routing exists, otherwise no healthcheck)
@@ -165,6 +184,16 @@ service DeploymentService {
   
   // List all available GitHub integrations for the current user
   rpc ListAvailableGitHubIntegrations(ListAvailableGitHubIntegrationsRequest) returns (ListAvailableGitHubIntegrationsResponse);
+
+  // Pull request environments
+  rpc GetPullRequestDeploymentConfig(GetPullRequestDeploymentConfigRequest) returns (GetPullRequestDeploymentConfigResponse);
+  rpc UpdatePullRequestDeploymentConfig(UpdatePullRequestDeploymentConfigRequest) returns (UpdatePullRequestDeploymentConfigResponse);
+  rpc ListPullRequestDeployments(ListPullRequestDeploymentsRequest) returns (ListPullRequestDeploymentsResponse);
+  rpc RedeployPullRequestDeployment(RedeployPullRequestDeploymentRequest) returns (RedeployPullRequestDeploymentResponse);
+  rpc DeletePullRequestDeployment(DeletePullRequestDeploymentRequest) returns (DeletePullRequestDeploymentResponse);
+  rpc ApprovePullRequestDeployment(ApprovePullRequestDeploymentRequest) returns (ApprovePullRequestDeploymentResponse);
+  rpc RejectPullRequestDeployment(RejectPullRequestDeploymentRequest) returns (RejectPullRequestDeploymentResponse);
+  rpc RestorePullRequestDeployment(RestorePullRequestDeploymentRequest) returns (RestorePullRequestDeploymentResponse);
 
   // Terminal access
   // Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
@@ -553,6 +582,135 @@ message GitHubIntegrationOption {
 
 message ListAvailableGitHubIntegrationsResponse {
   repeated GitHubIntegrationOption integrations = 1;
+}
+
+message PullRequestDeploymentConfig {
+  string deployment_id = 1;
+  bool enabled = 2;
+  repeated string base_branches = 3;
+  repeated string include_paths = 4;
+  repeated string exclude_paths = 5;
+  bool deploy_drafts = 6;
+  bool redeploy_on_push = 7;
+  bool cleanup_on_close = 8;
+  bool comment_enabled = 9;
+  bool deployment_status_enabled = 10;
+  string domain_template = 11;
+  uint32 max_active_previews = 12;
+  uint32 ttl_hours = 13;
+  PullRequestForkPolicy fork_policy = 14;
+  repeated string environment_variable_names = 15;
+  repeated string build_argument_names = 16;
+  google.protobuf.Timestamp created_at = 17;
+  google.protobuf.Timestamp updated_at = 18;
+  bool require_approval = 19;
+  bool approval_covers_updates = 20;
+  bool check_run_enabled = 21;
+  uint32 restored_preview_ttl_hours = 22;
+}
+
+message GetPullRequestDeploymentConfigRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message GetPullRequestDeploymentConfigResponse {
+  PullRequestDeploymentConfig config = 1;
+}
+
+message UpdatePullRequestDeploymentConfigRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  PullRequestDeploymentConfig config = 3;
+}
+
+message UpdatePullRequestDeploymentConfigResponse {
+  PullRequestDeploymentConfig config = 1;
+}
+
+message PullRequestDeployment {
+  string id = 1;
+  string source_deployment_id = 2;
+  optional string preview_deployment_id = 3;
+  string repository = 4;
+  int64 pull_request_number = 5;
+  string head_sha = 6;
+  string head_ref = 7;
+  string base_ref = 8;
+  bool from_fork = 9;
+  PullRequestDeploymentStatus status = 10;
+  optional string environment_url = 11;
+  optional string error = 12;
+  google.protobuf.Timestamp expires_at = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  optional string approved_by = 16;
+  optional string approved_head_sha = 17;
+  optional google.protobuf.Timestamp approved_at = 18;
+  bool merged = 19;
+  optional google.protobuf.Timestamp closed_at = 20;
+  optional string state_url = 21;
+}
+
+message ListPullRequestDeploymentsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  bool include_closed = 3;
+}
+
+message ListPullRequestDeploymentsResponse {
+  repeated PullRequestDeployment deployments = 1;
+}
+
+message RedeployPullRequestDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string pull_request_deployment_id = 3;
+}
+
+message RedeployPullRequestDeploymentResponse {
+  PullRequestDeployment deployment = 1;
+}
+
+message DeletePullRequestDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string pull_request_deployment_id = 3;
+}
+
+message DeletePullRequestDeploymentResponse {
+  bool success = 1;
+}
+
+message ApprovePullRequestDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string pull_request_deployment_id = 3;
+}
+
+message ApprovePullRequestDeploymentResponse {
+  PullRequestDeployment deployment = 1;
+}
+
+message RejectPullRequestDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string pull_request_deployment_id = 3;
+  optional string reason = 4;
+}
+
+message RejectPullRequestDeploymentResponse {
+  PullRequestDeployment deployment = 1;
+}
+
+message RestorePullRequestDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string pull_request_deployment_id = 3;
+}
+
+message RestorePullRequestDeploymentResponse {
+  PullRequestDeployment deployment = 1;
 }
 
 message StreamTerminalOutputRequest {

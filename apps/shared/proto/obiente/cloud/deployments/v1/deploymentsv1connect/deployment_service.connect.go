@@ -126,6 +126,30 @@ const (
 	// DeploymentServiceListAvailableGitHubIntegrationsProcedure is the fully-qualified name of the
 	// DeploymentService's ListAvailableGitHubIntegrations RPC.
 	DeploymentServiceListAvailableGitHubIntegrationsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListAvailableGitHubIntegrations"
+	// DeploymentServiceGetPullRequestDeploymentConfigProcedure is the fully-qualified name of the
+	// DeploymentService's GetPullRequestDeploymentConfig RPC.
+	DeploymentServiceGetPullRequestDeploymentConfigProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetPullRequestDeploymentConfig"
+	// DeploymentServiceUpdatePullRequestDeploymentConfigProcedure is the fully-qualified name of the
+	// DeploymentService's UpdatePullRequestDeploymentConfig RPC.
+	DeploymentServiceUpdatePullRequestDeploymentConfigProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UpdatePullRequestDeploymentConfig"
+	// DeploymentServiceListPullRequestDeploymentsProcedure is the fully-qualified name of the
+	// DeploymentService's ListPullRequestDeployments RPC.
+	DeploymentServiceListPullRequestDeploymentsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListPullRequestDeployments"
+	// DeploymentServiceRedeployPullRequestDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's RedeployPullRequestDeployment RPC.
+	DeploymentServiceRedeployPullRequestDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RedeployPullRequestDeployment"
+	// DeploymentServiceDeletePullRequestDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's DeletePullRequestDeployment RPC.
+	DeploymentServiceDeletePullRequestDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/DeletePullRequestDeployment"
+	// DeploymentServiceApprovePullRequestDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's ApprovePullRequestDeployment RPC.
+	DeploymentServiceApprovePullRequestDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ApprovePullRequestDeployment"
+	// DeploymentServiceRejectPullRequestDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's RejectPullRequestDeployment RPC.
+	DeploymentServiceRejectPullRequestDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RejectPullRequestDeployment"
+	// DeploymentServiceRestorePullRequestDeploymentProcedure is the fully-qualified name of the
+	// DeploymentService's RestorePullRequestDeployment RPC.
+	DeploymentServiceRestorePullRequestDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RestorePullRequestDeployment"
 	// DeploymentServiceStreamTerminalProcedure is the fully-qualified name of the DeploymentService's
 	// StreamTerminal RPC.
 	DeploymentServiceStreamTerminalProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamTerminal"
@@ -264,6 +288,15 @@ type DeploymentServiceClient interface {
 	DeleteBuild(context.Context, *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error)
 	// List all available GitHub integrations for the current user
 	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
+	// Pull request environments
+	GetPullRequestDeploymentConfig(context.Context, *connect.Request[v1.GetPullRequestDeploymentConfigRequest]) (*connect.Response[v1.GetPullRequestDeploymentConfigResponse], error)
+	UpdatePullRequestDeploymentConfig(context.Context, *connect.Request[v1.UpdatePullRequestDeploymentConfigRequest]) (*connect.Response[v1.UpdatePullRequestDeploymentConfigResponse], error)
+	ListPullRequestDeployments(context.Context, *connect.Request[v1.ListPullRequestDeploymentsRequest]) (*connect.Response[v1.ListPullRequestDeploymentsResponse], error)
+	RedeployPullRequestDeployment(context.Context, *connect.Request[v1.RedeployPullRequestDeploymentRequest]) (*connect.Response[v1.RedeployPullRequestDeploymentResponse], error)
+	DeletePullRequestDeployment(context.Context, *connect.Request[v1.DeletePullRequestDeploymentRequest]) (*connect.Response[v1.DeletePullRequestDeploymentResponse], error)
+	ApprovePullRequestDeployment(context.Context, *connect.Request[v1.ApprovePullRequestDeploymentRequest]) (*connect.Response[v1.ApprovePullRequestDeploymentResponse], error)
+	RejectPullRequestDeployment(context.Context, *connect.Request[v1.RejectPullRequestDeploymentRequest]) (*connect.Response[v1.RejectPullRequestDeploymentResponse], error)
+	RestorePullRequestDeployment(context.Context, *connect.Request[v1.RestorePullRequestDeploymentRequest]) (*connect.Response[v1.RestorePullRequestDeploymentResponse], error)
 	// Terminal access
 	// Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
 	// Use this for better input/output synchronization
@@ -518,6 +551,54 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("ListAvailableGitHubIntegrations")),
 			connect.WithClientOptions(opts...),
 		),
+		getPullRequestDeploymentConfig: connect.NewClient[v1.GetPullRequestDeploymentConfigRequest, v1.GetPullRequestDeploymentConfigResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetPullRequestDeploymentConfigProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetPullRequestDeploymentConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		updatePullRequestDeploymentConfig: connect.NewClient[v1.UpdatePullRequestDeploymentConfigRequest, v1.UpdatePullRequestDeploymentConfigResponse](
+			httpClient,
+			baseURL+DeploymentServiceUpdatePullRequestDeploymentConfigProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("UpdatePullRequestDeploymentConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		listPullRequestDeployments: connect.NewClient[v1.ListPullRequestDeploymentsRequest, v1.ListPullRequestDeploymentsResponse](
+			httpClient,
+			baseURL+DeploymentServiceListPullRequestDeploymentsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListPullRequestDeployments")),
+			connect.WithClientOptions(opts...),
+		),
+		redeployPullRequestDeployment: connect.NewClient[v1.RedeployPullRequestDeploymentRequest, v1.RedeployPullRequestDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceRedeployPullRequestDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RedeployPullRequestDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		deletePullRequestDeployment: connect.NewClient[v1.DeletePullRequestDeploymentRequest, v1.DeletePullRequestDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceDeletePullRequestDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("DeletePullRequestDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		approvePullRequestDeployment: connect.NewClient[v1.ApprovePullRequestDeploymentRequest, v1.ApprovePullRequestDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceApprovePullRequestDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ApprovePullRequestDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		rejectPullRequestDeployment: connect.NewClient[v1.RejectPullRequestDeploymentRequest, v1.RejectPullRequestDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceRejectPullRequestDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RejectPullRequestDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		restorePullRequestDeployment: connect.NewClient[v1.RestorePullRequestDeploymentRequest, v1.RestorePullRequestDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceRestorePullRequestDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RestorePullRequestDeployment")),
+			connect.WithClientOptions(opts...),
+		),
 		streamTerminal: connect.NewClient[v1.TerminalInput, v1.TerminalOutput](
 			httpClient,
 			baseURL+DeploymentServiceStreamTerminalProcedure,
@@ -661,60 +742,68 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // deploymentServiceClient implements DeploymentServiceClient.
 type deploymentServiceClient struct {
-	listDeployments                 *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
-	createDeployment                *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
-	getDeployment                   *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
-	updateDeployment                *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
-	triggerDeployment               *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
-	streamDeploymentStatus          *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
-	getDeploymentLogs               *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
-	streamDeploymentLogs            *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
-	streamBuildLogs                 *connect.Client[v1.StreamBuildLogsRequest, v1.DeploymentLogLine]
-	getDeploymentMetrics            *connect.Client[v1.GetDeploymentMetricsRequest, v1.GetDeploymentMetricsResponse]
-	streamDeploymentMetrics         *connect.Client[v1.StreamDeploymentMetricsRequest, v1.DeploymentMetric]
-	getDeploymentUsage              *connect.Client[v1.GetDeploymentUsageRequest, v1.GetDeploymentUsageResponse]
-	startDeployment                 *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
-	stopDeployment                  *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
-	deleteDeployment                *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
-	restartDeployment               *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
-	scaleDeployment                 *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
-	getDeploymentEnvVars            *connect.Client[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse]
-	updateDeploymentEnvVars         *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
-	getDeploymentCompose            *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
-	validateDeploymentCompose       *connect.Client[v1.ValidateDeploymentComposeRequest, v1.ValidateDeploymentComposeResponse]
-	updateDeploymentCompose         *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
-	listGitHubRepos                 *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
-	getGitHubBranches               *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
-	getGitHubFile                   *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
-	listBuilds                      *connect.Client[v1.ListBuildsRequest, v1.ListBuildsResponse]
-	getBuild                        *connect.Client[v1.GetBuildRequest, v1.GetBuildResponse]
-	getBuildLogs                    *connect.Client[v1.GetBuildLogsRequest, v1.GetBuildLogsResponse]
-	revertToBuild                   *connect.Client[v1.RevertToBuildRequest, v1.RevertToBuildResponse]
-	deleteBuild                     *connect.Client[v1.DeleteBuildRequest, v1.DeleteBuildResponse]
-	listAvailableGitHubIntegrations *connect.Client[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse]
-	streamTerminal                  *connect.Client[v1.TerminalInput, v1.TerminalOutput]
-	streamTerminalOutput            *connect.Client[v1.StreamTerminalOutputRequest, v1.TerminalOutput]
-	sendTerminalInput               *connect.Client[v1.SendTerminalInputRequest, v1.SendTerminalInputResponse]
-	listContainerFiles              *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
-	getContainerFile                *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
-	uploadContainerFiles            *connect.Client[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
-	chunkUploadContainerFiles       *connect.Client[v1.ChunkUploadContainerFilesRequest, v1.ChunkUploadContainerFilesResponse]
-	deleteContainerEntries          *connect.Client[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse]
-	renameContainerEntry            *connect.Client[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse]
-	createContainerEntry            *connect.Client[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse]
-	writeContainerFile              *connect.Client[v1.WriteContainerFileRequest, v1.WriteContainerFileResponse]
-	extractDeploymentFile           *connect.Client[v1.ExtractDeploymentFileRequest, v1.ExtractDeploymentFileResponse]
-	createDeploymentFileArchive     *connect.Client[v1.CreateDeploymentFileArchiveRequest, v1.CreateDeploymentFileArchiveResponse]
-	getDeploymentRoutings           *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
-	updateDeploymentRoutings        *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
-	getDeploymentServiceNames       *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
-	getDomainVerificationToken      *connect.Client[v1.GetDomainVerificationTokenRequest, v1.GetDomainVerificationTokenResponse]
-	verifyDomainOwnership           *connect.Client[v1.VerifyDomainOwnershipRequest, v1.VerifyDomainOwnershipResponse]
-	listDeploymentContainers        *connect.Client[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse]
-	streamContainerLogs             *connect.Client[v1.StreamContainerLogsRequest, v1.DeploymentLogLine]
-	startContainer                  *connect.Client[v1.StartContainerRequest, v1.StartContainerResponse]
-	stopContainer                   *connect.Client[v1.StopContainerRequest, v1.StopContainerResponse]
-	restartContainer                *connect.Client[v1.RestartContainerRequest, v1.RestartContainerResponse]
+	listDeployments                   *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
+	createDeployment                  *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
+	getDeployment                     *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
+	updateDeployment                  *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
+	triggerDeployment                 *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
+	streamDeploymentStatus            *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
+	getDeploymentLogs                 *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
+	streamDeploymentLogs              *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
+	streamBuildLogs                   *connect.Client[v1.StreamBuildLogsRequest, v1.DeploymentLogLine]
+	getDeploymentMetrics              *connect.Client[v1.GetDeploymentMetricsRequest, v1.GetDeploymentMetricsResponse]
+	streamDeploymentMetrics           *connect.Client[v1.StreamDeploymentMetricsRequest, v1.DeploymentMetric]
+	getDeploymentUsage                *connect.Client[v1.GetDeploymentUsageRequest, v1.GetDeploymentUsageResponse]
+	startDeployment                   *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
+	stopDeployment                    *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
+	deleteDeployment                  *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
+	restartDeployment                 *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
+	scaleDeployment                   *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
+	getDeploymentEnvVars              *connect.Client[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse]
+	updateDeploymentEnvVars           *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
+	getDeploymentCompose              *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
+	validateDeploymentCompose         *connect.Client[v1.ValidateDeploymentComposeRequest, v1.ValidateDeploymentComposeResponse]
+	updateDeploymentCompose           *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
+	listGitHubRepos                   *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
+	getGitHubBranches                 *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
+	getGitHubFile                     *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
+	listBuilds                        *connect.Client[v1.ListBuildsRequest, v1.ListBuildsResponse]
+	getBuild                          *connect.Client[v1.GetBuildRequest, v1.GetBuildResponse]
+	getBuildLogs                      *connect.Client[v1.GetBuildLogsRequest, v1.GetBuildLogsResponse]
+	revertToBuild                     *connect.Client[v1.RevertToBuildRequest, v1.RevertToBuildResponse]
+	deleteBuild                       *connect.Client[v1.DeleteBuildRequest, v1.DeleteBuildResponse]
+	listAvailableGitHubIntegrations   *connect.Client[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse]
+	getPullRequestDeploymentConfig    *connect.Client[v1.GetPullRequestDeploymentConfigRequest, v1.GetPullRequestDeploymentConfigResponse]
+	updatePullRequestDeploymentConfig *connect.Client[v1.UpdatePullRequestDeploymentConfigRequest, v1.UpdatePullRequestDeploymentConfigResponse]
+	listPullRequestDeployments        *connect.Client[v1.ListPullRequestDeploymentsRequest, v1.ListPullRequestDeploymentsResponse]
+	redeployPullRequestDeployment     *connect.Client[v1.RedeployPullRequestDeploymentRequest, v1.RedeployPullRequestDeploymentResponse]
+	deletePullRequestDeployment       *connect.Client[v1.DeletePullRequestDeploymentRequest, v1.DeletePullRequestDeploymentResponse]
+	approvePullRequestDeployment      *connect.Client[v1.ApprovePullRequestDeploymentRequest, v1.ApprovePullRequestDeploymentResponse]
+	rejectPullRequestDeployment       *connect.Client[v1.RejectPullRequestDeploymentRequest, v1.RejectPullRequestDeploymentResponse]
+	restorePullRequestDeployment      *connect.Client[v1.RestorePullRequestDeploymentRequest, v1.RestorePullRequestDeploymentResponse]
+	streamTerminal                    *connect.Client[v1.TerminalInput, v1.TerminalOutput]
+	streamTerminalOutput              *connect.Client[v1.StreamTerminalOutputRequest, v1.TerminalOutput]
+	sendTerminalInput                 *connect.Client[v1.SendTerminalInputRequest, v1.SendTerminalInputResponse]
+	listContainerFiles                *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
+	getContainerFile                  *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
+	uploadContainerFiles              *connect.Client[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
+	chunkUploadContainerFiles         *connect.Client[v1.ChunkUploadContainerFilesRequest, v1.ChunkUploadContainerFilesResponse]
+	deleteContainerEntries            *connect.Client[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse]
+	renameContainerEntry              *connect.Client[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse]
+	createContainerEntry              *connect.Client[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse]
+	writeContainerFile                *connect.Client[v1.WriteContainerFileRequest, v1.WriteContainerFileResponse]
+	extractDeploymentFile             *connect.Client[v1.ExtractDeploymentFileRequest, v1.ExtractDeploymentFileResponse]
+	createDeploymentFileArchive       *connect.Client[v1.CreateDeploymentFileArchiveRequest, v1.CreateDeploymentFileArchiveResponse]
+	getDeploymentRoutings             *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
+	updateDeploymentRoutings          *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
+	getDeploymentServiceNames         *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
+	getDomainVerificationToken        *connect.Client[v1.GetDomainVerificationTokenRequest, v1.GetDomainVerificationTokenResponse]
+	verifyDomainOwnership             *connect.Client[v1.VerifyDomainOwnershipRequest, v1.VerifyDomainOwnershipResponse]
+	listDeploymentContainers          *connect.Client[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse]
+	streamContainerLogs               *connect.Client[v1.StreamContainerLogsRequest, v1.DeploymentLogLine]
+	startContainer                    *connect.Client[v1.StartContainerRequest, v1.StartContainerResponse]
+	stopContainer                     *connect.Client[v1.StopContainerRequest, v1.StopContainerResponse]
+	restartContainer                  *connect.Client[v1.RestartContainerRequest, v1.RestartContainerResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -876,6 +965,54 @@ func (c *deploymentServiceClient) DeleteBuild(ctx context.Context, req *connect.
 // obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations.
 func (c *deploymentServiceClient) ListAvailableGitHubIntegrations(ctx context.Context, req *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error) {
 	return c.listAvailableGitHubIntegrations.CallUnary(ctx, req)
+}
+
+// GetPullRequestDeploymentConfig calls
+// obiente.cloud.deployments.v1.DeploymentService.GetPullRequestDeploymentConfig.
+func (c *deploymentServiceClient) GetPullRequestDeploymentConfig(ctx context.Context, req *connect.Request[v1.GetPullRequestDeploymentConfigRequest]) (*connect.Response[v1.GetPullRequestDeploymentConfigResponse], error) {
+	return c.getPullRequestDeploymentConfig.CallUnary(ctx, req)
+}
+
+// UpdatePullRequestDeploymentConfig calls
+// obiente.cloud.deployments.v1.DeploymentService.UpdatePullRequestDeploymentConfig.
+func (c *deploymentServiceClient) UpdatePullRequestDeploymentConfig(ctx context.Context, req *connect.Request[v1.UpdatePullRequestDeploymentConfigRequest]) (*connect.Response[v1.UpdatePullRequestDeploymentConfigResponse], error) {
+	return c.updatePullRequestDeploymentConfig.CallUnary(ctx, req)
+}
+
+// ListPullRequestDeployments calls
+// obiente.cloud.deployments.v1.DeploymentService.ListPullRequestDeployments.
+func (c *deploymentServiceClient) ListPullRequestDeployments(ctx context.Context, req *connect.Request[v1.ListPullRequestDeploymentsRequest]) (*connect.Response[v1.ListPullRequestDeploymentsResponse], error) {
+	return c.listPullRequestDeployments.CallUnary(ctx, req)
+}
+
+// RedeployPullRequestDeployment calls
+// obiente.cloud.deployments.v1.DeploymentService.RedeployPullRequestDeployment.
+func (c *deploymentServiceClient) RedeployPullRequestDeployment(ctx context.Context, req *connect.Request[v1.RedeployPullRequestDeploymentRequest]) (*connect.Response[v1.RedeployPullRequestDeploymentResponse], error) {
+	return c.redeployPullRequestDeployment.CallUnary(ctx, req)
+}
+
+// DeletePullRequestDeployment calls
+// obiente.cloud.deployments.v1.DeploymentService.DeletePullRequestDeployment.
+func (c *deploymentServiceClient) DeletePullRequestDeployment(ctx context.Context, req *connect.Request[v1.DeletePullRequestDeploymentRequest]) (*connect.Response[v1.DeletePullRequestDeploymentResponse], error) {
+	return c.deletePullRequestDeployment.CallUnary(ctx, req)
+}
+
+// ApprovePullRequestDeployment calls
+// obiente.cloud.deployments.v1.DeploymentService.ApprovePullRequestDeployment.
+func (c *deploymentServiceClient) ApprovePullRequestDeployment(ctx context.Context, req *connect.Request[v1.ApprovePullRequestDeploymentRequest]) (*connect.Response[v1.ApprovePullRequestDeploymentResponse], error) {
+	return c.approvePullRequestDeployment.CallUnary(ctx, req)
+}
+
+// RejectPullRequestDeployment calls
+// obiente.cloud.deployments.v1.DeploymentService.RejectPullRequestDeployment.
+func (c *deploymentServiceClient) RejectPullRequestDeployment(ctx context.Context, req *connect.Request[v1.RejectPullRequestDeploymentRequest]) (*connect.Response[v1.RejectPullRequestDeploymentResponse], error) {
+	return c.rejectPullRequestDeployment.CallUnary(ctx, req)
+}
+
+// RestorePullRequestDeployment calls
+// obiente.cloud.deployments.v1.DeploymentService.RestorePullRequestDeployment.
+func (c *deploymentServiceClient) RestorePullRequestDeployment(ctx context.Context, req *connect.Request[v1.RestorePullRequestDeploymentRequest]) (*connect.Response[v1.RestorePullRequestDeploymentResponse], error) {
+	return c.restorePullRequestDeployment.CallUnary(ctx, req)
 }
 
 // StreamTerminal calls obiente.cloud.deployments.v1.DeploymentService.StreamTerminal.
@@ -1067,6 +1204,15 @@ type DeploymentServiceHandler interface {
 	DeleteBuild(context.Context, *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error)
 	// List all available GitHub integrations for the current user
 	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
+	// Pull request environments
+	GetPullRequestDeploymentConfig(context.Context, *connect.Request[v1.GetPullRequestDeploymentConfigRequest]) (*connect.Response[v1.GetPullRequestDeploymentConfigResponse], error)
+	UpdatePullRequestDeploymentConfig(context.Context, *connect.Request[v1.UpdatePullRequestDeploymentConfigRequest]) (*connect.Response[v1.UpdatePullRequestDeploymentConfigResponse], error)
+	ListPullRequestDeployments(context.Context, *connect.Request[v1.ListPullRequestDeploymentsRequest]) (*connect.Response[v1.ListPullRequestDeploymentsResponse], error)
+	RedeployPullRequestDeployment(context.Context, *connect.Request[v1.RedeployPullRequestDeploymentRequest]) (*connect.Response[v1.RedeployPullRequestDeploymentResponse], error)
+	DeletePullRequestDeployment(context.Context, *connect.Request[v1.DeletePullRequestDeploymentRequest]) (*connect.Response[v1.DeletePullRequestDeploymentResponse], error)
+	ApprovePullRequestDeployment(context.Context, *connect.Request[v1.ApprovePullRequestDeploymentRequest]) (*connect.Response[v1.ApprovePullRequestDeploymentResponse], error)
+	RejectPullRequestDeployment(context.Context, *connect.Request[v1.RejectPullRequestDeploymentRequest]) (*connect.Response[v1.RejectPullRequestDeploymentResponse], error)
+	RestorePullRequestDeployment(context.Context, *connect.Request[v1.RestorePullRequestDeploymentRequest]) (*connect.Response[v1.RestorePullRequestDeploymentResponse], error)
 	// Terminal access
 	// Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
 	// Use this for better input/output synchronization
@@ -1316,6 +1462,54 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("ListAvailableGitHubIntegrations")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceGetPullRequestDeploymentConfigHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetPullRequestDeploymentConfigProcedure,
+		svc.GetPullRequestDeploymentConfig,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetPullRequestDeploymentConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceUpdatePullRequestDeploymentConfigHandler := connect.NewUnaryHandler(
+		DeploymentServiceUpdatePullRequestDeploymentConfigProcedure,
+		svc.UpdatePullRequestDeploymentConfig,
+		connect.WithSchema(deploymentServiceMethods.ByName("UpdatePullRequestDeploymentConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceListPullRequestDeploymentsHandler := connect.NewUnaryHandler(
+		DeploymentServiceListPullRequestDeploymentsProcedure,
+		svc.ListPullRequestDeployments,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListPullRequestDeployments")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRedeployPullRequestDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceRedeployPullRequestDeploymentProcedure,
+		svc.RedeployPullRequestDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("RedeployPullRequestDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceDeletePullRequestDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceDeletePullRequestDeploymentProcedure,
+		svc.DeletePullRequestDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("DeletePullRequestDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceApprovePullRequestDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceApprovePullRequestDeploymentProcedure,
+		svc.ApprovePullRequestDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("ApprovePullRequestDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRejectPullRequestDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceRejectPullRequestDeploymentProcedure,
+		svc.RejectPullRequestDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("RejectPullRequestDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRestorePullRequestDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceRestorePullRequestDeploymentProcedure,
+		svc.RestorePullRequestDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("RestorePullRequestDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceStreamTerminalHandler := connect.NewBidiStreamHandler(
 		DeploymentServiceStreamTerminalProcedure,
 		svc.StreamTerminal,
@@ -1518,6 +1712,22 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceDeleteBuildHandler.ServeHTTP(w, r)
 		case DeploymentServiceListAvailableGitHubIntegrationsProcedure:
 			deploymentServiceListAvailableGitHubIntegrationsHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetPullRequestDeploymentConfigProcedure:
+			deploymentServiceGetPullRequestDeploymentConfigHandler.ServeHTTP(w, r)
+		case DeploymentServiceUpdatePullRequestDeploymentConfigProcedure:
+			deploymentServiceUpdatePullRequestDeploymentConfigHandler.ServeHTTP(w, r)
+		case DeploymentServiceListPullRequestDeploymentsProcedure:
+			deploymentServiceListPullRequestDeploymentsHandler.ServeHTTP(w, r)
+		case DeploymentServiceRedeployPullRequestDeploymentProcedure:
+			deploymentServiceRedeployPullRequestDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceDeletePullRequestDeploymentProcedure:
+			deploymentServiceDeletePullRequestDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceApprovePullRequestDeploymentProcedure:
+			deploymentServiceApprovePullRequestDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceRejectPullRequestDeploymentProcedure:
+			deploymentServiceRejectPullRequestDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceRestorePullRequestDeploymentProcedure:
+			deploymentServiceRestorePullRequestDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamTerminalProcedure:
 			deploymentServiceStreamTerminalHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamTerminalOutputProcedure:
@@ -1695,6 +1905,38 @@ func (UnimplementedDeploymentServiceHandler) DeleteBuild(context.Context, *conne
 
 func (UnimplementedDeploymentServiceHandler) ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetPullRequestDeploymentConfig(context.Context, *connect.Request[v1.GetPullRequestDeploymentConfigRequest]) (*connect.Response[v1.GetPullRequestDeploymentConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetPullRequestDeploymentConfig is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) UpdatePullRequestDeploymentConfig(context.Context, *connect.Request[v1.UpdatePullRequestDeploymentConfigRequest]) (*connect.Response[v1.UpdatePullRequestDeploymentConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UpdatePullRequestDeploymentConfig is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListPullRequestDeployments(context.Context, *connect.Request[v1.ListPullRequestDeploymentsRequest]) (*connect.Response[v1.ListPullRequestDeploymentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListPullRequestDeployments is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RedeployPullRequestDeployment(context.Context, *connect.Request[v1.RedeployPullRequestDeploymentRequest]) (*connect.Response[v1.RedeployPullRequestDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RedeployPullRequestDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) DeletePullRequestDeployment(context.Context, *connect.Request[v1.DeletePullRequestDeploymentRequest]) (*connect.Response[v1.DeletePullRequestDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.DeletePullRequestDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ApprovePullRequestDeployment(context.Context, *connect.Request[v1.ApprovePullRequestDeploymentRequest]) (*connect.Response[v1.ApprovePullRequestDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ApprovePullRequestDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RejectPullRequestDeployment(context.Context, *connect.Request[v1.RejectPullRequestDeploymentRequest]) (*connect.Response[v1.RejectPullRequestDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RejectPullRequestDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RestorePullRequestDeployment(context.Context, *connect.Request[v1.RestorePullRequestDeploymentRequest]) (*connect.Response[v1.RestorePullRequestDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RestorePullRequestDeployment is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error {

@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -66,5 +67,40 @@ func TestReadGitHubAPIResponseBodyRejectsOversizedResponse(t *testing.T) {
 	_, err := readGitHubAPIResponseBody(strings.NewReader(strings.Repeat("a", githubAPIResponseBodyLimit+1)))
 	if err == nil {
 		t.Fatal("expected oversized response to be rejected")
+	}
+}
+
+func TestCreateDeploymentUsesTransientNonProductionEnvironment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost || req.URL.Path != "/repos/obiente/cloud/deployments" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body["auto_merge"] != false || body["transient_environment"] != true || body["production_environment"] != false {
+			t.Fatalf("unsafe deployment options: %#v", body)
+		}
+		contexts, ok := body["required_contexts"].([]interface{})
+		if !ok || len(contexts) != 0 {
+			t.Fatalf("required contexts = %#v", body["required_contexts"])
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":42}`))
+	}))
+	defer server.Close()
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	id, err := client.CreateDeployment(t.Context(), "obiente/cloud", strings.Repeat("a", 40), "Obiente Preview / PR #1", "preview")
+	if err != nil || id != 42 {
+		t.Fatalf("create deployment: id=%d err=%v", id, err)
+	}
+}
+
+func TestCheckRunActionRequiredIsCompleted(t *testing.T) {
+	body := checkRunBody(CheckRunUpdate{Status: "completed", Conclusion: "action_required"}, true)
+	if body["status"] != "completed" || body["conclusion"] != "action_required" {
+		t.Fatalf("check run body = %#v", body)
 	}
 }

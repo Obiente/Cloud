@@ -417,6 +417,7 @@ services:
     environment:
       PORT: 3005
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
+      PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
       ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
@@ -453,6 +454,15 @@ services:
         - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
         - "traefik.http.routers.deployments-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.deployments-service-secure.service=deployments-service"
+        - "traefik.http.routers.preview-status.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status.entrypoints=web"
+        - "traefik.http.routers.preview-status.priority=300"
+        - "traefik.http.routers.preview-status.service=deployments-service"
+        - "traefik.http.routers.preview-status-secure.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status-secure.entrypoints=websecure"
+        - "traefik.http.routers.preview-status-secure.priority=300"
+        - "traefik.http.routers.preview-status-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.preview-status-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
       interval: 30s

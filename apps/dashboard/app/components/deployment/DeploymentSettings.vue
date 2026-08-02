@@ -238,6 +238,11 @@
             </OuiCardBody>
           </OuiCard>
 
+          <DeploymentPullRequestEnvironments
+            v-if="showAutoDeployToggle"
+            :deployment="deployment"
+          />
+
           <!-- Build Strategy -->
           <OuiGrid :cols="{ sm: 1, md: 2 }" gap="md">
             <OuiSelect

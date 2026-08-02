@@ -107,6 +107,8 @@ func (s *Service) HandleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		})
 	case "push":
 		s.handleGitHubPushWebhook(w, event, body)
+	case "pull_request":
+		s.handleGitHubPullRequestWebhook(w, event, body)
 	default:
 		writeGitHubWebhookJSON(w, http.StatusAccepted, githubWebhookResponse{
 			OK:      true,

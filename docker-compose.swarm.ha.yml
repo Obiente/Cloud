@@ -906,6 +906,7 @@ services:
     environment:
       PORT: 3005
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
+      PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
       DB_HOST: pgpool
       METRICS_DB_HOST: metrics-pgpool
@@ -944,6 +945,15 @@ services:
         - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
         - "traefik.http.routers.deployments-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.deployments-service-secure.service=deployments-service"
+        - "traefik.http.routers.preview-status.rule=Host(`${DOMAIN}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status.entrypoints=web"
+        - "traefik.http.routers.preview-status.priority=300"
+        - "traefik.http.routers.preview-status.service=deployments-service"
+        - "traefik.http.routers.preview-status-secure.rule=Host(`${DOMAIN}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status-secure.entrypoints=websecure"
+        - "traefik.http.routers.preview-status-secure.priority=300"
+        - "traefik.http.routers.preview-status-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.preview-status-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
       interval: 30s
