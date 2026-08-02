@@ -4,34 +4,35 @@ Complete reference for all Obiente Cloud environment variables.
 
 ## Quick Reference
 
-| Variable                             | Default                      | Required      | Description                                                                                                         |
-| ------------------------------------ | ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `POSTGRES_USER`                      | `obiente`                    | ❌            | PostgreSQL username                                                                                                 |
-| `POSTGRES_PASSWORD`                  | -                            | ✅            | PostgreSQL password                                                                                                 |
-| `ZITADEL_URL`                        | `https://auth.obiente.cloud` | ❌            | Zitadel instance URL                                                                                                |
-| `LOG_LEVEL`                          | `info`                       | ❌            | Application logging level                                                                                           |
-| `DB_LOG_LEVEL`                       | (uses LOG_LEVEL)             | ❌            | Database query logging level                                                                                        |
-| `CORS_ORIGIN`                        | `*`                          | ❌            | Allowed CORS origins                                                                                                |
-| `SMTP_HOST`                          | -                            | ❌            | SMTP server host (required to enable email)                                                                         |
-| `SMTP_FROM_ADDRESS`                  | -                            | ❌            | From address used for outbound email                                                                                |
-| `DASHBOARD_URL`                      | `https://obiente.cloud`      | ❌            | Dashboard URL used in invitation call-to-action and billing redirects                                               |
-| `SUPPORT_EMAIL`                      | -                            | ❌            | Support contact displayed in email footers                                                                          |
-| `SUPERADMIN_EMAILS`                  | -                            | ❌            | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
-| `SELF_HOSTED`                        | `false`                      | ❌            | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
-| `GITHUB_WEBHOOK_SECRET`              | -                            | ✅ (GitHub)   | Random signing secret you generate and configure on the GitHub App. Example: `openssl rand -hex 32`                 |
-| `GITHUB_APP_SLUG`                    | -                            | ✅ (GitHub)   | GitHub App slug used to start workspace app installs                                                                |
-| `NUXT_PUBLIC_GITHUB_APP_SLUG`        | `${GITHUB_APP_SLUG}`         | ✅ (GitHub)   | Public GitHub App slug exposed to the dashboard                                                                     |
-| `GITHUB_APP_ID`                      | -                            | ✅ (GitHub)   | GitHub App ID used to mint installation tokens                                                                      |
-| `GITHUB_APP_CLIENT_ID`               | -                            | ✅ (GitHub)   | GitHub App client ID used to verify the installer with a one-time setup code                                        |
-| `GITHUB_APP_CLIENT_SECRET`           | -                            | ✅ (GitHub)   | GitHub App client secret used server-side for setup-code exchange                                                   |
-| `GITHUB_APP_PRIVATE_KEY`             | -                            | ❌            | GitHub App private key PEM. Prefer base64 or file path for deployment envs                                           |
-| `GITHUB_APP_PRIVATE_KEY_BASE64`      | -                            | ✅ (org app)  | Base64-encoded GitHub App private key PEM                                                                           |
-| `GITHUB_APP_PRIVATE_KEY_PATH`        | -                            | ❌            | Path to GitHub App private key PEM                                                                                  |
-| `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
-| `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
-| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
-| `USE_TRAEFIK_ROUTING`                | `true`                       | ❌            | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP)                          |
-| `USE_DOMAIN_ROUTING`                 | `true`                       | ❌            | Use domain-based routing for service-to-service communication (works across nodes/networks)                         |
+| Variable                              | Default                      | Required        | Description                                                                                                         |
+| ------------------------------------- | ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`                       | `obiente`                    | ❌              | PostgreSQL username                                                                                                 |
+| `POSTGRES_PASSWORD`                   | -                            | ✅              | PostgreSQL password                                                                                                 |
+| `ZITADEL_URL`                         | `https://auth.obiente.cloud` | ❌              | Zitadel instance URL                                                                                                |
+| `LOG_LEVEL`                           | `info`                       | ❌              | Application logging level                                                                                           |
+| `DB_LOG_LEVEL`                        | (uses LOG_LEVEL)             | ❌              | Database query logging level                                                                                        |
+| `CORS_ORIGIN`                         | `*`                          | ❌              | Allowed CORS origins                                                                                                |
+| `SMTP_HOST`                           | -                            | ❌              | SMTP server host (required to enable email)                                                                         |
+| `SMTP_FROM_ADDRESS`                   | -                            | ❌              | From address used for outbound email                                                                                |
+| `DASHBOARD_URL`                       | `https://obiente.cloud`      | ❌              | Dashboard URL used in invitation call-to-action and billing redirects                                               |
+| `SUPPORT_EMAIL`                       | -                            | ❌              | Support contact displayed in email footers                                                                          |
+| `SUPERADMIN_EMAILS`                   | -                            | ❌              | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
+| `SELF_HOSTED`                         | `false`                      | ❌              | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
+| `GITHUB_WEBHOOK_SECRET`               | -                            | ✅ (GitHub)     | Random signing secret you generate and configure on the GitHub App. Example: `openssl rand -hex 32`                 |
+| `DEPLOYMENTS_INTERNAL_SERVICE_SECRET` | -                            | ✅ (multi-node) | Dedicated secret shared only by deployments-service nodes for forwarding automatic deployment triggers              |
+| `GITHUB_APP_SLUG`                     | -                            | ✅ (GitHub)     | GitHub App slug used to start workspace app installs                                                                |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`         | `${GITHUB_APP_SLUG}`         | ✅ (GitHub)     | Public GitHub App slug exposed to the dashboard                                                                     |
+| `GITHUB_APP_ID`                       | -                            | ✅ (GitHub)     | GitHub App ID used to mint installation tokens                                                                      |
+| `GITHUB_APP_CLIENT_ID`                | -                            | ✅ (GitHub)     | GitHub App client ID used to verify the installer with a one-time setup code                                        |
+| `GITHUB_APP_CLIENT_SECRET`            | -                            | ✅ (GitHub)     | GitHub App client secret used server-side for setup-code exchange                                                   |
+| `GITHUB_APP_PRIVATE_KEY`              | -                            | ❌              | GitHub App private key PEM. Prefer base64 or file path for deployment envs                                          |
+| `GITHUB_APP_PRIVATE_KEY_BASE64`       | -                            | ✅ (org app)    | Base64-encoded GitHub App private key PEM                                                                           |
+| `GITHUB_APP_PRIVATE_KEY_PATH`         | -                            | ❌              | Path to GitHub App private key PEM                                                                                  |
+| `STRIPE_SECRET_KEY`                   | -                            | ✅ (billing)    | Stripe secret API key for payment processing                                                                        |
+| `STRIPE_WEBHOOK_SECRET`               | -                            | ✅ (webhooks)   | Stripe webhook signing secret for webhook verification                                                              |
+| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`  | -                            | ✅ (frontend)   | Stripe publishable key for client-side Stripe.js                                                                    |
+| `USE_TRAEFIK_ROUTING`                 | `true`                       | ❌              | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP)                          |
+| `USE_DOMAIN_ROUTING`                  | `true`                       | ❌              | Use domain-based routing for service-to-service communication (works across nodes/networks)                         |
 
 ## Configuration Sections
 
@@ -209,17 +210,18 @@ DB_LOG_LEVEL=debug
 
 ### GitHub App Configuration
 
-| Variable                        | Type   | Default | Required |
-| ------------------------------- | ------ | ------- | -------- |
-| `GITHUB_APP_SLUG`               | string | -       | ✅       |
-| `NUXT_PUBLIC_GITHUB_APP_SLUG`   | string | -       | ✅       |
-| `GITHUB_APP_ID`                 | string | -       | ✅       |
-| `GITHUB_APP_CLIENT_ID`          | string | -       | ✅       |
-| `GITHUB_APP_CLIENT_SECRET`      | string | -       | ✅       |
-| `GITHUB_APP_PRIVATE_KEY`        | string | -       | ❌       |
-| `GITHUB_APP_PRIVATE_KEY_BASE64` | string | -       | ✅       |
-| `GITHUB_APP_PRIVATE_KEY_PATH`   | string | -       | ❌       |
-| `GITHUB_WEBHOOK_SECRET`         | string | -       | ✅       |
+| Variable                              | Type   | Default | Required |
+| ------------------------------------- | ------ | ------- | -------- |
+| `GITHUB_APP_SLUG`                     | string | -       | ✅       |
+| `NUXT_PUBLIC_GITHUB_APP_SLUG`         | string | -       | ✅       |
+| `GITHUB_APP_ID`                       | string | -       | ✅       |
+| `GITHUB_APP_CLIENT_ID`                | string | -       | ✅       |
+| `GITHUB_APP_CLIENT_SECRET`            | string | -       | ✅       |
+| `GITHUB_APP_PRIVATE_KEY`              | string | -       | ❌       |
+| `GITHUB_APP_PRIVATE_KEY_BASE64`       | string | -       | ✅       |
+| `GITHUB_APP_PRIVATE_KEY_PATH`         | string | -       | ❌       |
+| `GITHUB_WEBHOOK_SECRET`               | string | -       | ✅       |
+| `DEPLOYMENTS_INTERNAL_SERVICE_SECRET` | string | -       | ✅\*     |
 
 Use:
 
@@ -231,6 +233,7 @@ GITHUB_APP_CLIENT_ID=...
 GITHUB_APP_CLIENT_SECRET=...
 GITHUB_APP_PRIVATE_KEY_BASE64=...
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+DEPLOYMENTS_INTERNAL_SERVICE_SECRET="$(openssl rand -base64 32)"
 ```
 
 Encode the GitHub App private key with:
@@ -1162,17 +1165,17 @@ See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-t
 
 ### Notifications Service Configuration
 
-| Variable                              | Type     | Default                             | Required | Description                                                                                                                                 |
-| ------------------------------------- | -------- | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERNAL_SERVICE_SECRET`             | string   | -                                   | ✅\*     | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications. |
-| `NOTIFICATIONS_SERVICE_URL`           | string   | `http://notifications-service:3012` | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                            |
-| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS`    | number   | `3`                                 | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                 |
-| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                                | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                  |
-| `NOTIFICATIONS_RETRY_MAX_BACKOFF`     | duration | `10s`                               | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                                               |
+| Variable                              | Type     | Default                             | Required | Description                                                                                                      |
+| ------------------------------------- | -------- | ----------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `INTERNAL_SERVICE_SECRET`             | string   | -                                   | ✅\*     | Shared secret for service-to-service notification calls.                                                         |
+| `NOTIFICATIONS_SERVICE_URL`           | string   | `http://notifications-service:3012` | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name. |
+| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS`    | number   | `3`                                 | ❌       | Maximum number of retry attempts for failed notification creation requests.                                      |
+| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                                | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                       |
+| `NOTIFICATIONS_RETRY_MAX_BACKOFF`     | duration | `10s`                               | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                    |
 
 **Internal Service Authentication:**
 
-The `INTERNAL_SERVICE_SECRET` is used to secure the notifications service endpoints (`CreateNotification` and `CreateOrganizationNotification`). Services that need to create notifications must provide this secret in the `x-internal-service-secret` header when calling the notifications service.
+The `INTERNAL_SERVICE_SECRET` secures notification service calls. Cross-node automatic deployment triggers use the separate `DEPLOYMENTS_INTERNAL_SERVICE_SECRET` documented under GitHub integration; keep that credential limited to deployments-service nodes. Both credentials are carried in the `x-internal-service-secret` header for their respective internal endpoints.
 
 **Retry Configuration:**
 

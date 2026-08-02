@@ -91,6 +91,7 @@ func main() {
 
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
+	internalServiceAuthInterceptor := deploymentsvc.NewInternalServiceAuthInterceptor(os.Getenv("DEPLOYMENTS_INTERNAL_SERVICE_SECRET"))
 
 	// Initialize orchestrator service for deployment management
 	// Try to get from global orchestrator service first
@@ -124,7 +125,7 @@ func main() {
 	// Register deployments service
 	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(
 		deploymentService,
-		connect.WithInterceptors(auditInterceptor, authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor, internalServiceAuthInterceptor),
 	)
 	mux.Handle(deploymentsPath, deploymentsHandler)
 

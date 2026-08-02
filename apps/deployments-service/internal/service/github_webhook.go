@@ -27,8 +27,12 @@ import (
 const githubWebhookMaxBodyBytes = 1 << 20 // 1 MiB
 
 type githubWebhookPushPayload struct {
-	Ref        string `json:"ref"`
-	After      string `json:"after"`
+	Ref          string `json:"ref"`
+	After        string `json:"after"`
+	Deleted      bool   `json:"deleted"`
+	Installation struct {
+		ID int64 `json:"id"`
+	} `json:"installation"`
 	Repository struct {
 		FullName string `json:"full_name"`
 		HTMLURL  string `json:"html_url"`
@@ -133,8 +137,38 @@ func (s *Service) handleGitHubPushWebhook(w http.ResponseWriter, event string, b
 		})
 		return
 	}
+	if payload.Installation.ID <= 0 {
+		writeGitHubWebhookJSON(w, http.StatusBadRequest, githubWebhookResponse{
+			OK:         false,
+			Event:      event,
+			Repository: repoFullName,
+			Branch:     branch,
+			Message:    "push payload is missing GitHub App installation",
+		})
+		return
+	}
+	if payload.Deleted {
+		writeGitHubWebhookJSON(w, http.StatusAccepted, githubWebhookResponse{
+			OK:         true,
+			Event:      event,
+			Repository: repoFullName,
+			Branch:     branch,
+			Message:    "deleted branch ignored",
+		})
+		return
+	}
+	if !isGitHubCommitSHA(payload.After) {
+		writeGitHubWebhookJSON(w, http.StatusBadRequest, githubWebhookResponse{
+			OK:         false,
+			Event:      event,
+			Repository: repoFullName,
+			Branch:     branch,
+			Message:    "push payload has an invalid commit SHA",
+		})
+		return
+	}
 
-	matchingDeployments, err := findDeploymentsForGitHubPush(repoFullName, branch)
+	matchingDeployments, err := findDeploymentsForGitHubPush(repoFullName, branch, payload.Installation.ID)
 	if err != nil {
 		logger.Error("[GitHubWebhook] Failed to find deployments for %s/%s: %v", repoFullName, branch, err)
 		writeGitHubWebhookJSON(w, http.StatusInternalServerError, githubWebhookResponse{
@@ -180,16 +214,17 @@ func (s *Service) triggerDeploymentFromGitHubPush(deploymentID, repoFullName, br
 		return
 	}
 
-	s.notifyGitHubAutoDeployStarted(ctx, deployment, repoFullName, branch, commitSHA, sender)
-
 	ctx = auth.WithSystemUser(ctx)
 	_, err = s.TriggerDeployment(ctx, connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{
 		DeploymentId: deploymentID,
+		CommitSha:    &commitSHA,
 	}))
 	if err != nil {
 		logger.Error("[GitHubWebhook] Failed to trigger deployment %s for %s@%s (%s) by %s: %v", deploymentID, repoFullName, branch, commitSHA, sender, err)
 		return
 	}
+
+	s.notifyGitHubAutoDeployStarted(ctx, deployment, repoFullName, branch, commitSHA, sender)
 
 	logger.Info("[GitHubWebhook] Triggered deployment %s for %s@%s (%s) by %s", deploymentID, repoFullName, branch, commitSHA, sender)
 }
@@ -261,6 +296,12 @@ func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployme
 	if !githubIntegrationUsesApp(integration) {
 		return fmt.Errorf(githubAppReconnectMessage)
 	}
+	if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+		return fmt.Errorf("GitHub App installation ID is missing")
+	}
+	if integration.OrganizationID == nil || *integration.OrganizationID != deployment.OrganizationID {
+		return fmt.Errorf("GitHub App integration does not belong to this deployment's workspace")
+	}
 
 	logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; repository webhook creation is not used", repoFullName)
 	return nil
@@ -297,13 +338,20 @@ func verifyGitHubWebhookSignature(body []byte, signatureHeader string) error {
 	return nil
 }
 
-func findDeploymentsForGitHubPush(repoFullName, branch string) ([]database.Deployment, error) {
+func findDeploymentsForGitHubPush(repoFullName, branch string, installationID int64) ([]database.Deployment, error) {
+	if installationID <= 0 {
+		return nil, nil
+	}
+
 	var deployments []database.Deployment
 	if err := database.DB.
+		Table("deployments").
+		Joins("JOIN github_integrations ON github_integrations.id = deployments.github_integration_id").
 		Where("deleted_at IS NULL").
-		Where("github_integration_id IS NOT NULL AND github_integration_id <> ''").
-		Where("(auto_deploy IS NULL OR auto_deploy = ?)", true).
-		Where("branch = ?", branch).
+		Where("github_integrations.github_app_installation_id = ?", installationID).
+		Where("github_integrations.organization_id = deployments.organization_id").
+		Where("(deployments.auto_deploy IS NULL OR deployments.auto_deploy = ?)", true).
+		Where("deployments.branch = ?", branch).
 		Find(&deployments).Error; err != nil {
 		return nil, err
 	}
@@ -319,6 +367,30 @@ func findDeploymentsForGitHubPush(repoFullName, branch string) ([]database.Deplo
 	}
 
 	return matches, nil
+}
+
+func isGitHubCommitSHA(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+
+	hasNonZeroDigit := false
+	for _, char := range value {
+		switch {
+		case char >= '0' && char <= '9':
+			if char != '0' {
+				hasNonZeroDigit = true
+			}
+		case char >= 'a' && char <= 'f':
+			hasNonZeroDigit = true
+		case char >= 'A' && char <= 'F':
+			hasNonZeroDigit = true
+		default:
+			return false
+		}
+	}
+
+	return hasNonZeroDigit
 }
 
 func githubRepoURLMatchesFullName(repoURL, repoFullName string) bool {

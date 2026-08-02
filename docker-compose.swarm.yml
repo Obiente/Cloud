@@ -416,6 +416,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
+      DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-swarm-orchestrator, *common-dns-delegation, *common-notifications]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

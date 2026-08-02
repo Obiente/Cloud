@@ -153,7 +153,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 
 	// Clone repository
 	writeBuildLog("   📥 Cloning repository...")
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, config.CommitSHA, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
@@ -903,7 +903,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 
 	// Clone repository
 	writeBuildLog("   📥 Cloning repository...")
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, config.CommitSHA, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
@@ -1725,7 +1725,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, config.CommitSHA, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -1899,7 +1899,7 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 	if branch == "" {
 		branch = "main"
 	}
-	if err := cloneRepository(ctx, config.RepositoryURL, branch, buildDir, config.GitHubToken); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, branch, config.CommitSHA, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -1986,7 +1986,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, config.CommitSHA, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, nil
 	}
 
