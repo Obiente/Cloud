@@ -16,52 +16,34 @@ concurrency:
 
 jobs:
   main:
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           filter: tree:0
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         name: Install pnpm
         with:
-          version: 10.20.0
           run_install: false
 
-      # This enables task distribution via Nx Cloud
-      # Run this command as early as possible, before dependencies are installed
-      # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-      # Uncomment this line to enable task distribution
-      - run: pnpm dlx nx start-ci-run --auto-apply-fixes="*format*,*lint*" --distribute-on="3 linux-medium-js" --stop-agents-after="build"
+      - name: Start distributed Nx Cloud run
+        run: pnpm dlx nx@21.6.10 start-ci-run --auto-apply-fixes="*format*,*lint*" --distribute-on="3 linux-medium-js" --stop-agents-after="lint,test,build,typecheck"
 
-      # Cache pnpm store for faster dependency installation
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: "pnpm"
 
-      - name: Derive NX SHAs
-        id: nx-shas
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-          fi
-
-          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-            BASE="$(git rev-parse HEAD~1)"
-          fi
-
-          echo "base=$BASE" >> "$GITHUB_OUTPUT"
-          echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
       - run: pnpm install --frozen-lockfile --prefer-offline
 
-      # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-      # - run: pnpm exec nx-cloud record -- echo Hello World
-      - run: pnpm exec nx affected -t lint test build typecheck --base=${{ steps.nx-shas.outputs.base }} --head=${{ steps.nx-shas.outputs.head }}
-      # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
+      - name: Derive Nx comparison SHAs
+        uses: nrwl/nx-set-shas@v5
+
+      - name: Run affected checks
+        run: pnpm exec nx affected -t lint test build typecheck
+
       - run: pnpm exec nx fix-ci
         if: always()

@@ -48,23 +48,14 @@ ENV NODE_OPTIONS="--max-old-space-size=8192 --no-warnings" \
     NITRO_PRESET=node-server \
     NODE_ENV=production
 
-# Build workspace dependencies if needed
-# Skip build-deps if packages are already built (faster)
-# Only build if package.json files changed or if explicitly needed
-RUN (pnpm --filter "@obiente/dashboard" build-deps 2>/dev/null || echo "build-deps skipped or not needed") || true
-
 # Build stage - reuse everything from deps
 FROM deps AS builder
 
-# Build the application with optimized cache mounts
-# Use all available cache mounts for maximum speed
-# Skip nuxt prepare if .nuxt directory exists and is valid (faster)
-# Only run prepare if needed (when source files changed significantly)
-RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
-    --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
+# Nuxt 4 keeps generated state under the workspace node_modules cache. Nuxt
+# build prepares that state itself, so a separate prepare pass only repeats work.
+RUN --mount=type=cache,id=nuxt-build,target=/app/node_modules/.cache/nuxt \
     --mount=type=cache,id=vite-cache,target=/app/apps/dashboard/node_modules/.vite \
     cd apps/dashboard && \
-    (test -d .nuxt && test -f .nuxt/nuxt.d.ts && echo "Skipping nuxt prepare (cache hit)" || pnpm exec nuxt prepare) && \
     echo "Starting Nuxt build (client + server)..." && \
     NUXT_TELEMETRY_DISABLED=1 \
     NITRO_PRESET=node-server \
