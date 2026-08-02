@@ -9,6 +9,7 @@ import {
   encodeGitHubAppInstallPKCEState,
   encodeGitHubAppInstallStateCore,
   GITHUB_APP_INSTALL_STATE_MAX_AGE_SECONDS,
+  resolveGitHubAppCallbackHost,
   verifyGitHubAppInstallStateCore,
 } from "./githubAppInstallStateCore";
 import type { GitHubAppInstallStatePayload } from "./githubAppInstallStateCore";
@@ -92,7 +93,9 @@ export function verifyGitHubAppInstallState(
 
 export function getGitHubAppCallbackUrl(event: H3Event): string {
   const config = useRuntimeConfig(event);
-  const requestHost = String(config.public.requestHost || "").trim();
+  const requestHost = resolveGitHubAppCallbackHost(
+    String(config.public.requestHost || "")
+  );
 
   try {
     return buildGitHubAppCallbackUrl(requestHost);

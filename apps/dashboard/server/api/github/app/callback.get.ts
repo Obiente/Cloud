@@ -157,7 +157,9 @@ export default defineEventHandler(async (event) => {
       httpVersion: "1.1",
       useBinaryFormat: false,
       interceptors: [authInterceptor],
-      defaultTimeoutMs: 30_000,
+      // The auth service can make three sequential GitHub requests, each with
+      // a 15-second timeout. Leave room for all three plus database work.
+      defaultTimeoutMs: 60_000,
     });
     const client = createClient(AuthService, transport);
 

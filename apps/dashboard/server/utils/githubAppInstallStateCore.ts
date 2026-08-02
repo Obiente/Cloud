@@ -58,6 +58,18 @@ export function buildGitHubAppCallbackUrl(requestHost: string): string {
   return new URL("/api/github/app/callback", baseUrl.origin).toString();
 }
 
+export function resolveGitHubAppCallbackHost(
+  configuredRequestHost: string,
+  runtimeEnvironment: Readonly<Record<string, string | undefined>> = process.env
+): string {
+  return String(
+    runtimeEnvironment.DASHBOARD_URL ||
+      runtimeEnvironment.NUXT_PUBLIC_REQUEST_HOST ||
+      configuredRequestHost ||
+      ""
+  ).trim();
+}
+
 export function encodeGitHubAppInstallStateCore(
   secret: string,
   state: Omit<GitHubAppInstallStatePayload, "issuedAt">

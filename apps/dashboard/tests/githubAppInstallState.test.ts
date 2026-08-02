@@ -8,6 +8,7 @@ import {
   decodeGitHubAppInstallStateCore,
   encodeGitHubAppInstallPKCEState,
   encodeGitHubAppInstallStateCore,
+  resolveGitHubAppCallbackHost,
   verifyGitHubAppInstallStateCore,
 } from "../server/utils/githubAppInstallStateCore";
 
@@ -107,5 +108,14 @@ describe("GitHub App install state", () => {
     expect(
       buildGitHubAppCallbackUrl("https://obiente.cloud/settings?ignored=true")
     ).toBe("https://obiente.cloud/api/github/app/callback");
+  });
+
+  it("prefers the canonical dashboard URL supplied at runtime", () => {
+    expect(
+      resolveGitHubAppCallbackHost("http://localhost:3000", {
+        DASHBOARD_URL: "https://obiente.cloud",
+        NUXT_PUBLIC_REQUEST_HOST: "https://stale.example",
+      })
+    ).toBe("https://obiente.cloud");
   });
 });
