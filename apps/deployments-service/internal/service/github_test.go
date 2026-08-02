@@ -1,6 +1,7 @@
 package deployments
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestGetUsableGitHubTokenRejectsLegacyIntegration(t *testing.T) {
-	_, err := getUsableGitHubToken(&database.GitHubIntegration{
+	_, err := getUsableGitHubToken(context.Background(), &database.GitHubIntegration{
 		AuthType: "oauth",
 		Token:    "gho_current",
 	})
@@ -21,7 +22,7 @@ func TestGetUsableGitHubTokenRejectsLegacyIntegration(t *testing.T) {
 }
 
 func TestGetUsableGitHubTokenRequiresAppInstallationID(t *testing.T) {
-	_, err := getUsableGitHubToken(&database.GitHubIntegration{
+	_, err := getUsableGitHubToken(context.Background(), &database.GitHubIntegration{
 		AuthType: "github_app",
 	})
 	if err == nil {
@@ -33,7 +34,7 @@ func TestGetUsableGitHubTokenRequiresAppInstallationID(t *testing.T) {
 }
 
 func TestGetUsableGitHubTokenRejectsNilIntegration(t *testing.T) {
-	_, err := getUsableGitHubToken(nil)
+	_, err := getUsableGitHubToken(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected nil integration to fail")
 	}

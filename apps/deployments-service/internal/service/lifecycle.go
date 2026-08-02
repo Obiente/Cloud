@@ -199,7 +199,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					// Get GitHub token if integration ID is set
 					githubToken := ""
 					if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
-						if token, err := getGitHubIntegrationTokenByID(*dbDeployment.GitHubIntegrationID); err == nil {
+						if token, err := getGitHubIntegrationTokenByID(buildCtx, dbDeployment.OrganizationID, *dbDeployment.GitHubIntegrationID); err == nil {
 							githubToken = token
 						}
 					}
@@ -271,7 +271,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		// Get GitHub token if integration ID is set
 		githubToken := ""
 		if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
-			if token, err := getGitHubIntegrationTokenByID(*dbDeployment.GitHubIntegrationID); err == nil {
+			if token, err := getGitHubIntegrationTokenByID(buildCtx, dbDeployment.OrganizationID, *dbDeployment.GitHubIntegrationID); err == nil {
 				githubToken = token
 			}
 		}

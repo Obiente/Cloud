@@ -274,8 +274,13 @@ func (s *Service) notifyGitHubAutoDeployStarted(ctx context.Context, deployment 
 }
 
 func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployment *database.Deployment) error {
-	_ = ctx
-	if deployment == nil || deployment.RepositoryURL == nil || deployment.GitHubIntegrationID == nil {
+	if deployment == nil || deployment.GitHubIntegrationID == nil || strings.TrimSpace(*deployment.GitHubIntegrationID) == "" {
+		return nil
+	}
+	if err := validateGitHubIntegrationForDeployment(ctx, deployment); err != nil {
+		return err
+	}
+	if deployment.RepositoryURL == nil || (deployment.AutoDeploy != nil && !*deployment.AutoDeploy) {
 		return nil
 	}
 
@@ -289,8 +294,17 @@ func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployme
 		return fmt.Errorf("GITHUB_WEBHOOK_SECRET is required to enable automatic GitHub deployments")
 	}
 
+	logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; repository webhook creation is not used", repoFullName)
+	return nil
+}
+
+func validateGitHubIntegrationForDeployment(ctx context.Context, deployment *database.Deployment) error {
+	if deployment == nil || deployment.GitHubIntegrationID == nil || strings.TrimSpace(*deployment.GitHubIntegrationID) == "" {
+		return nil
+	}
+
 	var integration database.GitHubIntegration
-	if err := database.DB.Where("id = ?", *deployment.GitHubIntegrationID).First(&integration).Error; err != nil {
+	if err := database.DB.WithContext(ctx).Where("id = ?", *deployment.GitHubIntegrationID).First(&integration).Error; err != nil {
 		return fmt.Errorf("failed to load GitHub App integration: %w", err)
 	}
 	if !githubIntegrationUsesApp(integration) {
@@ -302,8 +316,6 @@ func (s *Service) ensureGitHubWebhookForDeployment(ctx context.Context, deployme
 	if integration.OrganizationID == nil || *integration.OrganizationID != deployment.OrganizationID {
 		return fmt.Errorf("GitHub App integration does not belong to this deployment's workspace")
 	}
-
-	logger.Info("[GitHubWebhook] GitHub App installation manages webhooks for %s; repository webhook creation is not used", repoFullName)
 	return nil
 }
 

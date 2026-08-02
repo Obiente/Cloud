@@ -1,4 +1,5 @@
 import {
+  createGitHubAppInstallNonce,
   encodeGitHubAppInstallState,
   setGitHubAppInstallStateCookie,
 } from "../../../utils/githubAppInstallState";
@@ -33,13 +34,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const state = encodeGitHubAppInstallState(event, {
-    random: crypto.randomUUID().replace(/-/g, ""),
+    random: createGitHubAppInstallNonce(),
     orgId,
   });
   setGitHubAppInstallStateCookie(event, state);
 
   const installUrl = new URL(
-    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/select_target`
+    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new`
   );
   installUrl.searchParams.set("state", state);
 

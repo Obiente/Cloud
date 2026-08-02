@@ -14,7 +14,8 @@ Complete reference for all Obiente Cloud environment variables.
 | `CORS_ORIGIN`                         | `*`                          | ❌              | Allowed CORS origins                                                                                                |
 | `SMTP_HOST`                           | -                            | ❌              | SMTP server host (required to enable email)                                                                         |
 | `SMTP_FROM_ADDRESS`                   | -                            | ❌              | From address used for outbound email                                                                                |
-| `DASHBOARD_URL`                       | `https://obiente.cloud`      | ❌              | Dashboard URL used in invitation call-to-action and billing redirects                                               |
+| `DASHBOARD_URL`                       | `https://obiente.cloud`      | ✅ (GitHub)     | Canonical dashboard origin used in redirects, including the GitHub App callback                                     |
+| `NUXT_SESSION_PASSWORD`               | -                            | ✅              | Strong shared secret used for dashboard sessions and GitHub App connection state                                    |
 | `SUPPORT_EMAIL`                       | -                            | ❌              | Support contact displayed in email footers                                                                          |
 | `SUPERADMIN_EMAILS`                   | -                            | ❌              | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
 | `SELF_HOSTED`                         | `false`                      | ❌              | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
@@ -234,6 +235,8 @@ GITHUB_APP_CLIENT_SECRET=...
 GITHUB_APP_PRIVATE_KEY_BASE64=...
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 DEPLOYMENTS_INTERNAL_SERVICE_SECRET="$(openssl rand -base64 32)"
+DASHBOARD_URL=https://YOUR-DASHBOARD-DOMAIN
+NUXT_SESSION_PASSWORD="$(openssl rand -hex 32)"
 ```
 
 Encode the GitHub App private key with:
@@ -252,6 +255,9 @@ Notes:
 - The GitHub App setup URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - The GitHub App callback URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - The GitHub App webhook URL is `https://YOUR-API-DOMAIN/webhooks/github`
+- Disable **Request user authorization (OAuth) during installation**; Obiente starts its own PKCE-protected authorization step
+- `DASHBOARD_URL` must use the same public origin as the setup and callback URLs
+- Every dashboard replica must receive the same `NUXT_SESSION_PASSWORD`
 
 ### Redis Configuration
 

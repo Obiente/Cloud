@@ -127,7 +127,9 @@ export function _useSession<T extends Record<string, any> = UserSession>(
   if (
     process.env.NODE_ENV === "production" &&
     (!finalConfig.password ||
-      finalConfig.password === SESSION_PASSWORD_PLACEHOLDER)
+      finalConfig.password.length < 32 ||
+      finalConfig.password === SESSION_PASSWORD_PLACEHOLDER ||
+      finalConfig.password === "changeme_GENERATE_64_CHAR_RANDOM_STRING_HERE")
   ) {
     throw createError({
       statusCode: 500,
