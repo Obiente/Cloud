@@ -38,6 +38,7 @@ jobs:
       display-name: Dashboard
       commit-arg-prefix: DASHBOARD_
       publish: false
+      validation-cache-mode: min
 
   publish:
     name: Publish Dashboard

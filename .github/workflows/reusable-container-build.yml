@@ -21,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      validation-cache-mode:
+        description: BuildKit cache export mode used for pull request validation
+        required: false
+        default: max
+        type: string
     secrets:
       REGISTRY_USERNAME:
         required: false
@@ -109,7 +114,7 @@ jobs:
             ${{ inputs.commit-arg-prefix }}COMMIT=${{ github.sha }}
             ${{ inputs.commit-arg-prefix }}COMMIT_MESSAGE=${{ steps.commit.outputs.subject }}
           cache-from: type=gha,scope=${{ inputs.service-name }}-${{ matrix.architecture }}
-          cache-to: type=gha,scope=${{ inputs.service-name }}-${{ matrix.architecture }},mode=max
+          cache-to: type=gha,scope=${{ inputs.service-name }}-${{ matrix.architecture }},mode=${{ inputs.validation-cache-mode }}
           platforms: ${{ matrix.platform }}
 
       - name: Build and push image by digest
