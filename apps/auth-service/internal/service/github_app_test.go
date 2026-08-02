@@ -13,14 +13,45 @@ import (
 const testPKCEVerifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
 
 func TestConfiguredGitHubAppCallbackURL(t *testing.T) {
-	t.Setenv("DASHBOARD_URL", "https://obiente.cloud/settings?tab=integrations#github")
-
-	got, err := configuredGitHubAppCallbackURL()
-	if err != nil {
-		t.Fatalf("configured callback URL: %v", err)
+	tests := []struct {
+		name         string
+		dashboardURL string
+		want         string
+	}{
+		{
+			name:         "replaces path query and fragment",
+			dashboardURL: "https://obiente.cloud/settings?tab=integrations#github",
+			want:         "https://obiente.cloud/api/github/app/callback",
+		},
+		{
+			name:         "canonicalizes hostname and HTTPS port",
+			dashboardURL: "https://EXAMPLE.com:443/settings",
+			want:         "https://example.com/api/github/app/callback",
+		},
+		{
+			name:         "canonicalizes hostname and HTTP port",
+			dashboardURL: "http://EXAMPLE.com:80",
+			want:         "http://example.com/api/github/app/callback",
+		},
+		{
+			name:         "preserves non-default port",
+			dashboardURL: "https://EXAMPLE.com:8443",
+			want:         "https://example.com:8443/api/github/app/callback",
+		},
 	}
-	if got != "https://obiente.cloud/api/github/app/callback" {
-		t.Fatalf("callback URL = %q", got)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("DASHBOARD_URL", test.dashboardURL)
+
+			got, err := configuredGitHubAppCallbackURL()
+			if err != nil {
+				t.Fatalf("configured callback URL: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("callback URL = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
@@ -113,19 +144,16 @@ func TestExchangeGitHubAppUserCodeRejectsRedirectMismatch(t *testing.T) {
 	}
 }
 
-func TestUserCanAccessGitHubInstallationUsesDirectLookup(t *testing.T) {
+func TestVerifyGitHubInstallationManagerAcceptsPersonalAccountOwner(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path != "/user/installations/42/repositories" {
+		if req.URL.Path != "/user" {
 			t.Errorf("path = %q", req.URL.Path)
-		}
-		if req.URL.Query().Get("per_page") != "1" {
-			t.Errorf("per_page = %q", req.URL.Query().Get("per_page"))
 		}
 		if req.Header.Get("Authorization") != "Bearer ghu_test" {
 			t.Errorf("authorization header = %q", req.Header.Get("Authorization"))
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{}`)
+		_, _ = io.WriteString(w, `{"login":"Personal-Owner"}`)
 	}))
 	defer server.Close()
 
@@ -138,12 +166,66 @@ func TestUserCanAccessGitHubInstallationUsesDirectLookup(t *testing.T) {
 		githubAppAPIBaseURL = previousBaseURL
 	})
 
-	found, err := userCanAccessGitHubInstallation(context.Background(), "ghu_test", 42)
-	if err != nil {
-		t.Fatalf("lookup installation: %v", err)
+	installation := &githubAppInstallation{ID: 42}
+	installation.Account.Login = "personal-owner"
+	installation.Account.Type = "User"
+	if err := verifyGitHubInstallationManager(context.Background(), "ghu_test", installation); err != nil {
+		t.Fatalf("verify personal owner: %v", err)
 	}
-	if !found {
-		t.Fatal("expected installation to be visible to the user")
+}
+
+func TestVerifyGitHubInstallationManagerAcceptsActiveOrganizationOwner(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/user/memberships/orgs/Obiente" {
+			t.Errorf("path = %q", req.URL.Path)
+		}
+		if req.Header.Get("Authorization") != "Bearer ghu_test" {
+			t.Errorf("authorization header = %q", req.Header.Get("Authorization"))
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"state":"active","role":"admin"}`)
+	}))
+	defer server.Close()
+
+	previousClient := githubAppHTTPClient
+	previousBaseURL := githubAppAPIBaseURL
+	githubAppHTTPClient = server.Client()
+	githubAppAPIBaseURL = server.URL
+	t.Cleanup(func() {
+		githubAppHTTPClient = previousClient
+		githubAppAPIBaseURL = previousBaseURL
+	})
+
+	installation := &githubAppInstallation{ID: 42}
+	installation.Account.Login = "Obiente"
+	installation.Account.Type = "Organization"
+	if err := verifyGitHubInstallationManager(context.Background(), "ghu_test", installation); err != nil {
+		t.Fatalf("verify organization owner: %v", err)
+	}
+}
+
+func TestVerifyGitHubInstallationManagerRejectsOrganizationMember(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{"state":"active","role":"member"}`)
+	}))
+	defer server.Close()
+
+	previousClient := githubAppHTTPClient
+	previousBaseURL := githubAppAPIBaseURL
+	githubAppHTTPClient = server.Client()
+	githubAppAPIBaseURL = server.URL
+	t.Cleanup(func() {
+		githubAppHTTPClient = previousClient
+		githubAppAPIBaseURL = previousBaseURL
+	})
+
+	installation := &githubAppInstallation{ID: 42}
+	installation.Account.Login = "Obiente"
+	installation.Account.Type = "Organization"
+	err := verifyGitHubInstallationManager(context.Background(), "ghu_test", installation)
+	if err == nil || !strings.Contains(err.Error(), "not an active owner") {
+		t.Fatalf("organization member error = %v", err)
 	}
 }
 

@@ -12,7 +12,7 @@ Use the Obiente GitHub App to import repositories, deploy from branches, and tri
 
 ## Prerequisites
 
-- A GitHub account that can install GitHub Apps on the target account or organization
+- The owner of the target GitHub personal account, or an owner of the target GitHub organization
 - Access to the Obiente dashboard
 - An Obiente workspace you can manage
 - For self-hosted setups: public dashboard and API URLs
@@ -47,6 +47,10 @@ Required repository permissions:
 
 - Metadata: read
 - Contents: read
+
+Required organization permissions:
+
+- Members: read
 
 Subscribe to events:
 
@@ -154,6 +158,8 @@ Check:
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY_BASE64`
 - The private key belongs to the same GitHub App
+- The GitHub App has `Members: read` organization permission
+- Existing organization installations approved the `Members: read` permission update
 - **Request user authorization (OAuth) during installation** is disabled in the GitHub App settings
 - `DASHBOARD_URL` exactly matches the public dashboard origin used by the setup and callback URLs
 - `NUXT_SESSION_PASSWORD` is set to the same value on every dashboard replica
@@ -183,7 +189,7 @@ Check:
 
 - No GitHub user tokens are stored or refreshed
 - The one-time GitHub App user authorization code is exchanged server-side and discarded
-- The installer's user token is used only to confirm the installation is visible to that GitHub user
+- The installer's user token is used only to confirm personal-account ownership or active organization ownership
 - Installation IDs are verified with GitHub before persistence and are not trusted from query strings alone
 - Installation and authorization state is signed, expires after ten minutes, and must match a short-lived HTTP-only cookie
 - GitHub user authorization uses PKCE and an exact configured callback URL

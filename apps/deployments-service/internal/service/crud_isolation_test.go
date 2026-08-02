@@ -82,6 +82,17 @@ func TestDeploymentServiceTenantIsolation(t *testing.T) {
 		t.Fatalf("same-org update name = %q, want updated name", got)
 	}
 
+	clearIntegration, err := service.UpdateDeployment(ctx, connect.NewRequest(&deploymentsv1.UpdateDeploymentRequest{
+		DeploymentId:        "dep-org-a-owner",
+		GithubIntegrationId: proto.String(" \t "),
+	}))
+	if err != nil {
+		t.Fatalf("clear whitespace-only GitHub integration: %v", err)
+	}
+	if clearIntegration.Msg.Deployment.GithubIntegrationId != nil {
+		t.Fatalf("whitespace-only GitHub integration was stored as %q", clearIntegration.Msg.Deployment.GetGithubIntegrationId())
+	}
+
 	_, err = service.DeleteDeployment(ctx, connect.NewRequest(&deploymentsv1.DeleteDeploymentRequest{
 		OrganizationId: "org-a",
 		DeploymentId:   "dep-org-a-owner",

@@ -350,7 +350,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		}
 	}
 	if req.Msg.GithubIntegrationId != nil {
-		integrationID := req.Msg.GetGithubIntegrationId()
+		integrationID := strings.TrimSpace(req.Msg.GetGithubIntegrationId())
 		if integrationID != "" {
 			dbDeployment.GitHubIntegrationID = &integrationID
 		} else {

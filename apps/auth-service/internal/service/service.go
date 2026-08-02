@@ -12,23 +12,26 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/obiente/cloud/apps/shared/pkg/auth"
-	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/shared/pkg/services/common"
-	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
-	"github.com/obiente/cloud/apps/shared/pkg/zitadel"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/services/common"
+	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
+	"github.com/obiente/cloud/apps/shared/pkg/zitadel"
+
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	"golang.org/x/net/idna"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -208,7 +211,7 @@ func (s *Service) ConnectOrganizationGitHubApp(ctx context.Context, req *connect
 		req.Msg.GetSetupCode(),
 		req.Msg.GetCodeVerifier(),
 		req.Msg.GetRedirectUri(),
-		installationID,
+		installation,
 	); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("failed to verify GitHub installer access: %w", err))
 	}
@@ -281,6 +284,15 @@ type githubAppUserTokenResponse struct {
 	ErrorDescription string `json:"error_description"`
 }
 
+type githubUser struct {
+	Login string `json:"login"`
+}
+
+type githubOrganizationMembership struct {
+	Role  string `json:"role"`
+	State string `json:"state"`
+}
+
 func verifyGitHubAppInstallation(ctx context.Context, installationID int64) (*githubAppInstallation, error) {
 	if installationID <= 0 {
 		return nil, fmt.Errorf("installation_id is required")
@@ -325,7 +337,7 @@ func verifyGitHubAppInstallation(ctx context.Context, installationID int64) (*gi
 	return &installation, nil
 }
 
-func verifyGitHubAppInstallationForUser(ctx context.Context, setupCode, codeVerifier, redirectURI string, installationID int64) error {
+func verifyGitHubAppInstallationForUser(ctx context.Context, setupCode, codeVerifier, redirectURI string, installation *githubAppInstallation) error {
 	setupCode = strings.TrimSpace(setupCode)
 	if setupCode == "" {
 		return fmt.Errorf("GitHub App user authorization code is required")
@@ -339,15 +351,7 @@ func verifyGitHubAppInstallationForUser(ctx context.Context, setupCode, codeVeri
 		return fmt.Errorf("GitHub App user authorization returned no access token")
 	}
 
-	found, err := userCanAccessGitHubInstallation(ctx, userToken, installationID)
-	if err != nil {
-		return err
-	}
-	if found {
-		return nil
-	}
-
-	return fmt.Errorf("GitHub user is not associated with installation %d", installationID)
+	return verifyGitHubInstallationManager(ctx, userToken, installation)
 }
 
 func exchangeGitHubAppUserCode(ctx context.Context, setupCode, codeVerifier, redirectURI string) (string, error) {
@@ -409,11 +413,46 @@ func exchangeGitHubAppUserCode(ctx context.Context, setupCode, codeVerifier, red
 	return tokenResp.AccessToken, nil
 }
 
-func userCanAccessGitHubInstallation(ctx context.Context, userToken string, installationID int64) (bool, error) {
-	reqURL := fmt.Sprintf("%s/user/installations/%d/repositories?per_page=1", strings.TrimRight(githubAppAPIBaseURL, "/"), installationID)
+func verifyGitHubInstallationManager(ctx context.Context, userToken string, installation *githubAppInstallation) error {
+	if installation == nil || installation.ID <= 0 {
+		return fmt.Errorf("valid GitHub App installation is required")
+	}
+
+	accountLogin := strings.TrimSpace(installation.Account.Login)
+	if accountLogin == "" {
+		return fmt.Errorf("GitHub App installation account is missing")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(installation.Account.Type)) {
+	case "user":
+		user, err := getAuthenticatedGitHubUser(ctx, userToken)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(strings.TrimSpace(user.Login), accountLogin) {
+			return fmt.Errorf("GitHub user does not own personal installation %d", installation.ID)
+		}
+		return nil
+	case "organization":
+		membership, err := getGitHubOrganizationMembership(ctx, userToken, accountLogin)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(strings.TrimSpace(membership.State), "active") ||
+			!strings.EqualFold(strings.TrimSpace(membership.Role), "admin") {
+			return fmt.Errorf("GitHub user is not an active owner of organization %s", accountLogin)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported GitHub App installation account type %q", installation.Account.Type)
+	}
+}
+
+func getAuthenticatedGitHubUser(ctx context.Context, userToken string) (*githubUser, error) {
+	reqURL := strings.TrimRight(githubAppAPIBaseURL, "/") + "/user"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+userToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -421,21 +460,57 @@ func userCanAccessGitHubInstallation(ctx context.Context, userToken string, inst
 
 	resp, err := githubAppHTTPClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("GitHub user installation lookup failed: %w", err)
+		return nil, fmt.Errorf("GitHub authenticated user lookup failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := readGitHubAppResponseBody(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to read GitHub user installation response: %w", err)
+		return nil, fmt.Errorf("failed to read GitHub authenticated user response: %w", err)
 	}
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub authenticated user lookup failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
+
+	var user githubUser
+	if err := json.Unmarshal(body, &user); err != nil {
+		return nil, fmt.Errorf("failed to decode GitHub authenticated user response: %w", err)
 	}
-	return false, fmt.Errorf("GitHub user installation lookup failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	if strings.TrimSpace(user.Login) == "" {
+		return nil, fmt.Errorf("GitHub authenticated user response did not include a login")
+	}
+	return &user, nil
+}
+
+func getGitHubOrganizationMembership(ctx context.Context, userToken, organization string) (*githubOrganizationMembership, error) {
+	reqURL := fmt.Sprintf("%s/user/memberships/orgs/%s", strings.TrimRight(githubAppAPIBaseURL, "/"), url.PathEscape(organization))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := githubAppHTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GitHub organization membership lookup failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := readGitHubAppResponseBody(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read GitHub organization membership response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub organization membership lookup failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var membership githubOrganizationMembership
+	if err := json.Unmarshal(body, &membership); err != nil {
+		return nil, fmt.Errorf("failed to decode GitHub organization membership response: %w", err)
+	}
+	return &membership, nil
 }
 
 func configuredGitHubAppCallbackURL() (string, error) {
@@ -445,8 +520,33 @@ func configuredGitHubAppCallbackURL() (string, error) {
 	}
 
 	parsed, err := url.Parse(dashboardURL)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil {
+	if err != nil || parsed.Host == "" || parsed.User != nil {
 		return "", fmt.Errorf("DASHBOARD_URL must be an absolute HTTP or HTTPS URL without credentials")
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("DASHBOARD_URL must be an absolute HTTP or HTTPS URL without credentials")
+	}
+
+	hostname, err := idna.Lookup.ToASCII(parsed.Hostname())
+	if err != nil || hostname == "" {
+		return "", fmt.Errorf("DASHBOARD_URL must contain a valid hostname")
+	}
+	hostname = strings.ToLower(hostname)
+	port := parsed.Port()
+	if (parsed.Scheme == "https" && port == "443") || (parsed.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	if strings.Contains(hostname, ":") {
+		if port == "" {
+			parsed.Host = "[" + hostname + "]"
+		} else {
+			parsed.Host = net.JoinHostPort(hostname, port)
+		}
+	} else if port == "" {
+		parsed.Host = hostname
+	} else {
+		parsed.Host = net.JoinHostPort(hostname, port)
 	}
 	parsed.Path = "/api/github/app/callback"
 	parsed.RawPath = ""

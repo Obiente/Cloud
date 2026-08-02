@@ -255,6 +255,7 @@ Notes:
 - The GitHub App setup URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - The GitHub App callback URL is `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - The GitHub App webhook URL is `https://YOUR-API-DOMAIN/webhooks/github`
+- Set the GitHub App's organization `Members` permission to read so Obiente can verify organization ownership
 - Disable **Request user authorization (OAuth) during installation**; Obiente starts its own PKCE-protected authorization step
 - `DASHBOARD_URL` must use the same public origin as the setup and callback URLs
 - Every dashboard replica must receive the same `NUXT_SESSION_PASSWORD`
