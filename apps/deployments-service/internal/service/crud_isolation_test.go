@@ -130,6 +130,10 @@ func newDeploymentServiceTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&database.Deployment{},
 		&database.BuildHistory{},
+		&database.DeploymentBuildControl{},
+		&database.PullRequestDeploymentConfig{},
+		&database.PullRequestDeployment{},
+		&database.GitHubIntegration{},
 		&database.Organization{},
 		&database.OrganizationMember{},
 		&database.OrgRole{},

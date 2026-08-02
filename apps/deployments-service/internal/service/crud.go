@@ -879,6 +879,12 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
 	}
+	deleted := false
+	defer func() {
+		if !deleted {
+			s.clearDeploymentBuildCancellationAfterAbort(deploymentID)
+		}
+	}()
 	if err := s.cancelDeploymentBuild(deploymentID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to coordinate build cancellation: %w", err))
 	}
@@ -927,6 +933,7 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	if err := s.repo.Delete(ctx, deploymentID); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
+	deleted = true
 	_ = database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).Delete(&database.DeploymentBuildControl{}).Error
 
 	res := connect.NewResponse(&deploymentsv1.DeleteDeploymentResponse{Success: true})

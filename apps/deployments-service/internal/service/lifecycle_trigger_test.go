@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -12,6 +13,24 @@ import (
 
 	"connectrpc.com/connect"
 )
+
+func TestAbortedDeletionClearsIdleCancellationMarker(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	service := NewService(context.Background(), database.NewDeploymentRepository(db, nil), nil, nil)
+	now := time.Now()
+	control := database.DeploymentBuildControl{DeploymentID: "deployment-aborted-delete", CancelRequestedAt: &now, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&control).Error; err != nil {
+		t.Fatalf("seed build cancellation marker: %v", err)
+	}
+	service.clearDeploymentBuildCancellationAfterAbort(control.DeploymentID)
+	var count int64
+	if err := db.Model(&database.DeploymentBuildControl{}).Where("deployment_id = ?", control.DeploymentID).Count(&count).Error; err != nil {
+		t.Fatalf("count build cancellation markers: %v", err)
+	}
+	if count != 0 {
+		t.Fatal("aborted deletion left an idle cancellation marker")
+	}
+}
 
 func TestRequestedDeploymentCommitSHARequiresSystemPrincipal(t *testing.T) {
 	commitSHA := strings.Repeat("a", 40)

@@ -74,6 +74,11 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 	if req.Msg.Config == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull request deployment config is required"))
 	}
+	var previous database.PullRequestDeploymentConfig
+	previousErr := database.DB.WithContext(ctx).Where("deployment_id = ?", deployment.ID).First(&previous).Error
+	if previousErr != nil && !errors.Is(previousErr, gorm.ErrRecordNotFound) {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load current pull request deployment settings: %w", previousErr))
+	}
 	config, err := sanitizePullRequestDeploymentConfig(deployment, req.Msg.Config)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -92,6 +97,11 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 	if err := database.DB.WithContext(ctx).Save(config).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save pull request deployment settings: %w", err))
 	}
+	if previousErr == nil && pullRequestConfigRequiresReconciliation(&previous, config) {
+		if err := s.reconcilePullRequestDeploymentConfig(ctx, deployment, config); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were saved, but active previews could not all be reconciled: %w", err))
+		}
+	}
 	// Persist the disabled setting before retiring checks. Reporters that are
 	// already running finish first under the per-PR reporting lock; later ones
 	// then observe the disabled setting and cannot put the check back in a
@@ -102,6 +112,137 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 		}
 	}
 	return connect.NewResponse(&deploymentsv1.UpdatePullRequestDeploymentConfigResponse{Config: pullRequestConfigToProto(config)}), nil
+}
+
+func pullRequestConfigRequiresReconciliation(previous, current *database.PullRequestDeploymentConfig) bool {
+	if previous == nil || current == nil {
+		return false
+	}
+	return previous.Enabled != current.Enabled ||
+		previous.BaseBranches != current.BaseBranches ||
+		previous.IncludePaths != current.IncludePaths ||
+		previous.ExcludePaths != current.ExcludePaths ||
+		previous.DeployDrafts != current.DeployDrafts ||
+		previous.CleanupOnClose != current.CleanupOnClose ||
+		previous.DomainTemplate != current.DomainTemplate ||
+		previous.MaxActivePreviews != current.MaxActivePreviews ||
+		previous.TTLHours != current.TTLHours ||
+		previous.ForkPolicy != current.ForkPolicy ||
+		previous.EnvironmentVariableNames != current.EnvironmentVariableNames ||
+		previous.BuildArgumentNames != current.BuildArgumentNames ||
+		previous.RequireApproval != current.RequireApproval ||
+		previous.ApprovalCoversUpdates != current.ApprovalCoversUpdates
+}
+
+func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, source *database.Deployment, config *database.PullRequestDeploymentConfig) error {
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND closed_at IS NULL", source.ID).Order("id ASC").Find(&records).Error; err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	// Make cleanup durable before any external Docker or GitHub operation. If
+	// this request or replica dies mid-reconciliation, the janitor will retry
+	// every runtime that was still attached instead of preserving the old
+	// policy for its previous (potentially very long) TTL.
+	now := time.Now()
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL", source.ID).
+		Updates(map[string]interface{}{"expires_at": now, "error": "Preview settings reconciliation is pending.", "updated_at": now}).Error; err != nil {
+		return fmt.Errorf("schedule durable settings reconciliation: %w", err)
+	}
+
+	integrationID, installationID := stringValue(source.GitHubIntegrationID), int64(0)
+	if config.Enabled {
+		var integration database.GitHubIntegration
+		if err := database.DB.WithContext(ctx).Where("id = ?", integrationID).First(&integration).Error; err != nil {
+			return fmt.Errorf("load current GitHub App integration: %w", err)
+		}
+		if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+			return fmt.Errorf("current GitHub App installation is unavailable")
+		}
+		installationID = *integration.GitHubAppInstallationID
+	}
+
+	var reconciliationErrors []error
+	for i := range records {
+		record := records[i]
+		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", source.ID, record.Repository, record.PullRequestNumber)
+		if err := withDistributedLock(ctx, lockKey, func() error {
+			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			if err := s.detachPullRequestRuntimeForReconciliation(ctx, &record, source, config.Enabled, integrationID, installationID); err != nil {
+				return err
+			}
+			if !config.Enabled {
+				s.reportPullRequestDeployment(record.ID)
+				return nil
+			}
+			payload := githubPullRequestWebhookPayload{Action: "reconcile", Number: record.PullRequestNumber}
+			payload.Installation.ID = installationID
+			payload.Repository.FullName = record.Repository
+			return s.processPullRequestWebhookLocked(ctx, *config, payload)
+		}); err != nil {
+			reconciliationErrors = append(reconciliationErrors, fmt.Errorf("reconcile %s#%d: %w", record.Repository, record.PullRequestNumber, err))
+		}
+	}
+	return errors.Join(reconciliationErrors...)
+}
+
+func (s *Service) detachPullRequestRuntimeForReconciliation(ctx context.Context, record *database.PullRequestDeployment, source *database.Deployment, enabled bool, integrationID string, installationID int64) error {
+	return withDistributedLock(ctx, "organization-quota:"+source.OrganizationID, func() error {
+		if record.PreviewDeploymentID != nil {
+			if err := s.removePreviewDeployment(ctx, record); err != nil {
+				s.markPullRequestPreviewCleanupForRetry(ctx, record.ID, "Preview removal is pending after a settings change.")
+				return fmt.Errorf("remove existing preview runtime: %w", err)
+			}
+		}
+		if installationID > 0 {
+			record.GitHubIntegrationID = integrationID
+			record.GitHubInstallationID = installationID
+		}
+		_ = s.markGitHubDeploymentInactive(ctx, record)
+		_ = s.markGitHubCheckRunComplete(ctx, record, "Preview settings changed", "Obiente is re-evaluating this pull request environment.", "cancelled")
+
+		now := time.Now()
+		status := int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED)
+		var errorMessage *string
+		if !enabled {
+			status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED)
+			message := "Pull request environments are disabled for this deployment."
+			errorMessage = &message
+		}
+		updates := map[string]interface{}{
+			"preview_deployment_id": nil,
+			"environment_url":       nil,
+			"active_head_sha":       nil,
+			"github_deployment_id":  nil,
+			"github_deployment_sha": nil,
+			"github_check_run_id":   nil,
+			"github_check_run_sha":  nil,
+			"status":                status,
+			"error":                 errorMessage,
+			"updated_at":            now,
+		}
+		if installationID > 0 {
+			updates["github_integration_id"] = integrationID
+			updates["github_installation_id"] = installationID
+		}
+		if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ? AND closed_at IS NULL", record.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		record.PreviewDeploymentID, record.EnvironmentURL, record.ActiveHeadSHA = nil, nil, nil
+		record.GitHubDeploymentID, record.GitHubDeploymentSHA = nil, nil
+		record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
+		record.Status, record.UpdatedAt = status, now
+		record.Error = errorMessage
+		return nil
+	})
 }
 
 func (s *Service) completePullRequestChecksBeforeDisable(ctx context.Context, sourceDeploymentID string) error {
@@ -604,9 +745,12 @@ func (s *Service) deployPullRequestEnvironment(recordID string) {
 		return
 	}
 	if requiresPullRequestApproval(&record, &config) && !pullRequestDeploymentApproved(&record, &config) {
-		record.Status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL)
-		record.UpdatedAt = time.Now()
-		_ = database.DB.WithContext(ctx).Save(&record).Error
+		result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+			Where("id = ? AND closed_at IS NULL AND head_sha = ? AND active_head_sha IS NULL", record.ID, record.HeadSHA).
+			Updates(map[string]interface{}{"status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL), "updated_at": time.Now()})
+		if result.Error != nil || result.RowsAffected != 1 {
+			return
+		}
 		s.reportPullRequestDeployment(record.ID)
 		return
 	}
@@ -691,7 +835,7 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 				return lockErr
 			}
 			var active int64
-			if countErr := tx.Model(&database.PullRequestDeployment{}).Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL AND status IN ?", source.ID, activeStatuses).Count(&active).Error; countErr != nil {
+			if countErr := tx.Model(&database.PullRequestDeployment{}).Where("source_deployment_id = ? AND id <> ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL AND status IN ?", source.ID, record.ID, activeStatuses).Count(&active).Error; countErr != nil {
 				return countErr
 			}
 			if active >= int64(config.MaxActivePreviews) {
@@ -843,35 +987,43 @@ func (s *Service) failPullRequestDeployment(ctx context.Context, record *databas
 
 func (s *Service) updatePullRequestDeploymentRuntime(ctx context.Context, previewDeploymentID, buildHeadSHA string, status deploymentsv1.PullRequestDeploymentStatus, message string) {
 	var record database.PullRequestDeployment
-	if err := database.DB.WithContext(ctx).Where("preview_deployment_id = ? AND closed_at IS NULL", previewDeploymentID).First(&record).Error; err != nil {
-		return
-	}
-	if record.ActiveHeadSHA == nil || *record.ActiveHeadSHA != buildHeadSHA {
+	if err := database.DB.WithContext(ctx).Select("id").Where("preview_deployment_id = ? AND closed_at IS NULL", previewDeploymentID).First(&record).Error; err != nil {
 		return
 	}
 	terminal := status == deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING || status == deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED
-	if record.HeadSHA != buildHeadSHA && !terminal {
-		return
-	}
-	if record.HeadSHA != buildHeadSHA {
-		record.ActiveHeadSHA, record.Error, record.UpdatedAt = nil, nil, time.Now()
-		record.Status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED)
-		if err := database.DB.WithContext(ctx).Save(&record).Error; err == nil {
-			go s.deployPullRequestEnvironment(record.ID)
-		}
-		return
-	}
-	record.Status, record.UpdatedAt = int32(status), time.Now()
+	updates := map[string]interface{}{"status": int32(status), "updated_at": time.Now()}
 	if terminal {
-		record.ActiveHeadSHA = nil
+		updates["active_head_sha"] = nil
 	}
 	if message == "" {
-		record.Error = nil
+		updates["error"] = nil
 	} else {
-		record.Error = &message
+		updates["error"] = message
 	}
-	if err := database.DB.WithContext(ctx).Save(&record).Error; err == nil {
+	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("id = ? AND closed_at IS NULL AND active_head_sha = ? AND head_sha = ?", record.ID, buildHeadSHA, buildHeadSHA).
+		Updates(updates)
+	if result.Error != nil {
+		logger.Warn("[PRDeployments] Failed to persist runtime state for %s: %v", record.ID, result.Error)
+		return
+	}
+	if result.RowsAffected == 1 {
 		go s.reportPullRequestDeployment(record.ID)
+		return
+	}
+	if !terminal {
+		return
+	}
+	// A newer webhook may have advanced head_sha while this build was still
+	// running. Retire only the matching old build lease and queue the current
+	// head without writing any fields from the stale callback snapshot.
+	queued := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("id = ? AND closed_at IS NULL AND active_head_sha = ? AND head_sha <> ?", record.ID, buildHeadSHA, buildHeadSHA).
+		Updates(map[string]interface{}{"active_head_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "updated_at": time.Now()})
+	if queued.Error != nil {
+		logger.Warn("[PRDeployments] Failed to queue the current revision for %s: %v", record.ID, queued.Error)
+	} else if queued.RowsAffected == 1 {
+		go s.deployPullRequestEnvironment(record.ID)
 	}
 }
 
@@ -941,7 +1093,17 @@ func (s *Service) cleanupExpiredPullRequestDeployments(parent context.Context) {
 		return
 	}
 	for i := range records {
-		if err := s.cleanupPullRequestDeployment(ctx, &records[i], "Preview lifetime expired."); err != nil {
+		record := records[i]
+		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", record.SourceDeploymentID, record.Repository, record.PullRequestNumber)
+		if err := withDistributedLock(ctx, lockKey, func() error {
+			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL AND expires_at < ?", record.ID, time.Now()).First(&record).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			return s.cleanupPullRequestDeployment(ctx, &record, "Preview lifetime expired.")
+		}); err != nil {
 			logger.Warn("[PRDeployments] Failed to clean up %s: %v", records[i].ID, err)
 		}
 	}
@@ -1055,51 +1217,56 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 	repository := normalizeGitHubRepoFullName(payload.Repository.FullName)
 	lockKey := fmt.Sprintf("pull-request:%s:%s:%d", config.DeploymentID, repository, payload.Number)
 	if err := withDistributedLock(ctx, lockKey, func() error {
-		s.processPullRequestWebhookLocked(ctx, config, payload)
-		return nil
+		return s.processPullRequestWebhookLocked(ctx, config, payload)
 	}); err != nil {
-		logger.Error("[PRDeployments] Failed to lock webhook state for %s#%d: %v", repository, payload.Number, err)
+		logger.Error("[PRDeployments] Failed to process webhook state for %s#%d: %v", repository, payload.Number, err)
 	}
 }
 
-func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config database.PullRequestDeploymentConfig, payload githubPullRequestWebhookPayload) {
+func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config database.PullRequestDeploymentConfig, payload githubPullRequestWebhookPayload) error {
 	repository := normalizeGitHubRepoFullName(payload.Repository.FullName)
 	client, err := githubclient.NewInstallationClient(ctx, payload.Installation.ID)
 	if err != nil {
-		logger.Warn("[PRDeployments] Failed to verify current state for %s#%d: %v", repository, payload.Number, err)
-		return
+		return fmt.Errorf("create GitHub client: %w", err)
 	}
 	live, err := client.GetPullRequest(ctx, repository, payload.Number)
 	if err != nil {
-		logger.Warn("[PRDeployments] Failed to load current state for %s#%d: %v", repository, payload.Number, err)
-		return
+		return fmt.Errorf("load current pull request state: %w", err)
 	}
 	if !pullRequestWebhookMatchesCurrentState(payload.Action, payload.PullRequest.Head.SHA, live) {
-		return
+		return nil
 	}
 	payload.PullRequest.Draft, payload.PullRequest.Merged = live.Draft, live.Merged
 	payload.PullRequest.Head.SHA, payload.PullRequest.Head.Ref, payload.PullRequest.Head.Repo.FullName = live.Head.SHA, live.Head.Ref, live.Head.Repo.FullName
 	payload.PullRequest.Base.Ref, payload.PullRequest.Base.Repo.FullName = live.Base.Ref, live.Base.Repo.FullName
+	if payload.Action == "reconcile" && live.State == "closed" {
+		payload.Action = "closed"
+	}
 	var existing database.PullRequestDeployment
 	existingErr := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND repository = ? AND pull_request_number = ?", config.DeploymentID, repository, payload.Number).First(&existing).Error
+	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("load existing pull request state: %w", existingErr)
+	}
 	if payload.Action == "closed" {
 		if existingErr == nil {
 			existing.Merged = payload.PullRequest.Merged
 			existing.UpdatedAt = time.Now()
 			if config.CleanupOnClose {
-				_ = s.cleanupPullRequestDeployment(ctx, &existing, "Pull request closed.")
+				if err := s.cleanupPullRequestDeployment(ctx, &existing, "Pull request closed."); err != nil {
+					return err
+				}
 			} else if err := database.DB.WithContext(ctx).Save(&existing).Error; err != nil {
-				logger.Warn("[PRDeployments] Failed to retain merged state for %s: %v", existing.ID, err)
+				return err
 			}
 		}
-		return
+		return nil
 	}
 	if payload.Action == "synchronize" && !config.RedeployOnPush {
-		return
+		return nil
 	}
 	source, err := s.repo.GetByID(ctx, config.DeploymentID)
 	if err != nil {
-		return
+		return err
 	}
 	baseRef, headRef := strings.TrimSpace(payload.PullRequest.Base.Ref), strings.TrimSpace(payload.PullRequest.Head.Ref)
 	fromFork := !strings.EqualFold(normalizeGitHubRepoFullName(payload.PullRequest.Head.Repo.FullName), repository)
@@ -1126,6 +1293,8 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		record = &database.PullRequestDeployment{ID: "pr-deployment-" + uuid.NewString(), SourceDeploymentID: source.ID, OrganizationID: source.OrganizationID,
 			GitHubIntegrationID: stringValue(source.GitHubIntegrationID), GitHubInstallationID: payload.Installation.ID, Repository: repository, PullRequestNumber: payload.Number, CreatedAt: now}
 	}
+	record.GitHubIntegrationID = stringValue(source.GitHubIntegrationID)
+	record.GitHubInstallationID = payload.Installation.ID
 	shaChanged := record.HeadSHA != "" && record.HeadSHA != payload.PullRequest.Head.SHA
 	if shaChanged && record.GitHubDeploymentID != nil {
 		_ = s.markGitHubDeploymentInactive(ctx, record)
@@ -1141,27 +1310,43 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	if shaChanged && !config.ApprovalCoversUpdates {
 		record.ApprovedAt, record.ApprovedBy, record.ApprovedHeadSHA = nil, nil, nil
 	}
+	runtimeDetached := false
 	if reason != "" {
 		if record.PreviewDeploymentID != nil {
+			s.markPullRequestPreviewCleanupForRetry(ctx, record.ID, "Preview removal is pending retry.")
 			if err := s.removePreviewDeployment(ctx, record); err != nil {
 				logger.Warn("[PRDeployments] Failed to remove out-of-scope preview %s: %v", record.ID, err)
+				return fmt.Errorf("remove out-of-scope preview: %w", err)
 			}
+			runtimeDetached = true
 		}
 		record.ActiveHeadSHA = nil
 		record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED), &reason
 	} else if requiresPullRequestApproval(record, &config) && !pullRequestDeploymentApproved(record, &config) {
+		if record.PreviewDeploymentID != nil {
+			s.markPullRequestPreviewCleanupForRetry(ctx, record.ID, "Preview removal is pending maintainer approval.")
+			if err := s.removePreviewDeployment(ctx, record); err != nil {
+				return fmt.Errorf("remove preview awaiting approval: %w", err)
+			}
+			runtimeDetached = true
+		}
+		record.ActiveHeadSHA = nil
 		record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL), nil
 	} else {
 		record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), nil
 	}
-	if domain, domainErr := renderPRDomain(&config, source, record); domainErr == nil {
-		url := "https://" + domain
-		record.EnvironmentURL = &url
+	if record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED) {
+		if domain, domainErr := renderPRDomain(&config, source, record); domainErr == nil {
+			url := "https://" + domain
+			record.EnvironmentURL = &url
+		} else {
+			logger.Warn("[PRDeployments] Invalid preview hostname for %s#%d: %v", repository, payload.Number, domainErr)
+			record.Status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED)
+			message := "The configured preview hostname is invalid."
+			record.Error = &message
+		}
 	} else {
-		logger.Warn("[PRDeployments] Invalid preview hostname for %s#%d: %v", repository, payload.Number, domainErr)
-		record.Status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED)
-		message := "The configured preview hostname is invalid."
-		record.Error = &message
+		record.EnvironmentURL = nil
 	}
 	var persistErr error
 	if existingErr != nil {
@@ -1182,9 +1367,19 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			"closed_at":              nil,
 			"updated_at":             record.UpdatedAt,
 		}
-		if reason != "" {
+		if reason != "" || record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL) {
 			updates["preview_deployment_id"] = record.PreviewDeploymentID
 			updates["active_head_sha"] = nil
+		}
+		if runtimeDetached {
+			_ = s.markGitHubDeploymentInactive(ctx, record)
+			_ = s.markGitHubCheckRunComplete(ctx, record, "Preview removed", "This pull request no longer meets the current preview policy.", "cancelled")
+			record.GitHubDeploymentID, record.GitHubDeploymentSHA = nil, nil
+			record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
+			updates["github_deployment_id"] = nil
+			updates["github_deployment_sha"] = nil
+			updates["github_check_run_id"] = nil
+			updates["github_check_run_sha"] = nil
 		}
 		if shaChanged {
 			updates["github_deployment_id"] = nil
@@ -1200,12 +1395,10 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		persistErr = database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", record.ID).Updates(updates).Error
 	}
 	if persistErr != nil {
-		logger.Error("[PRDeployments] Failed to persist %s#%d: %v", repository, payload.Number, persistErr)
-		return
+		return fmt.Errorf("persist pull request state: %w", persistErr)
 	}
 	if err := database.DB.WithContext(ctx).Where("id = ?", record.ID).First(record).Error; err != nil {
-		logger.Error("[PRDeployments] Failed to reload %s#%d: %v", repository, payload.Number, err)
-		return
+		return fmt.Errorf("reload pull request state: %w", err)
 	}
 	if record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED) {
 		if record.ActiveHeadSHA == nil {
@@ -1216,10 +1409,17 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	} else {
 		s.reportPullRequestDeployment(record.ID)
 	}
+	return nil
 }
 
 func pullRequestWebhookMatchesCurrentState(action, payloadHeadSHA string, live *githubclient.PullRequest) bool {
-	if live == nil || live.Head.SHA != payloadHeadSHA {
+	if live == nil {
+		return false
+	}
+	if action == "reconcile" {
+		return live.State == "open" || live.State == "closed"
+	}
+	if live.Head.SHA != payloadHeadSHA {
 		return false
 	}
 	if action == "closed" {
@@ -1238,6 +1438,15 @@ func (s *Service) removePreviewDeployment(ctx context.Context, record *database.
 	}
 	record.PreviewDeploymentID, record.EnvironmentURL = nil, nil
 	return nil
+}
+
+func (s *Service) markPullRequestPreviewCleanupForRetry(ctx context.Context, recordID, message string) {
+	now := time.Now()
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("id = ? AND closed_at IS NULL", recordID).
+		Updates(map[string]interface{}{"expires_at": now, "error": message, "updated_at": now}).Error; err != nil {
+		logger.Warn("[PRDeployments] Failed to schedule cleanup retry for %s: %v", recordID, err)
+	}
 }
 
 func pullRequestFilesMatch(files []githubclient.PullRequestFile, config *database.PullRequestDeploymentConfig) bool {

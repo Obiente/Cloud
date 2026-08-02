@@ -9,6 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
@@ -73,7 +74,13 @@ func (s *Service) registerDeploymentBuild(ctx context.Context, deploymentID stri
 		var existing database.DeploymentBuildControl
 		err := database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).First(&existing).Error
 		if err == nil && existing.CancelRequestedAt != nil {
-			return nil
+			// A live build token must acknowledge cancellation before another
+			// build starts. An idle marker older than the abort-cleanup window is
+			// stale (for example after a replica crashed on an error return), and
+			// the deployment existence check above proves deletion did not finish.
+			if existing.BuildToken != "" || time.Since(*existing.CancelRequestedAt) < 2*time.Minute {
+				return nil
+			}
 		}
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
@@ -186,6 +193,67 @@ func (s *Service) cancelDeploymentBuild(deploymentID string) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func (s *Service) clearDeploymentBuildCancellationAfterAbort(deploymentID string) {
+	clear := func(ctx context.Context) (bool, error) {
+		cleared := false
+		err := withDistributedLock(ctx, "deployment-build:"+deploymentID, func() error {
+			var control database.DeploymentBuildControl
+			err := database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).First(&control).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				cleared = true
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if control.BuildToken != "" {
+				return nil
+			}
+			if err := database.DB.WithContext(ctx).Delete(&control).Error; err != nil {
+				return err
+			}
+			cleared = true
+			return nil
+		})
+		return cleared, err
+	}
+
+	ctx, cancel := s.detachedContext(5 * time.Second)
+	cleared, err := clear(ctx)
+	cancel()
+	if cleared {
+		return
+	}
+	if err != nil {
+		logger.Warn("[Deployments] Failed to clear aborted deletion marker for %s: %v", deploymentID, err)
+	}
+
+	// A remote build owner can acknowledge cancellation just after the delete
+	// request times out. Keep retrying in the background so that an aborted
+	// deletion cannot permanently block future deploys, but never clear the
+	// marker while the old build token is still active.
+	go func() {
+		ctx, cancel := s.detachedContext(2 * time.Minute)
+		defer cancel()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			cleared, err := clear(ctx)
+			if cleared {
+				return
+			}
+			if err != nil {
+				logger.Warn("[Deployments] Failed to retry aborted deletion cleanup for %s: %v", deploymentID, err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 }
 
 func (s *Service) monitorDeploymentBuild(ctx context.Context, deploymentID, token string, cancel context.CancelFunc) {

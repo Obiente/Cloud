@@ -1,6 +1,7 @@
 package deployments
 
 import (
+	"context"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -72,6 +73,100 @@ func TestEditedPullRequestWebhookReevaluatesBaseBranchScope(t *testing.T) {
 		t.Fatal("retargeting a pull request must re-evaluate preview scope")
 	}
 }
+
+func TestPullRequestConfigReconciliationTracksRuntimePolicies(t *testing.T) {
+	previous := &database.PullRequestDeploymentConfig{Enabled: true, ForkPolicy: int32(deploymentsv1.PullRequestForkPolicy_PULL_REQUEST_FORK_ISOLATED), BaseBranches: `["main"]`, CommentEnabled: true}
+	current := *previous
+	current.CommentEnabled = false
+	if pullRequestConfigRequiresReconciliation(previous, &current) {
+		t.Fatal("comment-only settings should not restart active previews")
+	}
+	current.ForkPolicy = int32(deploymentsv1.PullRequestForkPolicy_PULL_REQUEST_FORK_DENY)
+	if !pullRequestConfigRequiresReconciliation(previous, &current) {
+		t.Fatal("tightening the fork policy must reconcile active previews")
+	}
+	current = *previous
+	current.Enabled = false
+	if !pullRequestConfigRequiresReconciliation(previous, &current) {
+		t.Fatal("disabling previews must reconcile active runtimes")
+	}
+}
+
+func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	background, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
+	now := time.Now()
+	autoDeploy := false
+	preview := testDeployment("preview-disable", "Preview", "org", "system", now, &autoDeploy)
+	preview.Groups = `["pull-request"]`
+	if err := db.Create(preview).Error; err != nil {
+		t.Fatalf("seed preview deployment: %v", err)
+	}
+	head := strings.Repeat("a", 40)
+	record := database.PullRequestDeployment{
+		ID: "pr-disable", SourceDeploymentID: "source-disable", PreviewDeploymentID: &preview.ID, OrganizationID: "org",
+		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 31,
+		HeadSHA: head, ActiveHeadSHA: &head, HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), ExpiresAt: now.Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+	source := &database.Deployment{ID: record.SourceDeploymentID, OrganizationID: record.OrganizationID}
+	if err := service.detachPullRequestRuntimeForReconciliation(t.Context(), &record, source, false, "", 0); err != nil {
+		t.Fatalf("detach disabled preview: %v", err)
+	}
+	var got database.PullRequestDeployment
+	if err := db.First(&got, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload pull request deployment: %v", err)
+	}
+	if got.PreviewDeploymentID != nil || got.ActiveHeadSHA != nil || got.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED) {
+		t.Fatalf("disabled preview remained active: %#v", got)
+	}
+	var deletedPreview database.Deployment
+	if err := db.Unscoped().First(&deletedPreview, "id = ?", preview.ID).Error; err != nil {
+		t.Fatalf("reload deleted preview: %v", err)
+	}
+	if deletedPreview.DeletedAt == nil {
+		t.Fatal("disabled preview runtime was not deleted")
+	}
+}
+
+func TestStaleRuntimeCallbackQueuesCurrentHeadWithoutOverwritingState(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	background, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
+	oldHead, newHead := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	deploymentID, checkID := int64(71), int64(72)
+	approvedAt := time.Now()
+	record := database.PullRequestDeployment{
+		ID: "pr-runtime-race", SourceDeploymentID: "source", PreviewDeploymentID: stringPointer("preview"), OrganizationID: "org",
+		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 31,
+		HeadSHA: newHead, ActiveHeadSHA: &oldHead, HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), GitHubDeploymentID: &deploymentID,
+		GitHubCheckRunID: &checkID, ApprovedHeadSHA: &newHead, ApprovedAt: &approvedAt, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+
+	service.updatePullRequestDeploymentRuntime(t.Context(), "preview", oldHead, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+	var got database.PullRequestDeployment
+	if err := db.First(&got, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload pull request deployment: %v", err)
+	}
+	if got.HeadSHA != newHead || got.ActiveHeadSHA != nil || got.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED) {
+		t.Fatalf("stale callback corrupted current runtime state: %#v", got)
+	}
+	if got.GitHubDeploymentID == nil || *got.GitHubDeploymentID != deploymentID || got.GitHubCheckRunID == nil || *got.GitHubCheckRunID != checkID || got.ApprovedHeadSHA == nil || *got.ApprovedHeadSHA != newHead {
+		t.Fatalf("stale callback overwrote unrelated current-revision fields: %#v", got)
+	}
+}
+
+func stringPointer(value string) *string { return &value }
 
 func TestPullRequestDomainTemplateValidation(t *testing.T) {
 	if err := validatePRDomainTemplate("pr-{pr}-{deployment}"); err != nil {
