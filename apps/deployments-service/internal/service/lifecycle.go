@@ -34,15 +34,19 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has deploy permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
+	commitSHA := strings.TrimSpace(req.Msg.GetCommitSha())
+	if commitSHA != "" && !isGitHubCommitSHA(commitSHA) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid commit SHA"))
+	}
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "deploy"); err != nil {
 		return nil, err
 	}
 
 	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
-		headers := map[string]string{
-			"Authorization":                      req.Header().Get("Authorization"),
-			orchestrator.ForwardTargetNodeHeader: targetNodeID,
+		headers, err := triggerDeploymentForwardHeaders(ctx, req, targetNodeID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
 		if err != nil {
@@ -69,9 +73,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 
 				reqBody, _ := json.Marshal(req.Msg)
-				headers := map[string]string{
-					"Authorization":                      req.Header().Get("Authorization"),
-					orchestrator.ForwardTargetNodeHeader: targetNode.ID,
+				headers, err := triggerDeploymentForwardHeaders(ctx, req, targetNode.ID)
+				if err != nil {
+					return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 				}
 				bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNode.ID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
 				if err != nil {
@@ -148,6 +152,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			BuildStrategy:  dbDeployment.BuildStrategy,
 			Branch:         dbDeployment.Branch,
 		}
+		if commitSHA != "" {
+			buildRecord.CommitSHA = &commitSHA
+		}
 
 		// Capture build configuration snapshot
 		if dbDeployment.RepositoryURL != nil {
@@ -196,7 +203,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 							githubToken = token
 						}
 					}
-					if err := cloneRepository(buildCtx, *dbDeployment.RepositoryURL, dbDeployment.Branch, buildDir, githubToken); err == nil {
+					if err := cloneRepository(buildCtx, *dbDeployment.RepositoryURL, dbDeployment.Branch, commitSHA, buildDir, githubToken); err == nil {
 						if detected, _ := s.buildRegistry.AutoDetect(buildCtx, buildDir); detected != deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED {
 							buildStrategy = detected
 							// Update deployment with detected strategy
@@ -289,6 +296,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			DeploymentID:           deploymentID,
 			RepositoryURL:          repoURL,
 			Branch:                 dbDeployment.Branch,
+			CommitSHA:              commitSHA,
 			GitHubToken:            githubToken,
 			BuildCommand:           buildCmd,
 			InstallCommand:         installCmd,
@@ -653,6 +661,27 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		Status:       "DEPLOYING",
 	})
 	return res, nil
+}
+
+func triggerDeploymentForwardHeaders(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest], targetNodeID string) (map[string]string, error) {
+	headers := map[string]string{
+		orchestrator.ForwardTargetNodeHeader: targetNodeID,
+	}
+
+	userInfo, _ := auth.GetUserFromContext(ctx)
+	if userInfo != nil && userInfo.Id == "system" {
+		secret := strings.TrimSpace(os.Getenv("INTERNAL_SERVICE_SECRET"))
+		if secret == "" {
+			return nil, fmt.Errorf("INTERNAL_SERVICE_SECRET is required for cross-node automatic deployments")
+		}
+		headers[internalServiceSecretHeader] = secret
+		return headers, nil
+	}
+
+	if authorization := req.Header().Get("Authorization"); authorization != "" {
+		headers["Authorization"] = authorization
+	}
+	return headers, nil
 }
 
 // StreamDeploymentStatus streams deployment status updates

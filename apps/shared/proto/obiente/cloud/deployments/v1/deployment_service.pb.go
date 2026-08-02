@@ -1106,6 +1106,7 @@ type TriggerDeploymentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	CommitSha      *string                `protobuf:"bytes,3,opt,name=commit_sha,json=commitSha,proto3,oneof" json:"commit_sha,omitempty"` // Exact revision to build for source-triggered deployments
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1150,6 +1151,13 @@ func (x *TriggerDeploymentRequest) GetOrganizationId() string {
 func (x *TriggerDeploymentRequest) GetDeploymentId() string {
 	if x != nil {
 		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *TriggerDeploymentRequest) GetCommitSha() string {
+	if x != nil && x.CommitSha != nil {
+		return *x.CommitSha
 	}
 	return ""
 }
@@ -9108,10 +9116,13 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x18UpdateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"h\n" +
+	"deployment\"\x9b\x01\n" +
 	"\x18TriggerDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
-	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"X\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\"\n" +
+	"\n" +
+	"commit_sha\x18\x03 \x01(\tH\x00R\tcommitSha\x88\x01\x01B\r\n" +
+	"\v_commit_sha\"X\n" +
 	"\x19TriggerDeploymentResponse\x12#\n" +
 	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"m\n" +
@@ -10385,6 +10396,7 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_init() {
 	}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[0].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[6].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[8].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[11].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[12].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[14].OneofWrappers = []any{}

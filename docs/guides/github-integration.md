@@ -71,6 +71,7 @@ GITHUB_APP_CLIENT_ID=your-github-app-client-id
 GITHUB_APP_CLIENT_SECRET=your-github-app-client-secret
 GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 -w0 path/to/private-key.pem)"
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+INTERNAL_SERVICE_SECRET="$(openssl rand -base64 32)"
 ```
 
 On macOS, encode the private key with:
@@ -85,6 +86,7 @@ Notes:
 - `GITHUB_APP_CLIENT_SECRET` is used only to exchange the one-time setup code and must stay server-side
 - `GITHUB_APP_PRIVATE_KEY_BASE64` must stay server-side only
 - `GITHUB_WEBHOOK_SECRET` must match the secret configured on the GitHub App
+- `INTERNAL_SERVICE_SECRET` must be identical on every Obiente Cloud node so a webhook received on one node can start a deployment on another
 - Enable **Redirect on update** so repository selection changes return users to Obiente
 
 ## Connecting A Workspace
@@ -121,8 +123,10 @@ GitHub calls:
 https://YOUR-API-DOMAIN/webhooks/github
 ```
 
-Obiente verifies `X-Hub-Signature-256`, matches the repository and branch, and
-triggers deployments that have auto-deploy enabled.
+Obiente verifies `X-Hub-Signature-256` and binds the event to the stored GitHub
+App installation, workspace, repository, and branch. It ignores branch deletion
+events. Each accepted push builds the exact commit from the event rather than a
+later branch head.
 
 ## Troubleshooting
 
@@ -161,6 +165,7 @@ Check:
 - GitHub can reach `https://YOUR-API-DOMAIN/webhooks/github`
 - The deployment repository and branch match the pushed repository and branch
 - Auto Deploy is enabled on the deployment
+- `INTERNAL_SERVICE_SECRET` is configured consistently on every node in a multi-node installation
 
 ## Security Notes
 
@@ -171,4 +176,6 @@ Check:
 - Installation state is validated server-side with a short-lived cookie
 - GitHub App installation tokens are minted on demand
 - Webhook payloads are verified with `X-Hub-Signature-256`
+- Pushes can only match deployments bound to the webhook's verified GitHub App installation and Obiente workspace
+- Webhook-triggered builds fetch and record the exact pushed commit
 - Production should always use HTTPS for dashboard and webhook endpoints

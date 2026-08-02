@@ -38,6 +38,7 @@ type BuildConfig struct {
 	DeploymentID           string
 	RepositoryURL          string
 	Branch                 string
+	CommitSHA              string // Exact source revision for webhook-triggered builds
 	GitHubToken            string // GitHub token for authenticating with private repositories
 	BuildCommand           string
 	InstallCommand         string
@@ -323,7 +324,7 @@ func ensureBuildDir(deploymentID string) (string, error) {
 }
 
 // cloneRepository clones a git repository to the build directory
-func cloneRepository(ctx context.Context, repoURL, branch, destDir string, githubToken string) error {
+func cloneRepository(ctx context.Context, repoURL, branch, commitSHA, destDir string, githubToken string) error {
 	// Remove destination if it exists
 	os.RemoveAll(destDir)
 
@@ -333,16 +334,43 @@ func cloneRepository(ctx context.Context, repoURL, branch, destDir string, githu
 		authenticatedURL = injectGitHubToken(repoURL, githubToken)
 	}
 
-	// Clone repository
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, authenticatedURL, destDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if commitSHA == "" {
+		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, authenticatedURL, destDir)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to clone repository: %w", err)
+		}
+		return nil
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to clone repository: %w", err)
+	if !isGitHubCommitSHA(commitSHA) {
+		return fmt.Errorf("invalid commit SHA")
+	}
+	if err := runGitCommand(ctx, "", "init", destDir); err != nil {
+		return fmt.Errorf("failed to initialize repository: %w", err)
+	}
+	if err := runGitCommand(ctx, destDir, "remote", "add", "origin", authenticatedURL); err != nil {
+		return fmt.Errorf("failed to configure repository remote: %w", err)
+	}
+	if err := runGitCommand(ctx, destDir, "fetch", "--depth", "1", "origin", commitSHA); err != nil {
+		return fmt.Errorf("failed to fetch commit %s: %w", commitSHA, err)
+	}
+	if err := runGitCommand(ctx, destDir, "checkout", "--detach", "FETCH_HEAD"); err != nil {
+		return fmt.Errorf("failed to check out commit %s: %w", commitSHA, err)
 	}
 
 	return nil
+}
+
+func runGitCommand(ctx context.Context, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // isGitHubURL checks if the URL is a GitHub repository URL

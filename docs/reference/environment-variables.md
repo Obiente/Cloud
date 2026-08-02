@@ -1162,17 +1162,17 @@ See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-t
 
 ### Notifications Service Configuration
 
-| Variable                              | Type     | Default                             | Required | Description                                                                                                                                 |
-| ------------------------------------- | -------- | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERNAL_SERVICE_SECRET`             | string   | -                                   | ✅\*     | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications. |
-| `NOTIFICATIONS_SERVICE_URL`           | string   | `http://notifications-service:3012` | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                            |
-| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS`    | number   | `3`                                 | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                 |
-| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                                | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                  |
-| `NOTIFICATIONS_RETRY_MAX_BACKOFF`     | duration | `10s`                               | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                                               |
+| Variable                              | Type     | Default                             | Required | Description                                                                                                      |
+| ------------------------------------- | -------- | ----------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `INTERNAL_SERVICE_SECRET`             | string   | -                                   | ✅\*     | Shared secret for service-to-service calls, including notifications and cross-node automatic deployments.        |
+| `NOTIFICATIONS_SERVICE_URL`           | string   | `http://notifications-service:3012` | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name. |
+| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS`    | number   | `3`                                 | ❌       | Maximum number of retry attempts for failed notification creation requests.                                      |
+| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                                | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                       |
+| `NOTIFICATIONS_RETRY_MAX_BACKOFF`     | duration | `10s`                               | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                    |
 
 **Internal Service Authentication:**
 
-The `INTERNAL_SERVICE_SECRET` is used to secure the notifications service endpoints (`CreateNotification` and `CreateOrganizationNotification`). Services that need to create notifications must provide this secret in the `x-internal-service-secret` header when calling the notifications service.
+The `INTERNAL_SERVICE_SECRET` secures internal service calls. It is used for notification endpoints and for forwarding automatic deployment triggers between Obiente Cloud nodes. Calling services provide it in the `x-internal-service-secret` header.
 
 **Retry Configuration:**
 

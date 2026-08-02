@@ -320,6 +320,7 @@ message UpdateDeploymentResponse {
 message TriggerDeploymentRequest {
   string organization_id = 1;
   string deployment_id = 2;
+  optional string commit_sha = 3; // Exact revision to build for source-triggered deployments
 }
 
 message TriggerDeploymentResponse {
