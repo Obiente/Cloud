@@ -713,7 +713,7 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		}); err != nil {
 			return err
 		}
-		url := "https://" + domain
+		url := "https://" + created.Domain
 		record.EnvironmentURL = &url
 		preview = &created
 		return nil
