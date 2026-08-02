@@ -76,11 +76,11 @@ type PullRequestDeploymentConfig struct {
 	IncludePaths             string    `gorm:"type:jsonb;not null;default:'[]'" json:"include_paths"`
 	ExcludePaths             string    `gorm:"type:jsonb;not null;default:'[]'" json:"exclude_paths"`
 	DeployDrafts             bool      `gorm:"not null;default:false" json:"deploy_drafts"`
-	RedeployOnPush           bool      `gorm:"not null;default:true" json:"redeploy_on_push"`
-	CleanupOnClose           bool      `gorm:"not null;default:true" json:"cleanup_on_close"`
-	CommentEnabled           bool      `gorm:"not null;default:true" json:"comment_enabled"`
-	DeploymentStatusEnabled  bool      `gorm:"not null;default:true" json:"deployment_status_enabled"`
-	CheckRunEnabled          bool      `gorm:"not null;default:true" json:"check_run_enabled"`
+	RedeployOnPush           bool      `gorm:"not null" json:"redeploy_on_push"`
+	CleanupOnClose           bool      `gorm:"not null" json:"cleanup_on_close"`
+	CommentEnabled           bool      `gorm:"not null" json:"comment_enabled"`
+	DeploymentStatusEnabled  bool      `gorm:"not null" json:"deployment_status_enabled"`
+	CheckRunEnabled          bool      `gorm:"not null" json:"check_run_enabled"`
 	DomainTemplate           string    `gorm:"not null;default:'pr-{pr}-{deployment}'" json:"domain_template"`
 	MaxActivePreviews        int32     `gorm:"not null;default:5" json:"max_active_previews"`
 	TTLHours                 int32     `gorm:"not null;default:72" json:"ttl_hours"`
@@ -131,6 +131,19 @@ type PullRequestDeployment struct {
 }
 
 func (PullRequestDeployment) TableName() string { return "pull_request_deployments" }
+
+// DeploymentBuildControl coordinates cancellation of an asynchronous build
+// across deployments-service replicas.
+type DeploymentBuildControl struct {
+	DeploymentID      string     `gorm:"primaryKey" json:"deployment_id"`
+	BuildToken        string     `gorm:"index;not null" json:"build_token"`
+	OwnerNodeID       string     `gorm:"index" json:"owner_node_id"`
+	CancelRequestedAt *time.Time `gorm:"index" json:"cancel_requested_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+func (DeploymentBuildControl) TableName() string { return "deployment_build_controls" }
 
 func (Deployment) TableName() string {
 	return "deployments"

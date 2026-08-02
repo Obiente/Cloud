@@ -58,6 +58,25 @@ type PullRequestFile struct {
 	Filename string `json:"filename"`
 }
 
+type PullRequest struct {
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	Head   struct {
+		SHA  string `json:"sha"`
+		Ref  string `json:"ref"`
+		Repo struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
+	} `json:"head"`
+	Base struct {
+		Ref  string `json:"ref"`
+		Repo struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
+	} `json:"base"`
+}
+
 type Deployment struct {
 	ID int64 `json:"id"`
 }
@@ -149,6 +168,22 @@ func (c *Client) ListPullRequestFiles(ctx context.Context, repoFullName string, 
 		}
 	}
 	return nil, fmt.Errorf("pull request contains more than 3000 files")
+}
+
+func (c *Client) GetPullRequest(ctx context.Context, repoFullName string, pullRequestNumber int64) (*PullRequest, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return nil, err
+	}
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number is required")
+	}
+	var pullRequest PullRequest
+	requestURL := fmt.Sprintf("%s/repos/%s/pulls/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, pullRequestNumber)
+	if err := c.doJSON(ctx, http.MethodGet, requestURL, nil, http.StatusOK, &pullRequest); err != nil {
+		return nil, err
+	}
+	return &pullRequest, nil
 }
 
 func (c *Client) CreateDeployment(ctx context.Context, repoFullName, ref, environment, description string) (int64, error) {

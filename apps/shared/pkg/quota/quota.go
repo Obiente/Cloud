@@ -123,28 +123,19 @@ func (c *Checker) getPlanLimitsFromQuota(q *database.OrgQuota) (deploymentsMax i
 }
 
 func (c *Checker) currentAllocations(orgID string, excludeDeploymentID string) (replicas int, memBytes int64, cpuCores int, err error) {
-	// Count running replicas from deployment locations
-	var count int64
-	locationQuery := database.DB.Model(&database.DeploymentLocation{}).
-		Where("deployment_locations.status = ?", "running").
-		Joins("JOIN deployments d ON d.id = deployment_locations.deployment_id").
-		Where("d.organization_id = ?", orgID)
-	if excludeDeploymentID != "" {
-		locationQuery = locationQuery.Where("d.id <> ?", excludeDeploymentID)
-	}
-	if err = locationQuery.Count(&count).Error; err != nil {
-		return
-	}
-	// Sum memory and CPU across active deployments, multiplied by their replica count.
+	// Sum reserved replicas, memory, and CPU across active deployments. BUILDING
+	// and DEPLOYING rows count before a runtime location exists so concurrent
+	// allocations cannot overcommit an organization while work is in flight.
 	// Only count deployments that are running, building, or deploying (not stopped/failed).
 	// RUNNING=3, BUILDING=2, DEPLOYING=6
 	type agg struct {
-		Mem int64
-		CPU int64
+		Replicas int64
+		Mem      int64
+		CPU      int64
 	}
 	var a agg
 	deploymentQuery := database.DB.Model(&database.Deployment{}).
-		Select("COALESCE(SUM(COALESCE(memory_bytes,0) * COALESCE(replicas,1)),0) as mem, COALESCE(SUM(COALESCE(cpu_shares,0) * COALESCE(replicas,1)),0) as cpu").
+		Select("COALESCE(SUM(COALESCE(replicas,1)),0) as replicas, COALESCE(SUM(COALESCE(memory_bytes,0) * COALESCE(replicas,1)),0) as mem, COALESCE(SUM(COALESCE(cpu_shares,0) * COALESCE(replicas,1)),0) as cpu").
 		Where("organization_id = ? AND deleted_at IS NULL AND status IN (2,3,6)", orgID)
 	if excludeDeploymentID != "" {
 		deploymentQuery = deploymentQuery.Where("id <> ?", excludeDeploymentID)
@@ -157,7 +148,7 @@ func (c *Checker) currentAllocations(orgID string, excludeDeploymentID string) (
 	if a.CPU%1024 != 0 {
 		cpuCores++ // round up partial cores
 	}
-	return int(count), a.Mem, cpuCores, nil
+	return int(a.Replicas), a.Mem, cpuCores, nil
 }
 
 // GetEffectiveLimits returns the effective memory and CPU limits for an organization

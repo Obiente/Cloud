@@ -124,7 +124,15 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		buildCtx, buildCancel := s.detachedContext(0)
 		defer buildCancel()
-		buildToken := s.registerDeploymentBuild(deploymentID, buildCancel)
+		buildToken, err := s.registerDeploymentBuild(buildCtx, deploymentID, buildCancel)
+		if err != nil {
+			logger.Error("[TriggerDeployment] Failed to register build for deployment %s: %v", deploymentID, err)
+			statusCtx, statusCancel := s.detachedContext(30 * time.Second)
+			defer statusCancel()
+			_ = s.repo.UpdateStatus(statusCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+			s.updatePullRequestDeploymentRuntime(statusCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, "The build could not be safely started.")
+			return
+		}
 		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
 		buildCtx = orchestrator.WithTargetNode(buildCtx, orchestrator.TargetNodeFromContext(ctx))
 		buildStartTime := time.Now()
@@ -409,6 +417,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		// Handle compose-based deployments
 		if shouldDeployStoredCompose(dbDeployment) {
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
 			streamer.Write([]byte("🐳 Deploying Docker Compose configuration...\n"))
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
 				logger.Warn("[TriggerDeployment] Compose deployment failed: %v", err)
@@ -442,6 +453,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 
 			buildResult = result
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
 
 			streamer.Write([]byte("✅ Build completed successfully\n"))
 
@@ -598,6 +612,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				logger.Info("[TriggerDeployment] Successfully created deployment manager as last resort")
 			}
 
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))

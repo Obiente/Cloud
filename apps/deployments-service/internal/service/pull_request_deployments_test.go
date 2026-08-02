@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,20 @@ func TestPullRequestPathScope(t *testing.T) {
 	}
 }
 
+func TestStalePullRequestWebhookDoesNotOverrideCurrentGitHubState(t *testing.T) {
+	live := &githubclient.PullRequest{State: "closed"}
+	live.Head.SHA = strings.Repeat("b", 40)
+	if pullRequestWebhookMatchesCurrentState("synchronize", strings.Repeat("a", 40), live) {
+		t.Fatal("an older synchronize event must not replace the current revision")
+	}
+	if pullRequestWebhookMatchesCurrentState("opened", live.Head.SHA, live) {
+		t.Fatal("an open event must not reopen a pull request that GitHub reports closed")
+	}
+	if !pullRequestWebhookMatchesCurrentState("closed", live.Head.SHA, live) {
+		t.Fatal("the current close event should be accepted")
+	}
+}
+
 func TestPullRequestDomainTemplateValidation(t *testing.T) {
 	if err := validatePRDomainTemplate("pr-{pr}-{deployment}"); err != nil {
 		t.Fatalf("valid template rejected: %v", err)
@@ -63,11 +78,58 @@ func TestPullRequestDomainTemplateValidation(t *testing.T) {
 	}
 }
 
+func TestPullRequestDomainRenderingRejectsUniquenessTruncation(t *testing.T) {
+	config := &database.PullRequestDeploymentConfig{DomainTemplate: "{deployment}-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-{pr}"}
+	source := &database.Deployment{ID: "deployment-with-a-long-stable-identifier"}
+	record := &database.PullRequestDeployment{PullRequestNumber: 42, HeadRef: "feature"}
+	if _, err := renderPRDomain(config, source, record); err == nil {
+		t.Fatal("overlong hostname should be rejected instead of truncating its PR suffix")
+	}
+}
+
 func TestForkApprovalPolicy(t *testing.T) {
 	record := &database.PullRequestDeployment{FromFork: true}
 	config := &database.PullRequestDeploymentConfig{ForkPolicy: int32(deploymentsv1.PullRequestForkPolicy_PULL_REQUEST_FORK_REQUIRE_APPROVAL)}
 	if !requiresPullRequestApproval(record, config) {
 		t.Fatal("fork policy should require approval")
+	}
+}
+
+func TestPreviewRequestedResourcesMatchSourceRuntime(t *testing.T) {
+	replicas := int32(3)
+	memory := int64(768 * 1024 * 1024)
+	cpu := int64(1536)
+	requested := previewRequestedResources(&database.Deployment{Replicas: &replicas, MemoryBytes: &memory, CPUShares: &cpu})
+	if requested.Replicas != 3 || requested.MemoryBytes != memory || requested.CPUshares != cpu {
+		t.Fatalf("unexpected preview reservation: %#v", requested)
+	}
+}
+
+func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
+	source := &database.Deployment{EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
+	preview := &database.Deployment{EnvVars: `{"REMOVED_SECRET":"old"}`, BuildArgs: `{"REMOVED_TOKEN":"old"}`, EnvFileContent: "SECRET=old", DockerfileVolumes: `["/secret"]`}
+	config := &database.PullRequestDeploymentConfig{EnvironmentVariableNames: `["PUBLIC"]`, BuildArgumentNames: `["SAFE"]`}
+	record := &database.PullRequestDeployment{HeadRef: "updated-head"}
+
+	refreshPreviewDeployment(preview, source, config, record)
+	if preview.EnvVars != `{"PUBLIC":"current"}` || preview.BuildArgs != `{"SAFE":"current"}` {
+		t.Fatalf("preview retained values outside the current allowlist: env=%s build=%s", preview.EnvVars, preview.BuildArgs)
+	}
+	if preview.EnvFileContent != "" || preview.DockerfileVolumes != "[]" {
+		t.Fatal("preview retained unscoped source configuration")
+	}
+}
+
+func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
+	typeOfConfig := reflect.TypeOf(database.PullRequestDeploymentConfig{})
+	for _, name := range []string{"RedeployOnPush", "CleanupOnClose", "CommentEnabled", "DeploymentStatusEnabled", "CheckRunEnabled"} {
+		field, ok := typeOfConfig.FieldByName(name)
+		if !ok {
+			t.Fatalf("missing config field %s", name)
+		}
+		if strings.Contains(field.Tag.Get("gorm"), "default:") {
+			t.Fatalf("%s has a GORM default that can override an explicitly supplied false value", name)
+		}
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
@@ -314,6 +315,11 @@ func sanitizePullRequestDeploymentConfig(deployment *database.Deployment, input 
 	if err := validatePRDomainTemplate(template); err != nil {
 		return nil, err
 	}
+	probe := &database.PullRequestDeployment{PullRequestNumber: int64(^uint64(0) >> 1), HeadRef: strings.Repeat("b", 20)}
+	probeConfig := &database.PullRequestDeploymentConfig{DomainTemplate: template}
+	if _, err := renderPRDomain(probeConfig, deployment, probe); err != nil {
+		return nil, fmt.Errorf("domain template is too long for this deployment: %w", err)
+	}
 	maxActive := int32(input.GetMaxActivePreviews())
 	if maxActive == 0 {
 		maxActive = defaultPRMaxActive
@@ -525,7 +531,7 @@ func renderPRDomain(config *database.PullRequestDeploymentConfig, source *databa
 	}
 	label := strings.NewReplacer("{pr}", fmt.Sprintf("%d", record.PullRequestNumber), "{deployment}", deploymentLabel, "{branch}", branchLabel).Replace(config.DomainTemplate)
 	if len(label) > 63 {
-		label = strings.Trim(label[:63], "-")
+		return "", fmt.Errorf("domain template produced a hostname label longer than 63 characters")
 	}
 	if !isDNSLabel(label) {
 		return "", fmt.Errorf("domain template produced an invalid hostname label")
@@ -615,64 +621,105 @@ func (s *Service) deployPullRequestEnvironment(recordID string) {
 }
 
 func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) (*database.Deployment, error) {
-	if record.PreviewDeploymentID != nil {
-		if existing, err := s.repo.GetByID(ctx, *record.PreviewDeploymentID); err == nil {
-			existing.Branch, existing.Status = record.HeadRef, int32(deploymentsv1.DeploymentStatus_STOPPED)
-			if err := s.repo.Update(ctx, existing); err != nil {
-				return nil, err
+	var preview *database.Deployment
+	err := withDistributedLock(ctx, "organization-quota:"+source.OrganizationID, func() error {
+		requested := previewRequestedResources(source)
+		if record.PreviewDeploymentID != nil {
+			requested.ExcludeDeploymentID = *record.PreviewDeploymentID
+		}
+		if err := s.quotaChecker.CanAllocate(ctx, source.OrganizationID, requested); err != nil {
+			return fmt.Errorf("preview quota check failed: %w", err)
+		}
+
+		if record.PreviewDeploymentID != nil {
+			if existing, err := s.repo.GetByID(ctx, *record.PreviewDeploymentID); err == nil {
+				refreshPreviewDeployment(existing, source, config, record)
+				if err := s.repo.Update(ctx, existing); err != nil {
+					return err
+				}
+				preview = existing
+				return nil
 			}
-			return existing, nil
 		}
-	}
-	preview := *source
-	preview.ID = "deployment-" + uuid.NewString()
-	preview.Name = fmt.Sprintf("%s · PR #%d", source.Name, record.PullRequestNumber)
-	preview.Branch = record.HeadRef
-	preview.CustomDomains, preview.Groups, preview.DockerfileVolumes = "[]", mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)}), "[]"
-	preview.Status, preview.HealthStatus, preview.Image, preview.Port = int32(deploymentsv1.DeploymentStatus_STOPPED), "pending", nil, source.Port
-	preview.ComposeYaml, preview.CreatedBy, preview.CreatedAt, preview.LastDeployedAt, preview.DeletedAt = "", "system", time.Now(), time.Now(), nil
-	autoDeploy := false
-	preview.AutoDeploy = &autoDeploy
-	domain, err := renderPRDomain(config, source, record)
-	if err != nil {
-		return nil, err
-	}
-	preview.Domain = domain
-	preview.EnvFileContent, preview.EnvVars, preview.BuildArgs = "", "{}", "{}"
-	preview.EnvVars, preview.BuildArgs = previewScopedVariables(source, config, record.FromFork)
-	activeStatuses := []int32{int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)}
-	err = database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var lockedConfig database.PullRequestDeploymentConfig
-		if lockErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("deployment_id").Where("deployment_id = ?", source.ID).First(&lockedConfig).Error; lockErr != nil {
-			return lockErr
+
+		created := *source
+		created.ID = "deployment-" + uuid.NewString()
+		created.Name = fmt.Sprintf("%s · PR #%d", source.Name, record.PullRequestNumber)
+		created.Branch = record.HeadRef
+		created.CustomDomains, created.Groups, created.DockerfileVolumes = "[]", mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)}), "[]"
+		created.Status, created.HealthStatus, created.Image, created.Port = int32(deploymentsv1.DeploymentStatus_DEPLOYING), "pending", nil, source.Port
+		created.ComposeYaml, created.CreatedBy, created.CreatedAt, created.LastDeployedAt, created.DeletedAt = "", "system", time.Now(), time.Now(), nil
+		autoDeploy := false
+		created.AutoDeploy = &autoDeploy
+		domain, err := renderPRDomain(config, source, record)
+		if err != nil {
+			return err
 		}
-		var active int64
-		if countErr := tx.Model(&database.PullRequestDeployment{}).Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL AND status IN ?", source.ID, activeStatuses).Count(&active).Error; countErr != nil {
-			return countErr
+		created.Domain = domain
+		created.EnvFileContent, created.EnvVars, created.BuildArgs = "", "{}", "{}"
+		created.EnvVars, created.BuildArgs = previewScopedVariables(source, config, record.FromFork)
+		activeStatuses := []int32{int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)}
+		if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			var lockedConfig database.PullRequestDeploymentConfig
+			if lockErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("deployment_id").Where("deployment_id = ?", source.ID).First(&lockedConfig).Error; lockErr != nil {
+				return lockErr
+			}
+			var active int64
+			if countErr := tx.Model(&database.PullRequestDeployment{}).Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL AND status IN ?", source.ID, activeStatuses).Count(&active).Error; countErr != nil {
+				return countErr
+			}
+			if active >= int64(config.MaxActivePreviews) {
+				return fmt.Errorf("maximum of %d active pull request environments reached", config.MaxActivePreviews)
+			}
+			if createErr := tx.Create(&created).Error; createErr != nil {
+				return createErr
+			}
+			claimed := tx.Model(&database.PullRequestDeployment{}).
+				Where("id = ? AND closed_at IS NULL AND active_head_sha = ?", record.ID, record.HeadSHA).
+				Update("preview_deployment_id", created.ID)
+			if claimed.Error != nil {
+				return claimed.Error
+			}
+			if claimed.RowsAffected != 1 {
+				return fmt.Errorf("pull request environment changed while its runtime was being created")
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
-		if active >= int64(config.MaxActivePreviews) {
-			return fmt.Errorf("maximum of %d active pull request environments reached", config.MaxActivePreviews)
-		}
-		if createErr := tx.Create(&preview).Error; createErr != nil {
-			return createErr
-		}
-		claimed := tx.Model(&database.PullRequestDeployment{}).
-			Where("id = ? AND closed_at IS NULL AND active_head_sha = ?", record.ID, record.HeadSHA).
-			Update("preview_deployment_id", preview.ID)
-		if claimed.Error != nil {
-			return claimed.Error
-		}
-		if claimed.RowsAffected != 1 {
-			return fmt.Errorf("pull request environment changed while its runtime was being created")
-		}
+		url := "https://" + domain
+		record.EnvironmentURL = &url
+		preview = &created
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create preview deployment: %w", err)
+		return nil, fmt.Errorf("failed to reserve preview deployment: %w", err)
 	}
-	url := "https://" + domain
-	record.EnvironmentURL = &url
-	return &preview, nil
+	return preview, nil
+}
+
+func refreshPreviewDeployment(preview, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) {
+	preview.Branch = record.HeadRef
+	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
+	preview.EnvFileContent = ""
+	preview.DockerfileVolumes = "[]"
+	preview.EnvVars, preview.BuildArgs = previewScopedVariables(source, config, record.FromFork)
+}
+
+func previewRequestedResources(source *database.Deployment) quota.RequestedResources {
+	replicas := 1
+	if source.Replicas != nil && *source.Replicas > 0 {
+		replicas = int(*source.Replicas)
+	}
+	memoryBytes := int64(512 * 1024 * 1024)
+	if source.MemoryBytes != nil && *source.MemoryBytes > 0 {
+		memoryBytes = *source.MemoryBytes
+	}
+	cpuShares := int64(256)
+	if source.CPUShares != nil && *source.CPUShares > 0 {
+		cpuShares = *source.CPUShares
+	}
+	return quota.RequestedResources{Replicas: replicas, MemoryBytes: memoryBytes, CPUshares: cpuShares}
 }
 
 func filterJSONVariables(raw string, allowed []string) string {
@@ -762,7 +809,6 @@ func (s *Service) updatePullRequestDeploymentRuntime(ctx context.Context, previe
 
 func (s *Service) cleanupPullRequestDeployment(ctx context.Context, record *database.PullRequestDeployment, reason string) error {
 	if record.PreviewDeploymentID != nil {
-		s.cancelDeploymentBuild(*record.PreviewDeploymentID)
 		_, err := s.DeleteDeployment(auth.WithSystemUser(ctx), connect.NewRequest(&deploymentsv1.DeleteDeploymentRequest{DeploymentId: *record.PreviewDeploymentID, OrganizationId: record.OrganizationID}))
 		if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
 			return fmt.Errorf("failed to remove preview deployment: %w", err)
@@ -909,6 +955,33 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 	ctx, cancel := s.detachedContext(10 * time.Minute)
 	defer cancel()
 	repository := normalizeGitHubRepoFullName(payload.Repository.FullName)
+	lockKey := fmt.Sprintf("pull-request:%s:%s:%d", config.DeploymentID, repository, payload.Number)
+	if err := withDistributedLock(ctx, lockKey, func() error {
+		s.processPullRequestWebhookLocked(ctx, config, payload)
+		return nil
+	}); err != nil {
+		logger.Error("[PRDeployments] Failed to lock webhook state for %s#%d: %v", repository, payload.Number, err)
+	}
+}
+
+func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config database.PullRequestDeploymentConfig, payload githubPullRequestWebhookPayload) {
+	repository := normalizeGitHubRepoFullName(payload.Repository.FullName)
+	client, err := githubclient.NewInstallationClient(ctx, payload.Installation.ID)
+	if err != nil {
+		logger.Warn("[PRDeployments] Failed to verify current state for %s#%d: %v", repository, payload.Number, err)
+		return
+	}
+	live, err := client.GetPullRequest(ctx, repository, payload.Number)
+	if err != nil {
+		logger.Warn("[PRDeployments] Failed to load current state for %s#%d: %v", repository, payload.Number, err)
+		return
+	}
+	if !pullRequestWebhookMatchesCurrentState(payload.Action, payload.PullRequest.Head.SHA, live) {
+		return
+	}
+	payload.PullRequest.Draft, payload.PullRequest.Merged = live.Draft, live.Merged
+	payload.PullRequest.Head.SHA, payload.PullRequest.Head.Ref, payload.PullRequest.Head.Repo.FullName = live.Head.SHA, live.Head.Ref, live.Head.Repo.FullName
+	payload.PullRequest.Base.Ref, payload.PullRequest.Base.Repo.FullName = live.Base.Ref, live.Base.Repo.FullName
 	var existing database.PullRequestDeployment
 	existingErr := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND repository = ? AND pull_request_number = ?", config.DeploymentID, repository, payload.Number).First(&existing).Error
 	if payload.Action == "closed" {
@@ -943,10 +1016,7 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 		reason = "Fork pull request previews are disabled for this deployment."
 	}
 	if reason == "" && (len(parseStringList(config.IncludePaths)) > 0 || len(parseStringList(config.ExcludePaths)) > 0) {
-		client, clientErr := githubclient.NewInstallationClient(ctx, payload.Installation.ID)
-		if clientErr != nil {
-			reason = "Obiente could not inspect the pull request file scope."
-		} else if files, filesErr := client.ListPullRequestFiles(ctx, repository, payload.Number); filesErr != nil {
+		if files, filesErr := client.ListPullRequestFiles(ctx, repository, payload.Number); filesErr != nil {
 			reason = "Obiente could not inspect the pull request file scope."
 		} else if !pullRequestFilesMatch(files, &config) {
 			reason = "No changed files match this preview scope."
@@ -1032,15 +1102,6 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 		persistErr = database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", record.ID).Updates(updates).Error
 	}
 	if persistErr != nil {
-		if existingErr != nil {
-			var raced database.PullRequestDeployment
-			if lookupErr := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND repository = ? AND pull_request_number = ?", config.DeploymentID, repository, payload.Number).First(&raced).Error; lookupErr == nil {
-				// Another webhook created the row after our initial lookup. Re-run
-				// against that durable record rather than dropping the event.
-				s.processPullRequestWebhook(config, payload)
-				return
-			}
-		}
 		logger.Error("[PRDeployments] Failed to persist %s#%d: %v", repository, payload.Number, persistErr)
 		return
 	}
@@ -1059,11 +1120,20 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 	}
 }
 
+func pullRequestWebhookMatchesCurrentState(action, payloadHeadSHA string, live *githubclient.PullRequest) bool {
+	if live == nil || live.Head.SHA != payloadHeadSHA {
+		return false
+	}
+	if action == "closed" {
+		return live.State == "closed"
+	}
+	return live.State == "open"
+}
+
 func (s *Service) removePreviewDeployment(ctx context.Context, record *database.PullRequestDeployment) error {
 	if record.PreviewDeploymentID == nil {
 		return nil
 	}
-	s.cancelDeploymentBuild(*record.PreviewDeploymentID)
 	_, err := s.DeleteDeployment(auth.WithSystemUser(ctx), connect.NewRequest(&deploymentsv1.DeleteDeploymentRequest{DeploymentId: *record.PreviewDeploymentID, OrganizationId: record.OrganizationID}))
 	if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
 		return err

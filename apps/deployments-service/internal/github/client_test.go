@@ -98,6 +98,26 @@ func TestCreateDeploymentUsesTransientNonProductionEnvironment(t *testing.T) {
 	}
 }
 
+func TestGetPullRequestReturnsAuthoritativeState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/repos/obiente/cloud/pulls/31" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"open","draft":false,"merged":false,"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"feature","repo":{"full_name":"obiente/cloud"}},"base":{"ref":"main","repo":{"full_name":"obiente/cloud"}}}`))
+	}))
+	defer server.Close()
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	pullRequest, err := client.GetPullRequest(t.Context(), "obiente/cloud", 31)
+	if err != nil {
+		t.Fatalf("get pull request: %v", err)
+	}
+	if pullRequest.State != "open" || pullRequest.Head.Ref != "feature" || pullRequest.Base.Ref != "main" {
+		t.Fatalf("unexpected pull request: %#v", pullRequest)
+	}
+}
+
 func TestCheckRunActionRequiredIsCompleted(t *testing.T) {
 	body := checkRunBody(CheckRunUpdate{Status: "completed", Conclusion: "action_required"}, true)
 	if body["status"] != "completed" || body["conclusion"] != "action_required" {
