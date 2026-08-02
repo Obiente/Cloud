@@ -171,6 +171,9 @@ echo "$GITHUB_APP_CLIENT_ID"
 echo "$GITHUB_APP_CLIENT_SECRET"
 echo "$GITHUB_APP_PRIVATE_KEY_BASE64"
 echo "$GITHUB_WEBHOOK_SECRET"
+echo "$DASHBOARD_URL"
+# Check presence without printing the session secret:
+test -n "$NUXT_SESSION_PASSWORD" && echo "NUXT_SESSION_PASSWORD is set"
 ```
 
 **Common causes:**
@@ -181,6 +184,9 @@ echo "$GITHUB_WEBHOOK_SECRET"
 4. Missing or mismatched GitHub App private key in the backend
 5. The app was installed directly in GitHub instead of from `Settings -> Integrations`
 6. Dashboard or auth-service was not redeployed after secret changes
+7. **Request user authorization (OAuth) during installation** is enabled; Obiente requires this GitHub App option to be disabled
+8. `DASHBOARD_URL`, the Setup URL, and the Callback URL do not use the same public dashboard origin
+9. Dashboard replicas do not share the same `NUXT_SESSION_PASSWORD`
 
 **Fix:**
 
@@ -192,6 +198,8 @@ GITHUB_APP_CLIENT_ID=...
 GITHUB_APP_CLIENT_SECRET=...
 GITHUB_APP_PRIVATE_KEY_BASE64=...
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+DASHBOARD_URL=https://YOUR-DASHBOARD-DOMAIN
+NUXT_SESSION_PASSWORD="$(openssl rand -hex 32)"
 ```
 
 Then redeploy:

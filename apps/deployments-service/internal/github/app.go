@@ -25,6 +25,13 @@ type installationTokenResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+const githubAppResponseBodyLimit = 1 << 20
+
+var (
+	githubAppHTTPClient = &http.Client{Timeout: 15 * time.Second}
+	githubAppAPIBaseURL = "https://api.github.com"
+)
+
 func NewInstallationClient(ctx context.Context, installationID int64) (*Client, error) {
 	token, err := CreateInstallationToken(ctx, installationID)
 	if err != nil {
@@ -43,7 +50,7 @@ func CreateInstallationToken(ctx context.Context, installationID int64) (string,
 		return "", err
 	}
 
-	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
+	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", strings.TrimRight(githubAppAPIBaseURL, "/"), installationID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return "", err
@@ -53,13 +60,16 @@ func CreateInstallationToken(ctx context.Context, installationID int64) (string,
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubAppHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("GitHub App installation token request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := readGitHubAppResponseBody(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read GitHub App installation token response: %w", err)
+	}
 	if resp.StatusCode != http.StatusCreated {
 		return "", fmt.Errorf("GitHub App installation token request failed: %d - %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
@@ -73,6 +83,17 @@ func CreateInstallationToken(ctx context.Context, installationID int64) (string,
 	}
 
 	return tokenResp.Token, nil
+}
+
+func readGitHubAppResponseBody(body io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, githubAppResponseBodyLimit+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > githubAppResponseBodyLimit {
+		return nil, fmt.Errorf("response exceeds %d bytes", githubAppResponseBodyLimit)
+	}
+	return data, nil
 }
 
 func createGitHubAppJWT(now time.Time) (string, error) {

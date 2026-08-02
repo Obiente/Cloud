@@ -350,7 +350,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		}
 	}
 	if req.Msg.GithubIntegrationId != nil {
-		integrationID := req.Msg.GetGithubIntegrationId()
+		integrationID := strings.TrimSpace(req.Msg.GetGithubIntegrationId())
 		if integrationID != "" {
 			dbDeployment.GitHubIntegrationID = &integrationID
 		} else {
@@ -665,8 +665,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// Status changes should only happen via explicit deploy/start/stop actions
 	// This allows users to save settings without triggering a build
 
-	autoDeployEnabled := dbDeployment.AutoDeploy == nil || *dbDeployment.AutoDeploy
-	if autoDeployEnabled && dbDeployment.RepositoryURL != nil && dbDeployment.GitHubIntegrationID != nil {
+	if dbDeployment.GitHubIntegrationID != nil {
 		if err := s.ensureGitHubWebhookForDeployment(ctx, dbDeployment); err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to configure GitHub auto-deploy webhook: %w", err))
 		}

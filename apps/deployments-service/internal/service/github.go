@@ -32,7 +32,7 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 	if err != nil {
 		return "", err
 	}
-	return getUsableGitHubToken(integration)
+	return getUsableGitHubToken(ctx, integration)
 }
 
 func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integrationID string) (*database.GitHubIntegration, error) {
@@ -46,7 +46,10 @@ func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integr
 	// First try specific integration ID if provided
 	if integrationID != "" {
 		var integration database.GitHubIntegration
-		if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err == nil {
+		if err := database.DB.WithContext(ctx).Where("id = ?", integrationID).First(&integration).Error; err == nil {
+			if orgID != "" && (integration.OrganizationID == nil || *integration.OrganizationID != orgID) {
+				return nil, fmt.Errorf("GitHub integration does not belong to this workspace")
+			}
 			// Verify user has access to this integration
 			if integration.UserID != nil && *integration.UserID == user.Id {
 				return &integration, nil
@@ -57,27 +60,38 @@ func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integr
 					return &integration, nil
 				}
 				var member database.OrganizationMember
-				if err := database.DB.Where("organization_id = ? AND user_id = ?", *integration.OrganizationID, user.Id).First(&member).Error; err == nil {
+				memberResult := database.DB.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND status = ?", *integration.OrganizationID, user.Id, "active").First(&member)
+				if memberResult.Error == nil {
 					return &integration, nil
 				}
+				if !errors.Is(memberResult.Error, gorm.ErrRecordNotFound) {
+					return nil, fmt.Errorf("failed to verify workspace membership: %w", memberResult.Error)
+				}
 			}
+			return nil, fmt.Errorf("GitHub integration is not accessible to this user")
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
 			return nil, fmt.Errorf("failed to get integration: %w", err)
 		}
+		return nil, fmt.Errorf("GitHub integration not found")
 	}
 
 	// Then try organization token if orgID is provided
 	if orgID != "" {
 		var orgIntegration database.GitHubIntegration
-		if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
+		if err := database.DB.WithContext(ctx).Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
 			if isSuperAdmin {
 				return &orgIntegration, nil
 			}
 			var member database.OrganizationMember
-			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
+			memberResult := database.DB.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member)
+			if memberResult.Error == nil {
 				return &orgIntegration, nil
 			}
+			if !errors.Is(memberResult.Error, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("failed to verify workspace membership: %w", memberResult.Error)
+			}
+			return nil, fmt.Errorf("GitHub integration is not accessible to this user")
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			// Log unexpected errors, but ignore "record not found"
 			return nil, fmt.Errorf("failed to get organization integration: %w", err)
@@ -86,7 +100,7 @@ func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integr
 
 	// Fall back to user token
 	var userIntegration database.GitHubIntegration
-	if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
+	if err := database.DB.WithContext(ctx).Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
 		return &userIntegration, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Log unexpected errors, but ignore "record not found"
@@ -96,13 +110,15 @@ func (s *Service) getGitHubIntegration(ctx context.Context, orgID string, integr
 	return nil, fmt.Errorf("no GitHub integration found for user or organization")
 }
 
-func getGitHubIntegrationTokenByID(integrationID string) (string, error) {
+func getGitHubIntegrationTokenByID(ctx context.Context, organizationID, integrationID string) (string, error) {
 	var integration database.GitHubIntegration
-	if err := database.DB.Where("id = ?", integrationID).First(&integration).Error; err != nil {
+	if err := database.DB.WithContext(ctx).
+		Where("id = ? AND organization_id = ?", integrationID, organizationID).
+		First(&integration).Error; err != nil {
 		return "", err
 	}
 
-	return getUsableGitHubToken(&integration)
+	return getUsableGitHubToken(ctx, &integration)
 }
 
 func getGitHubClientForIntegration(ctx context.Context, integration *database.GitHubIntegration) (*githubclient.Client, bool, error) {
@@ -123,7 +139,7 @@ func githubIntegrationUsesApp(integration database.GitHubIntegration) bool {
 	return strings.EqualFold(strings.TrimSpace(integration.AuthType), "github_app") || integration.GitHubAppInstallationID != nil
 }
 
-func getUsableGitHubToken(integration *database.GitHubIntegration) (string, error) {
+func getUsableGitHubToken(ctx context.Context, integration *database.GitHubIntegration) (string, error) {
 	if integration == nil {
 		return "", fmt.Errorf("GitHub integration is nil")
 	}
@@ -133,7 +149,7 @@ func getUsableGitHubToken(integration *database.GitHubIntegration) (string, erro
 	if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
 		return "", fmt.Errorf("GitHub App installation ID is missing")
 	}
-	return githubclient.CreateInstallationToken(context.Background(), *integration.GitHubAppInstallationID)
+	return githubclient.CreateInstallationToken(ctx, *integration.GitHubAppInstallationID)
 }
 
 func isMissingGitHubIntegrationError(err error) bool {
@@ -183,11 +199,7 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 			// Return proper error code so frontend can prompt user to reconnect
 			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub App installation is unavailable or cannot access this repository. Update or reinstall the GitHub App for this Obiente workspace: %w", err))
 		}
-		// For other errors, return empty list (backward compatibility)
-		return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
-			Repos: []*deploymentsv1.GitHubRepo{},
-			Total: 0,
-		}), nil
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to list repositories from GitHub: %w", err))
 	}
 
 	protoRepos := make([]*deploymentsv1.GitHubRepo, 0, len(repos))
@@ -310,25 +322,33 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 	if orgID != "" {
 		// Get organization's GitHub integration (if user is member)
 		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
+		memberResult := database.DB.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member)
+		if memberResult.Error == nil {
 			var orgIntegration database.GitHubIntegration
-			if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
+			integrationResult := database.DB.WithContext(ctx).Where("organization_id = ?", orgID).First(&orgIntegration)
+			if integrationResult.Error == nil {
 				integrations = append(integrations, orgIntegration)
+			} else if !errors.Is(integrationResult.Error, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load GitHub integration: %w", integrationResult.Error))
 			}
-			// Ignore "record not found" errors - org may not have an integration
+		} else if !errors.Is(memberResult.Error, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to verify workspace membership: %w", memberResult.Error))
 		}
-		// Ignore "record not found" errors - user may not be a member
 	} else {
 		// Get all integrations user has access to
 		var orgMemberships []database.OrganizationMember
-		database.DB.Where("user_id = ?", user.Id).Find(&orgMemberships)
+		if err := database.DB.WithContext(ctx).Where("user_id = ? AND status = ?", user.Id, "active").Find(&orgMemberships).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load workspace memberships: %w", err))
+		}
 
 		for _, membership := range orgMemberships {
 			var orgIntegration database.GitHubIntegration
-			if err := database.DB.Where("organization_id = ?", membership.OrganizationID).First(&orgIntegration).Error; err == nil {
+			integrationResult := database.DB.WithContext(ctx).Where("organization_id = ?", membership.OrganizationID).First(&orgIntegration)
+			if integrationResult.Error == nil {
 				integrations = append(integrations, orgIntegration)
+			} else if !errors.Is(integrationResult.Error, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load GitHub integration: %w", integrationResult.Error))
 			}
-			// Ignore "record not found" errors - org may not have an integration
 		}
 	}
 

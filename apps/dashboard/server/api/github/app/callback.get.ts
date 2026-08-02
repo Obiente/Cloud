@@ -1,20 +1,25 @@
 import {
+  clearGitHubAppInstallPKCECookie,
   clearGitHubAppInstallStateCookie,
-  encodeGitHubAppInstallState,
+  createGitHubAppInstallNonce,
+  createGitHubAppInstallPKCE,
   decodeGitHubAppInstallState,
+  encodeGitHubAppInstallState,
+  getGitHubAppCallbackUrl,
+  getGitHubAppInstallPKCEVerifier,
   getGitHubAppInstallStateCookie,
+  setGitHubAppInstallPKCECookie,
   setGitHubAppInstallStateCookie,
   verifyGitHubAppInstallState,
 } from "../../../utils/githubAppInstallState";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
-  const state = typeof query.state === "string" ? query.state : "";
-  const installationIdValue =
-    typeof query.installation_id === "string" ? query.installation_id : "";
-  const setupCode = typeof query.code === "string" ? query.code : "";
-  const setupAction =
-    typeof query.setup_action === "string" ? query.setup_action : "";
+  const state = queryValue(query.state);
+  const installationIdValue = queryValue(query.installation_id);
+  const setupCode = queryValue(query.code);
+  const setupAction = queryValue(query.setup_action);
+  const authorizationError = queryValue(query.error);
 
   const redirectToSettings = (reason: string) =>
     sendRedirect(
@@ -24,8 +29,28 @@ export default defineEventHandler(async (event) => {
       )}`
     );
 
-  if (!verifyGitHubAppInstallState(event, getGitHubAppInstallStateCookie(event), state)) {
-    clearGitHubAppInstallStateCookie(event);
+  // GitHub can call the setup URL after an installation is updated directly
+  // from GitHub. That callback has no Obiente state and must remain
+  // non-mutating; the settings page reloads the already-authorized integration.
+  if (!state && setupAction === "update") {
+    clearInstallCookies(event);
+    const installationId = parseInstallationId(installationIdValue);
+    if (!installationId) {
+      return redirectToSettings("missing_installation");
+    }
+    const updateQuery = new URLSearchParams({
+      tab: "integrations",
+      provider: "github",
+      success: "true",
+      installationUpdated: "true",
+      installationId: String(installationId),
+    });
+    return sendRedirect(event, `/settings?${updateQuery.toString()}`);
+  }
+
+  const expectedState = getGitHubAppInstallStateCookie(event);
+  if (!verifyGitHubAppInstallState(event, expectedState, state)) {
+    clearInstallCookies(event);
     return redirectToSettings("invalid_state");
   }
 
@@ -33,55 +58,75 @@ export default defineEventHandler(async (event) => {
   try {
     stateData = decodeGitHubAppInstallState(state);
   } catch {
-    clearGitHubAppInstallStateCookie(event);
+    clearInstallCookies(event);
     return redirectToSettings("invalid_state");
   }
   clearGitHubAppInstallStateCookie(event);
 
-  if (!stateData.orgId) {
-    return redirectToSettings("missing_organization");
+  if (authorizationError) {
+    clearGitHubAppInstallPKCECookie(event);
+    return redirectToSettings(
+      authorizationError === "access_denied"
+        ? "github_authorization_cancelled"
+        : "github_authorization_failed"
+    );
   }
 
-  const installationIdFromQuery = Number.parseInt(installationIdValue, 10);
-  const installationIdFromState = Number.parseInt(
-    stateData.installationId || "",
-    10
+  const installationIdFromQuery = parseInstallationId(installationIdValue);
+  const installationIdFromState = parseInstallationId(
+    stateData.installationId || ""
   );
-  const installationId = Number.isFinite(installationIdFromQuery) && installationIdFromQuery > 0
-    ? installationIdFromQuery
-    : installationIdFromState;
-  if (!Number.isFinite(installationId) || installationId <= 0) {
-    clearGitHubAppInstallStateCookie(event);
+  const installationId = installationIdFromQuery || installationIdFromState;
+  if (!installationId) {
+    clearGitHubAppInstallPKCECookie(event);
     return redirectToSettings("missing_installation");
   }
 
   if (!setupCode) {
+    clearGitHubAppInstallPKCECookie(event);
+
     const config = useRuntimeConfig(event);
     const clientId =
-      (config.githubAppClientId as string) ||
+      String(config.githubAppClientId || "").trim() ||
       process.env.GITHUB_APP_CLIENT_ID ||
       "";
     if (!clientId) {
-      clearGitHubAppInstallStateCookie(event);
       return redirectToSettings("github_app_client_not_configured");
     }
 
-    const authState = encodeGitHubAppInstallState(event, {
-      random: crypto.randomUUID().replace(/-/g, ""),
+    let callbackUrl: string;
+    try {
+      callbackUrl = getGitHubAppCallbackUrl(event);
+    } catch (error: unknown) {
+      logGitHubAppError("Invalid callback URL configuration", error);
+      return redirectToSettings("github_app_callback_not_configured");
+    }
+
+    const authStateData = {
+      random: createGitHubAppInstallNonce(),
       orgId: stateData.orgId,
       installationId: String(installationId),
-      repositorySelection: setupAction || stateData.repositorySelection || "",
-    });
+      setupAction: setupAction || stateData.setupAction || "",
+    };
+    const authState = encodeGitHubAppInstallState(event, authStateData);
+    const { codeVerifier, codeChallenge } = createGitHubAppInstallPKCE();
     setGitHubAppInstallStateCookie(event, authState);
+    setGitHubAppInstallPKCECookie(event, authStateData.random, codeVerifier);
 
     const authUrl = new URL("https://github.com/login/oauth/authorize");
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("state", authState);
-    authUrl.searchParams.set("redirect_uri", getGitHubAppCallbackUrl(event));
+    authUrl.searchParams.set("redirect_uri", callbackUrl);
+    authUrl.searchParams.set("code_challenge", codeChallenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
     return sendRedirect(event, authUrl.toString());
   }
 
-  clearGitHubAppInstallStateCookie(event);
+  const codeVerifier = getGitHubAppInstallPKCEVerifier(event, stateData.random);
+  clearInstallCookies(event);
+  if (!codeVerifier) {
+    return redirectToSettings("invalid_authorization_session");
+  }
 
   const isAuthDisabled = process.env.DISABLE_AUTH === "true";
   const { getServerToken } = await import("../../../utils/serverAuth");
@@ -90,7 +135,7 @@ export default defineEventHandler(async (event) => {
     userAccessToken = "dev-dummy-token";
   }
   if (!userAccessToken) {
-    return redirectToSettings("Please log in to connect your GitHub organization");
+    return redirectToSettings("login_required");
   }
 
   try {
@@ -104,73 +149,104 @@ export default defineEventHandler(async (event) => {
 
     const getToken = () => Promise.resolve(userAccessToken || undefined);
     const authInterceptor = createAuthInterceptor(getToken);
-    const createTransport = (baseUrl: string) =>
-      createConnectTransport({
-        baseUrl,
-        httpVersion: "1.1",
-        useBinaryFormat: false,
-        interceptors: [authInterceptor],
-      });
-
-    let apiHost = (config.apiHostInternal as string) || config.public.apiHost;
-    let client = createClient(AuthService, createTransport(apiHost));
+    const apiHost =
+      String(config.apiHostInternal || "").trim() ||
+      String(config.public.apiHost || "").trim();
+    const transport = createConnectTransport({
+      baseUrl: apiHost,
+      httpVersion: "1.1",
+      useBinaryFormat: false,
+      interceptors: [authInterceptor],
+      // The auth service can make three sequential GitHub requests, each with
+      // a 15-second timeout. Leave room for all three plus database work.
+      defaultTimeoutMs: 60_000,
+    });
+    const client = createClient(AuthService, transport);
 
     const request = create(ConnectOrganizationGitHubAppRequestSchema, {
       organizationId: stateData.orgId,
       installationId: BigInt(installationId),
-      accountLogin: "",
-      accountType: "Organization",
-      repositorySelection: setupAction || stateData.repositorySelection || "",
       setupCode,
+      codeVerifier,
+      redirectUri: getGitHubAppCallbackUrl(event),
     });
 
-    try {
-      await client.connectOrganizationGitHubApp(request);
-    } catch (err) {
-      if (config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
-        apiHost = config.public.apiHost;
-        client = createClient(AuthService, createTransport(apiHost));
-        await client.connectOrganizationGitHubApp(request);
-      } else {
-        throw err;
-      }
+    // The setup code can be exchanged only once. Do not retry this RPC against
+    // another endpoint after an ambiguous network failure.
+    await client.connectOrganizationGitHubApp(request);
+
+    const successQuery = new URLSearchParams({
+      tab: "integrations",
+      provider: "github",
+      success: "true",
+      orgId: stateData.orgId,
+      installationId: String(installationId),
+    });
+    if ((stateData.setupAction || setupAction) === "update") {
+      successQuery.set("installationUpdated", "true");
     }
-
-    return sendRedirect(
-      event,
-      `/settings?tab=integrations&provider=github&success=true&orgId=${encodeURIComponent(
-        stateData.orgId
-      )}&installationId=${encodeURIComponent(String(installationId))}`
-    );
-  } catch (err: any) {
-    console.error("[GitHub App] Failed to save installation:", {
-      message: err?.message,
-      code: err?.code,
-    });
-    return redirectToSettings(err?.message || "github_app_install_failed");
+    return sendRedirect(event, `/settings?${successQuery.toString()}`);
+  } catch (error: unknown) {
+    logGitHubAppError("Failed to save installation", error);
+    return redirectToSettings(githubAppConnectionErrorCode(error));
   }
 });
 
-function getGitHubAppCallbackUrl(event: any): string {
-  const requestUrl = new URL(
-    event.node.req.url || "/",
-    `http://${event.node.req.headers.host || "localhost:3000"}`
-  );
-  const forwardedProto = event.node.req.headers["x-forwarded-proto"];
-  const forwardedHost = event.node.req.headers["x-forwarded-host"];
-  const protocolHeader = Array.isArray(forwardedProto)
-    ? forwardedProto[0]
-    : forwardedProto;
-  const hostHeader = Array.isArray(forwardedHost)
-    ? forwardedHost[0]
-    : forwardedHost;
-  const protocol =
-    protocolHeader || (requestUrl.protocol === "https:" ? "https" : "http");
-  const host =
-    hostHeader?.split(",")[0]?.trim() ||
-    event.node.req.headers.host ||
-    requestUrl.host ||
-    "localhost:3000";
+function queryValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
 
-  return `${protocol}://${host}/api/github/app/callback`;
+function parseInstallationId(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function clearInstallCookies(
+  event: Parameters<typeof clearGitHubAppInstallStateCookie>[0]
+) {
+  clearGitHubAppInstallStateCookie(event);
+  clearGitHubAppInstallPKCECookie(event);
+}
+
+function githubAppConnectionErrorCode(error: unknown): string {
+  const message = errorMessage(error).toLowerCase();
+  if (
+    message.includes("permission_denied") ||
+    message.includes("permission denied")
+  ) {
+    return "github_installer_not_authorized";
+  }
+  if (
+    message.includes("failed_precondition") ||
+    message.includes("failed precondition")
+  ) {
+    return "github_installation_verification_failed";
+  }
+  if (
+    message.includes("already_exists") ||
+    message.includes("already exists")
+  ) {
+    return "github_installation_already_connected";
+  }
+  return "github_app_connection_failed";
+}
+
+function logGitHubAppError(context: string, error: unknown): void {
+  const errorRecord =
+    error && typeof error === "object"
+      ? (error as Record<string, unknown>)
+      : undefined;
+  console.error(`[GitHub App] ${context}:`, {
+    message: errorMessage(error),
+    code: errorRecord?.code,
+  });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : String(error || "unknown error");
 }

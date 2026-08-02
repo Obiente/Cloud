@@ -222,6 +222,35 @@ onMounted(async () => {
       if (errorMsg === "missing_code") {
         error.value =
           "Authorization code missing. Please try connecting again.";
+      } else if (errorMsg === "invalid_state") {
+        error.value =
+          "The GitHub connection expired or did not return through the expected install flow. Start again from this page.";
+      } else if (errorMsg === "invalid_authorization_session") {
+        error.value =
+          "The GitHub authorization session expired. Start the connection again.";
+      } else if (errorMsg === "github_authorization_cancelled") {
+        error.value = "GitHub authorization was cancelled.";
+      } else if (errorMsg === "github_authorization_failed") {
+        error.value =
+          "GitHub could not authorize the connection. Start the connection again.";
+      } else if (errorMsg === "github_app_callback_not_configured") {
+        error.value =
+          "The GitHub callback URL does not match this dashboard. Check the server configuration.";
+      } else if (errorMsg === "github_installer_not_authorized") {
+        error.value =
+          "Your GitHub account cannot manage this app installation.";
+      } else if (errorMsg === "github_installation_already_connected") {
+        error.value =
+          "This GitHub App installation is already connected to another workspace.";
+      } else if (errorMsg === "github_installation_verification_failed") {
+        error.value =
+          "GitHub could not verify this app installation. Check its repository access and try again.";
+      } else if (errorMsg === "login_required") {
+        error.value =
+          "Your Obiente session expired during the GitHub setup. Log in and start again.";
+      } else if (errorMsg === "github_app_connection_failed") {
+        error.value =
+          "GitHub could not be connected. Start again, or check the server logs if it keeps failing.";
       } else if (errorMsg === "configuration_error") {
         error.value =
           "GitHub integration is not properly configured. Please contact your administrator.";

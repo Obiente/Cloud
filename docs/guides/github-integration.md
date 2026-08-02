@@ -12,7 +12,7 @@ Use the Obiente GitHub App to import repositories, deploy from branches, and tri
 
 ## Prerequisites
 
-- A GitHub account that can install GitHub Apps on the target account or organization
+- The owner of the target GitHub personal account, or an owner of the target GitHub organization
 - Access to the Obiente dashboard
 - An Obiente workspace you can manage
 - For self-hosted setups: public dashboard and API URLs
@@ -31,7 +31,9 @@ Use these values:
 - `Setup URL`: `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - `Callback URL`: `https://YOUR-DASHBOARD-DOMAIN/api/github/app/callback`
 - Enable **Redirect on update**
-- Enable **Request user authorization (OAuth) during installation**
+- Disable **Request user authorization (OAuth) during installation**. Obiente
+  starts the user authorization step after GitHub returns the installation ID so
+  it can bind the workspace, installation, signed state, and PKCE verifier.
 - `Webhook URL`: `https://YOUR-API-DOMAIN/webhooks/github`
 - `Webhook secret`: the same value as `GITHUB_WEBHOOK_SECRET`
 
@@ -45,6 +47,10 @@ Required repository permissions:
 
 - Metadata: read
 - Contents: read
+
+Required organization permissions:
+
+- Members: read
 
 Subscribe to events:
 
@@ -64,6 +70,7 @@ Webhook URL: https://api.obiente.cloud/webhooks/github
 Set these in production:
 
 ```bash
+DASHBOARD_URL=https://YOUR-DASHBOARD-DOMAIN
 GITHUB_APP_SLUG=your-github-app-slug
 NUXT_PUBLIC_GITHUB_APP_SLUG=your-github-app-slug
 GITHUB_APP_ID=123456
@@ -72,6 +79,7 @@ GITHUB_APP_CLIENT_SECRET=your-github-app-client-secret
 GITHUB_APP_PRIVATE_KEY_BASE64="$(base64 -w0 path/to/private-key.pem)"
 GITHUB_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 DEPLOYMENTS_INTERNAL_SERVICE_SECRET="$(openssl rand -base64 32)"
+NUXT_SESSION_PASSWORD="$(openssl rand -hex 32)"
 ```
 
 On macOS, encode the private key with:
@@ -87,7 +95,12 @@ Notes:
 - `GITHUB_APP_PRIVATE_KEY_BASE64` must stay server-side only
 - `GITHUB_WEBHOOK_SECRET` must match the secret configured on the GitHub App
 - `DEPLOYMENTS_INTERNAL_SERVICE_SECRET` must be identical on every deployments-service node and must not be shared with unrelated services
+- `NUXT_SESSION_PASSWORD` must be the same strong value on every dashboard replica
 - Enable **Redirect on update** so repository selection changes return users to Obiente
+- `DASHBOARD_URL` must exactly match the public origin used by the setup and callback URLs
+- Deploy the updated dashboard and auth service together. The PKCE authorization
+  code and verifier are one flow and mixed old/new service versions cannot
+  complete it.
 
 ## Connecting A Workspace
 
@@ -101,10 +114,10 @@ Notes:
 Personal Obiente accounts are also represented as an Obiente workspace, so they
 use this same install flow.
 
-The dashboard sends users through GitHub's target-selection install URL so
-existing GitHub App installations can be selected and returned to Obiente with
-the workspace state. If the app is already installed on a GitHub account, choose
-that account from GitHub's install target picker and save/update the installation.
+The dashboard sends users through GitHub's supported
+`/apps/APP/installations/new?state=...` URL so the workspace state survives the
+installation flow. If the app is already installed on a GitHub account, GitHub
+opens that installation for updating and returns it to Obiente.
 
 ## Auto-Deploy Webhooks
 
@@ -145,6 +158,11 @@ Check:
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY_BASE64`
 - The private key belongs to the same GitHub App
+- The GitHub App has `Members: read` organization permission
+- Existing organization installations approved the `Members: read` permission update
+- **Request user authorization (OAuth) during installation** is disabled in the GitHub App settings
+- `DASHBOARD_URL` exactly matches the public dashboard origin used by the setup and callback URLs
+- `NUXT_SESSION_PASSWORD` is set to the same value on every dashboard replica
 - `auth-service` and `deployments-service` were restarted
 
 ### Private repositories are missing
@@ -171,9 +189,10 @@ Check:
 
 - No GitHub user tokens are stored or refreshed
 - The one-time GitHub App user authorization code is exchanged server-side and discarded
-- The installer's user token is used only to confirm the installation is visible to that GitHub user
+- The installer's user token is used only to confirm personal-account ownership or active organization ownership
 - Installation IDs are verified with GitHub before persistence and are not trusted from query strings alone
-- Installation state is validated server-side with a short-lived cookie
+- Installation and authorization state is signed, expires after ten minutes, and must match a short-lived HTTP-only cookie
+- GitHub user authorization uses PKCE and an exact configured callback URL
 - GitHub App installation tokens are minted on demand
 - Webhook payloads are verified with `X-Hub-Signature-256`
 - Pushes can only match deployments bound to the webhook's verified GitHub App installation and Obiente workspace

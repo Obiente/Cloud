@@ -4,7 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 const SESSION_PASSWORD_PLACEHOLDER =
   "changeme_dashboard_session_password_please_override";
 const sessionPassword =
-  process.env.NUXT_SESSION_PASSWORD || SESSION_PASSWORD_PLACEHOLDER;
+  process.env.NUXT_SESSION_PASSWORD ||
+  process.env.SESSION_SECRET ||
+  SESSION_PASSWORD_PLACEHOLDER;
 
 // Nuxt config runs during `nuxt prepare`/`nuxt build`, including Docker image
 // creation where runtime secrets are often injected later. Runtime session

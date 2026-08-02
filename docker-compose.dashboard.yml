@@ -12,7 +12,9 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOST: 0.0.0.0
-      NUXT_SESSION_PASSWORD: ${SESSION_SECRET:-changeme}
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-${SESSION_SECRET:-}}
+      # Backward-compatible input for installations that used the old name.
+      SESSION_SECRET: ${SESSION_SECRET:-}
       GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
       GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
       DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
