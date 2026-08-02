@@ -1217,7 +1217,11 @@ func (s *Service) processPullRequestWebhook(config database.PullRequestDeploymen
 	repository := normalizeGitHubRepoFullName(payload.Repository.FullName)
 	lockKey := fmt.Sprintf("pull-request:%s:%s:%d", config.DeploymentID, repository, payload.Number)
 	if err := withDistributedLock(ctx, lockKey, func() error {
-		return s.processPullRequestWebhookLocked(ctx, config, payload)
+		var current database.PullRequestDeploymentConfig
+		if err := database.DB.WithContext(ctx).Where("deployment_id = ?", config.DeploymentID).First(&current).Error; err != nil {
+			return fmt.Errorf("reload pull request deployment settings: %w", err)
+		}
+		return s.processPullRequestWebhookLocked(ctx, current, payload)
 	}); err != nil {
 		logger.Error("[PRDeployments] Failed to process webhook state for %s#%d: %v", repository, payload.Number, err)
 	}
@@ -1271,8 +1275,13 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	baseRef, headRef := strings.TrimSpace(payload.PullRequest.Base.Ref), strings.TrimSpace(payload.PullRequest.Head.Ref)
 	fromFork := !strings.EqualFold(normalizeGitHubRepoFullName(payload.PullRequest.Head.Repo.FullName), repository)
 	reason := ""
-	if patterns := parseStringList(config.BaseBranches); len(patterns) > 0 && !matchesPRPatterns(baseRef, patterns) {
-		reason = "The pull request target branch is outside this preview scope."
+	if !config.Enabled {
+		reason = "Pull request environments are disabled for this deployment."
+	}
+	if reason == "" {
+		if patterns := parseStringList(config.BaseBranches); len(patterns) > 0 && !matchesPRPatterns(baseRef, patterns) {
+			reason = "The pull request target branch is outside this preview scope."
+		}
 	}
 	if reason == "" && payload.PullRequest.Draft && !config.DeployDrafts {
 		reason = "Draft pull requests are not deployed by this template."
