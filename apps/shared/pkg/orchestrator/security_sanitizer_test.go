@@ -9,6 +9,51 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestSanitizeUntrustedComposeYAMLRemovesHostControlOptions(t *testing.T) {
+	composeYaml := `services:
+  app:
+    image: nginx:alpine
+    devices:
+      - /dev/kvm:/dev/kvm
+    pid: host
+    ipc: host
+    privileged: true
+    network_mode: host
+    volumes:
+      - /etc:/host-etc
+`
+	sanitizer := NewComposeSanitizer("preview-test")
+	filtered, err := sanitizer.SanitizeUntrustedComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("sanitize untrusted compose: %v", err)
+	}
+	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:"} {
+		if strings.Contains(filtered, forbidden) {
+			t.Fatalf("untrusted Compose retained %q:\n%s", forbidden, filtered)
+		}
+	}
+	if !strings.Contains(filtered, "volumes:") {
+		t.Fatalf("volumes should remain for the deployment-owned path sanitizer:\n%s", filtered)
+	}
+}
+
+func TestSanitizeUntrustedComposeYAMLRejectsRepositoryBuild(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    build: .\n"); err == nil {
+		t.Fatal("repository Compose build should be rejected for pull request previews")
+	}
+}
+
+func TestSanitizeUntrustedComposeYAMLRejectsInterpolation(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    image: ${IMAGE}\n"); err == nil {
+		t.Fatal("environment interpolation should be rejected for pull request previews")
+	}
+	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    image: nginx\n    command: '$${LITERAL}'\n"); err != nil {
+		t.Fatalf("escaped interpolation should remain a literal: %v", err)
+	}
+}
+
 func TestSanitizeEnvironment_BooleanValues(t *testing.T) {
 	composeYaml := `version: '3.8'
 services:

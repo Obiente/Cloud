@@ -418,7 +418,7 @@ services:
       PORT: 3005
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
       PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications, *common-dashboard]
       ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

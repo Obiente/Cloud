@@ -330,6 +330,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			Port:                   port,
 			MemoryBytes:            memoryBytes,
 			CPUShares:              cpuShares,
+			Untrusted:              deploymentIsPullRequestPreview(dbDeployment),
 			LogWriter:              streamer,                  // Stream stdout
 			LogWriterErr:           NewStderrWriter(streamer), // Stream stderr
 		}

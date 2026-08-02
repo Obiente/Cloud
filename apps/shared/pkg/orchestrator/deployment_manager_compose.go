@@ -44,9 +44,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	sanitizer := NewComposeSanitizer(deploymentID)
 	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
 	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to sanitize compose YAML for deployment %s: %v. Using original YAML.", deploymentID, err)
-		// Continue with original YAML if sanitization fails (but log the warning)
-		sanitizedYaml = composeYaml
+		return fmt.Errorf("refusing to deploy compose YAML that could not be sanitized: %w", err)
 	} else {
 		logger.Info("[DeploymentManager] Sanitized compose YAML for deployment %s (volumes mapped to: %s)", deploymentID, sanitizer.GetSafeBaseDir())
 	}

@@ -33,11 +33,17 @@ var (
 )
 
 func NewInstallationClient(ctx context.Context, installationID int64) (*Client, error) {
+	appID, err := configuredGitHubAppID()
+	if err != nil {
+		return nil, err
+	}
 	token, err := CreateInstallationToken(ctx, installationID)
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(token), nil
+	client := NewClient(token)
+	client.appID = appID
+	return client, nil
 }
 
 func CreateInstallationToken(ctx context.Context, installationID int64) (string, error) {
@@ -97,9 +103,9 @@ func readGitHubAppResponseBody(body io.Reader) ([]byte, error) {
 }
 
 func createGitHubAppJWT(now time.Time) (string, error) {
-	appID := strings.TrimSpace(os.Getenv("GITHUB_APP_ID"))
-	if appID == "" {
-		return "", fmt.Errorf("GITHUB_APP_ID is required for GitHub App installations")
+	appID, err := configuredGitHubAppID()
+	if err != nil {
+		return "", err
 	}
 
 	key, err := loadGitHubAppPrivateKey()
@@ -117,7 +123,7 @@ func createGitHubAppJWT(now time.Time) (string, error) {
 	claims, err := json.Marshal(map[string]interface{}{
 		"iat": now.Add(-time.Minute).Unix(),
 		"exp": now.Add(9 * time.Minute).Unix(),
-		"iss": appID,
+		"iss": strconv.FormatInt(appID, 10),
 	})
 	if err != nil {
 		return "", err
@@ -131,6 +137,15 @@ func createGitHubAppJWT(now time.Time) (string, error) {
 	}
 
 	return unsigned + "." + base64.RawURLEncoding.EncodeToString(signature), nil
+}
+
+func configuredGitHubAppID() (int64, error) {
+	value := strings.TrimSpace(os.Getenv("GITHUB_APP_ID"))
+	appID, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || appID <= 0 {
+		return 0, fmt.Errorf("GITHUB_APP_ID must be a positive integer")
+	}
+	return appID, nil
 }
 
 func loadGitHubAppPrivateKey() (*rsa.PrivateKey, error) {

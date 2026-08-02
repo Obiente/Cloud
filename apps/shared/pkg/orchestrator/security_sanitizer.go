@@ -97,6 +97,75 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	return string(sanitizedYaml), nil
 }
 
+// SanitizeUntrustedComposeYAML removes host- and cluster-control options from
+// repository Compose files before they are allowed into the normal deployment
+// sanitizer. It is used for pull request previews, where every byte of the
+// Compose file must be treated as attacker controlled.
+func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (string, error) {
+	if containsUnescapedComposeInterpolation(composeYaml) {
+		return "", fmt.Errorf("environment interpolation is not allowed in pull request Compose files")
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("failed to parse untrusted compose YAML: %w", err)
+	}
+	services, ok := compose["services"].(map[string]interface{})
+	if !ok || len(services) == 0 {
+		return "", fmt.Errorf("pull request Compose file must define at least one service")
+	}
+
+	dangerousServiceKeys := []string{
+		"build", "cap_add", "cap_drop", "cgroup", "cgroup_parent",
+		"configs", "container_name", "credential_spec", "deploy", "develop",
+		"device_cgroup_rules", "devices", "env_file", "external_links",
+		"extra_hosts", "ipc", "isolation", "labels", "links", "network_mode",
+		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged",
+		"runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
+		"userns_mode", "uts", "volumes_from",
+	}
+	for serviceName, serviceData := range services {
+		service, ok := serviceData.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("service %q has an invalid definition", serviceName)
+		}
+		if _, buildsFromRepository := service["build"]; buildsFromRepository {
+			return "", fmt.Errorf("service %q uses build, which is not allowed in pull request Compose previews; publish an image or use the Dockerfile strategy", serviceName)
+		}
+		for _, key := range dangerousServiceKeys {
+			delete(service, key)
+		}
+	}
+
+	// Only services and the optional version marker are carried forward. The
+	// normal sanitizer creates deployment-owned networks and rewrites volumes.
+	filtered := map[string]interface{}{"services": services}
+	if version, exists := compose["version"]; exists {
+		filtered["version"] = version
+	}
+	result, err := yaml.Marshal(filtered)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal untrusted compose YAML: %w", err)
+	}
+	return string(result), nil
+}
+
+func containsUnescapedComposeInterpolation(value string) bool {
+	for i := 0; i+1 < len(value); i++ {
+		if value[i] != '$' || value[i+1] != '{' {
+			continue
+		}
+		precedingDollars := 0
+		for j := i - 1; j >= 0 && value[j] == '$'; j-- {
+			precedingDollars++
+		}
+		if precedingDollars%2 == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeService sanitizes a single service in the compose file
 func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) {
 	// Sanitize environment variables to ensure proper formatting

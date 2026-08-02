@@ -14,6 +14,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 )
 
 // RailpackStrategy handles Railpack deployments
@@ -1930,6 +1931,13 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 	composeYaml, err := readFile(composeFilePath)
 	if err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to read compose file: %w", err)}, nil
+	}
+	if config.Untrusted {
+		sanitizer := orchestrator.NewComposeSanitizer(deployment.ID)
+		composeYaml, err = sanitizer.SanitizeUntrustedComposeYAML(composeYaml)
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("unsafe pull request compose file: %w", err)}, nil
+		}
 	}
 
 	// Validate compose file

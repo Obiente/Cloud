@@ -19,6 +19,7 @@ type Client struct {
 	token      string
 	baseURL    string
 	httpClient *http.Client
+	appID      int64
 }
 
 func NewClient(token string) *Client {
@@ -82,8 +83,11 @@ type Deployment struct {
 }
 
 type IssueComment struct {
-	ID   int64  `json:"id"`
-	Body string `json:"body"`
+	ID                    int64  `json:"id"`
+	Body                  string `json:"body"`
+	PerformedViaGitHubApp *struct {
+		ID int64 `json:"id"`
+	} `json:"performed_via_github_app"`
 }
 
 type CheckRun struct {
@@ -132,10 +136,12 @@ func (c *Client) UpdateCheckRun(ctx context.Context, repoFullName string, checkR
 func checkRunBody(update CheckRunUpdate, create bool) map[string]interface{} {
 	body := map[string]interface{}{
 		"name":        update.Name,
-		"details_url": update.DetailsURL,
 		"external_id": update.ExternalID,
 		"status":      update.Status,
 		"output":      map[string]string{"title": update.Title, "summary": update.Summary},
+	}
+	if update.DetailsURL != "" {
+		body["details_url"] = update.DetailsURL
 	}
 	if create {
 		body["head_sha"] = update.HeadSHA
@@ -249,7 +255,7 @@ func (c *Client) FindIssueComment(ctx context.Context, repoFullName string, issu
 			return nil, err
 		}
 		for i := range comments {
-			if strings.Contains(comments[i].Body, marker) {
+			if strings.Contains(comments[i].Body, marker) && comments[i].PerformedViaGitHubApp != nil && comments[i].PerformedViaGitHubApp.ID == c.appID && c.appID > 0 {
 				return &comments[i], nil
 			}
 		}

@@ -92,7 +92,43 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 	if err := database.DB.WithContext(ctx).Save(config).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save pull request deployment settings: %w", err))
 	}
+	// Persist the disabled setting before retiring checks. Reporters that are
+	// already running finish first under the per-PR reporting lock; later ones
+	// then observe the disabled setting and cannot put the check back in a
+	// pending state. Retrying this update also retries any failed retirement.
+	if !config.CheckRunEnabled {
+		if err := s.completePullRequestChecksBeforeDisable(ctx, deployment.ID); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("GitHub check reporting was disabled, but active checks could not be completed: %w", err))
+		}
+	}
 	return connect.NewResponse(&deploymentsv1.UpdatePullRequestDeploymentConfigResponse{Config: pullRequestConfigToProto(config)}), nil
+}
+
+func (s *Service) completePullRequestChecksBeforeDisable(ctx context.Context, sourceDeploymentID string) error {
+	activeStatuses := []int32{
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING),
+	}
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).
+		Where("source_deployment_id = ? AND github_check_run_id IS NOT NULL AND status IN ?", sourceDeploymentID, activeStatuses).
+		Find(&records).Error; err != nil {
+		return err
+	}
+	for i := range records {
+		if err := s.markGitHubCheckRunComplete(ctx, &records[i], "Preview check disabled", "GitHub check reporting was disabled in Obiente.", "neutral"); err != nil {
+			return err
+		}
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(records))
+	for i := range records {
+		ids = append(ids, records[i].ID)
+	}
+	return database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id IN ?", ids).
+		Updates(map[string]interface{}{"github_check_run_id": nil, "github_check_run_sha": nil}).Error
 }
 
 func (s *Service) ListPullRequestDeployments(ctx context.Context, req *connect.Request[deploymentsv1.ListPullRequestDeploymentsRequest]) (*connect.Response[deploymentsv1.ListPullRequestDeploymentsResponse], error) {
@@ -105,7 +141,7 @@ func (s *Service) ListPullRequestDeployments(ctx context.Context, req *connect.R
 		query = query.Where("closed_at IS NULL")
 	}
 	var records []database.PullRequestDeployment
-	if err := query.Order("updated_at DESC").Limit(100).Find(&records).Error; err != nil {
+	if err := query.Order("CASE WHEN closed_at IS NULL THEN 0 ELSE 1 END").Order("updated_at DESC").Limit(100).Find(&records).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list pull request deployments: %w", err))
 	}
 	items := make([]*deploymentsv1.PullRequestDeployment, 0, len(records))
@@ -134,7 +170,7 @@ func (s *Service) ApprovePullRequestDeployment(ctx context.Context, req *connect
 	if err != nil || user == nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authenticated approver is required"))
 	}
-	s.markGitHubCheckRunComplete(ctx, record, "Preview approved", "A maintainer approved this revision. A new check will report the build.", "neutral")
+	_ = s.markGitHubCheckRunComplete(ctx, record, "Preview approved", "A maintainer approved this revision. A new check will report the build.", "neutral")
 	now := time.Now()
 	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status IN ?", record.ID, allowedStatuses).
@@ -192,8 +228,8 @@ func (s *Service) RedeployPullRequestDeployment(ctx context.Context, req *connec
 	if record.ClosedAt != nil || record.ActiveHeadSHA != nil {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("pull request environment cannot be redeployed in its current state"))
 	}
-	s.markGitHubDeploymentInactive(ctx, record)
-	s.markGitHubCheckRunComplete(ctx, record, "Preview redeploying", "A maintainer requested a fresh preview build.", "cancelled")
+	_ = s.markGitHubDeploymentInactive(ctx, record)
+	_ = s.markGitHubCheckRunComplete(ctx, record, "Preview redeploying", "A maintainer requested a fresh preview build.", "cancelled")
 	now := time.Now()
 	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL", record.ID).
@@ -633,7 +669,9 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 
 		if record.PreviewDeploymentID != nil {
 			if existing, err := s.repo.GetByID(ctx, *record.PreviewDeploymentID); err == nil {
-				refreshPreviewDeployment(existing, source, config, record)
+				if err := refreshPreviewDeployment(existing, source, config, record); err != nil {
+					return err
+				}
 				if err := s.repo.Update(ctx, existing); err != nil {
 					return err
 				}
@@ -642,22 +680,10 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 			}
 		}
 
-		created := *source
-		created.ID = "deployment-" + uuid.NewString()
-		created.Name = fmt.Sprintf("%s · PR #%d", source.Name, record.PullRequestNumber)
-		created.Branch = record.HeadRef
-		created.CustomDomains, created.Groups, created.DockerfileVolumes = "[]", mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)}), "[]"
-		created.Status, created.HealthStatus, created.Image, created.Port = int32(deploymentsv1.DeploymentStatus_DEPLOYING), "pending", nil, source.Port
-		created.ComposeYaml, created.CreatedBy, created.CreatedAt, created.LastDeployedAt, created.DeletedAt = "", "system", time.Now(), time.Now(), nil
-		autoDeploy := false
-		created.AutoDeploy = &autoDeploy
-		domain, err := renderPRDomain(config, source, record)
-		if err != nil {
+		created := database.Deployment{ID: "deployment-" + uuid.NewString()}
+		if err := refreshPreviewDeployment(&created, source, config, record); err != nil {
 			return err
 		}
-		created.Domain = domain
-		created.EnvFileContent, created.EnvVars, created.BuildArgs = "", "{}", "{}"
-		created.EnvVars, created.BuildArgs = previewScopedVariables(source, config, record.FromFork)
 		activeStatuses := []int32{int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)}
 		if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			var lockedConfig database.PullRequestDeploymentConfig
@@ -698,12 +724,42 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 	return preview, nil
 }
 
-func refreshPreviewDeployment(preview, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) {
+func refreshPreviewDeployment(preview, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) error {
+	if preview == nil || source == nil || config == nil || record == nil {
+		return fmt.Errorf("preview template is incomplete")
+	}
+	id, createdAt := preview.ID, preview.CreatedAt
+	if id == "" {
+		id = "deployment-" + uuid.NewString()
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	*preview = *source
+	preview.ID = id
+	preview.Name = fmt.Sprintf("%s · PR #%d", source.Name, record.PullRequestNumber)
 	preview.Branch = record.HeadRef
-	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
-	preview.EnvFileContent = ""
+	preview.CustomDomains = "[]"
+	preview.Groups = mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)})
 	preview.DockerfileVolumes = "[]"
+	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
+	preview.HealthStatus = "pending"
+	preview.Image = nil
+	preview.ComposeYaml = ""
+	preview.CreatedBy = "system"
+	preview.CreatedAt = createdAt
+	preview.LastDeployedAt = time.Now()
+	preview.DeletedAt = nil
+	autoDeploy := false
+	preview.AutoDeploy = &autoDeploy
+	domain, err := renderPRDomain(config, source, record)
+	if err != nil {
+		return err
+	}
+	preview.Domain = domain
+	preview.EnvFileContent = ""
 	preview.EnvVars, preview.BuildArgs = previewScopedVariables(source, config, record.FromFork)
+	return nil
 }
 
 func previewRequestedResources(source *database.Deployment) quota.RequestedResources {
@@ -739,6 +795,18 @@ func previewScopedVariables(source *database.Deployment, config *database.PullRe
 		return "{}", "{}"
 	}
 	return filterJSONVariables(source.EnvVars, parseStringList(config.EnvironmentVariableNames)), filterJSONVariables(source.BuildArgs, parseStringList(config.BuildArgumentNames))
+}
+
+func deploymentIsPullRequestPreview(deployment *database.Deployment) bool {
+	if deployment == nil {
+		return false
+	}
+	for _, group := range parseStringList(deployment.Groups) {
+		if group == "pull-request" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) failPullRequestDeployment(ctx context.Context, record *database.PullRequestDeployment, err error) {
@@ -823,6 +891,28 @@ func (s *Service) cleanupPullRequestDeployment(ctx context.Context, record *data
 		return err
 	}
 	go s.reportPullRequestDeployment(record.ID)
+	return nil
+}
+
+func (s *Service) cleanupPullRequestDeploymentsForSource(ctx context.Context, sourceDeploymentID string) error {
+	activePreviewIDs := database.DB.Model(&database.Deployment{}).Select("id").Where("deleted_at IS NULL")
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).
+		Where("source_deployment_id = ? AND (closed_at IS NULL OR preview_deployment_id IN (?))", sourceDeploymentID, activePreviewIDs).
+		Find(&records).Error; err != nil {
+		return err
+	}
+	for i := range records {
+		if records[i].PreviewDeploymentID != nil && *records[i].PreviewDeploymentID == sourceDeploymentID {
+			return fmt.Errorf("pull request preview %s cannot reference its source as its runtime", records[i].ID)
+		}
+		if err := s.cleanupPullRequestDeployment(ctx, &records[i], "The source deployment was removed from Obiente."); err != nil {
+			return fmt.Errorf("cleanup pull request preview %s: %w", records[i].ID, err)
+		}
+		// The source and its reporting configuration are about to be deleted, so
+		// wait for one final GitHub update while that context is still available.
+		s.reportPullRequestDeployment(records[i].ID)
+	}
 	return nil
 }
 
@@ -915,8 +1005,7 @@ func (s *Service) handleGitHubPullRequestWebhook(w http.ResponseWriter, event st
 		writeGitHubWebhookJSON(w, http.StatusBadRequest, githubWebhookResponse{OK: false, Event: event, Message: "pull request payload is missing repository, installation, number, or head revision"})
 		return
 	}
-	supported := map[string]bool{"opened": true, "reopened": true, "synchronize": true, "ready_for_review": true, "converted_to_draft": true, "closed": true}
-	if !supported[payload.Action] {
+	if !supportedPullRequestAction(payload.Action) {
 		writeGitHubWebhookJSON(w, http.StatusAccepted, githubWebhookResponse{OK: true, Event: event, Repository: repository, Message: "pull request action ignored"})
 		return
 	}
@@ -947,6 +1036,15 @@ func (s *Service) handleGitHubPullRequestWebhook(w http.ResponseWriter, event st
 		go s.processPullRequestWebhook(config, payload)
 	}
 	writeGitHubWebhookJSON(w, http.StatusAccepted, githubWebhookResponse{OK: true, Event: event, Repository: repository, MatchedDeployments: len(matched), Triggered: matched, Message: "pull request webhook accepted"})
+}
+
+func supportedPullRequestAction(action string) bool {
+	switch action {
+	case "opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "edited", "closed":
+		return true
+	default:
+		return false
+	}
 }
 
 func rContext() context.Context { return context.Background() }
@@ -1030,11 +1128,11 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	}
 	shaChanged := record.HeadSHA != "" && record.HeadSHA != payload.PullRequest.Head.SHA
 	if shaChanged && record.GitHubDeploymentID != nil {
-		s.markGitHubDeploymentInactive(ctx, record)
+		_ = s.markGitHubDeploymentInactive(ctx, record)
 		record.GitHubDeploymentID, record.GitHubDeploymentSHA = nil, nil
 	}
 	if shaChanged {
-		s.markGitHubCheckRunSuperseded(ctx, record)
+		_ = s.markGitHubCheckRunSuperseded(ctx, record)
 		record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
 	}
 	record.HeadSHA, record.HeadRef, record.BaseRef, record.FromFork = payload.PullRequest.Head.SHA, headRef, baseRef, fromFork
@@ -1164,8 +1262,17 @@ func stringValue(value *string) string {
 }
 
 func (s *Service) reportPullRequestDeployment(recordID string) {
-	ctx, cancel := s.detachedContext(30 * time.Second)
+	ctx, cancel := s.detachedContext(2 * time.Minute)
 	defer cancel()
+	if err := withDistributedLock(ctx, "pull-request-report:"+recordID, func() error {
+		s.reportPullRequestDeploymentLocked(ctx, recordID)
+		return nil
+	}); err != nil {
+		logger.Warn("[PRDeployments] Failed to serialize GitHub reporting for %s: %v", recordID, err)
+	}
+}
+
+func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordID string) {
 	var record database.PullRequestDeployment
 	if err := database.DB.WithContext(ctx).Where("id = ?", recordID).First(&record).Error; err != nil {
 		return
@@ -1180,14 +1287,11 @@ func (s *Service) reportPullRequestDeployment(recordID string) {
 		return
 	}
 	source, _ := s.repo.GetByID(ctx, record.SourceDeploymentID)
-	dashboardURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
 	logURL := ""
-	if dashboardURL != "" {
-		if record.PreviewDeploymentID != nil {
-			logURL = dashboardURL + "/deployments/" + *record.PreviewDeploymentID
-		} else {
-			logURL = dashboardURL + "/deployments/" + record.SourceDeploymentID
-		}
+	if record.PreviewDeploymentID != nil {
+		logURL = deploymentDashboardURL(*record.PreviewDeploymentID)
+	} else {
+		logURL = deploymentDashboardURL(record.SourceDeploymentID)
 	}
 	if config.DeploymentStatusEnabled && deploymentsv1.PullRequestDeploymentStatus(record.Status) != deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED {
 		if record.GitHubDeploymentID == nil && record.ClosedAt == nil {
@@ -1274,37 +1378,44 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 	return githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), HeadSHA: record.HeadSHA, DetailsURL: detailsURL, ExternalID: record.ID, Status: status, Conclusion: conclusion, Title: title, Summary: summary}
 }
 
-func (s *Service) markGitHubDeploymentInactive(ctx context.Context, record *database.PullRequestDeployment) {
+func (s *Service) markGitHubDeploymentInactive(ctx context.Context, record *database.PullRequestDeployment) error {
 	if record.GitHubDeploymentID == nil {
-		return
+		return nil
 	}
-	client, err := githubclient.NewInstallationClient(ctx, record.GitHubInstallationID)
-	if err != nil {
-		return
-	}
-	if err := client.CreateDeploymentStatus(ctx, record.Repository, *record.GitHubDeploymentID, "inactive", "Superseded by a newer pull request revision.", "", ""); err != nil {
-		logger.Warn("[PRDeployments] Failed to retire GitHub deployment %s: %v", record.ID, err)
-	}
+	return withDistributedLock(ctx, "pull-request-report:"+record.ID, func() error {
+		client, err := githubclient.NewInstallationClient(ctx, record.GitHubInstallationID)
+		if err != nil {
+			return err
+		}
+		return client.CreateDeploymentStatus(ctx, record.Repository, *record.GitHubDeploymentID, "inactive", "Superseded by a newer pull request revision.", "", "")
+	})
 }
 
-func (s *Service) markGitHubCheckRunSuperseded(ctx context.Context, record *database.PullRequestDeployment) {
-	s.markGitHubCheckRunComplete(ctx, record, "Preview superseded", "A newer pull request revision replaced this preview.", "cancelled")
+func (s *Service) markGitHubCheckRunSuperseded(ctx context.Context, record *database.PullRequestDeployment) error {
+	return s.markGitHubCheckRunComplete(ctx, record, "Preview superseded", "A newer pull request revision replaced this preview.", "cancelled")
 }
 
-func (s *Service) markGitHubCheckRunComplete(ctx context.Context, record *database.PullRequestDeployment, title, summary, conclusion string) {
+func (s *Service) markGitHubCheckRunComplete(ctx context.Context, record *database.PullRequestDeployment, title, summary, conclusion string) error {
 	if record.GitHubCheckRunID == nil {
-		return
+		return nil
 	}
-	client, err := githubclient.NewInstallationClient(ctx, record.GitHubInstallationID)
-	if err != nil {
-		return
+	return withDistributedLock(ctx, "pull-request-report:"+record.ID, func() error {
+		client, err := githubclient.NewInstallationClient(ctx, record.GitHubInstallationID)
+		if err != nil {
+			return err
+		}
+		source, _ := s.repo.GetByID(ctx, record.SourceDeploymentID)
+		update := githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), DetailsURL: deploymentDashboardURL(record.SourceDeploymentID), ExternalID: record.ID, Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
+		return client.UpdateCheckRun(ctx, record.Repository, *record.GitHubCheckRunID, update)
+	})
+}
+
+func deploymentDashboardURL(deploymentID string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
+	if baseURL == "" {
+		return ""
 	}
-	detailsURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/") + "/deployments/" + record.SourceDeploymentID
-	source, _ := s.repo.GetByID(ctx, record.SourceDeploymentID)
-	update := githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), DetailsURL: detailsURL, ExternalID: record.ID, Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
-	if err := client.UpdateCheckRun(ctx, record.Repository, *record.GitHubCheckRunID, update); err != nil {
-		logger.Warn("[PRDeployments] Failed to retire GitHub check %s: %v", record.ID, err)
-	}
+	return baseURL + "/deployments/" + deploymentID
 }
 
 func githubPRDeploymentState(record *database.PullRequestDeployment) (string, string) {

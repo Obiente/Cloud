@@ -67,6 +67,12 @@ func TestStalePullRequestWebhookDoesNotOverrideCurrentGitHubState(t *testing.T) 
 	}
 }
 
+func TestEditedPullRequestWebhookReevaluatesBaseBranchScope(t *testing.T) {
+	if !supportedPullRequestAction("edited") {
+		t.Fatal("retargeting a pull request must re-evaluate preview scope")
+	}
+}
+
 func TestPullRequestDomainTemplateValidation(t *testing.T) {
 	if err := validatePRDomainTemplate("pr-{pr}-{deployment}"); err != nil {
 		t.Fatalf("valid template rejected: %v", err)
@@ -106,17 +112,24 @@ func TestPreviewRequestedResourcesMatchSourceRuntime(t *testing.T) {
 }
 
 func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
-	source := &database.Deployment{EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
-	preview := &database.Deployment{EnvVars: `{"REMOVED_SECRET":"old"}`, BuildArgs: `{"REMOVED_TOKEN":"old"}`, EnvFileContent: "SECRET=old", DockerfileVolumes: `["/secret"]`}
-	config := &database.PullRequestDeploymentConfig{EnvironmentVariableNames: `["PUBLIC"]`, BuildArgumentNames: `["SAFE"]`}
-	record := &database.PullRequestDeployment{HeadRef: "updated-head"}
+	buildCommand := "pnpm build"
+	port := int32(8080)
+	source := &database.Deployment{ID: "source", Name: "App", BuildStrategy: int32(deploymentsv1.BuildStrategy_NIXPACKS), BuildCommand: &buildCommand, Port: &port, EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
+	preview := &database.Deployment{ID: "preview", BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE), EnvVars: `{"REMOVED_SECRET":"old"}`, BuildArgs: `{"REMOVED_TOKEN":"old"}`, EnvFileContent: "SECRET=old", DockerfileVolumes: `["/secret"]`}
+	config := &database.PullRequestDeploymentConfig{DomainTemplate: "pr-{pr}-{deployment}", EnvironmentVariableNames: `["PUBLIC"]`, BuildArgumentNames: `["SAFE"]`}
+	record := &database.PullRequestDeployment{PullRequestNumber: 31, HeadRef: "updated-head"}
 
-	refreshPreviewDeployment(preview, source, config, record)
+	if err := refreshPreviewDeployment(preview, source, config, record); err != nil {
+		t.Fatalf("refresh preview: %v", err)
+	}
 	if preview.EnvVars != `{"PUBLIC":"current"}` || preview.BuildArgs != `{"SAFE":"current"}` {
 		t.Fatalf("preview retained values outside the current allowlist: env=%s build=%s", preview.EnvVars, preview.BuildArgs)
 	}
 	if preview.EnvFileContent != "" || preview.DockerfileVolumes != "[]" {
 		t.Fatal("preview retained unscoped source configuration")
+	}
+	if preview.ID != "preview" || preview.BuildStrategy != source.BuildStrategy || preview.BuildCommand == nil || *preview.BuildCommand != buildCommand || preview.Port == nil || *preview.Port != port {
+		t.Fatalf("preview did not refresh the current source template: %#v", preview)
 	}
 }
 
@@ -200,5 +213,16 @@ func TestPreviewStateSecurityHeaders(t *testing.T) {
 	}
 	if csp := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors 'none'") || !strings.Contains(csp, "default-src 'none'") {
 		t.Fatalf("unexpected content security policy: %q", csp)
+	}
+}
+
+func TestDeploymentDashboardURLRequiresConfiguredOrigin(t *testing.T) {
+	t.Setenv("DASHBOARD_URL", "")
+	if got := deploymentDashboardURL("deployment-1"); got != "" {
+		t.Fatalf("missing dashboard origin produced relative URL %q", got)
+	}
+	t.Setenv("DASHBOARD_URL", "https://dashboard.obiente.cloud/")
+	if got := deploymentDashboardURL("deployment-1"); got != "https://dashboard.obiente.cloud/deployments/deployment-1" {
+		t.Fatalf("dashboard URL = %q", got)
 	}
 }

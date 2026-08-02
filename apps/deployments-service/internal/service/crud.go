@@ -888,6 +888,9 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
+	if err := s.cleanupPullRequestDeploymentsForSource(ctx, deploymentID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to remove pull request previews: %w", err))
+	}
 
 	// Delete all build logs and build history for this deployment
 	// Get all build IDs for this deployment before deleting

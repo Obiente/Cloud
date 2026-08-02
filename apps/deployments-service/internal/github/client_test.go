@@ -124,3 +124,52 @@ func TestCheckRunActionRequiredIsCompleted(t *testing.T) {
 		t.Fatalf("check run body = %#v", body)
 	}
 }
+
+func TestCheckRunOmitsEmptyDetailsURL(t *testing.T) {
+	body := checkRunBody(CheckRunUpdate{Status: "in_progress"}, true)
+	if _, exists := body["details_url"]; exists {
+		t.Fatalf("empty details URL should be omitted: %#v", body)
+	}
+}
+
+func TestFindIssueCommentOnlyAdoptsCurrentGitHubAppComment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/repos/obiente/cloud/issues/31/comments" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"id":1,"body":"<!-- obiente-preview -->","performed_via_github_app":{"id":999}},
+			{"id":2,"body":"<!-- obiente-preview -->","performed_via_github_app":{"id":42}}
+		]`))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL, client.httpClient, client.appID = server.URL, server.Client(), 42
+	comment, err := client.FindIssueComment(t.Context(), "obiente/cloud", 31, "<!-- obiente-preview -->")
+	if err != nil {
+		t.Fatalf("find issue comment: %v", err)
+	}
+	if comment == nil || comment.ID != 2 {
+		t.Fatalf("adopted comment = %#v", comment)
+	}
+}
+
+func TestFindIssueCommentDoesNotAdoptUnownedMarker(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"id":1,"body":"<!-- obiente-preview -->"}]`))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL, client.httpClient, client.appID = server.URL, server.Client(), 42
+	comment, err := client.FindIssueComment(t.Context(), "obiente/cloud", 31, "<!-- obiente-preview -->")
+	if err != nil {
+		t.Fatalf("find issue comment: %v", err)
+	}
+	if comment != nil {
+		t.Fatalf("adopted unowned comment = %#v", comment)
+	}
+}

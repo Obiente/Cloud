@@ -56,6 +56,7 @@ type BuildConfig struct {
 	Port                   int
 	MemoryBytes            int64
 	CPUShares              int64
+	Untrusted              bool      // Pull request controlled source requiring stricter policies
 	LogWriter              io.Writer // Optional writer for build logs (stdout)
 	LogWriterErr           io.Writer // Optional writer for build logs (stderr)
 }
