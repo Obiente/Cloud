@@ -217,7 +217,7 @@ func isSafeGitHubPathSegment(value string) bool {
 }
 
 func escapedGitHubContentPath(path string) (string, error) {
-	parts := strings.Split(strings.TrimSpace(path), "/")
+	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
 		return "", fmt.Errorf("GitHub file path is required")
 	}

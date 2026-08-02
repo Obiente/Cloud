@@ -34,6 +34,24 @@ func TestGetFileEscapesPathAndBranch(t *testing.T) {
 	}
 }
 
+func TestGetFilePreservesWhitespaceInPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.EscapedPath() != "/repos/obiente/cloud/contents/%20docs/release%20notes.md%20" {
+			t.Errorf("escaped path = %q", req.URL.EscapedPath())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"content":%q,"encoding":"base64","size":5}`, base64.StdEncoding.EncodeToString([]byte("hello")))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL = server.URL
+	client.httpClient = server.Client()
+	if _, err := client.GetFile(t.Context(), "obiente/cloud", "main", " docs/release notes.md "); err != nil {
+		t.Fatalf("get file with surrounding whitespace: %v", err)
+	}
+}
+
 func TestGetFileRejectsTraversalPath(t *testing.T) {
 	client := NewClient("token")
 	if _, err := client.GetFile(t.Context(), "obiente/cloud", "main", "../secret"); err == nil {
