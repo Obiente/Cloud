@@ -3,8 +3,8 @@ ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS builder
 
 # Accept build arguments for multi-arch support
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+ARG TARGETARCH
+ARG TARGETOS
 
 WORKDIR /build
 
@@ -31,7 +31,7 @@ RUN --mount=type=bind,source=.,target=/src,rw \
 # Build grpcurl (baked into layer - exported to registry cache)
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+    GOBIN=/build/tools go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 
 # Final stage
 FROM ${BASE_REGISTRY}/library/alpine:latest
@@ -49,7 +49,7 @@ WORKDIR /app
 
 # Copy binary and grpcurl from builder
 COPY --from=builder /build/apps/vps-gateway/vps-gateway .
-COPY --from=builder /root/go/bin/grpcurl /usr/local/bin/grpcurl
+COPY --from=builder /build/tools/grpcurl /usr/local/bin/grpcurl
 
 # Create directory for dnsmasq files
 RUN mkdir -p /var/lib/obiente/vps-gateway

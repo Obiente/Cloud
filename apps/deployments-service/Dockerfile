@@ -4,8 +4,8 @@ ARG BASE_REGISTRY=docker.io
 FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+ARG TARGETARCH
+ARG TARGETOS
 
 # Install build dependencies
 # Use --no-scripts to disable triggers and avoid QEMU emulation issues
@@ -43,8 +43,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo install nixpacks --locked
 
 # Final stage
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+ARG TARGETARCH
+ARG TARGETOS
 FROM ${BASE_REGISTRY}/library/alpine:latest
 
 # Install CA certificates for HTTPS requests

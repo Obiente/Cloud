@@ -111,12 +111,9 @@ export default defineNuxtConfig({
               if (id.includes("zod")) {
                 return "zod";
               }
-              // Keep vendor chunks reasonable - group smaller deps
-              if (id.includes("node_modules")) {
-                return "vendor";
-              }
             }
-            // Let Nuxt handle page-level chunk splitting automatically
+            // Preserve Nuxt's route and dynamic-import boundaries for all
+            // other dependencies instead of creating one oversized vendor chunk.
           },
         },
         watch: {
@@ -227,7 +224,10 @@ export default defineNuxtConfig({
         process.env.ZITADEL_URL ||
         "http://localhost:8080",
       oidcClientId: "339499954043158530",
-      githubAppSlug: process.env.NUXT_PUBLIC_GITHUB_APP_SLUG || process.env.GITHUB_APP_SLUG || "",
+      githubAppSlug:
+        process.env.NUXT_PUBLIC_GITHUB_APP_SLUG ||
+        process.env.GITHUB_APP_SLUG ||
+        "",
       stripePublishableKey: "",
     },
   },
