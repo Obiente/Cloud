@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -71,6 +72,53 @@ func TestStalePullRequestWebhookDoesNotOverrideCurrentGitHubState(t *testing.T) 
 func TestEditedPullRequestWebhookReevaluatesBaseBranchScope(t *testing.T) {
 	if !supportedPullRequestAction("edited") {
 		t.Fatal("retargeting a pull request must re-evaluate preview scope")
+	}
+}
+
+func TestUnchangedPullRequestWebhookPreservesExistingRuntimeState(t *testing.T) {
+	for _, status := range []deploymentsv1.PullRequestDeploymentStatus{
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED,
+	} {
+		if !preservePullRequestStateForUnchangedRevision(int32(status)) {
+			t.Fatalf("unchanged revision should preserve %s", status)
+		}
+	}
+	for _, status := range []deploymentsv1.PullRequestDeploymentStatus{
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED,
+		deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED,
+	} {
+		if preservePullRequestStateForUnchangedRevision(int32(status)) {
+			t.Fatalf("eligibility transition should not preserve %s", status)
+		}
+	}
+}
+
+func TestApprovalMutationRejectsAStaleReviewedHead(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	oldHead, newHead := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	record := database.PullRequestDeployment{
+		ID: "pr-stale-maintainer-action", SourceDeploymentID: "source", OrganizationID: "org",
+		Repository: "obiente/cloud", PullRequestNumber: 31, HeadSHA: newHead, HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+	stale := record
+	stale.HeadSHA = oldHead
+	result := pullRequestApprovalMutation(t.Context(), &stale).
+		Where("status = ?", int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL)).
+		Update("status", int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED))
+	if result.Error != nil {
+		t.Fatalf("apply stale approval mutation: %v", result.Error)
+	}
+	if result.RowsAffected != 0 {
+		t.Fatal("a maintainer action for an older reviewed head changed the current revision")
 	}
 }
 
@@ -163,6 +211,33 @@ func TestStaleRuntimeCallbackQueuesCurrentHeadWithoutOverwritingState(t *testing
 	}
 	if got.GitHubDeploymentID == nil || *got.GitHubDeploymentID != deploymentID || got.GitHubCheckRunID == nil || *got.GitHubCheckRunID != checkID || got.ApprovedHeadSHA == nil || *got.ApprovedHeadSHA != newHead {
 		t.Fatalf("stale callback overwrote unrelated current-revision fields: %#v", got)
+	}
+}
+
+func TestExpiredPreviewCleanupAdvancesBeyondFirstBatch(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	background, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
+	expiredAt := time.Now().Add(-time.Hour)
+	records := make([]database.PullRequestDeployment, 0, 101)
+	for index := 0; index < 101; index++ {
+		records = append(records, database.PullRequestDeployment{
+			ID: fmt.Sprintf("pr-expired-%03d", index), SourceDeploymentID: "source", OrganizationID: "org",
+			Repository: "obiente/cloud", PullRequestNumber: int64(index + 1), HeadSHA: strings.Repeat("a", 40),
+			HeadRef: "feature", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), ExpiresAt: expiredAt,
+		})
+	}
+	if err := db.Create(&records).Error; err != nil {
+		t.Fatalf("seed expired previews: %v", err)
+	}
+	service.cleanupExpiredPullRequestDeployments(t.Context())
+	var open int64
+	if err := db.Model(&database.PullRequestDeployment{}).Where("closed_at IS NULL").Count(&open).Error; err != nil {
+		t.Fatalf("count open previews: %v", err)
+	}
+	if open != 0 {
+		t.Fatalf("expired cleanup left %d previews open", open)
 	}
 }
 

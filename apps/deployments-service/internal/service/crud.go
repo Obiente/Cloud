@@ -898,6 +898,19 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to remove pull request previews: %w", err))
 	}
 
+	// Do not remove the database row until the orchestrator confirms that the
+	// runtime is gone. Preview cleanup relies on an error here to retain its
+	// retryable parent record instead of orphaning publicly reachable code.
+	if s.manager != nil {
+		if dbDep.ComposeYaml != "" {
+			if err := s.manager.RemoveComposeDeployment(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove compose runtime: %w", err))
+			}
+		} else if err := s.manager.DeleteDeployment(ctx, deploymentID); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove deployment runtime: %w", err))
+		}
+	}
+
 	// Delete all build logs and build history for this deployment
 	// Get all build IDs for this deployment before deleting
 	buildIDs, deletedCount, err := s.buildHistoryRepo.DeleteBuildsByDeployment(ctx, deploymentID)
@@ -914,20 +927,6 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 			}
 		}
 		log.Printf("[DeleteDeployment] Deleted %d builds and their logs for deployment %s", deletedCount, deploymentID)
-	}
-
-	// Remove containers/stack before deleting from DB
-	if s.manager != nil {
-		if dbDep.ComposeYaml != "" {
-			// Remove compose deployment
-			if err := s.manager.RemoveComposeDeployment(ctx, deploymentID); err != nil {
-				log.Printf("[DeleteDeployment] Failed to remove compose deployment %s: %v", deploymentID, err)
-				// Continue with DB deletion even if container removal failed
-			}
-		} else {
-			// Remove regular containers
-			_ = s.manager.DeleteDeployment(ctx, deploymentID)
-		}
 	}
 
 	if err := s.repo.Delete(ctx, deploymentID); err != nil {

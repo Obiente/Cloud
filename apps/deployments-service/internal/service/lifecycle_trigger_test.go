@@ -32,6 +32,27 @@ func TestAbortedDeletionClearsIdleCancellationMarker(t *testing.T) {
 	}
 }
 
+func TestInterruptedBuildHistoryIsFinalizedWithDetachedContext(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	service := NewService(context.Background(), database.NewDeploymentRepository(db, nil), nil, nil)
+	startedAt := time.Now().Add(-time.Minute)
+	build := database.BuildHistory{
+		ID: "build-superseded", DeploymentID: "deployment-superseded", OrganizationID: "org",
+		BuildNumber: 1, Status: 2, StartedAt: startedAt,
+	}
+	if err := db.Create(&build).Error; err != nil {
+		t.Fatalf("seed interrupted build: %v", err)
+	}
+	service.finalizeInterruptedBuildHistory(build.ID, startedAt)
+	var got database.BuildHistory
+	if err := db.First(&got, "id = ?", build.ID).Error; err != nil {
+		t.Fatalf("reload interrupted build: %v", err)
+	}
+	if got.Status != 4 || got.CompletedAt == nil || got.Error == nil || !strings.Contains(*got.Error, "superseded") {
+		t.Fatalf("interrupted build was not finalized: %#v", got)
+	}
+}
+
 func TestRequestedDeploymentCommitSHARequiresSystemPrincipal(t *testing.T) {
 	commitSHA := strings.Repeat("a", 40)
 

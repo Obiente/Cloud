@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -687,10 +688,12 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 		return fmt.Errorf("failed to list compose containers: %w", err)
 	}
 
+	var removalErrors []error
 	for _, cnt := range containers {
 		// SECURITY: Verify container was created by our API
 		if cnt.Labels["cloud.obiente.managed"] != "true" {
 			logger.Error("[DeploymentManager] SECURITY: Refusing to delete compose container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", cnt.ID[:12])
+			removalErrors = append(removalErrors, fmt.Errorf("refused to remove unmanaged compose container %s", cnt.ID))
 			continue
 		}
 
@@ -701,11 +704,17 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 		// Remove
 		if err := dm.dockerHelper.RemoveContainer(ctx, cnt.ID, true); err != nil {
 			logger.Info("[DeploymentManager] Failed to remove compose container %s: %v", cnt.ID[:12], err)
+			removalErrors = append(removalErrors, fmt.Errorf("remove compose container %s: %w", cnt.ID, err))
 		} else {
 			logger.Info("[DeploymentManager] Removed compose container %s", cnt.ID[:12])
 			// Unregister
-			_ = dm.registry.UnregisterDeployment(ctx, cnt.ID)
+			if err := dm.registry.UnregisterDeployment(ctx, cnt.ID); err != nil {
+				logger.Warn("[DeploymentManager] Failed to unregister compose container %s: %v", cnt.ID, err)
+			}
 		}
+	}
+	if err := errors.Join(removalErrors...); err != nil {
+		return err
 	}
 
 	// Clean up volumes and deployment data

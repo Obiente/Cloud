@@ -111,6 +111,11 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("GitHub check reporting was disabled, but active checks could not be completed: %w", err))
 		}
 	}
+	if !config.DeploymentStatusEnabled {
+		if err := s.completePullRequestDeploymentsBeforeDisable(ctx, deployment.ID); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("GitHub deployment reporting was disabled, but active deployments could not be retired: %w", err))
+		}
+	}
 	return connect.NewResponse(&deploymentsv1.UpdatePullRequestDeploymentConfigResponse{Config: pullRequestConfigToProto(config)}), nil
 }
 
@@ -246,13 +251,9 @@ func (s *Service) detachPullRequestRuntimeForReconciliation(ctx context.Context,
 }
 
 func (s *Service) completePullRequestChecksBeforeDisable(ctx context.Context, sourceDeploymentID string) error {
-	activeStatuses := []int32{
-		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED),
-		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING),
-	}
 	var records []database.PullRequestDeployment
 	if err := database.DB.WithContext(ctx).
-		Where("source_deployment_id = ? AND github_check_run_id IS NOT NULL AND status IN ?", sourceDeploymentID, activeStatuses).
+		Where("source_deployment_id = ? AND closed_at IS NULL AND github_check_run_id IS NOT NULL", sourceDeploymentID).
 		Find(&records).Error; err != nil {
 		return err
 	}
@@ -270,6 +271,29 @@ func (s *Service) completePullRequestChecksBeforeDisable(ctx context.Context, so
 	}
 	return database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id IN ?", ids).
 		Updates(map[string]interface{}{"github_check_run_id": nil, "github_check_run_sha": nil}).Error
+}
+
+func (s *Service) completePullRequestDeploymentsBeforeDisable(ctx context.Context, sourceDeploymentID string) error {
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).
+		Where("source_deployment_id = ? AND closed_at IS NULL AND github_deployment_id IS NOT NULL", sourceDeploymentID).
+		Find(&records).Error; err != nil {
+		return err
+	}
+	for i := range records {
+		if err := s.markGitHubDeploymentInactiveWithDescription(ctx, &records[i], "GitHub deployment reporting was disabled in Obiente."); err != nil {
+			return err
+		}
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(records))
+	for i := range records {
+		ids = append(ids, records[i].ID)
+	}
+	return database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id IN ?", ids).
+		Updates(map[string]interface{}{"github_deployment_id": nil, "github_deployment_sha": nil}).Error
 }
 
 func (s *Service) ListPullRequestDeployments(ctx context.Context, req *connect.Request[deploymentsv1.ListPullRequestDeploymentsRequest]) (*connect.Response[deploymentsv1.ListPullRequestDeploymentsResponse], error) {
@@ -313,8 +337,8 @@ func (s *Service) ApprovePullRequestDeployment(ctx context.Context, req *connect
 	}
 	_ = s.markGitHubCheckRunComplete(ctx, record, "Preview approved", "A maintainer approved this revision. A new check will report the build.", "neutral")
 	now := time.Now()
-	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
-		Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status IN ?", record.ID, allowedStatuses).
+	result := pullRequestApprovalMutation(ctx, record).
+		Where("status IN ?", allowedStatuses).
 		Updates(map[string]interface{}{"approved_by": user.Id, "approved_head_sha": record.HeadSHA, "approved_at": now, "github_check_run_id": nil, "github_check_run_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "updated_at": now})
 	if result.Error != nil {
 		return nil, connect.NewError(connect.CodeInternal, result.Error)
@@ -342,20 +366,25 @@ func (s *Service) RejectPullRequestDeployment(ctx context.Context, req *connect.
 		reason = "A maintainer rejected this pull request environment."
 	}
 	now := time.Now()
-	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
-		Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status = ?", record.ID, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL)).
+	result := pullRequestApprovalMutation(ctx, record).
+		Where("status = ?", int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL)).
 		Updates(map[string]interface{}{"status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED), "error": reason, "updated_at": now})
 	if result.Error != nil {
 		return nil, connect.NewError(connect.CodeInternal, result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("pull request environment is not waiting for approval"))
+		return nil, connect.NewError(connect.CodeAborted, fmt.Errorf("pull request environment changed while it was being rejected"))
 	}
 	if err := database.DB.WithContext(ctx).Where("id = ?", record.ID).First(record).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	go s.reportPullRequestDeployment(record.ID)
 	return connect.NewResponse(&deploymentsv1.RejectPullRequestDeploymentResponse{Deployment: pullRequestDeploymentToProto(record)}), nil
+}
+
+func pullRequestApprovalMutation(ctx context.Context, record *database.PullRequestDeployment) *gorm.DB {
+	return database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("id = ? AND head_sha = ? AND closed_at IS NULL AND active_head_sha IS NULL", record.ID, record.HeadSHA)
 }
 
 func (s *Service) RedeployPullRequestDeployment(ctx context.Context, req *connect.Request[deploymentsv1.RedeployPullRequestDeploymentRequest]) (*connect.Response[deploymentsv1.RedeployPullRequestDeploymentResponse], error) {
@@ -1087,24 +1116,41 @@ func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 func (s *Service) cleanupExpiredPullRequestDeployments(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
-	var records []database.PullRequestDeployment
-	if err := database.DB.WithContext(ctx).Where("closed_at IS NULL AND expires_at < ?", time.Now()).Limit(100).Find(&records).Error; err != nil {
-		logger.Warn("[PRDeployments] Failed to load expired environments: %v", err)
-		return
-	}
-	for i := range records {
-		record := records[i]
-		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", record.SourceDeploymentID, record.Repository, record.PullRequestNumber)
-		if err := withDistributedLock(ctx, lockKey, func() error {
-			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL AND expires_at < ?", record.ID, time.Now()).First(&record).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return nil
+	lastID := ""
+	for {
+		var records []database.PullRequestDeployment
+		query := database.DB.WithContext(ctx).
+			Where("closed_at IS NULL AND expires_at < ?", time.Now()).
+			Order("id ASC").
+			Limit(100)
+		if lastID != "" {
+			query = query.Where("id > ?", lastID)
+		}
+		if err := query.Find(&records).Error; err != nil {
+			logger.Warn("[PRDeployments] Failed to load expired environments: %v", err)
+			return
+		}
+		if len(records) == 0 {
+			break
+		}
+		for i := range records {
+			record := records[i]
+			lockKey := fmt.Sprintf("pull-request:%s:%s:%d", record.SourceDeploymentID, record.Repository, record.PullRequestNumber)
+			if err := withDistributedLock(ctx, lockKey, func() error {
+				if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL AND expires_at < ?", record.ID, time.Now()).First(&record).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						return nil
+					}
+					return err
 				}
-				return err
+				return s.cleanupPullRequestDeployment(ctx, &record, "Preview lifetime expired.")
+			}); err != nil {
+				logger.Warn("[PRDeployments] Failed to clean up %s: %v", records[i].ID, err)
 			}
-			return s.cleanupPullRequestDeployment(ctx, &record, "Preview lifetime expired.")
-		}); err != nil {
-			logger.Warn("[PRDeployments] Failed to clean up %s: %v", records[i].ID, err)
+		}
+		lastID = records[len(records)-1].ID
+		if len(records) < 100 {
+			break
 		}
 	}
 	stuckBefore := time.Now().Add(-6 * time.Hour)
@@ -1305,6 +1351,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	record.GitHubIntegrationID = stringValue(source.GitHubIntegrationID)
 	record.GitHubInstallationID = payload.Installation.ID
 	shaChanged := record.HeadSHA != "" && record.HeadSHA != payload.PullRequest.Head.SHA
+	revisionUnchanged := existingErr == nil && !shaChanged
 	if shaChanged && record.GitHubDeploymentID != nil {
 		_ = s.markGitHubDeploymentInactive(ctx, record)
 		record.GitHubDeploymentID, record.GitHubDeploymentSHA = nil, nil
@@ -1340,9 +1387,16 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			runtimeDetached = true
 		}
 		record.ActiveHeadSHA = nil
-		record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL), nil
+		if !revisionUnchanged || !containsPRStatus([]int32{
+			int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL),
+			int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED),
+		}, record.Status) {
+			record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL), nil
+		}
 	} else {
-		record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), nil
+		if !revisionUnchanged || !preservePullRequestStateForUnchangedRevision(record.Status) {
+			record.Status, record.Error = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), nil
+		}
 	}
 	if record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED) {
 		if domain, domainErr := renderPRDomain(&config, source, record); domainErr == nil {
@@ -1354,7 +1408,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			message := "The configured preview hostname is invalid."
 			record.Error = &message
 		}
-	} else {
+	} else if reason != "" || record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL) || record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED) {
 		record.EnvironmentURL = nil
 	}
 	var persistErr error
@@ -1419,6 +1473,15 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		s.reportPullRequestDeployment(record.ID)
 	}
 	return nil
+}
+
+func preservePullRequestStateForUnchangedRevision(status int32) bool {
+	return containsPRStatus([]int32{
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED),
+	}, status)
 }
 
 func pullRequestWebhookMatchesCurrentState(action, payloadHeadSHA string, live *githubclient.PullRequest) bool {
@@ -1597,6 +1660,10 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 }
 
 func (s *Service) markGitHubDeploymentInactive(ctx context.Context, record *database.PullRequestDeployment) error {
+	return s.markGitHubDeploymentInactiveWithDescription(ctx, record, "Superseded by a newer pull request revision.")
+}
+
+func (s *Service) markGitHubDeploymentInactiveWithDescription(ctx context.Context, record *database.PullRequestDeployment, description string) error {
 	if record.GitHubDeploymentID == nil {
 		return nil
 	}
@@ -1605,7 +1672,7 @@ func (s *Service) markGitHubDeploymentInactive(ctx context.Context, record *data
 		if err != nil {
 			return err
 		}
-		return client.CreateDeploymentStatus(ctx, record.Repository, *record.GitHubDeploymentID, "inactive", "Superseded by a newer pull request revision.", "", "")
+		return client.CreateDeploymentStatus(ctx, record.Repository, *record.GitHubDeploymentID, "inactive", description, "", "")
 	})
 }
 

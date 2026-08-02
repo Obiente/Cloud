@@ -172,6 +172,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if commitSHA != "" {
 			buildRecord.CommitSHA = &commitSHA
 		}
+		buildRecordCreated := false
+		buildHistoryFinalized := false
 
 		// Capture build configuration snapshot
 		if dbDeployment.RepositoryURL != nil {
@@ -198,6 +200,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Still update deployment status to BUILDING even if build record creation fails
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		} else {
+			buildRecordCreated = true
 			// Set build ID on streamer so logs are saved to database
 			streamer.SetBuildID(buildID)
 			// Update build history status to BUILDING
@@ -205,6 +208,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Update deployment status to BUILDING when build actually starts
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		}
+		defer func() {
+			if !buildRecordCreated || buildHistoryFinalized {
+				return
+			}
+			s.finalizeInterruptedBuildHistory(buildID, buildStartTime)
+		}()
 
 		// Get build strategy - handle UNSPECIFIED by auto-detecting
 		buildStrategy := deploymentsv1.BuildStrategy(dbDeployment.BuildStrategy)
@@ -353,6 +362,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
 				logger.Warn("[TriggerDeployment] Failed to update build status: %v", err)
 				return
+			}
+			if status == 3 || status == 4 {
+				buildHistoryFinalized = true
 			}
 			if status == 4 {
 				previewStatusFinalized = true
@@ -700,6 +712,19 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		Status:       "DEPLOYING",
 	})
 	return res, nil
+}
+
+func (s *Service) finalizeInterruptedBuildHistory(buildID string, startedAt time.Time) {
+	statusCtx, statusCancel := s.detachedContext(30 * time.Second)
+	defer statusCancel()
+	var current database.BuildHistory
+	if err := database.DB.WithContext(statusCtx).Select("status").Where("id = ?", buildID).First(&current).Error; err != nil || (current.Status != 1 && current.Status != 2) {
+		return
+	}
+	message := "Build stopped because it was superseded or the deployment was removed."
+	if err := s.buildHistoryRepo.UpdateBuildStatus(statusCtx, buildID, 4, int32(time.Since(startedAt).Seconds()), &message); err != nil {
+		logger.Warn("[TriggerDeployment] Failed to finalize interrupted build history %s: %v", buildID, err)
+	}
 }
 
 func requestedDeploymentCommitSHA(ctx context.Context, value string) (string, error) {

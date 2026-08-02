@@ -27,13 +27,10 @@ func TestSanitizeUntrustedComposeYAMLRemovesHostControlOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanitize untrusted compose: %v", err)
 	}
-	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:"} {
+	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:", "volumes:"} {
 		if strings.Contains(filtered, forbidden) {
 			t.Fatalf("untrusted Compose retained %q:\n%s", forbidden, filtered)
 		}
-	}
-	if !strings.Contains(filtered, "volumes:") {
-		t.Fatalf("volumes should remain for the deployment-owned path sanitizer:\n%s", filtered)
 	}
 }
 

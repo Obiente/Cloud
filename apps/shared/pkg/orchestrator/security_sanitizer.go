@@ -122,7 +122,7 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (st
 		"extra_hosts", "ipc", "isolation", "labels", "links", "network_mode",
 		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged",
 		"runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
-		"userns_mode", "uts", "volumes_from",
+		"userns_mode", "uts", "volumes", "volumes_from",
 	}
 	for serviceName, serviceData := range services {
 		service, ok := serviceData.(map[string]interface{})
@@ -138,7 +138,9 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (st
 	}
 
 	// Only services and the optional version marker are carried forward. The
-	// normal sanitizer creates deployment-owned networks and rewrites volumes.
+	// normal sanitizer creates deployment-owned networks. Service volumes are
+	// intentionally discarded so one untrusted revision cannot leave durable
+	// files that influence a later revision of the same preview.
 	filtered := map[string]interface{}{"services": services}
 	if version, exists := compose["version"]; exists {
 		filtered["version"] = version
