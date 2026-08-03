@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -93,6 +95,22 @@ func TestSwarmDisableHealthcheckArgs(t *testing.T) {
 	got := swarmDisableHealthcheckArgs()
 	if len(got) != 1 || got[0] != "--no-healthcheck" {
 		t.Fatalf("swarmDisableHealthcheckArgs() = %#v, want [--no-healthcheck]", got)
+	}
+}
+
+func TestSwarmRestoreImageHealthcheckArgs(t *testing.T) {
+	t.Parallel()
+
+	got := swarmRestoreImageHealthcheckArgs()
+	want := []string{
+		"--health-cmd", "",
+		"--health-interval", "0s",
+		"--health-timeout", "0s",
+		"--health-retries", "0",
+		"--health-start-period", "0s",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmRestoreImageHealthcheckArgs() = %#v, want %#v", got, want)
 	}
 }
 
@@ -219,15 +237,122 @@ func TestHTTPHealthcheckCommandUsesSafePath(t *testing.T) {
 	t.Parallel()
 
 	got := httpHealthcheckCommand(3000, "/health", 204)
-	if !strings.Contains(got, "http://localhost:3000/health") {
+	if !strings.Contains(got, "http://127.0.0.1:3000/health") {
 		t.Fatalf("httpHealthcheckCommand() = %q, want health URL", got)
 	}
-	if !strings.Contains(got, `"204"`) {
+	if !strings.Contains(got, "expected=204") {
 		t.Fatalf("httpHealthcheckCommand() = %q, want expected status", got)
 	}
 
 	injected := httpHealthcheckCommand(3000, "/health'; touch /tmp/owned; '", 200)
-	if strings.Contains(injected, "touch /tmp/owned") || !strings.Contains(injected, "http://localhost:3000/") {
+	if strings.Contains(injected, "touch /tmp/owned") || !strings.Contains(injected, "http://127.0.0.1:3000/") {
 		t.Fatalf("httpHealthcheckCommand() did not neutralize unsafe path: %q", injected)
+	}
+	for _, packageManager := range []string{"apk add", "apt-get", "yum install"} {
+		if strings.Contains(got, packageManager) {
+			t.Fatalf("httpHealthcheckCommand() mutates the running image with %q: %q", packageManager, got)
+		}
+	}
+	if !strings.Contains(got, "command -v node") {
+		t.Fatalf("httpHealthcheckCommand() = %q, want node fallback", got)
+	}
+	if !strings.Contains(got, `awk "/HTTP\\//`) {
+		t.Fatalf("httpHealthcheckCommand() = %q, want a closed HTTP status regex", got)
+	}
+	if !strings.Contains(got, `{print \$2; exit}`) {
+		t.Fatalf("httpHealthcheckCommand() = %q, want wget to retain the initial response status", got)
+	}
+	if !strings.Contains(got, "http.client.HTTPConnection") {
+		t.Fatalf("httpHealthcheckCommand() = %q, want Python status handling that supports expected non-2xx responses", got)
+	}
+}
+
+func TestIsPlatformManagedHealthcheck(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		test   []string
+		want   bool
+	}{
+		{
+			name:   "current platform label",
+			source: "platform",
+			test:   []string{"CMD-SHELL", "any command"},
+			want:   true,
+		},
+		{
+			name: "legacy generated tcp check",
+			test: []string{"CMD-SHELL", "HEALTHCHECK_PORT=4321 node -e 'probe'"},
+			want: true,
+		},
+		{
+			name: "legacy runtime package check",
+			test: []string{"CMD-SHELL", "apt-get install -y -qq netcat && nc -z localhost 4321"},
+			want: true,
+		},
+		{
+			name:   "disabled platform check",
+			source: "disabled",
+			want:   false,
+		},
+		{
+			name: "image defined check",
+			test: []string{"CMD-SHELL", "curl --fail http://localhost:8080/ready || exit 1"},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isPlatformManagedHealthcheck(test.source, test.test); got != test.want {
+				t.Fatalf("isPlatformManagedHealthcheck(%q, %q) = %t, want %t", test.source, test.test, got, test.want)
+			}
+		})
+	}
+}
+
+func TestTCPHealthcheckCommandDoesNotInstallRuntimePackages(t *testing.T) {
+	t.Parallel()
+
+	explicit := tcpHealthcheckCommand(4321, false)
+	automatic := tcpHealthcheckCommand(4321, true)
+	for _, command := range []string{explicit, automatic} {
+		for _, packageManager := range []string{"apk add", "apt-get", "yum install"} {
+			if strings.Contains(command, packageManager) {
+				t.Fatalf("tcpHealthcheckCommand() mutates the running image with %q: %q", packageManager, command)
+			}
+		}
+		if !strings.Contains(command, "HEALTHCHECK_PORT=4321 node") {
+			t.Fatalf("tcpHealthcheckCommand() = %q, want node fallback", command)
+		}
+		if strings.Contains(command, "busybox nc -z") {
+			t.Fatalf("tcpHealthcheckCommand() uses unsupported BusyBox nc -z: %q", command)
+		}
+	}
+	if !strings.Contains(explicit, "exit 1; fi") {
+		t.Fatalf("explicit tcp health check must fail without a probe: %q", explicit)
+	}
+	if !strings.Contains(automatic, "exit 0; fi") {
+		t.Fatalf("automatic tcp health check must not fail solely because the image has no probe: %q", automatic)
+	}
+}
+
+func TestRollbackPreserved(t *testing.T) {
+	t.Parallel()
+
+	err := fmt.Errorf("update deployment: %w", &SwarmRolloutError{
+		ServiceName:             "deploy-example-default",
+		State:                   "rollback_completed",
+		PreviousRevisionRunning: true,
+	})
+	if !RollbackPreserved(err) {
+		t.Fatal("RollbackPreserved() = false, want true for wrapped completed rollback")
+	}
+	if RollbackPreserved(errors.New("ordinary failure")) {
+		t.Fatal("RollbackPreserved() = true for ordinary failure")
 	}
 }

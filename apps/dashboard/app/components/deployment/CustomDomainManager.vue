@@ -354,6 +354,7 @@ const addDomain = async () => {
       organizationId: organizationId.value,
       deploymentId: props.deployment.id,
       customDomains: updatedDomains,
+      replaceCustomDomains: true,
     });
 
     await refreshNuxtData(`deployment-${props.deployment.id}`);
@@ -458,6 +459,7 @@ const removeDomain = async (domain: string) => {
       organizationId: organizationId.value,
       deploymentId: props.deployment.id,
       customDomains: updatedDomains,
+      replaceCustomDomains: true,
     });
 
     // Refresh deployment data - the watch will automatically update domains.value

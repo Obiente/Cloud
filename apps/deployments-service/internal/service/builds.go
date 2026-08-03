@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -44,7 +45,7 @@ func (s *Service) ListBuilds(ctx context.Context, req *connect.Request[deploymen
 
 	return connect.NewResponse(&deploymentsv1.ListBuildsResponse{
 		Builds: protoBuilds,
-		Total:   int32(total),
+		Total:  int32(total),
 	}), nil
 }
 
@@ -53,6 +54,9 @@ func (s *Service) GetBuild(ctx context.Context, req *connect.Request[deployments
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
 	buildID := req.Msg.GetBuildId()
+	if invalidBuildID(buildID) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("build ID is required"))
+	}
 
 	// Check permissions
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -79,6 +83,9 @@ func (s *Service) GetBuildLogs(ctx context.Context, req *connect.Request[deploym
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
 	buildID := req.Msg.GetBuildId()
+	if invalidBuildID(buildID) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("build ID is required"))
+	}
 
 	// Check permissions
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -121,11 +128,19 @@ func (s *Service) GetBuildLogs(ctx context.Context, req *connect.Request[deploym
 	}), nil
 }
 
+func invalidBuildID(buildID string) bool {
+	buildID = strings.TrimSpace(buildID)
+	return buildID == "" || strings.EqualFold(buildID, "undefined") || strings.EqualFold(buildID, "null")
+}
+
 // RevertToBuild reverts a deployment to a previous build
 func (s *Service) RevertToBuild(ctx context.Context, req *connect.Request[deploymentsv1.RevertToBuildRequest]) (*connect.Response[deploymentsv1.RevertToBuildResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
 	buildID := req.Msg.GetBuildId()
+	if invalidBuildID(buildID) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("build ID is required"))
+	}
 
 	// Check permissions
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentDeploy, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -212,11 +227,11 @@ func (s *Service) triggerBuildFromRevert(ctx context.Context, deploymentID, reve
 	_, err := s.TriggerDeployment(ctx, connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{
 		DeploymentId: deploymentID,
 	}))
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to trigger deployment: %w", err)
 	}
-	
+
 	// Return empty string - the new build ID will be created by TriggerDeployment
 	// In the future, we could return the build ID if we modify TriggerDeployment to return it
 	return "", nil
@@ -284,6 +299,9 @@ func (s *Service) DeleteBuild(ctx context.Context, req *connect.Request[deployme
 	deploymentID := req.Msg.GetDeploymentId()
 	orgID := req.Msg.GetOrganizationId()
 	buildID := req.Msg.GetBuildId()
+	if invalidBuildID(buildID) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("build ID is required"))
+	}
 
 	// Check permissions - need deployments.manage permission
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentManage, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -315,4 +333,3 @@ func (s *Service) DeleteBuild(ctx context.Context, req *connect.Request[deployme
 		Success: true,
 	}), nil
 }
-

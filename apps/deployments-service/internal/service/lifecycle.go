@@ -583,11 +583,19 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
-				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				if orchestrator.RollbackPreserved(err) {
+					streamer.WriteStderr([]byte(fmt.Sprintf("❌ New revision failed; the previous revision remains online: %v\n", err)))
+				} else {
+					streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				}
 				s.captureDeploymentFailureDiagnostics(buildCtx, deploymentID, "orchestrator_deploy_failed", err.Error(), streamer)
 				errorMsg := err.Error()
 				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
-				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				if orchestrator.RollbackPreserved(err) {
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
+				} else {
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				}
 				return
 			}
 
