@@ -156,7 +156,7 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAMLWithLimits(composeYaml s
 		"configs", "container_name", "credential_spec", "deploy", "develop",
 		"device_cgroup_rules", "devices", "env_file", "external_links",
 		"extra_hosts", "ipc", "isolation", "labels", "links", "network_mode",
-		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged",
+		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged", "scale",
 		"mem_limit", "mem_reservation", "memswap_limit", "runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
 		"userns_mode", "uts", "volumes", "volumes_from",
 	}

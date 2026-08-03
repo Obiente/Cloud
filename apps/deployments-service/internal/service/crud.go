@@ -149,6 +149,17 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	return res, nil
 }
 
+func validateUserManagedEnvironment(environment deploymentsv1.Environment) error {
+	switch environment {
+	case deploymentsv1.Environment_PRODUCTION, deploymentsv1.Environment_STAGING, deploymentsv1.Environment_DEVELOPMENT:
+		return nil
+	case deploymentsv1.Environment_PULL_REQUEST:
+		return errors.New("pull request preview environments are managed automatically")
+	default:
+		return fmt.Errorf("invalid deployment environment %d", environment)
+	}
+}
+
 // CreateDeployment creates a new deployment
 func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.CreateDeploymentRequest]) (*connect.Response[deploymentsv1.CreateDeploymentResponse], error) {
 	orgID := req.Msg.GetOrganizationId()
@@ -183,6 +194,9 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	environment := req.Msg.GetEnvironment()
 	if environment == deploymentsv1.Environment_ENVIRONMENT_UNSPECIFIED {
 		environment = deploymentsv1.Environment_PRODUCTION
+	}
+	if err := validateUserManagedEnvironment(environment); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
 	// Get groups from request (optional)
@@ -521,8 +535,15 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		dbDeployment.BuildStrategy = buildStrategy
 	}
 	if req.Msg.Environment != nil {
-		environment := int32(req.Msg.GetEnvironment())
-		dbDeployment.Environment = environment
+		environment := req.Msg.GetEnvironment()
+		if dbDeployment.Environment == int32(deploymentsv1.Environment_PULL_REQUEST) {
+			if environment != deploymentsv1.Environment_PULL_REQUEST {
+				return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("pull request preview environments are managed automatically"))
+			}
+		} else if err := validateUserManagedEnvironment(environment); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		dbDeployment.Environment = int32(environment)
 	}
 
 	// Per-deployment resource limits (overrides)
@@ -682,15 +703,36 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 
 	nextRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
 	nextIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
-	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
-		if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to retire pull request previews for the previous repository: %w", err))
+	sourceChanged := originalRepository != nextRepository || originalIntegrationID != nextIntegrationID
+	persistDeployment := func() error {
+		if sourceChanged {
+			if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
+				return fmt.Errorf("retire pull request previews for the previous repository: %w", err)
+			}
 		}
+		if err := s.repo.Update(ctx, dbDeployment); err != nil {
+			return fmt.Errorf("update deployment: %w", err)
+		}
+		if sourceChanged {
+			if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+				Where("deployment_id = ? AND enabled = ?", deploymentID, true).
+				Updates(map[string]interface{}{"open_pull_requests_synced_at": nil, "updated_at": time.Now()}).Error; err != nil {
+				return fmt.Errorf("schedule existing pull requests for discovery: %w", err)
+			}
+		}
+		return nil
 	}
-
-	// Save changes to database
-	if err := s.repo.Update(ctx, dbDeployment); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update deployment: %w", err))
+	if sourceChanged {
+		err = withDistributedLock(ctx, "pull-request-source:"+deploymentID, persistDeployment)
+	} else {
+		err = persistDeployment()
+	}
+	if err != nil {
+		code := connect.CodeInternal
+		if sourceChanged {
+			code = connect.CodeUnavailable
+		}
+		return nil, connect.NewError(code, fmt.Errorf("failed to persist deployment changes: %w", err))
 	}
 
 	// Return updated deployment
@@ -927,7 +969,11 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
 	}
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if targetNodeID != "" {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers, err := deleteDeploymentForwardHeaders(ctx, req, targetNodeID)
 		if err != nil {
@@ -972,6 +1018,11 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 			}
 		} else if err := s.manager.DeleteDeployment(ctx, deploymentID); err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove deployment runtime: %w", err))
+		}
+		if deploymentIsPullRequestPreview(dbDep) {
+			if err := s.manager.RemovePreviewIngressNetwork(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove preview ingress network: %w", err))
+			}
 		}
 	}
 

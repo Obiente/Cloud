@@ -649,6 +649,7 @@ services:
       - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       # Database TCP ports are handled by databases-service proxy (not Traefik)
     labels:
+      - "cloud.obiente.ingress-proxy=true"
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"

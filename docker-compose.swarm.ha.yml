@@ -518,6 +518,7 @@ services:
           cpus: "1"
           memory: 256M
       labels:
+        - "cloud.obiente.ingress-proxy=true"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"

@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,40 @@ import (
 // Swift, Scala, Zig
 // The detection is Rails-optimized, but the build can handle any supported language.
 type RailpackStrategy struct{}
+
+var dockerTagPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// dockerImageTag keeps ordinary branch tags stable while converting refs such
+// as feat/example into a deterministic, collision-resistant Docker tag.
+func dockerImageTag(ref string) string {
+	if dockerTagPattern.MatchString(ref) {
+		return ref
+	}
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(ref)))[:12]
+	var cleaned strings.Builder
+	cleaned.Grow(len(ref))
+	lastDash := false
+	for _, r := range ref {
+		allowed := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-'
+		if !allowed {
+			r = '-'
+		}
+		if r == '-' && lastDash {
+			continue
+		}
+		cleaned.WriteRune(r)
+		lastDash = r == '-'
+	}
+	base := strings.Trim(cleaned.String(), ".-")
+	if base == "" {
+		base = "ref"
+	}
+	const maxBaseLength = 128 - 1 - 12
+	if len(base) > maxBaseLength {
+		base = strings.TrimRight(base[:maxBaseLength], ".-")
+	}
+	return base + "-" + digest
+}
 
 func NewRailpackStrategy() *RailpackStrategy {
 	return &RailpackStrategy{}
@@ -160,7 +195,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -910,7 +945,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -1731,7 +1766,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Use configured Dockerfile path or default to "Dockerfile"
 	dockerfile := config.DockerfilePath
@@ -1955,8 +1990,16 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 		}
 	}
 
+	validationComposeYaml := composeYaml
+	if len(config.EnvVars) > 0 {
+		validationComposeYaml, err = injectComposeServiceEnvironment(composeYaml, composeValidationEnvironment(config.EnvVars))
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("prepare preview environment variables for Compose validation: %w", err)}, nil
+		}
+	}
+
 	// Validate compose file
-	if err := ValidateCompose(ctx, composeYaml); len(err) > 0 {
+	if err := ValidateCompose(ctx, validationComposeYaml); len(err) > 0 {
 		for _, ve := range err {
 			if ve.Severity == "error" {
 				return &BuildResult{Success: false, Error: fmt.Errorf("compose validation error: %s", ve.Message)}, nil
@@ -1971,6 +2014,14 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 		ComposeYaml: composeYaml,
 		Success:     true,
 	}, nil
+}
+
+func composeValidationEnvironment(values map[string]string) map[string]string {
+	escaped := make(map[string]string, len(values))
+	for key, value := range values {
+		escaped[key] = strings.ReplaceAll(value, "$", "$$")
+	}
+	return escaped
 }
 
 func injectComposeServiceEnvironment(composeYaml string, values map[string]string) (string, error) {
@@ -2009,9 +2060,9 @@ func injectComposeServiceEnvironment(composeYaml string, values map[string]strin
 			return "", fmt.Errorf("service %s has an unsupported environment declaration", serviceName)
 		}
 		for key, value := range values {
-			// Compose treats dollar signs as interpolation even in generated YAML.
-			// Escape them so the allowlisted value reaches the container literally.
-			environment[key] = strings.ReplaceAll(value, "$", "$$")
+			// The normal Compose sanitizer performs the one required interpolation
+			// escape after this injected YAML is decoded.
+			environment[key] = value
 		}
 		service["environment"] = environment
 	}
@@ -2074,7 +2125,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	// Step 1: Use Railpack to build the application
 	// This will create an image with all dependencies and built files
-	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, deployment.Branch)
+	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	writeBuildLog := func(format string, args ...interface{}) {
 		msg := fmt.Sprintf(format, args...)
@@ -2310,7 +2361,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to write Dockerfile: %w", err)}, nil
 	}
 
-	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Build final minimal nginx image
 	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", nil, DockerfileBuildOptions{}, config.LogWriter, config.LogWriterErr); err != nil {

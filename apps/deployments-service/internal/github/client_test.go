@@ -185,6 +185,78 @@ func TestGetPullRequestReturnsAuthoritativeState(t *testing.T) {
 	}
 }
 
+func TestListOpenPullRequestsPaginatesExistingPullRequests(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/repos/obiente/cloud/pulls" || req.URL.Query().Get("state") != "open" {
+			t.Fatalf("unexpected request %s", req.URL.String())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if req.URL.Query().Get("page") == "1" {
+			pullRequests := make([]map[string]interface{}, 100)
+			for i := range pullRequests {
+				pullRequests[i] = map[string]interface{}{"number": i + 1, "state": "open"}
+			}
+			_ = json.NewEncoder(w).Encode(pullRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`[{"number":101,"state":"open"}]`))
+	}))
+	defer server.Close()
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	pullRequests, err := client.ListOpenPullRequests(t.Context(), "obiente/cloud")
+	if err != nil || len(pullRequests) != 101 || pullRequests[100].Number != 101 {
+		t.Fatalf("list open pull requests: count=%d err=%v", len(pullRequests), err)
+	}
+}
+
+func TestListOpenPullRequestsRescansMutablePagination(t *testing.T) {
+	scan := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		page := req.URL.Query().Get("page")
+		if page == "1" {
+			scan++
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if page == "1" {
+			start := 1
+			if scan > 1 {
+				start = 2
+			}
+			pullRequests := make([]map[string]interface{}, 100)
+			for i := range pullRequests {
+				pullRequests[i] = map[string]interface{}{"number": start + i, "state": "open"}
+			}
+			_ = json.NewEncoder(w).Encode(pullRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`[{"number":102,"state":"open"}]`))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	pullRequests, err := client.ListOpenPullRequests(t.Context(), "obiente/cloud")
+	if err != nil {
+		t.Fatalf("list open pull requests: %v", err)
+	}
+	if scan != 3 {
+		t.Fatalf("pagination scans = %d, want 3", scan)
+	}
+	found101 := false
+	for i := range pullRequests {
+		if pullRequests[i].Number == 101 {
+			found101 = true
+		}
+		if pullRequests[i].Number == 1 {
+			t.Fatal("closed pull request from the unstable first scan was retained")
+		}
+	}
+	if !found101 {
+		t.Fatal("pull request shifted across the first pagination boundary was skipped")
+	}
+}
+
 func TestCheckRunActionRequiredIsCompleted(t *testing.T) {
 	body := checkRunBody(CheckRunUpdate{Status: "completed", Conclusion: "action_required"}, true)
 	if body["status"] != "completed" || body["conclusion"] != "action_required" {

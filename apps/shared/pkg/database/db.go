@@ -17,6 +17,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 var DB *gorm.DB
@@ -529,6 +530,15 @@ func InitDatabase() error {
 		}
 	}
 
+	// Pull request previews were exercised against production before every
+	// reporting/recovery field existed. Some installations can therefore have a
+	// valid older table that receives traffic during a rolling update. Add the
+	// nullable/defaulted compatibility columns explicitly before GORM inspects
+	// the models so no new replica can serve against that partial schema.
+	if err := ensurePullRequestPreviewCompatibilityColumns(db); err != nil {
+		return fmt.Errorf("failed to prepare pull request preview schema: %w", err)
+	}
+
 	// Auto-migrate the schema (build_logs is stored in TimescaleDB, not here)
 	if err := db.AutoMigrate(
 		&Deployment{},
@@ -566,6 +576,10 @@ func InitDatabase() error {
 		}
 	}
 
+	if err := BackfillPullRequestPreviewEnvironments(db); err != nil {
+		return fmt.Errorf("failed to backfill pull request preview environments: %w", err)
+	}
+
 	// Initialize VPS catalog with default sizes and regions
 	if err := InitVPSCatalog(); err != nil {
 		logger.Warn("Failed to initialize VPS catalog: %v", err)
@@ -596,6 +610,58 @@ func InitDatabase() error {
 		logger.Debug("Skipping metrics database initialization (not required for this service)")
 	}
 
+	return nil
+}
+
+func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
+	statements := []string{
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS active_head_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_comment_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_pending BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS next_report_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS isolation_version INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_pending BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_generation BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS next_reconciliation_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS open_pull_requests_synced_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS deployment_build_controls ADD COLUMN IF NOT EXISTS owner_node_id TEXT`,
+		`ALTER TABLE IF EXISTS deployment_build_controls ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ`,
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// BackfillPullRequestPreviewEnvironments corrects preview environments created
+// by replicas from before the dedicated PR environment was introduced. It is
+// safe to run repeatedly while a rolling deployment drains legacy writers.
+func BackfillPullRequestPreviewEnvironments(db *gorm.DB) error {
+	result := db.Exec(`
+		UPDATE deployments AS deployment
+		SET environment = ?
+		FROM pull_request_deployments AS preview
+		WHERE preview.preview_deployment_id = deployment.id
+		  AND deployment.environment <> ?
+	`, int32(deploymentsv1.Environment_PULL_REQUEST), int32(deploymentsv1.Environment_PULL_REQUEST))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("Marked %d existing pull request preview deployment(s) as PR environments", result.RowsAffected)
+	}
 	return nil
 }
 

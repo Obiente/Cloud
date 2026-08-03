@@ -28,6 +28,29 @@ type activeDeploymentBuild struct {
 	cancel context.CancelFunc
 }
 
+const (
+	deploymentBuildHeartbeatInterval  = 15 * time.Second
+	deploymentBuildHeartbeatTimeout   = 2 * time.Minute
+	deploymentBuildLegacyOwnerTimeout = 6 * time.Hour
+)
+
+func deploymentBuildControlIsStale(control *database.DeploymentBuildControl, now time.Time) bool {
+	if control == nil || control.BuildToken == "" {
+		return false
+	}
+	if control.HeartbeatAt == nil {
+		lastSeen := control.UpdatedAt
+		if lastSeen.IsZero() {
+			lastSeen = control.CreatedAt
+		}
+		// Replicas from before heartbeat support only updated this row when the
+		// build began. Keep those owners for a rolling-upgrade grace period so a
+		// new replica cannot steal a long-running build after two minutes.
+		return !lastSeen.IsZero() && now.Sub(lastSeen) > deploymentBuildLegacyOwnerTimeout
+	}
+	return now.Sub(*control.HeartbeatAt) > deploymentBuildHeartbeatTimeout
+}
+
 type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
 	repo              *database.DeploymentRepository
@@ -73,24 +96,27 @@ func (s *Service) registerDeploymentBuild(ctx context.Context, deploymentID stri
 		}
 		var existing database.DeploymentBuildControl
 		err := database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).First(&existing).Error
+		now := time.Now()
+		if err == nil && existing.BuildToken != "" && !deploymentBuildControlIsStale(&existing, now) {
+			return nil
+		}
 		if err == nil && existing.CancelRequestedAt != nil {
 			// A live build token must acknowledge cancellation before another
 			// build starts. An idle marker older than the abort-cleanup window is
 			// stale (for example after a replica crashed on an error return), and
 			// the deployment existence check above proves deletion did not finish.
-			if existing.BuildToken != "" || time.Since(*existing.CancelRequestedAt) < 2*time.Minute {
+			if (existing.BuildToken != "" && !deploymentBuildControlIsStale(&existing, now)) || now.Sub(*existing.CancelRequestedAt) < 2*time.Minute {
 				return nil
 			}
 		}
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		now := time.Now()
-		control := database.DeploymentBuildControl{DeploymentID: deploymentID, BuildToken: token, OwnerNodeID: ownerNodeID, CreatedAt: now, UpdatedAt: now}
+		control := database.DeploymentBuildControl{DeploymentID: deploymentID, BuildToken: token, OwnerNodeID: ownerNodeID, HeartbeatAt: &now, CreatedAt: now, UpdatedAt: now}
 		if err := database.DB.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "deployment_id"}},
 			DoUpdates: clause.Assignments(map[string]interface{}{
-				"build_token": token, "owner_node_id": ownerNodeID, "cancel_requested_at": nil, "updated_at": now,
+				"build_token": token, "owner_node_id": ownerNodeID, "heartbeat_at": now, "cancel_requested_at": nil, "updated_at": now,
 			}),
 		}).Create(&control).Error; err != nil {
 			return err
@@ -103,7 +129,7 @@ func (s *Service) registerDeploymentBuild(ctx context.Context, deploymentID stri
 		if err != nil {
 			return "", err
 		}
-		return "", fmt.Errorf("deployment has a pending cancellation request")
+		return "", fmt.Errorf("deployment already has an active build or pending cancellation request")
 	}
 	s.activeBuildsMu.Lock()
 	if s.activeBuilds == nil {
@@ -134,7 +160,7 @@ func (s *Service) unregisterDeploymentBuild(deploymentID, token string) {
 		}
 		if control.CancelRequestedAt != nil {
 			return database.DB.WithContext(ctx).Model(&control).Updates(map[string]interface{}{
-				"build_token": "", "owner_node_id": "", "updated_at": time.Now(),
+				"build_token": "", "owner_node_id": "", "heartbeat_at": nil, "updated_at": time.Now(),
 			}).Error
 		}
 		return database.DB.WithContext(ctx).Delete(&control).Error
@@ -149,7 +175,13 @@ func (s *Service) cancelDeploymentBuild(deploymentID string) error {
 		now := time.Now()
 		var existing database.DeploymentBuildControl
 		if err := database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).First(&existing).Error; err == nil {
-			buildToken = existing.BuildToken
+			if deploymentBuildControlIsStale(&existing, now) {
+				if err := database.DB.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{"build_token": "", "owner_node_id": "", "heartbeat_at": nil, "updated_at": now}).Error; err != nil {
+					return err
+				}
+			} else {
+				buildToken = existing.BuildToken
+			}
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -209,7 +241,12 @@ func (s *Service) clearDeploymentBuildCancellationAfterAbort(deploymentID string
 				return err
 			}
 			if control.BuildToken != "" {
-				return nil
+				if !deploymentBuildControlIsStale(&control, time.Now()) {
+					return nil
+				}
+				if err := database.DB.WithContext(ctx).Model(&control).Updates(map[string]interface{}{"build_token": "", "owner_node_id": "", "heartbeat_at": nil, "updated_at": time.Now()}).Error; err != nil {
+					return err
+				}
 			}
 			if err := database.DB.WithContext(ctx).Delete(&control).Error; err != nil {
 				return err
@@ -259,6 +296,7 @@ func (s *Service) clearDeploymentBuildCancellationAfterAbort(deploymentID string
 func (s *Service) monitorDeploymentBuild(ctx context.Context, deploymentID, token string, cancel context.CancelFunc) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	lastHeartbeat := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -269,6 +307,17 @@ func (s *Service) monitorDeploymentBuild(ctx context.Context, deploymentID, toke
 			if err != nil || control.BuildToken != token || control.CancelRequestedAt != nil {
 				cancel()
 				return
+			}
+			if time.Since(lastHeartbeat) >= deploymentBuildHeartbeatInterval {
+				now := time.Now()
+				result := database.DB.WithContext(ctx).Model(&database.DeploymentBuildControl{}).
+					Where("deployment_id = ? AND build_token = ? AND cancel_requested_at IS NULL", deploymentID, token).
+					Updates(map[string]interface{}{"heartbeat_at": now, "updated_at": now})
+				if result.Error != nil || result.RowsAffected != 1 {
+					cancel()
+					return
+				}
+				lastHeartbeat = now
 			}
 			var count int64
 			if err := database.DB.WithContext(ctx).Model(&database.Deployment{}).Where("id = ? AND deleted_at IS NULL", deploymentID).Count(&count).Error; err != nil || count != 1 {

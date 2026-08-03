@@ -28,6 +28,7 @@
               v-model="localEnvironment"
               :items="environmentOptions"
               label="Environment"
+              :disabled="isPullRequestEnvironment"
               @update:model-value="markGeneralDirty"
             />
 
@@ -904,11 +905,24 @@
     { label: "Custom Command", value: 4 }, // HEALTHCHECK_CUSTOM
   ];
 
-  const environmentOptions = [
+  const userManagedEnvironmentOptions = [
     { label: "Production", value: String(EnvEnum.PRODUCTION) },
     { label: "Staging", value: String(EnvEnum.STAGING) },
     { label: "Development", value: String(EnvEnum.DEVELOPMENT) },
   ];
+
+  const isPullRequestEnvironment = computed(
+    () => props.deployment.environment === EnvEnum.PULL_REQUEST
+  );
+
+  const environmentOptions = computed(() =>
+    isPullRequestEnvironment.value
+      ? [
+          ...userManagedEnvironmentOptions,
+          { label: "PR", value: String(EnvEnum.PULL_REQUEST) },
+        ]
+      : userManagedEnvironmentOptions
+  );
 
   // Track if we're manually clearing the repository
   const isClearingRepository = ref(false);

@@ -71,6 +71,21 @@ func TestTraefikRouterPriority(t *testing.T) {
 	}
 }
 
+func TestGenerateTraefikLabelsSelectsIngressNetworkForDockerAndSwarm(t *testing.T) {
+	t.Parallel()
+
+	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+		ServiceName: "default",
+		Domain:      "preview.example.com",
+	}}, nil, "deployment-preview-123")
+
+	for _, key := range []string{"traefik.docker.network", "traefik.swarm.network"} {
+		if got := labels[key]; got != "deployment-preview-123" {
+			t.Fatalf("%s = %q, want deployment-preview-123", key, got)
+		}
+	}
+}
+
 func TestNormalizeServiceNetworksFromList(t *testing.T) {
 	service := map[string]interface{}{
 		"networks": []interface{}{"deployment-123", "obiente-network"},
@@ -136,7 +151,7 @@ networks:
 `)
 
 	routings := []database.DeploymentRouting{{ServiceName: "directus"}}
-	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings, PreviewIngressNetworkName)
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings, legacyPreviewIngressNetworkName)
 	if err != nil {
 		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
 	}
@@ -179,7 +194,48 @@ networks:
 	}
 	topLevelNetworks := compose["networks"].(map[string]interface{})
 	ingressConfig := topLevelNetworks["obiente-network"].(map[string]interface{})
-	if ingressConfig["name"] != PreviewIngressNetworkName || ingressConfig["external"] != true {
+	if ingressConfig["name"] != legacyPreviewIngressNetworkName || ingressConfig["external"] != true {
 		t.Fatalf("expected routed service to use isolated ingress network, got %#v", ingressConfig)
+	}
+}
+
+func TestAddTraefikNetworkToRoutedServicesReusesMatchingDeploymentNetwork(t *testing.T) {
+	t.Setenv("ENABLE_SWARM", "true")
+
+	dm := &DeploymentManager{}
+	const ingressNetwork = "deployment-preview-123"
+	composeYaml := strings.TrimSpace(`
+services:
+  web:
+    image: example/web:latest
+    networks:
+      - deployment-preview-123
+networks:
+  deployment-preview-123:
+    external: true
+`)
+
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, []database.DeploymentRouting{{ServiceName: "web"}}, ingressNetwork)
+	if err != nil {
+		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(gotYaml), &compose); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+
+	topLevelNetworks := compose["networks"].(map[string]interface{})
+	_, hasDuplicateIngress := topLevelNetworks["obiente-network"]
+	if len(topLevelNetworks) != 1 || hasDuplicateIngress {
+		t.Fatalf("matching ingress network was declared twice: %#v", topLevelNetworks)
+	}
+	web := compose["services"].(map[string]interface{})["web"].(map[string]interface{})
+	serviceNetworks := web["networks"].(map[string]interface{})
+	if len(serviceNetworks) != 1 {
+		t.Fatalf("routed service has duplicate network attachments: %#v", serviceNetworks)
+	}
+	networkConfig, ok := serviceNetworks[ingressNetwork].(map[string]interface{})
+	if !ok || !reflect.DeepEqual(networkConfig["aliases"], []interface{}{"web"}) {
+		t.Fatalf("routed service did not reuse the deployment network: %#v", serviceNetworks)
 	}
 }

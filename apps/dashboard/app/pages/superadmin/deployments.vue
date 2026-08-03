@@ -80,6 +80,7 @@ const environmentOptions = computed(() => [
   { label: "Production", value: "production" },
   { label: "Staging", value: "staging" },
   { label: "Development", value: "development" },
+  { label: "PR", value: "pull_request" },
 ]);
 
 const statusOptions = computed(() => {
@@ -214,6 +215,8 @@ function formatEnvironment(env?: number) {
       return "STAGING";
     case 3:
       return "DEVELOPMENT";
+    case 4:
+      return "PULL_REQUEST";
     default:
       return "UNSPECIFIED";
   }
@@ -242,6 +245,7 @@ const environmentStatusMap: Record<string, { label: string; variant: BadgeVarian
   production: { label: "PRODUCTION", variant: "success" },
   staging: { label: "STAGING", variant: "warning" },
   development: { label: "DEVELOPMENT", variant: "secondary" },
+  pull_request: { label: "PR", variant: "secondary" },
   unspecified: { label: "UNSPECIFIED", variant: "secondary" },
 };
 
@@ -255,4 +259,3 @@ const deploymentStatusMap: Record<string, { label: string; variant: BadgeVariant
   unknown: { label: "UNKNOWN", variant: "secondary" },
 };
 </script>
-

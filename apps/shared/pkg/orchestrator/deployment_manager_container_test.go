@@ -3,9 +3,45 @@ package orchestrator
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T) {
+	t.Parallel()
+	want := []string{
+		"--network-rm", "older_obiente-network",
+		"--network-rm", "current_obiente-network",
+	}
+	got := swarmServiceNetworkUpdateArgs([]string{
+		"older_obiente-network",
+		legacyPreviewIngressNetworkName,
+		"current_obiente-network",
+		"older_obiente-network",
+	}, legacyPreviewIngressNetworkName)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("network update args = %#v, want %#v", got, want)
+	}
+
+	want = []string{
+		"--network-add", legacyPreviewIngressNetworkName,
+		"--network-rm", "custom_obiente-network",
+	}
+	got = swarmServiceNetworkUpdateArgs([]string{"custom_obiente-network"}, legacyPreviewIngressNetworkName)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("network migration args = %#v, want %#v", got, want)
+	}
+}
+
+func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
+	t.Parallel()
+	first := PreviewIngressNetworkNameForDeployment("preview-one")
+	second := PreviewIngressNetworkNameForDeployment("preview-two")
+	if first == second || first == legacyPreviewIngressNetworkName || second == legacyPreviewIngressNetworkName {
+		t.Fatalf("preview ingress networks are not isolated: first=%q second=%q", first, second)
+	}
+}
 
 func TestSwarmMemoryReservation(t *testing.T) {
 	t.Parallel()

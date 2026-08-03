@@ -69,30 +69,34 @@ type Deployment struct {
 // derived from a source deployment. Secret-bearing values are allowlisted by
 // name and are never copied to fork previews.
 type PullRequestDeploymentConfig struct {
-	DeploymentID             string    `gorm:"primaryKey;column:deployment_id" json:"deployment_id"`
-	OrganizationID           string    `gorm:"index;not null" json:"organization_id"`
-	Enabled                  bool      `gorm:"not null;default:false" json:"enabled"`
-	BaseBranches             string    `gorm:"type:jsonb;not null;default:'[]'" json:"base_branches"`
-	IncludePaths             string    `gorm:"type:jsonb;not null;default:'[]'" json:"include_paths"`
-	ExcludePaths             string    `gorm:"type:jsonb;not null;default:'[]'" json:"exclude_paths"`
-	DeployDrafts             bool      `gorm:"not null;default:false" json:"deploy_drafts"`
-	RedeployOnPush           bool      `gorm:"not null" json:"redeploy_on_push"`
-	CleanupOnClose           bool      `gorm:"not null" json:"cleanup_on_close"`
-	CommentEnabled           bool      `gorm:"not null" json:"comment_enabled"`
-	DeploymentStatusEnabled  bool      `gorm:"not null" json:"deployment_status_enabled"`
-	CheckRunEnabled          bool      `gorm:"not null" json:"check_run_enabled"`
-	DomainTemplate           string    `gorm:"not null;default:'pr-{pr}-{deployment}'" json:"domain_template"`
-	MaxActivePreviews        int32     `gorm:"not null;default:5" json:"max_active_previews"`
-	TTLHours                 int32     `gorm:"not null;default:72" json:"ttl_hours"`
-	RestoredPreviewTTLHours  int32     `gorm:"not null;default:4" json:"restored_preview_ttl_hours"`
-	ForkPolicy               int32     `gorm:"not null;default:1" json:"fork_policy"`
-	EnvironmentVariableNames string    `gorm:"type:jsonb;not null;default:'[]'" json:"environment_variable_names"`
-	BuildArgumentNames       string    `gorm:"type:jsonb;not null;default:'[]'" json:"build_argument_names"`
-	RequireApproval          bool      `gorm:"not null;default:false" json:"require_approval"`
-	ApprovalCoversUpdates    bool      `gorm:"not null;default:false" json:"approval_covers_updates"`
-	ReconciliationPending    bool      `gorm:"index;not null;default:false" json:"reconciliation_pending"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+	DeploymentID             string     `gorm:"primaryKey;column:deployment_id" json:"deployment_id"`
+	OrganizationID           string     `gorm:"index;not null" json:"organization_id"`
+	Enabled                  bool       `gorm:"not null;default:false" json:"enabled"`
+	BaseBranches             string     `gorm:"type:jsonb;not null;default:'[]'" json:"base_branches"`
+	IncludePaths             string     `gorm:"type:jsonb;not null;default:'[]'" json:"include_paths"`
+	ExcludePaths             string     `gorm:"type:jsonb;not null;default:'[]'" json:"exclude_paths"`
+	DeployDrafts             bool       `gorm:"not null;default:false" json:"deploy_drafts"`
+	RedeployOnPush           bool       `gorm:"not null" json:"redeploy_on_push"`
+	CleanupOnClose           bool       `gorm:"not null" json:"cleanup_on_close"`
+	CommentEnabled           bool       `gorm:"not null" json:"comment_enabled"`
+	DeploymentStatusEnabled  bool       `gorm:"not null" json:"deployment_status_enabled"`
+	CheckRunEnabled          bool       `gorm:"not null" json:"check_run_enabled"`
+	DomainTemplate           string     `gorm:"not null;default:'pr-{pr}-{deployment}'" json:"domain_template"`
+	MaxActivePreviews        int32      `gorm:"not null;default:5" json:"max_active_previews"`
+	TTLHours                 int32      `gorm:"not null;default:72" json:"ttl_hours"`
+	RestoredPreviewTTLHours  int32      `gorm:"not null;default:4" json:"restored_preview_ttl_hours"`
+	ForkPolicy               int32      `gorm:"not null;default:1" json:"fork_policy"`
+	EnvironmentVariableNames string     `gorm:"type:jsonb;not null;default:'[]'" json:"environment_variable_names"`
+	BuildArgumentNames       string     `gorm:"type:jsonb;not null;default:'[]'" json:"build_argument_names"`
+	RequireApproval          bool       `gorm:"not null;default:false" json:"require_approval"`
+	ApprovalCoversUpdates    bool       `gorm:"not null;default:false" json:"approval_covers_updates"`
+	ReconciliationPending    bool       `gorm:"index;not null;default:false" json:"reconciliation_pending"`
+	ReconciliationGeneration int64      `gorm:"not null;default:0" json:"reconciliation_generation"`
+	ReconciliationAttempts   int32      `gorm:"not null;default:0" json:"reconciliation_attempts"`
+	NextReconciliationAt     *time.Time `gorm:"index" json:"next_reconciliation_at"`
+	OpenPullRequestsSyncedAt *time.Time `gorm:"index" json:"open_pull_requests_synced_at"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
 }
 
 func (PullRequestDeploymentConfig) TableName() string { return "pull_request_deployment_configs" }
@@ -117,6 +121,7 @@ type PullRequestDeployment struct {
 	FromFork             bool       `gorm:"not null;default:false" json:"from_fork"`
 	Merged               bool       `gorm:"not null;default:false" json:"merged"`
 	Status               int32      `gorm:"index;not null" json:"status"`
+	IsolationVersion     int32      `gorm:"index;not null;default:0" json:"isolation_version"`
 	EnvironmentURL       *string    `json:"environment_url"`
 	Error                *string    `gorm:"type:text" json:"error"`
 	GitHubDeploymentID   *int64     `json:"github_deployment_id"`
@@ -132,6 +137,7 @@ type PullRequestDeployment struct {
 	ApprovedAt           *time.Time `json:"approved_at"`
 	ExpiresAt            time.Time  `gorm:"index;not null" json:"expires_at"`
 	ClosedAt             *time.Time `gorm:"index" json:"closed_at"`
+	RestoredAt           *time.Time `gorm:"index" json:"restored_at"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 }
@@ -144,6 +150,7 @@ type DeploymentBuildControl struct {
 	DeploymentID      string     `gorm:"primaryKey" json:"deployment_id"`
 	BuildToken        string     `gorm:"index;not null" json:"build_token"`
 	OwnerNodeID       string     `gorm:"index" json:"owner_node_id"`
+	HeartbeatAt       *time.Time `gorm:"index" json:"heartbeat_at"`
 	CancelRequestedAt *time.Time `gorm:"index" json:"cancel_requested_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`

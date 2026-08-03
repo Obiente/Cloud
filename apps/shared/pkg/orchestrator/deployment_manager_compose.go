@@ -23,7 +23,11 @@ import (
 
 // Compose operations for deployments
 
-const PreviewIngressNetworkName = "obiente-preview-ingress"
+const legacyPreviewIngressNetworkName = "obiente-preview-ingress"
+
+func PreviewIngressNetworkNameForDeployment(deploymentID string) string {
+	return fmt.Sprintf("deployment-%s", deploymentID)
+}
 
 func composeUpArgs(projectName, composeFile string) []string {
 	return []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--build", "--pull", "always", "--force-recreate", "--remove-orphans"}
@@ -40,10 +44,11 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 // DeployIsolatedComposeFile routes an untrusted preview through a dedicated
 // ingress network that contains Traefik but no Obiente control-plane service.
 func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
-	if err := dm.ensureDeploymentNetwork(ctx, PreviewIngressNetworkName); err != nil {
+	ingressNetworkName := PreviewIngressNetworkNameForDeployment(deploymentID)
+	if err := dm.ensurePreviewIngressNetwork(ctx, ingressNetworkName); err != nil {
 		return fmt.Errorf("preview ingress network is required: %w", err)
 	}
-	return dm.deployComposeFile(ctx, deploymentID, composeYaml, PreviewIngressNetworkName)
+	return dm.deployComposeFile(ctx, deploymentID, composeYaml, ingressNetworkName)
 }
 
 func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) error {
@@ -179,16 +184,15 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		sanitizedYaml = labeledYaml
 	}
 
-	// If there are routing rules, add obiente-network to routed services for Traefik discovery
-	// This allows services with configured routes to be discovered by Traefik on the shared obiente-network
-	// while maintaining deployment isolation through the deployment-specific network
+	// If there are routing rules, connect routed services to the selected Traefik
+	// ingress network. Isolated previews reuse their deployment network here.
 	if len(routings) > 0 {
 		routedYaml, err := dm.addTraefikNetworkToRoutedServices(sanitizedYaml, routings, ingressNetworkName)
 		if err != nil {
 			logger.Warn("[DeploymentManager] Failed to add Traefik network to routed services: %v. Continuing with current YAML.", err)
 		} else {
 			sanitizedYaml = routedYaml
-			logger.Info("[DeploymentManager] Added obiente-network to %d routed services for Traefik discovery", len(routings))
+			logger.Info("[DeploymentManager] Connected %d routed services to the Traefik ingress network", len(routings))
 		}
 	}
 

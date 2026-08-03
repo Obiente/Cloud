@@ -36,7 +36,20 @@ const (
 	maxPRFilterCount          = 100
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
+	currentPRIsolationVersion = int32(1)
+	pendingPRIsolationVersion = int32(-1)
 )
+
+type pullRequestSyncSource struct {
+	repositoryURL  string
+	integrationID  string
+	installationID int64
+}
+
+type isolationMigrationCandidate struct {
+	ID               string
+	IsolationVersion int32
+}
 
 func defaultPullRequestDeploymentConfig(deploymentID, organizationID string) *database.PullRequestDeploymentConfig {
 	now := time.Now()
@@ -74,11 +87,6 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 	if req.Msg.Config == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("pull request deployment config is required"))
 	}
-	var previous database.PullRequestDeploymentConfig
-	previousErr := database.DB.WithContext(ctx).Where("deployment_id = ?", deployment.ID).First(&previous).Error
-	if previousErr != nil && !errors.Is(previousErr, gorm.ErrRecordNotFound) {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load current pull request deployment settings: %w", previousErr))
-	}
 	config, err := sanitizePullRequestDeploymentConfig(deployment, req.Msg.Config)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -94,18 +102,64 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
 	}
-	reconciliationRequired := previousErr == nil && pullRequestConfigRequiresReconciliation(&previous, config)
-	config.ReconciliationPending = reconciliationRequired || (previousErr == nil && previous.ReconciliationPending)
-	if err := database.DB.WithContext(ctx).Save(config).Error; err != nil {
+	var previous database.PullRequestDeploymentConfig
+	var previousErr error
+	err = withDistributedLock(ctx, "pull-request-config:"+deployment.ID, func() error {
+		previousErr = database.DB.WithContext(ctx).Where("deployment_id = ?", deployment.ID).First(&previous).Error
+		if previousErr != nil && !errors.Is(previousErr, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("load current pull request deployment settings: %w", previousErr)
+		}
+		reconciliationRequired := (errors.Is(previousErr, gorm.ErrRecordNotFound) && config.Enabled) ||
+			(previousErr == nil && pullRequestConfigRequiresReconciliation(&previous, config))
+		if previousErr == nil {
+			config.CreatedAt = previous.CreatedAt
+			config.ReconciliationGeneration = previous.ReconciliationGeneration
+		}
+		if reconciliationRequired {
+			config.ReconciliationGeneration++
+		}
+		config.ReconciliationPending = reconciliationRequired || (previousErr == nil && previous.ReconciliationPending)
+		if reconciliationRequired {
+			now := time.Now()
+			config.ReconciliationAttempts = 0
+			config.NextReconciliationAt = &now
+			if config.Enabled {
+				config.OpenPullRequestsSyncedAt = nil
+			}
+		} else if previousErr == nil && previous.ReconciliationPending {
+			config.ReconciliationAttempts = previous.ReconciliationAttempts
+			config.NextReconciliationAt = previous.NextReconciliationAt
+			config.OpenPullRequestsSyncedAt = previous.OpenPullRequestsSyncedAt
+		} else if previousErr == nil {
+			config.OpenPullRequestsSyncedAt = previous.OpenPullRequestsSyncedAt
+		}
+		return database.DB.WithContext(ctx).Save(config).Error
+	})
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save pull request deployment settings: %w", err))
 	}
 	if config.ReconciliationPending {
-		if err := s.reconcilePullRequestDeploymentConfig(ctx, deployment, config); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were saved, but active previews could not all be reconciled: %w", err))
+		syncSource, reconcileErr := s.reconcilePullRequestDeploymentConfig(ctx, deployment, config)
+		if reconcileErr != nil {
+			if retryErr := schedulePullRequestReconciliationRetry(ctx, config); retryErr != nil {
+				reconcileErr = errors.Join(reconcileErr, retryErr)
+			}
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were saved, but active previews could not all be reconciled: %w", reconcileErr))
 		}
-		config.ReconciliationPending = false
-		if err := database.DB.WithContext(ctx).Model(config).Update("reconciliation_pending", false).Error; err != nil {
+		completed, err := completePullRequestReconciliation(ctx, config, syncSource)
+		if err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were reconciled, but completion could not be recorded: %w", err))
+		}
+		if completed {
+			config.ReconciliationPending = false
+			config.ReconciliationAttempts = 0
+			config.NextReconciliationAt = nil
+			if config.Enabled {
+				now := time.Now()
+				config.OpenPullRequestsSyncedAt = &now
+			}
+		} else if err := database.DB.WithContext(ctx).Where("deployment_id = ?", config.DeploymentID).First(config).Error; err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings changed during reconciliation and could not be reloaded: %w", err))
 		}
 	}
 	// Persist the disabled setting before retiring checks. Reporters that are
@@ -168,13 +222,10 @@ func pullRequestConfigRequiresReconciliation(previous, current *database.PullReq
 		previous.ApprovalCoversUpdates != current.ApprovalCoversUpdates
 }
 
-func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, source *database.Deployment, config *database.PullRequestDeploymentConfig) error {
+func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, source *database.Deployment, config *database.PullRequestDeploymentConfig) (*pullRequestSyncSource, error) {
 	var records []database.PullRequestDeployment
 	if err := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND closed_at IS NULL", source.ID).Order("id ASC").Find(&records).Error; err != nil {
-		return err
-	}
-	if len(records) == 0 {
-		return nil
+		return nil, err
 	}
 	// Make cleanup durable before any external Docker or GitHub operation. If
 	// this request or replica dies mid-reconciliation, the janitor will retry
@@ -184,24 +235,25 @@ func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, sour
 	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL", source.ID).
 		Updates(map[string]interface{}{"expires_at": now, "error": "Preview settings reconciliation is pending.", "updated_at": now}).Error; err != nil {
-		return fmt.Errorf("schedule durable settings reconciliation: %w", err)
+		return nil, fmt.Errorf("schedule durable settings reconciliation: %w", err)
 	}
 
 	integrationID, installationID := stringValue(source.GitHubIntegrationID), int64(0)
+	var syncSource *pullRequestSyncSource
 	if config.Enabled {
-		var integration database.GitHubIntegration
-		if err := database.DB.WithContext(ctx).Where("id = ?", integrationID).First(&integration).Error; err != nil {
-			return fmt.Errorf("load current GitHub App integration: %w", err)
+		var err error
+		syncSource, err = loadPullRequestSyncSource(ctx, source)
+		if err != nil {
+			return nil, err
 		}
-		if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
-			return fmt.Errorf("current GitHub App installation is unavailable")
-		}
-		installationID = *integration.GitHubAppInstallationID
+		integrationID, installationID = syncSource.integrationID, syncSource.installationID
 	}
 
 	var reconciliationErrors []error
+	processed := make(map[int64]struct{}, len(records))
 	for i := range records {
 		record := records[i]
+		reconciled := false
 		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", source.ID, record.Repository, record.PullRequestNumber)
 		if err := withDistributedLock(ctx, lockKey, func() error {
 			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
@@ -215,17 +267,128 @@ func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, sour
 			}
 			if !config.Enabled {
 				s.reportPullRequestDeployment(record.ID)
+				reconciled = true
 				return nil
 			}
 			payload := githubPullRequestWebhookPayload{Action: "reconcile", Number: record.PullRequestNumber}
 			payload.Installation.ID = installationID
 			payload.Repository.FullName = record.Repository
-			return s.processPullRequestWebhookLocked(ctx, *config, payload)
+			if err := s.processPullRequestWebhookLocked(ctx, *config, payload); err != nil {
+				return err
+			}
+			reconciled = true
+			return nil
 		}); err != nil {
 			reconciliationErrors = append(reconciliationErrors, fmt.Errorf("reconcile %s#%d: %w", record.Repository, record.PullRequestNumber, err))
+		} else if reconciled {
+			processed[record.PullRequestNumber] = struct{}{}
 		}
 	}
-	return errors.Join(reconciliationErrors...)
+	if config.Enabled {
+		if err := s.backfillOpenPullRequestsForConfig(ctx, source, config, syncSource, processed); err != nil {
+			reconciliationErrors = append(reconciliationErrors, err)
+		}
+	}
+	return syncSource, errors.Join(reconciliationErrors...)
+}
+
+func loadPullRequestSyncSource(ctx context.Context, source *database.Deployment) (*pullRequestSyncSource, error) {
+	if source == nil || source.RepositoryURL == nil || normalizeGitHubRepoFullName(*source.RepositoryURL) == "" {
+		return nil, fmt.Errorf("source deployment does not have a valid GitHub repository")
+	}
+	integrationID := stringValue(source.GitHubIntegrationID)
+	if integrationID == "" {
+		return nil, fmt.Errorf("current GitHub App integration is unavailable")
+	}
+	var integration database.GitHubIntegration
+	if err := database.DB.WithContext(ctx).Where("id = ?", integrationID).First(&integration).Error; err != nil {
+		return nil, fmt.Errorf("load current GitHub App integration: %w", err)
+	}
+	if integration.GitHubAppInstallationID == nil || *integration.GitHubAppInstallationID <= 0 {
+		return nil, fmt.Errorf("current GitHub App installation is unavailable")
+	}
+	return &pullRequestSyncSource{
+		repositoryURL:  stringValue(source.RepositoryURL),
+		integrationID:  integrationID,
+		installationID: *integration.GitHubAppInstallationID,
+	}, nil
+}
+
+func (s *Service) backfillOpenPullRequestsForConfig(ctx context.Context, source *database.Deployment, config *database.PullRequestDeploymentConfig, syncSource *pullRequestSyncSource, processed map[int64]struct{}) error {
+	if syncSource == nil {
+		return fmt.Errorf("current GitHub source is unavailable")
+	}
+	client, err := githubclient.NewInstallationClient(ctx, syncSource.installationID)
+	if err != nil {
+		return fmt.Errorf("create GitHub client for open pull request backfill: %w", err)
+	}
+	repository := ""
+	if source.RepositoryURL != nil {
+		repository = normalizeGitHubRepoFullName(*source.RepositoryURL)
+	}
+	if repository == "" {
+		return fmt.Errorf("source deployment does not have a valid GitHub repository")
+	}
+	openPullRequests, err := client.ListOpenPullRequests(ctx, repository)
+	if err != nil {
+		return fmt.Errorf("list existing open pull requests: %w", err)
+	}
+	var backfillErrors []error
+	for i := range openPullRequests {
+		pullRequest := openPullRequests[i]
+		if _, exists := processed[pullRequest.Number]; exists {
+			continue
+		}
+		payload := pullRequestWebhookPayloadFromGitHub(repository, syncSource.installationID, &pullRequest)
+		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", source.ID, repository, pullRequest.Number)
+		if processErr := withDistributedLock(ctx, "pull-request-source:"+source.ID, func() error {
+			currentSource, err := s.repo.GetByID(ctx, source.ID)
+			if err != nil {
+				return err
+			}
+			currentSyncSource, err := loadPullRequestSyncSource(ctx, currentSource)
+			if err != nil {
+				return err
+			}
+			if !pullRequestSyncSourcesEqual(currentSyncSource, syncSource) {
+				return fmt.Errorf("source repository or GitHub installation changed during open pull request discovery")
+			}
+			return withDistributedLock(ctx, lockKey, func() error {
+				var current database.PullRequestDeploymentConfig
+				if err := database.DB.WithContext(ctx).Where("deployment_id = ? AND enabled = ? AND reconciliation_generation = ?", config.DeploymentID, true, config.ReconciliationGeneration).First(&current).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						return nil
+					}
+					return err
+				}
+				return s.processPullRequestWebhookLocked(ctx, current, payload)
+			})
+		}); processErr != nil {
+			backfillErrors = append(backfillErrors, fmt.Errorf("backfill %s#%d: %w", repository, pullRequest.Number, processErr))
+		}
+	}
+	return errors.Join(backfillErrors...)
+}
+
+func pullRequestSyncSourcesEqual(left, right *pullRequestSyncSource) bool {
+	return left != nil && right != nil &&
+		left.repositoryURL == right.repositoryURL &&
+		left.integrationID == right.integrationID &&
+		left.installationID == right.installationID
+}
+
+func pullRequestWebhookPayloadFromGitHub(repository string, installationID int64, pullRequest *githubclient.PullRequest) githubPullRequestWebhookPayload {
+	payload := githubPullRequestWebhookPayload{Action: "reconcile", Number: pullRequest.Number}
+	payload.Installation.ID = installationID
+	payload.Repository.FullName = repository
+	payload.PullRequest.Draft = pullRequest.Draft
+	payload.PullRequest.Merged = pullRequest.Merged
+	payload.PullRequest.Head.SHA = pullRequest.Head.SHA
+	payload.PullRequest.Head.Ref = pullRequest.Head.Ref
+	payload.PullRequest.Head.Repo.FullName = pullRequest.Head.Repo.FullName
+	payload.PullRequest.Base.Ref = pullRequest.Base.Ref
+	payload.PullRequest.Base.Repo.FullName = pullRequest.Base.Repo.FullName
+	return payload
 }
 
 func (s *Service) detachPullRequestRuntimeForReconciliation(ctx context.Context, record *database.PullRequestDeployment, source *database.Deployment, enabled bool, integrationID string, installationID int64) error {
@@ -509,7 +672,7 @@ func (s *Service) RestorePullRequestDeployment(ctx context.Context, req *connect
 	expiresAt := now.Add(time.Duration(config.RestoredPreviewTTLHours) * time.Hour)
 	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("id = ? AND merged = ? AND closed_at IS NOT NULL AND active_head_sha IS NULL", record.ID, true).
-		Updates(map[string]interface{}{"preview_deployment_id": nil, "github_deployment_id": nil, "github_deployment_sha": nil, "github_check_run_id": nil, "github_check_run_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "closed_at": nil, "expires_at": expiresAt, "updated_at": now})
+		Updates(map[string]interface{}{"preview_deployment_id": nil, "github_deployment_id": nil, "github_deployment_sha": nil, "github_check_run_id": nil, "github_check_run_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "closed_at": nil, "restored_at": now, "expires_at": expiresAt, "updated_at": now})
 	if result.Error != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restore pull request environment: %w", result.Error))
 	}
@@ -875,7 +1038,7 @@ func (s *Service) deployPullRequestEnvironment(recordID string) {
 	record.UpdatedAt = time.Now()
 	updated := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("id = ? AND closed_at IS NULL AND active_head_sha = ? AND head_sha = ?", record.ID, record.HeadSHA, record.HeadSHA).
-		Updates(map[string]interface{}{"preview_deployment_id": preview.ID, "status": record.Status, "error": nil, "updated_at": record.UpdatedAt})
+		Updates(map[string]interface{}{"preview_deployment_id": preview.ID, "environment_url": record.EnvironmentURL, "status": record.Status, "error": nil, "updated_at": record.UpdatedAt})
 	if updated.Error != nil {
 		s.failPullRequestDeployment(ctx, &record, updated.Error)
 		return
@@ -928,14 +1091,13 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		if err := refreshPreviewDeployment(&created, source, config, record); err != nil {
 			return err
 		}
-		activeStatuses := []int32{int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)}
 		if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			var lockedConfig database.PullRequestDeploymentConfig
 			if lockErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("deployment_id").Where("deployment_id = ?", source.ID).First(&lockedConfig).Error; lockErr != nil {
 				return lockErr
 			}
-			var active int64
-			if countErr := tx.Model(&database.PullRequestDeployment{}).Where("source_deployment_id = ? AND id <> ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL AND status IN ?", source.ID, record.ID, activeStatuses).Count(&active).Error; countErr != nil {
+			active, countErr := countActivePullRequestPreviews(tx, source.ID, record.ID)
+			if countErr != nil {
 				return countErr
 			}
 			if active >= int64(config.MaxActivePreviews) {
@@ -972,6 +1134,24 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		return nil, fmt.Errorf("failed to reserve preview deployment: %w", err)
 	}
 	return preview, nil
+}
+
+func countActivePullRequestPreviews(db *gorm.DB, sourceDeploymentID, excludedRecordID string) (int64, error) {
+	activeStatuses := []int32{
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING),
+		int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+	}
+	var active int64
+	result := db.Model(&database.PullRequestDeployment{}).
+		Where(`source_deployment_id = ? AND id <> ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL
+			AND (status IN ? OR EXISTS (
+				SELECT 1 FROM deployment_locations
+				WHERE deployment_locations.deployment_id = pull_request_deployments.preview_deployment_id
+				  AND deployment_locations.status = ?
+			))`, sourceDeploymentID, excludedRecordID, activeStatuses, "running").
+		Count(&active)
+	return active, result.Error
 }
 
 func previewEnvironmentURL(ctx context.Context, preview *database.Deployment) (string, error) {
@@ -1211,6 +1391,7 @@ func refreshPreviewDeployment(preview, source *database.Deployment, config *data
 	preview.Branch = record.HeadRef
 	preview.CustomDomains = "[]"
 	preview.Groups = mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)})
+	preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
 	preview.DockerfileVolumes = "[]"
 	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
 	preview.HealthStatus = "pending"
@@ -1274,15 +1455,7 @@ func previewScopedVariables(source *database.Deployment, config *database.PullRe
 }
 
 func deploymentIsPullRequestPreview(deployment *database.Deployment) bool {
-	if deployment == nil {
-		return false
-	}
-	for _, group := range parseStringList(deployment.Groups) {
-		if group == "pull-request" {
-			return true
-		}
-	}
-	return false
+	return deployment != nil && deployment.Environment == int32(deploymentsv1.Environment_PULL_REQUEST)
 }
 
 func (s *Service) failPullRequestDeployment(ctx context.Context, record *database.PullRequestDeployment, err error) {
@@ -1324,6 +1497,9 @@ func (s *Service) updatePullRequestDeploymentRuntime(ctx context.Context, previe
 	}
 	terminal := status == deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING || status == deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED
 	updates := map[string]interface{}{"status": int32(status), "updated_at": time.Now()}
+	if status == deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING {
+		updates["isolation_version"] = currentPRIsolationVersion
+	}
 	if terminal {
 		updates["active_head_sha"] = nil
 	}
@@ -1402,6 +1578,8 @@ func (s *Service) cleanupPullRequestDeploymentsForSource(ctx context.Context, so
 
 func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 	go func() {
+		s.correctPullRequestPreviewEnvironments()
+		s.migrateLegacyPullRequestPreviewIsolation(ctx)
 		s.cleanupExpiredPullRequestDeployments(ctx)
 		s.retryPendingPullRequestReconciliations(ctx)
 		s.retryPendingPullRequestReports(ctx)
@@ -1416,11 +1594,124 @@ func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 			case <-cleanupTicker.C:
 				s.cleanupExpiredPullRequestDeployments(ctx)
 			case <-retryTicker.C:
+				s.correctPullRequestPreviewEnvironments()
+				s.migrateLegacyPullRequestPreviewIsolation(ctx)
 				s.retryPendingPullRequestReconciliations(ctx)
 				s.retryPendingPullRequestReports(ctx)
 			}
 		}
 	}()
+	go func() {
+		s.backfillExistingOpenPullRequests(ctx)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.backfillExistingOpenPullRequests(ctx)
+			}
+		}
+	}()
+}
+
+func (s *Service) correctPullRequestPreviewEnvironments() {
+	if err := database.BackfillPullRequestPreviewEnvironments(database.DB); err != nil {
+		logger.Warn("[PRDeployments] Failed to correct pull request preview environments during rolling update: %v", err)
+	}
+}
+
+func (s *Service) migrateLegacyPullRequestPreviewIsolation(ctx context.Context) {
+	const retryDelay = 5 * time.Minute
+	candidates, err := loadPullRequestIsolationMigrationCandidates(ctx, time.Now().Add(-retryDelay))
+	if err != nil {
+		logger.Warn("[PRDeployments] Failed to load legacy preview runtimes for network isolation migration: %v", err)
+		return
+	}
+	for _, candidate := range candidates {
+		if candidate.IsolationVersion == 0 {
+			marked := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+				Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status = ? AND isolation_version = ?", candidate.ID, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), int32(0)).
+				Update("isolation_version", pendingPRIsolationVersion)
+			if marked.Error != nil {
+				logger.Warn("[PRDeployments] Failed to mark preview %s for network isolation migration: %v", candidate.ID, marked.Error)
+				continue
+			}
+			if marked.RowsAffected != 1 {
+				continue
+			}
+		}
+		go s.deployPullRequestEnvironment(candidate.ID)
+	}
+}
+
+func loadPullRequestIsolationMigrationCandidates(ctx context.Context, retryBefore time.Time) ([]isolationMigrationCandidate, error) {
+	var candidates []isolationMigrationCandidate
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Select("pull_request_deployments.id, pull_request_deployments.isolation_version").
+		Joins("JOIN deployments AS preview ON preview.id = pull_request_deployments.preview_deployment_id").
+		Joins("JOIN pull_request_deployment_configs AS config ON config.deployment_id = pull_request_deployments.source_deployment_id").
+		Where("pull_request_deployments.closed_at IS NULL AND pull_request_deployments.active_head_sha IS NULL").
+		Where("(pull_request_deployments.isolation_version = ? AND pull_request_deployments.status = ?) OR (pull_request_deployments.isolation_version = ? AND pull_request_deployments.status IN ? AND pull_request_deployments.updated_at <= ?)",
+			int32(0), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+			pendingPRIsolationVersion,
+			[]int32{
+				int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+				int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED),
+			},
+			retryBefore).
+		Where("config.enabled = ?", true).
+		Where("preview.deleted_at IS NULL AND preview.environment = ?", int32(deploymentsv1.Environment_PULL_REQUEST)).
+		Order("pull_request_deployments.id ASC").Limit(25).
+		Scan(&candidates).Error; err != nil {
+		return nil, err
+	}
+	return candidates, nil
+}
+
+func (s *Service) backfillExistingOpenPullRequests(ctx context.Context) {
+	lastDeploymentID := ""
+	for {
+		var configs []database.PullRequestDeploymentConfig
+		query := database.DB.WithContext(ctx).
+			Where("enabled = ? AND open_pull_requests_synced_at IS NULL", true).
+			Order("deployment_id ASC").Limit(25)
+		if lastDeploymentID != "" {
+			query = query.Where("deployment_id > ?", lastDeploymentID)
+		}
+		if err := query.Find(&configs).Error; err != nil {
+			logger.Warn("[PRDeployments] Failed to load existing settings for open pull request backfill: %v", err)
+			return
+		}
+		if len(configs) == 0 {
+			return
+		}
+		for i := range configs {
+			config := configs[i]
+			lastDeploymentID = config.DeploymentID
+			source, err := s.repo.GetByID(ctx, config.DeploymentID)
+			if err != nil {
+				logger.Warn("[PRDeployments] Failed to load source %s for open pull request backfill: %v", config.DeploymentID, err)
+				continue
+			}
+			syncSource, err := loadPullRequestSyncSource(ctx, source)
+			if err != nil {
+				logger.Warn("[PRDeployments] GitHub integration is unavailable for open pull request backfill on %s", config.DeploymentID)
+				continue
+			}
+			if err := s.backfillOpenPullRequestsForConfig(ctx, source, &config, syncSource, nil); err != nil {
+				logger.Warn("[PRDeployments] Existing open pull request backfill failed for %s: %v", config.DeploymentID, err)
+				continue
+			}
+			if _, err := markOpenPullRequestsSynced(ctx, &config, syncSource); err != nil {
+				logger.Warn("[PRDeployments] Failed to record open pull request backfill for %s: %v", config.DeploymentID, err)
+			}
+		}
+		if len(configs) < 25 {
+			return
+		}
+	}
 }
 
 func (s *Service) retryPendingPullRequestReports(ctx context.Context) {
@@ -1438,11 +1729,50 @@ func (s *Service) retryPendingPullRequestReports(ctx context.Context) {
 	}
 }
 
+func pullRequestSyncSourceGuard(query *gorm.DB, syncSource *pullRequestSyncSource) *gorm.DB {
+	if syncSource == nil {
+		return query.Where("1 = 0")
+	}
+	return query.Where(`EXISTS (
+		SELECT 1
+		FROM deployments AS source
+		JOIN github_integrations AS integration ON integration.id = source.github_integration_id
+		WHERE source.id = pull_request_deployment_configs.deployment_id
+		  AND source.deleted_at IS NULL
+		  AND source.repository_url = ?
+		  AND source.github_integration_id = ?
+		  AND integration.github_app_installation_id = ?
+	)`, syncSource.repositoryURL, syncSource.integrationID, syncSource.installationID)
+}
+
+func markOpenPullRequestsSynced(ctx context.Context, config *database.PullRequestDeploymentConfig, syncSource *pullRequestSyncSource) (bool, error) {
+	query := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+		Where("deployment_id = ? AND enabled = ? AND open_pull_requests_synced_at IS NULL AND reconciliation_generation = ?", config.DeploymentID, true, config.ReconciliationGeneration)
+	result := pullRequestSyncSourceGuard(query, syncSource).Update("open_pull_requests_synced_at", time.Now())
+	return result.RowsAffected == 1, result.Error
+}
+
+func completePullRequestReconciliation(ctx context.Context, config *database.PullRequestDeploymentConfig, syncSource *pullRequestSyncSource) (bool, error) {
+	updates := map[string]interface{}{
+		"reconciliation_pending":  false,
+		"reconciliation_attempts": 0,
+		"next_reconciliation_at":  nil,
+	}
+	query := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+		Where("deployment_id = ? AND reconciliation_pending = ? AND reconciliation_generation = ?", config.DeploymentID, true, config.ReconciliationGeneration)
+	if config.Enabled {
+		query = pullRequestSyncSourceGuard(query.Where("enabled = ?", true), syncSource)
+		updates["open_pull_requests_synced_at"] = time.Now()
+	}
+	result := query.Updates(updates)
+	return result.RowsAffected == 1, result.Error
+}
+
 func (s *Service) retryPendingPullRequestReconciliations(ctx context.Context) {
 	var configs []database.PullRequestDeploymentConfig
 	if err := database.DB.WithContext(ctx).
-		Where("reconciliation_pending = ?", true).
-		Order("updated_at ASC, deployment_id ASC").
+		Where("reconciliation_pending = ? AND (next_reconciliation_at IS NULL OR next_reconciliation_at <= ?)", true, time.Now()).
+		Order("next_reconciliation_at ASC, deployment_id ASC").
 		Limit(25).
 		Find(&configs).Error; err != nil {
 		logger.Warn("[PRDeployments] Failed to load pending settings reconciliations: %v", err)
@@ -1453,18 +1783,36 @@ func (s *Service) retryPendingPullRequestReconciliations(ctx context.Context) {
 		source, err := s.repo.GetByID(ctx, config.DeploymentID)
 		if err != nil {
 			logger.Warn("[PRDeployments] Failed to load source %s for pending settings reconciliation: %v", config.DeploymentID, err)
+			if retryErr := schedulePullRequestReconciliationRetry(ctx, &config); retryErr != nil {
+				logger.Warn("[PRDeployments] Failed to advance settings reconciliation retry for %s: %v", config.DeploymentID, retryErr)
+			}
 			continue
 		}
-		if err := s.reconcilePullRequestDeploymentConfig(ctx, source, &config); err != nil {
-			logger.Warn("[PRDeployments] Pending settings reconciliation failed for %s: %v", config.DeploymentID, err)
+		syncSource, reconcileErr := s.reconcilePullRequestDeploymentConfig(ctx, source, &config)
+		if reconcileErr != nil {
+			logger.Warn("[PRDeployments] Pending settings reconciliation failed for %s: %v", config.DeploymentID, reconcileErr)
+			if retryErr := schedulePullRequestReconciliationRetry(ctx, &config); retryErr != nil {
+				logger.Warn("[PRDeployments] Failed to advance settings reconciliation retry for %s: %v", config.DeploymentID, retryErr)
+			}
 			continue
 		}
-		if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
-			Where("deployment_id = ? AND reconciliation_pending = ?", config.DeploymentID, true).
-			Update("reconciliation_pending", false).Error; err != nil {
+		if _, err := completePullRequestReconciliation(ctx, &config, syncSource); err != nil {
 			logger.Warn("[PRDeployments] Failed to complete settings reconciliation for %s: %v", config.DeploymentID, err)
 		}
 	}
+}
+
+func schedulePullRequestReconciliationRetry(ctx context.Context, config *database.PullRequestDeploymentConfig) error {
+	attempts := config.ReconciliationAttempts + 1
+	next := time.Now().Add(pullRequestReportRetryDelay(attempts))
+	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+		Where("deployment_id = ? AND reconciliation_pending = ? AND reconciliation_generation = ?", config.DeploymentID, true, config.ReconciliationGeneration).
+		Updates(map[string]interface{}{"reconciliation_attempts": attempts, "next_reconciliation_at": next, "updated_at": time.Now()})
+	if result.Error == nil && result.RowsAffected == 1 {
+		config.ReconciliationAttempts = attempts
+		config.NextReconciliationAt = &next
+	}
+	return result.Error
 }
 
 func (s *Service) cleanupExpiredPullRequestDeployments(parent context.Context) {
@@ -1663,16 +2011,24 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	payload.PullRequest.Draft, payload.PullRequest.Merged = live.Draft, live.Merged
 	payload.PullRequest.Head.SHA, payload.PullRequest.Head.Ref, payload.PullRequest.Head.Repo.FullName = live.Head.SHA, live.Head.Ref, live.Head.Repo.FullName
 	payload.PullRequest.Base.Ref, payload.PullRequest.Base.Repo.FullName = live.Base.Ref, live.Base.Repo.FullName
-	if payload.Action == "reconcile" && live.State == "closed" {
-		payload.Action = "closed"
-	}
+	reconcilingClosedPullRequest := payload.Action == "reconcile" && live.State == "closed"
 	var existing database.PullRequestDeployment
 	existingErr := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND repository = ? AND pull_request_number = ?", config.DeploymentID, repository, payload.Number).First(&existing).Error
 	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("load existing pull request state: %w", existingErr)
 	}
+	reconcilingRestoredPreview := existingErr == nil && pullRequestReconciliationPreservesRestoredPreview(&existing, payload.Action, live.State, payload.PullRequest.Head.SHA)
+	if reconcilingClosedPullRequest && !reconcilingRestoredPreview {
+		payload.Action = "closed"
+	}
 	if payload.Action == "closed" {
 		if existingErr == nil {
+			// A restored merged preview intentionally remains open until its short
+			// TTL expires. GitHub may redeliver the original close webhook after
+			// restoration; do not tear the restored revision down again.
+			if pullRequestCloseIsRestoredRedelivery(&existing, payload.PullRequest.Head.SHA) {
+				return nil
+			}
 			existing.Merged = payload.PullRequest.Merged
 			existing.UpdatedAt = time.Now()
 			if config.CleanupOnClose {
@@ -1741,6 +2097,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	}
 	record.GitHubIntegrationID = stringValue(source.GitHubIntegrationID)
 	record.GitHubInstallationID = payload.Installation.ID
+	restoredAt, restoredExpiresAt := record.RestoredAt, record.ExpiresAt
 	shaChanged := record.HeadSHA != "" && record.HeadSHA != payload.PullRequest.Head.SHA
 	revisionUnchanged := existingErr == nil && !shaChanged
 	if shaChanged && record.GitHubDeploymentID != nil {
@@ -1752,8 +2109,16 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
 	}
 	record.HeadSHA, record.IgnoredHeadSHA, record.HeadRef, record.BaseRef, record.FromFork, record.Draft = payload.PullRequest.Head.SHA, nil, headRef, baseRef, fromFork, payload.PullRequest.Draft
-	record.Merged = false
-	record.ExpiresAt, record.ClosedAt, record.UpdatedAt = now.Add(time.Duration(config.TTLHours)*time.Hour), nil, now
+	record.ClosedAt, record.UpdatedAt = nil, now
+	if reconcilingRestoredPreview {
+		record.Merged = true
+		record.RestoredAt = restoredAt
+		record.ExpiresAt = restoredExpiresAt
+	} else {
+		record.Merged = false
+		record.RestoredAt = nil
+		record.ExpiresAt = now.Add(time.Duration(config.TTLHours) * time.Hour)
+	}
 	if shaChanged && !config.ApprovalCoversUpdates {
 		record.ApprovedAt, record.ApprovedBy, record.ApprovedHeadSHA = nil, nil, nil
 	}
@@ -1821,6 +2186,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			"error":                  record.Error,
 			"expires_at":             record.ExpiresAt,
 			"closed_at":              nil,
+			"restored_at":            record.RestoredAt,
 			"updated_at":             record.UpdatedAt,
 		}
 		if reason != "" || record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL) {
@@ -1866,6 +2232,14 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		s.reportPullRequestDeployment(record.ID)
 	}
 	return nil
+}
+
+func pullRequestCloseIsRestoredRedelivery(record *database.PullRequestDeployment, headSHA string) bool {
+	return record != nil && record.RestoredAt != nil && record.Merged && record.ClosedAt == nil && record.HeadSHA == headSHA
+}
+
+func pullRequestReconciliationPreservesRestoredPreview(record *database.PullRequestDeployment, action, liveState, headSHA string) bool {
+	return action == "reconcile" && liveState == "closed" && pullRequestCloseIsRestoredRedelivery(record, headSHA)
 }
 
 func preserveIgnoredPullRequestRevision(record *database.PullRequestDeployment, existingErr error, config *database.PullRequestDeploymentConfig, observedHeadSHA, reason string) bool {
@@ -2100,7 +2474,7 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 			summary += "\n\n[Open preview](" + *record.EnvironmentURL + ")"
 		}
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED:
-		status, conclusion, title, summary = "completed", "failure", "Preview failed", "The preview did not deploy successfully. Open Obiente for build output."
+		status, conclusion, title, summary = "completed", "failure", "Preview failed", "The preview did not deploy successfully. Open Obiente Cloud for build output."
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED:
 		status, conclusion, title, summary = "completed", "skipped", "Preview not deployed", stringValue(record.Error)
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL:

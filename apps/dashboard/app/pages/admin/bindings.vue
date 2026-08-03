@@ -241,6 +241,7 @@ const environmentItems = [
   { label: "Production", value: "production" },
   { label: "Staging", value: "staging" },
   { label: "Development", value: "development" },
+  { label: "PR", value: "pull_request" },
 ];
 
 const orgClient = useConnectClient(OrganizationService);

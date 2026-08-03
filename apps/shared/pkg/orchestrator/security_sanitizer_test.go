@@ -18,6 +18,7 @@ func TestSanitizeUntrustedComposeYAMLRemovesHostControlOptions(t *testing.T) {
     pid: host
     ipc: host
     privileged: true
+    scale: 500
     network_mode: host
     volumes:
       - /etc:/host-etc
@@ -27,7 +28,7 @@ func TestSanitizeUntrustedComposeYAMLRemovesHostControlOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanitize untrusted compose: %v", err)
 	}
-	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:", "volumes:"} {
+	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:", "volumes:", "scale:"} {
 		if strings.Contains(filtered, forbidden) {
 			t.Fatalf("untrusted Compose retained %q:\n%s", forbidden, filtered)
 		}

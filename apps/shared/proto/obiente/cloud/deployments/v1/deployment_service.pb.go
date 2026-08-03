@@ -168,6 +168,7 @@ const (
 	Environment_PRODUCTION              Environment = 1
 	Environment_STAGING                 Environment = 2
 	Environment_DEVELOPMENT             Environment = 3
+	Environment_PULL_REQUEST            Environment = 4
 )
 
 // Enum value maps for Environment.
@@ -177,12 +178,14 @@ var (
 		1: "PRODUCTION",
 		2: "STAGING",
 		3: "DEVELOPMENT",
+		4: "PULL_REQUEST",
 	}
 	Environment_value = map[string]int32{
 		"ENVIRONMENT_UNSPECIFIED": 0,
 		"PRODUCTION":              1,
 		"STAGING":                 2,
 		"DEVELOPMENT":             3,
+		"PULL_REQUEST":            4,
 	}
 )
 
@@ -680,7 +683,7 @@ type CreateDeploymentRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Environment    Environment            `protobuf:"varint,3,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment" json:"environment,omitempty"` // Environment (production/staging/development)
+	Environment    Environment            `protobuf:"varint,3,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment" json:"environment,omitempty"` // User-managed environment (production/staging/development)
 	Groups         []string               `protobuf:"bytes,4,rep,name=groups,proto3" json:"groups,omitempty"`                                                          // Optional groups/labels for organizing deployments
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -905,7 +908,7 @@ type UpdateDeploymentRequest struct {
 	CustomDomains       []string               `protobuf:"bytes,9,rep,name=custom_domains,json=customDomains,proto3" json:"custom_domains,omitempty"`
 	Port                *int32                 `protobuf:"varint,10,opt,name=port,proto3,oneof" json:"port,omitempty"`
 	BuildStrategy       *BuildStrategy         `protobuf:"varint,11,opt,name=build_strategy,json=buildStrategy,proto3,enum=obiente.cloud.deployments.v1.BuildStrategy,oneof" json:"build_strategy,omitempty"` // build strategy enum
-	Environment         *Environment           `protobuf:"varint,15,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment,oneof" json:"environment,omitempty"`                            // Environment (production/staging/development)
+	Environment         *Environment           `protobuf:"varint,15,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment,oneof" json:"environment,omitempty"`                            // User-managed environment (production/staging/development)
 	Groups              []string               `protobuf:"bytes,16,rep,name=groups,proto3" json:"groups,omitempty"`                                                                                           // Optional groups/labels for organizing deployments
 	CpuLimit            *float64               `protobuf:"fixed64,22,opt,name=cpu_limit,json=cpuLimit,proto3,oneof" json:"cpu_limit,omitempty"`                                                               // CPU limit in cores
 	MemoryLimit         *int64                 `protobuf:"varint,23,opt,name=memory_limit,json=memoryLimit,proto3,oneof" json:"memory_limit,omitempty"`                                                       // Memory limit in MB
@@ -11450,13 +11453,14 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"DOCKERFILE\x10\x03\x12\x11\n" +
 	"\rPLAIN_COMPOSE\x10\x04\x12\x10\n" +
 	"\fCOMPOSE_REPO\x10\x06\x12\x0f\n" +
-	"\vSTATIC_SITE\x10\x05*X\n" +
+	"\vSTATIC_SITE\x10\x05*j\n" +
 	"\vEnvironment\x12\x1b\n" +
 	"\x17ENVIRONMENT_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
 	"PRODUCTION\x10\x01\x12\v\n" +
 	"\aSTAGING\x10\x02\x12\x0f\n" +
-	"\vDEVELOPMENT\x10\x03*\x85\x01\n" +
+	"\vDEVELOPMENT\x10\x03\x12\x10\n" +
+	"\fPULL_REQUEST\x10\x04*\x85\x01\n" +
 	"\x10DeploymentStatus\x12!\n" +
 	"\x1dDEPLOYMENT_STATUS_UNSPECIFIED\x10\x00\x12\v\n" +
 	"\aCREATED\x10\x01\x12\f\n" +

@@ -45,6 +45,18 @@ func TestForkPreviewNeverReceivesTemplateValues(t *testing.T) {
 	}
 }
 
+func TestPullRequestPreviewIdentityUsesProtectedEnvironment(t *testing.T) {
+	preview := &database.Deployment{Environment: int32(deploymentsv1.Environment_PULL_REQUEST), Groups: `[]`}
+	if !deploymentIsPullRequestPreview(preview) {
+		t.Fatal("system-managed PR environment was not treated as an isolated preview")
+	}
+	preview.Environment = int32(deploymentsv1.Environment_PRODUCTION)
+	preview.Groups = `["pull-request"]`
+	if deploymentIsPullRequestPreview(preview) {
+		t.Fatal("mutable deployment group granted pull request preview isolation identity")
+	}
+}
+
 func TestPullRequestPathScope(t *testing.T) {
 	config := &database.PullRequestDeploymentConfig{IncludePaths: `["apps/web/**"]`, ExcludePaths: `["apps/web/docs/**"]`}
 	if !pullRequestFilesMatch([]githubclient.PullRequestFile{{Filename: "apps/web/src/main.ts"}}, config) {
@@ -160,6 +172,101 @@ func TestPullRequestConfigReconciliationTracksRuntimePolicies(t *testing.T) {
 	}
 }
 
+func TestStaleReconciliationCannotCompleteOrRescheduleNewGeneration(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	config := database.PullRequestDeploymentConfig{
+		DeploymentID: "source-generation", OrganizationID: "org", ReconciliationPending: true,
+		ReconciliationGeneration: 2, BaseBranches: `[]`, IncludePaths: `[]`, ExcludePaths: `[]`,
+		EnvironmentVariableNames: `[]`, BuildArgumentNames: `[]`, DomainTemplate: defaultPRDomainTemplate,
+	}
+	if err := db.Create(&config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+	stale := config
+	stale.ReconciliationGeneration = 1
+	if completed, err := completePullRequestReconciliation(t.Context(), &stale, nil); err != nil {
+		t.Fatalf("complete stale reconciliation: %v", err)
+	} else if completed {
+		t.Fatal("stale reconciliation completed a newer settings generation")
+	}
+	if err := schedulePullRequestReconciliationRetry(t.Context(), &stale); err != nil {
+		t.Fatalf("schedule stale reconciliation retry: %v", err)
+	}
+	var got database.PullRequestDeploymentConfig
+	if err := db.First(&got, "deployment_id = ?", config.DeploymentID).Error; err != nil {
+		t.Fatalf("reload pull request config: %v", err)
+	}
+	if !got.ReconciliationPending || got.ReconciliationAttempts != 0 || got.ReconciliationGeneration != 2 {
+		t.Fatalf("stale worker changed the current settings generation: %#v", got)
+	}
+}
+
+func TestOpenPullRequestSyncMarkerRequiresUnchangedSource(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	repository, replacement := "https://github.com/obiente/cloud", "https://github.com/obiente/website"
+	integrationID, installationID := "integration-sync", int64(42)
+	autoDeploy := false
+	source := testDeployment("source-sync", "Source", "org", "owner", time.Now(), &autoDeploy)
+	source.RepositoryURL, source.GitHubIntegrationID = &repository, &integrationID
+	integration := database.GitHubIntegration{ID: integrationID, GitHubAppInstallationID: &installationID}
+	config := database.PullRequestDeploymentConfig{
+		DeploymentID: source.ID, OrganizationID: source.OrganizationID, Enabled: true, ReconciliationGeneration: 1,
+		BaseBranches: `[]`, IncludePaths: `[]`, ExcludePaths: `[]`, EnvironmentVariableNames: `[]`, BuildArgumentNames: `[]`, DomainTemplate: defaultPRDomainTemplate,
+	}
+	if err := db.Create(&integration).Error; err != nil {
+		t.Fatalf("seed GitHub integration: %v", err)
+	}
+	if err := db.Create(source).Error; err != nil {
+		t.Fatalf("seed source deployment: %v", err)
+	}
+	if err := db.Create(&config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+	snapshot := &pullRequestSyncSource{repositoryURL: repository, integrationID: integrationID, installationID: installationID}
+	if err := db.Model(&database.Deployment{}).Where("id = ?", source.ID).Update("repository_url", replacement).Error; err != nil {
+		t.Fatalf("change source repository: %v", err)
+	}
+	if marked, err := markOpenPullRequestsSynced(t.Context(), &config, snapshot); err != nil {
+		t.Fatalf("mark open pull requests synced: %v", err)
+	} else if marked {
+		t.Fatal("old repository scan marked the replacement repository as synchronized")
+	}
+	var got database.PullRequestDeploymentConfig
+	if err := db.First(&got, "deployment_id = ?", config.DeploymentID).Error; err != nil {
+		t.Fatalf("reload pull request config: %v", err)
+	}
+	if got.OpenPullRequestsSyncedAt != nil {
+		t.Fatal("source-changing race persisted an invalid sync marker")
+	}
+}
+
+func TestActivePreviewCountExcludesFailedBuildWithoutRuntime(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	if err := db.AutoMigrate(&database.DeploymentLocation{}); err != nil {
+		t.Fatalf("migrate deployment locations: %v", err)
+	}
+	failedPreview, livePreview, buildingPreview := "preview-failed", "preview-live", "preview-building"
+	records := []database.PullRequestDeployment{
+		{ID: "pr-failed", SourceDeploymentID: "source-count", PreviewDeploymentID: &failedPreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 1, HeadSHA: strings.Repeat("a", 40), HeadRef: "failed", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED), ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "pr-live", SourceDeploymentID: "source-count", PreviewDeploymentID: &livePreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 2, HeadSHA: strings.Repeat("b", 40), HeadRef: "live", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED), ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "pr-building", SourceDeploymentID: "source-count", PreviewDeploymentID: &buildingPreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 3, HeadSHA: strings.Repeat("c", 40), HeadRef: "building", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	if err := db.Create(&records).Error; err != nil {
+		t.Fatalf("seed pull request deployments: %v", err)
+	}
+	location := database.DeploymentLocation{ID: "location-live", DeploymentID: livePreview, NodeID: "node", ContainerID: "container-live", Status: "running"}
+	if err := db.Create(&location).Error; err != nil {
+		t.Fatalf("seed live deployment location: %v", err)
+	}
+	active, err := countActivePullRequestPreviews(db, "source-count", "new-record")
+	if err != nil {
+		t.Fatalf("count active pull request previews: %v", err)
+	}
+	if active != 2 {
+		t.Fatalf("active pull request previews = %d, want live failed revision plus in-progress build", active)
+	}
+}
+
 func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	background, cancel := context.WithCancel(context.Background())
@@ -169,6 +276,7 @@ func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
 	autoDeploy := false
 	preview := testDeployment("preview-disable", "Preview", "org", "system", now, &autoDeploy)
 	preview.Groups = `["pull-request"]`
+	preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
 	if err := db.Create(preview).Error; err != nil {
 		t.Fatalf("seed preview deployment: %v", err)
 	}
@@ -231,6 +339,103 @@ func TestStaleRuntimeCallbackQueuesCurrentHeadWithoutOverwritingState(t *testing
 	}
 	if got.GitHubDeploymentID == nil || *got.GitHubDeploymentID != deploymentID || got.GitHubCheckRunID == nil || *got.GitHubCheckRunID != checkID || got.ApprovedHeadSHA == nil || *got.ApprovedHeadSHA != newHead {
 		t.Fatalf("stale callback overwrote unrelated current-revision fields: %#v", got)
+	}
+}
+
+func TestSuccessfulPreviewRuntimeRecordsIsolationMigration(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	background, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
+	head := strings.Repeat("a", 40)
+	record := database.PullRequestDeployment{
+		ID: "pr-isolation-version", SourceDeploymentID: "source", PreviewDeploymentID: stringPointer("preview-isolation"), OrganizationID: "org",
+		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 32,
+		HeadSHA: head, ActiveHeadSHA: &head, HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), IsolationVersion: pendingPRIsolationVersion, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+	service.updatePullRequestDeploymentRuntime(t.Context(), "preview-isolation", head, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+	var got database.PullRequestDeployment
+	if err := db.First(&got, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload pull request deployment: %v", err)
+	}
+	if got.IsolationVersion != currentPRIsolationVersion || got.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) {
+		t.Fatalf("successful preview did not record current isolation version: %#v", got)
+	}
+}
+
+func TestIsolationMigrationRetriesOnlyMarkedFailedPreviewsAfterDelay(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	now := time.Now().UTC()
+	config := defaultPullRequestDeploymentConfig("source-isolation", "org")
+	config.Enabled = true
+	if err := db.Create(config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+
+	type candidateSeed struct {
+		id               string
+		status           deploymentsv1.PullRequestDeploymentStatus
+		isolationVersion int32
+		updatedAt        time.Time
+	}
+	seeds := []candidateSeed{
+		{id: "retry-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now.Add(-10 * time.Minute)},
+		{id: "fresh-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now},
+		{id: "legacy-running", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, isolationVersion: 0, updatedAt: now},
+		{id: "ordinary-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: 0, updatedAt: now.Add(-10 * time.Minute)},
+	}
+	for index, seed := range seeds {
+		previewID := "preview-" + seed.id
+		preview := testDeployment(previewID, previewID, "org", "system", now, nil)
+		preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
+		if err := db.Create(preview).Error; err != nil {
+			t.Fatalf("seed preview deployment %s: %v", previewID, err)
+		}
+		record := &database.PullRequestDeployment{
+			ID: seed.id, SourceDeploymentID: config.DeploymentID, PreviewDeploymentID: &previewID, OrganizationID: "org",
+			GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: int64(index + 1),
+			HeadSHA: strings.Repeat("a", 40), HeadRef: "feature", BaseRef: "main", Status: int32(seed.status),
+			IsolationVersion: seed.isolationVersion, ExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: seed.updatedAt,
+		}
+		if err := db.Create(record).Error; err != nil {
+			t.Fatalf("seed pull request deployment %s: %v", seed.id, err)
+		}
+	}
+
+	candidates, err := loadPullRequestIsolationMigrationCandidates(t.Context(), now.Add(-5*time.Minute))
+	if err != nil {
+		t.Fatalf("load isolation migration candidates: %v", err)
+	}
+	got := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		got = append(got, candidate.ID)
+	}
+	want := []string{"legacy-running", "retry-failed"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("isolation migration candidates = %v, want %v", got, want)
+	}
+}
+
+func TestPullRequestSyncSourceComparisonIncludesRepositoryAndInstallation(t *testing.T) {
+	t.Parallel()
+
+	base := &pullRequestSyncSource{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 42}
+	if !pullRequestSyncSourcesEqual(base, &pullRequestSyncSource{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 42}) {
+		t.Fatal("identical pull request sources should match")
+	}
+	for _, changed := range []*pullRequestSyncSource{
+		{repositoryURL: "Obiente/Other", integrationID: "integration-1", installationID: 42},
+		{repositoryURL: "Obiente/Cloud", integrationID: "integration-2", installationID: 42},
+		{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 43},
+		nil,
+	} {
+		if pullRequestSyncSourcesEqual(base, changed) {
+			t.Fatalf("changed pull request source matched: %#v", changed)
+		}
 	}
 }
 
@@ -304,7 +509,7 @@ func TestPreviewRequestedResourcesMatchSourceRuntime(t *testing.T) {
 func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
 	buildCommand := "pnpm build"
 	port := int32(8080)
-	source := &database.Deployment{ID: "source", Name: "App", BuildStrategy: int32(deploymentsv1.BuildStrategy_NIXPACKS), BuildCommand: &buildCommand, Port: &port, EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
+	source := &database.Deployment{ID: "source", Name: "App", Environment: int32(deploymentsv1.Environment_PRODUCTION), BuildStrategy: int32(deploymentsv1.BuildStrategy_NIXPACKS), BuildCommand: &buildCommand, Port: &port, EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
 	preview := &database.Deployment{ID: "preview", BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE), EnvVars: `{"REMOVED_SECRET":"old"}`, BuildArgs: `{"REMOVED_TOKEN":"old"}`, EnvFileContent: "SECRET=old", DockerfileVolumes: `["/secret"]`}
 	config := &database.PullRequestDeploymentConfig{DomainTemplate: "pr-{pr}-{deployment}", EnvironmentVariableNames: `["PUBLIC"]`, BuildArgumentNames: `["SAFE"]`}
 	record := &database.PullRequestDeployment{PullRequestNumber: 31, HeadRef: "updated-head"}
@@ -320,6 +525,9 @@ func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
 	}
 	if preview.ID != "preview" || preview.BuildStrategy != source.BuildStrategy || preview.BuildCommand == nil || *preview.BuildCommand != buildCommand || preview.Port == nil || *preview.Port != port {
 		t.Fatalf("preview did not refresh the current source template: %#v", preview)
+	}
+	if preview.Environment != int32(deploymentsv1.Environment_PULL_REQUEST) {
+		t.Fatalf("preview inherited source environment %d instead of using the PR environment", preview.Environment)
 	}
 }
 
@@ -408,8 +616,12 @@ func TestComposePreviewEnvironmentIsInjectedLiterally(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inject Compose environment: %v", err)
 	}
-	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$$path") {
+	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$path") {
 		t.Fatalf("allowlisted Compose environment was not preserved literally:\n%s", got)
+	}
+	validation := composeValidationEnvironment(map[string]string{"PUBLIC_URL": "https://example.test/${MISSING?must-exist}"})
+	if validation["PUBLIC_URL"] != "https://example.test/$${MISSING?must-exist}" {
+		t.Fatalf("Compose validation value was not escaped exactly once: %q", validation["PUBLIC_URL"])
 	}
 }
 
@@ -454,6 +666,57 @@ func TestMergedPreviewRestoreRequiresRecordedApproval(t *testing.T) {
 	record.Merged = false
 	if pullRequestDeploymentCanRestore(record, config) {
 		t.Fatal("a closed unmerged pull request must not be restorable")
+	}
+}
+
+func TestRestoredMergedPreviewIgnoresDuplicateCloseDelivery(t *testing.T) {
+	now := time.Now()
+	record := &database.PullRequestDeployment{Merged: true, RestoredAt: &now, HeadSHA: strings.Repeat("a", 40)}
+	if !pullRequestCloseIsRestoredRedelivery(record, record.HeadSHA) {
+		t.Fatal("the original close delivery should not remove a restored merged preview")
+	}
+	if pullRequestCloseIsRestoredRedelivery(record, strings.Repeat("b", 40)) {
+		t.Fatal("a close delivery for a different revision must not be ignored")
+	}
+	record.RestoredAt = nil
+	if pullRequestCloseIsRestoredRedelivery(record, record.HeadSHA) {
+		t.Fatal("a normal open preview must still process close deliveries")
+	}
+}
+
+func TestInternalReconciliationPreservesRestoredMergedPreview(t *testing.T) {
+	now := time.Now()
+	record := &database.PullRequestDeployment{Merged: true, RestoredAt: &now, HeadSHA: strings.Repeat("a", 40)}
+	if !pullRequestReconciliationPreservesRestoredPreview(record, "reconcile", "closed", record.HeadSHA) {
+		t.Fatal("internal settings reconciliation should preserve an active restored preview")
+	}
+	if pullRequestReconciliationPreservesRestoredPreview(record, "closed", "closed", record.HeadSHA) {
+		t.Fatal("an external close delivery must remain distinguishable from internal reconciliation")
+	}
+}
+
+func TestStaleBuildControlRequiresExpiredHeartbeat(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-deploymentBuildHeartbeatInterval)
+	control := &database.DeploymentBuildControl{BuildToken: "active", HeartbeatAt: &recent, UpdatedAt: recent}
+	if deploymentBuildControlIsStale(control, now) {
+		t.Fatal("a recently heartbeating build was considered abandoned")
+	}
+	stale := now.Add(-deploymentBuildHeartbeatTimeout - time.Second)
+	control.HeartbeatAt = &stale
+	if !deploymentBuildControlIsStale(control, now) {
+		t.Fatal("an abandoned build token was not considered stale")
+	}
+	legacyRecent := now.Add(-deploymentBuildHeartbeatTimeout - time.Second)
+	control.HeartbeatAt = nil
+	control.UpdatedAt = legacyRecent
+	if deploymentBuildControlIsStale(control, now) {
+		t.Fatal("a pre-heartbeat build owner was stolen during the rolling-upgrade grace period")
+	}
+	legacyStale := now.Add(-deploymentBuildLegacyOwnerTimeout - time.Second)
+	control.UpdatedAt = legacyStale
+	if !deploymentBuildControlIsStale(control, now) {
+		t.Fatal("an abandoned pre-heartbeat build owner was never reclaimed")
 	}
 }
 
