@@ -2009,9 +2009,9 @@ func injectComposeServiceEnvironment(composeYaml string, values map[string]strin
 			return "", fmt.Errorf("service %s has an unsupported environment declaration", serviceName)
 		}
 		for key, value := range values {
-			// Compose treats dollar signs as interpolation even in generated YAML.
-			// Escape them so the allowlisted value reaches the container literally.
-			environment[key] = strings.ReplaceAll(value, "$", "$$")
+			// The normal Compose sanitizer performs the one required interpolation
+			// escape after this injected YAML is decoded.
+			environment[key] = value
 		}
 		service["environment"] = environment
 	}

@@ -754,6 +754,9 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			HealthcheckCustomCommand:  deployment.HealthcheckCustomCommand,
 			TargetNodeID:              targetNodeID,
 		}
+		if deploymentIsPullRequestPreview(deployment) {
+			cfg.NetworkName = orchestrator.PreviewIngressNetworkName
+		}
 
 		if deployment.Replicas != nil {
 			cfg.Replicas = int(*deployment.Replicas)

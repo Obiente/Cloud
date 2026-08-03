@@ -692,6 +692,13 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if err := s.repo.Update(ctx, dbDeployment); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update deployment: %w", err))
 	}
+	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
+		if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+			Where("deployment_id = ? AND enabled = ?", deploymentID, true).
+			Updates(map[string]interface{}{"open_pull_requests_synced_at": nil, "updated_at": time.Now()}).Error; err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("repository was updated, but existing pull requests could not be scheduled for discovery: %w", err))
+		}
+	}
 
 	// Return updated deployment
 	protoDeployment := dbDeploymentToProto(dbDeployment)
@@ -927,7 +934,11 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
 	}
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if targetNodeID != "" {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers, err := deleteDeploymentForwardHeaders(ctx, req, targetNodeID)
 		if err != nil {

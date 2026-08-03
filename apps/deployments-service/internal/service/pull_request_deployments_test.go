@@ -408,7 +408,7 @@ func TestComposePreviewEnvironmentIsInjectedLiterally(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inject Compose environment: %v", err)
 	}
-	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$$path") {
+	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$path") {
 		t.Fatalf("allowlisted Compose environment was not preserved literally:\n%s", got)
 	}
 }
@@ -454,6 +454,35 @@ func TestMergedPreviewRestoreRequiresRecordedApproval(t *testing.T) {
 	record.Merged = false
 	if pullRequestDeploymentCanRestore(record, config) {
 		t.Fatal("a closed unmerged pull request must not be restorable")
+	}
+}
+
+func TestRestoredMergedPreviewIgnoresDuplicateCloseDelivery(t *testing.T) {
+	now := time.Now()
+	record := &database.PullRequestDeployment{Merged: true, RestoredAt: &now, HeadSHA: strings.Repeat("a", 40)}
+	if !pullRequestCloseIsRestoredRedelivery(record, record.HeadSHA) {
+		t.Fatal("the original close delivery should not remove a restored merged preview")
+	}
+	if pullRequestCloseIsRestoredRedelivery(record, strings.Repeat("b", 40)) {
+		t.Fatal("a close delivery for a different revision must not be ignored")
+	}
+	record.RestoredAt = nil
+	if pullRequestCloseIsRestoredRedelivery(record, record.HeadSHA) {
+		t.Fatal("a normal open preview must still process close deliveries")
+	}
+}
+
+func TestStaleBuildControlRequiresExpiredHeartbeat(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-deploymentBuildHeartbeatInterval)
+	control := &database.DeploymentBuildControl{BuildToken: "active", HeartbeatAt: &recent, UpdatedAt: recent}
+	if deploymentBuildControlIsStale(control, now) {
+		t.Fatal("a recently heartbeating build was considered abandoned")
+	}
+	stale := now.Add(-deploymentBuildHeartbeatTimeout - time.Second)
+	control.HeartbeatAt = &stale
+	if !deploymentBuildControlIsStale(control, now) {
+		t.Fatal("an abandoned build token was not considered stale")
 	}
 }
 

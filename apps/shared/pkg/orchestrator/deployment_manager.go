@@ -58,6 +58,9 @@ type DeploymentConfig struct {
 	HealthcheckExpectedStatus *int32  // Expected HTTP status code (default: 200, used with HEALTHCHECK_HTTP)
 	HealthcheckCustomCommand  *string // Custom command (sanitized, used with HEALTHCHECK_CUSTOM)
 	TargetNodeID              string
+	// NetworkName overrides the platform control-plane network for isolated
+	// runtimes such as untrusted pull request previews.
+	NetworkName string
 }
 
 type DeploymentVolume struct {

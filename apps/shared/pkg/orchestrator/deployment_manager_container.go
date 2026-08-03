@@ -135,6 +135,41 @@ func existingSwarmServiceEnvNames(ctx context.Context, serviceName string) []str
 	return parseSwarmServiceEnvNames(output)
 }
 
+func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) []string {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.Networks}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var attachments []struct {
+		Target string `json:"Target"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output), &attachments); err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(attachments))
+	for _, attachment := range attachments {
+		if strings.TrimSpace(attachment.Target) == "" {
+			continue
+		}
+		inspect := exec.CommandContext(ctx, "docker", "network", "inspect", "--format", "{{.Name}}", attachment.Target)
+		name, inspectErr := inspect.Output()
+		if inspectErr == nil && strings.TrimSpace(string(name)) != "" {
+			names = append(names, strings.TrimSpace(string(name)))
+		}
+	}
+	return names
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func existingSwarmServiceUsesPlatformHealthcheck(ctx context.Context, serviceName string) bool {
 	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", `{{index .Spec.Labels "cloud.obiente.healthcheck_source"}}	{{json .Spec.TaskTemplate.ContainerSpec.Healthcheck.Test}}`, serviceName)
 	output, err := cmd.Output()
@@ -378,11 +413,19 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 
-	// Get the actual Swarm network name (may be prefixed with stack name)
-	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
-	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	// Traefik must discover the runtime on the same network the container joins.
+	runtimeNetworkName := strings.TrimSpace(config.NetworkName)
+	if runtimeNetworkName == "" {
+		runtimeNetworkName = dm.networkName
+	}
+	swarmNetworkName := runtimeNetworkName
+	if config.NetworkName == "" {
+		var err error
+		swarmNetworkName, err = dm.getSwarmNetworkName(ctx)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+			swarmNetworkName = "obiente_obiente-network"
+		}
 	}
 
 	// Generate Traefik labels from routing rules
@@ -641,7 +684,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			NanoCPUs:  nanoCPUs,         // Hard CPU limit (prevents exceeding allocated CPUs)
 		},
 		// SECURITY: Explicitly set network mode to bridge (default) to prevent host network access
-		NetworkMode: container.NetworkMode(dm.networkName),
+		NetworkMode: container.NetworkMode(runtimeNetworkName),
 		// SECURITY: Disable privileged mode to prevent container from gaining host access
 		Privileged: false,
 	}
@@ -649,7 +692,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	// Network configuration
 	networkConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{
-			dm.networkName: {},
+			runtimeNetworkName: {},
 		},
 	}
 
@@ -736,11 +779,16 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 
-	// Get the actual Swarm network name (may be prefixed with stack name)
-	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
-	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	// Get the actual Swarm network name unless the caller selected an isolated
+	// runtime network explicitly.
+	swarmNetworkName := strings.TrimSpace(config.NetworkName)
+	if swarmNetworkName == "" {
+		var err error
+		swarmNetworkName, err = dm.getSwarmNetworkName(ctx)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+			swarmNetworkName = "obiente_obiente-network"
+		}
 	}
 
 	// Generate Traefik labels from routing rules
@@ -1411,11 +1459,16 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 
-	// Get the actual Swarm network name (may be prefixed with stack name)
-	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
-	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	// Get the actual Swarm network name unless the caller selected an isolated
+	// runtime network explicitly.
+	sharedNetworkName, sharedNetworkErr := dm.getSwarmNetworkName(ctx)
+	if sharedNetworkErr != nil {
+		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", sharedNetworkErr)
+		sharedNetworkName = "obiente_obiente-network"
+	}
+	swarmNetworkName := strings.TrimSpace(config.NetworkName)
+	if swarmNetworkName == "" {
+		swarmNetworkName = sharedNetworkName
 	}
 
 	// Generate Traefik labels from routing rules
@@ -1469,6 +1522,15 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	// Build docker service update command
 	args := []string{"service", "update",
 		"--with-registry-auth=true", // Enable registry auth for private images
+	}
+	if config.NetworkName != "" && swarmNetworkName != sharedNetworkName {
+		existingNetworks := existingSwarmServiceNetworkNames(ctx, swarmServiceName)
+		if !containsString(existingNetworks, swarmNetworkName) {
+			args = append(args, "--network-add", swarmNetworkName)
+		}
+		if containsString(existingNetworks, sharedNetworkName) {
+			args = append(args, "--network-rm", sharedNetworkName)
+		}
 	}
 
 	// Update labels - Docker service update will merge labels

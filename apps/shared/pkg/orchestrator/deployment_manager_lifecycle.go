@@ -29,9 +29,16 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		logger.Warn("[DeploymentManager] Failed to apply plan limits: %v (continuing anyway)", err)
 	}
 
-	// Ensure network exists before creating containers (retry if it failed during initialization)
-	if err := dm.ensureNetwork(ctx); err != nil {
-		return fmt.Errorf("network is required but could not be created: %w", err)
+	// Untrusted previews use a dedicated ingress network and must never join the
+	// platform control-plane network.
+	var networkErr error
+	if config.NetworkName != "" {
+		networkErr = dm.ensureDeploymentNetwork(ctx, config.NetworkName)
+	} else {
+		networkErr = dm.ensureNetwork(ctx)
+	}
+	if networkErr != nil {
+		return fmt.Errorf("network is required but could not be created: %w", networkErr)
 	}
 
 	// Select best node for deployment
