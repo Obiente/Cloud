@@ -812,9 +812,9 @@ func parseCPUString(cpuStr string) float64 {
 	return cores
 }
 
-// addTraefikNetworkToRoutedServices adds obiente-network to services that have routing configured
-// This allows Traefik to discover and route to these services on the shared obiente-network
-// while maintaining deployment isolation through the deployment-specific network
+// addTraefikNetworkToRoutedServices connects routed services to the selected
+// ingress network. Isolated previews reuse their existing deployment network
+// when it already resolves to the same external Docker network.
 func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml string, routings []database.DeploymentRouting, ingressNetworkName string) (string, error) {
 	if ingressNetworkName == "" {
 		if utils.IsSwarmModeEnabled() {
@@ -832,6 +832,22 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
 		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
+	}
+	if _, ok := compose["networks"]; !ok {
+		compose["networks"] = make(map[string]interface{})
+	}
+	networks, ok := compose["networks"].(map[string]interface{})
+	if !ok {
+		networks = make(map[string]interface{})
+		compose["networks"] = networks
+	}
+	ingressNetworkKey := externalComposeNetworkKey(networks, ingressNetworkName)
+	if ingressNetworkKey == "" {
+		ingressNetworkKey = "obiente-network"
+		networks[ingressNetworkKey] = map[string]interface{}{
+			"external": true,
+			"name":     ingressNetworkName,
+		}
 	}
 
 	// Build a set of service names that have routing configured
@@ -853,14 +869,14 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 		}
 	}
 
-	// Add obiente-network to routed services
+	// Connect routed services to the logical key for the selected ingress network.
 	if services, ok := compose["services"].(map[string]interface{}); ok {
 		for serviceName, serviceData := range services {
 			if servicesToRoute[serviceName] {
 				if service, ok := serviceData.(map[string]interface{}); ok {
 					serviceNetworks := normalizeServiceNetworks(service)
-					if _, exists := serviceNetworks["obiente-network"]; !exists {
-						serviceNetworks["obiente-network"] = nil
+					if _, exists := serviceNetworks[ingressNetworkKey]; !exists {
+						serviceNetworks[ingressNetworkKey] = nil
 					}
 
 					if utils.IsSwarmModeEnabled() {
@@ -870,27 +886,10 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 					}
 
 					service["networks"] = serviceNetworks
-					logger.Debug("[DeploymentManager] Added obiente-network to routed service %s for Traefik discovery", serviceName)
+					logger.Debug("[DeploymentManager] Added ingress network %s to routed service %s for Traefik discovery", ingressNetworkKey, serviceName)
 				}
 			}
 		}
-	}
-
-	// Ensure obiente-network is defined in networks section
-	if _, ok := compose["networks"]; !ok {
-		compose["networks"] = make(map[string]interface{})
-	}
-
-	networks, ok := compose["networks"].(map[string]interface{})
-	if !ok {
-		networks = make(map[string]interface{})
-		compose["networks"] = networks
-	}
-
-	// Mark obiente-network as external (it already exists in the system)
-	networks["obiente-network"] = map[string]interface{}{
-		"external": true,
-		"name":     ingressNetworkName,
 	}
 
 	// Marshal back to YAML
@@ -900,4 +899,25 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 	}
 
 	return string(result), nil
+}
+
+func externalComposeNetworkKey(networks map[string]interface{}, externalName string) string {
+	if composeNetworkUsesExternalName(externalName, networks[externalName], externalName) {
+		return externalName
+	}
+	for logicalName, rawConfig := range networks {
+		if logicalName != externalName && composeNetworkUsesExternalName(logicalName, rawConfig, externalName) {
+			return logicalName
+		}
+	}
+	return ""
+}
+
+func composeNetworkUsesExternalName(logicalName string, rawConfig interface{}, externalName string) bool {
+	config, ok := rawConfig.(map[string]interface{})
+	if !ok || config["external"] != true {
+		return false
+	}
+	configuredName, _ := config["name"].(string)
+	return (configuredName == "" && logicalName == externalName) || configuredName == externalName
 }
