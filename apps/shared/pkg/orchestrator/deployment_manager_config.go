@@ -630,8 +630,11 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 
 	// Specify which network Traefik should use (prevents using ingress network IPs)
 	if networkName != "" {
-		labels["traefik.docker.network"] = networkName
-		labels["traefik.swarm.network"] = networkName
+		if utils.IsSwarmModeEnabled() {
+			labels["traefik.swarm.network"] = networkName
+		} else {
+			labels["traefik.docker.network"] = networkName
+		}
 	}
 
 	// Generate labels for each routing rule

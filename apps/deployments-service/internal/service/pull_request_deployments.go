@@ -36,9 +36,9 @@ const (
 	maxPRFilterCount          = 100
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
-	// Version 2 provisions durable routing rows for every preview build strategy,
-	// allowing the Swarm runtime to generate Traefik labels before deployment.
-	currentPRIsolationVersion = int32(2)
+	// Version 3 provisions durable routes and provider-specific Traefik network
+	// labels for every preview build strategy before deployment.
+	currentPRIsolationVersion = int32(3)
 	pendingPRIsolationVersion = int32(-1)
 )
 

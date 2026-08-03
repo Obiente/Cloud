@@ -72,17 +72,24 @@ func TestTraefikRouterPriority(t *testing.T) {
 }
 
 func TestGenerateTraefikLabelsSelectsIngressNetworkForDockerAndSwarm(t *testing.T) {
-	t.Parallel()
-
-	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
-		ServiceName: "default",
-		Domain:      "preview.example.com",
-	}}, nil, "deployment-preview-123")
-
-	for _, key := range []string{"traefik.docker.network", "traefik.swarm.network"} {
-		if got := labels[key]; got != "deployment-preview-123" {
-			t.Fatalf("%s = %q, want deployment-preview-123", key, got)
-		}
+	for _, tc := range []struct {
+		name, swarm, want, reject string
+	}{
+		{name: "Docker", swarm: "false", want: "traefik.docker.network", reject: "traefik.swarm.network"},
+		{name: "Swarm", swarm: "true", want: "traefik.swarm.network", reject: "traefik.docker.network"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ENABLE_SWARM", tc.swarm)
+			labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+				ServiceName: "default", Domain: "preview.example.com",
+			}}, nil, "deployment-preview-123")
+			if got := labels[tc.want]; got != "deployment-preview-123" {
+				t.Fatalf("%s = %q, want deployment-preview-123", tc.want, got)
+			}
+			if _, exists := labels[tc.reject]; exists {
+				t.Fatalf("mutually exclusive network label %s was also generated", tc.reject)
+			}
+		})
 	}
 }
 
