@@ -71,7 +71,41 @@ Edit `.env` with your configuration:
 - Set your domain name
 - Generate secrets for JWT and sessions
 
-### 4. Prepare All Nodes (Required)
+### 4. Configure Preview TLS DNS Credentials
+
+Traefik uses DNS-01 to obtain one wildcard certificate for `my.obiente.cloud`
+and `*.my.obiente.cloud`. This certificate covers both live pull request
+previews and the preview status page shown while a preview is not running.
+
+Choose any DNS provider supported by
+[lego](https://go-acme.github.io/lego/dns/), then set its provider code in
+`.env`:
+
+```bash
+PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
+```
+
+Create a protected file containing the environment variables required by that
+provider, one `NAME=value` entry per line. Use the variable names from the
+provider's lego documentation. Blank lines and lines beginning with `#` are
+allowed. Create one provider-neutral external Docker secret from that file:
+
+```bash
+docker secret create preview_dns_credentials /secure/path/preview-dns-credentials
+```
+
+Verify that the secret exists:
+
+```bash
+docker secret inspect preview_dns_credentials >/dev/null
+```
+
+The Traefik wrapper validates credential names and exports them without
+printing their values. Do not place provider credentials in `.env` or commit
+them to the repository. The deployment script stops before changing the stack
+if the provider or secret is missing.
+
+### 5. Prepare All Nodes (Required)
 
 The API service runs on **ALL nodes** (mode: global). You **must** create required directories on each node before deploying:
 
@@ -105,7 +139,7 @@ for node in manager-1 worker-1 worker-2; do
 done
 ```
 
-### 4.5. Configure Node Labels (Required for Non-HA)
+### 6. Configure Node Labels (Required for Non-HA)
 
 For non-HA deployments, you must label nodes to specify where database services should run. This gives you control over which nodes host PostgreSQL, TimescaleDB, and Redis.
 
@@ -146,7 +180,7 @@ docker node inspect <node-name-or-id> --pretty
 
 **Note:** You can use the same node for all database services, or distribute them across different nodes. The labels allow you to control placement precisely.
 
-### 5. Deploy the Stack
+### 7. Deploy the Stack
 
 Deploy to the Swarm cluster:
 

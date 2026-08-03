@@ -418,6 +418,11 @@ services:
   # Traefik - Dynamic reverse proxy with service discovery
   traefik:
     image: traefik:v3.6.1
+    environment:
+      PREVIEW_ACME_DNS_PROVIDER: ${PREVIEW_ACME_DNS_PROVIDER:-}
+    secrets:
+      - preview_dns_credentials
+    entrypoint: *traefik-dns-entrypoint
     command:
       - --api.dashboard=true
       - --api.insecure=false  # Use secure API (HTTPS only)
@@ -456,6 +461,11 @@ services:
       # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
       # Default: production (https://acme-v02.api.letsencrypt.org/directory)
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      # Wildcard certificate shared by PR state pages and live preview routers.
+      - --certificatesresolvers.previewdns.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.previewdns.acme.storage=/letsencrypt/acme-preview.json
+      - --certificatesresolvers.previewdns.acme.dnschallenge.provider=${PREVIEW_ACME_DNS_PROVIDER:-}
+      - --certificatesresolvers.previewdns.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --metrics.prometheus=true
       - --accesslog=true
       - --log.level=INFO
@@ -967,6 +977,9 @@ services:
         - "traefik.http.routers.preview-domain-fallback-secure.entrypoints=websecure"
         - "traefik.http.routers.preview-domain-fallback-secure.priority=1"
         - "traefik.http.routers.preview-domain-fallback-secure.tls=true"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.certresolver=previewdns"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].main=my.obiente.cloud"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].sans=*.my.obiente.cloud"
         - "traefik.http.routers.preview-domain-fallback-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
@@ -1563,6 +1576,8 @@ networks:
 # ============================================================================
 
 secrets:
+  preview_dns_credentials:
+    external: true
   ssh_proxy_host_key:
     external: true
     # This secret must be created before deploying the stack:

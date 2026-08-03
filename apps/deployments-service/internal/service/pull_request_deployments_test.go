@@ -598,8 +598,8 @@ func TestPreviewComposeRoutingUsesPreviewDomainAndSourceService(t *testing.T) {
 	if routing.DeploymentID != preview.ID || routing.Domain != preview.Domain || routing.ServiceName != "web" || routing.TargetPort != 8080 {
 		t.Fatalf("unexpected preview routing: %#v", routing)
 	}
-	if !routing.SSLEnabled || routing.SSLCertResolver != "letsencrypt" {
-		t.Fatalf("preview routing does not enable managed HTTPS: %#v", routing)
+	if !routing.SSLEnabled || routing.SSLCertResolver != "" {
+		t.Fatalf("preview routing does not rely on platform wildcard HTTPS: %#v", routing)
 	}
 	if routing.Protocol != "https" {
 		t.Fatalf("preview routing does not use the HTTPS entrypoint: %#v", routing)
@@ -628,6 +628,9 @@ func TestPreviewDockerfileRoutingUsesPreviewDomainAndSourcePort(t *testing.T) {
 	}
 	if routing.PathPrefix != "/docs" || routing.Protocol != "https" || !routing.SSLEnabled {
 		t.Fatalf("Dockerfile preview routing did not preserve the public route: %#v", routing)
+	}
+	if routing.SSLCertResolver != "" {
+		t.Fatalf("Dockerfile preview requested a per-PR certificate: %#v", routing)
 	}
 }
 

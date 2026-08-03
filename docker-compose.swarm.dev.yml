@@ -472,6 +472,9 @@ services:
         - "traefik.http.routers.preview-domain-fallback-secure.entrypoints=websecure"
         - "traefik.http.routers.preview-domain-fallback-secure.priority=1"
         - "traefik.http.routers.preview-domain-fallback-secure.tls=true"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.certresolver=previewdns"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].main=my.obiente.cloud"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].sans=*.my.obiente.cloud"
         - "traefik.http.routers.preview-domain-fallback-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
@@ -999,6 +1002,11 @@ services:
 
   traefik:
     image: traefik:v3.6.1
+    environment:
+      PREVIEW_ACME_DNS_PROVIDER: ${PREVIEW_ACME_DNS_PROVIDER:-}
+    secrets:
+      - preview_dns_credentials
+    entrypoint: *traefik-dns-entrypoint
     command:
       - --api.dashboard=true
       - --api.insecure=true  # Enable API on port 8080 directly
@@ -1033,6 +1041,11 @@ services:
       # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
       # Default: production (https://acme-v02.api.letsencrypt.org/directory)
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      # Wildcard certificate shared by PR state pages and live preview routers.
+      - --certificatesresolvers.previewdns.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.previewdns.acme.storage=/letsencrypt/acme-preview.json
+      - --certificatesresolvers.previewdns.acme.dnschallenge.provider=${PREVIEW_ACME_DNS_PROVIDER:-}
+      - --certificatesresolvers.previewdns.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       # Metrics
       - --metrics.prometheus=true
       # Logging
@@ -1317,3 +1330,7 @@ configs:
   # Init script to copy pg_hba.conf to PGDATA
   postgres_hba_init:
     file: ./scripts/internal/init-pg-hba.sh
+
+secrets:
+  preview_dns_credentials:
+    external: true

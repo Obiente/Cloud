@@ -676,6 +676,10 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			} else if routing.SSLCertResolver == "internal" {
 				// For internal SSL, don't set certresolver (let app handle it)
 				labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
+			} else {
+				// TLS can use a certificate already present in Traefik's default
+				// store, such as the platform wildcard certificate for PR previews.
+				labels["traefik.http.routers."+routerName+".tls"] = "true"
 			}
 		} else {
 			// HTTP-only: explicitly set web entrypoint and ensure no TLS labels

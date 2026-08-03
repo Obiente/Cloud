@@ -847,17 +847,23 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 
 ### Domain & SSL
 
-| Variable     | Type   | Default               | Required               |
-| ------------ | ------ | --------------------- | ---------------------- |
-| `DOMAIN`     | string | `obiente.example.com` | ❌                     |
-| `ACME_EMAIL` | string | -                     | ❌ (for Let's Encrypt) |
+| Variable                    | Type   | Default               | Required                        |
+| --------------------------- | ------ | --------------------- | ------------------------------- |
+| `DOMAIN`                    | string | `obiente.example.com` | ❌                              |
+| `ACME_EMAIL`                | string | -                     | ❌ (for Let's Encrypt)          |
+| `PREVIEW_ACME_DNS_PROVIDER` | string | -                     | ✅ (for pull request previews)  |
 
 **Example:**
 
 ```bash
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
+PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
 ```
+
+`PREVIEW_ACME_DNS_PROVIDER` accepts any DNS provider code supported by lego.
+Provider-specific credentials belong in the `preview_dns_credentials` Docker
+secret, not in `.env`.
 
 ### DNS Configuration
 

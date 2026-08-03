@@ -193,6 +193,11 @@ sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$
 # Bind mounts with relative paths must exist on every node, so we convert them to absolute paths
 sed -i "s|\\./monitoring/|${REPO_ROOT}/monitoring/|g" "$MERGED_COMPOSE"
 
+# DNS credentials are required before Traefik can obtain the wildcard
+# certificate used by PR preview domains and their always-on status pages.
+require_environment_variables PREVIEW_ACME_DNS_PROVIDER
+require_swarm_secrets preview_dns_credentials
+
 # Verify config files exist before deploying
 echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(

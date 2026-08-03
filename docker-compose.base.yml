@@ -5,6 +5,29 @@
 # This file is automatically included by all compose files using the 'include' feature
 # (Docker Compose v2.20+). This allows YAML anchors to work across files.
 
+# Load provider-specific DNS credentials from a provider-neutral Swarm secret.
+# The credential file contains NAME=value lines using the names expected by the
+# selected lego DNS provider. Values are exported without evaluating shell code.
+x-traefik-dns-entrypoint: &traefik-dns-entrypoint
+  - /bin/sh
+  - -ec
+  - |
+    credentials_file=/run/secrets/preview_dns_credentials
+    while IFS= read -r credential || [ -n "$$credential" ]; do
+      case "$$credential" in
+        ""|\#*) continue ;;
+        *=*) ;;
+        *) echo "Invalid preview DNS credential entry" >&2; exit 1 ;;
+      esac
+      credential_name=$${credential%%=*}
+      case "$$credential_name" in
+        ""|[0-9]*|*[!A-Za-z0-9_]*) echo "Invalid preview DNS credential name" >&2; exit 1 ;;
+      esac
+      export "$$credential"
+    done < "$$credentials_file"
+    exec /entrypoint.sh "$$@"
+  - traefik-dns-wrapper
+
 x-common-database: &common-database
   DB_HOST: ${DB_HOST:-postgres}
   DB_PORT: ${DB_PORT:-5432}

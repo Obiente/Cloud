@@ -113,6 +113,20 @@ func TestGenerateTraefikLabelsAddsPreviewFallback(t *testing.T) {
 	}
 }
 
+func TestGenerateTraefikLabelsEnablesTLSWithoutPerRouteResolver(t *testing.T) {
+	t.Parallel()
+	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+		ServiceName: "default", Domain: "pr-31-deployment-123.my.obiente.cloud", TargetPort: 3000,
+		Protocol: "https", SSLEnabled: true,
+	}}, nil, "deployment-preview-123")
+	if got := labels["traefik.http.routers.deployment-123.tls"]; got != "true" {
+		t.Fatalf("router TLS = %q, want true", got)
+	}
+	if _, exists := labels["traefik.http.routers.deployment-123.tls.certresolver"]; exists {
+		t.Fatal("wildcard-covered preview router requested a per-route certificate")
+	}
+}
+
 func TestGenerateTraefikLabelsDoesNotAddPreviewFallbackToOrdinaryDomain(t *testing.T) {
 	t.Parallel()
 	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
