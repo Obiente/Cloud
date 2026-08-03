@@ -135,6 +135,44 @@ func existingSwarmServiceEnvNames(ctx context.Context, serviceName string) []str
 	return parseSwarmServiceEnvNames(output)
 }
 
+func existingSwarmServiceUsesPlatformHealthcheck(ctx context.Context, serviceName string) bool {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", `{{index .Spec.Labels "cloud.obiente.healthcheck_source"}}	{{json .Spec.TaskTemplate.ContainerSpec.Healthcheck.Test}}`, serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Debug("[DeploymentManager] Failed to inspect health check for service %s: %v", serviceName, err)
+		return false
+	}
+	parts := strings.SplitN(strings.TrimSpace(string(output)), "\t", 2)
+	if len(parts) < 2 {
+		return false
+	}
+	var test []string
+	if err := json.Unmarshal([]byte(parts[1]), &test); err != nil {
+		return false
+	}
+	return isPlatformManagedHealthcheck(strings.TrimSpace(parts[0]), test)
+}
+
+func isPlatformManagedHealthcheck(source string, test []string) bool {
+	if source == "platform" {
+		return true
+	}
+	command := strings.ToLower(strings.Join(test, " "))
+	legacyOrGeneratedMarkers := []string{
+		"healthcheck_port=",
+		"healthcheck_url=",
+		"apk add --no-cache netcat",
+		"apt-get install -y -qq netcat",
+		"nc -z localhost",
+	}
+	for _, marker := range legacyOrGeneratedMarkers {
+		if strings.Contains(command, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func parseSwarmServiceEnvNames(output []byte) []string {
 	var env []string
 	if err := json.Unmarshal(bytes.TrimSpace(output), &env); err != nil {
@@ -216,6 +254,18 @@ func swarmDisableHealthcheckArgs() []string {
 	return []string{"--no-healthcheck"}
 }
 
+func swarmRestoreImageHealthcheckArgs() []string {
+	// An empty command and zero-valued timing fields remove the service-level
+	// override. The engine can then inherit the health check from the image.
+	return []string{
+		"--health-cmd", "",
+		"--health-interval", "0s",
+		"--health-timeout", "0s",
+		"--health-retries", "0",
+		"--health-start-period", "0s",
+	}
+}
+
 func safeHealthcheckPath(rawPath string) string {
 	rawPath = strings.TrimSpace(rawPath)
 	if rawPath == "" || len(rawPath) > 2048 || !strings.HasPrefix(rawPath, "/") || strings.Contains(rawPath, "\x00") {
@@ -233,7 +283,7 @@ func safeHealthcheckPath(rawPath string) string {
 
 func httpHealthcheckCommand(port int, rawPath string, expectedStatus int) string {
 	path := safeHealthcheckPath(rawPath)
-	return fmt.Sprintf(`sh -c 'url=http://127.0.0.1:%d%s; expected=%d; if command -v curl >/dev/null 2>&1; then status=$(curl -sS -o /dev/null -w "%%{http_code}" "$url") || exit 1; [ "$status" -eq "$expected" ]; elif command -v wget >/dev/null 2>&1; then status=$(wget --server-response --spider "$url" 2>&1 | awk "/HTTP\\//{code=\$2} END{print code}"); [ "$status" -eq "$expected" ]; elif command -v node >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" node -e "const http=require(\"http\"),u=process.env.HEALTHCHECK_URL,w=Number(process.env.HEALTHCHECK_STATUS);const r=http.get(u,x=>{x.resume();process.exit(x.statusCode===w?0:1)});r.setTimeout(5000,()=>r.destroy());r.on(\"error\",()=>process.exit(1))"; elif command -v python3 >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" python3 -c "import http.client,os,sys,urllib.parse;u=urllib.parse.urlsplit(os.environ[\"HEALTHCHECK_URL\"]);c=http.client.HTTPConnection(u.hostname,u.port,timeout=5);c.request(\"GET\",u.path or \"/\");r=c.getresponse();sys.exit(0 if r.status==int(os.environ[\"HEALTHCHECK_STATUS\"]) else 1)"; else echo "health check requires curl, wget, node, or python3" >&2; exit 1; fi'`, port, path, expectedStatus)
+	return fmt.Sprintf(`sh -c 'url=http://127.0.0.1:%d%s; expected=%d; if command -v curl >/dev/null 2>&1; then status=$(curl -sS -o /dev/null -w "%%{http_code}" "$url") || exit 1; [ "$status" -eq "$expected" ]; elif command -v wget >/dev/null 2>&1; then status=$(wget --server-response --spider "$url" 2>&1 | awk "/HTTP\\//{print \$2; exit}"); [ "$status" -eq "$expected" ]; elif command -v node >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" node -e "const http=require(\"http\"),u=process.env.HEALTHCHECK_URL,w=Number(process.env.HEALTHCHECK_STATUS);const r=http.get(u,x=>{x.resume();process.exit(x.statusCode===w?0:1)});r.setTimeout(5000,()=>r.destroy());r.on(\"error\",()=>process.exit(1))"; elif command -v python3 >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" python3 -c "import http.client,os,sys,urllib.parse;u=urllib.parse.urlsplit(os.environ[\"HEALTHCHECK_URL\"]);c=http.client.HTTPConnection(u.hostname,u.port,timeout=5);c.request(\"GET\",u.path or \"/\");r=c.getresponse();sys.exit(0 if r.status==int(os.environ[\"HEALTHCHECK_STATUS\"]) else 1)"; else echo "health check requires curl, wget, node, or python3" >&2; exit 1; fi'`, port, path, expectedStatus)
 }
 
 func tcpHealthcheckCommand(port int, allowMissingProbe bool) string {
@@ -817,6 +867,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				args = append(args, "--label", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Added TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
 			}
 
@@ -838,6 +889,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				args = append(args, "--label", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Added HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
 			}
 
@@ -850,6 +902,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				args = append(args, "--label", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Added custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
 			}
 
@@ -863,6 +916,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				args = append(args, "--label", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Added auto TCP health check for Swarm service %s on port %d (routing exists)", swarmServiceName, effectiveHealthCheckPort)
 			} else {
 				logger.Info("[DeploymentManager] No health check for Swarm service %s - type unspecified and no routing rules", swarmServiceName)
@@ -1463,6 +1517,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-start-period", "40s",
 				)
 				healthcheckConfigured = true
+				args = append(args, "--label-add", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Updated TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
 			}
 
@@ -1485,6 +1540,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-start-period", "40s",
 				)
 				healthcheckConfigured = true
+				args = append(args, "--label-add", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Updated HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
 			}
 
@@ -1498,6 +1554,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-start-period", "40s",
 				)
 				healthcheckConfigured = true
+				args = append(args, "--label-add", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Updated custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
 			}
 
@@ -1512,6 +1569,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-start-period", "40s",
 				)
 				healthcheckConfigured = true
+				args = append(args, "--label-add", "cloud.obiente.healthcheck_source=platform")
 				logger.Info("[DeploymentManager] Updated auto TCP health check for Swarm service %s on port %d (routing exists)", swarmServiceName, effectiveHealthCheckPort)
 			} else {
 				logger.Info("[DeploymentManager] No health check for Swarm service %s - type unspecified and no routing rules", swarmServiceName)
@@ -1519,8 +1577,17 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		}
 	}
 	if !healthcheckConfigured {
-		logger.Info("[DeploymentManager] Clearing health check for Swarm service %s because no active check is configured", swarmServiceName)
-		args = append(args, swarmDisableHealthcheckArgs()...)
+		if healthcheckType != 0 {
+			logger.Info("[DeploymentManager] Disabling health check for Swarm service %s because it is explicitly disabled or invalid", swarmServiceName)
+			args = append(args, swarmDisableHealthcheckArgs()...)
+			args = append(args, "--label-add", "cloud.obiente.healthcheck_source=disabled")
+		} else if existingSwarmServiceUsesPlatformHealthcheck(ctx, swarmServiceName) {
+			logger.Info("[DeploymentManager] Removing platform health check override for Swarm service %s and restoring the image-defined check", swarmServiceName)
+			args = append(args, swarmRestoreImageHealthcheckArgs()...)
+			args = append(args, "--label-add", "cloud.obiente.healthcheck_source=image")
+		} else {
+			logger.Info("[DeploymentManager] Preserving image-defined health check for Swarm service %s", swarmServiceName)
+		}
 	}
 
 	// Update resource limits

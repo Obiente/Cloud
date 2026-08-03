@@ -98,6 +98,22 @@ func TestSwarmDisableHealthcheckArgs(t *testing.T) {
 	}
 }
 
+func TestSwarmRestoreImageHealthcheckArgs(t *testing.T) {
+	t.Parallel()
+
+	got := swarmRestoreImageHealthcheckArgs()
+	want := []string{
+		"--health-cmd", "",
+		"--health-interval", "0s",
+		"--health-timeout", "0s",
+		"--health-retries", "0",
+		"--health-start-period", "0s",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("swarmRestoreImageHealthcheckArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestSwarmEnvUpdateArgsRemovesStaleEnv(t *testing.T) {
 	t.Parallel()
 
@@ -243,8 +259,59 @@ func TestHTTPHealthcheckCommandUsesSafePath(t *testing.T) {
 	if !strings.Contains(got, `awk "/HTTP\\//`) {
 		t.Fatalf("httpHealthcheckCommand() = %q, want a closed HTTP status regex", got)
 	}
+	if !strings.Contains(got, `{print \$2; exit}`) {
+		t.Fatalf("httpHealthcheckCommand() = %q, want wget to retain the initial response status", got)
+	}
 	if !strings.Contains(got, "http.client.HTTPConnection") {
 		t.Fatalf("httpHealthcheckCommand() = %q, want Python status handling that supports expected non-2xx responses", got)
+	}
+}
+
+func TestIsPlatformManagedHealthcheck(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		source string
+		test   []string
+		want   bool
+	}{
+		{
+			name:   "current platform label",
+			source: "platform",
+			test:   []string{"CMD-SHELL", "any command"},
+			want:   true,
+		},
+		{
+			name: "legacy generated tcp check",
+			test: []string{"CMD-SHELL", "HEALTHCHECK_PORT=4321 node -e 'probe'"},
+			want: true,
+		},
+		{
+			name: "legacy runtime package check",
+			test: []string{"CMD-SHELL", "apt-get install -y -qq netcat && nc -z localhost 4321"},
+			want: true,
+		},
+		{
+			name:   "disabled platform check",
+			source: "disabled",
+			want:   false,
+		},
+		{
+			name: "image defined check",
+			test: []string{"CMD-SHELL", "curl --fail http://localhost:8080/ready || exit 1"},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isPlatformManagedHealthcheck(test.source, test.test); got != test.want {
+				t.Fatalf("isPlatformManagedHealthcheck(%q, %q) = %t, want %t", test.source, test.test, got, test.want)
+			}
+		})
 	}
 }
 
