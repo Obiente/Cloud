@@ -51,6 +51,35 @@ func TestSanitizeUntrustedComposeYAMLRejectsInterpolation(t *testing.T) {
 	}
 }
 
+func TestSanitizeUntrustedComposeYAMLBoundsAggregateResources(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	filtered, err := sanitizer.SanitizeUntrustedComposeYAMLWithLimits(`services:
+  web:
+    image: nginx
+  worker:
+    image: alpine
+`, UntrustedComposeLimits{MaxServices: 2, TotalMemoryBytes: 1024, TotalCPUShares: 512})
+	if err != nil {
+		t.Fatalf("sanitize budgeted compose: %v", err)
+	}
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(filtered), &result); err != nil {
+		t.Fatalf("parse sanitized compose: %v", err)
+	}
+	services := result["services"].(map[string]interface{})
+	for name, raw := range services {
+		service := raw.(map[string]interface{})
+		deploy := service["deploy"].(map[string]interface{})
+		limits := deploy["resources"].(map[string]interface{})["limits"].(map[string]interface{})
+		if limits["memory"] != "512B" || limits["cpus"] != "0.250000" {
+			t.Fatalf("service %s limits = %#v", name, limits)
+		}
+	}
+	if _, err := sanitizer.SanitizeUntrustedComposeYAMLWithLimits("services:\n  one:\n    image: nginx\n  two:\n    image: nginx\n  three:\n    image: nginx\n", UntrustedComposeLimits{MaxServices: 2, TotalMemoryBytes: 1024, TotalCPUShares: 512}); err == nil {
+		t.Fatal("service count above the configured maximum should be rejected")
+	}
+}
+
 func TestSanitizeEnvironment_BooleanValues(t *testing.T) {
 	composeYaml := `version: '3.8'
 services:

@@ -109,8 +109,24 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		triggeredBy = userInfo.Id
 	}
 
+	// Claim build ownership before returning to the caller. Registering inside
+	// the goroutine lets two rapid requests start out of order and allows the
+	// older request to replace the newer request's token.
+	buildCtx, buildCancel := s.detachedContext(0)
+	buildToken, err := s.registerDeploymentBuild(buildCtx, deploymentID, buildCancel)
+	if err != nil {
+		buildCancel()
+		_ = s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+		return nil, connect.NewError(connect.CodeAborted, fmt.Errorf("failed to register deployment build: %w", err))
+	}
+	targetNodeID := orchestrator.TargetNodeFromContext(ctx)
+
 	// Start async rebuild with log streaming
 	go func() {
+		defer buildCancel()
+		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
+		buildCtx = orchestrator.WithTargetNode(buildCtx, targetNodeID)
+
 		// Recover from panics to ensure deployment status is always updated
 		defer func() {
 			if r := recover(); r != nil {
@@ -118,23 +134,11 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				// Ensure deployment status is updated even on panic
 				panicCtx, cancel := s.detachedContext(30 * time.Second)
 				defer cancel()
-				_ = s.repo.UpdateStatus(panicCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				if deploymentBuildIsCurrent(panicCtx, deploymentID, buildToken) {
+					_ = s.repo.UpdateStatus(panicCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				}
 			}
 		}()
-
-		buildCtx, buildCancel := s.detachedContext(0)
-		defer buildCancel()
-		buildToken, err := s.registerDeploymentBuild(buildCtx, deploymentID, buildCancel)
-		if err != nil {
-			logger.Error("[TriggerDeployment] Failed to register build for deployment %s: %v", deploymentID, err)
-			statusCtx, statusCancel := s.detachedContext(30 * time.Second)
-			defer statusCancel()
-			_ = s.repo.UpdateStatus(statusCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
-			s.updatePullRequestDeploymentRuntime(statusCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, "The build could not be safely started.")
-			return
-		}
-		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
-		buildCtx = orchestrator.WithTargetNode(buildCtx, orchestrator.TargetNodeFromContext(ctx))
 		buildStartTime := time.Now()
 		previewStatusFinalized := false
 		s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING, "")
@@ -759,6 +763,27 @@ func triggerDeploymentForwardHeaders(ctx context.Context, req *connect.Request[d
 		secret := strings.TrimSpace(os.Getenv(deploymentsInternalServiceSecretEnv))
 		if secret == "" {
 			return nil, fmt.Errorf("%s is required for cross-node automatic deployments", deploymentsInternalServiceSecretEnv)
+		}
+		headers[internalServiceSecretHeader] = secret
+		return headers, nil
+	}
+
+	if authorization := req.Header().Get("Authorization"); authorization != "" {
+		headers["Authorization"] = authorization
+	}
+	return headers, nil
+}
+
+func deleteDeploymentForwardHeaders(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest], targetNodeID string) (map[string]string, error) {
+	headers := map[string]string{
+		orchestrator.ForwardTargetNodeHeader: targetNodeID,
+	}
+
+	userInfo, _ := auth.GetUserFromContext(ctx)
+	if userInfo != nil && userInfo.Id == "system" {
+		secret := strings.TrimSpace(os.Getenv(deploymentsInternalServiceSecretEnv))
+		if secret == "" {
+			return nil, fmt.Errorf("%s is required for cross-node automatic deletion", deploymentsInternalServiceSecretEnv)
 		}
 		headers[internalServiceSecretHeader] = secret
 		return headers, nil

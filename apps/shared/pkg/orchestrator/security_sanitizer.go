@@ -15,6 +15,14 @@ type ComposeSanitizer struct {
 	safeBaseDir  string // Base directory where user volumes should be stored
 }
 
+const DefaultMaxUntrustedComposeServices = 8
+
+type UntrustedComposeLimits struct {
+	MaxServices      int
+	TotalMemoryBytes int64
+	TotalCPUShares   int64
+}
+
 // NewComposeSanitizer creates a new compose sanitizer for a deployment
 func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 	// Determine safe base directory for user volumes
@@ -102,6 +110,17 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 // sanitizer. It is used for pull request previews, where every byte of the
 // Compose file must be treated as attacker controlled.
 func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (string, error) {
+	return cs.SanitizeUntrustedComposeYAMLWithLimits(composeYaml, UntrustedComposeLimits{
+		MaxServices:      DefaultMaxUntrustedComposeServices,
+		TotalMemoryBytes: 512 * 1024 * 1024,
+		TotalCPUShares:   256,
+	})
+}
+
+// SanitizeUntrustedComposeYAMLWithLimits also divides a preview's reserved
+// runtime budget across all attacker-controlled services. This keeps the sum
+// of service limits within the quota reservation made for the preview row.
+func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAMLWithLimits(composeYaml string, budget UntrustedComposeLimits) (string, error) {
 	if containsUnescapedComposeInterpolation(composeYaml) {
 		return "", fmt.Errorf("environment interpolation is not allowed in pull request Compose files")
 	}
@@ -114,14 +133,29 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (st
 	if !ok || len(services) == 0 {
 		return "", fmt.Errorf("pull request Compose file must define at least one service")
 	}
+	if budget.MaxServices <= 0 {
+		budget.MaxServices = DefaultMaxUntrustedComposeServices
+	}
+	if len(services) > budget.MaxServices {
+		return "", fmt.Errorf("pull request Compose file defines %d services; at most %d are allowed", len(services), budget.MaxServices)
+	}
+	if budget.TotalMemoryBytes <= 0 || budget.TotalCPUShares <= 0 {
+		return "", fmt.Errorf("pull request Compose resource budget must include positive memory and CPU limits")
+	}
+	perServiceMemory := budget.TotalMemoryBytes / int64(len(services))
+	perServiceCPUShares := budget.TotalCPUShares / int64(len(services))
+	if perServiceMemory <= 0 || perServiceCPUShares <= 0 {
+		return "", fmt.Errorf("pull request Compose resource budget is too small for %d services", len(services))
+	}
 
 	dangerousServiceKeys := []string{
-		"build", "cap_add", "cap_drop", "cgroup", "cgroup_parent",
+		"build", "cap_add", "cap_drop", "cgroup", "cgroup_parent", "cpu_count",
+		"cpu_percent", "cpu_shares", "cpus",
 		"configs", "container_name", "credential_spec", "deploy", "develop",
 		"device_cgroup_rules", "devices", "env_file", "external_links",
 		"extra_hosts", "ipc", "isolation", "labels", "links", "network_mode",
 		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged",
-		"runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
+		"mem_limit", "mem_reservation", "memswap_limit", "runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
 		"userns_mode", "uts", "volumes", "volumes_from",
 	}
 	for serviceName, serviceData := range services {
@@ -135,6 +169,15 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (st
 		for _, key := range dangerousServiceKeys {
 			delete(service, key)
 		}
+		memoryLimit := fmt.Sprintf("%dB", perServiceMemory)
+		cpuLimit := fmt.Sprintf("%.6f", float64(perServiceCPUShares)/1024.0)
+		service["deploy"] = map[string]interface{}{
+			"resources": map[string]interface{}{
+				"limits": map[string]interface{}{"memory": memoryLimit, "cpus": cpuLimit},
+			},
+		}
+		service["mem_limit"] = memoryLimit
+		service["cpus"] = cpuLimit
 	}
 
 	// Only services and the optional version marker are carried forward. The

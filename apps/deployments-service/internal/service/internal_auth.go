@@ -56,8 +56,9 @@ func (i *InternalServiceAuthInterceptor) authenticateForwardedTrigger(ctx contex
 	if i.secret == "" || subtle.ConstantTimeCompare([]byte(secret), []byte(i.secret)) != 1 {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid internal service credentials"))
 	}
-	if procedure != deploymentsv1connect.DeploymentServiceTriggerDeploymentProcedure {
-		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("internal credentials are only accepted for deployment triggers"))
+	if procedure != deploymentsv1connect.DeploymentServiceTriggerDeploymentProcedure &&
+		procedure != deploymentsv1connect.DeploymentServiceDeleteDeploymentProcedure {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("internal credentials are only accepted for deployment triggers and runtime deletion"))
 	}
 	if strings.TrimSpace(targetNode) == "" {
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("internal deployment triggers require a forwarding target"))

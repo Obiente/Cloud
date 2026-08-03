@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 // ListDeployments lists all deployments for an organization
@@ -309,7 +311,11 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has edit permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if targetNodeID != "" {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -874,10 +880,27 @@ func cleanHealthcheckPath(rawPath string) (string, bool) {
 
 // DeleteDeployment deletes a deployment
 func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest]) (*connect.Response[deploymentsv1.DeleteDeploymentResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has delete permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
+	}
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers, err := deleteDeploymentForwardHeaders(ctx, req, targetNodeID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/DeleteDeployment", headers, &deploymentsv1.DeleteDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to forward deployment deletion: %w", err))
+		}
+		var response deploymentsv1.DeleteDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode deletion response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 	deleted := false
 	defer func() {
@@ -937,6 +960,29 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 
 	res := connect.NewResponse(&deploymentsv1.DeleteDeploymentResponse{Success: true})
 	return res, nil
+}
+
+func (s *Service) deploymentDeletionForwardTarget(ctx context.Context, deploymentID string) (string, error) {
+	var location database.DeploymentLocation
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Order("updated_at DESC").
+		First(&location).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to locate deployment runtime: %w", err)
+	}
+	if s.manager == nil {
+		return "", fmt.Errorf("deployment runtime is tracked on node %s, but the local orchestrator is unavailable", location.NodeID)
+	}
+	if location.NodeID == s.manager.GetNodeID() {
+		return "", nil
+	}
+	if s.forwarder == nil || !s.forwarder.CanForward(location.NodeID) {
+		return "", fmt.Errorf("deployment runtime is owned by node %s, but deletion cannot be forwarded", location.NodeID)
+	}
+	return location.NodeID, nil
 }
 
 // resolveUserDefaultOrgID returns a membership org id for the authenticated user, if any

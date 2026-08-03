@@ -173,3 +173,21 @@ func TestFindIssueCommentDoesNotAdoptUnownedMarker(t *testing.T) {
 		t.Fatalf("adopted unowned comment = %#v", comment)
 	}
 }
+
+func TestDeleteIssueCommentAcceptsDeletedOrAlreadyMissing(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodDelete || req.URL.Path != "/repos/obiente/cloud/issues/comments/42" {
+				t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+			}
+			w.WriteHeader(status)
+		}))
+		client := NewClient("token")
+		client.baseURL, client.httpClient = server.URL, server.Client()
+		if err := client.DeleteIssueComment(t.Context(), "obiente/cloud", 42); err != nil {
+			server.Close()
+			t.Fatalf("delete issue comment with status %d: %v", status, err)
+		}
+		server.Close()
+	}
+}

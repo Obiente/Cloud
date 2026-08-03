@@ -108,9 +108,11 @@ type PullRequestDeployment struct {
 	Repository           string     `gorm:"not null;uniqueIndex:idx_pr_deployment_source_repo_number" json:"repository"`
 	PullRequestNumber    int64      `gorm:"not null;uniqueIndex:idx_pr_deployment_source_repo_number" json:"pull_request_number"`
 	HeadSHA              string     `gorm:"index;not null" json:"head_sha"`
+	IgnoredHeadSHA       *string    `gorm:"index" json:"ignored_head_sha"`
 	ActiveHeadSHA        *string    `gorm:"index" json:"active_head_sha"`
 	HeadRef              string     `gorm:"not null" json:"head_ref"`
 	BaseRef              string     `gorm:"not null" json:"base_ref"`
+	Draft                bool       `gorm:"not null;default:false" json:"draft"`
 	FromFork             bool       `gorm:"not null;default:false" json:"from_fork"`
 	Merged               bool       `gorm:"not null;default:false" json:"merged"`
 	Status               int32      `gorm:"index;not null" json:"status"`

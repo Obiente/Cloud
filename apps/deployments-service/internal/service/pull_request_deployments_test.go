@@ -98,6 +98,26 @@ func TestUnchangedPullRequestWebhookPreservesExistingRuntimeState(t *testing.T) 
 	}
 }
 
+func TestIgnoredPushRevisionIsNotBuiltByLaterStateOnlyEvent(t *testing.T) {
+	ignored := strings.Repeat("b", 40)
+	record := &database.PullRequestDeployment{
+		HeadSHA:        strings.Repeat("a", 40),
+		IgnoredHeadSHA: &ignored,
+		Status:         int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+	}
+	config := &database.PullRequestDeploymentConfig{RedeployOnPush: false}
+	if !preserveIgnoredPullRequestRevision(record, nil, config, ignored, "") {
+		t.Fatal("a later state-only event must not deploy a revision ignored by RedeployOnPush=false")
+	}
+	if preserveIgnoredPullRequestRevision(record, nil, config, ignored, "the pull request is out of scope") {
+		t.Fatal("an eligibility change must still be allowed to remove an ignored revision's runtime")
+	}
+	record.Status = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED)
+	if preserveIgnoredPullRequestRevision(record, nil, config, ignored, "") {
+		t.Fatal("a newly eligible skipped preview must be allowed to deploy the current revision")
+	}
+}
+
 func TestApprovalMutationRejectsAStaleReviewedHead(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	oldHead, newHead := strings.Repeat("a", 40), strings.Repeat("b", 40)

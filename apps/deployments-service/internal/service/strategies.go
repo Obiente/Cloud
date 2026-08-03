@@ -1934,7 +1934,15 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 	}
 	if config.Untrusted {
 		sanitizer := orchestrator.NewComposeSanitizer(deployment.ID)
-		composeYaml, err = sanitizer.SanitizeUntrustedComposeYAML(composeYaml)
+		replicas := int64(1)
+		if deployment.Replicas != nil && *deployment.Replicas > 0 {
+			replicas = int64(*deployment.Replicas)
+		}
+		composeYaml, err = sanitizer.SanitizeUntrustedComposeYAMLWithLimits(composeYaml, orchestrator.UntrustedComposeLimits{
+			MaxServices:      orchestrator.DefaultMaxUntrustedComposeServices,
+			TotalMemoryBytes: config.MemoryBytes * replicas,
+			TotalCPUShares:   config.CPUShares * replicas,
+		})
 		if err != nil {
 			return &BuildResult{Success: false, Error: fmt.Errorf("unsafe pull request compose file: %w", err)}, nil
 		}

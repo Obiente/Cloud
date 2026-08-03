@@ -291,6 +291,39 @@ func (c *Client) UpdateIssueComment(ctx context.Context, repoFullName string, co
 	return c.doJSON(ctx, http.MethodPatch, requestURL, map[string]string{"body": body}, http.StatusOK, nil)
 }
 
+func (c *Client) DeleteIssueComment(ctx context.Context, repoFullName string, commentID int64) error {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return err
+	}
+	if commentID <= 0 {
+		return fmt.Errorf("GitHub comment ID is required")
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s/issues/comments/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, commentID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, requestURL, nil)
+	if err != nil {
+		return err
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := readGitHubAPIResponseBody(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return fmt.Errorf("GitHub API %s %s failed: %d - %s", http.MethodDelete, requestURL, resp.StatusCode, strings.TrimSpace(string(body)))
+}
+
 func (c *Client) doJSON(ctx context.Context, method, requestURL string, payload interface{}, expectedStatus int, target interface{}) error {
 	var bodyReader io.Reader
 	if payload != nil {
