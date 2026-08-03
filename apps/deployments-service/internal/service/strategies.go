@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,40 @@ import (
 // Swift, Scala, Zig
 // The detection is Rails-optimized, but the build can handle any supported language.
 type RailpackStrategy struct{}
+
+var dockerTagPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+
+// dockerImageTag keeps ordinary branch tags stable while converting refs such
+// as feat/example into a deterministic, collision-resistant Docker tag.
+func dockerImageTag(ref string) string {
+	if dockerTagPattern.MatchString(ref) {
+		return ref
+	}
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(ref)))[:12]
+	var cleaned strings.Builder
+	cleaned.Grow(len(ref))
+	lastDash := false
+	for _, r := range ref {
+		allowed := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.' || r == '-'
+		if !allowed {
+			r = '-'
+		}
+		if r == '-' && lastDash {
+			continue
+		}
+		cleaned.WriteRune(r)
+		lastDash = r == '-'
+	}
+	base := strings.Trim(cleaned.String(), ".-")
+	if base == "" {
+		base = "ref"
+	}
+	const maxBaseLength = 128 - 1 - 12
+	if len(base) > maxBaseLength {
+		base = strings.TrimRight(base[:maxBaseLength], ".-")
+	}
+	return base + "-" + digest
+}
 
 func NewRailpackStrategy() *RailpackStrategy {
 	return &RailpackStrategy{}
@@ -160,7 +195,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -910,7 +945,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -1731,7 +1766,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Use configured Dockerfile path or default to "Dockerfile"
 	dockerfile := config.DockerfilePath
@@ -2074,7 +2109,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	// Step 1: Use Railpack to build the application
 	// This will create an image with all dependencies and built files
-	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, deployment.Branch)
+	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	writeBuildLog := func(format string, args ...interface{}) {
 		msg := fmt.Sprintf(format, args...)
@@ -2310,7 +2345,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to write Dockerfile: %w", err)}, nil
 	}
 
-	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
 
 	// Build final minimal nginx image
 	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", nil, DockerfileBuildOptions{}, config.LogWriter, config.LogWriterErr); err != nil {

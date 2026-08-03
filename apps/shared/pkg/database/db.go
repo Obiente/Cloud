@@ -529,6 +529,15 @@ func InitDatabase() error {
 		}
 	}
 
+	// Pull request previews were exercised against production before every
+	// reporting/recovery field existed. Some installations can therefore have a
+	// valid older table that receives traffic during a rolling update. Add the
+	// nullable/defaulted compatibility columns explicitly before GORM inspects
+	// the models so no new replica can serve against that partial schema.
+	if err := ensurePullRequestPreviewCompatibilityColumns(db); err != nil {
+		return fmt.Errorf("failed to prepare pull request preview schema: %w", err)
+	}
+
 	// Auto-migrate the schema (build_logs is stored in TimescaleDB, not here)
 	if err := db.AutoMigrate(
 		&Deployment{},
@@ -597,6 +606,36 @@ func InitDatabase() error {
 	}
 
 	return nil
+}
+
+func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
+	statements := []string{
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS active_head_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_comment_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_id BIGINT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_pending BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS next_report_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_pending BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_attempts INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS next_reconciliation_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS open_pull_requests_synced_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS deployment_build_controls ADD COLUMN IF NOT EXISTS owner_node_id TEXT`,
+		`ALTER TABLE IF EXISTS deployment_build_controls ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ`,
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for _, statement := range statements {
+			if err := tx.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // InitAuditLogsTimescaleDB converts audit_logs table to TimescaleDB hypertable if available
