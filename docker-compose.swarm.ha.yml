@@ -506,7 +506,9 @@ services:
       mode: global  # Run on all nodes for HA and DNS to resolve properly
       update_config:
         parallelism: 1
-        order: start-first
+        # Host-published ports cannot be held by old and replacement tasks on
+        # the same node at once.
+        order: stop-first
       placement:
         constraints:
           - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
@@ -907,6 +909,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
+      STACK_NAME: __STACK_NAME__
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
       PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications, *common-dashboard]

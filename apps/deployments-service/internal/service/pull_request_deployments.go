@@ -231,11 +231,12 @@ func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, sour
 	// this request or replica dies mid-reconciliation, the janitor will retry
 	// every runtime that was still attached instead of preserving the old
 	// policy for its previous (potentially very long) TTL.
-	now := time.Now()
-	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
-		Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL", source.ID).
-		Updates(map[string]interface{}{"expires_at": now, "error": "Preview settings reconciliation is pending.", "updated_at": now}).Error; err != nil {
+	current, err := schedulePullRequestRuntimeReconciliation(ctx, config)
+	if err != nil {
 		return nil, fmt.Errorf("schedule durable settings reconciliation: %w", err)
+	}
+	if !current {
+		return nil, nil
 	}
 
 	integrationID, installationID := stringValue(source.GitHubIntegrationID), int64(0)
@@ -254,32 +255,46 @@ func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, sour
 	for i := range records {
 		record := records[i]
 		reconciled := false
+		superseded := false
 		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", source.ID, record.Repository, record.PullRequestNumber)
-		if err := withDistributedLock(ctx, lockKey, func() error {
-			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
+		configLockKey := "pull-request-config:" + source.ID
+		if err := withDistributedLock(ctx, configLockKey, func() error {
+			return withDistributedLock(ctx, lockKey, func() error {
+				currentConfig, current, err := currentPullRequestReconciliationConfig(ctx, config)
+				if err != nil {
+					return err
+				}
+				if !current {
+					superseded = true
 					return nil
 				}
-				return err
-			}
-			if err := s.detachPullRequestRuntimeForReconciliation(ctx, &record, source, config.Enabled, integrationID, installationID); err != nil {
-				return err
-			}
-			if !config.Enabled {
-				s.reportPullRequestDeployment(record.ID)
+				if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						return nil
+					}
+					return err
+				}
+				if err := s.detachPullRequestRuntimeForReconciliation(ctx, &record, source, currentConfig.Enabled, integrationID, installationID); err != nil {
+					return err
+				}
+				if !currentConfig.Enabled {
+					s.reportPullRequestDeployment(record.ID)
+					reconciled = true
+					return nil
+				}
+				payload := githubPullRequestWebhookPayload{Action: "reconcile", Number: record.PullRequestNumber}
+				payload.Installation.ID = installationID
+				payload.Repository.FullName = record.Repository
+				if err := s.processPullRequestWebhookLocked(ctx, *currentConfig, payload); err != nil {
+					return err
+				}
 				reconciled = true
 				return nil
-			}
-			payload := githubPullRequestWebhookPayload{Action: "reconcile", Number: record.PullRequestNumber}
-			payload.Installation.ID = installationID
-			payload.Repository.FullName = record.Repository
-			if err := s.processPullRequestWebhookLocked(ctx, *config, payload); err != nil {
-				return err
-			}
-			reconciled = true
-			return nil
+			})
 		}); err != nil {
 			reconciliationErrors = append(reconciliationErrors, fmt.Errorf("reconcile %s#%d: %w", record.Repository, record.PullRequestNumber, err))
+		} else if superseded {
+			return syncSource, nil
 		} else if reconciled {
 			processed[record.PullRequestNumber] = struct{}{}
 		}
@@ -290,6 +305,46 @@ func (s *Service) reconcilePullRequestDeploymentConfig(ctx context.Context, sour
 		}
 	}
 	return syncSource, errors.Join(reconciliationErrors...)
+}
+
+func schedulePullRequestRuntimeReconciliation(ctx context.Context, config *database.PullRequestDeploymentConfig) (bool, error) {
+	if config == nil {
+		return false, nil
+	}
+	current := false
+	err := withDistributedLock(ctx, "pull-request-config:"+config.DeploymentID, func() error {
+		currentConfig, isCurrent, err := currentPullRequestReconciliationConfig(ctx, config)
+		if err != nil || !isCurrent {
+			return err
+		}
+		now := time.Now()
+		result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+			Where("source_deployment_id = ? AND closed_at IS NULL AND preview_deployment_id IS NOT NULL", currentConfig.DeploymentID).
+			Updates(map[string]interface{}{"expires_at": now, "error": "Preview settings reconciliation is pending.", "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		current = true
+		return nil
+	})
+	return current, err
+}
+
+func currentPullRequestReconciliationConfig(ctx context.Context, snapshot *database.PullRequestDeploymentConfig) (*database.PullRequestDeploymentConfig, bool, error) {
+	if snapshot == nil {
+		return nil, false, nil
+	}
+	var current database.PullRequestDeploymentConfig
+	err := database.DB.WithContext(ctx).
+		Where("deployment_id = ? AND reconciliation_pending = ? AND reconciliation_generation = ?", snapshot.DeploymentID, true, snapshot.ReconciliationGeneration).
+		First(&current).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &current, true, nil
 }
 
 func loadPullRequestSyncSource(ctx context.Context, source *database.Deployment) (*pullRequestSyncSource, error) {

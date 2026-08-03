@@ -416,6 +416,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
+      STACK_NAME: __STACK_NAME__
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
       PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-swarm-orchestrator, *common-dns-delegation, *common-notifications, *common-dashboard]
@@ -1064,7 +1065,9 @@ services:
       mode: global  # Run one instance on each manager node
       update_config:
         parallelism: 1
-        order: start-first
+        # Host-published ports cannot be held by old and replacement tasks on
+        # the same node at once.
+        order: stop-first
       placement:
         constraints:
           - node.role == manager  # Only run on manager nodes

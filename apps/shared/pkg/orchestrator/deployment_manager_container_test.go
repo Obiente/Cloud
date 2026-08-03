@@ -1,12 +1,45 @@
 package orchestrator
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSwarmIngressProxyServiceNameUsesCurrentStack(t *testing.T) {
+	t.Setenv("TRAEFIK_SERVICE_NAME", "")
+	t.Setenv("STACK_NAME", "obiente-dev")
+
+	serviceName, err := swarmIngressProxyServiceName(context.Background())
+	if err != nil {
+		t.Fatalf("resolve ingress proxy service: %v", err)
+	}
+	if serviceName != "obiente-dev_traefik" {
+		t.Fatalf("ingress proxy service = %q, want obiente-dev_traefik", serviceName)
+	}
+}
+
+func TestSwarmIngressProxyServiceNameHonorsExplicitOverride(t *testing.T) {
+	t.Setenv("TRAEFIK_SERVICE_NAME", "custom-edge")
+	t.Setenv("STACK_NAME", "obiente-dev")
+
+	serviceName, err := swarmIngressProxyServiceName(context.Background())
+	if err != nil {
+		t.Fatalf("resolve ingress proxy service: %v", err)
+	}
+	if serviceName != "custom-edge" {
+		t.Fatalf("ingress proxy service = %q, want custom-edge", serviceName)
+	}
+}
+
+func TestDockerNetworkMissingRecognizesDockerInspectMessage(t *testing.T) {
+	if !dockerNetworkMissing("Error response from daemon: network preview-123 not found") {
+		t.Fatal("expected Docker's inspect error to be treated as an already removed network")
+	}
+}
 
 func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T) {
 	t.Parallel()

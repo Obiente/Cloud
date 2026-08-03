@@ -215,7 +215,12 @@ networks:
     external: true
 `)
 
-	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, []database.DeploymentRouting{{ServiceName: "web"}}, ingressNetwork)
+	routings := []database.DeploymentRouting{{ServiceName: "web", Domain: "preview.example.com", TargetPort: 3000}}
+	labeledYaml, err := dm.injectTraefikLabelsIntoCompose(composeYaml, "preview-123", routings, ingressNetwork)
+	if err != nil {
+		t.Fatalf("injectTraefikLabelsIntoCompose failed: %v", err)
+	}
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(labeledYaml, routings, ingressNetwork)
 	if err != nil {
 		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
 	}
