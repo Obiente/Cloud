@@ -135,6 +135,19 @@ func existingSwarmServiceEnvNames(ctx context.Context, serviceName string) []str
 	return parseSwarmServiceEnvNames(output)
 }
 
+func existingSwarmServiceLabels(ctx context.Context, serviceName string) (map[string]string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.Labels}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("inspect service labels: %w", err)
+	}
+	labels := make(map[string]string)
+	if err := json.Unmarshal(bytes.TrimSpace(output), &labels); err != nil {
+		return nil, fmt.Errorf("decode service labels: %w", err)
+	}
+	return labels, nil
+}
+
 func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.Networks}}", serviceName)
 	output, err := cmd.Output()
@@ -274,6 +287,43 @@ func swarmEnvUpdateArgs(existingEnvNames []string, desiredEnv []string) []string
 		args = append(args, "--env-add", entry)
 	}
 	return args
+}
+
+func swarmServiceLabelUpdateArgs(existingLabels, desiredLabels map[string]string) []string {
+	staleKeys := make([]string, 0)
+	for key := range existingLabels {
+		if !isPlatformManagedServiceLabel(key) {
+			continue
+		}
+		if _, keep := desiredLabels[key]; !keep {
+			staleKeys = append(staleKeys, key)
+		}
+	}
+	sort.Strings(staleKeys)
+
+	desiredKeys := make([]string, 0, len(desiredLabels))
+	for key := range desiredLabels {
+		desiredKeys = append(desiredKeys, key)
+	}
+	sort.Strings(desiredKeys)
+
+	args := make([]string, 0, 2*(len(staleKeys)+len(desiredKeys)))
+	for _, key := range staleKeys {
+		args = append(args, "--label-rm", key)
+	}
+	for _, key := range desiredKeys {
+		args = append(args, "--label-add", fmt.Sprintf("%s=%s", key, desiredLabels[key]))
+	}
+	return args
+}
+
+func isPlatformManagedServiceLabel(key string) bool {
+	// Health-check ownership has its own state machine later in the update and
+	// may intentionally be preserved when the image supplies the check.
+	if key == "cloud.obiente.healthcheck_source" {
+		return false
+	}
+	return strings.HasPrefix(key, "cloud.obiente.") || strings.HasPrefix(key, "traefik.")
 }
 
 func swarmMemoryReservation(limitBytes int64) int64 {
@@ -1558,11 +1608,14 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		args = append(args, swarmServiceNetworkUpdateArgs(existingNetworks, swarmNetworkName)...)
 	}
 
-	// Update labels - Docker service update will merge labels
-	// We add/update labels, and they'll replace any existing ones with the same key
-	for k, v := range labels {
-		args = append(args, "--label-add", fmt.Sprintf("%s=%s", k, v))
+	// Reconcile platform-owned labels as desired state. Swarm's --label-add only
+	// merges keys, so obsolete routers, middleware, or provider network labels
+	// must be removed explicitly while unrelated external labels are preserved.
+	existingLabels, err := existingSwarmServiceLabels(ctx, swarmServiceName)
+	if err != nil {
+		return "", "", fmt.Errorf("inspect existing service labels before update: %w", err)
 	}
+	args = append(args, swarmServiceLabelUpdateArgs(existingLabels, labels)...)
 
 	// Update environment variables. Swarm retains keys that are not explicitly
 	// removed, so remove stale keys before applying the desired set.

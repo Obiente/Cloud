@@ -36,9 +36,9 @@ const (
 	maxPRFilterCount          = 100
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
-	// Version 3 provisions durable routes and provider-specific Traefik network
-	// labels for every preview build strategy before deployment.
-	currentPRIsolationVersion = int32(3)
+	// Version 4 provisions durable routes and fully reconciled provider-specific
+	// Traefik labels for every preview build strategy before deployment.
+	currentPRIsolationVersion = int32(4)
 	pendingPRIsolationVersion = int32(-1)
 )
 

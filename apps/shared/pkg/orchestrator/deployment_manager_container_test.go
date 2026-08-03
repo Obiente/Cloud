@@ -201,6 +201,58 @@ func TestSwarmEnvUpdateArgsRemovesStaleEnv(t *testing.T) {
 	}
 }
 
+func TestSwarmServiceLabelUpdateArgsReconcilesManagedLabels(t *testing.T) {
+	t.Parallel()
+
+	existing := map[string]string{
+		"cloud.obiente.managed":            "true",
+		"cloud.obiente.traefik":            "true",
+		"cloud.obiente.healthcheck_source": "platform",
+		"traefik.docker.network":           "preview-network",
+		"traefik.http.routers.old.rule":    "Host(`old.example.com`)",
+		"com.example.external-label":       "keep",
+	}
+	desired := map[string]string{
+		"cloud.obiente.managed":             "true",
+		"cloud.obiente.traefik":             "true",
+		"traefik.swarm.network":             "preview-network",
+		"traefik.http.routers.current.rule": "Host(`preview.example.com`)",
+	}
+	want := []string{
+		"--label-rm", "traefik.docker.network",
+		"--label-rm", "traefik.http.routers.old.rule",
+		"--label-add", "cloud.obiente.managed=true",
+		"--label-add", "cloud.obiente.traefik=true",
+		"--label-add", "traefik.http.routers.current.rule=Host(`preview.example.com`)",
+		"--label-add", "traefik.swarm.network=preview-network",
+	}
+	if got := swarmServiceLabelUpdateArgs(existing, desired); !reflect.DeepEqual(got, want) {
+		t.Fatalf("label update args = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwarmServiceLabelUpdateArgsRemovesDisabledRouting(t *testing.T) {
+	t.Parallel()
+
+	existing := map[string]string{
+		"cloud.obiente.managed":         "true",
+		"cloud.obiente.traefik":         "true",
+		"traefik.enable":                "true",
+		"traefik.http.routers.app.rule": "Host(`preview.example.com`)",
+		"com.example.external-label":    "keep",
+	}
+	desired := map[string]string{"cloud.obiente.managed": "true"}
+	want := []string{
+		"--label-rm", "cloud.obiente.traefik",
+		"--label-rm", "traefik.enable",
+		"--label-rm", "traefik.http.routers.app.rule",
+		"--label-add", "cloud.obiente.managed=true",
+	}
+	if got := swarmServiceLabelUpdateArgs(existing, desired); !reflect.DeepEqual(got, want) {
+		t.Fatalf("disabled-routing label args = %#v, want %#v", got, want)
+	}
+}
+
 func TestParseSwarmServiceEnvNames(t *testing.T) {
 	t.Parallel()
 
