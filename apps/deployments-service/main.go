@@ -139,7 +139,12 @@ func main() {
 	mux.HandleFunc("/health", health.HandleHealth("deployments-service", func() (bool, string, map[string]interface{}) {
 		// Check database connection
 		sqlDB, err := database.DB.DB()
-		if err != nil || sqlDB.Ping() != nil {
+		if err != nil {
+			return false, "database unavailable", nil
+		}
+		healthCtx, cancelHealthCheck := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancelHealthCheck()
+		if sqlDB.PingContext(healthCtx) != nil {
 			return false, "database unavailable", nil
 		}
 

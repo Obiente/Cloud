@@ -89,6 +89,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	// Check if we're in Swarm mode
 	isSwarmMode := utils.IsSwarmModeEnabled()
+	completedSwarmOperations := 0
 
 	// Create containers/services for each service and replica
 	for _, serviceName := range serviceNames {
@@ -118,6 +119,42 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
 					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
 					if err != nil {
+						var rolloutErr *SwarmRolloutError
+						if errors.As(err, &rolloutErr) && rolloutErr.ContainerID != "" {
+							publicPort := config.Port
+							for _, routing := range routings {
+								if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+									publicPort = routing.TargetPort
+									break
+								}
+							}
+							shortID := rolloutErr.ContainerID
+							if len(shortID) > 12 {
+								shortID = shortID[:12]
+							}
+							location := &database.DeploymentLocation{
+								ID:           fmt.Sprintf("loc-%s-%s", config.DeploymentID, shortID),
+								DeploymentID: config.DeploymentID,
+								NodeID:       dm.nodeID,
+								NodeHostname: dm.nodeHostname,
+								ContainerID:  rolloutErr.ContainerID,
+								ServiceID:    rolloutErr.ServiceID,
+								TaskID:       rolloutErr.TaskID,
+								Status:       "running",
+								Port:         publicPort,
+								Domain:       config.Domain,
+								HealthStatus: "unknown",
+								CreatedAt:    time.Now(),
+								UpdatedAt:    time.Now(),
+							}
+							if registerErr := dm.registry.RegisterDeployment(ctx, location); registerErr != nil {
+								logger.Warn("[DeploymentManager] Failed to refresh restored Swarm location for %s: %v", config.DeploymentID, registerErr)
+							}
+						}
+						if rolloutErr != nil && rolloutErr.PreviousRevisionRunning && completedSwarmOperations > 0 {
+							rolloutErr.PreviousRevisionRunning = false
+							rolloutErr.Message = fmt.Sprintf("%s; %d earlier service operation(s) already completed, so the deployment may contain mixed revisions", rolloutErr.Message, completedSwarmOperations)
+						}
 						return fmt.Errorf("failed to update Swarm service: %w", err)
 					}
 				} else {
@@ -128,6 +165,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 						return fmt.Errorf("failed to create Swarm service: %w", err)
 					}
 				}
+				completedSwarmOperations++
 
 				// For Swarm services, containerID might be empty initially - try to get it from service tasks
 				if containerID == "" {

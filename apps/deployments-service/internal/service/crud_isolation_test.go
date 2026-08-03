@@ -71,6 +71,13 @@ func TestDeploymentServiceTenantIsolation(t *testing.T) {
 		t.Fatalf("cross-org update changed org-b name to %q", orgBDeployment.Name)
 	}
 
+	const verifiedDomains = `["obiente.org:token:domain-token:verified","obiente.com:token:second-token:verified"]`
+	if err := db.Model(&database.Deployment{}).
+		Where("id = ?", "dep-org-a-owner").
+		Update("custom_domains", verifiedDomains).Error; err != nil {
+		t.Fatalf("seed verified domains: %v", err)
+	}
+
 	updateOrgA, err := service.UpdateDeployment(ctx, connect.NewRequest(&deploymentsv1.UpdateDeploymentRequest{
 		DeploymentId: "dep-org-a-owner",
 		Name:         proto.String("Org A Updated"),
@@ -80,6 +87,24 @@ func TestDeploymentServiceTenantIsolation(t *testing.T) {
 	}
 	if got := updateOrgA.Msg.Deployment.GetName(); got != "Org A Updated" {
 		t.Fatalf("same-org update name = %q, want updated name", got)
+	}
+	if got := updateOrgA.Msg.Deployment.GetCustomDomains(); !slices.Equal(got, []string{
+		"obiente.org:token:domain-token:verified",
+		"obiente.com:token:second-token:verified",
+	}) {
+		t.Fatalf("partial update changed custom domains to %v", got)
+	}
+
+	clearedDomains, err := service.UpdateDeployment(ctx, connect.NewRequest(&deploymentsv1.UpdateDeploymentRequest{
+		DeploymentId:         "dep-org-a-owner",
+		ReplaceCustomDomains: true,
+		CustomDomains:        []string{},
+	}))
+	if err != nil {
+		t.Fatalf("explicitly clear custom domains: %v", err)
+	}
+	if got := clearedDomains.Msg.Deployment.GetCustomDomains(); len(got) != 0 {
+		t.Fatalf("explicit domain clear retained %v", got)
 	}
 
 	clearIntegration, err := service.UpdateDeployment(ctx, connect.NewRequest(&deploymentsv1.UpdateDeploymentRequest{
