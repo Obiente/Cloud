@@ -121,6 +121,7 @@ func main() {
 	deploymentRepo := database.NewDeploymentRepository(database.DB, database.RedisClient)
 	qc := quota.NewChecker()
 	deploymentService := deploymentsvc.NewService(shutdownCtx, deploymentRepo, manager, qc)
+	deploymentService.StartPullRequestDeploymentJanitor(shutdownCtx)
 
 	// Register deployments service
 	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(
@@ -132,6 +133,7 @@ func main() {
 	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
 	mux.HandleFunc("/terminal/ws", deploymentService.HandleTerminalWebSocket)
 	mux.HandleFunc("/webhooks/github", deploymentService.HandleGitHubWebhook)
+	mux.HandleFunc("/previews/", deploymentService.HandlePullRequestPreviewState)
 
 	// Health check endpoint with replica ID
 	mux.HandleFunc("/health", health.HandleHealth("deployments-service", func() (bool, string, map[string]interface{}) {

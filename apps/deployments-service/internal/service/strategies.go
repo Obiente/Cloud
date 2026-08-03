@@ -14,6 +14,8 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"gopkg.in/yaml.v3"
 )
 
 // RailpackStrategy handles Railpack deployments
@@ -1931,6 +1933,27 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 	if err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to read compose file: %w", err)}, nil
 	}
+	if config.Untrusted {
+		sanitizer := orchestrator.NewComposeSanitizer(deployment.ID)
+		replicas := int64(1)
+		if deployment.Replicas != nil && *deployment.Replicas > 0 {
+			replicas = int64(*deployment.Replicas)
+		}
+		composeYaml, err = sanitizer.SanitizeUntrustedComposeYAMLWithLimits(composeYaml, orchestrator.UntrustedComposeLimits{
+			MaxServices:      orchestrator.DefaultMaxUntrustedComposeServices,
+			TotalMemoryBytes: config.MemoryBytes * replicas,
+			TotalCPUShares:   config.CPUShares * replicas,
+		})
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("unsafe pull request compose file: %w", err)}, nil
+		}
+	}
+	if len(config.EnvVars) > 0 {
+		composeYaml, err = injectComposeServiceEnvironment(composeYaml, config.EnvVars)
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("inject preview environment variables: %w", err)}, nil
+		}
+	}
 
 	// Validate compose file
 	if err := ValidateCompose(ctx, composeYaml); len(err) > 0 {
@@ -1948,6 +1971,55 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 		ComposeYaml: composeYaml,
 		Success:     true,
 	}, nil
+}
+
+func injectComposeServiceEnvironment(composeYaml string, values map[string]string) (string, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", err
+	}
+	services, ok := compose["services"].(map[string]interface{})
+	if !ok || len(services) == 0 {
+		return "", fmt.Errorf("Compose file has no services")
+	}
+	for serviceName, rawService := range services {
+		service, ok := rawService.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("service %s is invalid", serviceName)
+		}
+		environment := make(map[string]interface{})
+		switch existing := service["environment"].(type) {
+		case map[string]interface{}:
+			for key, value := range existing {
+				environment[key] = value
+			}
+		case []interface{}:
+			for _, item := range existing {
+				entry, ok := item.(string)
+				if !ok {
+					continue
+				}
+				key, value, found := strings.Cut(entry, "=")
+				if found && strings.TrimSpace(key) != "" {
+					environment[strings.TrimSpace(key)] = value
+				}
+			}
+		case nil:
+		default:
+			return "", fmt.Errorf("service %s has an unsupported environment declaration", serviceName)
+		}
+		for key, value := range values {
+			// Compose treats dollar signs as interpolation even in generated YAML.
+			// Escape them so the allowlisted value reaches the container literally.
+			environment[key] = strings.ReplaceAll(value, "$", "$$")
+		}
+		service["environment"] = environment
+	}
+	data, err := yaml.Marshal(compose)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // StaticStrategy handles static site deployments

@@ -223,7 +223,8 @@ services:
     environment:
       PORT: 3005
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications, *common-dashboard]
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,6 +248,15 @@ services:
       - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
       - "traefik.http.routers.deployments-service-secure.service=deployments-service"
       - "traefik.http.routers.deployments-service-secure.tls=true"
+      - "traefik.http.routers.preview-status.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+      - "traefik.http.routers.preview-status.entrypoints=web"
+      - "traefik.http.routers.preview-status.priority=300"
+      - "traefik.http.routers.preview-status.service=deployments-service"
+      - "traefik.http.routers.preview-status-secure.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+      - "traefik.http.routers.preview-status-secure.entrypoints=websecure"
+      - "traefik.http.routers.preview-status-secure.priority=300"
+      - "traefik.http.routers.preview-status-secure.service=deployments-service"
+      - "traefik.http.routers.preview-status-secure.tls=true"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
       interval: 30s
@@ -655,6 +665,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - obiente-network
+      - obiente-preview-ingress
 
   # DNS Server - Runs on port 53 inside Docker network only (not exposed to host)
   # This allows dev deployments to resolve without binding port 53 on host
@@ -678,6 +689,12 @@ networks:
     driver: bridge
     # Configure network to prevent DNS search domain issues
     # This ensures service names like "postgres" resolve correctly without appending .my.obiente.cloud
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.driver.mtu: "1500"
+  obiente-preview-ingress:
+    name: obiente-preview-ingress
+    driver: bridge
     driver_opts:
       com.docker.network.bridge.enable_icc: "true"
       com.docker.network.driver.mtu: "1500"

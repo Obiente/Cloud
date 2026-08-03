@@ -2,6 +2,7 @@ package github
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -133,5 +134,127 @@ func TestReadGitHubAPIResponseBodyRejectsOversizedResponse(t *testing.T) {
 	_, err := readGitHubAPIResponseBody(strings.NewReader(strings.Repeat("a", githubAPIResponseBodyLimit+1)))
 	if err == nil {
 		t.Fatal("expected oversized response to be rejected")
+	}
+}
+
+func TestCreateDeploymentUsesTransientNonProductionEnvironment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost || req.URL.Path != "/repos/obiente/cloud/deployments" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body["auto_merge"] != false || body["transient_environment"] != true || body["production_environment"] != false {
+			t.Fatalf("unsafe deployment options: %#v", body)
+		}
+		contexts, ok := body["required_contexts"].([]interface{})
+		if !ok || len(contexts) != 0 {
+			t.Fatalf("required contexts = %#v", body["required_contexts"])
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":42}`))
+	}))
+	defer server.Close()
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	id, err := client.CreateDeployment(t.Context(), "obiente/cloud", strings.Repeat("a", 40), "Obiente Preview / PR #1", "preview")
+	if err != nil || id != 42 {
+		t.Fatalf("create deployment: id=%d err=%v", id, err)
+	}
+}
+
+func TestGetPullRequestReturnsAuthoritativeState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/repos/obiente/cloud/pulls/31" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"open","draft":false,"merged":false,"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"feature","repo":{"full_name":"obiente/cloud"}},"base":{"ref":"main","repo":{"full_name":"obiente/cloud"}}}`))
+	}))
+	defer server.Close()
+	client := NewClient("token")
+	client.baseURL, client.httpClient = server.URL, server.Client()
+	pullRequest, err := client.GetPullRequest(t.Context(), "obiente/cloud", 31)
+	if err != nil {
+		t.Fatalf("get pull request: %v", err)
+	}
+	if pullRequest.State != "open" || pullRequest.Head.Ref != "feature" || pullRequest.Base.Ref != "main" {
+		t.Fatalf("unexpected pull request: %#v", pullRequest)
+	}
+}
+
+func TestCheckRunActionRequiredIsCompleted(t *testing.T) {
+	body := checkRunBody(CheckRunUpdate{Status: "completed", Conclusion: "action_required"}, true)
+	if body["status"] != "completed" || body["conclusion"] != "action_required" {
+		t.Fatalf("check run body = %#v", body)
+	}
+}
+
+func TestCheckRunOmitsEmptyDetailsURL(t *testing.T) {
+	body := checkRunBody(CheckRunUpdate{Status: "in_progress"}, true)
+	if _, exists := body["details_url"]; exists {
+		t.Fatalf("empty details URL should be omitted: %#v", body)
+	}
+}
+
+func TestFindIssueCommentOnlyAdoptsCurrentGitHubAppComment(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/repos/obiente/cloud/issues/31/comments" {
+			t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{"id":1,"body":"<!-- obiente-preview -->","performed_via_github_app":{"id":999}},
+			{"id":2,"body":"<!-- obiente-preview -->","performed_via_github_app":{"id":42}}
+		]`))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL, client.httpClient, client.appID = server.URL, server.Client(), 42
+	comment, err := client.FindIssueComment(t.Context(), "obiente/cloud", 31, "<!-- obiente-preview -->")
+	if err != nil {
+		t.Fatalf("find issue comment: %v", err)
+	}
+	if comment == nil || comment.ID != 2 {
+		t.Fatalf("adopted comment = %#v", comment)
+	}
+}
+
+func TestFindIssueCommentDoesNotAdoptUnownedMarker(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"id":1,"body":"<!-- obiente-preview -->"}]`))
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL, client.httpClient, client.appID = server.URL, server.Client(), 42
+	comment, err := client.FindIssueComment(t.Context(), "obiente/cloud", 31, "<!-- obiente-preview -->")
+	if err != nil {
+		t.Fatalf("find issue comment: %v", err)
+	}
+	if comment != nil {
+		t.Fatalf("adopted unowned comment = %#v", comment)
+	}
+}
+
+func TestDeleteIssueCommentAcceptsDeletedOrAlreadyMissing(t *testing.T) {
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodDelete || req.URL.Path != "/repos/obiente/cloud/issues/comments/42" {
+				t.Fatalf("unexpected request %s %s", req.Method, req.URL.Path)
+			}
+			w.WriteHeader(status)
+		}))
+		client := NewClient("token")
+		client.baseURL, client.httpClient = server.URL, server.Client()
+		if err := client.DeleteIssueComment(t.Context(), "obiente/cloud", 42); err != nil {
+			server.Close()
+			t.Fatalf("delete issue comment with status %d: %v", status, err)
+		}
+		server.Close()
 	}
 }

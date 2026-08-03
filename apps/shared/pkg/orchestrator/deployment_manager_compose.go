@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,6 +23,8 @@ import (
 
 // Compose operations for deployments
 
+const PreviewIngressNetworkName = "obiente-preview-ingress"
+
 func composeUpArgs(projectName, composeFile string) []string {
 	return []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--build", "--pull", "always", "--force-recreate", "--remove-orphans"}
 }
@@ -31,6 +34,19 @@ func stackDeployArgs(projectName, composeFile string) []string {
 }
 
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+	return dm.deployComposeFile(ctx, deploymentID, composeYaml, "")
+}
+
+// DeployIsolatedComposeFile routes an untrusted preview through a dedicated
+// ingress network that contains Traefik but no Obiente control-plane service.
+func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+	if err := dm.ensureDeploymentNetwork(ctx, PreviewIngressNetworkName); err != nil {
+		return fmt.Errorf("preview ingress network is required: %w", err)
+	}
+	return dm.deployComposeFile(ctx, deploymentID, composeYaml, PreviewIngressNetworkName)
+}
+
+func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) error {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 
 	// Ensure per-deployment network exists before deploying
@@ -44,9 +60,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	sanitizer := NewComposeSanitizer(deploymentID)
 	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
 	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to sanitize compose YAML for deployment %s: %v. Using original YAML.", deploymentID, err)
-		// Continue with original YAML if sanitization fails (but log the warning)
-		sanitizedYaml = composeYaml
+		return fmt.Errorf("refusing to deploy compose YAML that could not be sanitized: %w", err)
 	} else {
 		logger.Info("[DeploymentManager] Sanitized compose YAML for deployment %s (volumes mapped to: %s)", deploymentID, sanitizer.GetSafeBaseDir())
 	}
@@ -152,7 +166,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	}
 
 	// Inject Traefik labels into compose file based on routing rules
-	labeledYaml, err := dm.injectTraefikLabelsIntoCompose(sanitizedYaml, deploymentID, routings)
+	labeledYaml, err := dm.injectTraefikLabelsIntoCompose(sanitizedYaml, deploymentID, routings, ingressNetworkName)
 	if err != nil {
 		logger.Warn("[DeploymentManager] Failed to inject Traefik labels into compose YAML for deployment %s: %v. Using sanitized YAML without labels.", deploymentID, err)
 		labeledYaml = sanitizedYaml
@@ -169,7 +183,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	// This allows services with configured routes to be discovered by Traefik on the shared obiente-network
 	// while maintaining deployment isolation through the deployment-specific network
 	if len(routings) > 0 {
-		routedYaml, err := dm.addTraefikNetworkToRoutedServices(sanitizedYaml, routings)
+		routedYaml, err := dm.addTraefikNetworkToRoutedServices(sanitizedYaml, routings, ingressNetworkName)
 		if err != nil {
 			logger.Warn("[DeploymentManager] Failed to add Traefik network to routed services: %v. Continuing with current YAML.", err)
 		} else {
@@ -673,6 +687,13 @@ func (dm *DeploymentManager) stopComposeContainersByLabel(ctx context.Context, p
 // RemoveComposeDeployment removes containers created by a compose file
 func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Removing compose deployment %s", deploymentID)
+	// Stop the Compose project through the mode-aware path first. In Swarm this
+	// runs `docker stack rm`; container-label cleanup alone cannot remove Swarm
+	// services, which would otherwise recreate their tasks after the database
+	// record has been deleted.
+	if err := dm.StopComposeDeployment(ctx, deploymentID); err != nil {
+		return fmt.Errorf("stop compose runtime before removal: %w", err)
+	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
@@ -689,10 +710,12 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 		return fmt.Errorf("failed to list compose containers: %w", err)
 	}
 
+	var removalErrors []error
 	for _, cnt := range containers {
 		// SECURITY: Verify container was created by our API
 		if cnt.Labels["cloud.obiente.managed"] != "true" {
 			logger.Error("[DeploymentManager] SECURITY: Refusing to delete compose container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", cnt.ID[:12])
+			removalErrors = append(removalErrors, fmt.Errorf("refused to remove unmanaged compose container %s", cnt.ID))
 			continue
 		}
 
@@ -703,11 +726,17 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 		// Remove
 		if err := dm.dockerHelper.RemoveContainer(ctx, cnt.ID, true); err != nil {
 			logger.Info("[DeploymentManager] Failed to remove compose container %s: %v", cnt.ID[:12], err)
+			removalErrors = append(removalErrors, fmt.Errorf("remove compose container %s: %w", cnt.ID, err))
 		} else {
 			logger.Info("[DeploymentManager] Removed compose container %s", cnt.ID[:12])
 			// Unregister
-			_ = dm.registry.UnregisterDeployment(ctx, cnt.ID)
+			if err := dm.registry.UnregisterDeployment(ctx, cnt.ID); err != nil {
+				logger.Warn("[DeploymentManager] Failed to unregister compose container %s: %v", cnt.ID, err)
+			}
 		}
+	}
+	if err := errors.Join(removalErrors...); err != nil {
+		return err
 	}
 
 	// Clean up volumes and deployment data

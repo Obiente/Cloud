@@ -15,6 +15,14 @@ type ComposeSanitizer struct {
 	safeBaseDir  string // Base directory where user volumes should be stored
 }
 
+const DefaultMaxUntrustedComposeServices = 8
+
+type UntrustedComposeLimits struct {
+	MaxServices      int
+	TotalMemoryBytes int64
+	TotalCPUShares   int64
+}
+
 // NewComposeSanitizer creates a new compose sanitizer for a deployment
 func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 	// Determine safe base directory for user volumes
@@ -95,6 +103,124 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	}
 
 	return string(sanitizedYaml), nil
+}
+
+// SanitizeUntrustedComposeYAML removes host- and cluster-control options from
+// repository Compose files before they are allowed into the normal deployment
+// sanitizer. It is used for pull request previews, where every byte of the
+// Compose file must be treated as attacker controlled.
+func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (string, error) {
+	return cs.SanitizeUntrustedComposeYAMLWithLimits(composeYaml, UntrustedComposeLimits{
+		MaxServices:      DefaultMaxUntrustedComposeServices,
+		TotalMemoryBytes: 512 * 1024 * 1024,
+		TotalCPUShares:   256,
+	})
+}
+
+// SanitizeUntrustedComposeYAMLWithLimits also divides a preview's reserved
+// runtime budget across all attacker-controlled services. This keeps the sum
+// of service limits within the quota reservation made for the preview row.
+func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAMLWithLimits(composeYaml string, budget UntrustedComposeLimits) (string, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("failed to parse untrusted compose YAML: %w", err)
+	}
+	// Compose interpolates both $NAME and ${NAME} after YAML decoding. Reject
+	// every dollar marker in untrusted input, including YAML-escaped markers and
+	// $$ forms, so the deployments-service environment can never be consulted.
+	if containsComposeInterpolationMarker(compose) {
+		return "", fmt.Errorf("environment interpolation is not allowed in pull request Compose files")
+	}
+	services, ok := compose["services"].(map[string]interface{})
+	if !ok || len(services) == 0 {
+		return "", fmt.Errorf("pull request Compose file must define at least one service")
+	}
+	if budget.MaxServices <= 0 {
+		budget.MaxServices = DefaultMaxUntrustedComposeServices
+	}
+	if len(services) > budget.MaxServices {
+		return "", fmt.Errorf("pull request Compose file defines %d services; at most %d are allowed", len(services), budget.MaxServices)
+	}
+	if budget.TotalMemoryBytes <= 0 || budget.TotalCPUShares <= 0 {
+		return "", fmt.Errorf("pull request Compose resource budget must include positive memory and CPU limits")
+	}
+	perServiceMemory := budget.TotalMemoryBytes / int64(len(services))
+	perServiceCPUShares := budget.TotalCPUShares / int64(len(services))
+	if perServiceMemory <= 0 || perServiceCPUShares <= 0 {
+		return "", fmt.Errorf("pull request Compose resource budget is too small for %d services", len(services))
+	}
+
+	dangerousServiceKeys := []string{
+		"build", "cap_add", "cap_drop", "cgroup", "cgroup_parent", "cpu_count",
+		"cpu_percent", "cpu_shares", "cpus",
+		"configs", "container_name", "credential_spec", "deploy", "develop",
+		"device_cgroup_rules", "devices", "env_file", "external_links",
+		"extra_hosts", "ipc", "isolation", "labels", "links", "network_mode",
+		"networks", "oom_kill_disable", "oom_score_adj", "pid", "privileged",
+		"mem_limit", "mem_reservation", "memswap_limit", "runtime", "secrets", "security_opt", "shm_size", "sysctls", "ulimits",
+		"userns_mode", "uts", "volumes", "volumes_from",
+	}
+	for serviceName, serviceData := range services {
+		service, ok := serviceData.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("service %q has an invalid definition", serviceName)
+		}
+		if _, buildsFromRepository := service["build"]; buildsFromRepository {
+			return "", fmt.Errorf("service %q uses build, which is not allowed in pull request Compose previews; publish an image or use the Dockerfile strategy", serviceName)
+		}
+		for _, key := range dangerousServiceKeys {
+			delete(service, key)
+		}
+		memoryLimit := fmt.Sprintf("%dB", perServiceMemory)
+		cpuLimit := fmt.Sprintf("%.6f", float64(perServiceCPUShares)/1024.0)
+		service["deploy"] = map[string]interface{}{
+			"resources": map[string]interface{}{
+				"limits": map[string]interface{}{"memory": memoryLimit, "cpus": cpuLimit},
+			},
+		}
+		service["mem_limit"] = memoryLimit
+		service["cpus"] = cpuLimit
+	}
+
+	// Only services and the optional version marker are carried forward. The
+	// normal sanitizer creates deployment-owned networks. Service volumes are
+	// intentionally discarded so one untrusted revision cannot leave durable
+	// files that influence a later revision of the same preview.
+	filtered := map[string]interface{}{"services": services}
+	if version, exists := compose["version"]; exists {
+		filtered["version"] = version
+	}
+	result, err := yaml.Marshal(filtered)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal untrusted compose YAML: %w", err)
+	}
+	return string(result), nil
+}
+
+func containsComposeInterpolationMarker(value interface{}) bool {
+	switch typed := value.(type) {
+	case string:
+		return strings.Contains(typed, "$")
+	case map[string]interface{}:
+		for key, child := range typed {
+			if strings.Contains(key, "$") || containsComposeInterpolationMarker(child) {
+				return true
+			}
+		}
+	case map[interface{}]interface{}:
+		for key, child := range typed {
+			if containsComposeInterpolationMarker(key) || containsComposeInterpolationMarker(child) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, child := range typed {
+			if containsComposeInterpolationMarker(child) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sanitizeService sanitizes a single service in the compose file

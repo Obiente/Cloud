@@ -2,12 +2,31 @@ package deployments
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestGitHubCloneAuthenticationIsEphemeral(t *testing.T) {
+	token := "installation-secret"
+	cmd := gitCommandWithAuthentication(context.Background(), "", "https://github.com/Obiente/Cloud.git", token, "fetch", "origin")
+	if strings.Contains(strings.Join(cmd.Args, " "), token) {
+		t.Fatal("git command arguments exposed the installation token")
+	}
+	wantHeader := "GIT_CONFIG_VALUE_0=Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
+	foundHeader := false
+	for _, value := range cmd.Env {
+		if value == wantHeader {
+			foundHeader = true
+		}
+	}
+	if !foundHeader {
+		t.Fatal("git command did not receive the ephemeral authorization header")
+	}
+}
 
 func TestCloneRepositoryChecksOutRequestedCommit(t *testing.T) {
 	sourceDir := t.TempDir()

@@ -109,8 +109,24 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		triggeredBy = userInfo.Id
 	}
 
+	// Claim build ownership before returning to the caller. Registering inside
+	// the goroutine lets two rapid requests start out of order and allows the
+	// older request to replace the newer request's token.
+	buildCtx, buildCancel := s.detachedContext(0)
+	buildToken, err := s.registerDeploymentBuild(buildCtx, deploymentID, buildCancel)
+	if err != nil {
+		buildCancel()
+		_ = s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+		return nil, connect.NewError(connect.CodeAborted, fmt.Errorf("failed to register deployment build: %w", err))
+	}
+	targetNodeID := orchestrator.TargetNodeFromContext(ctx)
+
 	// Start async rebuild with log streaming
 	go func() {
+		defer buildCancel()
+		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
+		buildCtx = orchestrator.WithTargetNode(buildCtx, targetNodeID)
+
 		// Recover from panics to ensure deployment status is always updated
 		defer func() {
 			if r := recover(); r != nil {
@@ -118,14 +134,19 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				// Ensure deployment status is updated even on panic
 				panicCtx, cancel := s.detachedContext(30 * time.Second)
 				defer cancel()
-				_ = s.repo.UpdateStatus(panicCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				if deploymentBuildIsCurrent(panicCtx, deploymentID, buildToken) {
+					_ = s.repo.UpdateStatus(panicCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+				}
 			}
 		}()
-
-		buildCtx, buildCancel := s.detachedContext(0)
-		defer buildCancel()
-		buildCtx = orchestrator.WithTargetNode(buildCtx, orchestrator.TargetNodeFromContext(ctx))
 		buildStartTime := time.Now()
+		previewStatusFinalized := false
+		s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING, "")
+		defer func() {
+			if !previewStatusFinalized {
+				s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, "The preview build ended before deployment completed.")
+			}
+		}()
 
 		// Get or create build log streamer
 		// Note: We do NOT close the streamer here because it should persist across builds
@@ -155,6 +176,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if commitSHA != "" {
 			buildRecord.CommitSHA = &commitSHA
 		}
+		buildRecordCreated := false
+		buildHistoryFinalized := false
 
 		// Capture build configuration snapshot
 		if dbDeployment.RepositoryURL != nil {
@@ -181,6 +204,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Still update deployment status to BUILDING even if build record creation fails
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		} else {
+			buildRecordCreated = true
 			// Set build ID on streamer so logs are saved to database
 			streamer.SetBuildID(buildID)
 			// Update build history status to BUILDING
@@ -188,6 +212,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Update deployment status to BUILDING when build actually starts
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		}
+		defer func() {
+			if !buildRecordCreated || buildHistoryFinalized {
+				return
+			}
+			s.finalizeInterruptedBuildHistory(buildID, buildStartTime)
+		}()
 
 		// Get build strategy - handle UNSPECIFIED by auto-detecting
 		buildStrategy := deploymentsv1.BuildStrategy(dbDeployment.BuildStrategy)
@@ -313,6 +343,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			Port:                   port,
 			MemoryBytes:            memoryBytes,
 			CPUShares:              cpuShares,
+			Untrusted:              deploymentIsPullRequestPreview(dbDeployment),
 			LogWriter:              streamer,                  // Stream stdout
 			LogWriterErr:           NewStderrWriter(streamer), // Stream stderr
 		}
@@ -335,6 +366,17 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
 				logger.Warn("[TriggerDeployment] Failed to update build status: %v", err)
 				return
+			}
+			if status == 3 || status == 4 {
+				buildHistoryFinalized = true
+			}
+			if status == 4 {
+				previewStatusFinalized = true
+				message := "Preview build failed."
+				if errorMsg != nil && strings.TrimSpace(*errorMsg) != "" {
+					message = *errorMsg
+				}
+				s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, message)
 			}
 
 			// Create notifications when build status changes from building/pending to success/failed
@@ -392,6 +434,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		// Handle compose-based deployments
 		if shouldDeployStoredCompose(dbDeployment) {
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
 			streamer.Write([]byte("🐳 Deploying Docker Compose configuration...\n"))
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
 				logger.Warn("[TriggerDeployment] Compose deployment failed: %v", err)
@@ -425,6 +470,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 
 			buildResult = result
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
 
 			streamer.Write([]byte("✅ Build completed successfully\n"))
 
@@ -581,6 +629,29 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				logger.Info("[TriggerDeployment] Successfully created deployment manager as last resort")
 			}
 
+			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
+				return
+			}
+			if result.ComposeYaml != "" {
+				// Persist the Compose cleanup marker and revision-specific routing
+				// before invoking Docker. A failed compose/stack operation may still
+				// leave resources that the cleanup path must recognize and remove.
+				dbDeployment.ComposeYaml = result.ComposeYaml
+				if err := resolvePreviewComposeRoutingForRevision(buildCtx, dbDeployment, result.ComposeYaml); err != nil {
+					errorMsg := err.Error()
+					streamer.WriteStderr([]byte(fmt.Sprintf("❌ Preview routing validation failed: %v\n", err)))
+					updateBuildStatus(4, &errorMsg)
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+					return
+				}
+				if err := s.repo.Update(buildCtx, dbDeployment); err != nil {
+					errorMsg := fmt.Sprintf("failed to persist Compose deployment metadata before rollout: %v", err)
+					streamer.WriteStderr([]byte("❌ " + errorMsg + "\n"))
+					updateBuildStatus(4, &errorMsg)
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+					return
+				}
+			}
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				if orchestrator.RollbackPreserved(err) {
@@ -627,6 +698,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 			_ = s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, 3, int32(time.Since(buildStartTime).Seconds()), &runtimeFailureMsg)
+			previewStatusFinalized = true
+			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, runtimeFailureMsg)
 
 			deploymentName := dbDeployment.Name
 			if deploymentName == "" {
@@ -661,6 +734,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
+			previewStatusFinalized = true
+			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
 		}
 	}()
 
@@ -669,6 +744,19 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		Status:       "DEPLOYING",
 	})
 	return res, nil
+}
+
+func (s *Service) finalizeInterruptedBuildHistory(buildID string, startedAt time.Time) {
+	statusCtx, statusCancel := s.detachedContext(30 * time.Second)
+	defer statusCancel()
+	var current database.BuildHistory
+	if err := database.DB.WithContext(statusCtx).Select("status").Where("id = ?", buildID).First(&current).Error; err != nil || (current.Status != 1 && current.Status != 2) {
+		return
+	}
+	message := "Build stopped because it was superseded or the deployment was removed."
+	if err := s.buildHistoryRepo.UpdateBuildStatus(statusCtx, buildID, 4, int32(time.Since(startedAt).Seconds()), &message); err != nil {
+		logger.Warn("[TriggerDeployment] Failed to finalize interrupted build history %s: %v", buildID, err)
+	}
 }
 
 func requestedDeploymentCommitSHA(ctx context.Context, value string) (string, error) {
@@ -703,6 +791,27 @@ func triggerDeploymentForwardHeaders(ctx context.Context, req *connect.Request[d
 		secret := strings.TrimSpace(os.Getenv(deploymentsInternalServiceSecretEnv))
 		if secret == "" {
 			return nil, fmt.Errorf("%s is required for cross-node automatic deployments", deploymentsInternalServiceSecretEnv)
+		}
+		headers[internalServiceSecretHeader] = secret
+		return headers, nil
+	}
+
+	if authorization := req.Header().Get("Authorization"); authorization != "" {
+		headers["Authorization"] = authorization
+	}
+	return headers, nil
+}
+
+func deleteDeploymentForwardHeaders(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest], targetNodeID string) (map[string]string, error) {
+	headers := map[string]string{
+		orchestrator.ForwardTargetNodeHeader: targetNodeID,
+	}
+
+	userInfo, _ := auth.GetUserFromContext(ctx)
+	if userInfo != nil && userInfo.Id == "system" {
+		secret := strings.TrimSpace(os.Getenv(deploymentsInternalServiceSecretEnv))
+		if secret == "" {
+			return nil, fmt.Errorf("%s is required for cross-node automatic deletion", deploymentsInternalServiceSecretEnv)
 		}
 		headers[internalServiceSecretHeader] = secret
 		return headers, nil

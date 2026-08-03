@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -22,6 +23,7 @@ type Client struct {
 	token      string
 	baseURL    string
 	httpClient *http.Client
+	appID      int64
 }
 
 func NewClient(token string) *Client {
@@ -55,6 +57,316 @@ type GitHubFileContent struct {
 	Content  string `json:"content"`
 	Encoding string `json:"encoding"`
 	Size     int64  `json:"size"`
+}
+
+type PullRequestFile struct {
+	Filename string `json:"filename"`
+}
+
+type PullRequest struct {
+	State  string `json:"state"`
+	Draft  bool   `json:"draft"`
+	Merged bool   `json:"merged"`
+	Head   struct {
+		SHA  string `json:"sha"`
+		Ref  string `json:"ref"`
+		Repo struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
+	} `json:"head"`
+	Base struct {
+		Ref  string `json:"ref"`
+		Repo struct {
+			FullName string `json:"full_name"`
+		} `json:"repo"`
+	} `json:"base"`
+}
+
+type Deployment struct {
+	ID int64 `json:"id"`
+}
+
+type IssueComment struct {
+	ID                    int64  `json:"id"`
+	Body                  string `json:"body"`
+	PerformedViaGitHubApp *struct {
+		ID int64 `json:"id"`
+	} `json:"performed_via_github_app"`
+}
+
+type CheckRun struct {
+	ID int64 `json:"id"`
+}
+
+type CheckRunUpdate struct {
+	Name       string
+	HeadSHA    string
+	DetailsURL string
+	ExternalID string
+	Status     string
+	Conclusion string
+	Title      string
+	Summary    string
+}
+
+func (c *Client) CreateCheckRun(ctx context.Context, repoFullName string, update CheckRunUpdate) (int64, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return 0, err
+	}
+	var checkRun CheckRun
+	requestURL := fmt.Sprintf("%s/repos/%s/check-runs", strings.TrimRight(c.baseURL, "/"), repositoryPath)
+	if err := c.doJSON(ctx, http.MethodPost, requestURL, checkRunBody(update, true), http.StatusCreated, &checkRun); err != nil {
+		return 0, err
+	}
+	if checkRun.ID <= 0 {
+		return 0, fmt.Errorf("GitHub check run response did not include an ID")
+	}
+	return checkRun.ID, nil
+}
+
+func (c *Client) UpdateCheckRun(ctx context.Context, repoFullName string, checkRunID int64, update CheckRunUpdate) error {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return err
+	}
+	if checkRunID <= 0 {
+		return fmt.Errorf("GitHub check run ID is required")
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s/check-runs/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, checkRunID)
+	return c.doJSON(ctx, http.MethodPatch, requestURL, checkRunBody(update, false), http.StatusOK, nil)
+}
+
+func checkRunBody(update CheckRunUpdate, create bool) map[string]interface{} {
+	body := map[string]interface{}{
+		"name":        update.Name,
+		"external_id": update.ExternalID,
+		"status":      update.Status,
+		"output":      map[string]string{"title": update.Title, "summary": update.Summary},
+	}
+	if update.DetailsURL != "" {
+		body["details_url"] = update.DetailsURL
+	}
+	if create {
+		body["head_sha"] = update.HeadSHA
+	}
+	if update.Conclusion != "" {
+		body["conclusion"] = update.Conclusion
+	}
+	return body
+}
+
+func (c *Client) ListPullRequestFiles(ctx context.Context, repoFullName string, pullRequestNumber int64) ([]PullRequestFile, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return nil, err
+	}
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number is required")
+	}
+
+	files := make([]PullRequestFile, 0)
+	for page := 1; page <= 30; page++ {
+		requestURL := fmt.Sprintf("%s/repos/%s/pulls/%d/files?per_page=100&page=%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, pullRequestNumber, page)
+		var batch []PullRequestFile
+		if err := c.doJSON(ctx, http.MethodGet, requestURL, nil, http.StatusOK, &batch); err != nil {
+			return nil, err
+		}
+		files = append(files, batch...)
+		if len(batch) < 100 {
+			return files, nil
+		}
+	}
+	return nil, fmt.Errorf("pull request contains more than 3000 files")
+}
+
+func (c *Client) GetPullRequest(ctx context.Context, repoFullName string, pullRequestNumber int64) (*PullRequest, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return nil, err
+	}
+	if pullRequestNumber <= 0 {
+		return nil, fmt.Errorf("pull request number is required")
+	}
+	var pullRequest PullRequest
+	requestURL := fmt.Sprintf("%s/repos/%s/pulls/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, pullRequestNumber)
+	if err := c.doJSON(ctx, http.MethodGet, requestURL, nil, http.StatusOK, &pullRequest); err != nil {
+		return nil, err
+	}
+	return &pullRequest, nil
+}
+
+func (c *Client) CreateDeployment(ctx context.Context, repoFullName, ref, environment, description string) (int64, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return 0, err
+	}
+	body := map[string]interface{}{
+		"ref":                    ref,
+		"environment":            environment,
+		"description":            description,
+		"auto_merge":             false,
+		"required_contexts":      []string{},
+		"transient_environment":  true,
+		"production_environment": false,
+	}
+	var deployment Deployment
+	requestURL := fmt.Sprintf("%s/repos/%s/deployments", strings.TrimRight(c.baseURL, "/"), repositoryPath)
+	if err := c.doJSON(ctx, http.MethodPost, requestURL, body, http.StatusCreated, &deployment); err != nil {
+		return 0, err
+	}
+	if deployment.ID <= 0 {
+		return 0, fmt.Errorf("GitHub deployment response did not include an ID")
+	}
+	return deployment.ID, nil
+}
+
+func (c *Client) CreateDeploymentStatus(ctx context.Context, repoFullName string, deploymentID int64, state, description, environmentURL, logURL string) error {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return err
+	}
+	if deploymentID <= 0 {
+		return fmt.Errorf("GitHub deployment ID is required")
+	}
+	body := map[string]interface{}{
+		"state":         state,
+		"description":   description,
+		"auto_inactive": false,
+	}
+	if environmentURL != "" {
+		body["environment_url"] = environmentURL
+	}
+	if logURL != "" {
+		body["log_url"] = logURL
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s/deployments/%d/statuses", strings.TrimRight(c.baseURL, "/"), repositoryPath, deploymentID)
+	return c.doJSON(ctx, http.MethodPost, requestURL, body, http.StatusCreated, nil)
+}
+
+func (c *Client) FindIssueComment(ctx context.Context, repoFullName string, issueNumber int64, marker string) (*IssueComment, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return nil, err
+	}
+	if issueNumber <= 0 || marker == "" {
+		return nil, fmt.Errorf("issue number and comment marker are required")
+	}
+	for page := 1; page <= 10; page++ {
+		requestURL := fmt.Sprintf("%s/repos/%s/issues/%d/comments?per_page=100&page=%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, issueNumber, page)
+		var comments []IssueComment
+		if err := c.doJSON(ctx, http.MethodGet, requestURL, nil, http.StatusOK, &comments); err != nil {
+			return nil, err
+		}
+		for i := range comments {
+			if strings.Contains(comments[i].Body, marker) && comments[i].PerformedViaGitHubApp != nil && comments[i].PerformedViaGitHubApp.ID == c.appID && c.appID > 0 {
+				return &comments[i], nil
+			}
+		}
+		if len(comments) < 100 {
+			return nil, nil
+		}
+	}
+	return nil, fmt.Errorf("could not safely search more than 1000 issue comments")
+}
+
+func (c *Client) CreateIssueComment(ctx context.Context, repoFullName string, issueNumber int64, body string) (int64, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return 0, err
+	}
+	var comment IssueComment
+	requestURL := fmt.Sprintf("%s/repos/%s/issues/%d/comments", strings.TrimRight(c.baseURL, "/"), repositoryPath, issueNumber)
+	if err := c.doJSON(ctx, http.MethodPost, requestURL, map[string]string{"body": body}, http.StatusCreated, &comment); err != nil {
+		return 0, err
+	}
+	return comment.ID, nil
+}
+
+func (c *Client) UpdateIssueComment(ctx context.Context, repoFullName string, commentID int64, body string) error {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return err
+	}
+	if commentID <= 0 {
+		return fmt.Errorf("GitHub comment ID is required")
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s/issues/comments/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, commentID)
+	return c.doJSON(ctx, http.MethodPatch, requestURL, map[string]string{"body": body}, http.StatusOK, nil)
+}
+
+func (c *Client) DeleteIssueComment(ctx context.Context, repoFullName string, commentID int64) error {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return err
+	}
+	if commentID <= 0 {
+		return fmt.Errorf("GitHub comment ID is required")
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s/issues/comments/%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, commentID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, requestURL, nil)
+	if err != nil {
+		return err
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := readGitHubAPIResponseBody(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return fmt.Errorf("GitHub API %s %s failed: %d - %s", http.MethodDelete, requestURL, resp.StatusCode, strings.TrimSpace(string(body)))
+}
+
+func (c *Client) doJSON(ctx context.Context, method, requestURL string, payload interface{}, expectedStatus int, target interface{}) error {
+	var bodyReader io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to encode GitHub API request: %w", err)
+		}
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, requestURL, bodyReader)
+	if err != nil {
+		return err
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := readGitHubAPIResponseBody(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != expectedStatus {
+		return fmt.Errorf("GitHub API %s %s failed: %d - %s", method, requestURL, resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	if target != nil && len(body) > 0 {
+		if err := json.Unmarshal(body, target); err != nil {
+			return fmt.Errorf("failed to decode GitHub API response: %w", err)
+		}
+	}
+	return nil
 }
 
 func (c *Client) ListInstallationRepos(ctx context.Context, page, perPage int) ([]GitHubRepo, error) {

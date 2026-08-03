@@ -47,6 +47,10 @@ Required repository permissions:
 
 - Metadata: read
 - Contents: read
+- Pull requests: read
+- Deployments: write
+- Checks: write
+- Issues: write
 
 Required organization permissions:
 
@@ -55,6 +59,12 @@ Required organization permissions:
 Subscribe to events:
 
 - Push
+- Pull request
+
+After adding permissions to an existing GitHub App, every existing installation
+must approve the requested update. Until it does, repository imports and push
+deployments continue to use the old permissions, but pull request environments
+cannot publish all GitHub statuses and comments.
 
 The setup URL uses the dashboard domain. The webhook URL uses the API domain.
 For example, if users visit `https://obiente.cloud` and your API is
@@ -141,6 +151,53 @@ App installation, workspace, repository, and branch. It ignores branch deletion
 events. Each accepted push builds the exact commit from the event rather than a
 later branch head.
 
+## Pull Request Environments
+
+Enable pull request environments in a deployment's settings. The deployment is
+the template: Obiente copies its repository and build configuration into a
+disposable deployment, checks out the webhook's exact head SHA, and gives the
+preview its own `*.my.obiente.cloud` hostname.
+
+The settings cover:
+
+- target branch and changed-path filters
+- draft and new-push behavior
+- automatic cleanup, maximum lifetime, and maximum active previews
+- a separate short lifetime for temporarily restored merged previews
+- hostname templates using `{pr}`, `{deployment}`, and `{branch}`
+- a maintained pull request comment, GitHub Deployment, and Check Run
+- approval for every PR, or for forks only
+- approval of only the current SHA, or the entire PR
+- explicit environment-variable and build-argument allowlists
+
+Fork previews are always isolated. They never receive deployment environment
+variables, build arguments, or persistent volumes, including after a maintainer
+approves them. Same-repository previews receive only explicitly allowlisted
+environment variables and build arguments. Persistent volumes are never copied
+to any pull request environment.
+
+By default, fork previews are disabled and approvals apply only to the current
+head SHA. When a new commit is pushed, Obiente retires the prior GitHub
+Deployment, invalidates the approval, and reports the new revision separately.
+
+Maintainers approve, reject, redeploy, or remove a preview in Obiente. Approval
+requires edit access to the source deployment, so a webhook sender cannot
+approve their own code.
+
+Before a preview is ready, its GitHub deployment links to a small public state
+page instead of a dead application URL. The page shows only whether the preview
+is waiting, building, unavailable, or offline; it does not expose repository,
+organization, approver, or build-error data. The public origin defaults to
+`https://$DOMAIN`; set `PREVIEW_STATUS_BASE_URL` when preview status pages use
+another public HTTPS origin.
+
+After an approved pull request is merged and its preview has been removed, a
+maintainer can restore that exact recorded revision from the deployment
+settings. Obiente creates a fresh disposable deployment without changing the
+approval or copying additional values. Restored previews use the configured
+restored-preview lifetime (four hours by default) and are automatically removed
+again by the preview janitor.
+
 ## Troubleshooting
 
 ### GitHub App is not configured
@@ -185,6 +242,17 @@ Check:
 - Auto Deploy is enabled on the deployment
 - `DEPLOYMENTS_INTERNAL_SERVICE_SECRET` is configured consistently on every deployments-service node in a multi-node installation
 
+### Pull request status or comment is missing
+
+Check:
+
+- The GitHub App subscribes to the `pull_request` event
+- The installation approved `Pull requests: read`, `Deployments: write`, `Checks: write`, and `Issues: write`
+- Pull request environments are enabled on the source deployment
+- The PR target branch and changed files match the configured scope
+- The deployment has not reached its active preview limit
+- `PREVIEW_STATUS_BASE_URL` points to the public base domain when it is overridden
+
 ## Security Notes
 
 - No GitHub user tokens are stored or refreshed
@@ -197,4 +265,9 @@ Check:
 - Webhook payloads are verified with `X-Hub-Signature-256`
 - Pushes can only match deployments bound to the webhook's verified GitHub App installation and Obiente workspace
 - Webhook-triggered builds fetch and record the exact pushed commit
+- Pull request approvals are bound to the head SHA by default and are invalidated by new commits
+- Fork previews cannot inherit deployment values, build arguments, or persistent volumes
+- Pull request environments have independent deployment IDs, hostnames, build history, expiry, and cleanup
+- Restoring a merged preview is limited to a previously approved recorded revision and always receives a new short expiry
+- Public preview state pages use opaque URLs, are not indexed, and do not expose private build details
 - Production should always use HTTPS for dashboard and webhook endpoints

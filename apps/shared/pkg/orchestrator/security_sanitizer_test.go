@@ -9,6 +9,87 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestSanitizeUntrustedComposeYAMLRemovesHostControlOptions(t *testing.T) {
+	composeYaml := `services:
+  app:
+    image: nginx:alpine
+    devices:
+      - /dev/kvm:/dev/kvm
+    pid: host
+    ipc: host
+    privileged: true
+    network_mode: host
+    volumes:
+      - /etc:/host-etc
+`
+	sanitizer := NewComposeSanitizer("preview-test")
+	filtered, err := sanitizer.SanitizeUntrustedComposeYAML(composeYaml)
+	if err != nil {
+		t.Fatalf("sanitize untrusted compose: %v", err)
+	}
+	for _, forbidden := range []string{"devices:", "pid:", "ipc:", "privileged:", "network_mode:", "volumes:"} {
+		if strings.Contains(filtered, forbidden) {
+			t.Fatalf("untrusted Compose retained %q:\n%s", forbidden, filtered)
+		}
+	}
+}
+
+func TestSanitizeUntrustedComposeYAMLRejectsRepositoryBuild(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    build: .\n"); err == nil {
+		t.Fatal("repository Compose build should be rejected for pull request previews")
+	}
+}
+
+func TestSanitizeUntrustedComposeYAMLRejectsInterpolation(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	for name, composeYaml := range map[string]string{
+		"braced":        "services:\n  app:\n    image: ${IMAGE}\n",
+		"unbraced":      "services:\n  app:\n    image: $IMAGE\n",
+		"double-dollar": "services:\n  app:\n    image: nginx\n    command: '$${LITERAL}'\n",
+		"yaml-escaped": `services:
+  app:
+    image: nginx
+    command: "\u0024SECRET"
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := sanitizer.SanitizeUntrustedComposeYAML(composeYaml); err == nil {
+				t.Fatal("environment interpolation marker should be rejected for pull request previews")
+			}
+		})
+	}
+}
+
+func TestSanitizeUntrustedComposeYAMLBoundsAggregateResources(t *testing.T) {
+	sanitizer := NewComposeSanitizer("preview-test")
+	filtered, err := sanitizer.SanitizeUntrustedComposeYAMLWithLimits(`services:
+  web:
+    image: nginx
+  worker:
+    image: alpine
+`, UntrustedComposeLimits{MaxServices: 2, TotalMemoryBytes: 1024, TotalCPUShares: 512})
+	if err != nil {
+		t.Fatalf("sanitize budgeted compose: %v", err)
+	}
+	var result map[string]interface{}
+	if err := yaml.Unmarshal([]byte(filtered), &result); err != nil {
+		t.Fatalf("parse sanitized compose: %v", err)
+	}
+	services := result["services"].(map[string]interface{})
+	for name, raw := range services {
+		service := raw.(map[string]interface{})
+		deploy := service["deploy"].(map[string]interface{})
+		limits := deploy["resources"].(map[string]interface{})["limits"].(map[string]interface{})
+		if limits["memory"] != "512B" || limits["cpus"] != "0.250000" {
+			t.Fatalf("service %s limits = %#v", name, limits)
+		}
+	}
+	if _, err := sanitizer.SanitizeUntrustedComposeYAMLWithLimits("services:\n  one:\n    image: nginx\n  two:\n    image: nginx\n  three:\n    image: nginx\n", UntrustedComposeLimits{MaxServices: 2, TotalMemoryBytes: 1024, TotalCPUShares: 512}); err == nil {
+		t.Fatal("service count above the configured maximum should be rejected")
+	}
+}
+
 func TestSanitizeEnvironment_BooleanValues(t *testing.T) {
 	composeYaml := `version: '3.8'
 services:

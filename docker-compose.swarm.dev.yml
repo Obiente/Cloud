@@ -417,7 +417,8 @@ services:
     environment:
       PORT: 3005
       DEPLOYMENTS_INTERNAL_SERVICE_SECRET: ${DEPLOYMENTS_INTERNAL_SERVICE_SECRET:-}
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications]
+      PREVIEW_STATUS_BASE_URL: ${PREVIEW_STATUS_BASE_URL:-}
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-github, *common-orchestrator, *common-dns-delegation, *common-notifications, *common-dashboard]
       ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -453,6 +454,15 @@ services:
         - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
         - "traefik.http.routers.deployments-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.deployments-service-secure.service=deployments-service"
+        - "traefik.http.routers.preview-status.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status.entrypoints=web"
+        - "traefik.http.routers.preview-status.priority=300"
+        - "traefik.http.routers.preview-status.service=deployments-service"
+        - "traefik.http.routers.preview-status-secure.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/previews/`)"
+        - "traefik.http.routers.preview-status-secure.entrypoints=websecure"
+        - "traefik.http.routers.preview-status-secure.priority=300"
+        - "traefik.http.routers.preview-status-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.preview-status-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
       interval: 30s
@@ -1072,6 +1082,7 @@ services:
     dns_search: []
     networks:
       - obiente-network
+      - obiente-preview-ingress
 
   # ============================================================================
   # MONITORING & OBSERVABILITY
@@ -1263,6 +1274,12 @@ networks:
         - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
+  obiente-preview-ingress:
+    name: obiente-preview-ingress
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
   obiente-databases:
     # Fixed name so API-created database containers can join this network
     name: obiente-databases

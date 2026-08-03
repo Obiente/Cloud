@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,6 +56,7 @@ type BuildConfig struct {
 	Port                   int
 	MemoryBytes            int64
 	CPUShares              int64
+	Untrusted              bool      // Pull request controlled source requiring stricter policies
 	LogWriter              io.Writer // Optional writer for build logs (stdout)
 	LogWriterErr           io.Writer // Optional writer for build logs (stderr)
 }
@@ -328,16 +330,8 @@ func cloneRepository(ctx context.Context, repoURL, branch, commitSHA, destDir st
 	// Remove destination if it exists
 	os.RemoveAll(destDir)
 
-	// If this is a GitHub repository and we have a token, inject it into the URL for authentication
-	authenticatedURL := repoURL
-	if githubToken != "" && isGitHubURL(repoURL) {
-		authenticatedURL = injectGitHubToken(repoURL, githubToken)
-	}
-
 	if commitSHA == "" {
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, authenticatedURL, destDir)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		cmd := gitCommandWithAuthentication(ctx, "", repoURL, githubToken, "clone", "--depth", "1", "--branch", branch, repoURL, destDir)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
@@ -350,10 +344,10 @@ func cloneRepository(ctx context.Context, repoURL, branch, commitSHA, destDir st
 	if err := runGitCommand(ctx, "", "init", destDir); err != nil {
 		return fmt.Errorf("failed to initialize repository: %w", err)
 	}
-	if err := runGitCommand(ctx, destDir, "remote", "add", "origin", authenticatedURL); err != nil {
+	if err := runGitCommand(ctx, destDir, "remote", "add", "origin", repoURL); err != nil {
 		return fmt.Errorf("failed to configure repository remote: %w", err)
 	}
-	if err := runGitCommand(ctx, destDir, "fetch", "--depth", "1", "origin", commitSHA); err != nil {
+	if err := gitCommandWithAuthentication(ctx, destDir, repoURL, githubToken, "fetch", "--depth", "1", "origin", commitSHA).Run(); err != nil {
 		return fmt.Errorf("failed to fetch commit %s: %w", commitSHA, err)
 	}
 	if err := runGitCommand(ctx, destDir, "checkout", "--detach", "FETCH_HEAD"); err != nil {
@@ -361,6 +355,27 @@ func cloneRepository(ctx context.Context, repoURL, branch, commitSHA, destDir st
 	}
 
 	return nil
+}
+
+// gitCommandWithAuthentication supplies a short-lived GitHub credential to one
+// git process without placing it in command arguments or the persisted remote.
+func gitCommandWithAuthentication(ctx context.Context, dir, repoURL, githubToken string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if githubToken != "" && isGitHubURL(repoURL) {
+		credentials := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + githubToken))
+		cmd.Env = append(cmd.Env,
+			"GIT_CONFIG_COUNT=1",
+			"GIT_CONFIG_KEY_0=http.extraHeader",
+			"GIT_CONFIG_VALUE_0=Authorization: Basic "+credentials,
+		)
+	}
+	return cmd
 }
 
 func runGitCommand(ctx context.Context, dir string, args ...string) error {
@@ -378,24 +393,6 @@ func isGitHubURL(url string) bool {
 	return strings.HasPrefix(url, "https://github.com/") ||
 		strings.HasPrefix(url, "http://github.com/") ||
 		strings.HasPrefix(url, "git@github.com:")
-}
-
-// injectGitHubToken injects a GitHub token into a repository URL for authentication
-func injectGitHubToken(repoURL, token string) string {
-	// Handle HTTPS GitHub URLs
-	if strings.HasPrefix(repoURL, "https://github.com/") {
-		// Replace https://github.com/ with https://token@github.com/
-		repoPath := strings.TrimPrefix(repoURL, "https://github.com/")
-		return fmt.Sprintf("https://%s@github.com/%s", token, repoPath)
-	}
-	if strings.HasPrefix(repoURL, "http://github.com/") {
-		// Replace http://github.com/ with http://token@github.com/
-		repoPath := strings.TrimPrefix(repoURL, "http://github.com/")
-		return fmt.Sprintf("http://%s@github.com/%s", token, repoPath)
-	}
-	// For SSH URLs (git@github.com:), tokens aren't used - SSH keys are required instead
-	// Return original URL if it's SSH or unknown format
-	return repoURL
 }
 
 // execCommand runs a command in a directory
@@ -661,6 +658,9 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 
 	if result.ComposeYaml != "" {
 		// Use compose deployment
+		if deploymentIsPullRequestPreview(deployment) {
+			return manager.DeployIsolatedComposeFile(ctx, deployment.ID, result.ComposeYaml)
+		}
 		return manager.DeployComposeFile(ctx, deployment.ID, result.ComposeYaml)
 	} else if result.ImageName != "" {
 		// Use single container deployment

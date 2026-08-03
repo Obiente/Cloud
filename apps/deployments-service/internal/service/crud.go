@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 // ListDeployments lists all deployments for an organization
@@ -244,7 +246,6 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-
 	// Convert to proto and enrich with actual container status
 	deployment := dbDeploymentToProto(dbDeployment)
 
@@ -309,7 +310,11 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has edit permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if targetNodeID != "" {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -336,6 +341,8 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
+	originalRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
+	originalIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
 
 	// Update deployment fields (only update if provided)
 	if req.Msg.Name != nil {
@@ -667,10 +674,17 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// NOTE: Do NOT update status fields on config save
 	// Status changes should only happen via explicit deploy/start/stop actions
 	// This allows users to save settings without triggering a build
-
 	if dbDeployment.GitHubIntegrationID != nil {
 		if err := s.ensureGitHubWebhookForDeployment(ctx, dbDeployment); err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to configure GitHub auto-deploy webhook: %w", err))
+		}
+	}
+
+	nextRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
+	nextIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
+	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
+		if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to retire pull request previews for the previous repository: %w", err))
 		}
 	}
 
@@ -683,6 +697,36 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	protoDeployment := dbDeploymentToProto(dbDeployment)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentResponse{Deployment: protoDeployment})
 	return res, nil
+}
+
+func (s *Service) retirePullRequestDeploymentsForRepositoryChange(ctx context.Context, sourceDeploymentID, previousRepository string) error {
+	if previousRepository == "" {
+		return nil
+	}
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).
+		Where("source_deployment_id = ? AND repository = ? AND closed_at IS NULL", sourceDeploymentID, previousRepository).
+		Order("id ASC").
+		Find(&records).Error; err != nil {
+		return err
+	}
+	for i := range records {
+		record := records[i]
+		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", sourceDeploymentID, record.Repository, record.PullRequestNumber)
+		if err := withDistributedLock(ctx, lockKey, func() error {
+			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			return s.cleanupPullRequestDeployment(ctx, &record, "The source repository connected to this deployment changed.")
+		}); err != nil {
+			return fmt.Errorf("retire %s#%d: %w", record.Repository, record.PullRequestNumber, err)
+		}
+		s.reportPullRequestDeployment(record.ID)
+	}
+	return nil
 }
 
 func sanitizeBuildArgs(args map[string]string) (map[string]string, error) {
@@ -877,16 +921,58 @@ func cleanHealthcheckPath(rawPath string) (string, bool) {
 
 // DeleteDeployment deletes a deployment
 func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest]) (*connect.Response[deploymentsv1.DeleteDeploymentResponse], error) {
+	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has delete permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
+	}
+	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+		reqBody, _ := json.Marshal(req.Msg)
+		headers, err := deleteDeploymentForwardHeaders(ctx, req, targetNodeID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+		}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/DeleteDeployment", headers, &deploymentsv1.DeleteDeploymentResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to forward deployment deletion: %w", err))
+		}
+		var response deploymentsv1.DeleteDeploymentResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode deletion response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+	deleted := false
+	defer func() {
+		if !deleted {
+			s.clearDeploymentBuildCancellationAfterAbort(deploymentID)
+		}
+	}()
+	if err := s.cancelDeploymentBuild(deploymentID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to coordinate build cancellation: %w", err))
 	}
 
 	// Get deployment before deleting to check if it's compose-based
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	if err := s.cleanupPullRequestDeploymentsForSource(ctx, deploymentID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to remove pull request previews: %w", err))
+	}
+
+	// Do not remove the database row until the orchestrator confirms that the
+	// runtime is gone. Preview cleanup relies on an error here to retain its
+	// retryable parent record instead of orphaning publicly reachable code.
+	if s.manager != nil {
+		if dbDep.ComposeYaml != "" || dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) || dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
+			if err := s.manager.RemoveComposeDeployment(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove compose runtime: %w", err))
+			}
+		} else if err := s.manager.DeleteDeployment(ctx, deploymentID); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove deployment runtime: %w", err))
+		}
 	}
 
 	// Delete all build logs and build history for this deployment
@@ -907,26 +993,37 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 		log.Printf("[DeleteDeployment] Deleted %d builds and their logs for deployment %s", deletedCount, deploymentID)
 	}
 
-	// Remove containers/stack before deleting from DB
-	if s.manager != nil {
-		if dbDep.ComposeYaml != "" {
-			// Remove compose deployment
-			if err := s.manager.RemoveComposeDeployment(ctx, deploymentID); err != nil {
-				log.Printf("[DeleteDeployment] Failed to remove compose deployment %s: %v", deploymentID, err)
-				// Continue with DB deletion even if container removal failed
-			}
-		} else {
-			// Remove regular containers
-			_ = s.manager.DeleteDeployment(ctx, deploymentID)
-		}
-	}
-
 	if err := s.repo.Delete(ctx, deploymentID); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
+	deleted = true
+	_ = database.DB.WithContext(ctx).Where("deployment_id = ?", deploymentID).Delete(&database.DeploymentBuildControl{}).Error
 
 	res := connect.NewResponse(&deploymentsv1.DeleteDeploymentResponse{Success: true})
 	return res, nil
+}
+
+func (s *Service) deploymentDeletionForwardTarget(ctx context.Context, deploymentID string) (string, error) {
+	var location database.DeploymentLocation
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Order("updated_at DESC").
+		First(&location).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to locate deployment runtime: %w", err)
+	}
+	if s.manager == nil {
+		return "", fmt.Errorf("deployment runtime is tracked on node %s, but the local orchestrator is unavailable", location.NodeID)
+	}
+	if location.NodeID == s.manager.GetNodeID() {
+		return "", nil
+	}
+	if s.forwarder == nil || !s.forwarder.CanForward(location.NodeID) {
+		return "", fmt.Errorf("deployment runtime is owned by node %s, but deletion cannot be forwarded", location.NodeID)
+	}
+	return location.NodeID, nil
 }
 
 // resolveUserDefaultOrgID returns a membership org id for the authenticated user, if any

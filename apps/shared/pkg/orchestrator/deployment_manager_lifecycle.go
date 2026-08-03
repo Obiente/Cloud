@@ -709,6 +709,7 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		return fmt.Errorf("failed to get deployment locations: %w", err)
 	}
 
+	var removalErrors []error
 	for _, location := range locations {
 		// Only delete containers on this node
 		if location.NodeID != dm.nodeID {
@@ -726,6 +727,7 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		// Verify container has our management label
 		if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
 			logger.Error("[DeploymentManager] SECURITY: Refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", location.ContainerID[:12])
+			removalErrors = append(removalErrors, fmt.Errorf("refused to remove unmanaged container %s", location.ContainerID))
 			continue
 		}
 
@@ -736,6 +738,7 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		// Remove container
 		if err := dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true); err != nil {
 			logger.Info("[DeploymentManager] Failed to remove container %s: %v", location.ContainerID, err)
+			removalErrors = append(removalErrors, fmt.Errorf("remove container %s: %w", location.ContainerID, err))
 			continue
 		}
 
@@ -745,6 +748,9 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		}
 
 		logger.Info("[DeploymentManager] Deleted container %s", location.ContainerID[:12])
+	}
+	if err := errors.Join(removalErrors...); err != nil {
+		return err
 	}
 
 	// Clean up volumes and deployment data

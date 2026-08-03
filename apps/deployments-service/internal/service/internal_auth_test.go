@@ -53,7 +53,7 @@ func TestInternalServiceAuthInterceptorRejectsOtherProcedures(t *testing.T) {
 	_, err := interceptor.authenticateForwardedTrigger(
 		context.Background(),
 		"shared-secret",
-		deploymentsv1connect.DeploymentServiceDeleteDeploymentProcedure,
+		deploymentsv1connect.DeploymentServiceUpdateDeploymentProcedure,
 		"node-two",
 	)
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
@@ -72,6 +72,23 @@ func TestInternalServiceAuthInterceptorRequiresForwardingTarget(t *testing.T) {
 	)
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("error code = %s, want %s", connect.CodeOf(err), connect.CodePermissionDenied)
+	}
+}
+
+func TestInternalServiceAuthInterceptorAllowsForwardedDeletion(t *testing.T) {
+	interceptor := NewInternalServiceAuthInterceptor("shared-secret")
+	ctx, err := interceptor.authenticateForwardedTrigger(
+		context.Background(),
+		"shared-secret",
+		deploymentsv1connect.DeploymentServiceDeleteDeploymentProcedure,
+		"node-two",
+	)
+	if err != nil {
+		t.Fatalf("authenticate forwarded deletion: %v", err)
+	}
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil || user == nil || user.Id != "system" {
+		t.Fatalf("forwarded deletion did not receive system identity: user=%#v err=%v", user, err)
 	}
 }
 
