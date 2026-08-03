@@ -89,6 +89,22 @@ interface Emits {
   (e: "composeLoaded", content: string): void;
 }
 
+interface GitHubRepository {
+  id: string;
+  name: string;
+  fullName: string;
+  description: string;
+  url: string;
+  isPrivate: boolean;
+  defaultBranch: string;
+}
+
+interface GitHubBranch {
+  name: string;
+  isDefault: boolean;
+  sha: string;
+}
+
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
@@ -96,8 +112,8 @@ const client = useConnectClient(DeploymentService);
 const selectedRepo = ref(props.modelValue || "");
 const selectedBranch = ref(props.branch || "");
 const selectedIntegrationId = ref<string>("");
-const repos = ref<any[]>([]);
-const branches = ref<any[]>([]);
+const repos = ref<GitHubRepository[]>([]);
+const branches = ref<GitHubBranch[]>([]);
 const availableIntegrations = ref<Array<{
   id: string;
   username: string;
@@ -280,6 +296,11 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
     return;
   }
 
+  const branchToPreserve =
+    repoFullName === props.modelValue ? props.branch || "" : "";
+  const repositoryDefaultBranch =
+    repos.value.find((repo) => repo.fullName === repoFullName)?.defaultBranch || "";
+
   emit("update:modelValue", repoFullName);
   // Always emit integration ID when repo is selected (essential for private repos)
   if (selectedIntegrationId.value) {
@@ -298,8 +319,12 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
     });
     branches.value = res.branches || [];
     if (branches.value.length > 0) {
-      const defaultBranch = branches.value.find((b) => b.isDefault) || branches.value[0];
-      selectedBranch.value = defaultBranch.name;
+      const selectedDefault =
+        branches.value.find((branch) => branch.name === branchToPreserve) ||
+        branches.value.find((branch) => branch.name === repositoryDefaultBranch) ||
+        branches.value.find((branch) => branch.isDefault) ||
+        branches.value[0];
+      selectedBranch.value = selectedDefault.name;
       emit("update:branch", selectedBranch.value);
     } else {
       error.value = "No branches found for this repository.";
