@@ -17,6 +17,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 var DB *gorm.DB
@@ -575,6 +576,10 @@ func InitDatabase() error {
 		}
 	}
 
+	if err := backfillPullRequestPreviewEnvironments(db); err != nil {
+		return fmt.Errorf("failed to backfill pull request preview environments: %w", err)
+	}
+
 	// Initialize VPS catalog with default sizes and regions
 	if err := InitVPSCatalog(); err != nil {
 		logger.Warn("Failed to initialize VPS catalog: %v", err)
@@ -636,6 +641,23 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		}
 		return nil
 	})
+}
+
+func backfillPullRequestPreviewEnvironments(db *gorm.DB) error {
+	result := db.Exec(`
+		UPDATE deployments AS deployment
+		SET environment = ?
+		FROM pull_request_deployments AS preview
+		WHERE preview.preview_deployment_id = deployment.id
+		  AND deployment.environment <> ?
+	`, int32(deploymentsv1.Environment_PULL_REQUEST), int32(deploymentsv1.Environment_PULL_REQUEST))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("Marked %d existing pull request preview deployment(s) as PR environments", result.RowsAffected)
+	}
+	return nil
 }
 
 // InitAuditLogsTimescaleDB converts audit_logs table to TimescaleDB hypertable if available

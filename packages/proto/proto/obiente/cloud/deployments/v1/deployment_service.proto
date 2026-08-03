@@ -41,6 +41,7 @@ enum Environment {
   PRODUCTION = 1;
   STAGING = 2;
   DEVELOPMENT = 3;
+  PULL_REQUEST = 4;
 }
 
 enum DeploymentStatus {
@@ -288,7 +289,7 @@ message ListDeploymentsResponse {
 message CreateDeploymentRequest {
   string organization_id = 1;
   string name = 2;
-  Environment environment = 3; // Environment (production/staging/development)
+  Environment environment = 3; // User-managed environment (production/staging/development)
   repeated string groups = 4; // Optional groups/labels for organizing deployments
 }
 
@@ -325,7 +326,7 @@ message UpdateDeploymentRequest {
   repeated string custom_domains = 9;
   optional int32 port = 10;
   optional BuildStrategy build_strategy = 11; // build strategy enum
-  optional Environment environment = 15; // Environment (production/staging/development)
+  optional Environment environment = 15; // User-managed environment (production/staging/development)
   repeated string groups = 16; // Optional groups/labels for organizing deployments
   optional double cpu_limit = 22; // CPU limit in cores
   optional int64 memory_limit = 23; // Memory limit in MB

@@ -248,6 +248,8 @@ func matchesEnvironmentForDeployment(deploymentID string, b database.OrgRoleBind
 		return dep.Environment == 2
 	case "development":
 		return dep.Environment == 3
+	case "pull_request":
+		return dep.Environment == 4
 	default:
 		return false
 	}

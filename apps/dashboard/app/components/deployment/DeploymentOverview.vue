@@ -483,6 +483,8 @@ const getEnvironmentLabel = (env: string | EnvEnum | number) => {
         return "Staging";
       case EnvEnum.DEVELOPMENT:
         return "Development";
+      case EnvEnum.PULL_REQUEST:
+        return "Pull Request";
       default:
         return "Environment";
     }
@@ -498,6 +500,8 @@ const getEnvironmentVariant = (env: string | EnvEnum | number): "success" | "war
       case EnvEnum.STAGING:
         return "warning";
       case EnvEnum.DEVELOPMENT:
+        return "secondary";
+      case EnvEnum.PULL_REQUEST:
         return "secondary";
       default:
         return "secondary";

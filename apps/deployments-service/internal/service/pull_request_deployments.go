@@ -1294,6 +1294,7 @@ func refreshPreviewDeployment(preview, source *database.Deployment, config *data
 	preview.Branch = record.HeadRef
 	preview.CustomDomains = "[]"
 	preview.Groups = mustJSON([]string{"pull-request", fmt.Sprintf("pr-%d", record.PullRequestNumber)})
+	preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
 	preview.DockerfileVolumes = "[]"
 	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
 	preview.HealthStatus = "pending"
@@ -2266,7 +2267,7 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 			summary += "\n\n[Open preview](" + *record.EnvironmentURL + ")"
 		}
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED:
-		status, conclusion, title, summary = "completed", "failure", "Preview failed", "The preview did not deploy successfully. Open Obiente for build output."
+		status, conclusion, title, summary = "completed", "failure", "Preview failed", "The preview did not deploy successfully. Open Obiente Cloud for build output."
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED:
 		status, conclusion, title, summary = "completed", "skipped", "Preview not deployed", stringValue(record.Error)
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL:

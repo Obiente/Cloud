@@ -49,7 +49,7 @@
 
             <OuiCombobox
               v-model="environmentFilter"
-              :options="environmentOptions"
+              :options="environmentFilterOptions"
               placeholder="All Environments"
               clearable
             />
@@ -289,6 +289,11 @@
     { label: "Development", value: String(EnvEnum.DEVELOPMENT) },
   ];
 
+  const environmentFilterOptions = [
+    ...environmentOptions,
+    { label: "PR", value: String(EnvEnum.PULL_REQUEST) },
+  ];
+
   // Compute available groups from deployments
   const groupOptions = computed(() => {
     const groups = new Set<string>();
@@ -425,6 +430,13 @@
       highlightIcon: null,
       highlightClass: "",
     },
+    pullRequest: {
+      label: "PR",
+      badge: "secondary",
+      chipClass: "bg-primary/10 text-primary ring-1 ring-primary/20",
+      highlightIcon: null,
+      highlightClass: "",
+    },
     DEFAULT: {
       label: "Environment",
       badge: "secondary",
@@ -446,6 +458,8 @@
           return ENVIRONMENT_META.staging;
         case EnvEnum.DEVELOPMENT:
           return ENVIRONMENT_META.development;
+        case EnvEnum.PULL_REQUEST:
+          return ENVIRONMENT_META.pullRequest;
         default:
           return ENVIRONMENT_META.DEFAULT;
       }
@@ -491,6 +505,8 @@
           return "Staging";
         case EnvEnum.DEVELOPMENT:
           return "Development";
+        case EnvEnum.PULL_REQUEST:
+          return "PR";
         default:
           return "Environment";
       }

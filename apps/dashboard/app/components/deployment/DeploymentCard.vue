@@ -395,6 +395,7 @@ const environmentLabel = computed(() => {
     [EnvEnum.PRODUCTION]: "Production",
     [EnvEnum.STAGING]: "Staging",
     [EnvEnum.DEVELOPMENT]: "Development",
+    [EnvEnum.PULL_REQUEST]: "PR",
   };
 
   return envMap[env] || "Unknown";
@@ -444,6 +445,10 @@ const ENVIRONMENT_META = {
   [EnvEnum.DEVELOPMENT]: {
     label: "Development",
     chipClass: "bg-info/10 text-info ring-1 ring-info/20",
+  },
+  [EnvEnum.PULL_REQUEST]: {
+    label: "PR",
+    chipClass: "bg-primary/10 text-primary ring-1 ring-primary/20",
   },
 } as const;
 

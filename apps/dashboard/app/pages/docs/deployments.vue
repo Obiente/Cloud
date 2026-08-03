@@ -397,6 +397,7 @@ const deploymentAccordionItems = [
         <li><strong>Production:</strong> Live, production deployments with production domains</li>
         <li><strong>Staging:</strong> Pre-production testing environment for QA and testing</li>
         <li><strong>Development:</strong> Development and testing environments</li>
+        <li><strong>PR:</strong> Isolated previews created automatically for pull requests</li>
       </ul>
       <p class="text-sm text-secondary mt-3">Each environment can have different resource limits, environment variables, and configurations. You can filter deployments by environment in the deployments list.</p>
     `,

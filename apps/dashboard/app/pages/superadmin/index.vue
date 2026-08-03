@@ -522,6 +522,8 @@
         return "STAGING";
       case 3:
         return "DEVELOPMENT";
+      case 4:
+        return "PULL_REQUEST";
       default:
         return "UNSPECIFIED";
     }

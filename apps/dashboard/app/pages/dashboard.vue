@@ -580,6 +580,9 @@
             case EnvEnum.DEVELOPMENT:
               env = "development";
               break;
+            case EnvEnum.PULL_REQUEST:
+              env = "pr";
+              break;
             default:
               env = "production";
           }

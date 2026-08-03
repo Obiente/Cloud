@@ -228,6 +228,8 @@ func GetProtoEnumValue(enumType string, value string) (int32, error) {
 			return int32(deploymentsv1.Environment_STAGING), nil
 		case "DEVELOPMENT":
 			return int32(deploymentsv1.Environment_DEVELOPMENT), nil
+		case "PULL_REQUEST":
+			return int32(deploymentsv1.Environment_PULL_REQUEST), nil
 		default:
 			return 0, fmt.Errorf("invalid Environment value: %s", value)
 		}

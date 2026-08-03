@@ -304,7 +304,7 @@ func TestPreviewRequestedResourcesMatchSourceRuntime(t *testing.T) {
 func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
 	buildCommand := "pnpm build"
 	port := int32(8080)
-	source := &database.Deployment{ID: "source", Name: "App", BuildStrategy: int32(deploymentsv1.BuildStrategy_NIXPACKS), BuildCommand: &buildCommand, Port: &port, EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
+	source := &database.Deployment{ID: "source", Name: "App", Environment: int32(deploymentsv1.Environment_PRODUCTION), BuildStrategy: int32(deploymentsv1.BuildStrategy_NIXPACKS), BuildCommand: &buildCommand, Port: &port, EnvVars: `{"PUBLIC":"current","REMOVED_SECRET":"old"}`, BuildArgs: `{"SAFE":"current","REMOVED_TOKEN":"old"}`}
 	preview := &database.Deployment{ID: "preview", BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE), EnvVars: `{"REMOVED_SECRET":"old"}`, BuildArgs: `{"REMOVED_TOKEN":"old"}`, EnvFileContent: "SECRET=old", DockerfileVolumes: `["/secret"]`}
 	config := &database.PullRequestDeploymentConfig{DomainTemplate: "pr-{pr}-{deployment}", EnvironmentVariableNames: `["PUBLIC"]`, BuildArgumentNames: `["SAFE"]`}
 	record := &database.PullRequestDeployment{PullRequestNumber: 31, HeadRef: "updated-head"}
@@ -320,6 +320,9 @@ func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
 	}
 	if preview.ID != "preview" || preview.BuildStrategy != source.BuildStrategy || preview.BuildCommand == nil || *preview.BuildCommand != buildCommand || preview.Port == nil || *preview.Port != port {
 		t.Fatalf("preview did not refresh the current source template: %#v", preview)
+	}
+	if preview.Environment != int32(deploymentsv1.Environment_PULL_REQUEST) {
+		t.Fatalf("preview inherited source environment %d instead of using the PR environment", preview.Environment)
 	}
 }
 
