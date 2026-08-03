@@ -27,6 +27,7 @@ import (
 const (
 	cacheTTL                  = 5 * time.Minute // Cache DNS responses for 5 minutes
 	defaultGameServerDNSGrace = 2 * time.Minute // Keep stale game server DNS briefly after stop
+	previewDNSZoneName        = "my.obiente.cloud."
 	previewACMEChallengeName  = "_acme-challenge.my.obiente.cloud."
 	previewACMECNAMETTL       = 60
 	httpReadHeaderTimeout     = 10 * time.Second
@@ -165,7 +166,7 @@ func normalizePreviewACMEChallengeCNAME(value string) (string, error) {
 			return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must contain only valid ASCII DNS labels")
 		}
 	}
-	if target == previewACMEChallengeName || strings.HasSuffix(target, ".my.obiente.cloud.") {
+	if target == previewDNSZoneName || strings.HasSuffix(target, "."+previewDNSZoneName) {
 		return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must point outside the delegated my.obiente.cloud zone")
 	}
 	return target, nil

@@ -73,22 +73,13 @@ Edit `.env` with your configuration:
 
 ### 4. Configure Preview TLS
 
-#### Standard Swarm Stack
-
-Traefik uses DNS-01 to obtain one wildcard certificate for `my.obiente.cloud`
-and `*.my.obiente.cloud`. This certificate covers both live pull request
-previews and the preview status page shown while a preview is not running.
-
-Choose any DNS provider supported by
-[lego](https://go-acme.github.io/lego/dns/), then set its provider code in
-`.env`:
-
-```bash
-PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
-```
+Issue one certificate that covers `my.obiente.cloud` and
+`*.my.obiente.cloud` using any ACME client, DNS provider, or certificate
+service. This certificate covers both live pull request previews and the
+preview status page shown while a preview is not running.
 
 When the bundled DNS service is authoritative for `my.obiente.cloud`, delegate
-the ACME challenge to a name outside that zone which the selected provider can
+DNS-01 validation to a name outside that zone which the certificate issuer can
 update. For example, an operator controlling `example.net` could use:
 
 ```bash
@@ -96,36 +87,13 @@ PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
 ```
 
 The DNS service answers `_acme-challenge.my.obiente.cloud` with this CNAME.
-The ACME client follows it and publishes the TXT value through the selected
-provider. If `ENABLE_DNS=false` and the selected provider is directly
-authoritative for the preview zone, this CNAME is not required.
+The ACME client follows it and publishes the TXT value through its configured
+provider. If `ENABLE_DNS=false` and that provider is directly authoritative for
+the preview zone, this CNAME is not required. The target must be outside the
+entire `my.obiente.cloud` zone, including its apex.
 
-Create a protected file containing the environment variables required by that
-provider, one `NAME=value` entry per line. Use the variable names from the
-provider's lego documentation. Blank lines and lines beginning with `#` are
-allowed. Create one provider-neutral external Docker secret from that file:
-
-```bash
-docker secret create preview_dns_credentials /secure/path/preview-dns-credentials
-```
-
-Verify that the secret exists:
-
-```bash
-docker secret inspect preview_dns_credentials >/dev/null
-```
-
-The Traefik wrapper validates credential names and exports them without
-printing their values. Do not place provider credentials in `.env` or commit
-them to the repository. The deployment script stops before changing the stack
-if the provider or secret is missing.
-
-#### HA Swarm Stack
-
-The HA stack does not run ACME independently in every Traefik replica. Issue
-the `my.obiente.cloud` and `*.my.obiente.cloud` certificate once using any ACME
-client or certificate service, then distribute the full chain and private key
-through versioned Docker Swarm secrets:
+Distribute the issued full chain and private key through versioned Docker
+Swarm secrets:
 
 ```bash
 docker secret create preview_tls_cert_20260803 /secure/path/fullchain.pem
@@ -139,10 +107,13 @@ PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
 PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
 ```
 
-Every Traefik replica receives the same certificate through Swarm and loads it
-from the file provider. To renew it, create new versioned secrets, update the
-two names, and deploy the stack. Remove old secrets only after no service
-references them.
+Every Traefik replica in the standard, development, and HA stacks receives the
+same certificate through Swarm and loads it from the file provider. This avoids
+independent ACME orders and renewal races on multi-manager clusters. To renew
+the certificate, create new versioned secrets, update the two names, and deploy
+the stack. Remove old secrets only after no service references them. The
+deployment scripts stop before changing the stack when either selected secret
+is missing.
 
 ### 5. Prepare All Nodes (Required)
 

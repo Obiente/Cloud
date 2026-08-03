@@ -472,9 +472,6 @@ services:
         - "traefik.http.routers.preview-domain-fallback-secure.entrypoints=websecure"
         - "traefik.http.routers.preview-domain-fallback-secure.priority=1"
         - "traefik.http.routers.preview-domain-fallback-secure.tls=true"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.certresolver=previewdns"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].main=my.obiente.cloud"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].sans=*.my.obiente.cloud"
         - "traefik.http.routers.preview-domain-fallback-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
@@ -1002,11 +999,13 @@ services:
 
   traefik:
     image: traefik:v3.6.1
-    environment:
-      PREVIEW_ACME_DNS_PROVIDER: ${PREVIEW_ACME_DNS_PROVIDER:-}
     secrets:
-      - preview_dns_credentials
-    entrypoint: *traefik-dns-entrypoint
+      - preview_tls_cert
+      - preview_tls_key
+    configs:
+      - source: preview_tls_config
+        target: /etc/traefik/dynamic/preview-tls.yml
+        mode: 0444
     command:
       - --api.dashboard=true
       - --api.insecure=true  # Enable API on port 8080 directly
@@ -1015,6 +1014,8 @@ services:
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      - --providers.file.filename=/etc/traefik/dynamic/preview-tls.yml
+      - --providers.file.watch=true
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
       - --serversTransport.forwardingTimeouts.dialTimeout=10s
@@ -1041,11 +1042,6 @@ services:
       # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
       # Default: production (https://acme-v02.api.letsencrypt.org/directory)
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
-      # Wildcard certificate shared by PR state pages and live preview routers.
-      - --certificatesresolvers.previewdns.acme.email=${ACME_EMAIL:-admin@example.com}
-      - --certificatesresolvers.previewdns.acme.storage=/letsencrypt/acme-preview.json
-      - --certificatesresolvers.previewdns.acme.dnschallenge.provider=${PREVIEW_ACME_DNS_PROVIDER:-}
-      - --certificatesresolvers.previewdns.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       # Metrics
       - --metrics.prometheus=true
       # Logging
@@ -1324,6 +1320,8 @@ networks:
     #   name: ${MAIN_DEPLOYMENT_NETWORK:-obiente_obiente-network}
 
 configs:
+  preview_tls_config:
+    file: ./scripts/internal/traefik-preview-tls.yml
   # Custom pg_hba.conf file
   postgres_hba_conf:
     file: ./scripts/internal/pg_hba.conf
@@ -1332,5 +1330,9 @@ configs:
     file: ./scripts/internal/init-pg-hba.sh
 
 secrets:
-  preview_dns_credentials:
+  preview_tls_cert:
+    name: ${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}
+    external: true
+  preview_tls_key:
+    name: ${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}
     external: true

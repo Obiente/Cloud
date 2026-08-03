@@ -20,6 +20,7 @@ func TestNormalizePreviewACMEChallengeCNAME(t *testing.T) {
 
 	for _, value := range []string{
 		"_acme-challenge.my.obiente.cloud",
+		"my.obiente.cloud",
 		"nested.my.obiente.cloud",
 		"invalid name",
 		"-invalid.example.net",

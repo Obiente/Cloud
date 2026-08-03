@@ -252,8 +252,8 @@ sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$
 # Bind mounts with relative paths must exist on every node, so we convert them to absolute paths
 sed -i "s|\\./monitoring/|${REPO_ROOT}/monitoring/|g" "$MERGED_COMPOSE"
 
-# Standard stacks issue the wildcard through DNS-01. HA stacks consume a
-# wildcard certificate distributed through Swarm secrets.
+# Every Traefik replica consumes the same wildcard certificate through Swarm
+# secrets, avoiding duplicate ACME orders in multi-manager stacks.
 require_preview_tls_configuration "$COMPOSE_FILE"
 
 # Verify config files exist before deploying

@@ -82,42 +82,8 @@ require_swarm_secrets() {
   return 1
 }
 
-require_environment_variables() {
-  local variable_name=""
-  local -a missing_variables=()
-
-  for variable_name in "$@"; do
-    if [ -z "${!variable_name:-}" ]; then
-      missing_variables+=("$variable_name")
-    fi
-  done
-
-  if [ ${#missing_variables[@]} -eq 0 ]; then
-    return 0
-  fi
-
-  echo "❌ Error: Required environment variables are missing:"
-  for variable_name in "${missing_variables[@]}"; do
-    echo "   - $variable_name"
-  done
-  return 1
-}
-
 require_preview_tls_configuration() {
   local compose_file="$1"
-
-  if grep -Eq '^[[:space:]]+- preview_dns_credentials[[:space:]]*$' "$compose_file"; then
-    require_environment_variables PREVIEW_ACME_DNS_PROVIDER || return 1
-    require_swarm_secrets preview_dns_credentials || return 1
-
-    case "${ENABLE_DNS:-true}" in
-      false|0)
-        ;;
-      *)
-        require_environment_variables PREVIEW_ACME_CHALLENGE_CNAME || return 1
-        ;;
-    esac
-  fi
 
   if grep -Eq '^[[:space:]]+- preview_tls_cert[[:space:]]*$' "$compose_file"; then
     require_swarm_secrets \

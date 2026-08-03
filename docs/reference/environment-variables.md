@@ -851,29 +851,25 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 | -------------------------------- | ------ | --------------------- | ----------------------------------------- |
 | `DOMAIN`                         | string | `obiente.example.com` | ❌                                        |
 | `ACME_EMAIL`                     | string | -                     | ❌ (for Let's Encrypt)                    |
-| `PREVIEW_ACME_DNS_PROVIDER`      | string | -                     | ✅ (standard PR preview TLS)              |
-| `PREVIEW_ACME_CHALLENGE_CNAME`   | string | -                     | ✅ when the bundled DNS service is active |
-| `PREVIEW_TLS_CERT_SECRET`        | string | `preview_tls_cert`    | ❌ (HA certificate rotation)              |
-| `PREVIEW_TLS_KEY_SECRET`         | string | `preview_tls_key`     | ❌ (HA certificate rotation)              |
+| `PREVIEW_ACME_CHALLENGE_CNAME`   | string | -                     | ❌ (external DNS-01 delegation)            |
+| `PREVIEW_TLS_CERT_SECRET`        | string | `preview_tls_cert`    | ❌ (certificate rotation)                  |
+| `PREVIEW_TLS_KEY_SECRET`         | string | `preview_tls_key`     | ❌ (certificate rotation)                  |
 
 **Example:**
 
 ```bash
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
-PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
 PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
 PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
 PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
 ```
 
-`PREVIEW_ACME_DNS_PROVIDER` accepts any DNS provider code supported by lego.
-Provider-specific credentials belong in the `preview_dns_credentials` Docker
-secret, not in `.env`. When Obiente's DNS service is authoritative,
-`PREVIEW_ACME_CHALLENGE_CNAME` must point to a name outside
-`my.obiente.cloud` that the selected provider can update. HA deployments use
-the two versioned certificate secret names instead of issuing certificates in
-each Traefik replica.
+When Obiente's DNS service is authoritative, an external ACME client can use
+`PREVIEW_ACME_CHALLENGE_CNAME` to delegate DNS-01 validation to a name outside
+`my.obiente.cloud` that its selected provider can update. Every Swarm stack
+loads the resulting certificate from the two versioned certificate secrets so
+multiple Traefik replicas never issue or renew the same wildcard independently.
 
 ### DNS Configuration
 
