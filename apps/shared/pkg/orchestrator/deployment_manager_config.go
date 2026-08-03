@@ -256,7 +256,7 @@ func (dm *DeploymentManager) injectPlanLimitsIntoCompose(composeYaml string, dep
 	return string(modifiedYaml), nil
 }
 
-func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, deploymentID string, routings []database.DeploymentRouting) (string, error) {
+func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, deploymentID string, routings []database.DeploymentRouting, ingressNetworkName string) (string, error) {
 	// Parse YAML
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
@@ -277,6 +277,20 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	var deploymentDomain string
 	if len(routings) > 0 {
 		deploymentDomain = routings[0].Domain
+	}
+
+	if ingressNetworkName == "" {
+		if utils.IsSwarmModeEnabled() {
+			resolved, err := dm.getSwarmNetworkName(context.Background())
+			if err != nil {
+				logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+				ingressNetworkName = "obiente_obiente-network"
+			} else {
+				ingressNetworkName = resolved
+			}
+		} else {
+			ingressNetworkName = dm.networkName
+		}
 	}
 
 	// Inject labels into each service
@@ -309,16 +323,8 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					}
 				}
 
-				// Get the actual Swarm network name dynamically (supports any stack name)
-				// This will find networks matching the pattern *_obiente-network
-				swarmNetworkName, err := dm.getSwarmNetworkName(context.Background())
-				if err != nil {
-					logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-					swarmNetworkName = "obiente_obiente-network"
-				}
-
 				// Generate Traefik labels for this service
-				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort, swarmNetworkName)
+				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort, ingressNetworkName)
 
 				// When Traefik handles routing, we should not expose ports to the host
 				// Convert ports to expose (internal network only) if Traefik labels are present
@@ -553,20 +559,11 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 			compose["networks"] = networks
 		}
 
-		// Get the actual Swarm network name dynamically (supports any stack name)
-		// This will find networks matching the pattern *_obiente-network
-		swarmNetworkName, err := dm.getSwarmNetworkName(context.Background())
-		if err != nil {
-			logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-			// Fallback: try to find any network ending with _obiente-network
-			swarmNetworkName = "obiente_obiente-network"
-		}
-
 		// Add or update obiente-network to be external (references the Swarm network)
 		// In Swarm mode, the network name is prefixed with stack name: {stack-name}_obiente-network
 		networkConfig := map[string]interface{}{
 			"external": true,
-			"name":     swarmNetworkName, // Use the dynamically discovered Swarm network name
+			"name":     ingressNetworkName,
 		}
 		networks["obiente-network"] = networkConfig
 
@@ -574,6 +571,16 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 		if services, ok := compose["services"].(map[string]interface{}); ok {
 			for serviceName, serviceData := range services {
 				if service, ok := serviceData.(map[string]interface{}); ok {
+					routed := false
+					for _, routing := range routings {
+						if routing.ServiceName == serviceName || ((routing.ServiceName == "" || routing.ServiceName == "default") && serviceName == "default") {
+							routed = true
+							break
+						}
+					}
+					if !routed {
+						continue
+					}
 					serviceNetworks := normalizeServiceNetworks(service)
 
 					// Ensure obiente-network is in the service's networks and every network has the bare service alias.
@@ -807,7 +814,19 @@ func parseCPUString(cpuStr string) float64 {
 // addTraefikNetworkToRoutedServices adds obiente-network to services that have routing configured
 // This allows Traefik to discover and route to these services on the shared obiente-network
 // while maintaining deployment isolation through the deployment-specific network
-func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml string, routings []database.DeploymentRouting) (string, error) {
+func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml string, routings []database.DeploymentRouting, ingressNetworkName string) (string, error) {
+	if ingressNetworkName == "" {
+		if utils.IsSwarmModeEnabled() {
+			resolved, err := dm.getSwarmNetworkName(context.Background())
+			if err != nil {
+				ingressNetworkName = "obiente_obiente-network"
+			} else {
+				ingressNetworkName = resolved
+			}
+		} else {
+			ingressNetworkName = dm.networkName
+		}
+	}
 	// Parse the compose file
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
@@ -868,10 +887,9 @@ func (dm *DeploymentManager) addTraefikNetworkToRoutedServices(composeYaml strin
 	}
 
 	// Mark obiente-network as external (it already exists in the system)
-	if _, exists := networks["obiente-network"]; !exists {
-		networks["obiente-network"] = map[string]interface{}{
-			"external": true,
-		}
+	networks["obiente-network"] = map[string]interface{}{
+		"external": true,
+		"name":     ingressNetworkName,
 	}
 
 	// Marshal back to YAML

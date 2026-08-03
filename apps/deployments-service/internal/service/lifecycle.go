@@ -632,6 +632,26 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if buildCtx.Err() != nil || !deploymentBuildIsCurrent(buildCtx, deploymentID, buildToken) {
 				return
 			}
+			if result.ComposeYaml != "" {
+				// Persist the Compose cleanup marker and revision-specific routing
+				// before invoking Docker. A failed compose/stack operation may still
+				// leave resources that the cleanup path must recognize and remove.
+				dbDeployment.ComposeYaml = result.ComposeYaml
+				if err := resolvePreviewComposeRoutingForRevision(buildCtx, dbDeployment, result.ComposeYaml); err != nil {
+					errorMsg := err.Error()
+					streamer.WriteStderr([]byte(fmt.Sprintf("❌ Preview routing validation failed: %v\n", err)))
+					updateBuildStatus(4, &errorMsg)
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+					return
+				}
+				if err := s.repo.Update(buildCtx, dbDeployment); err != nil {
+					errorMsg := fmt.Sprintf("failed to persist Compose deployment metadata before rollout: %v", err)
+					streamer.WriteStderr([]byte("❌ " + errorMsg + "\n"))
+					updateBuildStatus(4, &errorMsg)
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+					return
+				}
+			}
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				if orchestrator.RollbackPreserved(err) {

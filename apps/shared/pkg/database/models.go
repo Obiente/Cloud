@@ -90,6 +90,7 @@ type PullRequestDeploymentConfig struct {
 	BuildArgumentNames       string    `gorm:"type:jsonb;not null;default:'[]'" json:"build_argument_names"`
 	RequireApproval          bool      `gorm:"not null;default:false" json:"require_approval"`
 	ApprovalCoversUpdates    bool      `gorm:"not null;default:false" json:"approval_covers_updates"`
+	ReconciliationPending    bool      `gorm:"index;not null;default:false" json:"reconciliation_pending"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
@@ -123,6 +124,9 @@ type PullRequestDeployment struct {
 	GitHubCommentID      *int64     `json:"github_comment_id"`
 	GitHubCheckRunID     *int64     `json:"github_check_run_id"`
 	GitHubCheckRunSHA    *string    `json:"github_check_run_sha"`
+	ReportPending        bool       `gorm:"index;not null;default:false" json:"report_pending"`
+	ReportAttempts       int32      `gorm:"not null;default:0" json:"report_attempts"`
+	NextReportAt         *time.Time `gorm:"index" json:"next_report_at"`
 	ApprovedBy           *string    `json:"approved_by"`
 	ApprovedHeadSHA      *string    `gorm:"index" json:"approved_head_sha"`
 	ApprovedAt           *time.Time `json:"approved_at"`

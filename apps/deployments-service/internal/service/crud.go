@@ -246,7 +246,6 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-
 	// Convert to proto and enrich with actual container status
 	deployment := dbDeploymentToProto(dbDeployment)
 
@@ -342,6 +341,8 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
+	originalRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
+	originalIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
 
 	// Update deployment fields (only update if provided)
 	if req.Msg.Name != nil {
@@ -673,10 +674,17 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// NOTE: Do NOT update status fields on config save
 	// Status changes should only happen via explicit deploy/start/stop actions
 	// This allows users to save settings without triggering a build
-
 	if dbDeployment.GitHubIntegrationID != nil {
 		if err := s.ensureGitHubWebhookForDeployment(ctx, dbDeployment); err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("failed to configure GitHub auto-deploy webhook: %w", err))
+		}
+	}
+
+	nextRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
+	nextIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
+	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
+		if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to retire pull request previews for the previous repository: %w", err))
 		}
 	}
 
@@ -689,6 +697,36 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	protoDeployment := dbDeploymentToProto(dbDeployment)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentResponse{Deployment: protoDeployment})
 	return res, nil
+}
+
+func (s *Service) retirePullRequestDeploymentsForRepositoryChange(ctx context.Context, sourceDeploymentID, previousRepository string) error {
+	if previousRepository == "" {
+		return nil
+	}
+	var records []database.PullRequestDeployment
+	if err := database.DB.WithContext(ctx).
+		Where("source_deployment_id = ? AND repository = ? AND closed_at IS NULL", sourceDeploymentID, previousRepository).
+		Order("id ASC").
+		Find(&records).Error; err != nil {
+		return err
+	}
+	for i := range records {
+		record := records[i]
+		lockKey := fmt.Sprintf("pull-request:%s:%s:%d", sourceDeploymentID, record.Repository, record.PullRequestNumber)
+		if err := withDistributedLock(ctx, lockKey, func() error {
+			if err := database.DB.WithContext(ctx).Where("id = ? AND closed_at IS NULL", record.ID).First(&record).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+			return s.cleanupPullRequestDeployment(ctx, &record, "The source repository connected to this deployment changed.")
+		}); err != nil {
+			return fmt.Errorf("retire %s#%d: %w", record.Repository, record.PullRequestNumber, err)
+		}
+		s.reportPullRequestDeployment(record.ID)
+	}
+	return nil
 }
 
 func sanitizeBuildArgs(args map[string]string) (map[string]string, error) {
@@ -928,7 +966,7 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	// runtime is gone. Preview cleanup relies on an error here to retain its
 	// retryable parent record instead of orphaning publicly reachable code.
 	if s.manager != nil {
-		if dbDep.ComposeYaml != "" {
+		if dbDep.ComposeYaml != "" || dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) || dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
 			if err := s.manager.RemoveComposeDeployment(ctx, deploymentID); err != nil {
 				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove compose runtime: %w", err))
 			}

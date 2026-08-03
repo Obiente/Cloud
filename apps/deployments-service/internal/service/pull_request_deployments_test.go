@@ -372,6 +372,56 @@ func TestPreviewComposeRoutingResolvesDefaultToActualService(t *testing.T) {
 	}
 }
 
+func TestPreviewEnvironmentURLIncludesComposePathPrefix(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	if err := db.AutoMigrate(&database.DeploymentRouting{}); err != nil {
+		t.Fatalf("migrate deployment routing: %v", err)
+	}
+	preview := &database.Deployment{ID: "preview-path", Domain: "pr-31.example.test", BuildStrategy: int32(deploymentsv1.BuildStrategy_COMPOSE_REPO)}
+	routing := database.DeploymentRouting{ID: "route-preview-path-default", DeploymentID: preview.ID, Domain: preview.Domain, ServiceName: "web", PathPrefix: "/api", TargetPort: 8080, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := db.Create(&routing).Error; err != nil {
+		t.Fatalf("seed preview routing: %v", err)
+	}
+	got, err := previewEnvironmentURL(t.Context(), preview)
+	if err != nil {
+		t.Fatalf("build preview URL: %v", err)
+	}
+	if got != "https://pr-31.example.test/api" {
+		t.Fatalf("preview URL omitted its route prefix: %q", got)
+	}
+}
+
+func TestPreviewComposeTargetTracksRenamedServiceAndPort(t *testing.T) {
+	composeYAML := "services:\n  frontend:\n    image: nginx\n    ports:\n      - '4321'\n"
+	serviceName, targetPort, err := resolvePreviewComposeTarget(composeYAML, "web", 8080)
+	if err != nil {
+		t.Fatalf("resolve current Compose target: %v", err)
+	}
+	if serviceName != "frontend" || targetPort != 4321 {
+		t.Fatalf("current Compose target was not selected: service=%q port=%d", serviceName, targetPort)
+	}
+}
+
+func TestComposePreviewEnvironmentIsInjectedLiterally(t *testing.T) {
+	composeYAML := "services:\n  web:\n    image: nginx\n    environment:\n      EXISTING: kept\n"
+	got, err := injectComposeServiceEnvironment(composeYAML, map[string]string{"PUBLIC_URL": "https://example.test/$path"})
+	if err != nil {
+		t.Fatalf("inject Compose environment: %v", err)
+	}
+	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$$path") {
+		t.Fatalf("allowlisted Compose environment was not preserved literally:\n%s", got)
+	}
+}
+
+func TestPullRequestReportRetryBackoffIsBounded(t *testing.T) {
+	if got := pullRequestReportRetryDelay(1); got != 30*time.Second {
+		t.Fatalf("unexpected first report retry delay: %s", got)
+	}
+	if got := pullRequestReportRetryDelay(20); got != 15*time.Minute {
+		t.Fatalf("report retry delay was not capped: %s", got)
+	}
+}
+
 func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
 	typeOfConfig := reflect.TypeOf(database.PullRequestDeploymentConfig{})
 	for _, name := range []string{"RedeployOnPush", "CleanupOnClose", "CommentEnabled", "DeploymentStatusEnabled", "CheckRunEnabled"} {

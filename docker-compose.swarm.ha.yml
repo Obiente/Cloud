@@ -534,6 +534,7 @@ services:
         - "traefik.http.services.api.loadbalancer.server.port=3001"
     networks:
       - obiente-network
+      - obiente-preview-ingress
 
   # ============================================================================
   # MONITORING & OBSERVABILITY
@@ -1537,6 +1538,12 @@ networks:
         - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
+  obiente-preview-ingress:
+    name: obiente-preview-ingress
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
 
 # ============================================================================
 # SECRETS

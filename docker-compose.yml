@@ -665,6 +665,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - obiente-network
+      - obiente-preview-ingress
 
   # DNS Server - Runs on port 53 inside Docker network only (not exposed to host)
   # This allows dev deployments to resolve without binding port 53 on host
@@ -688,6 +689,12 @@ networks:
     driver: bridge
     # Configure network to prevent DNS search domain issues
     # This ensures service names like "postgres" resolve correctly without appending .my.obiente.cloud
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.driver.mtu: "1500"
+  obiente-preview-ingress:
+    name: obiente-preview-ingress
+    driver: bridge
     driver_opts:
       com.docker.network.bridge.enable_icc: "true"
       com.docker.network.driver.mtu: "1500"

@@ -94,12 +94,18 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
 	}
+	reconciliationRequired := previousErr == nil && pullRequestConfigRequiresReconciliation(&previous, config)
+	config.ReconciliationPending = reconciliationRequired || (previousErr == nil && previous.ReconciliationPending)
 	if err := database.DB.WithContext(ctx).Save(config).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to save pull request deployment settings: %w", err))
 	}
-	if previousErr == nil && pullRequestConfigRequiresReconciliation(&previous, config) {
+	if config.ReconciliationPending {
 		if err := s.reconcilePullRequestDeploymentConfig(ctx, deployment, config); err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were saved, but active previews could not all be reconciled: %w", err))
+		}
+		config.ReconciliationPending = false
+		if err := database.DB.WithContext(ctx).Model(config).Update("reconciliation_pending", false).Error; err != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request settings were reconciled, but completion could not be recorded: %w", err))
 		}
 	}
 	// Persist the disabled setting before retiring checks. Reporters that are
@@ -121,7 +127,25 @@ func (s *Service) UpdatePullRequestDeploymentConfig(ctx context.Context, req *co
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("pull request comments were disabled, but maintained comments could not be removed: %w", err))
 		}
 	}
+	if previousErr == nil && ((!previous.CheckRunEnabled && config.CheckRunEnabled) ||
+		(!previous.DeploymentStatusEnabled && config.DeploymentStatusEnabled) ||
+		(!previous.CommentEnabled && config.CommentEnabled)) {
+		s.reportExistingPullRequestDeployments(deployment.ID)
+	}
 	return connect.NewResponse(&deploymentsv1.UpdatePullRequestDeploymentConfigResponse{Config: pullRequestConfigToProto(config)}), nil
+}
+
+func (s *Service) reportExistingPullRequestDeployments(sourceDeploymentID string) {
+	var recordIDs []string
+	if err := database.DB.Model(&database.PullRequestDeployment{}).
+		Where("source_deployment_id = ?", sourceDeploymentID).
+		Pluck("id", &recordIDs).Error; err != nil {
+		logger.Warn("[PRDeployments] Failed to queue reports after enabling GitHub reporting for %s: %v", sourceDeploymentID, err)
+		return
+	}
+	for _, recordID := range recordIDs {
+		go s.reportPullRequestDeployment(recordID)
+	}
 }
 
 func pullRequestConfigRequiresReconciliation(previous, current *database.PullRequestDeploymentConfig) bool {
@@ -890,7 +914,10 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 				if err := ensurePreviewComposeRouting(ctx, existing, source); err != nil {
 					return err
 				}
-				url := "https://" + existing.Domain
+				url, err := previewEnvironmentURL(ctx, existing)
+				if err != nil {
+					return err
+				}
 				record.EnvironmentURL = &url
 				preview = existing
 				return nil
@@ -933,7 +960,10 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		if err := ensurePreviewComposeRouting(ctx, &created, source); err != nil {
 			return err
 		}
-		url := "https://" + created.Domain
+		url, err := previewEnvironmentURL(ctx, &created)
+		if err != nil {
+			return err
+		}
 		record.EnvironmentURL = &url
 		preview = &created
 		return nil
@@ -942,6 +972,31 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		return nil, fmt.Errorf("failed to reserve preview deployment: %w", err)
 	}
 	return preview, nil
+}
+
+func previewEnvironmentURL(ctx context.Context, preview *database.Deployment) (string, error) {
+	if preview == nil || strings.TrimSpace(preview.Domain) == "" {
+		return "", fmt.Errorf("preview domain is unavailable")
+	}
+	result := "https://" + strings.TrimSpace(preview.Domain)
+	if preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) && preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
+		return result, nil
+	}
+	var routing database.DeploymentRouting
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ? AND domain = ?", preview.ID, preview.Domain).
+		Order("created_at ASC, id ASC").
+		First(&routing).Error; err != nil {
+		return "", fmt.Errorf("load preview route for its public URL: %w", err)
+	}
+	prefix := strings.TrimSpace(routing.PathPrefix)
+	if prefix == "" || prefix == "/" {
+		return result, nil
+	}
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	return result + prefix, nil
 }
 
 func ensurePreviewComposeRouting(ctx context.Context, preview, source *database.Deployment) error {
@@ -1062,11 +1117,88 @@ func previewComposeServiceName(composeYaml string, targetPort int) (string, erro
 	return "", fmt.Errorf("source Compose routing must identify one target service")
 }
 
+func resolvePreviewComposeRoutingForRevision(ctx context.Context, preview *database.Deployment, composeYaml string) error {
+	if preview == nil || !deploymentIsPullRequestPreview(preview) || preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+		return nil
+	}
+	var routings []database.DeploymentRouting
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ?", preview.ID).
+		Order("created_at ASC, id ASC").
+		Find(&routings).Error; err != nil {
+		return fmt.Errorf("load preview routing for current revision: %w", err)
+	}
+	if len(routings) == 0 {
+		return fmt.Errorf("preview routing is unavailable for the current revision")
+	}
+	for i := range routings {
+		routing := &routings[i]
+		serviceName, targetPort, resolveErr := resolvePreviewComposeTarget(composeYaml, routing.ServiceName, routing.TargetPort)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve route %s against the current preview Compose file: %w", routing.ID, resolveErr)
+		}
+		if routing.ServiceName == serviceName && routing.TargetPort == targetPort {
+			continue
+		}
+		routing.ServiceName = serviceName
+		routing.TargetPort = targetPort
+		routing.UpdatedAt = time.Now()
+		if err := database.UpsertDeploymentRouting(routing); err != nil {
+			return fmt.Errorf("update preview route %s for the current revision: %w", routing.ID, err)
+		}
+	}
+	return nil
+}
+
+func resolvePreviewComposeTarget(composeYaml, previousService string, previousPort int) (string, int, error) {
+	serviceNames, err := ExtractServiceNames(composeYaml)
+	if err != nil {
+		return "", 0, err
+	}
+	actualNames := make([]string, 0, len(serviceNames))
+	for _, name := range serviceNames {
+		if name != "" && name != "default" {
+			actualNames = append(actualNames, name)
+		}
+	}
+	for _, name := range actualNames {
+		if name != previousService {
+			continue
+		}
+		if port, portErr := ExtractServicePort(composeYaml, name); portErr == nil && port > 0 {
+			return name, port, nil
+		}
+		if previousPort > 0 {
+			return name, previousPort, nil
+		}
+	}
+	matchingNames := make([]string, 0, len(actualNames))
+	for _, name := range actualNames {
+		if port, portErr := ExtractServicePort(composeYaml, name); portErr == nil && port == previousPort {
+			matchingNames = append(matchingNames, name)
+		}
+	}
+	if len(matchingNames) == 1 {
+		return matchingNames[0], previousPort, nil
+	}
+	if len(actualNames) == 1 {
+		port := previousPort
+		if detected, portErr := ExtractServicePort(composeYaml, actualNames[0]); portErr == nil && detected > 0 {
+			port = detected
+		}
+		if port > 0 {
+			return actualNames[0], port, nil
+		}
+	}
+	return "", 0, fmt.Errorf("current Compose revision does not identify one routed service and target port")
+}
+
 func refreshPreviewDeployment(preview, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) error {
 	if preview == nil || source == nil || config == nil || record == nil {
 		return fmt.Errorf("preview template is incomplete")
 	}
 	id, createdAt := preview.ID, preview.CreatedAt
+	existingComposeYAML := preview.ComposeYaml
 	if id == "" {
 		id = "deployment-" + uuid.NewString()
 	}
@@ -1083,7 +1215,13 @@ func refreshPreviewDeployment(preview, source *database.Deployment, config *data
 	preview.Status = int32(deploymentsv1.DeploymentStatus_DEPLOYING)
 	preview.HealthStatus = "pending"
 	preview.Image = nil
-	preview.ComposeYaml = ""
+	if preview.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) || preview.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
+		if existingComposeYAML != "" {
+			preview.ComposeYaml = existingComposeYAML
+		}
+	} else {
+		preview.ComposeYaml = ""
+	}
 	preview.CreatedBy = "system"
 	preview.CreatedAt = createdAt
 	preview.LastDeployedAt = time.Now()
@@ -1265,17 +1403,68 @@ func (s *Service) cleanupPullRequestDeploymentsForSource(ctx context.Context, so
 func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 	go func() {
 		s.cleanupExpiredPullRequestDeployments(ctx)
-		ticker := time.NewTicker(15 * time.Minute)
-		defer ticker.Stop()
+		s.retryPendingPullRequestReconciliations(ctx)
+		s.retryPendingPullRequestReports(ctx)
+		cleanupTicker := time.NewTicker(15 * time.Minute)
+		retryTicker := time.NewTicker(time.Minute)
+		defer cleanupTicker.Stop()
+		defer retryTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-cleanupTicker.C:
 				s.cleanupExpiredPullRequestDeployments(ctx)
+			case <-retryTicker.C:
+				s.retryPendingPullRequestReconciliations(ctx)
+				s.retryPendingPullRequestReports(ctx)
 			}
 		}
 	}()
+}
+
+func (s *Service) retryPendingPullRequestReports(ctx context.Context) {
+	var recordIDs []string
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Where("report_pending = ? AND (next_report_at IS NULL OR next_report_at <= ?)", true, time.Now()).
+		Order("next_report_at ASC, id ASC").
+		Limit(100).
+		Pluck("id", &recordIDs).Error; err != nil {
+		logger.Warn("[PRDeployments] Failed to load pending GitHub reports: %v", err)
+		return
+	}
+	for _, recordID := range recordIDs {
+		go s.reportPullRequestDeployment(recordID)
+	}
+}
+
+func (s *Service) retryPendingPullRequestReconciliations(ctx context.Context) {
+	var configs []database.PullRequestDeploymentConfig
+	if err := database.DB.WithContext(ctx).
+		Where("reconciliation_pending = ?", true).
+		Order("updated_at ASC, deployment_id ASC").
+		Limit(25).
+		Find(&configs).Error; err != nil {
+		logger.Warn("[PRDeployments] Failed to load pending settings reconciliations: %v", err)
+		return
+	}
+	for i := range configs {
+		config := configs[i]
+		source, err := s.repo.GetByID(ctx, config.DeploymentID)
+		if err != nil {
+			logger.Warn("[PRDeployments] Failed to load source %s for pending settings reconciliation: %v", config.DeploymentID, err)
+			continue
+		}
+		if err := s.reconcilePullRequestDeploymentConfig(ctx, source, &config); err != nil {
+			logger.Warn("[PRDeployments] Pending settings reconciliation failed for %s: %v", config.DeploymentID, err)
+			continue
+		}
+		if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+			Where("deployment_id = ? AND reconciliation_pending = ?", config.DeploymentID, true).
+			Update("reconciliation_pending", false).Error; err != nil {
+			logger.Warn("[PRDeployments] Failed to complete settings reconciliation for %s: %v", config.DeploymentID, err)
+		}
+	}
 }
 
 func (s *Service) cleanupExpiredPullRequestDeployments(parent context.Context) {
@@ -1759,28 +1948,68 @@ func stringValue(value *string) string {
 func (s *Service) reportPullRequestDeployment(recordID string) {
 	ctx, cancel := s.detachedContext(2 * time.Minute)
 	defer cancel()
-	if err := withDistributedLock(ctx, "pull-request-report:"+recordID, func() error {
-		s.reportPullRequestDeploymentLocked(ctx, recordID)
-		return nil
-	}); err != nil {
-		logger.Warn("[PRDeployments] Failed to serialize GitHub reporting for %s: %v", recordID, err)
+	now := time.Now()
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", recordID).
+		Updates(map[string]interface{}{"report_pending": true, "next_report_at": now}).Error; err != nil {
+		logger.Warn("[PRDeployments] Failed to queue GitHub reporting for %s: %v", recordID, err)
+		return
 	}
+	err := withDistributedLock(ctx, "pull-request-report:"+recordID, func() error {
+		return s.reportPullRequestDeploymentLocked(ctx, recordID)
+	})
+	if err == nil {
+		if clearErr := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", recordID).
+			Updates(map[string]interface{}{"report_pending": false, "report_attempts": 0, "next_report_at": nil}).Error; clearErr != nil {
+			logger.Warn("[PRDeployments] GitHub reporting completed for %s but its retry marker could not be cleared: %v", recordID, clearErr)
+		}
+		return
+	}
+	var record database.PullRequestDeployment
+	if loadErr := database.DB.WithContext(ctx).Select("report_attempts").Where("id = ?", recordID).First(&record).Error; loadErr != nil {
+		logger.Warn("[PRDeployments] GitHub reporting failed for %s and its retry state could not be loaded: %v (report error: %v)", recordID, loadErr, err)
+		return
+	}
+	attempts := record.ReportAttempts + 1
+	nextAttempt := time.Now().Add(pullRequestReportRetryDelay(attempts))
+	if updateErr := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", recordID).
+		Updates(map[string]interface{}{"report_pending": true, "report_attempts": attempts, "next_report_at": nextAttempt}).Error; updateErr != nil {
+		logger.Warn("[PRDeployments] GitHub reporting failed for %s and its retry could not be scheduled: %v (report error: %v)", recordID, updateErr, err)
+		return
+	}
+	logger.Warn("[PRDeployments] GitHub reporting failed for %s; retry %d scheduled for %s: %v", recordID, attempts, nextAttempt.Format(time.RFC3339), err)
 }
 
-func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordID string) {
+func pullRequestReportRetryDelay(attempt int32) time.Duration {
+	delay := 30 * time.Second
+	for i := int32(1); i < attempt && delay < 15*time.Minute; i++ {
+		delay *= 2
+	}
+	if delay > 15*time.Minute {
+		return 15 * time.Minute
+	}
+	return delay
+}
+
+func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordID string) error {
 	var record database.PullRequestDeployment
 	if err := database.DB.WithContext(ctx).Where("id = ?", recordID).First(&record).Error; err != nil {
-		return
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
 	}
 	var config database.PullRequestDeploymentConfig
 	if err := database.DB.WithContext(ctx).Where("deployment_id = ?", record.SourceDeploymentID).First(&config).Error; err != nil {
-		return
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
 	}
 	client, err := githubclient.NewInstallationClient(ctx, record.GitHubInstallationID)
 	if err != nil {
-		logger.Warn("[PRDeployments] GitHub client unavailable for %s: %v", record.ID, err)
-		return
+		return fmt.Errorf("create GitHub client: %w", err)
 	}
+	var reportErrors []error
 	source, _ := s.repo.GetByID(ctx, record.SourceDeploymentID)
 	logURL := ""
 	if record.PreviewDeploymentID != nil {
@@ -1793,17 +2022,19 @@ func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordI
 			environment := fmt.Sprintf("Obiente Preview / PR #%d / %s", record.PullRequestNumber, sourceName(source, record.SourceDeploymentID))
 			deploymentID, createErr := client.CreateDeployment(ctx, record.Repository, record.HeadSHA, environment, "Obiente pull request environment")
 			if createErr != nil {
-				logger.Warn("[PRDeployments] Failed to create GitHub deployment for %s: %v", record.ID, createErr)
+				reportErrors = append(reportErrors, fmt.Errorf("create GitHub deployment: %w", createErr))
 			} else {
 				record.GitHubDeploymentID, record.GitHubDeploymentSHA = &deploymentID, &record.HeadSHA
-				_ = database.DB.WithContext(ctx).Model(&record).Updates(map[string]interface{}{"github_deployment_id": deploymentID, "github_deployment_sha": record.HeadSHA}).Error
+				if err := database.DB.WithContext(ctx).Model(&record).Updates(map[string]interface{}{"github_deployment_id": deploymentID, "github_deployment_sha": record.HeadSHA}).Error; err != nil {
+					reportErrors = append(reportErrors, fmt.Errorf("persist GitHub deployment: %w", err))
+				}
 			}
 		}
 		if record.GitHubDeploymentID != nil {
 			state, description := githubPRDeploymentState(&record)
 			environmentURL := pullRequestDeploymentPublicURL(&record)
 			if err := client.CreateDeploymentStatus(ctx, record.Repository, *record.GitHubDeploymentID, state, description, environmentURL, logURL); err != nil {
-				logger.Warn("[PRDeployments] Failed to update GitHub deployment %s: %v", record.ID, err)
+				reportErrors = append(reportErrors, fmt.Errorf("update GitHub deployment: %w", err))
 			}
 		}
 	}
@@ -1811,14 +2042,16 @@ func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordI
 		check := githubPRCheckRun(&record, source, logURL)
 		if record.GitHubCheckRunID == nil && record.ClosedAt == nil {
 			if id, createErr := client.CreateCheckRun(ctx, record.Repository, check); createErr != nil {
-				logger.Warn("[PRDeployments] Failed to create GitHub check for %s: %v", record.ID, createErr)
+				reportErrors = append(reportErrors, fmt.Errorf("create GitHub check: %w", createErr))
 			} else {
 				record.GitHubCheckRunID, record.GitHubCheckRunSHA = &id, &record.HeadSHA
-				_ = database.DB.WithContext(ctx).Model(&record).Updates(map[string]interface{}{"github_check_run_id": id, "github_check_run_sha": record.HeadSHA}).Error
+				if err := database.DB.WithContext(ctx).Model(&record).Updates(map[string]interface{}{"github_check_run_id": id, "github_check_run_sha": record.HeadSHA}).Error; err != nil {
+					reportErrors = append(reportErrors, fmt.Errorf("persist GitHub check: %w", err))
+				}
 			}
 		} else if record.GitHubCheckRunID != nil {
 			if updateErr := client.UpdateCheckRun(ctx, record.Repository, *record.GitHubCheckRunID, check); updateErr != nil {
-				logger.Warn("[PRDeployments] Failed to update GitHub check for %s: %v", record.ID, updateErr)
+				reportErrors = append(reportErrors, fmt.Errorf("update GitHub check: %w", updateErr))
 			}
 		}
 	}
@@ -1826,27 +2059,34 @@ func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordI
 		marker := fmt.Sprintf(prEnvironmentCommentMark, record.SourceDeploymentID)
 		body := pullRequestDeploymentComment(marker, &record, source, logURL)
 		commentID := record.GitHubCommentID
+		commentLookupSucceeded := true
 		if commentID == nil {
 			if comment, findErr := client.FindIssueComment(ctx, record.Repository, record.PullRequestNumber, marker); findErr != nil {
-				logger.Warn("[PRDeployments] Failed to find PR comment for %s: %v", record.ID, findErr)
+				commentLookupSucceeded = false
+				reportErrors = append(reportErrors, fmt.Errorf("find pull request comment: %w", findErr))
 			} else if comment != nil {
 				commentID = &comment.ID
 			}
 		}
 		if commentID == nil {
-			if id, createErr := client.CreateIssueComment(ctx, record.Repository, record.PullRequestNumber, body); createErr != nil {
-				logger.Warn("[PRDeployments] Failed to comment on PR for %s: %v", record.ID, createErr)
-			} else {
-				commentID = &id
+			if commentLookupSucceeded {
+				if id, createErr := client.CreateIssueComment(ctx, record.Repository, record.PullRequestNumber, body); createErr != nil {
+					reportErrors = append(reportErrors, fmt.Errorf("create pull request comment: %w", createErr))
+				} else {
+					commentID = &id
+				}
 			}
 		} else if updateErr := client.UpdateIssueComment(ctx, record.Repository, *commentID, body); updateErr != nil {
-			logger.Warn("[PRDeployments] Failed to update PR comment for %s: %v", record.ID, updateErr)
+			reportErrors = append(reportErrors, fmt.Errorf("update pull request comment: %w", updateErr))
 		}
 		if commentID != nil && record.GitHubCommentID == nil {
 			record.GitHubCommentID = commentID
-			_ = database.DB.WithContext(ctx).Model(&record).Update("github_comment_id", *commentID).Error
+			if err := database.DB.WithContext(ctx).Model(&record).Update("github_comment_id", *commentID).Error; err != nil {
+				reportErrors = append(reportErrors, fmt.Errorf("persist pull request comment: %w", err))
+			}
 		}
 	}
+	return errors.Join(reportErrors...)
 }
 
 func githubPRCheckRun(record *database.PullRequestDeployment, source *database.Deployment, detailsURL string) githubclient.CheckRunUpdate {

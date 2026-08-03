@@ -78,7 +78,7 @@ func TestNormalizeServiceNetworksFromList(t *testing.T) {
 
 	got := normalizeServiceNetworks(service)
 	want := map[string]interface{}{
-		"deployment-123": nil,
+		"deployment-123":  nil,
 		"obiente-network": nil,
 	}
 
@@ -136,7 +136,7 @@ networks:
 `)
 
 	routings := []database.DeploymentRouting{{ServiceName: "directus"}}
-	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings)
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings, PreviewIngressNetworkName)
 	if err != nil {
 		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
 	}
@@ -176,5 +176,10 @@ networks:
 
 	if !reflect.DeepEqual(deploymentAliases, []interface{}{"directus"}) {
 		t.Fatalf("expected deployment aliases to remain intact, got %#v", deploymentAliases)
+	}
+	topLevelNetworks := compose["networks"].(map[string]interface{})
+	ingressConfig := topLevelNetworks["obiente-network"].(map[string]interface{})
+	if ingressConfig["name"] != PreviewIngressNetworkName || ingressConfig["external"] != true {
+		t.Fatalf("expected routed service to use isolated ingress network, got %#v", ingressConfig)
 	}
 }

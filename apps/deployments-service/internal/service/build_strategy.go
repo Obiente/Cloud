@@ -658,6 +658,9 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 
 	if result.ComposeYaml != "" {
 		// Use compose deployment
+		if deploymentIsPullRequestPreview(deployment) {
+			return manager.DeployIsolatedComposeFile(ctx, deployment.ID, result.ComposeYaml)
+		}
 		return manager.DeployComposeFile(ctx, deployment.ID, result.ComposeYaml)
 	} else if result.ImageName != "" {
 		// Use single container deployment
