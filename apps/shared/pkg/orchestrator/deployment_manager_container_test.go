@@ -3,9 +3,36 @@ package orchestrator
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T) {
+	t.Parallel()
+	want := []string{
+		"--network-rm", "older_obiente-network",
+		"--network-rm", "current_obiente-network",
+	}
+	got := swarmServiceNetworkUpdateArgs([]string{
+		"older_obiente-network",
+		PreviewIngressNetworkName,
+		"current_obiente-network",
+		"older_obiente-network",
+	}, PreviewIngressNetworkName)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("network update args = %#v, want %#v", got, want)
+	}
+
+	want = []string{
+		"--network-add", PreviewIngressNetworkName,
+		"--network-rm", "custom_obiente-network",
+	}
+	got = swarmServiceNetworkUpdateArgs([]string{"custom_obiente-network"}, PreviewIngressNetworkName)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("network migration args = %#v, want %#v", got, want)
+	}
+}
 
 func TestSwarmMemoryReservation(t *testing.T) {
 	t.Parallel()

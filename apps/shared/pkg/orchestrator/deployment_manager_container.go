@@ -175,6 +175,25 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
+func swarmServiceNetworkUpdateArgs(existingNetworks []string, desiredNetwork string) []string {
+	args := make([]string, 0, 2+2*len(existingNetworks))
+	if !containsString(existingNetworks, desiredNetwork) {
+		args = append(args, "--network-add", desiredNetwork)
+	}
+	removed := make(map[string]struct{}, len(existingNetworks))
+	for _, existingNetwork := range existingNetworks {
+		if existingNetwork == desiredNetwork {
+			continue
+		}
+		if _, exists := removed[existingNetwork]; exists {
+			continue
+		}
+		removed[existingNetwork] = struct{}{}
+		args = append(args, "--network-rm", existingNetwork)
+	}
+	return args
+}
+
 func existingSwarmServiceUsesPlatformHealthcheck(ctx context.Context, serviceName string) bool {
 	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", `{{index .Spec.Labels "cloud.obiente.healthcheck_source"}}	{{json .Spec.TaskTemplate.ContainerSpec.Healthcheck.Test}}`, serviceName)
 	output, err := cmd.Output()
@@ -1533,12 +1552,10 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		if err != nil {
 			return "", "", fmt.Errorf("inspect existing service networks before isolation migration: %w", err)
 		}
-		if !containsString(existingNetworks, swarmNetworkName) {
-			args = append(args, "--network-add", swarmNetworkName)
-		}
-		if containsString(existingNetworks, sharedNetworkName) {
-			args = append(args, "--network-rm", sharedNetworkName)
-		}
+		// Network inspection is authoritative here. A previous stack name or
+		// control-plane network selection may differ from today's resolved shared
+		// name, so remove every inspected attachment except the isolated target.
+		args = append(args, swarmServiceNetworkUpdateArgs(existingNetworks, swarmNetworkName)...)
 	}
 
 	// Update labels - Docker service update will merge labels

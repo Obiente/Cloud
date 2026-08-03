@@ -1418,15 +1418,7 @@ func previewScopedVariables(source *database.Deployment, config *database.PullRe
 }
 
 func deploymentIsPullRequestPreview(deployment *database.Deployment) bool {
-	if deployment == nil {
-		return false
-	}
-	for _, group := range parseStringList(deployment.Groups) {
-		if group == "pull-request" {
-			return true
-		}
-	}
-	return false
+	return deployment != nil && deployment.Environment == int32(deploymentsv1.Environment_PULL_REQUEST)
 }
 
 func (s *Service) failPullRequestDeployment(ctx context.Context, record *database.PullRequestDeployment, err error) {

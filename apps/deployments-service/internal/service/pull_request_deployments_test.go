@@ -45,6 +45,18 @@ func TestForkPreviewNeverReceivesTemplateValues(t *testing.T) {
 	}
 }
 
+func TestPullRequestPreviewIdentityUsesProtectedEnvironment(t *testing.T) {
+	preview := &database.Deployment{Environment: int32(deploymentsv1.Environment_PULL_REQUEST), Groups: `[]`}
+	if !deploymentIsPullRequestPreview(preview) {
+		t.Fatal("system-managed PR environment was not treated as an isolated preview")
+	}
+	preview.Environment = int32(deploymentsv1.Environment_PRODUCTION)
+	preview.Groups = `["pull-request"]`
+	if deploymentIsPullRequestPreview(preview) {
+		t.Fatal("mutable deployment group granted pull request preview isolation identity")
+	}
+}
+
 func TestPullRequestPathScope(t *testing.T) {
 	config := &database.PullRequestDeploymentConfig{IncludePaths: `["apps/web/**"]`, ExcludePaths: `["apps/web/docs/**"]`}
 	if !pullRequestFilesMatch([]githubclient.PullRequestFile{{Filename: "apps/web/src/main.ts"}}, config) {
@@ -264,6 +276,7 @@ func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
 	autoDeploy := false
 	preview := testDeployment("preview-disable", "Preview", "org", "system", now, &autoDeploy)
 	preview.Groups = `["pull-request"]`
+	preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
 	if err := db.Create(preview).Error; err != nil {
 		t.Fatalf("seed preview deployment: %v", err)
 	}
