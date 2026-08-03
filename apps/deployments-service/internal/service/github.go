@@ -241,6 +241,14 @@ func (s *Service) GetGitHubBranches(ctx context.Context, req *connect.Request[de
 	}
 
 	ghClient := githubclient.NewClient(ghToken)
+	repository, err := ghClient.GetRepository(ctx, repoFullName)
+	if err != nil {
+		errMsg := err.Error()
+		if containsAuthError(errMsg) {
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or revoked. Please reconnect your GitHub account: %w", err))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch repository metadata: %w", err))
+	}
 
 	branches, err := ghClient.ListBranches(ctx, repoFullName)
 	if err != nil {
@@ -252,18 +260,21 @@ func (s *Service) GetGitHubBranches(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch branches: %w", err))
 	}
 
+	return connect.NewResponse(&deploymentsv1.GetGitHubBranchesResponse{
+		Branches: githubBranchesResponse(branches, repository.DefaultBranch),
+	}), nil
+}
+
+func githubBranchesResponse(branches []githubclient.GitHubBranch, defaultBranch string) []*deploymentsv1.GitHubBranch {
 	protoBranches := make([]*deploymentsv1.GitHubBranch, 0, len(branches))
-	for i, b := range branches {
+	for _, branch := range branches {
 		protoBranches = append(protoBranches, &deploymentsv1.GitHubBranch{
-			Name:      b.Name,
-			IsDefault: i == 0, // First branch is often default
-			Sha:       b.Commit.SHA,
+			Name:      branch.Name,
+			IsDefault: branch.Name == defaultBranch,
+			Sha:       branch.Commit.SHA,
 		})
 	}
-
-	return connect.NewResponse(&deploymentsv1.GetGitHubBranchesResponse{
-		Branches: protoBranches,
-	}), nil
+	return protoBranches
 }
 
 // GetGitHubFile retrieves a file from a GitHub repository

@@ -62,6 +62,73 @@ func TestGetFileRejectsTraversalPath(t *testing.T) {
 	}
 }
 
+func TestListBranchesFollowsPagination(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.EscapedPath() != "/repos/Obiente/nc-native/branches" {
+			t.Errorf("escaped path = %q", req.URL.EscapedPath())
+		}
+		if req.URL.Query().Get("per_page") != "100" {
+			t.Errorf("per_page = %q", req.URL.Query().Get("per_page"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if req.URL.Query().Get("page") == "2" {
+			_, _ = fmt.Fprint(w, `[{"name":"main","commit":{"sha":"main-sha"}}]`)
+			return
+		}
+		w.Header().Set("Link", fmt.Sprintf(`<%s/repos/Obiente/nc-native/branches?page=2&per_page=100>; rel="next"`, server.URL))
+		_, _ = fmt.Fprint(w, `[{"name":"feat/example","commit":{"sha":"feature-sha"}}]`)
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL = server.URL
+	client.httpClient = server.Client()
+	branches, err := client.ListBranches(t.Context(), "Obiente/nc-native")
+	if err != nil {
+		t.Fatalf("list branches: %v", err)
+	}
+	if len(branches) != 2 || branches[0].Name != "feat/example" || branches[1].Name != "main" {
+		t.Fatalf("branches = %+v", branches)
+	}
+}
+
+func TestListBranchesRejectsCrossOriginPagination(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Link", `<https://example.invalid/branches?page=2>; rel="next"`)
+		_, _ = fmt.Fprint(w, `[]`)
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL = server.URL
+	client.httpClient = server.Client()
+	if _, err := client.ListBranches(t.Context(), "Obiente/nc-native"); err == nil || !strings.Contains(err.Error(), "unexpected host") {
+		t.Fatalf("expected cross-origin pagination error, got %v", err)
+	}
+}
+
+func TestGetRepositoryReturnsDefaultBranch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.EscapedPath() != "/repos/Obiente/nc-native" {
+			t.Errorf("escaped path = %q", req.URL.EscapedPath())
+		}
+		_, _ = fmt.Fprint(w, `{"id":1,"name":"nc-native","full_name":"Obiente/nc-native","default_branch":"main"}`)
+	}))
+	defer server.Close()
+
+	client := NewClient("token")
+	client.baseURL = server.URL
+	client.httpClient = server.Client()
+	repository, err := client.GetRepository(t.Context(), "Obiente/nc-native")
+	if err != nil {
+		t.Fatalf("get repository: %v", err)
+	}
+	if repository.DefaultBranch != "main" {
+		t.Fatalf("default branch = %q", repository.DefaultBranch)
+	}
+}
+
 func TestReadGitHubAPIResponseBodyRejectsOversizedResponse(t *testing.T) {
 	_, err := readGitHubAPIResponseBody(strings.NewReader(strings.Repeat("a", githubAPIResponseBodyLimit+1)))
 	if err == nil {

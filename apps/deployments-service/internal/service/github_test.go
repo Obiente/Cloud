@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	githubclient "deployments-service/internal/github"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 )
 
@@ -46,6 +47,21 @@ func TestIsMissingGitHubIntegrationError(t *testing.T) {
 	}
 	if isMissingGitHubIntegrationError(assertErr("GitHub token expired or could not be refreshed")) {
 		t.Fatal("expected token refresh error not to match missing integration")
+	}
+}
+
+func TestGitHubBranchesResponseMarksRepositoryDefault(t *testing.T) {
+	branches := []githubclient.GitHubBranch{
+		{Name: "feat/first-alphabetically"},
+		{Name: "main"},
+	}
+
+	response := githubBranchesResponse(branches, "main")
+	if response[0].IsDefault {
+		t.Fatal("first returned branch must not be assumed to be the default")
+	}
+	if !response[1].IsDefault {
+		t.Fatal("repository default branch was not marked as default")
 	}
 }
 

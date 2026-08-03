@@ -12,7 +12,11 @@ import (
 	"time"
 )
 
-const githubAPIResponseBodyLimit = 4 << 20
+const (
+	githubAPIResponseBodyLimit = 4 << 20
+	githubBranchesPerPage      = 100
+	githubBranchesMaxPages     = 100
+)
 
 type Client struct {
 	token      string
@@ -105,41 +109,148 @@ func (c *Client) ListBranches(ctx context.Context, repoFullName string) ([]GitHu
 	if err != nil {
 		return nil, err
 	}
-	requestURL := fmt.Sprintf("%s/repos/%s/branches", strings.TrimRight(c.baseURL, "/"), repositoryPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	requestURL, err := url.Parse(fmt.Sprintf("%s/repos/%s/branches", strings.TrimRight(c.baseURL, "/"), repositoryPath))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid GitHub API URL: %w", err)
+	}
+	query := requestURL.Query()
+	query.Set("per_page", fmt.Sprintf("%d", githubBranchesPerPage))
+	requestURL.RawQuery = query.Encode()
+
+	branches := make([]GitHubBranch, 0, githubBranchesPerPage)
+	for page := 1; requestURL != nil; page++ {
+		if page > githubBranchesMaxPages {
+			return nil, fmt.Errorf("repository branch list exceeds the supported limit of %d", githubBranchesPerPage*githubBranchesMaxPages)
+		}
+
+		pageBranches, nextURL, err := c.listBranchesPage(ctx, requestURL)
+		if err != nil {
+			return nil, err
+		}
+		branches = append(branches, pageBranches...)
+		requestURL = nextURL
+	}
+
+	return branches, nil
+}
+
+func (c *Client) listBranchesPage(ctx context.Context, requestURL *url.URL) ([]GitHubBranch, *url.URL, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("github API request failed: %w", err)
+	}
+	body, readErr := readGitHubAPIResponseBody(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return nil, nil, fmt.Errorf("failed to read GitHub API response: %w", readErr)
+	}
+	if closeErr != nil {
+		return nil, nil, fmt.Errorf("failed to close GitHub API response: %w", closeErr)
+	}
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, nil, fmt.Errorf("github authentication failed (token may be expired or revoked): %d - %s", resp.StatusCode, string(body))
+		}
+		return nil, nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var branches []GitHubBranch
+	if err := json.Unmarshal(body, &branches); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode branches: %w", err)
+	}
+
+	nextURL, err := c.githubPaginationURL(resp.Header.Get("Link"), "next")
+	if err != nil {
+		return nil, nil, err
+	}
+	return branches, nextURL, nil
+}
+
+func (c *Client) githubPaginationURL(linkHeader, relation string) (*url.URL, error) {
+	for _, link := range strings.Split(linkHeader, ",") {
+		parts := strings.Split(link, ";")
+		if len(parts) < 2 {
+			continue
+		}
+		matchesRelation := false
+		for _, parameter := range parts[1:] {
+			if strings.TrimSpace(parameter) == fmt.Sprintf(`rel="%s"`, relation) {
+				matchesRelation = true
+				break
+			}
+		}
+		if !matchesRelation {
+			continue
+		}
+
+		rawURL := strings.TrimSpace(parts[0])
+		if len(rawURL) < 2 || rawURL[0] != '<' || rawURL[len(rawURL)-1] != '>' {
+			return nil, fmt.Errorf("invalid GitHub pagination link")
+		}
+		nextURL, err := url.Parse(rawURL[1 : len(rawURL)-1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid GitHub pagination URL: %w", err)
+		}
+		baseURL, err := url.Parse(c.baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid GitHub API base URL: %w", err)
+		}
+		if nextURL.Scheme != baseURL.Scheme || nextURL.Host != baseURL.Host {
+			return nil, fmt.Errorf("GitHub pagination URL points to an unexpected host")
+		}
+		return nextURL, nil
+	}
+	return nil, nil
+}
+
+func (c *Client) GetRepository(ctx context.Context, repoFullName string) (*GitHubRepo, error) {
+	repositoryPath, err := escapedGitHubRepositoryPath(repoFullName)
+	if err != nil {
+		return nil, err
+	}
+	requestURL := fmt.Sprintf("%s/repos/%s", strings.TrimRight(c.baseURL, "/"), repositoryPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("github API request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
 	body, err := readGitHubAPIResponseBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read GitHub API response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		// Check for authentication errors (401/403) which indicate expired/revoked tokens
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return nil, fmt.Errorf("github authentication failed (token may be expired or revoked): %d - %s", resp.StatusCode, string(body))
 		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
 
-	var branches []GitHubBranch
-	if err := json.Unmarshal(body, &branches); err != nil {
-		return nil, fmt.Errorf("failed to decode branches: %w", err)
+	var repository GitHubRepo
+	if err := json.Unmarshal(body, &repository); err != nil {
+		return nil, fmt.Errorf("failed to decode repository: %w", err)
 	}
-
-	return branches, nil
+	return &repository, nil
 }
 
 func (c *Client) GetFile(ctx context.Context, repoFullName, branch, path string) (*GitHubFileContent, error) {
