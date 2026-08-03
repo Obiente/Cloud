@@ -37,12 +37,18 @@ const (
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
 	currentPRIsolationVersion = int32(1)
+	pendingPRIsolationVersion = int32(-1)
 )
 
 type pullRequestSyncSource struct {
 	repositoryURL  string
 	integrationID  string
 	installationID int64
+}
+
+type isolationMigrationCandidate struct {
+	ID               string
+	IsolationVersion int32
 }
 
 func defaultPullRequestDeploymentConfig(deploymentID, organizationID string) *database.PullRequestDeploymentConfig {
@@ -1617,22 +1623,51 @@ func (s *Service) correctPullRequestPreviewEnvironments() {
 }
 
 func (s *Service) migrateLegacyPullRequestPreviewIsolation(ctx context.Context) {
-	var recordIDs []string
-	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
-		Joins("JOIN deployments AS preview ON preview.id = pull_request_deployments.preview_deployment_id").
-		Joins("JOIN pull_request_deployment_configs AS config ON config.deployment_id = pull_request_deployments.source_deployment_id").
-		Where("pull_request_deployments.closed_at IS NULL AND pull_request_deployments.active_head_sha IS NULL").
-		Where("pull_request_deployments.status = ? AND pull_request_deployments.isolation_version < ?", int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), currentPRIsolationVersion).
-		Where("config.enabled = ?", true).
-		Where("preview.deleted_at IS NULL AND preview.environment = ?", int32(deploymentsv1.Environment_PULL_REQUEST)).
-		Order("pull_request_deployments.id ASC").Limit(25).
-		Pluck("pull_request_deployments.id", &recordIDs).Error; err != nil {
+	const retryDelay = 5 * time.Minute
+	candidates, err := loadPullRequestIsolationMigrationCandidates(ctx, time.Now().Add(-retryDelay))
+	if err != nil {
 		logger.Warn("[PRDeployments] Failed to load legacy preview runtimes for network isolation migration: %v", err)
 		return
 	}
-	for _, recordID := range recordIDs {
-		go s.deployPullRequestEnvironment(recordID)
+	for _, candidate := range candidates {
+		if candidate.IsolationVersion == 0 {
+			marked := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+				Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status = ? AND isolation_version = ?", candidate.ID, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), int32(0)).
+				Update("isolation_version", pendingPRIsolationVersion)
+			if marked.Error != nil {
+				logger.Warn("[PRDeployments] Failed to mark preview %s for network isolation migration: %v", candidate.ID, marked.Error)
+				continue
+			}
+			if marked.RowsAffected != 1 {
+				continue
+			}
+		}
+		go s.deployPullRequestEnvironment(candidate.ID)
 	}
+}
+
+func loadPullRequestIsolationMigrationCandidates(ctx context.Context, retryBefore time.Time) ([]isolationMigrationCandidate, error) {
+	var candidates []isolationMigrationCandidate
+	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
+		Select("pull_request_deployments.id, pull_request_deployments.isolation_version").
+		Joins("JOIN deployments AS preview ON preview.id = pull_request_deployments.preview_deployment_id").
+		Joins("JOIN pull_request_deployment_configs AS config ON config.deployment_id = pull_request_deployments.source_deployment_id").
+		Where("pull_request_deployments.closed_at IS NULL AND pull_request_deployments.active_head_sha IS NULL").
+		Where("(pull_request_deployments.isolation_version = ? AND pull_request_deployments.status = ?) OR (pull_request_deployments.isolation_version = ? AND pull_request_deployments.status IN ? AND pull_request_deployments.updated_at <= ?)",
+			int32(0), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+			pendingPRIsolationVersion,
+			[]int32{
+				int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+				int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED),
+			},
+			retryBefore).
+		Where("config.enabled = ?", true).
+		Where("preview.deleted_at IS NULL AND preview.environment = ?", int32(deploymentsv1.Environment_PULL_REQUEST)).
+		Order("pull_request_deployments.id ASC").Limit(25).
+		Scan(&candidates).Error; err != nil {
+		return nil, err
+	}
+	return candidates, nil
 }
 
 func (s *Service) backfillExistingOpenPullRequests(ctx context.Context) {

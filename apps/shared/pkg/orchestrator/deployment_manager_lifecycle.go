@@ -717,6 +717,18 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 	if err != nil {
 		return fmt.Errorf("failed to get deployment locations: %w", err)
 	}
+	if utils.IsSwarmModeEnabled() {
+		if err := removeSwarmDeploymentServices(ctx, deploymentID); err != nil {
+			return err
+		}
+		for _, location := range locations {
+			if err := dm.registry.UnregisterDeployment(ctx, location.ContainerID); err != nil {
+				return fmt.Errorf("unregister removed Swarm deployment task %s: %w", location.ContainerID, err)
+			}
+		}
+		dm.cleanupDeploymentData(deploymentID)
+		return nil
+	}
 
 	var removalErrors []error
 	for _, location := range locations {
@@ -765,6 +777,28 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 	// Clean up volumes and deployment data
 	dm.cleanupDeploymentData(deploymentID)
 
+	return nil
+}
+
+func removeSwarmDeploymentServices(ctx context.Context, deploymentID string) error {
+	command := exec.CommandContext(ctx, "docker", "service", "ls",
+		"--filter", "label=cloud.obiente.managed=true",
+		"--filter", "label=cloud.obiente.deployment_id="+deploymentID,
+		"--format", "{{.ID}}")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("discover managed Swarm services for deployment %s: %w (%s)", deploymentID, err, strings.TrimSpace(string(output)))
+	}
+	serviceIDs := strings.Fields(string(output))
+	if len(serviceIDs) == 0 {
+		return nil
+	}
+	args := append([]string{"service", "rm"}, serviceIDs...)
+	remove := exec.CommandContext(ctx, "docker", args...)
+	removeOutput, err := remove.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("remove managed Swarm services for deployment %s: %w (%s)", deploymentID, err, strings.TrimSpace(string(removeOutput)))
+	}
 	return nil
 }
 

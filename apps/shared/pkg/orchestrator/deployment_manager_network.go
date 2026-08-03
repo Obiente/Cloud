@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
@@ -297,4 +298,107 @@ func ensureContainerIngressProxyNetwork(ctx context.Context, networkName string)
 		}
 	}
 	return nil
+}
+
+// RemovePreviewIngressNetwork detaches the ingress proxy and removes the
+// managed network created exclusively for one pull request preview.
+func (dm *DeploymentManager) RemovePreviewIngressNetwork(ctx context.Context, deploymentID string) error {
+	networkName := PreviewIngressNetworkNameForDeployment(deploymentID)
+	exists, err := managedPreviewNetworkExists(ctx, networkName, deploymentID)
+	if err != nil || !exists {
+		return err
+	}
+	if utils.IsSwarmModeEnabled() {
+		if err := removeSwarmIngressProxyNetwork(ctx, networkName); err != nil {
+			return err
+		}
+	} else if err := removeContainerIngressProxyNetwork(ctx, networkName); err != nil {
+		return err
+	}
+
+	var lastErr error
+	var lastOutput string
+	for attempt := 0; attempt < 10; attempt++ {
+		command := exec.CommandContext(ctx, "docker", "network", "rm", networkName)
+		output, removeErr := command.CombinedOutput()
+		lastErr = removeErr
+		lastOutput = strings.TrimSpace(string(output))
+		if removeErr == nil || dockerNetworkMissing(lastOutput) {
+			return nil
+		}
+		if err := waitForPreviewNetworkRetry(ctx, 500*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("remove preview ingress network %s: %w (%s)", networkName, lastErr, lastOutput)
+}
+
+func managedPreviewNetworkExists(ctx context.Context, networkName, deploymentID string) (bool, error) {
+	command := exec.CommandContext(ctx, "docker", "network", "inspect", "--format", "{{index .Labels \"cloud.obiente.managed\"}}\t{{index .Labels \"cloud.obiente.deployment\"}}", networkName)
+	output, err := command.CombinedOutput()
+	formatted := strings.TrimSpace(string(output))
+	if err != nil {
+		if dockerNetworkMissing(formatted) {
+			return false, nil
+		}
+		return false, fmt.Errorf("inspect preview ingress network %s: %w (%s)", networkName, err, formatted)
+	}
+	parts := strings.SplitN(formatted, "\t", 2)
+	if len(parts) != 2 || parts[0] != "true" || parts[1] != deploymentID {
+		return false, fmt.Errorf("refusing to remove network %s without matching managed preview ownership", networkName)
+	}
+	return true, nil
+}
+
+func removeSwarmIngressProxyNetwork(ctx context.Context, networkName string) error {
+	serviceName, err := swarmIngressProxyServiceName(ctx)
+	if err != nil {
+		return err
+	}
+	existingNetworks, err := existingSwarmServiceNetworkNames(ctx, serviceName)
+	if err != nil {
+		return fmt.Errorf("inspect ingress proxy service %s: %w", serviceName, err)
+	}
+	if !containsString(existingNetworks, networkName) {
+		return nil
+	}
+	command := exec.CommandContext(ctx, "docker", "service", "update", "--network-rm", networkName, serviceName)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("detach ingress proxy service %s from %s: %w (%s)", serviceName, networkName, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func removeContainerIngressProxyNetwork(ctx context.Context, networkName string) error {
+	command := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "label=cloud.obiente.ingress-proxy=true", "--format", "{{.ID}}")
+	output, err := command.Output()
+	if err != nil {
+		return fmt.Errorf("discover ingress proxy container: %w", err)
+	}
+	for _, containerID := range strings.Fields(string(output)) {
+		disconnect := exec.CommandContext(ctx, "docker", "network", "disconnect", "--force", networkName, containerID)
+		disconnectOutput, disconnectErr := disconnect.CombinedOutput()
+		message := strings.ToLower(strings.TrimSpace(string(disconnectOutput)))
+		if disconnectErr != nil && !dockerNetworkMissing(message) && !strings.Contains(message, "is not connected") {
+			return fmt.Errorf("detach ingress proxy container %s from %s: %w (%s)", containerID, networkName, disconnectErr, strings.TrimSpace(string(disconnectOutput)))
+		}
+	}
+	return nil
+}
+
+func dockerNetworkMissing(output string) bool {
+	output = strings.ToLower(output)
+	return strings.Contains(output, "no such network") || strings.Contains(output, "network not found")
+}
+
+func waitForPreviewNetworkRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

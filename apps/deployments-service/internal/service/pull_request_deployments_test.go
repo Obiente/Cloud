@@ -352,7 +352,7 @@ func TestSuccessfulPreviewRuntimeRecordsIsolationMigration(t *testing.T) {
 		ID: "pr-isolation-version", SourceDeploymentID: "source", PreviewDeploymentID: stringPointer("preview-isolation"), OrganizationID: "org",
 		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 32,
 		HeadSHA: head, ActiveHeadSHA: &head, HeadRef: "feature", BaseRef: "main",
-		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), ExpiresAt: time.Now().Add(time.Hour),
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), IsolationVersion: pendingPRIsolationVersion, ExpiresAt: time.Now().Add(time.Hour),
 	}
 	if err := db.Create(&record).Error; err != nil {
 		t.Fatalf("seed pull request deployment: %v", err)
@@ -364,6 +364,59 @@ func TestSuccessfulPreviewRuntimeRecordsIsolationMigration(t *testing.T) {
 	}
 	if got.IsolationVersion != currentPRIsolationVersion || got.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) {
 		t.Fatalf("successful preview did not record current isolation version: %#v", got)
+	}
+}
+
+func TestIsolationMigrationRetriesOnlyMarkedFailedPreviewsAfterDelay(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	now := time.Now().UTC()
+	config := defaultPullRequestDeploymentConfig("source-isolation", "org")
+	config.Enabled = true
+	if err := db.Create(config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+
+	type candidateSeed struct {
+		id               string
+		status           deploymentsv1.PullRequestDeploymentStatus
+		isolationVersion int32
+		updatedAt        time.Time
+	}
+	seeds := []candidateSeed{
+		{id: "retry-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now.Add(-10 * time.Minute)},
+		{id: "fresh-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now},
+		{id: "legacy-running", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, isolationVersion: 0, updatedAt: now},
+		{id: "ordinary-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: 0, updatedAt: now.Add(-10 * time.Minute)},
+	}
+	for index, seed := range seeds {
+		previewID := "preview-" + seed.id
+		preview := testDeployment(previewID, previewID, "org", "system", now, nil)
+		preview.Environment = int32(deploymentsv1.Environment_PULL_REQUEST)
+		if err := db.Create(preview).Error; err != nil {
+			t.Fatalf("seed preview deployment %s: %v", previewID, err)
+		}
+		record := &database.PullRequestDeployment{
+			ID: seed.id, SourceDeploymentID: config.DeploymentID, PreviewDeploymentID: &previewID, OrganizationID: "org",
+			GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: int64(index + 1),
+			HeadSHA: strings.Repeat("a", 40), HeadRef: "feature", BaseRef: "main", Status: int32(seed.status),
+			IsolationVersion: seed.isolationVersion, ExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: seed.updatedAt,
+		}
+		if err := db.Create(record).Error; err != nil {
+			t.Fatalf("seed pull request deployment %s: %v", seed.id, err)
+		}
+	}
+
+	candidates, err := loadPullRequestIsolationMigrationCandidates(t.Context(), now.Add(-5*time.Minute))
+	if err != nil {
+		t.Fatalf("load isolation migration candidates: %v", err)
+	}
+	got := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		got = append(got, candidate.ID)
+	}
+	want := []string{"legacy-running", "retry-failed"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("isolation migration candidates = %v, want %v", got, want)
 	}
 }
 

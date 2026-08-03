@@ -1019,6 +1019,11 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 		} else if err := s.manager.DeleteDeployment(ctx, deploymentID); err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove deployment runtime: %w", err))
 		}
+		if deploymentIsPullRequestPreview(dbDep) {
+			if err := s.manager.RemovePreviewIngressNetwork(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to remove preview ingress network: %w", err))
+			}
+		}
 	}
 
 	// Delete all build logs and build history for this deployment
