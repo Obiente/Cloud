@@ -1,0 +1,45 @@
+name: Validate Preview TLS Scripts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/preview-tls-scripts.yml"
+      - "scripts/manage-preview-tls.sh"
+      - "scripts/install-preview-tls-renewal.sh"
+      - "scripts/tests/manage-preview-tls-test.sh"
+      - "scripts/internal/systemd/obiente-preview-tls-renew.*"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/preview-tls-scripts.yml"
+      - "scripts/manage-preview-tls.sh"
+      - "scripts/install-preview-tls-renewal.sh"
+      - "scripts/tests/manage-preview-tls-test.sh"
+      - "scripts/internal/systemd/obiente-preview-tls-renew.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-tls-scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Shell validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        run: |
+          shellcheck \
+            scripts/manage-preview-tls.sh \
+            scripts/install-preview-tls-renewal.sh \
+            scripts/tests/manage-preview-tls-test.sh
+
+      - name: Run script tests
+        run: bash scripts/tests/manage-preview-tls-test.sh

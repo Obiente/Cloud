@@ -2,6 +2,32 @@
 
 This directory contains utility scripts for managing and deploying Obiente Cloud.
 
+## Preview TLS
+
+### `manage-preview-tls.sh`
+
+Obtains or renews the shared preview wildcard certificate with any lego DNS
+provider, validates it, rotates versioned Swarm secrets, updates `.env`, and
+loads the certificate into Traefik.
+
+```bash
+./scripts/manage-preview-tls.sh setup \
+  --provider PROVIDER_CODE \
+  --credentials-file /etc/obiente/preview-dns.env \
+  --email admin@example.com \
+  --accept-tos
+```
+
+### `install-preview-tls-renewal.sh`
+
+Installs the preview TLS management script as a systemd oneshot service with a
+daily randomized renewal timer.
+
+See [Preview TLS certificates](../docs/deployment/preview-tls.md) for the
+credential format, staging flow, status commands, and recovery behavior.
+
+---
+
 ## Deployment Scripts
 
 ### `setup-ssh-proxy-key.sh`

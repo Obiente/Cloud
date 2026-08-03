@@ -1000,8 +1000,12 @@ services:
   traefik:
     image: traefik:v3.6.1
     secrets:
-      - preview_tls_cert
-      - preview_tls_key
+      - source: preview_tls_cert
+        target: preview_tls_cert
+        mode: 0400
+      - source: preview_tls_key
+        target: preview_tls_key
+        mode: 0400
     configs:
       - source: preview_tls_config
         target: /etc/traefik/dynamic/preview-tls.yml

@@ -73,6 +73,10 @@ Edit `.env` with your configuration:
 
 ### 4. Configure Preview TLS
 
+For the automated setup and renewal path, see
+[Preview TLS certificates](preview-tls.md). The commands below describe the
+equivalent manual secret setup.
+
 Issue one certificate that covers `my.obiente.cloud` and
 `*.my.obiente.cloud` using any ACME client, DNS provider, or certificate
 service. This certificate covers both live pull request previews and the
