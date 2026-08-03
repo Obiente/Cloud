@@ -323,6 +323,55 @@ func TestRefreshingPreviewReappliesCurrentVariableAllowlist(t *testing.T) {
 	}
 }
 
+func TestPreviewComposeRoutingUsesPreviewDomainAndSourceService(t *testing.T) {
+	port := int32(4321)
+	source := &database.Deployment{ID: "source", Domain: "app.example.test", Port: &port}
+	preview := &database.Deployment{ID: "preview", Domain: "pr-31-app.example.test"}
+	routing, err := previewComposeRouting(preview, source, []database.DeploymentRouting{
+		{ID: "secondary", Domain: "api.example.test", ServiceName: "api", TargetPort: 9000, Protocol: "http"},
+		{ID: "primary", Domain: source.Domain, ServiceName: "web", PathPrefix: "/", TargetPort: 8080, Protocol: "http", SSLCertResolver: "letsencrypt", Middleware: "{}"},
+	})
+	if err != nil {
+		t.Fatalf("create preview routing: %v", err)
+	}
+	if routing.DeploymentID != preview.ID || routing.Domain != preview.Domain || routing.ServiceName != "web" || routing.TargetPort != 8080 {
+		t.Fatalf("unexpected preview routing: %#v", routing)
+	}
+	if !routing.SSLEnabled || routing.SSLCertResolver != "letsencrypt" {
+		t.Fatalf("preview routing does not enable managed HTTPS: %#v", routing)
+	}
+	if routing.Protocol != "https" {
+		t.Fatalf("preview routing does not use the HTTPS entrypoint: %#v", routing)
+	}
+}
+
+func TestPreviewComposeRoutingRequiresRoutablePort(t *testing.T) {
+	_, err := previewComposeRouting(
+		&database.Deployment{ID: "preview", Domain: "pr-31-app.example.test"},
+		&database.Deployment{ID: "source"},
+		nil,
+	)
+	if err == nil {
+		t.Fatal("preview Compose routing should fail closed without a source service port")
+	}
+}
+
+func TestPreviewComposeRoutingResolvesDefaultToActualService(t *testing.T) {
+	port := int32(8080)
+	source := &database.Deployment{ID: "source", Port: &port, ComposeYaml: "services:\n  web:\n    image: nginx\n    ports:\n      - '8080'\n"}
+	routing, err := previewComposeRouting(
+		&database.Deployment{ID: "preview", Domain: "pr-31-app.example.test"},
+		source,
+		[]database.DeploymentRouting{{ServiceName: "default", TargetPort: 8080}},
+	)
+	if err != nil {
+		t.Fatalf("create preview routing: %v", err)
+	}
+	if routing.ServiceName != "web" {
+		t.Fatalf("default source routing was not resolved to the Compose service: %#v", routing)
+	}
+}
+
 func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
 	typeOfConfig := reflect.TypeOf(database.PullRequestDeploymentConfig{})
 	for _, name := range []string{"RedeployOnPush", "CleanupOnClose", "CommentEnabled", "DeploymentStatusEnabled", "CheckRunEnabled"} {

@@ -123,32 +123,70 @@ func (c *Checker) getPlanLimitsFromQuota(q *database.OrgQuota) (deploymentsMax i
 }
 
 func (c *Checker) currentAllocations(orgID string, excludeDeploymentID string) (replicas int, memBytes int64, cpuCores int, err error) {
-	// Sum reserved replicas, memory, and CPU across active deployments. BUILDING
-	// and DEPLOYING rows count before a runtime location exists so concurrent
-	// allocations cannot overcommit an organization while work is in flight.
-	// Only count deployments that are running, building, or deploying (not stopped/failed).
-	// RUNNING=3, BUILDING=2, DEPLOYING=6
-	type agg struct {
-		Replicas int64
-		Mem      int64
-		CPU      int64
-	}
-	var a agg
-	deploymentQuery := database.DB.Model(&database.Deployment{}).
-		Select("COALESCE(SUM(COALESCE(replicas,1)),0) as replicas, COALESCE(SUM(COALESCE(memory_bytes,0) * COALESCE(replicas,1)),0) as mem, COALESCE(SUM(COALESCE(cpu_shares,0) * COALESCE(replicas,1)),0) as cpu").
-		Where("organization_id = ? AND deleted_at IS NULL AND status IN (2,3,6)", orgID)
+	// Reserve configured replicas while work is in flight and count every
+	// materialized runtime that still exists. Taking the maximum per deployment
+	// avoids double-counting established single-service replicas while retaining
+	// multi-service Compose locations and runtimes whose row has become failed.
+	var deployments []database.Deployment
+	deploymentQuery := database.DB.
+		Where("organization_id = ? AND deleted_at IS NULL", orgID)
 	if excludeDeploymentID != "" {
 		deploymentQuery = deploymentQuery.Where("id <> ?", excludeDeploymentID)
 	}
-	if err = deploymentQuery.Scan(&a).Error; err != nil {
+	if err = deploymentQuery.Find(&deployments).Error; err != nil {
 		return
 	}
+
+	type locationCount struct {
+		DeploymentID string
+		Count        int64
+	}
+	var locationCounts []locationCount
+	locationQuery := database.DB.Model(&database.DeploymentLocation{}).
+		Select("deployment_locations.deployment_id, COUNT(*) AS count").
+		Joins("JOIN deployments d ON d.id = deployment_locations.deployment_id").
+		Where("deployment_locations.status = ? AND d.organization_id = ? AND d.deleted_at IS NULL", "running", orgID)
+	if excludeDeploymentID != "" {
+		locationQuery = locationQuery.Where("d.id <> ?", excludeDeploymentID)
+	}
+	if err = locationQuery.Group("deployment_locations.deployment_id").Scan(&locationCounts).Error; err != nil {
+		return
+	}
+	runningByDeployment := make(map[string]int64, len(locationCounts))
+	for _, location := range locationCounts {
+		runningByDeployment[location.DeploymentID] = location.Count
+	}
+
+	var cpuShares int64
+	for i := range deployments {
+		deployment := &deployments[i]
+		reservedReplicas := int64(0)
+		active := deployment.Status == 2 || deployment.Status == 3 || deployment.Status == 6
+		if active {
+			reservedReplicas = int64(valueOr32(deployment.Replicas, 1))
+			if reservedReplicas < 1 {
+				reservedReplicas = 1
+			}
+		}
+		effectiveReplicas := max(reservedReplicas, runningByDeployment[deployment.ID])
+		if effectiveReplicas == 0 {
+			continue
+		}
+		replicas += int(effectiveReplicas)
+		// Memory and CPU are deployment-row reservations. In particular, an
+		// untrusted Compose preview divides this aggregate budget across its
+		// services, so materialized service count must not multiply it again.
+		if active {
+			memBytes += valueOr64(deployment.MemoryBytes, 0) * reservedReplicas
+			cpuShares += valueOr64(deployment.CPUShares, 0) * reservedReplicas
+		}
+	}
 	// Convert Docker CPU shares to cores (1024 shares = 1 core)
-	cpuCores = int(a.CPU) / 1024
-	if a.CPU%1024 != 0 {
+	cpuCores = int(cpuShares) / 1024
+	if cpuShares%1024 != 0 {
 		cpuCores++ // round up partial cores
 	}
-	return int(a.Replicas), a.Mem, cpuCores, nil
+	return replicas, memBytes, cpuCores, nil
 }
 
 // GetEffectiveLimits returns the effective memory and CPU limits for an organization
@@ -215,6 +253,13 @@ func valueOr(p *int, d int) int {
 	return *p
 }
 func valueOr64(p *int64, d int64) int64 {
+	if p == nil {
+		return d
+	}
+	return *p
+}
+
+func valueOr32(p *int32, d int32) int32 {
 	if p == nil {
 		return d
 	}

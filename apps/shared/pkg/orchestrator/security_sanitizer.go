@@ -121,13 +121,15 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAML(composeYaml string) (st
 // runtime budget across all attacker-controlled services. This keeps the sum
 // of service limits within the quota reservation made for the preview row.
 func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAMLWithLimits(composeYaml string, budget UntrustedComposeLimits) (string, error) {
-	if containsUnescapedComposeInterpolation(composeYaml) {
-		return "", fmt.Errorf("environment interpolation is not allowed in pull request Compose files")
-	}
-
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
 		return "", fmt.Errorf("failed to parse untrusted compose YAML: %w", err)
+	}
+	// Compose interpolates both $NAME and ${NAME} after YAML decoding. Reject
+	// every dollar marker in untrusted input, including YAML-escaped markers and
+	// $$ forms, so the deployments-service environment can never be consulted.
+	if containsComposeInterpolationMarker(compose) {
+		return "", fmt.Errorf("environment interpolation is not allowed in pull request Compose files")
 	}
 	services, ok := compose["services"].(map[string]interface{})
 	if !ok || len(services) == 0 {
@@ -195,17 +197,27 @@ func (cs *ComposeSanitizer) SanitizeUntrustedComposeYAMLWithLimits(composeYaml s
 	return string(result), nil
 }
 
-func containsUnescapedComposeInterpolation(value string) bool {
-	for i := 0; i+1 < len(value); i++ {
-		if value[i] != '$' || value[i+1] != '{' {
-			continue
+func containsComposeInterpolationMarker(value interface{}) bool {
+	switch typed := value.(type) {
+	case string:
+		return strings.Contains(typed, "$")
+	case map[string]interface{}:
+		for key, child := range typed {
+			if strings.Contains(key, "$") || containsComposeInterpolationMarker(child) {
+				return true
+			}
 		}
-		precedingDollars := 0
-		for j := i - 1; j >= 0 && value[j] == '$'; j-- {
-			precedingDollars++
+	case map[interface{}]interface{}:
+		for key, child := range typed {
+			if containsComposeInterpolationMarker(key) || containsComposeInterpolationMarker(child) {
+				return true
+			}
 		}
-		if precedingDollars%2 == 0 {
-			return true
+	case []interface{}:
+		for _, child := range typed {
+			if containsComposeInterpolationMarker(child) {
+				return true
+			}
 		}
 	}
 	return false

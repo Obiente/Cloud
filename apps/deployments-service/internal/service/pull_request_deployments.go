@@ -887,6 +887,11 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 				if err := s.repo.Update(ctx, existing); err != nil {
 					return err
 				}
+				if err := ensurePreviewComposeRouting(ctx, existing, source); err != nil {
+					return err
+				}
+				url := "https://" + existing.Domain
+				record.EnvironmentURL = &url
 				preview = existing
 				return nil
 			}
@@ -925,6 +930,9 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		}); err != nil {
 			return err
 		}
+		if err := ensurePreviewComposeRouting(ctx, &created, source); err != nil {
+			return err
+		}
 		url := "https://" + created.Domain
 		record.EnvironmentURL = &url
 		preview = &created
@@ -934,6 +942,124 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		return nil, fmt.Errorf("failed to reserve preview deployment: %w", err)
 	}
 	return preview, nil
+}
+
+func ensurePreviewComposeRouting(ctx context.Context, preview, source *database.Deployment) error {
+	if preview == nil || source == nil {
+		return fmt.Errorf("preview routing template is incomplete")
+	}
+	if preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) && preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
+		return nil
+	}
+
+	var sourceRoutings []database.DeploymentRouting
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ?", source.ID).
+		Order("created_at ASC, id ASC").
+		Find(&sourceRoutings).Error; err != nil {
+		return fmt.Errorf("load source Compose routing: %w", err)
+	}
+	routing, err := previewComposeRouting(preview, source, sourceRoutings)
+	if err != nil {
+		return err
+	}
+	if err := database.UpsertDeploymentRouting(routing); err != nil {
+		return fmt.Errorf("provision preview Compose routing: %w", err)
+	}
+	return nil
+}
+
+func previewComposeRouting(preview, source *database.Deployment, sourceRoutings []database.DeploymentRouting) (*database.DeploymentRouting, error) {
+	if preview == nil || source == nil || strings.TrimSpace(preview.Domain) == "" {
+		return nil, fmt.Errorf("preview Compose routing requires a deployment and domain")
+	}
+
+	var template *database.DeploymentRouting
+	for i := range sourceRoutings {
+		candidate := &sourceRoutings[i]
+		if candidate.TargetPort <= 0 {
+			continue
+		}
+		if template == nil || (source.Domain != "" && candidate.Domain == source.Domain) {
+			template = candidate
+		}
+		if source.Domain != "" && candidate.Domain == source.Domain {
+			break
+		}
+	}
+
+	targetPort := 0
+	serviceName, certResolver, middleware := "default", "letsencrypt", "{}"
+	pathPrefix := ""
+	if template != nil {
+		targetPort = template.TargetPort
+		if strings.TrimSpace(template.ServiceName) != "" {
+			serviceName = template.ServiceName
+		}
+		if strings.TrimSpace(template.SSLCertResolver) != "" && template.SSLCertResolver != "internal" {
+			certResolver = template.SSLCertResolver
+		}
+		if strings.TrimSpace(template.Middleware) != "" {
+			middleware = template.Middleware
+		}
+		pathPrefix = template.PathPrefix
+	} else if source.Port != nil {
+		targetPort = int(*source.Port)
+	}
+	if targetPort <= 0 {
+		return nil, fmt.Errorf("source Compose deployment has no routable service port")
+	}
+	if serviceName == "default" {
+		resolvedServiceName, err := previewComposeServiceName(source.ComposeYaml, targetPort)
+		if err != nil {
+			return nil, err
+		}
+		serviceName = resolvedServiceName
+	}
+
+	now := time.Now()
+	return &database.DeploymentRouting{
+		ID:              fmt.Sprintf("route-%s-default", preview.ID),
+		DeploymentID:    preview.ID,
+		Domain:          preview.Domain,
+		ServiceName:     serviceName,
+		PathPrefix:      pathPrefix,
+		TargetPort:      targetPort,
+		Protocol:        "https",
+		SSLEnabled:      true,
+		SSLCertResolver: certResolver,
+		Middleware:      middleware,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}, nil
+}
+
+func previewComposeServiceName(composeYaml string, targetPort int) (string, error) {
+	serviceNames, err := ExtractServiceNames(composeYaml)
+	if err != nil {
+		return "", fmt.Errorf("read source Compose services: %w", err)
+	}
+	actualNames := make([]string, 0, len(serviceNames))
+	for _, serviceName := range serviceNames {
+		if serviceName != "" && serviceName != "default" {
+			actualNames = append(actualNames, serviceName)
+		}
+	}
+	if len(actualNames) == 1 {
+		return actualNames[0], nil
+	}
+
+	matchingNames := make([]string, 0, len(actualNames))
+	for _, serviceName := range actualNames {
+		port, portErr := ExtractServicePort(composeYaml, serviceName)
+		if portErr == nil && port == targetPort {
+			matchingNames = append(matchingNames, serviceName)
+		}
+	}
+	if len(matchingNames) == 1 {
+		return matchingNames[0], nil
+	}
+	return "", fmt.Errorf("source Compose routing must identify one target service")
 }
 
 func refreshPreviewDeployment(preview, source *database.Deployment, config *database.PullRequestDeploymentConfig, record *database.PullRequestDeployment) error {

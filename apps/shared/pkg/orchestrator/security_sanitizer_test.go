@@ -43,11 +43,21 @@ func TestSanitizeUntrustedComposeYAMLRejectsRepositoryBuild(t *testing.T) {
 
 func TestSanitizeUntrustedComposeYAMLRejectsInterpolation(t *testing.T) {
 	sanitizer := NewComposeSanitizer("preview-test")
-	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    image: ${IMAGE}\n"); err == nil {
-		t.Fatal("environment interpolation should be rejected for pull request previews")
-	}
-	if _, err := sanitizer.SanitizeUntrustedComposeYAML("services:\n  app:\n    image: nginx\n    command: '$${LITERAL}'\n"); err != nil {
-		t.Fatalf("escaped interpolation should remain a literal: %v", err)
+	for name, composeYaml := range map[string]string{
+		"braced":        "services:\n  app:\n    image: ${IMAGE}\n",
+		"unbraced":      "services:\n  app:\n    image: $IMAGE\n",
+		"double-dollar": "services:\n  app:\n    image: nginx\n    command: '$${LITERAL}'\n",
+		"yaml-escaped": `services:
+  app:
+    image: nginx
+    command: "\u0024SECRET"
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := sanitizer.SanitizeUntrustedComposeYAML(composeYaml); err == nil {
+				t.Fatal("environment interpolation marker should be rejected for pull request previews")
+			}
+		})
 	}
 }
 
