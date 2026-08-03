@@ -847,11 +847,14 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 
 ### Domain & SSL
 
-| Variable                    | Type   | Default               | Required                        |
-| --------------------------- | ------ | --------------------- | ------------------------------- |
-| `DOMAIN`                    | string | `obiente.example.com` | ❌                              |
-| `ACME_EMAIL`                | string | -                     | ❌ (for Let's Encrypt)          |
-| `PREVIEW_ACME_DNS_PROVIDER` | string | -                     | ✅ (for pull request previews)  |
+| Variable                         | Type   | Default               | Required                                  |
+| -------------------------------- | ------ | --------------------- | ----------------------------------------- |
+| `DOMAIN`                         | string | `obiente.example.com` | ❌                                        |
+| `ACME_EMAIL`                     | string | -                     | ❌ (for Let's Encrypt)                    |
+| `PREVIEW_ACME_DNS_PROVIDER`      | string | -                     | ✅ (standard PR preview TLS)              |
+| `PREVIEW_ACME_CHALLENGE_CNAME`   | string | -                     | ✅ when the bundled DNS service is active |
+| `PREVIEW_TLS_CERT_SECRET`        | string | `preview_tls_cert`    | ❌ (HA certificate rotation)              |
+| `PREVIEW_TLS_KEY_SECRET`         | string | `preview_tls_key`     | ❌ (HA certificate rotation)              |
 
 **Example:**
 
@@ -859,11 +862,18 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
 PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
+PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
+PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
+PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
 ```
 
 `PREVIEW_ACME_DNS_PROVIDER` accepts any DNS provider code supported by lego.
 Provider-specific credentials belong in the `preview_dns_credentials` Docker
-secret, not in `.env`.
+secret, not in `.env`. When Obiente's DNS service is authoritative,
+`PREVIEW_ACME_CHALLENGE_CNAME` must point to a name outside
+`my.obiente.cloud` that the selected provider can update. HA deployments use
+the two versioned certificate secret names instead of issuing certificates in
+each Traefik replica.
 
 ### DNS Configuration
 

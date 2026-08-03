@@ -26,6 +26,7 @@ RUN cd apps/shared && GOWORK=off go mod download && \
 RUN --mount=type=bind,source=.,target=/src,rw \
     --mount=type=cache,target=/root/.cache/go-build \
     cd /src/apps/dns-service && \
+    GOWORK=off go test ./... && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     GOWORK=off go build -trimpath -ldflags="-w -s -extldflags '-static'" \
     -o /build/dns-service .

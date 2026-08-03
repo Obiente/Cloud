@@ -24,6 +24,8 @@ See shared configuration in `docker-compose.yml` for common variables.
 - `DNS_IPS` - DNS server IP addresses (optional, for documentation)
 - `DNS_PORT` - DNS server port (default: 53)
 - `REDIS_URL` - Redis connection URL (for caching)
+- `PREVIEW_ACME_CHALLENGE_CNAME` - Provider-managed DNS name outside
+  `my.obiente.cloud` used for wildcard certificate DNS-01 validation
 
 ## Endpoints
 
@@ -40,4 +42,3 @@ See shared configuration in `docker-compose.yml` for common variables.
 - Requires `NET_BIND_SERVICE` capability to bind to port 53
 - Must be accessible on port 53 for DNS queries
 - Caches DNS responses for 60 seconds
-

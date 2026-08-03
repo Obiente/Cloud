@@ -27,15 +27,18 @@ import (
 const (
 	cacheTTL                  = 5 * time.Minute // Cache DNS responses for 5 minutes
 	defaultGameServerDNSGrace = 2 * time.Minute // Keep stale game server DNS briefly after stop
+	previewACMEChallengeName  = "_acme-challenge.my.obiente.cloud."
+	previewACMECNAMETTL       = 60
 	httpReadHeaderTimeout     = 10 * time.Second
 	serviceShutdownTimeout    = 30 * time.Second
 )
 
 type DNSServer struct {
-	db                       *gorm.DB
-	nodeIPMap                map[string][]string
-	redisCache               *database.RedisCache
-	gameServerStaleGraceTime time.Duration
+	db                        *gorm.DB
+	nodeIPMap                 map[string][]string
+	redisCache                *database.RedisCache
+	gameServerStaleGraceTime  time.Duration
+	previewACMEChallengeCNAME string
 }
 
 func NewDNSServer() (*DNSServer, error) {
@@ -137,7 +140,30 @@ func NewDNSServer() (*DNSServer, error) {
 	}
 	log.Printf("[DNS] Game server DNS stale grace configured to %s", s.gameServerStaleGraceTime)
 
+	challengeTarget, err := normalizePreviewACMEChallengeCNAME(os.Getenv("PREVIEW_ACME_CHALLENGE_CNAME"))
+	if err != nil {
+		return nil, err
+	}
+	if challengeTarget != "" {
+		s.previewACMEChallengeCNAME = challengeTarget
+		log.Printf("[DNS] Preview ACME challenge delegated to %s", challengeTarget)
+	}
+
 	return s, nil
+}
+
+func normalizePreviewACMEChallengeCNAME(value string) (string, error) {
+	target := dns.Fqdn(strings.ToLower(strings.TrimSpace(value)))
+	if target == "." {
+		return "", nil
+	}
+	if _, ok := dns.IsDomainName(target); !ok {
+		return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must be a valid DNS name")
+	}
+	if target == previewACMEChallengeName || strings.HasSuffix(target, ".my.obiente.cloud.") {
+		return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must point outside the delegated my.obiente.cloud zone")
+	}
+	return target, nil
 }
 
 func (s *DNSServer) getCached(ctx context.Context, deploymentID string) ([]string, bool) {
@@ -203,6 +229,14 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			return
 		}
 
+		// The preview wildcard is issued through a provider-managed challenge
+		// name outside this delegated zone. A CNAME is returned for every query
+		// type so recursive resolvers can follow it when looking up the TXT value.
+		if s.handlePreviewACMEChallenge(msg, q) {
+			w.WriteMsg(msg)
+			return
+		}
+
 		// Handle SRV record queries for game servers
 		// Format: _minecraft._tcp.gs-123.my.obiente.cloud
 		// Format: _minecraft._udp.gs-123.my.obiente.cloud (Bedrock)
@@ -233,6 +267,23 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	w.WriteMsg(msg)
+}
+
+func (s *DNSServer) handlePreviewACMEChallenge(msg *dns.Msg, q dns.Question) bool {
+	if s.previewACMEChallengeCNAME == "" || !strings.EqualFold(dns.Fqdn(q.Name), previewACMEChallengeName) {
+		return false
+	}
+
+	msg.Answer = append(msg.Answer, &dns.CNAME{
+		Hdr: dns.RR_Header{
+			Name:   previewACMEChallengeName,
+			Rrtype: dns.TypeCNAME,
+			Class:  dns.ClassINET,
+			Ttl:    previewACMECNAMETTL,
+		},
+		Target: s.previewACMEChallengeCNAME,
+	})
+	return true
 }
 
 // handleSRVQuery handles SRV record queries for game servers

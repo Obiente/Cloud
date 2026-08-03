@@ -103,6 +103,29 @@ require_environment_variables() {
   return 1
 }
 
+require_preview_tls_configuration() {
+  local compose_file="$1"
+
+  if grep -Eq '^[[:space:]]+- preview_dns_credentials[[:space:]]*$' "$compose_file"; then
+    require_environment_variables PREVIEW_ACME_DNS_PROVIDER || return 1
+    require_swarm_secrets preview_dns_credentials || return 1
+
+    case "${ENABLE_DNS:-true}" in
+      false|0)
+        ;;
+      *)
+        require_environment_variables PREVIEW_ACME_CHALLENGE_CNAME || return 1
+        ;;
+    esac
+  fi
+
+  if grep -Eq '^[[:space:]]+- preview_tls_cert[[:space:]]*$' "$compose_file"; then
+    require_swarm_secrets \
+      "${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}" \
+      "${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}" || return 1
+  fi
+}
+
 PARALLEL_PULL_FAILURES=()
 
 wait_for_pull_slot() {

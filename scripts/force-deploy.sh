@@ -79,8 +79,7 @@ sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$MERGED_COMPOSE"
 
-require_environment_variables PREVIEW_ACME_DNS_PROVIDER
-require_swarm_secrets preview_dns_credentials
+require_preview_tls_configuration "$COMPOSE_FILE"
 
 docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
 rm -f "$MERGED_COMPOSE"

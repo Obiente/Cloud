@@ -71,7 +71,9 @@ Edit `.env` with your configuration:
 - Set your domain name
 - Generate secrets for JWT and sessions
 
-### 4. Configure Preview TLS DNS Credentials
+### 4. Configure Preview TLS
+
+#### Standard Swarm Stack
 
 Traefik uses DNS-01 to obtain one wildcard certificate for `my.obiente.cloud`
 and `*.my.obiente.cloud`. This certificate covers both live pull request
@@ -84,6 +86,19 @@ Choose any DNS provider supported by
 ```bash
 PREVIEW_ACME_DNS_PROVIDER=<lego-provider-code>
 ```
+
+When the bundled DNS service is authoritative for `my.obiente.cloud`, delegate
+the ACME challenge to a name outside that zone which the selected provider can
+update. For example, an operator controlling `example.net` could use:
+
+```bash
+PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
+```
+
+The DNS service answers `_acme-challenge.my.obiente.cloud` with this CNAME.
+The ACME client follows it and publishes the TXT value through the selected
+provider. If `ENABLE_DNS=false` and the selected provider is directly
+authoritative for the preview zone, this CNAME is not required.
 
 Create a protected file containing the environment variables required by that
 provider, one `NAME=value` entry per line. Use the variable names from the
@@ -104,6 +119,30 @@ The Traefik wrapper validates credential names and exports them without
 printing their values. Do not place provider credentials in `.env` or commit
 them to the repository. The deployment script stops before changing the stack
 if the provider or secret is missing.
+
+#### HA Swarm Stack
+
+The HA stack does not run ACME independently in every Traefik replica. Issue
+the `my.obiente.cloud` and `*.my.obiente.cloud` certificate once using any ACME
+client or certificate service, then distribute the full chain and private key
+through versioned Docker Swarm secrets:
+
+```bash
+docker secret create preview_tls_cert_20260803 /secure/path/fullchain.pem
+docker secret create preview_tls_key_20260803 /secure/path/privkey.pem
+```
+
+Select those versions in `.env`:
+
+```bash
+PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
+PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
+```
+
+Every Traefik replica receives the same certificate through Swarm and loads it
+from the file provider. To renew it, create new versioned secrets, update the
+two names, and deploy the stack. Remove old secrets only after no service
+references them.
 
 ### 5. Prepare All Nodes (Required)
 

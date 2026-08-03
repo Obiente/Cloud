@@ -109,6 +109,15 @@ ns2.my.obiente.cloud.    IN    A    <NODE_2_IP>
 ns3.my.obiente.cloud.    IN    A    <NODE_3_IP>
 ```
 
+Wildcard preview certificates use a CNAME to place their DNS-01 TXT challenge
+outside this delegated zone. Set `PREVIEW_ACME_CHALLENGE_CNAME` to a name in a
+zone controlled by the selected ACME DNS provider. The bundled DNS service
+then answers the following alias automatically:
+
+```text
+_acme-challenge.my.obiente.cloud. IN CNAME <configured-challenge-name>.
+```
+
 **Best Practice**: Configure at least 2-3 nameservers, but you can configure one per node for maximum redundancy.
 
 ### Step 3: Verify DNS Resolution

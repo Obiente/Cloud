@@ -418,11 +418,13 @@ services:
   # Traefik - Dynamic reverse proxy with service discovery
   traefik:
     image: traefik:v3.6.1
-    environment:
-      PREVIEW_ACME_DNS_PROVIDER: ${PREVIEW_ACME_DNS_PROVIDER:-}
     secrets:
-      - preview_dns_credentials
-    entrypoint: *traefik-dns-entrypoint
+      - preview_tls_cert
+      - preview_tls_key
+    configs:
+      - source: preview_tls_config
+        target: /etc/traefik/dynamic/preview-tls.yml
+        mode: 0444
     command:
       - --api.dashboard=true
       - --api.insecure=false  # Use secure API (HTTPS only)
@@ -432,6 +434,8 @@ services:
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      - --providers.file.filename=/etc/traefik/dynamic/preview-tls.yml
+      - --providers.file.watch=true
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
       - --serversTransport.forwardingTimeouts.dialTimeout=10s
@@ -461,11 +465,6 @@ services:
       # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
       # Default: production (https://acme-v02.api.letsencrypt.org/directory)
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
-      # Wildcard certificate shared by PR state pages and live preview routers.
-      - --certificatesresolvers.previewdns.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.previewdns.acme.storage=/letsencrypt/acme-preview.json
-      - --certificatesresolvers.previewdns.acme.dnschallenge.provider=${PREVIEW_ACME_DNS_PROVIDER:-}
-      - --certificatesresolvers.previewdns.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --metrics.prometheus=true
       - --accesslog=true
       - --log.level=INFO
@@ -977,9 +976,6 @@ services:
         - "traefik.http.routers.preview-domain-fallback-secure.entrypoints=websecure"
         - "traefik.http.routers.preview-domain-fallback-secure.priority=1"
         - "traefik.http.routers.preview-domain-fallback-secure.tls=true"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.certresolver=previewdns"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].main=my.obiente.cloud"
-        - "traefik.http.routers.preview-domain-fallback-secure.tls.domains[0].sans=*.my.obiente.cloud"
         - "traefik.http.routers.preview-domain-fallback-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
@@ -1572,11 +1568,23 @@ networks:
       encrypted: "true"
 
 # ============================================================================
+# CONFIGS
+# ============================================================================
+
+configs:
+  preview_tls_config:
+    file: ./scripts/internal/traefik-preview-tls.yml
+
+# ============================================================================
 # SECRETS
 # ============================================================================
 
 secrets:
-  preview_dns_credentials:
+  preview_tls_cert:
+    name: ${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}
+    external: true
+  preview_tls_key:
+    name: ${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}
     external: true
   ssh_proxy_host_key:
     external: true
