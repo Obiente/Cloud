@@ -108,8 +108,8 @@ type PullRequestDeployment struct {
 	SourceDeploymentID   string     `gorm:"not null;uniqueIndex:idx_pr_deployment_source_repo_number" json:"source_deployment_id"`
 	PreviewDeploymentID  *string    `gorm:"uniqueIndex" json:"preview_deployment_id"`
 	OrganizationID       string     `gorm:"index;not null" json:"organization_id"`
-	GitHubIntegrationID  string     `gorm:"index;not null" json:"github_integration_id"`
-	GitHubInstallationID int64      `gorm:"index;not null" json:"github_installation_id"`
+	GitHubIntegrationID  string     `gorm:"column:github_integration_id;index;not null" json:"github_integration_id"`
+	GitHubInstallationID int64      `gorm:"column:github_installation_id;index;not null" json:"github_installation_id"`
 	Repository           string     `gorm:"not null;uniqueIndex:idx_pr_deployment_source_repo_number" json:"repository"`
 	PullRequestNumber    int64      `gorm:"not null;uniqueIndex:idx_pr_deployment_source_repo_number" json:"pull_request_number"`
 	HeadSHA              string     `gorm:"index;not null" json:"head_sha"`
@@ -124,11 +124,11 @@ type PullRequestDeployment struct {
 	IsolationVersion     int32      `gorm:"index;not null;default:0" json:"isolation_version"`
 	EnvironmentURL       *string    `json:"environment_url"`
 	Error                *string    `gorm:"type:text" json:"error"`
-	GitHubDeploymentID   *int64     `json:"github_deployment_id"`
-	GitHubDeploymentSHA  *string    `json:"github_deployment_sha"`
-	GitHubCommentID      *int64     `json:"github_comment_id"`
-	GitHubCheckRunID     *int64     `json:"github_check_run_id"`
-	GitHubCheckRunSHA    *string    `json:"github_check_run_sha"`
+	GitHubDeploymentID   *int64     `gorm:"column:github_deployment_id" json:"github_deployment_id"`
+	GitHubDeploymentSHA  *string    `gorm:"column:github_deployment_sha" json:"github_deployment_sha"`
+	GitHubCommentID      *int64     `gorm:"column:github_comment_id" json:"github_comment_id"`
+	GitHubCheckRunID     *int64     `gorm:"column:github_check_run_id" json:"github_check_run_id"`
+	GitHubCheckRunSHA    *string    `gorm:"column:github_check_run_sha" json:"github_check_run_sha"`
 	ReportPending        bool       `gorm:"index;not null;default:false" json:"report_pending"`
 	ReportAttempts       int32      `gorm:"not null;default:0" json:"report_attempts"`
 	NextReportAt         *time.Time `gorm:"index" json:"next_report_at"`

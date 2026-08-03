@@ -547,55 +547,6 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 		}
 	}
 
-	// Ensure network configuration is set correctly for Swarm mode
-	// In Swarm mode, services must be on the network that Traefik monitors
-	if isSwarmMode {
-		// Ensure networks section exists
-		var networks map[string]interface{}
-		if existingNetworks, ok := compose["networks"].(map[string]interface{}); ok {
-			networks = existingNetworks
-		} else {
-			networks = make(map[string]interface{})
-			compose["networks"] = networks
-		}
-
-		// Add or update obiente-network to be external (references the Swarm network)
-		// In Swarm mode, the network name is prefixed with stack name: {stack-name}_obiente-network
-		networkConfig := map[string]interface{}{
-			"external": true,
-			"name":     ingressNetworkName,
-		}
-		networks["obiente-network"] = networkConfig
-
-		// Ensure all services are connected to the network
-		if services, ok := compose["services"].(map[string]interface{}); ok {
-			for serviceName, serviceData := range services {
-				if service, ok := serviceData.(map[string]interface{}); ok {
-					routed := false
-					for _, routing := range routings {
-						if routing.ServiceName == serviceName || ((routing.ServiceName == "" || routing.ServiceName == "default") && serviceName == "default") {
-							routed = true
-							break
-						}
-					}
-					if !routed {
-						continue
-					}
-					serviceNetworks := normalizeServiceNetworks(service)
-
-					// Ensure obiente-network is in the service's networks and every network has the bare service alias.
-					serviceNetworks["obiente-network"] = mergeNetworkAliases(serviceNetworks["obiente-network"], serviceName)
-					for networkName, networkConfig := range serviceNetworks {
-						serviceNetworks[networkName] = mergeNetworkAliases(networkConfig, serviceName)
-					}
-
-					service["networks"] = serviceNetworks
-					logger.Debug("[DeploymentManager] Ensured service %s is connected to obiente-network (Swarm mode)", serviceName)
-				}
-			}
-		}
-	}
-
 	// Marshal back to YAML
 	labeledYaml, err := yaml.Marshal(compose)
 	if err != nil {

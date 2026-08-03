@@ -7,13 +7,18 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
+	"gorm.io/gorm"
 )
 
 // Network operations for deployments
+
+var ingressProxyMutationLocks sync.Map
 
 func (dm *DeploymentManager) getSwarmNetworkName(ctx context.Context) (string, error) {
 	// Try multiple approaches to find the network
@@ -241,24 +246,15 @@ func ensureSwarmIngressProxyNetwork(ctx context.Context, networkName string) err
 	if err != nil {
 		return err
 	}
-	existingNetworks, err := existingSwarmServiceNetworkNames(ctx, serviceName)
-	if err != nil {
-		return fmt.Errorf("inspect ingress proxy service %s: %w", serviceName, err)
-	}
-	if containsString(existingNetworks, networkName) {
-		return nil
-	}
-	command := exec.CommandContext(ctx, "docker", "service", "update", "--network-add", networkName, serviceName)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("attach ingress proxy service %s to %s: %w (%s)", serviceName, networkName, err, strings.TrimSpace(string(output)))
-	}
-	return nil
+	return mutateSwarmIngressProxyNetwork(ctx, serviceName, networkName, true)
 }
 
 func swarmIngressProxyServiceName(ctx context.Context) (string, error) {
 	if serviceName := strings.TrimSpace(os.Getenv("TRAEFIK_SERVICE_NAME")); serviceName != "" {
 		return serviceName, nil
+	}
+	if stackName := strings.TrimSpace(os.Getenv("STACK_NAME")); stackName != "" {
+		return stackName + "_traefik", nil
 	}
 	command := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", "label=cloud.obiente.ingress-proxy=true", "--format", "{{.Name}}")
 	if output, err := command.Output(); err == nil {
@@ -273,11 +269,7 @@ func swarmIngressProxyServiceName(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("multiple ingress proxy services matched cloud.obiente.ingress-proxy=true")
 		}
 	}
-	stackName := strings.TrimSpace(os.Getenv("STACK_NAME"))
-	if stackName == "" {
-		stackName = "obiente"
-	}
-	return stackName + "_traefik", nil
+	return "", fmt.Errorf("ingress proxy service is ambiguous; configure STACK_NAME or TRAEFIK_SERVICE_NAME")
 }
 
 func ensureContainerIngressProxyNetwork(ctx context.Context, networkName string) error {
@@ -355,19 +347,61 @@ func removeSwarmIngressProxyNetwork(ctx context.Context, networkName string) err
 	if err != nil {
 		return err
 	}
-	existingNetworks, err := existingSwarmServiceNetworkNames(ctx, serviceName)
-	if err != nil {
-		return fmt.Errorf("inspect ingress proxy service %s: %w", serviceName, err)
+	return mutateSwarmIngressProxyNetwork(ctx, serviceName, networkName, false)
+}
+
+func mutateSwarmIngressProxyNetwork(ctx context.Context, serviceName, networkName string, attach bool) error {
+	return withIngressProxyMutationLock(ctx, serviceName, func() error {
+		var lastErr error
+		var lastOutput string
+		for attempt := 0; attempt < 4; attempt++ {
+			existingNetworks, err := existingSwarmServiceNetworkNames(ctx, serviceName)
+			if err != nil {
+				lastErr = fmt.Errorf("inspect ingress proxy service %s: %w", serviceName, err)
+			} else {
+				currentlyAttached := containsString(existingNetworks, networkName)
+				if currentlyAttached == attach {
+					return nil
+				}
+				operation := "--network-rm"
+				if attach {
+					operation = "--network-add"
+				}
+				command := exec.CommandContext(ctx, "docker", "service", "update", operation, networkName, serviceName)
+				output, updateErr := command.CombinedOutput()
+				lastOutput = strings.TrimSpace(string(output))
+				if updateErr == nil {
+					return nil
+				}
+				lastErr = updateErr
+			}
+			if err := waitForPreviewNetworkRetry(ctx, 250*time.Millisecond); err != nil {
+				return err
+			}
+		}
+		action := "detach from"
+		if attach {
+			action = "attach to"
+		}
+		return fmt.Errorf("%s ingress proxy service %s network %s: %w (%s)", action, serviceName, networkName, lastErr, lastOutput)
+	})
+}
+
+func withIngressProxyMutationLock(ctx context.Context, serviceName string, fn func() error) error {
+	value, _ := ingressProxyMutationLocks.LoadOrStore(serviceName, &sync.Mutex{})
+	mutex := value.(*sync.Mutex)
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if database.DB != nil && database.DB.Dialector.Name() == "postgres" {
+		return database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "ingress-proxy-network:"+serviceName).Error; err != nil {
+				return err
+			}
+			return fn()
+		})
 	}
-	if !containsString(existingNetworks, networkName) {
-		return nil
-	}
-	command := exec.CommandContext(ctx, "docker", "service", "update", "--network-rm", networkName, serviceName)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("detach ingress proxy service %s from %s: %w (%s)", serviceName, networkName, err, strings.TrimSpace(string(output)))
-	}
-	return nil
+	return fn()
 }
 
 func removeContainerIngressProxyNetwork(ctx context.Context, networkName string) error {
@@ -389,7 +423,9 @@ func removeContainerIngressProxyNetwork(ctx context.Context, networkName string)
 
 func dockerNetworkMissing(output string) bool {
 	output = strings.ToLower(output)
-	return strings.Contains(output, "no such network") || strings.Contains(output, "network not found")
+	return strings.Contains(output, "no such network") ||
+		strings.Contains(output, "network not found") ||
+		(strings.Contains(output, "network ") && strings.Contains(output, " not found"))
 }
 
 func waitForPreviewNetworkRetry(ctx context.Context, delay time.Duration) error {

@@ -134,7 +134,7 @@ jobs:
             ${{ inputs.commit-arg-prefix }}COMMIT=${{ github.sha }}
             ${{ inputs.commit-arg-prefix }}COMMIT_MESSAGE=${{ steps.commit.outputs.subject }}
           cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.architecture }}
-          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.architecture }},mode=max
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }}:${{ matrix.architecture }},mode=max,ignore-error=true
           platforms: ${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 

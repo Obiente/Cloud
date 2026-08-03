@@ -201,6 +201,56 @@ func TestStaleReconciliationCannotCompleteOrRescheduleNewGeneration(t *testing.T
 	}
 }
 
+func TestStaleReconciliationCannotDetachExistingRuntime(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	now := time.Now()
+	config := database.PullRequestDeploymentConfig{
+		DeploymentID: "source-runtime-generation", OrganizationID: "org", Enabled: true, ReconciliationPending: true,
+		ReconciliationGeneration: 2, BaseBranches: `[]`, IncludePaths: `[]`, ExcludePaths: `[]`,
+		EnvironmentVariableNames: `[]`, BuildArgumentNames: `[]`, DomainTemplate: defaultPRDomainTemplate,
+	}
+	previewID := "preview-runtime-generation"
+	record := database.PullRequestDeployment{
+		ID: "pr-runtime-generation", SourceDeploymentID: config.DeploymentID, PreviewDeploymentID: &previewID, OrganizationID: "org",
+		Repository: "obiente/cloud", PullRequestNumber: 7, HeadSHA: strings.Repeat("a", 40), HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), ExpiresAt: now.Add(time.Hour),
+	}
+	if err := db.Create(&config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+
+	stale := config
+	stale.ReconciliationGeneration = 1
+	if current, err := schedulePullRequestRuntimeReconciliation(t.Context(), &stale); err != nil {
+		t.Fatalf("schedule stale runtime reconciliation: %v", err)
+	} else if current {
+		t.Fatal("stale settings generation was accepted for runtime reconciliation")
+	}
+	var unchanged database.PullRequestDeployment
+	if err := db.First(&unchanged, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload pull request deployment: %v", err)
+	}
+	if !unchanged.ExpiresAt.After(now) || unchanged.Error != nil {
+		t.Fatalf("stale settings generation detached the current runtime: %#v", unchanged)
+	}
+
+	if current, err := schedulePullRequestRuntimeReconciliation(t.Context(), &config); err != nil {
+		t.Fatalf("schedule current runtime reconciliation: %v", err)
+	} else if !current {
+		t.Fatal("current settings generation was rejected")
+	}
+	var scheduled database.PullRequestDeployment
+	if err := db.First(&scheduled, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload scheduled pull request deployment: %v", err)
+	}
+	if scheduled.ExpiresAt.After(time.Now()) || stringValue(scheduled.Error) != "Preview settings reconciliation is pending." {
+		t.Fatalf("current settings generation did not schedule runtime reconciliation: %#v", scheduled)
+	}
+}
+
 func TestOpenPullRequestSyncMarkerRequiresUnchangedSource(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	repository, replacement := "https://github.com/obiente/cloud", "https://github.com/obiente/website"
@@ -643,6 +693,28 @@ func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
 		}
 		if strings.Contains(field.Tag.Get("gorm"), "default:") {
 			t.Fatalf("%s has a GORM default that can override an explicitly supplied false value", name)
+		}
+	}
+}
+
+func TestPullRequestGitHubColumnsArePinned(t *testing.T) {
+	typeOfDeployment := reflect.TypeOf(database.PullRequestDeployment{})
+	wantColumns := map[string]string{
+		"GitHubIntegrationID":  "github_integration_id",
+		"GitHubInstallationID": "github_installation_id",
+		"GitHubDeploymentID":   "github_deployment_id",
+		"GitHubDeploymentSHA":  "github_deployment_sha",
+		"GitHubCommentID":      "github_comment_id",
+		"GitHubCheckRunID":     "github_check_run_id",
+		"GitHubCheckRunSHA":    "github_check_run_sha",
+	}
+	for fieldName, columnName := range wantColumns {
+		field, ok := typeOfDeployment.FieldByName(fieldName)
+		if !ok {
+			t.Fatalf("missing pull request deployment field %s", fieldName)
+		}
+		if !strings.Contains(field.Tag.Get("gorm"), "column:"+columnName) {
+			t.Fatalf("%s is not pinned to %s", fieldName, columnName)
 		}
 	}
 }

@@ -615,13 +615,51 @@ func InitDatabase() error {
 
 func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 	statements := []string{
-		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,
-		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS active_head_sha TEXT`,
+		// GORM previously named these fields git_hub_*. Add the canonical columns
+		// nullable first so installations with existing previews can retain their
+		// GitHub identity and reporting records before non-null constraints apply.
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_integration_id TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_installation_id BIGINT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_id BIGINT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_deployment_sha TEXT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_comment_id BIGINT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_id BIGINT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS github_check_run_sha TEXT`,
+		`DO $$
+		 DECLARE
+		   column_mapping RECORD;
+		 BEGIN
+		   IF to_regclass('pull_request_deployments') IS NOT NULL THEN
+		     FOR column_mapping IN
+		       SELECT * FROM (VALUES
+		         ('git_hub_integration_id', 'github_integration_id'),
+		         ('git_hub_installation_id', 'github_installation_id'),
+		         ('git_hub_deployment_id', 'github_deployment_id'),
+		         ('git_hub_deployment_sha', 'github_deployment_sha'),
+		         ('git_hub_comment_id', 'github_comment_id'),
+		         ('git_hub_check_run_id', 'github_check_run_id'),
+		         ('git_hub_check_run_sha', 'github_check_run_sha')
+		       ) AS mapping(legacy_name, canonical_name)
+		     LOOP
+		       IF EXISTS (
+		         SELECT 1 FROM information_schema.columns
+		         WHERE table_schema = current_schema()
+		           AND table_name = 'pull_request_deployments'
+		           AND column_name = column_mapping.legacy_name
+		       ) THEN
+		         EXECUTE format(
+		           'UPDATE pull_request_deployments SET %1$I = %2$I WHERE %1$I IS NULL AND %2$I IS NOT NULL',
+		           column_mapping.canonical_name,
+		           column_mapping.legacy_name
+		         );
+		       END IF;
+		     END LOOP;
+		   END IF;
+		 END $$`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_integration_id SET NOT NULL`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_installation_id SET NOT NULL`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS active_head_sha TEXT`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_pending BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_attempts INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS next_report_at TIMESTAMPTZ`,
