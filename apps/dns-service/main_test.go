@@ -22,6 +22,9 @@ func TestNormalizePreviewACMEChallengeCNAME(t *testing.T) {
 		"_acme-challenge.my.obiente.cloud",
 		"nested.my.obiente.cloud",
 		"invalid name",
+		"-invalid.example.net",
+		"invalid-.example.net",
+		"täst.example.net",
 	} {
 		_, err := normalizePreviewACMEChallengeCNAME(value)
 		if err == nil {

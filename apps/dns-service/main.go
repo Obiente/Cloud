@@ -160,10 +160,28 @@ func normalizePreviewACMEChallengeCNAME(value string) (string, error) {
 	if _, ok := dns.IsDomainName(target); !ok {
 		return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must be a valid DNS name")
 	}
+	for _, label := range dns.SplitDomainName(target) {
+		if !validPreviewACMEDNSLabel(label) {
+			return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must contain only valid ASCII DNS labels")
+		}
+	}
 	if target == previewACMEChallengeName || strings.HasSuffix(target, ".my.obiente.cloud.") {
 		return "", fmt.Errorf("PREVIEW_ACME_CHALLENGE_CNAME must point outside the delegated my.obiente.cloud zone")
 	}
 	return target, nil
+}
+
+func validPreviewACMEDNSLabel(label string) bool {
+	if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+		return false
+	}
+	for _, char := range label {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func (s *DNSServer) getCached(ctx context.Context, deploymentID string) ([]string, bool) {
