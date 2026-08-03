@@ -464,6 +464,15 @@ services:
         - "traefik.http.routers.preview-status-secure.priority=300"
         - "traefik.http.routers.preview-status-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.preview-status-secure.service=deployments-service"
+        - "traefik.http.routers.preview-domain-fallback.rule=HostRegexp(`^pr-[a-z0-9-]+[.]my[.]obiente[.]cloud$`)"
+        - "traefik.http.routers.preview-domain-fallback.entrypoints=web"
+        - "traefik.http.routers.preview-domain-fallback.priority=1"
+        - "traefik.http.routers.preview-domain-fallback.service=deployments-service"
+        - "traefik.http.routers.preview-domain-fallback-secure.rule=HostRegexp(`^pr-[a-z0-9-]+[.]my[.]obiente[.]cloud$`)"
+        - "traefik.http.routers.preview-domain-fallback-secure.entrypoints=websecure"
+        - "traefik.http.routers.preview-domain-fallback-secure.priority=1"
+        - "traefik.http.routers.preview-domain-fallback-secure.tls=true"
+        - "traefik.http.routers.preview-domain-fallback-secure.service=deployments-service"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3005/health || exit 1"]
       interval: 30s

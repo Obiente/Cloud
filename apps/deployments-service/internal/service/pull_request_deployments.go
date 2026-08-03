@@ -36,7 +36,9 @@ const (
 	maxPRFilterCount          = 100
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
-	currentPRIsolationVersion = int32(1)
+	// Version 2 provisions durable routing rows for every preview build strategy,
+	// allowing the Swarm runtime to generate Traefik labels before deployment.
+	currentPRIsolationVersion = int32(2)
 	pendingPRIsolationVersion = int32(-1)
 )
 
@@ -1129,7 +1131,7 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 				if err := s.repo.Update(ctx, existing); err != nil {
 					return err
 				}
-				if err := ensurePreviewComposeRouting(ctx, existing, source); err != nil {
+				if err := ensurePreviewRouting(ctx, existing, source); err != nil {
 					return err
 				}
 				url, err := previewEnvironmentURL(ctx, existing)
@@ -1174,7 +1176,7 @@ func (s *Service) ensurePreviewDeployment(ctx context.Context, source *database.
 		}); err != nil {
 			return err
 		}
-		if err := ensurePreviewComposeRouting(ctx, &created, source); err != nil {
+		if err := ensurePreviewRouting(ctx, &created, source); err != nil {
 			return err
 		}
 		url, err := previewEnvironmentURL(ctx, &created)
@@ -1214,9 +1216,6 @@ func previewEnvironmentURL(ctx context.Context, preview *database.Deployment) (s
 		return "", fmt.Errorf("preview domain is unavailable")
 	}
 	result := "https://" + strings.TrimSpace(preview.Domain)
-	if preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) && preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
-		return result, nil
-	}
 	var routing database.DeploymentRouting
 	if err := database.DB.WithContext(ctx).
 		Where("deployment_id = ? AND domain = ?", preview.ID, preview.Domain).
@@ -1234,12 +1233,9 @@ func previewEnvironmentURL(ctx context.Context, preview *database.Deployment) (s
 	return result + prefix, nil
 }
 
-func ensurePreviewComposeRouting(ctx context.Context, preview, source *database.Deployment) error {
+func ensurePreviewRouting(ctx context.Context, preview, source *database.Deployment) error {
 	if preview == nil || source == nil {
 		return fmt.Errorf("preview routing template is incomplete")
-	}
-	if preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) && preview.BuildStrategy != int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) {
-		return nil
 	}
 
 	var sourceRoutings []database.DeploymentRouting
@@ -1249,14 +1245,60 @@ func ensurePreviewComposeRouting(ctx context.Context, preview, source *database.
 		Find(&sourceRoutings).Error; err != nil {
 		return fmt.Errorf("load source Compose routing: %w", err)
 	}
-	routing, err := previewComposeRouting(preview, source, sourceRoutings)
+	routing, err := previewRouting(preview, source, sourceRoutings)
 	if err != nil {
 		return err
 	}
 	if err := database.UpsertDeploymentRouting(routing); err != nil {
-		return fmt.Errorf("provision preview Compose routing: %w", err)
+		return fmt.Errorf("provision preview routing: %w", err)
 	}
 	return nil
+}
+
+func previewRouting(preview, source *database.Deployment, sourceRoutings []database.DeploymentRouting) (*database.DeploymentRouting, error) {
+	if preview != nil && (preview.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) || preview.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE)) {
+		return previewComposeRouting(preview, source, sourceRoutings)
+	}
+	return previewSingleServiceRouting(preview, source, sourceRoutings)
+}
+
+func previewSingleServiceRouting(preview, source *database.Deployment, sourceRoutings []database.DeploymentRouting) (*database.DeploymentRouting, error) {
+	if preview == nil || source == nil || strings.TrimSpace(preview.Domain) == "" {
+		return nil, fmt.Errorf("preview routing requires a deployment and domain")
+	}
+	template := preferredPreviewSourceRouting(source, sourceRoutings)
+	targetPort := 0
+	certResolver, middleware, pathPrefix := "letsencrypt", "{}", ""
+	if template != nil {
+		targetPort = template.TargetPort
+		if strings.TrimSpace(template.SSLCertResolver) != "" && template.SSLCertResolver != "internal" {
+			certResolver = template.SSLCertResolver
+		}
+		if strings.TrimSpace(template.Middleware) != "" {
+			middleware = template.Middleware
+		}
+		pathPrefix = template.PathPrefix
+	} else if source.Port != nil {
+		targetPort = int(*source.Port)
+	}
+	if targetPort <= 0 {
+		return nil, fmt.Errorf("source deployment has no routable service port")
+	}
+	now := time.Now()
+	return &database.DeploymentRouting{
+		ID:              fmt.Sprintf("route-%s-default", preview.ID),
+		DeploymentID:    preview.ID,
+		Domain:          preview.Domain,
+		ServiceName:     "default",
+		PathPrefix:      pathPrefix,
+		TargetPort:      targetPort,
+		Protocol:        "https",
+		SSLEnabled:      true,
+		SSLCertResolver: certResolver,
+		Middleware:      middleware,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}, nil
 }
 
 func previewComposeRouting(preview, source *database.Deployment, sourceRoutings []database.DeploymentRouting) (*database.DeploymentRouting, error) {
@@ -1264,19 +1306,7 @@ func previewComposeRouting(preview, source *database.Deployment, sourceRoutings 
 		return nil, fmt.Errorf("preview Compose routing requires a deployment and domain")
 	}
 
-	var template *database.DeploymentRouting
-	for i := range sourceRoutings {
-		candidate := &sourceRoutings[i]
-		if candidate.TargetPort <= 0 {
-			continue
-		}
-		if template == nil || (source.Domain != "" && candidate.Domain == source.Domain) {
-			template = candidate
-		}
-		if source.Domain != "" && candidate.Domain == source.Domain {
-			break
-		}
-	}
+	template := preferredPreviewSourceRouting(source, sourceRoutings)
 
 	targetPort := 0
 	serviceName, certResolver, middleware := "default", "letsencrypt", "{}"
@@ -1322,6 +1352,26 @@ func previewComposeRouting(preview, source *database.Deployment, sourceRoutings 
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}, nil
+}
+
+func preferredPreviewSourceRouting(source *database.Deployment, sourceRoutings []database.DeploymentRouting) *database.DeploymentRouting {
+	if source == nil {
+		return nil
+	}
+	var template *database.DeploymentRouting
+	for i := range sourceRoutings {
+		candidate := &sourceRoutings[i]
+		if candidate.TargetPort <= 0 {
+			continue
+		}
+		if template == nil || (source.Domain != "" && candidate.Domain == source.Domain) {
+			template = candidate
+		}
+		if source.Domain != "" && candidate.Domain == source.Domain {
+			break
+		}
+	}
+	return template
 }
 
 func previewComposeServiceName(composeYaml string, targetPort int) (string, error) {
@@ -1681,16 +1731,16 @@ func (s *Service) migrateLegacyPullRequestPreviewIsolation(ctx context.Context) 
 	const retryDelay = 5 * time.Minute
 	candidates, err := loadPullRequestIsolationMigrationCandidates(ctx, time.Now().Add(-retryDelay))
 	if err != nil {
-		logger.Warn("[PRDeployments] Failed to load legacy preview runtimes for network isolation migration: %v", err)
+		logger.Warn("[PRDeployments] Failed to load legacy preview runtimes for runtime migration: %v", err)
 		return
 	}
 	for _, candidate := range candidates {
-		if candidate.IsolationVersion == 0 {
+		if candidate.IsolationVersion >= 0 && candidate.IsolationVersion < currentPRIsolationVersion {
 			marked := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
-				Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status = ? AND isolation_version = ?", candidate.ID, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), int32(0)).
+				Where("id = ? AND closed_at IS NULL AND active_head_sha IS NULL AND status = ? AND isolation_version = ?", candidate.ID, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING), candidate.IsolationVersion).
 				Update("isolation_version", pendingPRIsolationVersion)
 			if marked.Error != nil {
-				logger.Warn("[PRDeployments] Failed to mark preview %s for network isolation migration: %v", candidate.ID, marked.Error)
+				logger.Warn("[PRDeployments] Failed to mark preview %s for runtime migration: %v", candidate.ID, marked.Error)
 				continue
 			}
 			if marked.RowsAffected != 1 {
@@ -1698,6 +1748,9 @@ func (s *Service) migrateLegacyPullRequestPreviewIsolation(ctx context.Context) 
 			}
 		}
 		go s.deployPullRequestEnvironment(candidate.ID)
+		// Rebuild one existing preview per janitor pass so a runtime migration
+		// cannot start every repository build at once on a small deployment node.
+		return
 	}
 }
 
@@ -1708,8 +1761,8 @@ func loadPullRequestIsolationMigrationCandidates(ctx context.Context, retryBefor
 		Joins("JOIN deployments AS preview ON preview.id = pull_request_deployments.preview_deployment_id").
 		Joins("JOIN pull_request_deployment_configs AS config ON config.deployment_id = pull_request_deployments.source_deployment_id").
 		Where("pull_request_deployments.closed_at IS NULL AND pull_request_deployments.active_head_sha IS NULL").
-		Where("(pull_request_deployments.isolation_version = ? AND pull_request_deployments.status = ?) OR (pull_request_deployments.isolation_version = ? AND pull_request_deployments.status IN ? AND pull_request_deployments.updated_at <= ?)",
-			int32(0), int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+		Where("(pull_request_deployments.isolation_version >= ? AND pull_request_deployments.isolation_version < ? AND pull_request_deployments.status = ?) OR (pull_request_deployments.isolation_version = ? AND pull_request_deployments.status IN ? AND pull_request_deployments.updated_at <= ?)",
+			int32(0), currentPRIsolationVersion, int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
 			pendingPRIsolationVersion,
 			[]int32{
 				int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),

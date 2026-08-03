@@ -690,9 +690,36 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 
 		// Service port
 		labels["traefik.http.services."+serviceNameLabel+".loadbalancer.server.port"] = strconv.Itoa(routing.TargetPort)
+
+		// A running preview owns the exact host router. If its backend returns a
+		// gateway/server error, let deployments-service render the same durable
+		// state page used before the preview is ready instead of exposing a raw
+		// Traefik 5xx response.
+		if isPullRequestPreviewDomain(routing.Domain) {
+			middlewareName := routerName + "-preview-fallback"
+			labels["traefik.http.routers."+routerName+".middlewares"] = middlewareName
+			labels["traefik.http.middlewares."+middlewareName+".errors.status"] = "500-599"
+			labels["traefik.http.middlewares."+middlewareName+".errors.service"] = "deployments-service"
+			labels["traefik.http.middlewares."+middlewareName+".errors.query"] = "/"
+		}
 	}
 
 	return labels
+}
+
+func isPullRequestPreviewDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	const suffix = ".my.obiente.cloud"
+	label := strings.TrimSuffix(domain, suffix)
+	if !strings.HasSuffix(domain, suffix) || !strings.HasPrefix(label, "pr-") || len(label) > 63 || label[len(label)-1] == '-' {
+		return false
+	}
+	for _, r := range label {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // GenerateTraefikLabels builds Traefik router/service labels from routing rules.

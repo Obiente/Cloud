@@ -160,6 +160,9 @@ func main() {
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if deploymentService.HandlePullRequestPreviewHostFallback(w, r) {
+			return
+		}
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return

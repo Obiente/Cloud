@@ -86,6 +86,52 @@ func TestGenerateTraefikLabelsSelectsIngressNetworkForDockerAndSwarm(t *testing.
 	}
 }
 
+func TestGenerateTraefikLabelsAddsPreviewFallback(t *testing.T) {
+	t.Parallel()
+	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+		ServiceName: "default", Domain: "pr-31-deployment-123.my.obiente.cloud", TargetPort: 3000, Protocol: "https",
+	}}, nil, "deployment-preview-123")
+	want := map[string]string{
+		"traefik.enable":        "true",
+		"cloud.obiente.traefik": "true",
+		"traefik.http.routers.deployment-123.middlewares":                         "deployment-123-preview-fallback",
+		"traefik.http.middlewares.deployment-123-preview-fallback.errors.status":  "500-599",
+		"traefik.http.middlewares.deployment-123-preview-fallback.errors.service": "deployments-service",
+		"traefik.http.middlewares.deployment-123-preview-fallback.errors.query":   "/",
+	}
+	for key, value := range want {
+		if got := labels[key]; got != value {
+			t.Errorf("%s = %q, want %q", key, got, value)
+		}
+	}
+}
+
+func TestGenerateTraefikLabelsDoesNotAddPreviewFallbackToOrdinaryDomain(t *testing.T) {
+	t.Parallel()
+	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+		ServiceName: "default", Domain: "app.example.com", TargetPort: 3000,
+	}}, nil, "obiente-network")
+	for key := range labels {
+		if strings.Contains(key, "preview-fallback") {
+			t.Fatalf("ordinary deployment received preview fallback label %q", key)
+		}
+	}
+}
+
+func TestPullRequestPreviewDomainValidation(t *testing.T) {
+	t.Parallel()
+	for _, domain := range []string{"pr-31-deployment-123.my.obiente.cloud", "PR-31-DEPLOYMENT-123.MY.OBIENTE.CLOUD"} {
+		if !isPullRequestPreviewDomain(domain) {
+			t.Errorf("valid preview domain %q was rejected", domain)
+		}
+	}
+	for _, domain := range []string{"app.my.obiente.cloud", "pr-.my.obiente.cloud", "pr-31-deployment-123.example.com", "pr-31.bad.my.obiente.cloud"} {
+		if isPullRequestPreviewDomain(domain) {
+			t.Errorf("invalid preview domain %q was accepted", domain)
+		}
+	}
+}
+
 func TestNormalizeServiceNetworksFromList(t *testing.T) {
 	service := map[string]interface{}{
 		"networks": []interface{}{"deployment-123", "obiente-network"},

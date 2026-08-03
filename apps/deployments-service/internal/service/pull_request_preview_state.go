@@ -13,6 +13,7 @@ import (
 )
 
 const pullRequestPreviewPath = "/previews/"
+const pullRequestPreviewHostSuffix = ".my.obiente.cloud"
 
 func pullRequestDeploymentStateURL(record *database.PullRequestDeployment) *string {
 	base := strings.TrimRight(strings.TrimSpace(os.Getenv("PREVIEW_STATUS_BASE_URL")), "/")
@@ -63,11 +64,50 @@ func (s *Service) HandlePullRequestPreviewState(w http.ResponseWriter, r *http.R
 		http.NotFound(w, r)
 		return
 	}
-	if record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) && record.EnvironmentURL != nil {
+	renderPullRequestPreviewState(w, r, &record, true)
+}
+
+// HandlePullRequestPreviewHostFallback serves the state page directly on a PR
+// hostname when Traefik has no healthy preview backend. It returns false for
+// unrelated hosts so the normal deployments-service root handler can continue.
+func (s *Service) HandlePullRequestPreviewHostFallback(w http.ResponseWriter, r *http.Request) bool {
+	host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(r.Host), "."))
+	if colon := strings.LastIndex(host, ":"); colon > -1 {
+		host = host[:colon]
+	}
+	label := strings.TrimSuffix(host, pullRequestPreviewHostSuffix)
+	if !strings.HasSuffix(host, pullRequestPreviewHostSuffix) || !strings.HasPrefix(label, "pr-") || !isDNSLabel(label) {
+		return false
+	}
+	var record database.PullRequestDeployment
+	httpsURL, httpURL := "https://"+host, "http://"+host
+	if err := database.DB.WithContext(r.Context()).
+		Where("environment_url IN ? OR environment_url LIKE ? OR environment_url LIKE ?", []string{httpsURL, httpURL}, httpsURL+"/%", httpURL+"/%").
+		Order("updated_at DESC").
+		First(&record).Error; err != nil {
+		return false
+	}
+	setPreviewStateHeaders(w)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return true
+	}
+	renderPullRequestPreviewState(w, r, &record, false)
+	return true
+}
+
+func renderPullRequestPreviewState(w http.ResponseWriter, r *http.Request, record *database.PullRequestDeployment, redirectRunning bool) {
+	if redirectRunning && record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) && record.EnvironmentURL != nil {
 		http.Redirect(w, r, *record.EnvironmentURL, http.StatusTemporaryRedirect)
 		return
 	}
-	title, detail, transient := previewStateCopy(&record)
+	title, detail, transient := previewStateCopy(record)
+	if !redirectRunning && record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) {
+		title = "Preview temporarily unavailable"
+		detail = "The preview container is restarting or cannot be reached. This page will retry automatically."
+		transient = true
+	}
 	if transient {
 		w.Header().Set("Retry-After", "10")
 	}

@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -436,6 +437,8 @@ func TestIsolationMigrationRetriesOnlyMarkedFailedPreviewsAfterDelay(t *testing.
 		{id: "retry-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now.Add(-10 * time.Minute)},
 		{id: "fresh-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: pendingPRIsolationVersion, updatedAt: now},
 		{id: "legacy-running", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, isolationVersion: 0, updatedAt: now},
+		{id: "previous-running", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, isolationVersion: currentPRIsolationVersion - 1, updatedAt: now},
+		{id: "current-running", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, isolationVersion: currentPRIsolationVersion, updatedAt: now},
 		{id: "ordinary-failed", status: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, isolationVersion: 0, updatedAt: now.Add(-10 * time.Minute)},
 	}
 	for index, seed := range seeds {
@@ -464,7 +467,7 @@ func TestIsolationMigrationRetriesOnlyMarkedFailedPreviewsAfterDelay(t *testing.
 	for _, candidate := range candidates {
 		got = append(got, candidate.ID)
 	}
-	want := []string{"legacy-running", "retry-failed"}
+	want := []string{"legacy-running", "previous-running", "retry-failed"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("isolation migration candidates = %v, want %v", got, want)
 	}
@@ -603,6 +606,31 @@ func TestPreviewComposeRoutingUsesPreviewDomainAndSourceService(t *testing.T) {
 	}
 }
 
+func TestPreviewDockerfileRoutingUsesPreviewDomainAndSourcePort(t *testing.T) {
+	port := int32(80)
+	source := &database.Deployment{
+		ID: "source", Domain: "app.example.test", Port: &port,
+		BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE),
+	}
+	preview := &database.Deployment{
+		ID: "preview", Domain: "pr-31-app.example.test",
+		BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE),
+	}
+	routing, err := previewRouting(preview, source, []database.DeploymentRouting{{
+		ID: "primary", Domain: source.Domain, ServiceName: "default", PathPrefix: "/docs",
+		TargetPort: 80, Protocol: "https", SSLEnabled: true, SSLCertResolver: "letsencrypt", Middleware: "{}",
+	}})
+	if err != nil {
+		t.Fatalf("create Dockerfile preview routing: %v", err)
+	}
+	if routing.DeploymentID != preview.ID || routing.Domain != preview.Domain || routing.ServiceName != "default" || routing.TargetPort != 80 {
+		t.Fatalf("unexpected Dockerfile preview routing: %#v", routing)
+	}
+	if routing.PathPrefix != "/docs" || routing.Protocol != "https" || !routing.SSLEnabled {
+		t.Fatalf("Dockerfile preview routing did not preserve the public route: %#v", routing)
+	}
+}
+
 func TestPreviewComposeRoutingRequiresRoutablePort(t *testing.T) {
 	_, err := previewComposeRouting(
 		&database.Deployment{ID: "preview", Domain: "pr-31-app.example.test"},
@@ -630,12 +658,12 @@ func TestPreviewComposeRoutingResolvesDefaultToActualService(t *testing.T) {
 	}
 }
 
-func TestPreviewEnvironmentURLIncludesComposePathPrefix(t *testing.T) {
+func TestPreviewEnvironmentURLIncludesRoutingPathPrefix(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	if err := db.AutoMigrate(&database.DeploymentRouting{}); err != nil {
 		t.Fatalf("migrate deployment routing: %v", err)
 	}
-	preview := &database.Deployment{ID: "preview-path", Domain: "pr-31.example.test", BuildStrategy: int32(deploymentsv1.BuildStrategy_COMPOSE_REPO)}
+	preview := &database.Deployment{ID: "preview-path", Domain: "pr-31.example.test", BuildStrategy: int32(deploymentsv1.BuildStrategy_DOCKERFILE)}
 	routing := database.DeploymentRouting{ID: "route-preview-path-default", DeploymentID: preview.ID, Domain: preview.Domain, ServiceName: "web", PathPrefix: "/api", TargetPort: 8080, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db.Create(&routing).Error; err != nil {
 		t.Fatalf("seed preview routing: %v", err)
@@ -837,6 +865,53 @@ func TestPreviewStateSecurityHeaders(t *testing.T) {
 	}
 	if csp := recorder.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "frame-ancestors 'none'") || !strings.Contains(csp, "default-src 'none'") {
 		t.Fatalf("unexpected content security policy: %q", csp)
+	}
+}
+
+func TestPreviewHostFallbackServesRunningPreviewOutage(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	host := "pr-31-deployment-123.my.obiente.cloud"
+	environmentURL := "https://" + host + "/docs"
+	record := database.PullRequestDeployment{
+		ID: "pr-deployment-host-fallback", SourceDeploymentID: "source", OrganizationID: "org",
+		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 31,
+		HeadSHA: strings.Repeat("a", 40), HeadRef: "feature", BaseRef: "main",
+		Status:         int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING),
+		EnvironmentURL: &environmentURL, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "https://"+host+"/unavailable", nil)
+	request.Host = host
+	recorder := httptest.NewRecorder()
+	if handled := (&Service{}).HandlePullRequestPreviewHostFallback(recorder, request); !handled {
+		t.Fatal("preview host fallback did not handle a known preview domain")
+	}
+	response := recorder.Result()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("preview host fallback status = %d, want 200", response.StatusCode)
+	}
+	if response.Header.Get("Retry-After") != "10" {
+		t.Fatalf("preview host fallback did not advertise a retry: %#v", response.Header)
+	}
+	if location := response.Header.Get("Location"); location != "" {
+		t.Fatalf("preview host fallback redirected into a loop: %q", location)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "Preview temporarily unavailable") {
+		t.Fatalf("preview host fallback rendered unexpected body: %s", body)
+	}
+}
+
+func TestPreviewHostFallbackIgnoresUnrelatedOrUnknownHosts(t *testing.T) {
+	newDeploymentServiceTestDB(t)
+	for _, host := range []string{"obiente.cloud", "pr-31-unknown.my.obiente.cloud"} {
+		request := httptest.NewRequest(http.MethodGet, "https://"+host+"/", nil)
+		request.Host = host
+		if handled := (&Service{}).HandlePullRequestPreviewHostFallback(httptest.NewRecorder(), request); handled {
+			t.Errorf("preview host fallback handled unrelated host %q", host)
+		}
 	}
 }
 
