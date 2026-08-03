@@ -342,6 +342,50 @@ func TestStaleRuntimeCallbackQueuesCurrentHeadWithoutOverwritingState(t *testing
 	}
 }
 
+func TestSuccessfulPreviewRuntimeRecordsIsolationMigration(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	background, cancel := context.WithCancel(context.Background())
+	cancel()
+	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
+	head := strings.Repeat("a", 40)
+	record := database.PullRequestDeployment{
+		ID: "pr-isolation-version", SourceDeploymentID: "source", PreviewDeploymentID: stringPointer("preview-isolation"), OrganizationID: "org",
+		GitHubIntegrationID: "integration", GitHubInstallationID: 42, Repository: "obiente/cloud", PullRequestNumber: 32,
+		HeadSHA: head, ActiveHeadSHA: &head, HeadRef: "feature", BaseRef: "main",
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), ExpiresAt: time.Now().Add(time.Hour),
+	}
+	if err := db.Create(&record).Error; err != nil {
+		t.Fatalf("seed pull request deployment: %v", err)
+	}
+	service.updatePullRequestDeploymentRuntime(t.Context(), "preview-isolation", head, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+	var got database.PullRequestDeployment
+	if err := db.First(&got, "id = ?", record.ID).Error; err != nil {
+		t.Fatalf("reload pull request deployment: %v", err)
+	}
+	if got.IsolationVersion != currentPRIsolationVersion || got.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING) {
+		t.Fatalf("successful preview did not record current isolation version: %#v", got)
+	}
+}
+
+func TestPullRequestSyncSourceComparisonIncludesRepositoryAndInstallation(t *testing.T) {
+	t.Parallel()
+
+	base := &pullRequestSyncSource{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 42}
+	if !pullRequestSyncSourcesEqual(base, &pullRequestSyncSource{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 42}) {
+		t.Fatal("identical pull request sources should match")
+	}
+	for _, changed := range []*pullRequestSyncSource{
+		{repositoryURL: "Obiente/Other", integrationID: "integration-1", installationID: 42},
+		{repositoryURL: "Obiente/Cloud", integrationID: "integration-2", installationID: 42},
+		{repositoryURL: "Obiente/Cloud", integrationID: "integration-1", installationID: 43},
+		nil,
+	} {
+		if pullRequestSyncSourcesEqual(base, changed) {
+			t.Fatalf("changed pull request source matched: %#v", changed)
+		}
+	}
+}
+
 func TestExpiredPreviewCleanupAdvancesBeyondFirstBatch(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	background, cancel := context.WithCancel(context.Background())

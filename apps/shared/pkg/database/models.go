@@ -121,6 +121,7 @@ type PullRequestDeployment struct {
 	FromFork             bool       `gorm:"not null;default:false" json:"from_fork"`
 	Merged               bool       `gorm:"not null;default:false" json:"merged"`
 	Status               int32      `gorm:"index;not null" json:"status"`
+	IsolationVersion     int32      `gorm:"index;not null;default:0" json:"isolation_version"`
 	EnvironmentURL       *string    `json:"environment_url"`
 	Error                *string    `gorm:"type:text" json:"error"`
 	GitHubDeploymentID   *int64     `json:"github_deployment_id"`

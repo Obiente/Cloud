@@ -1070,6 +1070,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.ingress-proxy=true"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         # Traefik dashboard accessible directly on port 8080 via --api.insecure=true

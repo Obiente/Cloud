@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 )
 
 // Network operations for deployments
@@ -163,7 +165,7 @@ func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploy
 
 	// Network doesn't exist, create it
 	logger.Info("[DeploymentManager] Creating deployment network %s", deploymentNetworkName)
-	
+
 	// Detect if Docker Swarm is active and use overlay driver if so
 	args := []string{"network", "create"}
 	swarmCheckCmd := exec.CommandContext(ctx, "docker", "info", "--format", "{{.Swarm.LocalNodeState}}")
@@ -173,13 +175,13 @@ func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploy
 			args = append(args, "--driver", "overlay", "--attachable")
 		}
 	}
-	
+
 	args = append(args,
 		"--label", "cloud.obiente.managed=true",
 		"--label", fmt.Sprintf("cloud.obiente.deployment=%s", strings.TrimPrefix(deploymentNetworkName, "deployment-")),
 		deploymentNetworkName,
 	)
-	
+
 	createCmd := exec.CommandContext(ctx, "docker", args...)
 	var stderr bytes.Buffer
 	createCmd.Stderr = &stderr
@@ -217,5 +219,82 @@ func (dm *DeploymentManager) ensureDeploymentNetwork(ctx context.Context, deploy
 	}
 
 	logger.Info("[DeploymentManager] Successfully created deployment network %s", deploymentNetworkName)
+	return nil
+}
+
+func (dm *DeploymentManager) ensurePreviewIngressNetwork(ctx context.Context, networkName string) error {
+	if strings.TrimSpace(networkName) == "" {
+		return fmt.Errorf("preview ingress network name is required")
+	}
+	if err := dm.ensureDeploymentNetwork(ctx, networkName); err != nil {
+		return err
+	}
+	if utils.IsSwarmModeEnabled() {
+		return ensureSwarmIngressProxyNetwork(ctx, networkName)
+	}
+	return ensureContainerIngressProxyNetwork(ctx, networkName)
+}
+
+func ensureSwarmIngressProxyNetwork(ctx context.Context, networkName string) error {
+	serviceName, err := swarmIngressProxyServiceName(ctx)
+	if err != nil {
+		return err
+	}
+	existingNetworks, err := existingSwarmServiceNetworkNames(ctx, serviceName)
+	if err != nil {
+		return fmt.Errorf("inspect ingress proxy service %s: %w", serviceName, err)
+	}
+	if containsString(existingNetworks, networkName) {
+		return nil
+	}
+	command := exec.CommandContext(ctx, "docker", "service", "update", "--network-add", networkName, serviceName)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("attach ingress proxy service %s to %s: %w (%s)", serviceName, networkName, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func swarmIngressProxyServiceName(ctx context.Context) (string, error) {
+	if serviceName := strings.TrimSpace(os.Getenv("TRAEFIK_SERVICE_NAME")); serviceName != "" {
+		return serviceName, nil
+	}
+	command := exec.CommandContext(ctx, "docker", "service", "ls", "--filter", "label=cloud.obiente.ingress-proxy=true", "--format", "{{.Name}}")
+	if output, err := command.Output(); err == nil {
+		serviceNames := strings.Fields(string(output))
+		switch len(serviceNames) {
+		case 1:
+			return serviceNames[0], nil
+		case 0:
+			// The label may not exist yet during a rolling upgrade. Fall back to
+			// the established stack-derived service name below.
+		default:
+			return "", fmt.Errorf("multiple ingress proxy services matched cloud.obiente.ingress-proxy=true")
+		}
+	}
+	stackName := strings.TrimSpace(os.Getenv("STACK_NAME"))
+	if stackName == "" {
+		stackName = "obiente"
+	}
+	return stackName + "_traefik", nil
+}
+
+func ensureContainerIngressProxyNetwork(ctx context.Context, networkName string) error {
+	command := exec.CommandContext(ctx, "docker", "ps", "--filter", "label=cloud.obiente.ingress-proxy=true", "--format", "{{.ID}}")
+	output, err := command.Output()
+	if err != nil {
+		return fmt.Errorf("discover ingress proxy container: %w", err)
+	}
+	containerIDs := strings.Fields(string(output))
+	if len(containerIDs) == 0 {
+		return fmt.Errorf("no ingress proxy container with cloud.obiente.ingress-proxy=true is running")
+	}
+	for _, containerID := range containerIDs {
+		connect := exec.CommandContext(ctx, "docker", "network", "connect", networkName, containerID)
+		output, err := connect.CombinedOutput()
+		if err != nil && !strings.Contains(strings.ToLower(string(output)), "already exists") {
+			return fmt.Errorf("attach ingress proxy container %s to %s: %w (%s)", containerID, networkName, err, strings.TrimSpace(string(output)))
+		}
+	}
 	return nil
 }

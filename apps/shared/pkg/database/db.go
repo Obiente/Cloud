@@ -626,6 +626,7 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS report_attempts INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS next_report_at TIMESTAMPTZ`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ`,
+		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS isolation_version INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_pending BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_generation BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_attempts INTEGER NOT NULL DEFAULT 0`,

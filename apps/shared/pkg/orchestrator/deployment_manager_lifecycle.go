@@ -32,7 +32,9 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	// Untrusted previews use a dedicated ingress network and must never join the
 	// platform control-plane network.
 	var networkErr error
-	if config.NetworkName != "" {
+	if config.IsolatedIngress {
+		networkErr = dm.ensurePreviewIngressNetwork(ctx, config.NetworkName)
+	} else if config.NetworkName != "" {
 		networkErr = dm.ensureDeploymentNetwork(ctx, config.NetworkName)
 	} else {
 		networkErr = dm.ensureNetwork(ctx)

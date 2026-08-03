@@ -60,7 +60,8 @@ type DeploymentConfig struct {
 	TargetNodeID              string
 	// NetworkName overrides the platform control-plane network for isolated
 	// runtimes such as untrusted pull request previews.
-	NetworkName string
+	NetworkName     string
+	IsolatedIngress bool
 }
 
 type DeploymentVolume struct {

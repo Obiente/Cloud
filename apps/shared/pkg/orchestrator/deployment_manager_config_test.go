@@ -71,6 +71,21 @@ func TestTraefikRouterPriority(t *testing.T) {
 	}
 }
 
+func TestGenerateTraefikLabelsSelectsIngressNetworkForDockerAndSwarm(t *testing.T) {
+	t.Parallel()
+
+	labels := generateTraefikLabels("deployment-123", "default", []database.DeploymentRouting{{
+		ServiceName: "default",
+		Domain:      "preview.example.com",
+	}}, nil, "deployment-preview-123")
+
+	for _, key := range []string{"traefik.docker.network", "traefik.swarm.network"} {
+		if got := labels[key]; got != "deployment-preview-123" {
+			t.Fatalf("%s = %q, want deployment-preview-123", key, got)
+		}
+	}
+}
+
 func TestNormalizeServiceNetworksFromList(t *testing.T) {
 	service := map[string]interface{}{
 		"networks": []interface{}{"deployment-123", "obiente-network"},
@@ -136,7 +151,7 @@ networks:
 `)
 
 	routings := []database.DeploymentRouting{{ServiceName: "directus"}}
-	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings, PreviewIngressNetworkName)
+	gotYaml, err := dm.addTraefikNetworkToRoutedServices(composeYaml, routings, legacyPreviewIngressNetworkName)
 	if err != nil {
 		t.Fatalf("addTraefikNetworkToRoutedServices failed: %v", err)
 	}
@@ -179,7 +194,7 @@ networks:
 	}
 	topLevelNetworks := compose["networks"].(map[string]interface{})
 	ingressConfig := topLevelNetworks["obiente-network"].(map[string]interface{})
-	if ingressConfig["name"] != PreviewIngressNetworkName || ingressConfig["external"] != true {
+	if ingressConfig["name"] != legacyPreviewIngressNetworkName || ingressConfig["external"] != true {
 		t.Fatalf("expected routed service to use isolated ingress network, got %#v", ingressConfig)
 	}
 }

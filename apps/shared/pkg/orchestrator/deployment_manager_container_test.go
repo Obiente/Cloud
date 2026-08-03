@@ -16,21 +16,30 @@ func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T
 	}
 	got := swarmServiceNetworkUpdateArgs([]string{
 		"older_obiente-network",
-		PreviewIngressNetworkName,
+		legacyPreviewIngressNetworkName,
 		"current_obiente-network",
 		"older_obiente-network",
-	}, PreviewIngressNetworkName)
+	}, legacyPreviewIngressNetworkName)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("network update args = %#v, want %#v", got, want)
 	}
 
 	want = []string{
-		"--network-add", PreviewIngressNetworkName,
+		"--network-add", legacyPreviewIngressNetworkName,
 		"--network-rm", "custom_obiente-network",
 	}
-	got = swarmServiceNetworkUpdateArgs([]string{"custom_obiente-network"}, PreviewIngressNetworkName)
+	got = swarmServiceNetworkUpdateArgs([]string{"custom_obiente-network"}, legacyPreviewIngressNetworkName)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("network migration args = %#v, want %#v", got, want)
+	}
+}
+
+func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
+	t.Parallel()
+	first := PreviewIngressNetworkNameForDeployment("preview-one")
+	second := PreviewIngressNetworkNameForDeployment("preview-two")
+	if first == second || first == legacyPreviewIngressNetworkName || second == legacyPreviewIngressNetworkName {
+		t.Fatalf("preview ingress networks are not isolated: first=%q second=%q", first, second)
 	}
 }
 

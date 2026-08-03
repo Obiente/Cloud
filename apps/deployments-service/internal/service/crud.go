@@ -703,22 +703,36 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 
 	nextRepository := normalizeGitHubRepoFullName(stringValue(dbDeployment.RepositoryURL))
 	nextIntegrationID := stringValue(dbDeployment.GitHubIntegrationID)
-	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
-		if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("failed to retire pull request previews for the previous repository: %w", err))
+	sourceChanged := originalRepository != nextRepository || originalIntegrationID != nextIntegrationID
+	persistDeployment := func() error {
+		if sourceChanged {
+			if err := s.retirePullRequestDeploymentsForRepositoryChange(ctx, deploymentID, originalRepository); err != nil {
+				return fmt.Errorf("retire pull request previews for the previous repository: %w", err)
+			}
 		}
-	}
-
-	// Save changes to database
-	if err := s.repo.Update(ctx, dbDeployment); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update deployment: %w", err))
-	}
-	if originalRepository != nextRepository || originalIntegrationID != nextIntegrationID {
-		if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
-			Where("deployment_id = ? AND enabled = ?", deploymentID, true).
-			Updates(map[string]interface{}{"open_pull_requests_synced_at": nil, "updated_at": time.Now()}).Error; err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("repository was updated, but existing pull requests could not be scheduled for discovery: %w", err))
+		if err := s.repo.Update(ctx, dbDeployment); err != nil {
+			return fmt.Errorf("update deployment: %w", err)
 		}
+		if sourceChanged {
+			if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+				Where("deployment_id = ? AND enabled = ?", deploymentID, true).
+				Updates(map[string]interface{}{"open_pull_requests_synced_at": nil, "updated_at": time.Now()}).Error; err != nil {
+				return fmt.Errorf("schedule existing pull requests for discovery: %w", err)
+			}
+		}
+		return nil
+	}
+	if sourceChanged {
+		err = withDistributedLock(ctx, "pull-request-source:"+deploymentID, persistDeployment)
+	} else {
+		err = persistDeployment()
+	}
+	if err != nil {
+		code := connect.CodeInternal
+		if sourceChanged {
+			code = connect.CodeUnavailable
+		}
+		return nil, connect.NewError(code, fmt.Errorf("failed to persist deployment changes: %w", err))
 	}
 
 	// Return updated deployment

@@ -97,11 +97,6 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment not found: %w", err))
 	}
 
-	// Update deployment status to deploying
-	if err := s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to trigger deployment: %w", err))
-	}
-
 	// Get user ID for build record
 	userInfo, _ := auth.GetUserFromContext(ctx)
 	triggeredBy := "system"
@@ -116,8 +111,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	buildToken, err := s.registerDeploymentBuild(buildCtx, deploymentID, buildCancel)
 	if err != nil {
 		buildCancel()
-		_ = s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 		return nil, connect.NewError(connect.CodeAborted, fmt.Errorf("failed to register deployment build: %w", err))
+	}
+	// Mutate the visible status only after this request owns the build. A
+	// duplicate trigger must not replace the active build's status with FAILED.
+	if err := s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
+		buildCancel()
+		s.unregisterDeploymentBuild(deploymentID, buildToken)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to trigger deployment: %w", err))
 	}
 	targetNodeID := orchestrator.TargetNodeFromContext(ctx)
 

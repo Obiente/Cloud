@@ -755,7 +755,8 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			TargetNodeID:              targetNodeID,
 		}
 		if deploymentIsPullRequestPreview(deployment) {
-			cfg.NetworkName = orchestrator.PreviewIngressNetworkName
+			cfg.NetworkName = orchestrator.PreviewIngressNetworkNameForDeployment(deployment.ID)
+			cfg.IsolatedIngress = true
 		}
 
 		if deployment.Replicas != nil {
