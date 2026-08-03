@@ -22,8 +22,8 @@ jobs:
       matrix:
         include:
           - name: BuildKit
-            runner: self-hosted
-            runner-label: self-hosted
+            runner: ubuntu-24.04
+            runner-label: github-hosted
             primary: docker.io/moby/buildkit:buildx-stable-1
             fallback: ""
             target: dockerhub/moby/buildkit:buildx-stable-1

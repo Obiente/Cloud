@@ -43,8 +43,8 @@ jobs:
         include:
           - platform: linux/amd64
             architecture: amd64
-            runner: ${{ inputs.publish && 'self-hosted' || 'ubuntu-24.04' }}
-            runner-label: ${{ inputs.publish && 'self-hosted' || 'github-hosted' }}
+            runner: ubuntu-24.04
+            runner-label: github-hosted
           - platform: linux/arm64
             architecture: arm64
             runner: ubuntu-24.04-arm
