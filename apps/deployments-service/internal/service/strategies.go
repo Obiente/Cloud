@@ -1990,8 +1990,16 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 		}
 	}
 
+	validationComposeYaml := composeYaml
+	if len(config.EnvVars) > 0 {
+		validationComposeYaml, err = injectComposeServiceEnvironment(composeYaml, composeValidationEnvironment(config.EnvVars))
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("prepare preview environment variables for Compose validation: %w", err)}, nil
+		}
+	}
+
 	// Validate compose file
-	if err := ValidateCompose(ctx, composeYaml); len(err) > 0 {
+	if err := ValidateCompose(ctx, validationComposeYaml); len(err) > 0 {
 		for _, ve := range err {
 			if ve.Severity == "error" {
 				return &BuildResult{Success: false, Error: fmt.Errorf("compose validation error: %s", ve.Message)}, nil
@@ -2006,6 +2014,14 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 		ComposeYaml: composeYaml,
 		Success:     true,
 	}, nil
+}
+
+func composeValidationEnvironment(values map[string]string) map[string]string {
+	escaped := make(map[string]string, len(values))
+	for key, value := range values {
+		escaped[key] = strings.ReplaceAll(value, "$", "$$")
+	}
+	return escaped
 }
 
 func injectComposeServiceEnvironment(composeYaml string, values map[string]string) (string, error) {

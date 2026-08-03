@@ -135,30 +135,35 @@ func existingSwarmServiceEnvNames(ctx context.Context, serviceName string) []str
 	return parseSwarmServiceEnvNames(output)
 }
 
-func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) []string {
+func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.Networks}}", serviceName)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("inspect service networks: %w", err)
 	}
 	var attachments []struct {
 		Target string `json:"Target"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(output), &attachments); err != nil {
-		return nil
+		return nil, fmt.Errorf("decode service networks: %w", err)
 	}
 	names := make([]string, 0, len(attachments))
 	for _, attachment := range attachments {
 		if strings.TrimSpace(attachment.Target) == "" {
-			continue
+			return nil, fmt.Errorf("service network attachment has no target")
 		}
 		inspect := exec.CommandContext(ctx, "docker", "network", "inspect", "--format", "{{.Name}}", attachment.Target)
 		name, inspectErr := inspect.Output()
-		if inspectErr == nil && strings.TrimSpace(string(name)) != "" {
-			names = append(names, strings.TrimSpace(string(name)))
+		if inspectErr != nil {
+			return nil, fmt.Errorf("inspect service network %s: %w", attachment.Target, inspectErr)
 		}
+		networkName := strings.TrimSpace(string(name))
+		if networkName == "" {
+			return nil, fmt.Errorf("service network %s has no name", attachment.Target)
+		}
+		names = append(names, networkName)
 	}
-	return names
+	return names, nil
 }
 
 func containsString(values []string, target string) bool {
@@ -1524,7 +1529,10 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 	if config.NetworkName != "" && swarmNetworkName != sharedNetworkName {
-		existingNetworks := existingSwarmServiceNetworkNames(ctx, swarmServiceName)
+		existingNetworks, err := existingSwarmServiceNetworkNames(ctx, swarmServiceName)
+		if err != nil {
+			return "", "", fmt.Errorf("inspect existing service networks before isolation migration: %w", err)
+		}
 		if !containsString(existingNetworks, swarmNetworkName) {
 			args = append(args, "--network-add", swarmNetworkName)
 		}

@@ -414,6 +414,10 @@ func TestComposePreviewEnvironmentIsInjectedLiterally(t *testing.T) {
 	if !strings.Contains(got, "EXISTING: kept") || !strings.Contains(got, "PUBLIC_URL: https://example.test/$path") {
 		t.Fatalf("allowlisted Compose environment was not preserved literally:\n%s", got)
 	}
+	validation := composeValidationEnvironment(map[string]string{"PUBLIC_URL": "https://example.test/${MISSING?must-exist}"})
+	if validation["PUBLIC_URL"] != "https://example.test/$${MISSING?must-exist}" {
+		t.Fatalf("Compose validation value was not escaped exactly once: %q", validation["PUBLIC_URL"])
+	}
 }
 
 func TestPullRequestReportRetryBackoffIsBounded(t *testing.T) {
@@ -475,6 +479,17 @@ func TestRestoredMergedPreviewIgnoresDuplicateCloseDelivery(t *testing.T) {
 	}
 }
 
+func TestInternalReconciliationPreservesRestoredMergedPreview(t *testing.T) {
+	now := time.Now()
+	record := &database.PullRequestDeployment{Merged: true, RestoredAt: &now, HeadSHA: strings.Repeat("a", 40)}
+	if !pullRequestReconciliationPreservesRestoredPreview(record, "reconcile", "closed", record.HeadSHA) {
+		t.Fatal("internal settings reconciliation should preserve an active restored preview")
+	}
+	if pullRequestReconciliationPreservesRestoredPreview(record, "closed", "closed", record.HeadSHA) {
+		t.Fatal("an external close delivery must remain distinguishable from internal reconciliation")
+	}
+}
+
 func TestStaleBuildControlRequiresExpiredHeartbeat(t *testing.T) {
 	now := time.Now()
 	recent := now.Add(-deploymentBuildHeartbeatInterval)
@@ -486,6 +501,17 @@ func TestStaleBuildControlRequiresExpiredHeartbeat(t *testing.T) {
 	control.HeartbeatAt = &stale
 	if !deploymentBuildControlIsStale(control, now) {
 		t.Fatal("an abandoned build token was not considered stale")
+	}
+	legacyRecent := now.Add(-deploymentBuildHeartbeatTimeout - time.Second)
+	control.HeartbeatAt = nil
+	control.UpdatedAt = legacyRecent
+	if deploymentBuildControlIsStale(control, now) {
+		t.Fatal("a pre-heartbeat build owner was stolen during the rolling-upgrade grace period")
+	}
+	legacyStale := now.Add(-deploymentBuildLegacyOwnerTimeout - time.Second)
+	control.UpdatedAt = legacyStale
+	if !deploymentBuildControlIsStale(control, now) {
+		t.Fatal("an abandoned pre-heartbeat build owner was never reclaimed")
 	}
 }
 

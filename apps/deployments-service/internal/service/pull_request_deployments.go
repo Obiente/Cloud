@@ -1486,7 +1486,6 @@ func (s *Service) cleanupPullRequestDeploymentsForSource(ctx context.Context, so
 
 func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 	go func() {
-		s.backfillExistingOpenPullRequests(ctx)
 		s.cleanupExpiredPullRequestDeployments(ctx)
 		s.retryPendingPullRequestReconciliations(ctx)
 		s.retryPendingPullRequestReports(ctx)
@@ -1501,9 +1500,21 @@ func (s *Service) StartPullRequestDeploymentJanitor(ctx context.Context) {
 			case <-cleanupTicker.C:
 				s.cleanupExpiredPullRequestDeployments(ctx)
 			case <-retryTicker.C:
-				s.backfillExistingOpenPullRequests(ctx)
 				s.retryPendingPullRequestReconciliations(ctx)
 				s.retryPendingPullRequestReports(ctx)
+			}
+		}
+	}()
+	go func() {
+		s.backfillExistingOpenPullRequests(ctx)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.backfillExistingOpenPullRequests(ctx)
 			}
 		}
 	}()
@@ -1543,10 +1554,21 @@ func (s *Service) backfillExistingOpenPullRequests(ctx context.Context) {
 				logger.Warn("[PRDeployments] Existing open pull request backfill failed for %s: %v", config.DeploymentID, err)
 				continue
 			}
-			if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
-				Where("deployment_id = ? AND enabled = ? AND open_pull_requests_synced_at IS NULL", config.DeploymentID, true).
-				Update("open_pull_requests_synced_at", time.Now()).Error; err != nil {
-				logger.Warn("[PRDeployments] Failed to record open pull request backfill for %s: %v", config.DeploymentID, err)
+			result := database.DB.WithContext(ctx).Model(&database.PullRequestDeploymentConfig{}).
+				Where(`deployment_id = ? AND enabled = ? AND open_pull_requests_synced_at IS NULL
+					AND EXISTS (
+						SELECT 1
+						FROM deployments AS source
+						JOIN github_integrations AS integration ON integration.id = source.github_integration_id
+						WHERE source.id = pull_request_deployment_configs.deployment_id
+						  AND source.deleted_at IS NULL
+						  AND source.repository_url = ?
+						  AND source.github_integration_id = ?
+						  AND integration.github_app_installation_id = ?
+					)`, config.DeploymentID, true, stringValue(source.RepositoryURL), stringValue(source.GitHubIntegrationID), *integration.GitHubAppInstallationID).
+				Update("open_pull_requests_synced_at", time.Now())
+			if result.Error != nil {
+				logger.Warn("[PRDeployments] Failed to record open pull request backfill for %s: %v", config.DeploymentID, result.Error)
 			}
 		}
 		if len(configs) < 25 {
@@ -1818,13 +1840,15 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	payload.PullRequest.Draft, payload.PullRequest.Merged = live.Draft, live.Merged
 	payload.PullRequest.Head.SHA, payload.PullRequest.Head.Ref, payload.PullRequest.Head.Repo.FullName = live.Head.SHA, live.Head.Ref, live.Head.Repo.FullName
 	payload.PullRequest.Base.Ref, payload.PullRequest.Base.Repo.FullName = live.Base.Ref, live.Base.Repo.FullName
-	if payload.Action == "reconcile" && live.State == "closed" {
-		payload.Action = "closed"
-	}
+	reconcilingClosedPullRequest := payload.Action == "reconcile" && live.State == "closed"
 	var existing database.PullRequestDeployment
 	existingErr := database.DB.WithContext(ctx).Where("source_deployment_id = ? AND repository = ? AND pull_request_number = ?", config.DeploymentID, repository, payload.Number).First(&existing).Error
 	if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("load existing pull request state: %w", existingErr)
+	}
+	reconcilingRestoredPreview := existingErr == nil && pullRequestReconciliationPreservesRestoredPreview(&existing, payload.Action, live.State, payload.PullRequest.Head.SHA)
+	if reconcilingClosedPullRequest && !reconcilingRestoredPreview {
+		payload.Action = "closed"
 	}
 	if payload.Action == "closed" {
 		if existingErr == nil {
@@ -1902,6 +1926,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 	}
 	record.GitHubIntegrationID = stringValue(source.GitHubIntegrationID)
 	record.GitHubInstallationID = payload.Installation.ID
+	restoredAt, restoredExpiresAt := record.RestoredAt, record.ExpiresAt
 	shaChanged := record.HeadSHA != "" && record.HeadSHA != payload.PullRequest.Head.SHA
 	revisionUnchanged := existingErr == nil && !shaChanged
 	if shaChanged && record.GitHubDeploymentID != nil {
@@ -1913,9 +1938,16 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
 	}
 	record.HeadSHA, record.IgnoredHeadSHA, record.HeadRef, record.BaseRef, record.FromFork, record.Draft = payload.PullRequest.Head.SHA, nil, headRef, baseRef, fromFork, payload.PullRequest.Draft
-	record.Merged = false
-	record.RestoredAt = nil
-	record.ExpiresAt, record.ClosedAt, record.UpdatedAt = now.Add(time.Duration(config.TTLHours)*time.Hour), nil, now
+	record.ClosedAt, record.UpdatedAt = nil, now
+	if reconcilingRestoredPreview {
+		record.Merged = true
+		record.RestoredAt = restoredAt
+		record.ExpiresAt = restoredExpiresAt
+	} else {
+		record.Merged = false
+		record.RestoredAt = nil
+		record.ExpiresAt = now.Add(time.Duration(config.TTLHours) * time.Hour)
+	}
 	if shaChanged && !config.ApprovalCoversUpdates {
 		record.ApprovedAt, record.ApprovedBy, record.ApprovedHeadSHA = nil, nil, nil
 	}
@@ -1983,7 +2015,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			"error":                  record.Error,
 			"expires_at":             record.ExpiresAt,
 			"closed_at":              nil,
-			"restored_at":            nil,
+			"restored_at":            record.RestoredAt,
 			"updated_at":             record.UpdatedAt,
 		}
 		if reason != "" || record.Status == int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL) {
@@ -2033,6 +2065,10 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 
 func pullRequestCloseIsRestoredRedelivery(record *database.PullRequestDeployment, headSHA string) bool {
 	return record != nil && record.RestoredAt != nil && record.Merged && record.ClosedAt == nil && record.HeadSHA == headSHA
+}
+
+func pullRequestReconciliationPreservesRestoredPreview(record *database.PullRequestDeployment, action, liveState, headSHA string) bool {
+	return action == "reconcile" && liveState == "closed" && pullRequestCloseIsRestoredRedelivery(record, headSHA)
 }
 
 func preserveIgnoredPullRequestRevision(record *database.PullRequestDeployment, existingErr error, config *database.PullRequestDeploymentConfig, observedHeadSHA, reason string) bool {

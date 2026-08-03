@@ -29,19 +29,26 @@ type activeDeploymentBuild struct {
 }
 
 const (
-	deploymentBuildHeartbeatInterval = 15 * time.Second
-	deploymentBuildHeartbeatTimeout  = 2 * time.Minute
+	deploymentBuildHeartbeatInterval  = 15 * time.Second
+	deploymentBuildHeartbeatTimeout   = 2 * time.Minute
+	deploymentBuildLegacyOwnerTimeout = 6 * time.Hour
 )
 
 func deploymentBuildControlIsStale(control *database.DeploymentBuildControl, now time.Time) bool {
 	if control == nil || control.BuildToken == "" {
 		return false
 	}
-	lastSeen := control.UpdatedAt
-	if control.HeartbeatAt != nil {
-		lastSeen = *control.HeartbeatAt
+	if control.HeartbeatAt == nil {
+		lastSeen := control.UpdatedAt
+		if lastSeen.IsZero() {
+			lastSeen = control.CreatedAt
+		}
+		// Replicas from before heartbeat support only updated this row when the
+		// build began. Keep those owners for a rolling-upgrade grace period so a
+		// new replica cannot steal a long-running build after two minutes.
+		return !lastSeen.IsZero() && now.Sub(lastSeen) > deploymentBuildLegacyOwnerTimeout
 	}
-	return lastSeen.IsZero() || now.Sub(lastSeen) > deploymentBuildHeartbeatTimeout
+	return now.Sub(*control.HeartbeatAt) > deploymentBuildHeartbeatTimeout
 }
 
 type Service struct {
