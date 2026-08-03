@@ -311,6 +311,7 @@ message UpdateDeploymentRequest {
   map<string, string> build_args = 30; // Docker build args for Dockerfile deployments
   repeated DockerfileVolume dockerfile_volumes = 31; // Persistent volume mounts for Dockerfile deployments
   optional DockerfileBuildOptions dockerfile_build_options = 32; // Additional Docker build options for Dockerfile deployments
+  bool replace_custom_domains = 33; // Explicitly replace custom_domains, including with an empty list
 }
 
 message UpdateDeploymentResponse {

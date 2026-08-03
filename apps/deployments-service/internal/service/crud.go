@@ -573,64 +573,67 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	// Get deployment before making changes (to preserve original domain for validation)
 	originalDomain := dbDeployment.Domain
 
-	// Handle custom_domains (repeated string -> JSON array)
-	// Note: Handle this BEFORE domain validation so we can check against updated custom domains
-	// For protobuf repeated fields, the slice is always non-nil, so we process it if it's provided
-	// The frontend always sends custom_domains when updating, so we always process it
+	// Handle custom_domains before domain validation so the new primary domain can
+	// be checked against the updated set. Repeated protobuf fields have no presence
+	// information, so ordinary partial updates must never infer that an omitted
+	// empty slice means "remove every domain". A non-empty list remains backward
+	// compatible with older clients; removing the final domain requires the
+	// explicit replacement marker.
 	customDomains := req.Msg.GetCustomDomains()
-	if len(customDomains) > 0 {
-		// Preserve existing tokens for domains that already have them
-		// Get current deployment state to preserve existing tokens
-		var currentCustomDomains []string
-		if dbDeployment.CustomDomains != "" {
-			if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &currentCustomDomains); err != nil {
-				currentCustomDomains = []string{}
+	if req.Msg.GetReplaceCustomDomains() || len(customDomains) > 0 {
+		if len(customDomains) == 0 {
+			dbDeployment.CustomDomains = "[]"
+		} else {
+			// Preserve existing tokens for domains that already have them
+			// Get current deployment state to preserve existing tokens
+			var currentCustomDomains []string
+			if dbDeployment.CustomDomains != "" {
+				if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &currentCustomDomains); err != nil {
+					currentCustomDomains = []string{}
+				}
 			}
-		}
 
-		// Map to preserve tokens: domain -> token entry
-		tokenMap := make(map[string]string)
-		for _, entry := range currentCustomDomains {
-			parts := strings.Split(entry, ":")
-			if len(parts) >= 3 && parts[1] == "token" {
+			// Map to preserve tokens: domain -> token entry
+			tokenMap := make(map[string]string)
+			for _, entry := range currentCustomDomains {
+				parts := strings.Split(entry, ":")
+				if len(parts) >= 3 && parts[1] == "token" {
+					domainName := parts[0] // Extract domain from entry
+					tokenMap[strings.ToLower(domainName)] = entry
+				}
+			}
+
+			// Process new domains and preserve existing tokens
+			processedDomains := []string{}
+			for _, domain := range customDomains {
+				parts := strings.Split(domain, ":")
 				domainName := parts[0] // Extract domain from entry
-				tokenMap[strings.ToLower(domainName)] = entry
+				domainLower := strings.ToLower(domainName)
+
+				// If this domain already has a token, preserve it
+				if tokenEntry, exists := tokenMap[domainLower]; exists {
+					processedDomains = append(processedDomains, tokenEntry)
+					delete(tokenMap, domainLower) // Remove from map so we don't add it twice
+				} else {
+					// New domain or plain entry - add as-is (token will be created on first verification request)
+					processedDomains = append(processedDomains, domain)
+				}
 			}
-		}
 
-		// Process new domains and preserve existing tokens
-		processedDomains := []string{}
-		for _, domain := range customDomains {
-			parts := strings.Split(domain, ":")
-			domainName := parts[0] // Extract domain from entry
-			domainLower := strings.ToLower(domainName)
+			// Deduplicate domains (case-insensitive) before validating
+			customDomains = DeduplicateCustomDomains(processedDomains)
 
-			// If this domain already has a token, preserve it
-			if tokenEntry, exists := tokenMap[domainLower]; exists {
-				processedDomains = append(processedDomains, tokenEntry)
-				delete(tokenMap, domainLower) // Remove from map so we don't add it twice
-			} else {
-				// New domain or plain entry - add as-is (token will be created on first verification request)
-				processedDomains = append(processedDomains, domain)
+			// Validate custom domains before saving (check conflicts and verify ownership)
+			if err := s.ValidateCustomDomains(ctx, deploymentID, customDomains); err != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom domain validation failed: %w", err))
 			}
-		}
 
-		// Deduplicate domains (case-insensitive) before validating
-		customDomains = DeduplicateCustomDomains(processedDomains)
-
-		// Validate custom domains before saving (check conflicts and verify ownership)
-		if err := s.ValidateCustomDomains(ctx, deploymentID, customDomains); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom domain validation failed: %w", err))
+			customDomainsJSON, err := json.Marshal(customDomains)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal custom domains: %w", err))
+			}
+			dbDeployment.CustomDomains = string(customDomainsJSON)
 		}
-
-		customDomainsJSON, err := json.Marshal(customDomains)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal custom domains: %w", err))
-		}
-		dbDeployment.CustomDomains = string(customDomainsJSON)
-	} else {
-		// Empty array - clear custom domains
-		dbDeployment.CustomDomains = "[]"
 	}
 
 	// Validate domain AFTER custom domains are updated (so we can check against newly verified custom domains)

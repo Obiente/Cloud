@@ -156,9 +156,23 @@ const route = useRoute();
 const router = useRouter();
 const orgsStore = useOrganizationsStore();
 
-const deploymentId = computed(() => String(route.params.id));
-const buildId = computed(() => String(route.params.buildId));
+const routeParam = (value: string | string[] | undefined): string => {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (typeof candidate !== "string") return "";
+  const normalized = candidate.trim();
+  const lowered = normalized.toLowerCase();
+  if (!normalized || lowered === "undefined" || lowered === "null") return "";
+  return normalized;
+};
+
+const deploymentId = computed(() => routeParam(route.params.id));
+const buildId = computed(() => routeParam(route.params.buildId));
 const organizationId = computed(() => orgsStore.currentOrgId || "");
+const invalidBuildRouteTarget = computed(() =>
+  deploymentId.value
+    ? `/deployments/${deploymentId.value}?tab=builds`
+    : "/deployments"
+);
 
 const client = useConnectClient(DeploymentService);
 const build = ref<Build | null>(null);
@@ -287,12 +301,20 @@ const formatBuildTime = (seconds: number) => {
 };
 
 onMounted(async () => {
+  if (!deploymentId.value || !buildId.value) {
+    await router.replace(invalidBuildRouteTarget.value);
+    return;
+  }
   await Promise.all([loadBuild(), loadBuildLogs()]);
 });
 
 watch(
   () => [deploymentId.value, buildId.value, organizationId.value],
   () => {
+    if (!deploymentId.value || !buildId.value) {
+      void router.replace(invalidBuildRouteTarget.value);
+      return;
+    }
     if (organizationId.value && deploymentId.value && buildId.value) {
       loadBuild();
       loadBuildLogs();

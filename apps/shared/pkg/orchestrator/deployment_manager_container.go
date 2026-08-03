@@ -233,7 +233,17 @@ func safeHealthcheckPath(rawPath string) string {
 
 func httpHealthcheckCommand(port int, rawPath string, expectedStatus int) string {
 	path := safeHealthcheckPath(rawPath)
-	return fmt.Sprintf(`sh -c 'if command -v curl >/dev/null 2>&1; then status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; else (apk add --no-cache curl >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1 || yum install -y -q curl >/dev/null 2>&1) && status=$(curl -s -o /dev/null -w "%%{http_code}" http://localhost:%d%s); [ "$status" -eq "%d" ] && exit 0 || exit 1; fi'`, port, path, expectedStatus, port, path, expectedStatus)
+	return fmt.Sprintf(`sh -c 'url=http://127.0.0.1:%d%s; expected=%d; if command -v curl >/dev/null 2>&1; then status=$(curl -sS -o /dev/null -w "%%{http_code}" "$url") || exit 1; [ "$status" -eq "$expected" ]; elif command -v wget >/dev/null 2>&1; then status=$(wget --server-response --spider "$url" 2>&1 | awk "/HTTP\\//{code=\$2} END{print code}"); [ "$status" -eq "$expected" ]; elif command -v node >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" node -e "const http=require(\"http\"),u=process.env.HEALTHCHECK_URL,w=Number(process.env.HEALTHCHECK_STATUS);const r=http.get(u,x=>{x.resume();process.exit(x.statusCode===w?0:1)});r.setTimeout(5000,()=>r.destroy());r.on(\"error\",()=>process.exit(1))"; elif command -v python3 >/dev/null 2>&1; then HEALTHCHECK_URL="$url" HEALTHCHECK_STATUS="$expected" python3 -c "import http.client,os,sys,urllib.parse;u=urllib.parse.urlsplit(os.environ[\"HEALTHCHECK_URL\"]);c=http.client.HTTPConnection(u.hostname,u.port,timeout=5);c.request(\"GET\",u.path or \"/\");r=c.getresponse();sys.exit(0 if r.status==int(os.environ[\"HEALTHCHECK_STATUS\"]) else 1)"; else echo "health check requires curl, wget, node, or python3" >&2; exit 1; fi'`, port, path, expectedStatus)
+}
+
+func tcpHealthcheckCommand(port int, allowMissingProbe bool) string {
+	missingProbeExit := 1
+	if allowMissingProbe {
+		// Auto-inferred checks must not terminate an otherwise healthy image just
+		// because the image deliberately contains no diagnostic utilities.
+		missingProbeExit = 0
+	}
+	return fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1 && nc -h 2>&1 | grep -q -- "-z"; then nc -z 127.0.0.1 %d; elif command -v node >/dev/null 2>&1; then HEALTHCHECK_PORT=%d node -e "const net=require(\"net\"),s=net.connect({host:\"127.0.0.1\",port:Number(process.env.HEALTHCHECK_PORT)});s.setTimeout(5000);s.on(\"connect\",()=>{s.destroy();process.exit(0)});s.on(\"timeout\",()=>{s.destroy();process.exit(1)});s.on(\"error\",()=>process.exit(1))"; elif command -v python3 >/dev/null 2>&1; then HEALTHCHECK_PORT=%d python3 -c "import os,socket; s=socket.create_connection((\"127.0.0.1\",int(os.environ[\"HEALTHCHECK_PORT\"])),5); s.close()"; else echo "health check requires nc with -z support, node, or python3" >&2; exit %d; fi'`, port, port, port, missingProbeExit)
 }
 
 func normalizeStartCommand(raw string) string {
@@ -381,29 +391,6 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Ensure netcat is available by adding environment variables for nixpacks/railpacks.
-	// Only required for the default nc-based healthcheck (routing-based).
-	shouldAddNetcatEnv := (config.HealthcheckType != nil && *config.HealthcheckType == 2) && // TCP check
-		healthCheckPort > 0 && len(routings) > 0
-	if shouldAddNetcatEnv {
-		// Check if env vars are already set (don't override user's custom values)
-		addedVars := []string{}
-		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
-			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
-			addedVars = append(addedVars, "NIXPACKS_APT_PKGS")
-		}
-		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
-			// RAILPACK_DEPLOY_APT_PACKAGES installs packages in the final image (what we need for health checks)
-			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
-			addedVars = append(addedVars, "RAILPACK_DEPLOY_APT_PACKAGES")
-		}
-		if len(addedVars) > 0 {
-			logger.Info("[DeploymentManager] Added netcat installation env vars for container %s: %v (these work during build if using Nixpacks/Railpacks; health check will install netcat at runtime if needed)", name, addedVars)
-		} else {
-			logger.Debug("[DeploymentManager] Netcat installation env vars already set by user for container %s", name)
-		}
-	}
-
 	// Determine container port - use routing target port if available, otherwise config.Port
 	containerPortNum := config.Port
 	if len(routings) > 0 {
@@ -483,8 +470,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 	case 2: // HEALTHCHECK_TCP
 		if effectiveHealthCheckPort > 0 {
-			// TCP port check using netcat
-			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+			healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, false)
 			healthcheck = &container.HealthConfig{
 				Test:        []string{"CMD-SHELL", healthCheckCmd},
 				Interval:    30 * time.Second,
@@ -540,7 +526,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) or unknown
 		// Auto-detect: Use TCP check if routing exists
 		if effectiveHealthCheckPort > 0 && len(routings) > 0 {
-			healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+			healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, true)
 			healthcheck = &container.HealthConfig{
 				Test:        []string{"CMD-SHELL", healthCheckCmd},
 				Interval:    30 * time.Second,
@@ -557,7 +543,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	// Container configuration
 	containerConfig := &container.Config{
 		Image:        config.Image,
-		Env:          env, // Environment variables including NIXPACKS_PKGS/RAILPACK_* if health check is needed
+		Env:          env,
 		Labels:       labels,
 		ExposedPorts: exposedPorts,
 		// Clear ENTRYPOINT to avoid conflicts when overriding CMD
@@ -773,16 +759,6 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Ensure netcat is available for health checks
-	if healthCheckPort > 0 {
-		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
-			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
-		}
-		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
-			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
-		}
-	}
-
 	// Service name format: deploy-{deploymentID}-{serviceName}
 	swarmServiceName := fmt.Sprintf("deploy-%s-%s", config.DeploymentID, serviceName)
 	if replicaIndex > 0 {
@@ -833,7 +809,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		switch healthcheckType {
 		case 2: // HEALTHCHECK_TCP
 			if effectiveHealthCheckPort > 0 {
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, false)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",
@@ -879,7 +855,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 		default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) - auto-detect
 			if effectiveHealthCheckPort > 0 && len(routings) > 0 {
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, true)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",
@@ -1436,16 +1412,6 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Ensure netcat is available for health checks
-	if healthCheckPort > 0 {
-		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
-			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
-		}
-		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
-			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
-		}
-	}
-
 	// Build docker service update command
 	args := []string{"service", "update",
 		"--with-registry-auth=true", // Enable registry auth for private images
@@ -1476,6 +1442,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		healthcheckType = *config.HealthcheckType
 	}
 
+	healthcheckConfigured := false
 	// Only add healthcheck if not explicitly disabled
 	if healthcheckType != 1 { // 1 = HEALTHCHECK_DISABLED
 		// Determine effective health check port
@@ -1487,7 +1454,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		switch healthcheckType {
 		case 2: // HEALTHCHECK_TCP
 			if effectiveHealthCheckPort > 0 {
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, false)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",
@@ -1495,6 +1462,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				healthcheckConfigured = true
 				logger.Info("[DeploymentManager] Updated TCP health check for Swarm service %s on port %d", swarmServiceName, effectiveHealthCheckPort)
 			}
 
@@ -1516,6 +1484,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				healthcheckConfigured = true
 				logger.Info("[DeploymentManager] Updated HTTP health check for Swarm service %s on port %d%s (expecting %d)", swarmServiceName, effectiveHealthCheckPort, path, expectedStatus)
 			}
 
@@ -1528,12 +1497,13 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				healthcheckConfigured = true
 				logger.Info("[DeploymentManager] Updated custom health check for Swarm service %s: %s", swarmServiceName, *config.HealthcheckCustomCommand)
 			}
 
 		default: // HEALTHCHECK_TYPE_UNSPECIFIED (0) - auto-detect
 			if effectiveHealthCheckPort > 0 && len(routings) > 0 {
-				healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, effectiveHealthCheckPort, effectiveHealthCheckPort)
+				healthCheckCmd := tcpHealthcheckCommand(effectiveHealthCheckPort, true)
 				args = append(args,
 					"--health-cmd", healthCheckCmd,
 					"--health-interval", "30s",
@@ -1541,13 +1511,15 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 					"--health-retries", "3",
 					"--health-start-period", "40s",
 				)
+				healthcheckConfigured = true
 				logger.Info("[DeploymentManager] Updated auto TCP health check for Swarm service %s on port %d (routing exists)", swarmServiceName, effectiveHealthCheckPort)
 			} else {
 				logger.Info("[DeploymentManager] No health check for Swarm service %s - type unspecified and no routing rules", swarmServiceName)
 			}
 		}
-	} else {
-		logger.Info("[DeploymentManager] Health check explicitly disabled for Swarm service %s", swarmServiceName)
+	}
+	if !healthcheckConfigured {
+		logger.Info("[DeploymentManager] Clearing health check for Swarm service %s because no active check is configured", swarmServiceName)
 		args = append(args, swarmDisableHealthcheckArgs()...)
 	}
 
@@ -1622,7 +1594,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	serviceID := strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
 
-	task, err := dm.waitForSwarmServiceConverged(ctx, swarmServiceName)
+	task, err := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)
 	if err != nil {
 		return serviceID, "", err
 	}
@@ -1632,8 +1604,9 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	return serviceID, task.ContainerID, nil
 }
 
-func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, swarmServiceName string) (*swarmConvergedTask, error) {
+func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) (*swarmConvergedTask, error) {
 	deadline := time.Now().Add(2 * time.Minute)
+	rollbackDiagnostics := ""
 	for time.Now().Before(deadline) {
 		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
@@ -1649,17 +1622,100 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, s
 				}
 				return task, nil
 			}
-		case "rollback_started", "rollback_paused", "rollback_completed", "paused":
+		case "rollback_started":
+			// A start-first update can still be serving the previous task while
+			// Docker restores it. Wait for a terminal rollback state before
+			// deciding whether availability was preserved.
+			if rollbackDiagnostics == "" {
+				rollbackDiagnostics = dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName)
+			}
+		case "rollback_completed", "rollback_paused", "paused":
 			if updateMessage == "" {
 				updateMessage = updateState
 			}
-			return nil, fmt.Errorf("swarm rollout for %s did not converge: %s", swarmServiceName, updateMessage)
+			diagnostics := dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName)
+			if rollbackDiagnostics != "" {
+				diagnostics = truncateSwarmDiagnostic(rollbackDiagnostics + "\n" + diagnostics)
+			}
+			rolloutErr := &SwarmRolloutError{
+				ServiceName: swarmServiceName,
+				State:       updateState,
+				Message:     updateMessage,
+				Diagnostics: diagnostics,
+			}
+			if updateState == "rollback_completed" {
+				if restoredTask, taskErr := dm.currentRunningSwarmTask(ctx, swarmServiceName); taskErr == nil && restoredTask != nil && restoredTask.ContainerID != "" {
+					rolloutErr.PreviousRevisionRunning = true
+					rolloutErr.ServiceID = restoredTask.ServiceID
+					rolloutErr.TaskID = restoredTask.TaskID
+					rolloutErr.ContainerID = restoredTask.ContainerID
+				}
+			}
+			return nil, rolloutErr
 		}
 
 		time.Sleep(2 * time.Second)
 	}
 
-	return nil, fmt.Errorf("timed out waiting for swarm service %s to converge", swarmServiceName)
+	return nil, &SwarmRolloutError{
+		ServiceName: swarmServiceName,
+		State:       "timeout",
+		Message:     "timed out waiting for the service to converge",
+		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+	}
+}
+
+func (dm *DeploymentManager) collectSwarmRolloutDiagnostics(ctx context.Context, deploymentID, swarmServiceName string) string {
+	diagnosticCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	psArgs := []string{"service", "ps", swarmServiceName, "--no-trunc", "--format", "{{.ID}}\t{{.Name}}\t{{.Image}}\t{{.CurrentState}}\t{{.Error}}"}
+	psCmd := exec.CommandContext(diagnosticCtx, "docker", psArgs...)
+	var psOutput bytes.Buffer
+	var psStderr bytes.Buffer
+	psCmd.Stdout = &psOutput
+	psCmd.Stderr = &psStderr
+	if err := psCmd.Run(); err != nil {
+		return truncateSwarmDiagnostic(fmt.Sprintf("unable to inspect tasks: %v (%s)", err, strings.TrimSpace(psStderr.String())))
+	}
+
+	diagnostics := strings.TrimSpace(psOutput.String())
+	for _, line := range strings.Split(diagnostics, "\n") {
+		parts := strings.SplitN(line, "\t", 5)
+		if len(parts) < 5 || strings.TrimSpace(parts[4]) == "" {
+			continue
+		}
+		taskID := strings.TrimSpace(parts[0])
+		inspectCmd := exec.CommandContext(diagnosticCtx, "docker", "inspect", taskID, "--format", "{{.Status.Err}}\t{{if .Status.ContainerStatus}}{{.Status.ContainerStatus.ExitCode}}\t{{.Status.ContainerStatus.ContainerID}}{{end}}")
+		if inspectOutput, err := inspectCmd.Output(); err == nil {
+			inspectParts := strings.SplitN(strings.TrimSpace(string(inspectOutput)), "\t", 3)
+			diagnostics += "\nfailed task: " + strings.TrimSpace(string(inspectOutput))
+			if len(inspectParts) == 3 && strings.TrimSpace(inspectParts[2]) != "" {
+				containerID := strings.TrimSpace(inspectParts[2])
+				healthCmd := exec.CommandContext(diagnosticCtx, "docker", "inspect", containerID, "--format", "{{if .State.Health}}{{range .State.Health.Log}}{{.Output}}{{end}}{{end}}")
+				if healthOutput, healthErr := healthCmd.Output(); healthErr == nil && strings.TrimSpace(string(healthOutput)) != "" {
+					diagnostics += "\nhealth check: " + strings.TrimSpace(string(healthOutput))
+				}
+			}
+		}
+		break
+	}
+
+	logsCmd := exec.CommandContext(diagnosticCtx, "docker", "service", "logs", "--tail", "100", swarmServiceName)
+	if logs, err := logsCmd.CombinedOutput(); err == nil && strings.TrimSpace(string(logs)) != "" {
+		persistDeploymentServiceLogSnapshot(ctx, deploymentID, swarmServiceName, dm.nodeID, string(logs))
+	}
+
+	return truncateSwarmDiagnostic(diagnostics)
+}
+
+func truncateSwarmDiagnostic(value string) string {
+	const maxDiagnosticBytes = 6000
+	value = strings.TrimSpace(value)
+	if len(value) <= maxDiagnosticBytes {
+		return value
+	}
+	return strings.TrimSpace(value[:maxDiagnosticBytes]) + "..."
 }
 
 func (dm *DeploymentManager) inspectSwarmServiceUpdate(ctx context.Context, swarmServiceName string) (serviceID string, state string, message string, err error) {

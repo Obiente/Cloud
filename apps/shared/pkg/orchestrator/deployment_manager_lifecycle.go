@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -117,6 +118,38 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
 					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
 					if err != nil {
+						var rolloutErr *SwarmRolloutError
+						if errors.As(err, &rolloutErr) && rolloutErr.PreviousRevisionRunning && rolloutErr.ContainerID != "" {
+							publicPort := config.Port
+							for _, routing := range routings {
+								if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+									publicPort = routing.TargetPort
+									break
+								}
+							}
+							shortID := rolloutErr.ContainerID
+							if len(shortID) > 12 {
+								shortID = shortID[:12]
+							}
+							location := &database.DeploymentLocation{
+								ID:           fmt.Sprintf("loc-%s-%s", config.DeploymentID, shortID),
+								DeploymentID: config.DeploymentID,
+								NodeID:       dm.nodeID,
+								NodeHostname: dm.nodeHostname,
+								ContainerID:  rolloutErr.ContainerID,
+								ServiceID:    rolloutErr.ServiceID,
+								TaskID:       rolloutErr.TaskID,
+								Status:       "running",
+								Port:         publicPort,
+								Domain:       config.Domain,
+								HealthStatus: "unknown",
+								CreatedAt:    time.Now(),
+								UpdatedAt:    time.Now(),
+							}
+							if registerErr := dm.registry.RegisterDeployment(ctx, location); registerErr != nil {
+								logger.Warn("[DeploymentManager] Failed to refresh restored Swarm location for %s: %v", config.DeploymentID, registerErr)
+							}
+						}
 						return fmt.Errorf("failed to update Swarm service: %w", err)
 					}
 				} else {

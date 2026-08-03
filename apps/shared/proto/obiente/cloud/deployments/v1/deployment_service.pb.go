@@ -800,6 +800,7 @@ type UpdateDeploymentRequest struct {
 	BuildArgs                 map[string]string       `protobuf:"bytes,30,rep,name=build_args,json=buildArgs,proto3" json:"build_args,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`  // Docker build args for Dockerfile deployments
 	DockerfileVolumes         []*DockerfileVolume     `protobuf:"bytes,31,rep,name=dockerfile_volumes,json=dockerfileVolumes,proto3" json:"dockerfile_volumes,omitempty"`                                                    // Persistent volume mounts for Dockerfile deployments
 	DockerfileBuildOptions    *DockerfileBuildOptions `protobuf:"bytes,32,opt,name=dockerfile_build_options,json=dockerfileBuildOptions,proto3,oneof" json:"dockerfile_build_options,omitempty"`                             // Additional Docker build options for Dockerfile deployments
+	ReplaceCustomDomains      bool                    `protobuf:"varint,33,opt,name=replace_custom_domains,json=replaceCustomDomains,proto3" json:"replace_custom_domains,omitempty"`                                        // Explicitly replace custom_domains, including with an empty list
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -1056,6 +1057,13 @@ func (x *UpdateDeploymentRequest) GetDockerfileBuildOptions() *DockerfileBuildOp
 		return x.DockerfileBuildOptions
 	}
 	return nil
+}
+
+func (x *UpdateDeploymentRequest) GetReplaceCustomDomains() bool {
+	if x != nil {
+		return x.ReplaceCustomDomains
+	}
+	return false
 }
 
 type UpdateDeploymentResponse struct {
@@ -9043,7 +9051,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x15GetDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"\xb8\x11\n" +
+	"deployment\"\xee\x11\n" +
 	"\x17UpdateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
@@ -9081,7 +9089,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\n" +
 	"build_args\x18\x1e \x03(\v2D.obiente.cloud.deployments.v1.UpdateDeploymentRequest.BuildArgsEntryR\tbuildArgs\x12]\n" +
 	"\x12dockerfile_volumes\x18\x1f \x03(\v2..obiente.cloud.deployments.v1.DockerfileVolumeR\x11dockerfileVolumes\x12s\n" +
-	"\x18dockerfile_build_options\x18  \x01(\v24.obiente.cloud.deployments.v1.DockerfileBuildOptionsH\x19R\x16dockerfileBuildOptions\x88\x01\x01\x1a<\n" +
+	"\x18dockerfile_build_options\x18  \x01(\v24.obiente.cloud.deployments.v1.DockerfileBuildOptionsH\x19R\x16dockerfileBuildOptions\x88\x01\x01\x124\n" +
+	"\x16replace_custom_domains\x18! \x01(\bR\x14replaceCustomDomains\x1a<\n" +
 	"\x0eBuildArgsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
