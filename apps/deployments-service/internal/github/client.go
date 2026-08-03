@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	githubAPIResponseBodyLimit = 4 << 20
-	githubBranchesPerPage      = 100
-	githubBranchesMaxPages     = 100
-	githubPullRequestsMaxPages = 100
+	githubAPIResponseBodyLimit    = 4 << 20
+	githubBranchesPerPage         = 100
+	githubBranchesMaxPages        = 100
+	githubPullRequestsMaxPages    = 100
+	githubPullRequestScanAttempts = 3
 )
 
 type Client struct {
@@ -206,19 +207,57 @@ func (c *Client) ListOpenPullRequests(ctx context.Context, repoFullName string) 
 	if err != nil {
 		return nil, err
 	}
+	var previous []PullRequest
+	for attempt := 1; attempt <= githubPullRequestScanAttempts; attempt++ {
+		pullRequests, paginated, err := c.listOpenPullRequestsOnce(ctx, repositoryPath)
+		if err != nil {
+			return nil, err
+		}
+		if !paginated || (previous != nil && samePullRequestNumberSet(previous, pullRequests)) {
+			return pullRequests, nil
+		}
+		previous = pullRequests
+	}
+	return nil, fmt.Errorf("open pull request set changed during %d pagination scans; retrying later", githubPullRequestScanAttempts)
+}
+
+func (c *Client) listOpenPullRequestsOnce(ctx context.Context, repositoryPath string) ([]PullRequest, bool, error) {
 	pullRequests := make([]PullRequest, 0)
+	seen := make(map[int64]struct{})
 	for page := 1; page <= githubPullRequestsMaxPages; page++ {
 		requestURL := fmt.Sprintf("%s/repos/%s/pulls?state=open&sort=updated&direction=desc&per_page=100&page=%d", strings.TrimRight(c.baseURL, "/"), repositoryPath, page)
 		var batch []PullRequest
 		if err := c.doJSON(ctx, http.MethodGet, requestURL, nil, http.StatusOK, &batch); err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		pullRequests = append(pullRequests, batch...)
+		for i := range batch {
+			if _, exists := seen[batch[i].Number]; exists {
+				continue
+			}
+			seen[batch[i].Number] = struct{}{}
+			pullRequests = append(pullRequests, batch[i])
+		}
 		if len(batch) < 100 {
-			return pullRequests, nil
+			return pullRequests, page > 1, nil
 		}
 	}
-	return nil, fmt.Errorf("repository has more than %d open pull requests", githubPullRequestsMaxPages*100)
+	return nil, true, fmt.Errorf("repository has more than %d open pull requests", githubPullRequestsMaxPages*100)
+}
+
+func samePullRequestNumberSet(left, right []PullRequest) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	numbers := make(map[int64]struct{}, len(left))
+	for i := range left {
+		numbers[left[i].Number] = struct{}{}
+	}
+	for i := range right {
+		if _, exists := numbers[right[i].Number]; !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) CreateDeployment(ctx context.Context, repoFullName, ref, environment, description string) (int64, error) {

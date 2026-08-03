@@ -576,7 +576,7 @@ func InitDatabase() error {
 		}
 	}
 
-	if err := backfillPullRequestPreviewEnvironments(db); err != nil {
+	if err := BackfillPullRequestPreviewEnvironments(db); err != nil {
 		return fmt.Errorf("failed to backfill pull request preview environments: %w", err)
 	}
 
@@ -627,6 +627,7 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS next_report_at TIMESTAMPTZ`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS restored_at TIMESTAMPTZ`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_pending BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_generation BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS reconciliation_attempts INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS next_reconciliation_at TIMESTAMPTZ`,
 		`ALTER TABLE IF EXISTS pull_request_deployment_configs ADD COLUMN IF NOT EXISTS open_pull_requests_synced_at TIMESTAMPTZ`,
@@ -643,7 +644,10 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 	})
 }
 
-func backfillPullRequestPreviewEnvironments(db *gorm.DB) error {
+// BackfillPullRequestPreviewEnvironments corrects preview environments created
+// by replicas from before the dedicated PR environment was introduced. It is
+// safe to run repeatedly while a rolling deployment drains legacy writers.
+func BackfillPullRequestPreviewEnvironments(db *gorm.DB) error {
 	result := db.Exec(`
 		UPDATE deployments AS deployment
 		SET environment = ?

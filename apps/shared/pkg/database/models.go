@@ -91,6 +91,7 @@ type PullRequestDeploymentConfig struct {
 	RequireApproval          bool       `gorm:"not null;default:false" json:"require_approval"`
 	ApprovalCoversUpdates    bool       `gorm:"not null;default:false" json:"approval_covers_updates"`
 	ReconciliationPending    bool       `gorm:"index;not null;default:false" json:"reconciliation_pending"`
+	ReconciliationGeneration int64      `gorm:"not null;default:0" json:"reconciliation_generation"`
 	ReconciliationAttempts   int32      `gorm:"not null;default:0" json:"reconciliation_attempts"`
 	NextReconciliationAt     *time.Time `gorm:"index" json:"next_reconciliation_at"`
 	OpenPullRequestsSyncedAt *time.Time `gorm:"index" json:"open_pull_requests_synced_at"`

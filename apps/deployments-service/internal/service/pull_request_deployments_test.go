@@ -160,6 +160,101 @@ func TestPullRequestConfigReconciliationTracksRuntimePolicies(t *testing.T) {
 	}
 }
 
+func TestStaleReconciliationCannotCompleteOrRescheduleNewGeneration(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	config := database.PullRequestDeploymentConfig{
+		DeploymentID: "source-generation", OrganizationID: "org", ReconciliationPending: true,
+		ReconciliationGeneration: 2, BaseBranches: `[]`, IncludePaths: `[]`, ExcludePaths: `[]`,
+		EnvironmentVariableNames: `[]`, BuildArgumentNames: `[]`, DomainTemplate: defaultPRDomainTemplate,
+	}
+	if err := db.Create(&config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+	stale := config
+	stale.ReconciliationGeneration = 1
+	if completed, err := completePullRequestReconciliation(t.Context(), &stale, nil); err != nil {
+		t.Fatalf("complete stale reconciliation: %v", err)
+	} else if completed {
+		t.Fatal("stale reconciliation completed a newer settings generation")
+	}
+	if err := schedulePullRequestReconciliationRetry(t.Context(), &stale); err != nil {
+		t.Fatalf("schedule stale reconciliation retry: %v", err)
+	}
+	var got database.PullRequestDeploymentConfig
+	if err := db.First(&got, "deployment_id = ?", config.DeploymentID).Error; err != nil {
+		t.Fatalf("reload pull request config: %v", err)
+	}
+	if !got.ReconciliationPending || got.ReconciliationAttempts != 0 || got.ReconciliationGeneration != 2 {
+		t.Fatalf("stale worker changed the current settings generation: %#v", got)
+	}
+}
+
+func TestOpenPullRequestSyncMarkerRequiresUnchangedSource(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	repository, replacement := "https://github.com/obiente/cloud", "https://github.com/obiente/website"
+	integrationID, installationID := "integration-sync", int64(42)
+	autoDeploy := false
+	source := testDeployment("source-sync", "Source", "org", "owner", time.Now(), &autoDeploy)
+	source.RepositoryURL, source.GitHubIntegrationID = &repository, &integrationID
+	integration := database.GitHubIntegration{ID: integrationID, GitHubAppInstallationID: &installationID}
+	config := database.PullRequestDeploymentConfig{
+		DeploymentID: source.ID, OrganizationID: source.OrganizationID, Enabled: true, ReconciliationGeneration: 1,
+		BaseBranches: `[]`, IncludePaths: `[]`, ExcludePaths: `[]`, EnvironmentVariableNames: `[]`, BuildArgumentNames: `[]`, DomainTemplate: defaultPRDomainTemplate,
+	}
+	if err := db.Create(&integration).Error; err != nil {
+		t.Fatalf("seed GitHub integration: %v", err)
+	}
+	if err := db.Create(source).Error; err != nil {
+		t.Fatalf("seed source deployment: %v", err)
+	}
+	if err := db.Create(&config).Error; err != nil {
+		t.Fatalf("seed pull request config: %v", err)
+	}
+	snapshot := &pullRequestSyncSource{repositoryURL: repository, integrationID: integrationID, installationID: installationID}
+	if err := db.Model(&database.Deployment{}).Where("id = ?", source.ID).Update("repository_url", replacement).Error; err != nil {
+		t.Fatalf("change source repository: %v", err)
+	}
+	if marked, err := markOpenPullRequestsSynced(t.Context(), &config, snapshot); err != nil {
+		t.Fatalf("mark open pull requests synced: %v", err)
+	} else if marked {
+		t.Fatal("old repository scan marked the replacement repository as synchronized")
+	}
+	var got database.PullRequestDeploymentConfig
+	if err := db.First(&got, "deployment_id = ?", config.DeploymentID).Error; err != nil {
+		t.Fatalf("reload pull request config: %v", err)
+	}
+	if got.OpenPullRequestsSyncedAt != nil {
+		t.Fatal("source-changing race persisted an invalid sync marker")
+	}
+}
+
+func TestActivePreviewCountExcludesFailedBuildWithoutRuntime(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	if err := db.AutoMigrate(&database.DeploymentLocation{}); err != nil {
+		t.Fatalf("migrate deployment locations: %v", err)
+	}
+	failedPreview, livePreview, buildingPreview := "preview-failed", "preview-live", "preview-building"
+	records := []database.PullRequestDeployment{
+		{ID: "pr-failed", SourceDeploymentID: "source-count", PreviewDeploymentID: &failedPreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 1, HeadSHA: strings.Repeat("a", 40), HeadRef: "failed", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED), ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "pr-live", SourceDeploymentID: "source-count", PreviewDeploymentID: &livePreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 2, HeadSHA: strings.Repeat("b", 40), HeadRef: "live", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED), ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "pr-building", SourceDeploymentID: "source-count", PreviewDeploymentID: &buildingPreview, OrganizationID: "org", Repository: "obiente/cloud", PullRequestNumber: 3, HeadSHA: strings.Repeat("c", 40), HeadRef: "building", BaseRef: "main", Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_BUILDING), ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	if err := db.Create(&records).Error; err != nil {
+		t.Fatalf("seed pull request deployments: %v", err)
+	}
+	location := database.DeploymentLocation{ID: "location-live", DeploymentID: livePreview, NodeID: "node", ContainerID: "container-live", Status: "running"}
+	if err := db.Create(&location).Error; err != nil {
+		t.Fatalf("seed live deployment location: %v", err)
+	}
+	active, err := countActivePullRequestPreviews(db, "source-count", "new-record")
+	if err != nil {
+		t.Fatalf("count active pull request previews: %v", err)
+	}
+	if active != 2 {
+		t.Fatalf("active pull request previews = %d, want live failed revision plus in-progress build", active)
+	}
+}
+
 func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	background, cancel := context.WithCancel(context.Background())
