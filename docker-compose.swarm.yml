@@ -1007,6 +1007,13 @@ services:
 
   traefik:
     image: traefik:v3.6.1
+    secrets:
+      - preview_tls_cert
+      - preview_tls_key
+    configs:
+      - source: preview_tls_config
+        target: /etc/traefik/dynamic/preview-tls.yml
+        mode: 0444
     command:
       - --api.dashboard=true
       - --api.insecure=true  # Enable API on port 8080 directly
@@ -1014,6 +1021,8 @@ services:
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      - --providers.file.filename=/etc/traefik/dynamic/preview-tls.yml
+      - --providers.file.watch=true
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
       - --serversTransport.forwardingTimeouts.dialTimeout=10s
@@ -1309,6 +1318,8 @@ networks:
       encrypted: "true"
 
 configs:
+  preview_tls_config:
+    file: ./scripts/internal/traefik-preview-tls.yml
   # Custom pg_hba.conf file
   postgres_hba_conf:
     file: ./scripts/internal/pg_hba.conf
@@ -1317,6 +1328,12 @@ configs:
     file: ./scripts/internal/init-pg-hba.sh
 
 secrets:
+  preview_tls_cert:
+    name: ${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}
+    external: true
+  preview_tls_key:
+    name: ${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}
+    external: true
   ssh_proxy_host_key:
     external: true
     # This secret must be created before deploying the stack:

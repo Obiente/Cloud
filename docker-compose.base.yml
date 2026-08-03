@@ -119,6 +119,7 @@ x-common-dns: &common-dns
   ENABLE_DNS: ${ENABLE_DNS:-true}
   NODE_IPS: ${NODE_IPS:-127.0.0.1}
   GAMESERVER_DNS_STALE_GRACE: ${GAMESERVER_DNS_STALE_GRACE:-2m}
+  PREVIEW_ACME_CHALLENGE_CNAME: ${PREVIEW_ACME_CHALLENGE_CNAME:-}
 
 x-common-security: &common-security
   SECRET: ${SECRET:-}

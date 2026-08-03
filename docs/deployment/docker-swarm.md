@@ -71,7 +71,51 @@ Edit `.env` with your configuration:
 - Set your domain name
 - Generate secrets for JWT and sessions
 
-### 4. Prepare All Nodes (Required)
+### 4. Configure Preview TLS
+
+Issue one certificate that covers `my.obiente.cloud` and
+`*.my.obiente.cloud` using any ACME client, DNS provider, or certificate
+service. This certificate covers both live pull request previews and the
+preview status page shown while a preview is not running.
+
+When the bundled DNS service is authoritative for `my.obiente.cloud`, delegate
+DNS-01 validation to a name outside that zone which the certificate issuer can
+update. For example, an operator controlling `example.net` could use:
+
+```bash
+PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
+```
+
+The DNS service answers `_acme-challenge.my.obiente.cloud` with this CNAME.
+The ACME client follows it and publishes the TXT value through its configured
+provider. If `ENABLE_DNS=false` and that provider is directly authoritative for
+the preview zone, this CNAME is not required. The target must be outside the
+entire `my.obiente.cloud` zone, including its apex.
+
+Distribute the issued full chain and private key through versioned Docker
+Swarm secrets:
+
+```bash
+docker secret create preview_tls_cert_20260803 /secure/path/fullchain.pem
+docker secret create preview_tls_key_20260803 /secure/path/privkey.pem
+```
+
+Select those versions in `.env`:
+
+```bash
+PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
+PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
+```
+
+Every Traefik replica in the standard, development, and HA stacks receives the
+same certificate through Swarm and loads it from the file provider. This avoids
+independent ACME orders and renewal races on multi-manager clusters. To renew
+the certificate, create new versioned secrets, update the two names, and deploy
+the stack. Remove old secrets only after no service references them. The
+deployment scripts stop before changing the stack when either selected secret
+is missing.
+
+### 5. Prepare All Nodes (Required)
 
 The API service runs on **ALL nodes** (mode: global). You **must** create required directories on each node before deploying:
 
@@ -105,7 +149,7 @@ for node in manager-1 worker-1 worker-2; do
 done
 ```
 
-### 4.5. Configure Node Labels (Required for Non-HA)
+### 6. Configure Node Labels (Required for Non-HA)
 
 For non-HA deployments, you must label nodes to specify where database services should run. This gives you control over which nodes host PostgreSQL, TimescaleDB, and Redis.
 
@@ -146,7 +190,7 @@ docker node inspect <node-name-or-id> --pretty
 
 **Note:** You can use the same node for all database services, or distribute them across different nodes. The labels allow you to control placement precisely.
 
-### 5. Deploy the Stack
+### 7. Deploy the Stack
 
 Deploy to the Swarm cluster:
 

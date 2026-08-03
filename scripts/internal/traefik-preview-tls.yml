@@ -1,0 +1,4 @@
+tls:
+  certificates:
+    - certFile: /run/secrets/preview_tls_cert
+      keyFile: /run/secrets/preview_tls_key

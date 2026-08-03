@@ -999,6 +999,13 @@ services:
 
   traefik:
     image: traefik:v3.6.1
+    secrets:
+      - preview_tls_cert
+      - preview_tls_key
+    configs:
+      - source: preview_tls_config
+        target: /etc/traefik/dynamic/preview-tls.yml
+        mode: 0444
     command:
       - --api.dashboard=true
       - --api.insecure=true  # Enable API on port 8080 directly
@@ -1007,6 +1014,8 @@ services:
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      - --providers.file.filename=/etc/traefik/dynamic/preview-tls.yml
+      - --providers.file.watch=true
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
       - --serversTransport.forwardingTimeouts.dialTimeout=10s
@@ -1311,9 +1320,19 @@ networks:
     #   name: ${MAIN_DEPLOYMENT_NETWORK:-obiente_obiente-network}
 
 configs:
+  preview_tls_config:
+    file: ./scripts/internal/traefik-preview-tls.yml
   # Custom pg_hba.conf file
   postgres_hba_conf:
     file: ./scripts/internal/pg_hba.conf
   # Init script to copy pg_hba.conf to PGDATA
   postgres_hba_init:
     file: ./scripts/internal/init-pg-hba.sh
+
+secrets:
+  preview_tls_cert:
+    name: ${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}
+    external: true
+  preview_tls_key:
+    name: ${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}
+    external: true

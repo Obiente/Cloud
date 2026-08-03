@@ -252,12 +252,19 @@ sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$
 # Bind mounts with relative paths must exist on every node, so we convert them to absolute paths
 sed -i "s|\\./monitoring/|${REPO_ROOT}/monitoring/|g" "$MERGED_COMPOSE"
 
+# Every Traefik replica consumes the same wildcard certificate through Swarm
+# secrets, avoiding duplicate ACME orders in multi-manager stacks.
+require_preview_tls_configuration "$COMPOSE_FILE"
+
 # Verify config files exist before deploying
 echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(
   "${REPO_ROOT}/scripts/internal/pg_hba.conf"
   "${REPO_ROOT}/scripts/internal/init-pg-hba.sh"
 )
+if grep -q "preview_tls_config:" "$COMPOSE_FILE"; then
+  CONFIG_FILES+=("${REPO_ROOT}/scripts/internal/traefik-preview-tls.yml")
+fi
 MISSING_CONFIGS=()
 for config_file in "${CONFIG_FILES[@]}"; do
   if [ ! -f "$config_file" ]; then

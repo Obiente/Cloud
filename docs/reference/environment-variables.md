@@ -847,17 +847,29 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 
 ### Domain & SSL
 
-| Variable     | Type   | Default               | Required               |
-| ------------ | ------ | --------------------- | ---------------------- |
-| `DOMAIN`     | string | `obiente.example.com` | ❌                     |
-| `ACME_EMAIL` | string | -                     | ❌ (for Let's Encrypt) |
+| Variable                         | Type   | Default               | Required                                  |
+| -------------------------------- | ------ | --------------------- | ----------------------------------------- |
+| `DOMAIN`                         | string | `obiente.example.com` | ❌                                        |
+| `ACME_EMAIL`                     | string | -                     | ❌ (for Let's Encrypt)                    |
+| `PREVIEW_ACME_CHALLENGE_CNAME`   | string | -                     | ❌ (external DNS-01 delegation)            |
+| `PREVIEW_TLS_CERT_SECRET`        | string | `preview_tls_cert`    | ❌ (certificate rotation)                  |
+| `PREVIEW_TLS_KEY_SECRET`         | string | `preview_tls_key`     | ❌ (certificate rotation)                  |
 
 **Example:**
 
 ```bash
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
+PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
+PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
+PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
 ```
+
+When Obiente's DNS service is authoritative, an external ACME client can use
+`PREVIEW_ACME_CHALLENGE_CNAME` to delegate DNS-01 validation to a name outside
+`my.obiente.cloud` that its selected provider can update. Every Swarm stack
+loads the resulting certificate from the two versioned certificate secrets so
+multiple Traefik replicas never issue or renew the same wildcard independently.
 
 ### DNS Configuration
 

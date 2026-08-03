@@ -54,6 +54,44 @@ load_env_file() {
   done < "$env_file"
 }
 
+require_swarm_secrets() {
+  local secret_name=""
+  local -a missing_secrets=()
+
+  for secret_name in "$@"; do
+    if ! docker secret inspect "$secret_name" >/dev/null 2>&1; then
+      missing_secrets+=("$secret_name")
+    fi
+  done
+
+  if [ ${#missing_secrets[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo "❌ Error: Required Docker Swarm secrets are missing:"
+  for secret_name in "${missing_secrets[@]}"; do
+    echo "   - $secret_name"
+  done
+  echo ""
+  echo "Create each secret from a protected file before deploying:"
+  for secret_name in "${missing_secrets[@]}"; do
+    echo "   docker secret create $secret_name /secure/path/$secret_name"
+  done
+  echo ""
+  echo "Do not store these credentials in .env or commit them to the repository."
+  return 1
+}
+
+require_preview_tls_configuration() {
+  local compose_file="$1"
+
+  if grep -Eq '^[[:space:]]+- preview_tls_cert[[:space:]]*$' "$compose_file"; then
+    require_swarm_secrets \
+      "${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}" \
+      "${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}" || return 1
+  fi
+}
+
 PARALLEL_PULL_FAILURES=()
 
 wait_for_pull_slot() {

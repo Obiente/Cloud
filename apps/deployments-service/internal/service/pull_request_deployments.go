@@ -36,9 +36,9 @@ const (
 	maxPRFilterCount          = 100
 	maxPRFilterLength         = 256
 	prEnvironmentCommentMark  = "<!-- obiente-pr-environment:%s -->"
-	// Version 4 provisions durable routes and fully reconciled provider-specific
-	// Traefik labels for every preview build strategy before deployment.
-	currentPRIsolationVersion = int32(4)
+	// Version 5 provisions durable routes that use the platform wildcard
+	// certificate and fully reconciled provider-specific Traefik labels.
+	currentPRIsolationVersion = int32(5)
 	pendingPRIsolationVersion = int32(-1)
 )
 
@@ -1268,12 +1268,9 @@ func previewSingleServiceRouting(preview, source *database.Deployment, sourceRou
 	}
 	template := preferredPreviewSourceRouting(source, sourceRoutings)
 	targetPort := 0
-	certResolver, middleware, pathPrefix := "letsencrypt", "{}", ""
+	middleware, pathPrefix := "{}", ""
 	if template != nil {
 		targetPort = template.TargetPort
-		if strings.TrimSpace(template.SSLCertResolver) != "" && template.SSLCertResolver != "internal" {
-			certResolver = template.SSLCertResolver
-		}
 		if strings.TrimSpace(template.Middleware) != "" {
 			middleware = template.Middleware
 		}
@@ -1286,15 +1283,17 @@ func previewSingleServiceRouting(preview, source *database.Deployment, sourceRou
 	}
 	now := time.Now()
 	return &database.DeploymentRouting{
-		ID:              fmt.Sprintf("route-%s-default", preview.ID),
-		DeploymentID:    preview.ID,
-		Domain:          preview.Domain,
-		ServiceName:     "default",
-		PathPrefix:      pathPrefix,
-		TargetPort:      targetPort,
-		Protocol:        "https",
-		SSLEnabled:      true,
-		SSLCertResolver: certResolver,
+		ID:           fmt.Sprintf("route-%s-default", preview.ID),
+		DeploymentID: preview.ID,
+		Domain:       preview.Domain,
+		ServiceName:  "default",
+		PathPrefix:   pathPrefix,
+		TargetPort:   targetPort,
+		Protocol:     "https",
+		SSLEnabled:   true,
+		// Preview hosts are covered by the platform wildcard certificate. Leaving
+		// the resolver empty prevents one ACME order for every pull request.
+		SSLCertResolver: "",
 		Middleware:      middleware,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -1309,15 +1308,12 @@ func previewComposeRouting(preview, source *database.Deployment, sourceRoutings 
 	template := preferredPreviewSourceRouting(source, sourceRoutings)
 
 	targetPort := 0
-	serviceName, certResolver, middleware := "default", "letsencrypt", "{}"
+	serviceName, middleware := "default", "{}"
 	pathPrefix := ""
 	if template != nil {
 		targetPort = template.TargetPort
 		if strings.TrimSpace(template.ServiceName) != "" {
 			serviceName = template.ServiceName
-		}
-		if strings.TrimSpace(template.SSLCertResolver) != "" && template.SSLCertResolver != "internal" {
-			certResolver = template.SSLCertResolver
 		}
 		if strings.TrimSpace(template.Middleware) != "" {
 			middleware = template.Middleware
@@ -1339,15 +1335,17 @@ func previewComposeRouting(preview, source *database.Deployment, sourceRoutings 
 
 	now := time.Now()
 	return &database.DeploymentRouting{
-		ID:              fmt.Sprintf("route-%s-default", preview.ID),
-		DeploymentID:    preview.ID,
-		Domain:          preview.Domain,
-		ServiceName:     serviceName,
-		PathPrefix:      pathPrefix,
-		TargetPort:      targetPort,
-		Protocol:        "https",
-		SSLEnabled:      true,
-		SSLCertResolver: certResolver,
+		ID:           fmt.Sprintf("route-%s-default", preview.ID),
+		DeploymentID: preview.ID,
+		Domain:       preview.Domain,
+		ServiceName:  serviceName,
+		PathPrefix:   pathPrefix,
+		TargetPort:   targetPort,
+		Protocol:     "https",
+		SSLEnabled:   true,
+		// Preview hosts are covered by the platform wildcard certificate. Leaving
+		// the resolver empty prevents one ACME order for every pull request.
+		SSLCertResolver: "",
 		Middleware:      middleware,
 		CreatedAt:       now,
 		UpdatedAt:       now,
