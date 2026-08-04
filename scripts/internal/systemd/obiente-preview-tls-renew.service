@@ -1,0 +1,18 @@
+[Unit]
+Description=Renew the Obiente Cloud preview wildcard certificate
+Documentation=https://github.com/Obiente/Cloud/blob/main/docs/deployment/preview-tls.md
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/obiente/preview-tls.conf
+ExecStart=/usr/local/libexec/obiente-cloud/manage-preview-tls.sh renew
+User=root
+Group=root
+UMask=0077
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/etc/obiente /var/lib/obiente /var/run/docker.sock
+NoNewPrivileges=true
