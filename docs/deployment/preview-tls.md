@@ -56,7 +56,7 @@ self-signed certificate so the first stack deployment can start its DNS and
 Traefik services:
 
 ```bash
-./scripts/manage-preview-tls.sh bootstrap
+sudo ./scripts/manage-preview-tls.sh bootstrap
 ./scripts/deploy-swarm.sh
 ```
 
@@ -71,16 +71,16 @@ rest of the stack.
 Run the setup on a Docker Swarm manager:
 
 ```bash
-./scripts/manage-preview-tls.sh setup \
+sudo ./scripts/manage-preview-tls.sh setup \
   --provider PROVIDER_CODE \
   --credentials-file /etc/obiente/preview-dns.env \
   --email admin@example.com \
   --accept-tos
 ```
 
-Use `check` with the same provider, credentials, email, and TOS arguments to
-validate permissions and configuration without pulling lego, issuing a
-certificate, creating secrets, or touching the deployment.
+Use `check` with the same `sudo` prefix, provider, credentials, email, and TOS
+arguments to validate permissions and configuration without pulling lego,
+issuing a certificate, creating secrets, or touching the deployment.
 
 The command:
 
@@ -106,7 +106,7 @@ is necessary.
 ## Check status
 
 ```bash
-./scripts/manage-preview-tls.sh status
+sudo ./scripts/manage-preview-tls.sh status
 ```
 
 This shows the locally stored certificate dates and fingerprint, selected
@@ -130,6 +130,10 @@ installs a standalone copy of the management script, performs the initial
 setup, and enables a daily timer. The timer has a six-hour randomized delay to
 avoid synchronized ACME traffic. lego only renews when the configured renewal
 window is reached; the default is 30 days.
+
+The installed systemd unit keeps the host filesystem read-only except for its
+state directory, the directory containing the selected deployment `.env`, and
+the Docker socket. The installer rejects overly broad write directories.
 
 Rerun the installer after changing provider credentials or after updating the
 repository's renewal tooling. It validates the new configuration before
@@ -156,7 +160,7 @@ Test provider credentials against the Let's Encrypt staging directory before
 production issuance:
 
 ```bash
-./scripts/manage-preview-tls.sh setup \
+sudo ./scripts/manage-preview-tls.sh setup \
   --provider PROVIDER_CODE \
   --credentials-file /etc/obiente/preview-dns.env \
   --email admin@example.com \
@@ -169,7 +173,9 @@ Issue-only mode obtains and validates the staging certificate but does not
 create Swarm secrets, change `.env`, or update Traefik. The script refuses to
 use a staging endpoint without this guard. Issue-only certificates and account
 data are kept in a separate state directory so they cannot replace the local
-production renewal state. Remove the staging override and run setup again for a
-trusted production certificate. The lego image, state directory, renewal
-threshold, stack name, and CA server can also be set with the `PREVIEW_TLS_*`
-variables documented in the environment variable reference.
+production renewal state. Every issue-only invocation forces a new challenge,
+so changed provider credentials are actually exercised. Remove the staging
+override and run setup again for a trusted production certificate. The lego
+image, state directory, renewal threshold, stack name, and CA server can also
+be set with the `PREVIEW_TLS_*` variables documented in the environment
+variable reference.

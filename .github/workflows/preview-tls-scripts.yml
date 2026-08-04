@@ -7,7 +7,9 @@ on:
       - "scripts/manage-preview-tls.sh"
       - "scripts/install-preview-tls-renewal.sh"
       - "scripts/tests/manage-preview-tls-test.sh"
+      - "scripts/tests/install-preview-tls-renewal-test.sh"
       - "scripts/internal/systemd/obiente-preview-tls-renew.*"
+      - "tools/preview-tls-scripts/project.json"
   push:
     branches:
       - main
@@ -16,7 +18,9 @@ on:
       - "scripts/manage-preview-tls.sh"
       - "scripts/install-preview-tls-renewal.sh"
       - "scripts/tests/manage-preview-tls-test.sh"
+      - "scripts/tests/install-preview-tls-renewal-test.sh"
       - "scripts/internal/systemd/obiente-preview-tls-renew.*"
+      - "tools/preview-tls-scripts/project.json"
 
 permissions:
   contents: read
@@ -28,18 +32,23 @@ concurrency:
 jobs:
   validate:
     name: Shell validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Run ShellCheck
-        run: |
-          shellcheck \
-            scripts/manage-preview-tls.sh \
-            scripts/install-preview-tls-renewal.sh \
-            scripts/tests/manage-preview-tls-test.sh
+      - uses: pnpm/action-setup@v6
+        name: Install pnpm
+        with:
+          run_install: false
 
-      - name: Run script tests
-        run: bash scripts/tests/manage-preview-tls-test.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run preview TLS validation target
+        run: pnpm exec nx run preview-tls-scripts:validate

@@ -11,7 +11,7 @@ provider, validates it, rotates versioned Swarm secrets, updates `.env`, and
 loads the certificate into Traefik.
 
 ```bash
-./scripts/manage-preview-tls.sh setup \
+sudo ./scripts/manage-preview-tls.sh setup \
   --provider PROVIDER_CODE \
   --credentials-file /etc/obiente/preview-dns.env \
   --email admin@example.com \

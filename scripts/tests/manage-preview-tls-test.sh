@@ -47,12 +47,37 @@ PREVIEW_TLS_KEY_SECRET=old_key
 PREVIEW_TLS_CERT_SECRET=duplicate_certificate
 EOF
 chmod 640 "$env_file"
+env_uid_before="$(stat -c '%u' "$env_file")"
+env_gid_before="$(stat -c '%g' "$env_file")"
 write_env_secret_names "$env_file" certificate_v2 key_v2
 assert_equals "1" "$(grep -c '^PREVIEW_TLS_CERT_SECRET=' "$env_file")" "certificate secret was not de-duplicated"
 assert_equals "1" "$(grep -c '^PREVIEW_TLS_KEY_SECRET=' "$env_file")" "key secret was not de-duplicated"
 assert_equals "certificate_v2" "$(sed -n 's/^PREVIEW_TLS_CERT_SECRET=//p' "$env_file")" "certificate secret was not updated"
 assert_equals "key_v2" "$(sed -n 's/^PREVIEW_TLS_KEY_SECRET=//p' "$env_file")" "key secret was not updated"
 assert_equals "640" "$(stat -c '%a' "$env_file")" "environment file permissions changed"
+assert_equals "$env_uid_before" "$(stat -c '%u' "$env_file")" "environment file owner changed"
+assert_equals "$env_gid_before" "$(stat -c '%g' "$env_file")" "environment file group changed"
+
+loader_env="${TEST_DIR}/loader.env"
+cat > "$loader_env" <<'EOF'
+PATH=/tmp/untrusted-bin
+LD_PRELOAD=/tmp/untrusted-library.so
+PREVIEW_TLS_RENEW_DAYS=99
+ENABLE_DNS=false
+UNRELATED_SETTING=ignored
+EOF
+original_path="$PATH"
+unset LD_PRELOAD
+PREVIEW_TLS_RENEW_DAYS=12
+export PREVIEW_TLS_RENEW_DAYS
+unset ENABLE_DNS
+load_env_file "$loader_env"
+assert_equals "$original_path" "$PATH" "deployment env changed PATH"
+assert_equals "" "${LD_PRELOAD:-}" "deployment env loaded LD_PRELOAD"
+assert_equals "12" "$PREVIEW_TLS_RENEW_DAYS" "deployment env overrode an installed setting"
+assert_equals "false" "$ENABLE_DNS" "allowlisted deployment setting was not loaded"
+assert_equals "" "${UNRELATED_SETTING:-}" "unrelated deployment setting was loaded"
+unset PREVIEW_TLS_RENEW_DAYS ENABLE_DNS
 
 credentials_file="${TEST_DIR}/provider.env"
 printf 'TEST_TOKEN=secret\n' > "$credentials_file"
@@ -88,6 +113,7 @@ mock_state="${TEST_DIR}/state"
 mock_secrets="${TEST_DIR}/secrets"
 mock_env="${TEST_DIR}/integration.env"
 mock_credentials="${TEST_DIR}/integration-provider.env"
+mock_docker_args="${TEST_DIR}/docker-run.args"
 mkdir -p "$mock_bin" "$mock_state" "$mock_secrets"
 printf 'TEST_TOKEN=secret\n' > "$mock_credentials"
 chmod 600 "$mock_credentials"
@@ -102,6 +128,7 @@ case "${1:-}" in
     printf 'active true\n'
     ;;
   run)
+    printf '%s\n' "$*" > "${MOCK_DOCKER_ARGS_FILE:-/dev/null}"
     mkdir -p "${MOCK_STATE_DIR}/certificates"
     if [ ! -f "${MOCK_STATE_DIR}/certificates/preview-wildcard.crt" ]; then
       openssl req -x509 -newkey rsa:2048 -nodes -days 90 \
@@ -115,6 +142,9 @@ case "${1:-}" in
   secret)
     case "${2:-}" in
       create)
+        if [ "${MOCK_FAIL_CERT_SECRET:-false}" = "true" ] && [[ "${3:-}" == preview_tls_cert_* ]]; then
+          exit 1
+        fi
         touch "${MOCK_SECRETS_DIR}/${3}"
         ;;
       inspect)
@@ -127,7 +157,35 @@ case "${1:-}" in
     esac
     ;;
   service)
-    exit 1
+    case "${2:-}" in
+      inspect)
+        [ "${MOCK_TRAEFIK_EXISTS:-false}" = "true" ] || exit 1
+        if printf '%s\n' "$@" | grep -q '^--format$' && [ -f "${MOCK_ACTIVE_SECRETS_FILE:-/dev/null}" ]; then
+          cat "$MOCK_ACTIVE_SECRETS_FILE"
+        fi
+        ;;
+      update)
+        if [ -n "${MOCK_SERVICE_FAIL_ONCE_FILE:-}" ] && [ -f "$MOCK_SERVICE_FAIL_ONCE_FILE" ]; then
+          rm -f "$MOCK_SERVICE_FAIL_ONCE_FILE"
+          exit 1
+        fi
+        : > "$MOCK_ACTIVE_SECRETS_FILE"
+        shift 2
+        while [ "$#" -gt 0 ]; do
+          if [ "$1" = "--secret-add" ]; then
+            source_name="$(printf '%s' "$2" | sed -n 's/^source=\([^,]*\),.*$/\1/p')"
+            target_name="$(printf '%s' "$2" | sed -n 's/^.*target=\([^,]*\),.*$/\1/p')"
+            printf '%s|%s\n' "$source_name" "$target_name" >> "$MOCK_ACTIVE_SECRETS_FILE"
+            shift 2
+          else
+            shift
+          fi
+        done
+        ;;
+      rollback)
+        ;;
+      *) exit 1 ;;
+    esac
     ;;
   *)
     printf 'unexpected docker command: %s\n' "$*" >&2
@@ -140,6 +198,7 @@ chmod 700 "${mock_bin}/docker"
 PATH="${mock_bin}:${PATH}" \
 MOCK_STATE_DIR="$mock_state" \
 MOCK_SECRETS_DIR="$mock_secrets" \
+MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
 "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" setup \
   --provider test \
   --credentials-file "$mock_credentials" \
@@ -149,6 +208,8 @@ MOCK_SECRETS_DIR="$mock_secrets" \
   --accept-tos \
   --no-activate \
   >/dev/null
+
+assert_equals "run" "$(awk '{print $NF}' "$mock_docker_args")" "lego command appeared before its global options"
 
 selected_certificate_secret="$(sed -n 's/^PREVIEW_TLS_CERT_SECRET=//p' "$mock_env")"
 selected_key_secret="$(sed -n 's/^PREVIEW_TLS_KEY_SECRET=//p' "$mock_env")"
@@ -179,6 +240,7 @@ printf 'DOMAIN=obiente.cloud\nENABLE_DNS=false\n' > "$issue_only_env"
 PATH="${mock_bin}:${PATH}" \
 MOCK_STATE_DIR="${issue_only_state}/issue-only" \
 MOCK_SECRETS_DIR="$issue_only_secrets" \
+MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
 "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" setup \
   --provider test \
   --credentials-file "$mock_credentials" \
@@ -191,6 +253,7 @@ MOCK_SECRETS_DIR="$issue_only_secrets" \
   >/dev/null
 assert_equals "0" "$(find "$issue_only_secrets" -type f | wc -l)" "issue-only mode created Swarm secrets"
 assert_equals $'DOMAIN=obiente.cloud\nENABLE_DNS=false' "$(cat "$issue_only_env")" "issue-only mode changed the environment file"
+grep -q -- '--renew-days 36500' "$mock_docker_args" || fail "issue-only mode did not force a fresh DNS challenge"
 
 assert_fails "staging activation was accepted" env \
   PATH="${mock_bin}:${PATH}" \
@@ -220,5 +283,73 @@ MOCK_SECRETS_DIR="$bootstrap_secrets" \
 assert_equals "2" "$(find "$bootstrap_secrets" -type f | wc -l)" "bootstrap did not create two Swarm secrets"
 grep -q '^PREVIEW_TLS_CERT_SECRET=preview_tls_cert_' "$bootstrap_env" || fail "bootstrap did not select its certificate secret"
 grep -q '^PREVIEW_TLS_KEY_SECRET=preview_tls_key_' "$bootstrap_env" || fail "bootstrap did not select its key secret"
+
+failed_secret_state="${TEST_DIR}/failed-secret-state"
+failed_secret_store="${TEST_DIR}/failed-secret-store"
+failed_secret_env="${TEST_DIR}/failed-secret.env"
+mkdir -p "$failed_secret_state" "$failed_secret_store"
+printf 'DOMAIN=obiente.cloud\nENABLE_DNS=false\n' > "$failed_secret_env"
+assert_fails "certificate-secret creation failure was ignored" env \
+  PATH="${mock_bin}:${PATH}" \
+  MOCK_STATE_DIR="$failed_secret_state" \
+  MOCK_SECRETS_DIR="$failed_secret_store" \
+  MOCK_FAIL_CERT_SECRET=true \
+  "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" setup \
+  --provider test \
+  --credentials-file "$mock_credentials" \
+  --email admin@example.com \
+  --env-file "$failed_secret_env" \
+  --state-dir "$failed_secret_state" \
+  --accept-tos \
+  --no-activate
+assert_equals "0" "$(find "$failed_secret_store" -type f | wc -l)" "key secret was created after certificate-secret failure"
+assert_equals $'DOMAIN=obiente.cloud\nENABLE_DNS=false' "$(cat "$failed_secret_env")" "failed secret creation changed the environment file"
+
+retry_state="${TEST_DIR}/retry-state"
+retry_secrets="${TEST_DIR}/retry-secrets"
+retry_env="${TEST_DIR}/retry.env"
+retry_active="${TEST_DIR}/retry-active-secrets"
+retry_fail_once="${TEST_DIR}/retry-fail-once"
+mkdir -p "$retry_state" "$retry_secrets"
+printf 'DOMAIN=obiente.cloud\nENABLE_DNS=false\n' > "$retry_env"
+touch "$retry_fail_once"
+assert_fails "failed Traefik activation unexpectedly succeeded" env \
+  PATH="${mock_bin}:${PATH}" \
+  MOCK_STATE_DIR="$retry_state" \
+  MOCK_SECRETS_DIR="$retry_secrets" \
+  MOCK_TRAEFIK_EXISTS=true \
+  MOCK_ACTIVE_SECRETS_FILE="$retry_active" \
+  MOCK_SERVICE_FAIL_ONCE_FILE="$retry_fail_once" \
+  "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" setup \
+  --provider test \
+  --credentials-file "$mock_credentials" \
+  --email admin@example.com \
+  --env-file "$retry_env" \
+  --state-dir "$retry_state" \
+  --accept-tos
+[ -f "${retry_state}/pending-secret-activation" ] || fail "failed activation did not retain retry metadata"
+retry_secret_count="$(find "$retry_secrets" -type f | wc -l)"
+
+PATH="${mock_bin}:${PATH}" \
+MOCK_STATE_DIR="$retry_state" \
+MOCK_SECRETS_DIR="$retry_secrets" \
+MOCK_TRAEFIK_EXISTS=true \
+MOCK_ACTIVE_SECRETS_FILE="$retry_active" \
+MOCK_SERVICE_FAIL_ONCE_FILE="$retry_fail_once" \
+"${TEST_SCRIPT_DIR}/manage-preview-tls.sh" renew \
+  --provider test \
+  --credentials-file "$mock_credentials" \
+  --email admin@example.com \
+  --env-file "$retry_env" \
+  --state-dir "$retry_state" \
+  --accept-tos \
+  >/dev/null
+
+assert_equals "$retry_secret_count" "$(find "$retry_secrets" -type f | wc -l)" "activation retry created duplicate secrets"
+[ ! -f "${retry_state}/pending-secret-activation" ] || fail "successful retry retained pending activation metadata"
+retry_certificate_secret="$(sed -n 's/^PREVIEW_TLS_CERT_SECRET=//p' "$retry_env")"
+retry_key_secret="$(sed -n 's/^PREVIEW_TLS_KEY_SECRET=//p' "$retry_env")"
+grep -q "^${retry_certificate_secret}|preview_tls_cert$" "$retry_active" || fail "retry did not activate the certificate secret"
+grep -q "^${retry_key_secret}|preview_tls_key$" "$retry_active" || fail "retry did not activate the key secret"
 
 printf 'Preview TLS script tests passed.\n'

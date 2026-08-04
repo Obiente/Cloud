@@ -72,6 +72,22 @@ trim_whitespace() {
   printf '%s' "$value"
 }
 
+is_allowed_deployment_env_key() {
+  case "$1" in
+    ACME_CA_SERVER|ACME_EMAIL|ENABLE_DNS|PREVIEW_ACME_CHALLENGE_CNAME|\
+    PREVIEW_TLS_ACCEPT_TOS|PREVIEW_TLS_ACTIVATE|PREVIEW_TLS_CA_SERVER|\
+    PREVIEW_TLS_CERT_SECRET|PREVIEW_TLS_DNS_CREDENTIALS_FILE|\
+    PREVIEW_TLS_DNS_PROVIDER|PREVIEW_TLS_EMAIL|PREVIEW_TLS_KEY_SECRET|\
+    PREVIEW_TLS_LEGO_IMAGE|PREVIEW_TLS_RENEW_DAYS|PREVIEW_TLS_STACK_NAME|\
+    PREVIEW_TLS_STATE_DIR)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 load_env_file() {
   local env_file="$1"
   local line=""
@@ -94,6 +110,8 @@ load_env_file() {
     value="${value#"${value%%[![:space:]]*}"}"
 
     [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    is_allowed_deployment_env_key "$key" || continue
+    [[ -v "$key" ]] && continue
     if [[ "$value" == \"*\" && "$value" == *\" ]]; then
       value="${value:1:${#value}-2}"
     elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
@@ -319,7 +337,7 @@ write_env_secret_names() {
         if (!wrote_key) print "PREVIEW_TLS_KEY_SECRET=" key_secret
       }
     ' "$env_file" > "$temp_file"
-    chmod --reference="$env_file" "$temp_file"
+    cp --attributes-only --preserve=all "$env_file" "$temp_file"
   else
     printf 'PREVIEW_TLS_CERT_SECRET=%s\nPREVIEW_TLS_KEY_SECRET=%s\n' "$certificate_secret" "$key_secret" > "$temp_file"
     chmod 600 "$temp_file"
@@ -377,12 +395,54 @@ create_certificate_secrets() {
   certificate_secret="preview_tls_cert_${suffix}"
   key_secret="preview_tls_key_${suffix}"
 
-  docker secret create "$certificate_secret" "$certificate_file" >/dev/null
+  if ! docker secret create "$certificate_secret" "$certificate_file" >/dev/null; then
+    fail "Failed to create certificate secret"
+  fi
   if ! docker secret create "$key_secret" "$key_file" >/dev/null; then
     docker secret rm "$certificate_secret" >/dev/null 2>&1 || true
     fail "Failed to create private-key secret"
   fi
 
+  printf '%s|%s\n' "$certificate_secret" "$key_secret"
+}
+
+write_pending_secret_pair() {
+  local pending_file="$1"
+  local fingerprint="$2"
+  local certificate_secret="$3"
+  local key_secret="$4"
+  local temp_file=""
+
+  temp_file="$(mktemp "$(dirname "$pending_file")/.preview-tls-pending.XXXXXX")"
+  printf 'fingerprint=%s\ncertificate_secret=%s\nkey_secret=%s\n' \
+    "$fingerprint" "$certificate_secret" "$key_secret" > "$temp_file"
+  chmod 600 "$temp_file"
+  mv "$temp_file" "$pending_file"
+}
+
+pending_secret_pair_for_fingerprint() {
+  local pending_file="$1"
+  local expected_fingerprint="$2"
+  local line=""
+  local fingerprint=""
+  local certificate_secret=""
+  local key_secret=""
+
+  [ -f "$pending_file" ] || return 1
+  [ ! -L "$pending_file" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      fingerprint=*) fingerprint="${line#*=}" ;;
+      certificate_secret=*) certificate_secret="${line#*=}" ;;
+      key_secret=*) key_secret="${line#*=}" ;;
+      *) return 1 ;;
+    esac
+  done < "$pending_file"
+
+  [[ "$fingerprint" =~ ^[A-Fa-f0-9]{64}$ ]] || return 1
+  [ "${fingerprint^^}" = "${expected_fingerprint^^}" ] || return 1
+  validate_safe_name "$certificate_secret" || return 1
+  validate_safe_name "$key_secret" || return 1
   printf '%s|%s\n' "$certificate_secret" "$key_secret"
 }
 
@@ -406,7 +466,6 @@ run_lego() {
 
   lego_args=(
     --log.format text
-    run
     --path /lego
     --cert.name "$CERTIFICATE_NAME"
     --email "$email"
@@ -419,6 +478,7 @@ run_lego() {
     --force-cert-domains
   )
   [ -z "$ca_server" ] || lego_args+=(--server "$ca_server")
+  lego_args+=(run)
 
   if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null || true)" != "Disabled" ]; then
     security_args+=(--security-opt label=disable)
@@ -513,6 +573,7 @@ main() {
   local service_name=""
   local active_certificate_secret=""
   local active_key_secret=""
+  local pending_file=""
 
   case "$command_name" in
     setup|renew|status|check|bootstrap) shift ;;
@@ -587,8 +648,10 @@ main() {
 
   if [ "$issue_only" = "true" ]; then
     state_dir="${state_dir%/}/issue-only"
+    force_renewal="true"
   fi
   state_dir="$(canonical_directory "$state_dir")"
+  pending_file="${state_dir}/pending-secret-activation"
   exec 9>"${state_dir}/operation.lock"
   flock -n 9 || fail "Another preview TLS operation is already running"
 
@@ -639,7 +702,30 @@ main() {
     current_secrets_available="true"
   fi
 
-  if [ "$old_fingerprint" = "$new_fingerprint" ] && [ "$current_secrets_available" = "true" ] && [ "$force_renewal" = "false" ]; then
+  if [ -f "$pending_file" ]; then
+    secret_pair="$(pending_secret_pair_for_fingerprint "$pending_file" "$new_fingerprint" || true)"
+    if [ -n "$secret_pair" ]; then
+      new_certificate_secret="${secret_pair%%|*}"
+      new_key_secret="${secret_pair#*|}"
+      if docker secret inspect "$new_certificate_secret" >/dev/null 2>&1 &&
+         docker secret inspect "$new_key_secret" >/dev/null 2>&1; then
+        log "Retrying the pending Traefik certificate activation."
+      else
+        warn "Discarding pending activation metadata because its Swarm secrets are missing."
+        new_certificate_secret=""
+        new_key_secret=""
+        rm -f "$pending_file"
+      fi
+    else
+      warn "Discarding stale or invalid pending activation metadata."
+      rm -f "$pending_file"
+    fi
+  fi
+
+  if [ -z "$new_certificate_secret" ] &&
+     [ "$old_fingerprint" = "$new_fingerprint" ] &&
+     [ "$current_secrets_available" = "true" ] &&
+     [ "$force_renewal" = "false" ]; then
     service_name="${stack_name}_traefik"
     if [ "$activate" = "true" ] && docker service inspect "$service_name" >/dev/null 2>&1; then
       active_certificate_secret="$(secret_source_for_target "$service_name" preview_tls_cert)"
@@ -661,15 +747,18 @@ main() {
     exit 0
   fi
 
-  secret_pair="$(create_certificate_secrets "$certificate_file" "$key_file" "$new_fingerprint")"
-  new_certificate_secret="${secret_pair%%|*}"
-  new_key_secret="${secret_pair#*|}"
-  log "Created Swarm secrets $new_certificate_secret and $new_key_secret."
+  if [ -z "$new_certificate_secret" ]; then
+    secret_pair="$(create_certificate_secrets "$certificate_file" "$key_file" "$new_fingerprint")"
+    new_certificate_secret="${secret_pair%%|*}"
+    new_key_secret="${secret_pair#*|}"
+    write_pending_secret_pair "$pending_file" "$new_fingerprint" "$new_certificate_secret" "$new_key_secret"
+    log "Created Swarm secrets $new_certificate_secret and $new_key_secret."
+  fi
 
   env_backup="${state_dir}/env-backup-$(date -u +%Y%m%dT%H%M%SZ)"
   if [ -f "$env_file" ]; then
     env_was_present="true"
-    cp -p "$env_file" "$env_backup"
+    cp --preserve=all "$env_file" "$env_backup"
   else
     : > "$env_backup"
     chmod 600 "$env_backup"
@@ -681,7 +770,7 @@ main() {
     if ! activate_traefik_secrets "$service_name" "$new_certificate_secret" "$new_key_secret"; then
       warn "Traefik did not accept the new secret configuration; restoring the previous environment file."
       if [ "$env_was_present" = "true" ]; then
-        cp -p "$env_backup" "$env_file"
+        cp --preserve=all "$env_backup" "$env_file"
       else
         rm -f "$env_file"
       fi
@@ -692,6 +781,7 @@ main() {
     log "Activation skipped. Deploy the stack when you are ready to load the new certificate."
   fi
 
+  rm -f "$pending_file"
   export PREVIEW_TLS_CERT_SECRET="$new_certificate_secret"
   export PREVIEW_TLS_KEY_SECRET="$new_key_secret"
   log "Preview TLS certificate setup completed."

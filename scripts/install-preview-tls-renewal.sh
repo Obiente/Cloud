@@ -9,7 +9,10 @@ readonly INSTALL_DIR="/usr/local/libexec/obiente-cloud"
 readonly INSTALLED_SCRIPT="${INSTALL_DIR}/manage-preview-tls.sh"
 readonly CONFIG_DIR="/etc/obiente"
 readonly CONFIG_FILE="${CONFIG_DIR}/preview-tls.conf"
+readonly MANAGED_CREDENTIALS_FILE="${CONFIG_DIR}/preview-dns-provider.env"
 readonly SERVICE_FILE="/etc/systemd/system/obiente-preview-tls-renew.service"
+readonly SERVICE_DROPIN_DIR="/etc/systemd/system/obiente-preview-tls-renew.service.d"
+readonly SERVICE_PATHS_FILE="${SERVICE_DROPIN_DIR}/write-paths.conf"
 readonly TIMER_FILE="/etc/systemd/system/obiente-preview-tls-renew.timer"
 
 fail() {
@@ -54,10 +57,58 @@ quote_systemd_environment_value() {
   printf '"%s"' "$value"
 }
 
+quote_systemd_unit_value() {
+  local value="$1"
+  value="${value//%/%%}"
+  quote_systemd_environment_value "$value"
+}
+
 write_config_value() {
   local key="$1"
   local value="$2"
   printf '%s=%s\n' "$key" "$(quote_systemd_environment_value "$value")" >> "$CONFIG_FILE"
+}
+
+validate_service_write_directory() {
+  local path="$1"
+  local relative_path=""
+
+  [[ "$path" == /* ]] || fail "Service write paths must be absolute: $path"
+  relative_path="${path#/}"
+  [[ "$relative_path" == */* ]] || fail "Refusing an overly broad service write path: $path"
+  case "$path" in
+    /|/boot|/efi|/etc|/home|/opt|/root|/srv|/usr|/usr/local|/var|/var/lib)
+      fail "Refusing an overly broad service write path: $path"
+      ;;
+    *$'\n'*|*$'\r'*)
+      fail "Service write paths must not contain line breaks"
+      ;;
+  esac
+}
+
+install_managed_credentials() {
+  local source_file="$1"
+  local destination_file="$2"
+
+  if [ "$source_file" = "$(realpath -m "$destination_file")" ]; then
+    chmod 0600 "$destination_file"
+    return 0
+  fi
+  install -m 0600 "$source_file" "$destination_file"
+}
+
+write_service_paths_override() {
+  local output_file="$1"
+  local env_directory="$2"
+  local state_directory="$3"
+
+  validate_service_write_directory "$env_directory"
+  validate_service_write_directory "$state_directory"
+  : > "$output_file"
+  chmod 0644 "$output_file"
+  printf '[Service]\nReadWritePaths=%s %s\n' \
+    "$(quote_systemd_unit_value "$env_directory")" \
+    "$(quote_systemd_unit_value "$state_directory")" > "$output_file"
 }
 
 main() {
@@ -74,6 +125,7 @@ main() {
   local issue_now="true"
   local activate="true"
   local credential_mode=""
+  local env_directory=""
   local -a validation_args=()
 
   while [ "$#" -gt 0 ]; do
@@ -112,6 +164,8 @@ main() {
   fi
   env_file="$(realpath -m "$env_file")"
   state_dir="$(realpath -m "$state_dir")"
+  env_directory="$(dirname "$env_file")"
+  [ -d "$env_directory" ] || fail "Environment file directory does not exist: $env_directory"
 
   validation_args=(
     check
@@ -131,11 +185,11 @@ main() {
   install -d -m 0755 "$INSTALL_DIR"
   install -m 0755 "${SCRIPT_DIR}/manage-preview-tls.sh" "$INSTALLED_SCRIPT"
   install -d -m 0700 "$CONFIG_DIR"
-  install -m 0600 "$credentials_file" "${CONFIG_DIR}/preview-dns-provider.env"
+  install_managed_credentials "$credentials_file" "$MANAGED_CREDENTIALS_FILE"
   : > "$CONFIG_FILE"
   chmod 0600 "$CONFIG_FILE"
   write_config_value PREVIEW_TLS_DNS_PROVIDER "$provider"
-  write_config_value PREVIEW_TLS_DNS_CREDENTIALS_FILE "${CONFIG_DIR}/preview-dns-provider.env"
+  write_config_value PREVIEW_TLS_DNS_CREDENTIALS_FILE "$MANAGED_CREDENTIALS_FILE"
   write_config_value PREVIEW_TLS_EMAIL "$email"
   write_config_value PREVIEW_TLS_ENV_FILE "$env_file"
   write_config_value PREVIEW_TLS_STATE_DIR "$state_dir"
@@ -148,6 +202,8 @@ main() {
 
   install -m 0644 "${SCRIPT_DIR}/internal/systemd/obiente-preview-tls-renew.service" "$SERVICE_FILE"
   install -m 0644 "${SCRIPT_DIR}/internal/systemd/obiente-preview-tls-renew.timer" "$TIMER_FILE"
+  install -d -m 0755 "$SERVICE_DROPIN_DIR"
+  write_service_paths_override "$SERVICE_PATHS_FILE" "$env_directory" "$state_dir"
   systemctl daemon-reload
 
   if [ "$issue_now" = "true" ]; then
@@ -161,4 +217,6 @@ main() {
   printf '  Renewal logs:  journalctl -u obiente-preview-tls-renew.service\n'
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
