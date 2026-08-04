@@ -2,8 +2,10 @@
 
 set -Eeuo pipefail
 
-readonly TEST_DIR="$(mktemp -d)"
-readonly TEST_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEST_DIR="$(mktemp -d)"
+readonly TEST_DIR
+TEST_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly TEST_SCRIPT_DIR
 
 cleanup() {
   rm -rf "$TEST_DIR"

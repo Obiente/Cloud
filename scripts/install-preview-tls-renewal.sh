@@ -3,7 +3,8 @@
 set -Eeuo pipefail
 umask 077
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly INSTALL_DIR="/usr/local/libexec/obiente-cloud"
 readonly INSTALLED_SCRIPT="${INSTALL_DIR}/manage-preview-tls.sh"
 readonly CONFIG_DIR="/etc/obiente"

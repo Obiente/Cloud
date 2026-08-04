@@ -3,7 +3,8 @@
 set -Eeuo pipefail
 umask 077
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly DEFAULT_LEGO_IMAGE="goacme/lego:v5.2.1"
 readonly DEFAULT_PREVIEW_DOMAIN="my.obiente.cloud"
 readonly DEFAULT_STATE_DIR="/var/lib/obiente/preview-tls"
