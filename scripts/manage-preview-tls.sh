@@ -420,6 +420,17 @@ write_pending_secret_pair() {
   mv "$temp_file" "$pending_file"
 }
 
+write_rotation_state() {
+  local state_file="$1"
+  local previous_fingerprint="$2"
+  local temp_file=""
+
+  temp_file="$(mktemp "$(dirname "$state_file")/.preview-tls-rotation.XXXXXX")"
+  printf 'previous_fingerprint=%s\n' "$previous_fingerprint" > "$temp_file"
+  chmod 600 "$temp_file"
+  mv "$temp_file" "$state_file"
+}
+
 pending_secret_pair_for_fingerprint() {
   local pending_file="$1"
   local expected_fingerprint="$2"
@@ -574,6 +585,8 @@ main() {
   local active_certificate_secret=""
   local active_key_secret=""
   local pending_file=""
+  local rotation_state_file=""
+  local rotation_pending_required="false"
 
   case "$command_name" in
     setup|renew|status|check|bootstrap) shift ;;
@@ -652,6 +665,7 @@ main() {
   fi
   state_dir="$(canonical_directory "$state_dir")"
   pending_file="${state_dir}/pending-secret-activation"
+  rotation_state_file="${state_dir}/rotation-in-progress"
   exec 9>"${state_dir}/operation.lock"
   flock -n 9 || fail "Another preview TLS operation is already running"
 
@@ -681,6 +695,13 @@ main() {
   certificate_file="${state_dir}/certificates/${CERTIFICATE_NAME}.crt"
   key_file="${state_dir}/certificates/${CERTIFICATE_NAME}.key"
   old_fingerprint="$(certificate_fingerprint "$certificate_file")"
+
+  if [ "$issue_only" != "true" ]; then
+    if [ -f "$rotation_state_file" ]; then
+      rotation_pending_required="true"
+    fi
+    write_rotation_state "$rotation_state_file" "$old_fingerprint"
+  fi
 
   verify_public_challenge_delegation
   run_lego "$state_dir" "$credentials_file" "$lego_image" "$provider" "$email" "$domain" "$renew_days" "$ca_server" "$force_renewal"
@@ -723,6 +744,7 @@ main() {
   fi
 
   if [ -z "$new_certificate_secret" ] &&
+     [ "$rotation_pending_required" = "false" ] &&
      [ "$old_fingerprint" = "$new_fingerprint" ] &&
      [ "$current_secrets_available" = "true" ] &&
      [ "$force_renewal" = "false" ]; then
@@ -742,6 +764,7 @@ main() {
         fi
       fi
     fi
+    rm -f "$rotation_state_file"
     log "The certificate is not due for renewal; existing Swarm secrets remain active."
     show_status "$state_dir" "$env_file" "$stack_name"
     exit 0
@@ -782,6 +805,7 @@ main() {
   fi
 
   rm -f "$pending_file"
+  rm -f "$rotation_state_file"
   export PREVIEW_TLS_CERT_SECRET="$new_certificate_secret"
   export PREVIEW_TLS_KEY_SECRET="$new_key_secret"
   log "Preview TLS certificate setup completed."

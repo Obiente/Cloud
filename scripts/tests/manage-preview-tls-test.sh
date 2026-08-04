@@ -305,6 +305,20 @@ assert_fails "certificate-secret creation failure was ignored" env \
 assert_equals "0" "$(find "$failed_secret_store" -type f | wc -l)" "key secret was created after certificate-secret failure"
 assert_equals $'DOMAIN=obiente.cloud\nENABLE_DNS=false' "$(cat "$failed_secret_env")" "failed secret creation changed the environment file"
 
+PATH="${mock_bin}:${PATH}" \
+MOCK_STATE_DIR="$failed_secret_state" \
+MOCK_SECRETS_DIR="$failed_secret_store" \
+"${TEST_SCRIPT_DIR}/manage-preview-tls.sh" setup \
+  --provider test \
+  --credentials-file "$mock_credentials" \
+  --email admin@example.com \
+  --env-file "$failed_secret_env" \
+  --state-dir "$failed_secret_state" \
+  --accept-tos \
+  --no-activate \
+  >/dev/null
+assert_equals "2" "$(find "$failed_secret_store" -type f | wc -l)" "secret creation failure was not retried"
+
 retry_state="${TEST_DIR}/retry-state"
 retry_secrets="${TEST_DIR}/retry-secrets"
 retry_env="${TEST_DIR}/retry.env"
