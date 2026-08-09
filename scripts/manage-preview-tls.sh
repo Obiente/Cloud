@@ -733,6 +733,7 @@ main() {
     if [ -f "$key_file" ]; then
       mv "$key_file" "${recovery_dir}/${CERTIFICATE_NAME}-${recovery_stamp}.key"
     fi
+    old_fingerprint=""
   fi
 
   if [ "$command_name" = "renew" ] && [ -n "$old_fingerprint" ]; then

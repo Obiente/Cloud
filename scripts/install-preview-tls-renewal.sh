@@ -89,6 +89,31 @@ validate_service_write_directory() {
   esac
 }
 
+validate_secure_path_ancestors() {
+  local path="$1"
+  local current="$path"
+  local mode=""
+
+  [[ "$path" == /* ]] || fail "Path must be absolute: $path"
+  while [ ! -e "$current" ]; do
+    [ ! -L "$current" ] || fail "Path must not contain symbolic links: $path"
+    local parent
+    parent="$(dirname "$current")"
+    [ "$parent" != "$current" ] || break
+    current="$parent"
+  done
+  [ ! -L "$current" ] || fail "Path must not contain symbolic links: $path"
+
+  while :; do
+    [ -d "$current" ] || fail "Path ancestor is not a directory: $current"
+    [ "$(stat -c '%u' "$current")" = 0 ] || fail "Path ancestor must be owned by root: $current"
+    mode="$(stat -c '%a' "$current")"
+    (( (8#$mode & 8#022) == 0 )) || fail "Path ancestor must not be writable by group or other users: $current"
+    [ "$current" != "/" ] || break
+    current="$(dirname "$current")"
+  done
+}
+
 install_managed_credentials() {
   local source_file="$1"
   local destination_file="$2"
@@ -165,6 +190,7 @@ main() {
   if (( (8#$credential_mode & 8#077) != 0 )); then
     fail "Credentials file must not be accessible by group or other users (mode $credential_mode)"
   fi
+  validate_secure_path_ancestors "$state_dir"
   env_file="$(realpath -m "$env_file")"
   state_dir="$(realpath -m "$state_dir")"
   env_directory="$(dirname "$env_file")"
@@ -185,12 +211,15 @@ main() {
   [ -z "$ca_server" ] || validation_args+=(--ca-server "$ca_server")
   "${SCRIPT_DIR}/manage-preview-tls.sh" "${validation_args[@]}"
 
-  install -d -m 0755 "$INSTALL_DIR"
+  install -d -o root -g root -m 0755 "$INSTALL_DIR"
   install -m 0755 "${SCRIPT_DIR}/manage-preview-tls.sh" "$INSTALLED_SCRIPT"
-  install -d -m 0700 "$CONFIG_DIR"
+  chown root:root "$INSTALLED_SCRIPT"
+  install -d -o root -g root -m 0700 "$CONFIG_DIR"
   install_managed_credentials "$credentials_file" "$MANAGED_CREDENTIALS_FILE"
+  chown root:root "$MANAGED_CREDENTIALS_FILE"
   : > "$CONFIG_FILE"
   chmod 0600 "$CONFIG_FILE"
+  chown root:root "$CONFIG_FILE"
   write_config_value PREVIEW_TLS_DNS_PROVIDER "$provider"
   write_config_value PREVIEW_TLS_DNS_CREDENTIALS_FILE "$MANAGED_CREDENTIALS_FILE"
   write_config_value PREVIEW_TLS_EMAIL "$email"
@@ -205,7 +234,7 @@ main() {
 
   install -m 0644 "${SCRIPT_DIR}/internal/systemd/obiente-preview-tls-renew.service" "$SERVICE_FILE"
   install -m 0644 "${SCRIPT_DIR}/internal/systemd/obiente-preview-tls-renew.timer" "$TIMER_FILE"
-  install -d -m 0755 "$SERVICE_DROPIN_DIR"
+  install -d -o root -g root -m 0755 "$SERVICE_DROPIN_DIR"
   write_service_paths_override "$SERVICE_PATHS_FILE" "$env_directory" "$state_dir"
   systemctl daemon-reload
 

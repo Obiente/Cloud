@@ -657,17 +657,33 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		   END IF;
 			 END $$`,
 		// The legacy columns were created by GORM's GitHub initialism naming
-		// (`git_hub_*`). They are no longer mapped by the models. Keeping their
-		// NOT NULL constraints makes every new canonical insert fail because the
-		// legacy columns are omitted. Values were copied above, so remove the
-		// obsolete columns before enforcing the canonical constraints.
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_integration_id`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_installation_id`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_deployment_id`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_deployment_sha`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_comment_id`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_check_run_id`,
-		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_check_run_sha`,
+		// (`git_hub_*`). Keep them nullable during the rolling upgrade so old
+		// replicas can continue to write while new replicas use the canonical
+		// columns. A later cleanup migration can remove them after all old
+		// writers are guaranteed to be gone.
+		`DO $$
+		 DECLARE
+		   legacy_column TEXT;
+		 BEGIN
+		   FOREACH legacy_column IN ARRAY ARRAY[
+		     'git_hub_integration_id', 'git_hub_installation_id',
+		     'git_hub_deployment_id', 'git_hub_deployment_sha',
+		     'git_hub_comment_id', 'git_hub_check_run_id',
+		     'git_hub_check_run_sha'
+		   ] LOOP
+		     IF EXISTS (
+		       SELECT 1 FROM information_schema.columns
+		       WHERE table_schema = current_schema()
+		         AND table_name = 'pull_request_deployments'
+		         AND column_name = legacy_column
+		     ) THEN
+		       EXECUTE format(
+		         'ALTER TABLE pull_request_deployments ALTER COLUMN %I DROP NOT NULL',
+		         legacy_column
+		       );
+		     END IF;
+		   END LOOP;
+		 END $$`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_integration_id SET NOT NULL`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_installation_id SET NOT NULL`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,

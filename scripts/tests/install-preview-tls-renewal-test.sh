@@ -55,5 +55,7 @@ grep -q '^ReadWritePaths="/etc/obiente-cloud" "/var/lib/obiente/preview-tls"$' "
 assert_equals "644" "$(stat -c '%a' "$paths_override")" "service override has unexpected permissions"
 assert_fails "broad /etc service write access was accepted" validate_service_write_directory /etc
 assert_fails "relative service write path was accepted" validate_service_write_directory relative/path
+assert_fails "state path beneath /tmp was accepted" validate_secure_path_ancestors /tmp/preview-tls
+assert_fails "relative state path was accepted" validate_secure_path_ancestors relative/path
 
 printf 'Preview TLS installer tests passed.\n'
