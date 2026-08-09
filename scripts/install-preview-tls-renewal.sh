@@ -159,6 +159,9 @@ main() {
   local activate="true"
   local credential_mode=""
   local env_directory=""
+  local backup_dir=""
+  local old_credentials_present="false"
+  local old_config_present="false"
   local -a validation_args=()
 
   while [ "$#" -gt 0 ]; do
@@ -216,6 +219,19 @@ main() {
   [ -z "$ca_server" ] || validation_args+=(--ca-server "$ca_server")
   "${SCRIPT_DIR}/manage-preview-tls.sh" "${validation_args[@]}"
 
+  backup_dir="$(mktemp -d /run/obiente-preview-tls-install.XXXXXX)"
+  chmod 700 "$backup_dir"
+  if [ -e "$MANAGED_CREDENTIALS_FILE" ]; then
+    [ ! -L "$MANAGED_CREDENTIALS_FILE" ] || fail "Existing managed credentials file must not be a symbolic link"
+    cp --preserve=all "$MANAGED_CREDENTIALS_FILE" "$backup_dir/credentials"
+    old_credentials_present="true"
+  fi
+  if [ -e "$CONFIG_FILE" ]; then
+    [ ! -L "$CONFIG_FILE" ] || fail "Existing preview TLS configuration must not be a symbolic link"
+    cp --preserve=all "$CONFIG_FILE" "$backup_dir/config"
+    old_config_present="true"
+  fi
+
   install -d -o root -g root -m 0755 "$INSTALL_DIR"
   install -m 0755 "${SCRIPT_DIR}/manage-preview-tls.sh" "$INSTALLED_SCRIPT"
   chown root:root "$INSTALLED_SCRIPT"
@@ -244,8 +260,25 @@ main() {
   systemctl daemon-reload
 
   if [ "$issue_now" = "true" ]; then
-    systemctl start obiente-preview-tls-renew.service
+    if ! systemctl start obiente-preview-tls-renew.service; then
+      printf 'Installation validation failed; restoring the previous renewal configuration.\n' >&2
+      if [ "$old_credentials_present" = "true" ]; then
+        install -m 0600 "$backup_dir/credentials" "$MANAGED_CREDENTIALS_FILE"
+      else
+        rm -f "$MANAGED_CREDENTIALS_FILE"
+      fi
+      if [ "$old_config_present" = "true" ]; then
+        install -m 0600 "$backup_dir/config" "$CONFIG_FILE"
+      else
+        rm -f "$CONFIG_FILE"
+      fi
+      chown root:root "$MANAGED_CREDENTIALS_FILE" "$CONFIG_FILE" 2>/dev/null || true
+      rm -rf "$backup_dir"
+      systemctl daemon-reload
+      fail "Initial preview TLS issuance failed; the previous installation was restored"
+    fi
   fi
+  rm -rf "$backup_dir"
   systemctl enable --now obiente-preview-tls-renew.timer
 
   printf 'Preview TLS renewal installed.\n'

@@ -742,11 +742,8 @@ main() {
     lego_command="renew"
   fi
 
-  if [ "$issue_only" != "true" ]; then
-    if [ -f "$rotation_state_file" ]; then
-      rotation_pending_required="true"
-    fi
-    write_rotation_state "$rotation_state_file" "$old_fingerprint"
+  if [ "$issue_only" != "true" ] && [ -f "$rotation_state_file" ]; then
+    rotation_pending_required="true"
   fi
 
   verify_public_challenge_delegation
@@ -762,6 +759,16 @@ main() {
     log "Certificate issuance and validation succeeded. No Swarm secrets or environment settings were changed."
     show_status "$state_dir" "$env_file" "$stack_name"
     exit 0
+  fi
+
+  # Only retain a rotation marker once issuance produced a different
+  # certificate. A failed pre-issuance run must not force duplicate secrets on
+  # the next successful, not-due renewal. Keep an existing marker when a
+  # pending secret pair still needs activation.
+  if [ "$old_fingerprint" != "$new_fingerprint" ]; then
+    write_rotation_state "$rotation_state_file" "$old_fingerprint"
+  elif [ ! -f "$pending_file" ]; then
+    rm -f "$rotation_state_file"
   fi
 
   if docker secret inspect "${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}" >/dev/null 2>&1 &&
