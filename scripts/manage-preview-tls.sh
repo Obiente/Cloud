@@ -267,6 +267,20 @@ validate_certificate_pair() {
   [ "$cert_public_key" = "$private_public_key" ] || fail "Certificate and private key do not match"
 }
 
+certificate_key_is_usable() {
+  local certificate_file="$1"
+  local key_file="$2"
+  local cert_public_key=""
+  local private_public_key=""
+
+  [ -f "$certificate_file" ] && [ -f "$key_file" ] || return 1
+  openssl x509 -in "$certificate_file" -noout >/dev/null 2>&1 || return 1
+  openssl pkey -in "$key_file" -noout >/dev/null 2>&1 || return 1
+  cert_public_key="$(openssl x509 -in "$certificate_file" -pubkey -noout 2>/dev/null | openssl pkey -pubin -outform DER 2>/dev/null | openssl dgst -sha256)" || return 1
+  private_public_key="$(openssl pkey -in "$key_file" -pubout -outform DER 2>/dev/null | openssl dgst -sha256)" || return 1
+  [ "$cert_public_key" = "$private_public_key" ]
+}
+
 create_bootstrap_certificate() {
   local state_dir="$1"
   local env_file="$2"
@@ -709,7 +723,7 @@ main() {
   key_file="${state_dir}/certificates/${CERTIFICATE_NAME}.key"
   old_fingerprint="$(certificate_fingerprint "$certificate_file")"
 
-  if [ -f "$certificate_file" ] && [ -z "$old_fingerprint" ]; then
+  if [ -f "$certificate_file" ] && { [ -z "$old_fingerprint" ] || ! certificate_key_is_usable "$certificate_file" "$key_file"; }; then
     recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
     recovery_dir="${state_dir}/recovery"
     mkdir -p "$recovery_dir"

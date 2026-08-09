@@ -96,9 +96,15 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
   -addext 'subjectAltName=DNS:my.obiente.cloud,DNS:*.my.obiente.cloud' \
   >/dev/null 2>&1
 validate_certificate_pair "${TEST_DIR}/preview.crt" "${TEST_DIR}/preview.key" my.obiente.cloud
+if ! certificate_key_is_usable "${TEST_DIR}/preview.crt" "${TEST_DIR}/preview.key"; then
+  printf 'FAIL: a valid certificate/key pair was rejected\n' >&2
+  exit 1
+fi
 
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "${TEST_DIR}/wrong.key" >/dev/null 2>&1
 assert_fails "mismatched certificate key was accepted" validate_certificate_pair "${TEST_DIR}/preview.crt" "${TEST_DIR}/wrong.key" my.obiente.cloud
+assert_fails "mismatched certificate key was considered usable" certificate_key_is_usable "${TEST_DIR}/preview.crt" "${TEST_DIR}/wrong.key"
+assert_fails "missing private key was considered usable" certificate_key_is_usable "${TEST_DIR}/preview.crt" "${TEST_DIR}/missing.key"
 
 ENABLE_DNS=true PREVIEW_ACME_CHALLENGE_CNAME=_acme-preview.example.net validate_challenge_delegation
 assert_fails "in-zone ACME challenge delegation was accepted" env \
