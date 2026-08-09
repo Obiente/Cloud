@@ -240,8 +240,13 @@ require_swarm_manager() {
 
 certificate_fingerprint() {
   local certificate_file="$1"
+  local fingerprint=""
+
   [ -f "$certificate_file" ] || return 0
-  openssl x509 -in "$certificate_file" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//; s/://g'
+  if ! fingerprint="$(openssl x509 -in "$certificate_file" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//; s/://g')"; then
+    return 0
+  fi
+  printf '%s\n' "$fingerprint"
 }
 
 validate_certificate_pair() {
@@ -467,6 +472,7 @@ run_lego() {
   local renew_days="$7"
   local ca_server="$8"
   local force_renewal="$9"
+  local lego_command="${10}"
   local effective_renew_days="$renew_days"
   local -a lego_args=()
   local -a security_args=(--security-opt no-new-privileges:true)
@@ -503,8 +509,8 @@ run_lego() {
     --cap-drop ALL \
     "${security_args[@]}" \
     --mount "type=bind,src=${state_dir},dst=/lego" \
-    --mount "type=bind,src=${credentials_file},dst=/provider.env,readonly" \
-    "$image" "${lego_args[@]}"
+    --env-file "$credentials_file" \
+    "$image" "${lego_args[@]}" "$lego_command"
 }
 
 show_status() {
@@ -587,6 +593,9 @@ main() {
   local pending_file=""
   local rotation_state_file=""
   local rotation_pending_required="false"
+  local lego_command="run"
+  local recovery_stamp=""
+  local recovery_dir=""
 
   case "$command_name" in
     setup|renew|status|check|bootstrap) shift ;;
@@ -613,6 +622,10 @@ main() {
       *) fail "Unknown option: $1" ;;
     esac
   done
+
+  if [ "$command_name" = "bootstrap" ] && [ "$issue_only" = "true" ]; then
+    fail "--issue-only cannot be used with bootstrap"
+  fi
 
   env_file="${cli_env_file:-${PREVIEW_TLS_ENV_FILE:-}}"
   if [ -z "$env_file" ]; then
@@ -696,6 +709,22 @@ main() {
   key_file="${state_dir}/certificates/${CERTIFICATE_NAME}.key"
   old_fingerprint="$(certificate_fingerprint "$certificate_file")"
 
+  if [ -f "$certificate_file" ] && [ -z "$old_fingerprint" ]; then
+    recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    recovery_dir="${state_dir}/recovery"
+    mkdir -p "$recovery_dir"
+    chmod 700 "$recovery_dir"
+    warn "The existing preview certificate is unreadable; moving it aside for recovery."
+    mv "$certificate_file" "${recovery_dir}/${CERTIFICATE_NAME}-${recovery_stamp}.crt"
+    if [ -f "$key_file" ]; then
+      mv "$key_file" "${recovery_dir}/${CERTIFICATE_NAME}-${recovery_stamp}.key"
+    fi
+  fi
+
+  if [ "$command_name" = "renew" ] && [ -n "$old_fingerprint" ]; then
+    lego_command="renew"
+  fi
+
   if [ "$issue_only" != "true" ]; then
     if [ -f "$rotation_state_file" ]; then
       rotation_pending_required="true"
@@ -704,7 +733,7 @@ main() {
   fi
 
   verify_public_challenge_delegation
-  run_lego "$state_dir" "$credentials_file" "$lego_image" "$provider" "$email" "$domain" "$renew_days" "$ca_server" "$force_renewal"
+  run_lego "$state_dir" "$credentials_file" "$lego_image" "$provider" "$email" "$domain" "$renew_days" "$ca_server" "$force_renewal" "$lego_command"
   [ -f "$certificate_file" ] || fail "lego did not produce $certificate_file"
   [ -f "$key_file" ] || fail "lego did not produce $key_file"
   validate_certificate_pair "$certificate_file" "$key_file" "$domain"

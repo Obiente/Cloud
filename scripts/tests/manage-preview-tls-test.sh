@@ -210,6 +210,7 @@ MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
   >/dev/null
 
 assert_equals "run" "$(awk '{print $NF}' "$mock_docker_args")" "lego command appeared before its global options"
+grep -q -- "--env-file $mock_credentials goacme/lego:v5.2.1" "$mock_docker_args" || fail "provider credentials were not passed as a Docker run option"
 
 selected_certificate_secret="$(sed -n 's/^PREVIEW_TLS_CERT_SECRET=//p' "$mock_env")"
 selected_key_secret="$(sed -n 's/^PREVIEW_TLS_KEY_SECRET=//p' "$mock_env")"
@@ -220,6 +221,7 @@ secret_count_before="$(find "$mock_secrets" -type f | wc -l)"
 PATH="${mock_bin}:${PATH}" \
 MOCK_STATE_DIR="$mock_state" \
 MOCK_SECRETS_DIR="$mock_secrets" \
+MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
 "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" renew \
   --provider test \
   --credentials-file "$mock_credentials" \
@@ -231,6 +233,7 @@ MOCK_SECRETS_DIR="$mock_secrets" \
   >/dev/null
 
 assert_equals "$secret_count_before" "$(find "$mock_secrets" -type f | wc -l)" "unchanged renewal created duplicate secrets"
+assert_equals "renew" "$(awk '{print $NF}' "$mock_docker_args")" "scheduled renewal did not use lego renew"
 
 issue_only_state="${TEST_DIR}/issue-only-state"
 issue_only_secrets="${TEST_DIR}/issue-only-secrets"
@@ -283,6 +286,15 @@ MOCK_SECRETS_DIR="$bootstrap_secrets" \
 assert_equals "2" "$(find "$bootstrap_secrets" -type f | wc -l)" "bootstrap did not create two Swarm secrets"
 grep -q '^PREVIEW_TLS_CERT_SECRET=preview_tls_cert_' "$bootstrap_env" || fail "bootstrap did not select its certificate secret"
 grep -q '^PREVIEW_TLS_KEY_SECRET=preview_tls_key_' "$bootstrap_env" || fail "bootstrap did not select its key secret"
+
+assert_fails "bootstrap accepted issue-only mode" env \
+  PATH="${mock_bin}:${PATH}" \
+  MOCK_STATE_DIR="$bootstrap_state" \
+  MOCK_SECRETS_DIR="$bootstrap_secrets" \
+  "${TEST_SCRIPT_DIR}/manage-preview-tls.sh" bootstrap \
+  --env-file "$bootstrap_env" \
+  --state-dir "$bootstrap_state" \
+  --issue-only
 
 failed_secret_state="${TEST_DIR}/failed-secret-state"
 failed_secret_store="${TEST_DIR}/failed-secret-store"

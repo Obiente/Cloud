@@ -80,6 +80,9 @@ validate_service_write_directory() {
     /|/boot|/efi|/etc|/home|/opt|/root|/srv|/usr|/usr/local|/var|/var/lib)
       fail "Refusing an overly broad service write path: $path"
       ;;
+    /tmp|/tmp/*|/var/tmp|/var/tmp/*)
+      fail "Service write paths under temporary directories are incompatible with PrivateTmp: $path"
+      ;;
     *$'\n'*|*$'\r'*)
       fail "Service write paths must not contain line breaks"
       ;;

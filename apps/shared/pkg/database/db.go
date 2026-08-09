@@ -655,7 +655,19 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		       END IF;
 		     END LOOP;
 		   END IF;
-		 END $$`,
+			 END $$`,
+		// The legacy columns were created by GORM's GitHub initialism naming
+		// (`git_hub_*`). They are no longer mapped by the models. Keeping their
+		// NOT NULL constraints makes every new canonical insert fail because the
+		// legacy columns are omitted. Values were copied above, so remove the
+		// obsolete columns before enforcing the canonical constraints.
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_integration_id`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_installation_id`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_deployment_id`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_deployment_sha`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_comment_id`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_check_run_id`,
+		`ALTER TABLE IF EXISTS pull_request_deployments DROP COLUMN IF EXISTS git_hub_check_run_sha`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_integration_id SET NOT NULL`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_installation_id SET NOT NULL`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ADD COLUMN IF NOT EXISTS ignored_head_sha TEXT`,
