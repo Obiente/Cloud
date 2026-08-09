@@ -502,14 +502,16 @@ run_lego() {
     --email "$email"
     --accept-tos
     --dns "$provider"
-    --env-file /provider.env
     --domains "$domain"
     --domains "*.$domain"
-    --renew-days "$effective_renew_days"
-    --force-cert-domains
   )
   [ -z "$ca_server" ] || lego_args+=(--server "$ca_server")
-  lego_args+=(run)
+  lego_args+=("$lego_command")
+  if [ "$lego_command" = "renew" ]; then
+    lego_args+=(--days "$effective_renew_days")
+  else
+    lego_args+=(--force-cert-domains)
+  fi
 
   if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null || true)" != "Disabled" ]; then
     security_args+=(--security-opt label=disable)
@@ -524,7 +526,7 @@ run_lego() {
     "${security_args[@]}" \
     --mount "type=bind,src=${state_dir},dst=/lego" \
     --env-file "$credentials_file" \
-    "$image" "${lego_args[@]}" "$lego_command"
+    "$image" "${lego_args[@]}"
 }
 
 show_status() {

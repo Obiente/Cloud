@@ -129,14 +129,19 @@ write_service_paths_override() {
   local output_file="$1"
   local env_directory="$2"
   local state_directory="$3"
+  local temporary_file=""
 
   validate_service_write_directory "$env_directory"
   validate_service_write_directory "$state_directory"
-  : > "$output_file"
-  chmod 0644 "$output_file"
+  [ ! -L "$output_file" ] || fail "Refusing to replace a symbolic-link systemd drop-in: $output_file"
+  temporary_file="$(mktemp "${output_file}.tmp.XXXXXX")"
+  chmod 0644 "$temporary_file"
+  [ "$(id -u)" -eq 0 ] && chown root:root "$temporary_file"
   printf '[Service]\nReadWritePaths=%s %s\n' \
     "$(quote_systemd_unit_value "$env_directory")" \
-    "$(quote_systemd_unit_value "$state_directory")" > "$output_file"
+    "$(quote_systemd_unit_value "$state_directory")" > "$temporary_file"
+  [ "$(id -u)" -eq 0 ] && chown root:root "$temporary_file"
+  mv -f "$temporary_file" "$output_file"
 }
 
 main() {
