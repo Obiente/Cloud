@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the Obiente Cloud preview wildcard certificate daily
+
+[Timer]
+OnCalendar=*-*-* 03:35:00
+RandomizedDelaySec=6h
+Persistent=true
+Unit=obiente-preview-tls-renew.service
+
+[Install]
+WantedBy=timers.target

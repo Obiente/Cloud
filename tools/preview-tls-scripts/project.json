@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "preview-tls-scripts",
+  "root": "tools/preview-tls-scripts",
+  "projectType": "application",
+  "targets": {
+    "validate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/scripts/manage-preview-tls.sh",
+        "{workspaceRoot}/scripts/install-preview-tls-renewal.sh",
+        "{workspaceRoot}/scripts/tests/manage-preview-tls-test.sh",
+        "{workspaceRoot}/scripts/tests/install-preview-tls-renewal-test.sh",
+        "{workspaceRoot}/scripts/internal/systemd/obiente-preview-tls-renew.service",
+        "{workspaceRoot}/scripts/internal/systemd/obiente-preview-tls-renew.timer"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "commands": [
+          "shellcheck scripts/manage-preview-tls.sh scripts/install-preview-tls-renewal.sh scripts/tests/manage-preview-tls-test.sh scripts/tests/install-preview-tls-renewal-test.sh",
+          "bash scripts/tests/manage-preview-tls-test.sh",
+          "bash scripts/tests/install-preview-tls-renewal-test.sh"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

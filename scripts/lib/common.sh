@@ -85,7 +85,7 @@ require_swarm_secrets() {
 require_preview_tls_configuration() {
   local compose_file="$1"
 
-  if grep -Eq '^[[:space:]]+- preview_tls_cert[[:space:]]*$' "$compose_file"; then
+  if grep -Eq '^[[:space:]]+- (source:[[:space:]]+)?preview_tls_cert[[:space:]]*$' "$compose_file"; then
     require_swarm_secrets \
       "${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}" \
       "${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}" || return 1

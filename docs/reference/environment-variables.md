@@ -854,6 +854,11 @@ METRICS_RETRY_MAX_QUEUE_SIZE=50000
 | `PREVIEW_ACME_CHALLENGE_CNAME`   | string | -                     | ❌ (external DNS-01 delegation)            |
 | `PREVIEW_TLS_CERT_SECRET`        | string | `preview_tls_cert`    | ❌ (certificate rotation)                  |
 | `PREVIEW_TLS_KEY_SECRET`         | string | `preview_tls_key`     | ❌ (certificate rotation)                  |
+| `PREVIEW_TLS_STACK_NAME`         | string | `obiente`             | ❌ (certificate automation)                |
+| `PREVIEW_TLS_STATE_DIR`          | string | `/var/lib/obiente/preview-tls` | ❌ (certificate automation)       |
+| `PREVIEW_TLS_LEGO_IMAGE`         | string | `goacme/lego:v5.2.1` | ❌ (certificate automation)                |
+| `PREVIEW_TLS_RENEW_DAYS`         | number | `30`                  | ❌ (certificate automation)                |
+| `PREVIEW_TLS_ACTIVATE`           | bool   | `true`                | ❌ (certificate automation)                |
 
 **Example:**
 
@@ -863,6 +868,11 @@ ACME_EMAIL=admin@obiente.cloud
 PREVIEW_ACME_CHALLENGE_CNAME=_acme-challenge-preview.example.net
 PREVIEW_TLS_CERT_SECRET=preview_tls_cert_20260803
 PREVIEW_TLS_KEY_SECRET=preview_tls_key_20260803
+PREVIEW_TLS_STACK_NAME=obiente
+PREVIEW_TLS_STATE_DIR=/var/lib/obiente/preview-tls
+PREVIEW_TLS_LEGO_IMAGE=goacme/lego:v5.2.1
+PREVIEW_TLS_RENEW_DAYS=30
+PREVIEW_TLS_ACTIVATE=true
 ```
 
 When Obiente's DNS service is authoritative, an external ACME client can use
@@ -870,6 +880,13 @@ When Obiente's DNS service is authoritative, an external ACME client can use
 `my.obiente.cloud` that its selected provider can update. Every Swarm stack
 loads the resulting certificate from the two versioned certificate secrets so
 multiple Traefik replicas never issue or renew the same wildcard independently.
+
+The management and systemd renewal scripts additionally accept
+`PREVIEW_TLS_DNS_PROVIDER`, `PREVIEW_TLS_DNS_CREDENTIALS_FILE`,
+`PREVIEW_TLS_EMAIL`, `PREVIEW_TLS_ENV_FILE`, `PREVIEW_TLS_CA_SERVER`, and
+`PREVIEW_TLS_ACCEPT_TOS`. Keep the credentials file outside the repository with
+mode `0600`; the systemd installer copies it to `/etc/obiente`. See
+[Preview TLS certificates](../deployment/preview-tls.md) for setup and renewal.
 
 ### DNS Configuration
 
