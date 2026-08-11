@@ -73,22 +73,45 @@ require_swarm_secrets() {
     echo "   - $secret_name"
   done
   echo ""
-  echo "Create each secret from a protected file before deploying:"
-  for secret_name in "${missing_secrets[@]}"; do
-    echo "   docker secret create $secret_name /secure/path/$secret_name"
-  done
-  echo ""
-  echo "Do not store these credentials in .env or commit them to the repository."
   return 1
+}
+
+print_preview_tls_setup_help() {
+  echo "Set up preview TLS with the repository's certificate manager:"
+  echo ""
+  echo "First deployment, before Traefik and the bundled DNS service exist:"
+  echo "   sudo ./scripts/manage-preview-tls.sh bootstrap"
+  echo ""
+  echo "This creates a seven-day self-signed certificate, creates versioned"
+  echo "Docker Swarm secrets, and updates their selected names in .env. Rerun"
+  echo "the deployment command afterwards. Replace this temporary certificate"
+  echo "with a trusted certificate as soon as DNS is available."
+  echo ""
+  echo "Trusted certificate setup through ACME DNS-01:"
+  echo "   sudo ./scripts/manage-preview-tls.sh setup \\"
+  echo "     --provider PROVIDER_CODE \\"
+  echo "     --credentials-file /etc/obiente/preview-dns.env \\"
+  echo "     --email admin@example.com \\"
+  echo "     --accept-tos"
+  echo ""
+  echo "The setup script obtains the certificate, validates the certificate/key"
+  echo "pair, creates versioned Swarm secrets, and updates .env. Provider"
+  echo "credentials must be stored in a root-owned mode-0600 file outside the"
+  echo "repository; they are not copied into .env or Docker secrets."
+  echo ""
+  echo "Full instructions: docs/deployment/preview-tls.md"
 }
 
 require_preview_tls_configuration() {
   local compose_file="$1"
 
   if grep -Eq '^[[:space:]]+- (source:[[:space:]]+)?preview_tls_cert[[:space:]]*$' "$compose_file"; then
-    require_swarm_secrets \
+    if ! require_swarm_secrets \
       "${PREVIEW_TLS_CERT_SECRET:-preview_tls_cert}" \
-      "${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}" || return 1
+      "${PREVIEW_TLS_KEY_SECRET:-preview_tls_key}"; then
+      print_preview_tls_setup_help
+      return 1
+    fi
   fi
 }
 

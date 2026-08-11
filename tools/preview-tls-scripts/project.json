@@ -10,6 +10,8 @@
       "inputs": [
         "{workspaceRoot}/scripts/manage-preview-tls.sh",
         "{workspaceRoot}/scripts/install-preview-tls-renewal.sh",
+        "{workspaceRoot}/scripts/lib/common.sh",
+        "{workspaceRoot}/scripts/tests/common-test.sh",
         "{workspaceRoot}/scripts/tests/manage-preview-tls-test.sh",
         "{workspaceRoot}/scripts/tests/install-preview-tls-renewal-test.sh",
         "{workspaceRoot}/scripts/internal/systemd/obiente-preview-tls-renew.service",
@@ -18,7 +20,8 @@
       "options": {
         "cwd": "{workspaceRoot}",
         "commands": [
-          "shellcheck scripts/manage-preview-tls.sh scripts/install-preview-tls-renewal.sh scripts/tests/manage-preview-tls-test.sh scripts/tests/install-preview-tls-renewal-test.sh",
+          "shellcheck scripts/manage-preview-tls.sh scripts/install-preview-tls-renewal.sh scripts/lib/common.sh scripts/tests/common-test.sh scripts/tests/manage-preview-tls-test.sh scripts/tests/install-preview-tls-renewal-test.sh",
+          "bash scripts/tests/common-test.sh",
           "bash scripts/tests/manage-preview-tls-test.sh",
           "bash scripts/tests/install-preview-tls-renewal-test.sh"
         ],
