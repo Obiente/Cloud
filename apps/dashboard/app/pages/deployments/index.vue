@@ -94,26 +94,45 @@
       </SharedEmptyState>
 
       <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
-        <template v-for="group in deploymentGroups" :key="group.parent.id">
-          <DeploymentCard
-            :deployment="group.parent"
-            :organization-id="organizationId"
-            :progress-value="progressValues[group.parent.id] ?? 0"
-            :progress-phase="progressPhases[group.parent.id]"
-            @refresh="refreshDeployments"
-          />
+        <div v-for="group in deploymentGroups" :key="group.parent.id" class="group relative min-w-0">
           <div
             v-if="group.children.length"
-            class="col-span-full rounded-xl border border-primary/15 bg-primary/[0.03] p-3 sm:p-4"
-          >
-            <OuiFlex align="center" gap="sm" class="mb-3 px-1">
-              <span class="h-2 w-2 rounded-full bg-primary" />
-              <OuiText size="xs" weight="semibold" color="secondary">
-                Pull request previews
-              </OuiText>
-              <OuiBadge variant="secondary" size="xs">{{ group.children.length }}</OuiBadge>
-            </OuiFlex>
-            <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-2 -bottom-1 top-2 rounded-xl border border-primary/15 bg-primary/[0.03] transition-transform duration-200 group-hover:translate-y-1"
+          />
+          <div
+            v-if="group.children.length > 1"
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-4 -bottom-2 top-4 rounded-xl border border-primary/10 bg-primary/[0.02] transition-transform duration-200 group-hover:translate-y-1"
+          />
+          <div class="relative">
+            <DeploymentCard
+              :deployment="group.parent"
+              :organization-id="organizationId"
+              :progress-value="progressValues[group.parent.id] ?? 0"
+              :progress-phase="progressPhases[group.parent.id]"
+              @refresh="refreshDeployments"
+            />
+            <OuiButton
+              v-if="group.children.length"
+              variant="soft"
+              color="primary"
+              size="xs"
+              class="absolute bottom-3 right-3 z-10 gap-1.5 shadow-sm"
+              :aria-expanded="expandedDeploymentGroups.has(group.parent.id)"
+              :aria-label="`${expandedDeploymentGroups.has(group.parent.id) ? 'Hide' : 'Show'} ${group.children.length} pull request previews for ${group.parent.name}`"
+              @click.stop="toggleDeploymentGroup(group.parent.id)"
+            >
+              <span>{{ group.children.length }} PR{{ group.children.length === 1 ? '' : 's' }}</span>
+              <ChevronDownIcon
+                class="h-3.5 w-3.5 transition-transform duration-200"
+                :class="{ 'rotate-180': expandedDeploymentGroups.has(group.parent.id) }"
+              />
+            </OuiButton>
+          </div>
+          <Transition name="deployment-previews">
+            <div v-if="expandedDeploymentGroups.has(group.parent.id)" class="relative mt-2 space-y-2 pl-3">
+              <div class="absolute bottom-3 left-0 top-0 w-px bg-primary/20" aria-hidden="true" />
               <DeploymentCard
                 v-for="child in group.children"
                 :key="child.id"
@@ -123,9 +142,9 @@
                 :progress-phase="progressPhases[child.id]"
                 @refresh="refreshDeployments"
               />
-            </OuiGrid>
-          </div>
-        </template>
+            </div>
+          </Transition>
+        </div>
       </OuiGrid>
 
       <OuiDialog
@@ -196,6 +215,7 @@
     ArrowTopRightOnSquareIcon,
     BoltIcon,
     CalendarIcon,
+    ChevronDownIcon,
     CodeBracketIcon,
     Cog6ToothIcon,
     CpuChipIcon,
@@ -888,6 +908,15 @@
     }));
   });
 
+  const expandedDeploymentGroups = ref(new Set<string>());
+
+  const toggleDeploymentGroup = (deploymentId: string) => {
+    const next = new Set(expandedDeploymentGroups.value);
+    if (next.has(deploymentId)) next.delete(deploymentId);
+    else next.add(deploymentId);
+    expandedDeploymentGroups.value = next;
+  };
+
   const stopDeployment = async (id: string) => {
     await deploymentActions.stopDeployment(id, deployments.value ?? []);
     // Refresh to get latest status from server (preserve data during refresh)
@@ -978,5 +1007,17 @@
     100% {
       transform: translateX(300%);
     }
+  }
+
+  .deployment-previews-enter-active,
+  .deployment-previews-leave-active {
+    transition: opacity 180ms ease, transform 180ms ease;
+    transform-origin: top;
+  }
+
+  .deployment-previews-enter-from,
+  .deployment-previews-leave-to {
+    opacity: 0;
+    transform: translateY(-0.5rem) scaleY(0.96);
   }
 </style>
