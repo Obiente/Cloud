@@ -196,6 +196,16 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		}
 	}
 
+	// Keep the existing Swarm services during updates. Removing the stack first
+	// causes an avoidable outage while the replacement tasks are starting.
+	if utils.IsSwarmModeEnabled() {
+		rollingYaml, err := injectSwarmRollingUpdatePolicy(sanitizedYaml)
+		if err != nil {
+			return fmt.Errorf("failed to configure Swarm rolling update policy: %w", err)
+		}
+		sanitizedYaml = rollingYaml
+	}
+
 	// Create persistent directory for compose file
 	// Try multiple possible locations, fallback to temp if needed
 	var deployDir string
@@ -272,15 +282,8 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			logger.Warn("[DeploymentManager] REGISTRY_PASSWORD not set - worker nodes may fail to pull private images")
 		}
 
-		// First, try to remove existing stack (ignore errors if it doesn't exist)
-		rmArgs := []string{"stack", "rm", projectName}
-		rmCmd := exec.CommandContext(ctx, "docker", rmArgs...)
-		rmCmd.Run() // Ignore errors - stack might not exist
-
-		// Wait a moment for stack removal to complete
-		time.Sleep(2 * time.Second)
-
-		// Deploy as a Swarm stack - this creates Swarm services that Traefik can discover
+		// Deploy in place so Swarm can start replacement tasks before stopping old
+		// ones according to each service's update_config.
 		// Use --with-registry-auth=true to pass registry credentials to Swarm
 		args := stackDeployArgs(projectName, composeFile)
 		logger.Info("[DeploymentManager] Deploying stack %s with docker stack deploy (creates Swarm services)", projectName)

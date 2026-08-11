@@ -256,6 +256,56 @@ func (dm *DeploymentManager) injectPlanLimitsIntoCompose(composeYaml string, dep
 	return string(modifiedYaml), nil
 }
 
+// injectSwarmRollingUpdatePolicy makes stack deploy replace tasks in place.
+// Docker Swarm otherwise defaults to stop-first, which briefly removes the
+// only serving task for the common single-replica deployment. Existing deploy
+// settings are retained except for the rollout fields that must be controlled
+// by the platform to provide safe, health-gated updates.
+func injectSwarmRollingUpdatePolicy(composeYaml string) (string, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("parse compose YAML: %w", err)
+	}
+
+	services, ok := compose["services"].(map[string]interface{})
+	if !ok {
+		return composeYaml, nil
+	}
+
+	for serviceName, serviceData := range services {
+		service, ok := serviceData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		deploy, ok := service["deploy"].(map[string]interface{})
+		if !ok {
+			deploy = make(map[string]interface{})
+			service["deploy"] = deploy
+		}
+
+		deploy["update_config"] = map[string]interface{}{
+			"parallelism":    1,
+			"delay":          "5s",
+			"monitor":        "60s",
+			"failure_action": "rollback",
+			"order":          "start-first",
+		}
+		deploy["rollback_config"] = map[string]interface{}{
+			"parallelism": 1,
+			"delay":       "5s",
+			"monitor":     "60s",
+			"order":       "start-first",
+		}
+		logger.Debug("[DeploymentManager] Configured start-first rolling update for Swarm service %s", serviceName)
+	}
+
+	result, err := yaml.Marshal(compose)
+	if err != nil {
+		return "", fmt.Errorf("marshal compose YAML: %w", err)
+	}
+	return string(result), nil
+}
+
 func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, deploymentID string, routings []database.DeploymentRouting, ingressNetworkName string) (string, error) {
 	// Parse YAML
 	var compose map[string]interface{}
