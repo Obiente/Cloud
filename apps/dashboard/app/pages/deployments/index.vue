@@ -94,15 +94,38 @@
       </SharedEmptyState>
 
       <OuiGrid v-else :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
-        <DeploymentCard
-          v-for="deployment in filteredDeployments"
-          :key="deployment.id"
-          :deployment="deployment"
-          :organization-id="organizationId"
-          :progress-value="progressValues[deployment.id] ?? 0"
-          :progress-phase="progressPhases[deployment.id]"
-          @refresh="refreshDeployments"
-        />
+        <template v-for="group in deploymentGroups" :key="group.parent.id">
+          <DeploymentCard
+            :deployment="group.parent"
+            :organization-id="organizationId"
+            :progress-value="progressValues[group.parent.id] ?? 0"
+            :progress-phase="progressPhases[group.parent.id]"
+            @refresh="refreshDeployments"
+          />
+          <div
+            v-if="group.children.length"
+            class="col-span-full rounded-xl border border-primary/15 bg-primary/[0.03] p-3 sm:p-4"
+          >
+            <OuiFlex align="center" gap="sm" class="mb-3 px-1">
+              <span class="h-2 w-2 rounded-full bg-primary" />
+              <OuiText size="xs" weight="semibold" color="secondary">
+                Pull request previews
+              </OuiText>
+              <OuiBadge variant="secondary" size="xs">{{ group.children.length }}</OuiBadge>
+            </OuiFlex>
+            <OuiGrid :cols="{ sm: 1, md: 2, lg: 3 }" gap="md">
+              <DeploymentCard
+                v-for="child in group.children"
+                :key="child.id"
+                :deployment="child"
+                :organization-id="organizationId"
+                :progress-value="progressValues[child.id] ?? 0"
+                :progress-phase="progressPhases[child.id]"
+                @refresh="refreshDeployments"
+              />
+            </OuiGrid>
+          </div>
+        </template>
       </OuiGrid>
 
       <OuiDialog
@@ -835,6 +858,34 @@
     }
 
     return filtered;
+  });
+
+  const deploymentGroups = computed(() => {
+    const all = (deployments.value ?? []) as Deployment[];
+    const visible = filteredDeployments.value;
+    const byId = new Map(all.map((deployment) => [deployment.id, deployment]));
+    const parents = new Map<string, Deployment>();
+    const children = new Map<string, Deployment[]>();
+
+    for (const deployment of visible) {
+      const parentId = deployment.parentDeploymentId;
+      if (!parentId) {
+        parents.set(deployment.id, deployment);
+        continue;
+      }
+      const list = children.get(parentId) ?? [];
+      list.push(deployment);
+      children.set(parentId, list);
+      if (!parents.has(parentId)) {
+        const parent = byId.get(parentId);
+        if (parent) parents.set(parentId, parent);
+      }
+    }
+
+    return Array.from(parents.values()).map((parent) => ({
+      parent,
+      children: children.get(parent.id) ?? [],
+    }));
   });
 
   const stopDeployment = async (id: string) => {

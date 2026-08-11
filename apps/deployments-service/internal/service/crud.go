@@ -111,10 +111,40 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 		}
 	}
 
+	// Preview deployments are materialized as ordinary deployment records, but
+	// they are children of a source deployment. Load that relationship in one
+	// query so the dashboard can present them under their parent instead of as
+	// unrelated top-level deployments.
+	previewDeploymentIDs := make([]string, 0)
+	for _, dbDep := range dbDeployments {
+		if dbDep.Environment == int32(deploymentsv1.Environment_PULL_REQUEST) {
+			previewDeploymentIDs = append(previewDeploymentIDs, dbDep.ID)
+		}
+	}
+	previewLinks := make(map[string]database.PullRequestDeployment, len(previewDeploymentIDs))
+	if len(previewDeploymentIDs) > 0 {
+		var records []database.PullRequestDeployment
+		if err := database.DB.WithContext(ctx).Where("preview_deployment_id IN ?", previewDeploymentIDs).Find(&records).Error; err != nil {
+			log.Printf("[ListDeployments] Failed to batch load preview parent links: %v", err)
+		} else {
+			for _, record := range records {
+				if record.PreviewDeploymentID != nil {
+					previewLinks[*record.PreviewDeploymentID] = record
+				}
+			}
+		}
+	}
+
 	// Convert DB models to proto models and enrich with actual container status
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))
 	for _, dbDep := range dbDeployments {
 		deployment := dbDeploymentToProto(dbDep)
+		if preview, ok := previewLinks[dbDep.ID]; ok {
+			deployment.ParentDeploymentId = proto.String(preview.SourceDeploymentID)
+			deployment.PullRequestRepository = proto.String(preview.Repository)
+			deployment.PullRequestNumber = proto.Int64(preview.PullRequestNumber)
+			deployment.PullRequestStatus = proto.Int32(preview.Status)
+		}
 
 		if deployment.BuildTime == 0 {
 			if latestBuild := latestBuilds[dbDep.ID]; latestBuild != nil && latestBuild.BuildTime > 0 {

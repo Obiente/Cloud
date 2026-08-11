@@ -928,3 +928,16 @@ func TestDeploymentDashboardURLRequiresConfiguredOrigin(t *testing.T) {
 		t.Fatalf("dashboard URL = %q", got)
 	}
 }
+
+func TestPullRequestDashboardURLFallsBackToSourceSettings(t *testing.T) {
+	t.Setenv("DASHBOARD_URL", "https://dashboard.obiente.cloud/")
+	record := &database.PullRequestDeployment{SourceDeploymentID: "source-1", PullRequestNumber: 42}
+	if got := pullRequestDashboardURL(record); got != "https://dashboard.obiente.cloud/deployments/source-1?tab=settings&pullRequest=42" {
+		t.Fatalf("pull request fallback URL = %q", got)
+	}
+	previewID := "preview-1"
+	record.PreviewDeploymentID = &previewID
+	if got := pullRequestDashboardURL(record); got != "https://dashboard.obiente.cloud/deployments/preview-1" {
+		t.Fatalf("pull request preview URL = %q", got)
+	}
+}

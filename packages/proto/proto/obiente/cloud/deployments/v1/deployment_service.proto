@@ -1181,6 +1181,11 @@ message Deployment {
   map<string, string> build_args = 46; // Docker build args for Dockerfile deployments
   repeated DockerfileVolume dockerfile_volumes = 47; // Persistent volume mounts for Dockerfile deployments
   optional DockerfileBuildOptions dockerfile_build_options = 48; // Additional Docker build options for Dockerfile deployments
+  // Parent deployment and pull request identity for automatically managed previews.
+  optional string parent_deployment_id = 49;
+  optional string pull_request_repository = 50;
+  optional int64 pull_request_number = 51;
+  optional int32 pull_request_status = 52;
 }
 
 message DockerfileVolume {

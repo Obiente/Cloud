@@ -2495,7 +2495,7 @@ func (s *Service) reportPullRequestDeploymentLocked(ctx context.Context, recordI
 	if record.PreviewDeploymentID != nil {
 		logURL = deploymentDashboardURL(*record.PreviewDeploymentID)
 	} else {
-		logURL = deploymentDashboardURL(record.SourceDeploymentID)
+		logURL = pullRequestDashboardURL(&record)
 	}
 	if config.DeploymentStatusEnabled && deploymentsv1.PullRequestDeploymentStatus(record.Status) != deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED {
 		if record.GitHubDeploymentID == nil && record.ClosedAt == nil {
@@ -2624,7 +2624,7 @@ func (s *Service) markGitHubCheckRunComplete(ctx context.Context, record *databa
 			return err
 		}
 		source, _ := s.repo.GetByID(ctx, record.SourceDeploymentID)
-		update := githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), DetailsURL: deploymentDashboardURL(record.SourceDeploymentID), ExternalID: record.ID, Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
+		update := githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), DetailsURL: pullRequestDashboardURL(record), ExternalID: record.ID, Status: "completed", Conclusion: conclusion, Title: title, Summary: summary}
 		return client.UpdateCheckRun(ctx, record.Repository, *record.GitHubCheckRunID, update)
 	})
 }
@@ -2635,6 +2635,24 @@ func deploymentDashboardURL(deploymentID string) string {
 		return ""
 	}
 	return baseURL + "/deployments/" + deploymentID
+}
+
+// pullRequestDashboardURL keeps failed or queued previews inspectable even
+// before a child runtime exists. Once a runtime is materialized, callers use
+// its own deployment URL; otherwise the source settings page opens the linked
+// pull-request environment list.
+func pullRequestDashboardURL(record *database.PullRequestDeployment) string {
+	if record == nil {
+		return ""
+	}
+	if record.PreviewDeploymentID != nil {
+		return deploymentDashboardURL(*record.PreviewDeploymentID)
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DASHBOARD_URL")), "/")
+	if baseURL == "" || record.SourceDeploymentID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/deployments/%s?tab=settings&pullRequest=%d", baseURL, record.SourceDeploymentID, record.PullRequestNumber)
 }
 
 func githubPRDeploymentState(record *database.PullRequestDeployment) (string, string) {
