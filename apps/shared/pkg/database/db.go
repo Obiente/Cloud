@@ -655,6 +655,34 @@ func ensurePullRequestPreviewCompatibilityColumns(db *gorm.DB) error {
 		       END IF;
 		     END LOOP;
 		   END IF;
+			 END $$`,
+		// The legacy columns were created by GORM's GitHub initialism naming
+		// (`git_hub_*`). Keep them nullable during the rolling upgrade so old
+		// replicas can continue to write while new replicas use the canonical
+		// columns. A later cleanup migration can remove them after all old
+		// writers are guaranteed to be gone.
+		`DO $$
+		 DECLARE
+		   legacy_column TEXT;
+		 BEGIN
+		   FOREACH legacy_column IN ARRAY ARRAY[
+		     'git_hub_integration_id', 'git_hub_installation_id',
+		     'git_hub_deployment_id', 'git_hub_deployment_sha',
+		     'git_hub_comment_id', 'git_hub_check_run_id',
+		     'git_hub_check_run_sha'
+		   ] LOOP
+		     IF EXISTS (
+		       SELECT 1 FROM information_schema.columns
+		       WHERE table_schema = current_schema()
+		         AND table_name = 'pull_request_deployments'
+		         AND column_name = legacy_column
+		     ) THEN
+		       EXECUTE format(
+		         'ALTER TABLE pull_request_deployments ALTER COLUMN %I DROP NOT NULL',
+		         legacy_column
+		       );
+		     END IF;
+		   END LOOP;
 		 END $$`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_integration_id SET NOT NULL`,
 		`ALTER TABLE IF EXISTS pull_request_deployments ALTER COLUMN github_installation_id SET NOT NULL`,
