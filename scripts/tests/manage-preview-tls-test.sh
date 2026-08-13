@@ -215,7 +215,7 @@ MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
   --no-activate \
   >/dev/null
 
-grep -q -- "goacme/lego:v5.2.1 --log.format text run --path /var/lib/lego.*--force-cert-domains" "$mock_docker_args" || fail "lego v5 run command/options were ordered incorrectly"
+grep -q -- "goacme/lego:v5.2.1 --log.format text run --path /var/lib/lego --account-id preview-tls.*--force-cert-domains" "$mock_docker_args" || fail "lego v5 run command/options were ordered incorrectly"
 grep -q -- "--env-file $mock_credentials goacme/lego:v5.2.1" "$mock_docker_args" || fail "provider credentials were not passed as a Docker run option"
 grep -q -- "--mount type=bind,src=$mock_state,dst=/var/lib/lego" "$mock_docker_args" || fail "lego state was not mounted away from the /lego executable"
 grep -q -- "--path /var/lib/lego" "$mock_docker_args" || fail "lego did not use the mounted state directory"
