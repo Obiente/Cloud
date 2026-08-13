@@ -215,8 +215,10 @@ MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
   --no-activate \
   >/dev/null
 
-grep -q -- "goacme/lego:v5.2.1.* run --force-cert-domains" "$mock_docker_args" || fail "lego run command/options were ordered incorrectly"
+grep -q -- "goacme/lego:v5.2.1 --log.format text run --path /var/lib/lego.*--force-cert-domains" "$mock_docker_args" || fail "lego v5 run command/options were ordered incorrectly"
 grep -q -- "--env-file $mock_credentials goacme/lego:v5.2.1" "$mock_docker_args" || fail "provider credentials were not passed as a Docker run option"
+grep -q -- "--mount type=bind,src=$mock_state,dst=/var/lib/lego" "$mock_docker_args" || fail "lego state was not mounted away from the /lego executable"
+grep -q -- "--path /var/lib/lego" "$mock_docker_args" || fail "lego did not use the mounted state directory"
 
 selected_certificate_secret="$(sed -n 's/^PREVIEW_TLS_CERT_SECRET=//p' "$mock_env")"
 selected_key_secret="$(sed -n 's/^PREVIEW_TLS_KEY_SECRET=//p' "$mock_env")"
@@ -239,7 +241,7 @@ MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
   >/dev/null
 
 assert_equals "$secret_count_before" "$(find "$mock_secrets" -type f | wc -l)" "unchanged renewal created duplicate secrets"
-grep -q -- "goacme/lego:v5.2.1.* renew --days " "$mock_docker_args" || fail "scheduled renewal did not use lego renew with its threshold"
+grep -q -- "goacme/lego:v5.2.1 --log.format text run .*--renew-days 30" "$mock_docker_args" || fail "scheduled renewal did not use the lego v5 renewal threshold"
 
 issue_only_state="${TEST_DIR}/issue-only-state"
 issue_only_secrets="${TEST_DIR}/issue-only-secrets"
@@ -262,7 +264,7 @@ MOCK_DOCKER_ARGS_FILE="$mock_docker_args" \
   >/dev/null
 assert_equals "0" "$(find "$issue_only_secrets" -type f | wc -l)" "issue-only mode created Swarm secrets"
 assert_equals $'DOMAIN=obiente.cloud\nENABLE_DNS=false' "$(cat "$issue_only_env")" "issue-only mode changed the environment file"
-grep -q -- 'goacme/lego:v5.2.1.* run --force-cert-domains' "$mock_docker_args" || fail "issue-only mode did not force a fresh DNS challenge"
+grep -q -- 'goacme/lego:v5.2.1 --log.format text run .*--force-cert-domains.*--renew-force' "$mock_docker_args" || fail "issue-only mode did not force a fresh DNS challenge"
 
 assert_fails "staging activation was accepted" env \
   PATH="${mock_bin}:${PATH}" \

@@ -11,6 +11,7 @@ readonly DEFAULT_STATE_DIR="/var/lib/obiente/preview-tls"
 readonly DEFAULT_RENEW_DAYS="30"
 readonly DEFAULT_STACK_NAME="obiente"
 readonly CERTIFICATE_NAME="preview-wildcard"
+readonly LEGO_CONTAINER_STATE_DIR="/var/lib/lego"
 
 log() {
   printf '%s\n' "$*"
@@ -487,17 +488,13 @@ run_lego() {
   local ca_server="$8"
   local force_renewal="$9"
   local lego_command="${10}"
-  local effective_renew_days="$renew_days"
   local -a lego_args=()
   local -a security_args=(--security-opt no-new-privileges:true)
 
-  if [ "$force_renewal" = "true" ]; then
-    effective_renew_days=36500
-  fi
-
   lego_args=(
     --log.format text
-    --path /lego
+    run
+    --path "$LEGO_CONTAINER_STATE_DIR"
     --cert.name "$CERTIFICATE_NAME"
     --email "$email"
     --accept-tos
@@ -506,11 +503,13 @@ run_lego() {
     --domains "*.$domain"
   )
   [ -z "$ca_server" ] || lego_args+=(--server "$ca_server")
-  lego_args+=("$lego_command")
   if [ "$lego_command" = "renew" ]; then
-    lego_args+=(--days "$effective_renew_days")
+    lego_args+=(--renew-days "$renew_days")
   else
     lego_args+=(--force-cert-domains)
+  fi
+  if [ "$force_renewal" = "true" ]; then
+    lego_args+=(--renew-force)
   fi
 
   if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null || true)" != "Disabled" ]; then
@@ -524,7 +523,7 @@ run_lego() {
     --tmpfs /tmp:rw,noexec,nosuid,size=16m \
     --cap-drop ALL \
     "${security_args[@]}" \
-    --mount "type=bind,src=${state_dir},dst=/lego" \
+    --mount "type=bind,src=${state_dir},dst=${LEGO_CONTAINER_STATE_DIR}" \
     --env-file "$credentials_file" \
     "$image" "${lego_args[@]}"
 }
