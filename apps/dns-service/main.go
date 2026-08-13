@@ -1281,7 +1281,7 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 		Scan(&databaseRows).Error; err != nil {
 		log.Printf("[DNS Pusher] Failed to query databases: %v", err)
 	} else {
-		records = append(records, collectDatabaseDNSRecords(databaseRows, nodeIPMap, ttl)...)
+		records = append(records, collectDatabaseDNSRecords(databaseRows, nodeIPMap, ttl, database.GetDatabaseNodeIP)...)
 	}
 
 	// Get all running game servers
@@ -1488,10 +1488,15 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 	}
 }
 
-func collectDatabaseDNSRecords(rows []databaseDNSRow, nodeIPMap map[string][]string, ttl int64) []map[string]interface{} {
+func collectDatabaseDNSRecords(
+	rows []databaseDNSRow,
+	nodeIPMap map[string][]string,
+	ttl int64,
+	resolveNodeIPs func(string, map[string][]string) ([]string, error),
+) []map[string]interface{} {
 	records := make([]map[string]interface{}, 0, len(rows)*2)
 	for _, row := range rows {
-		ips, err := database.GetDatabaseNodeIP(row.DatabaseID, nodeIPMap)
+		ips, err := resolveNodeIPs(row.DatabaseID, nodeIPMap)
 		if err != nil {
 			log.Printf("[DNS Pusher] Skipping database %s because its host node could not be resolved: %v", row.DatabaseID, err)
 			continue

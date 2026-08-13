@@ -1,14 +1,11 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/miekg/dns"
-	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestNormalizePreviewACMEChallengeCNAME(t *testing.T) {
@@ -43,38 +40,17 @@ func TestNormalizePreviewACMEChallengeCNAME(t *testing.T) {
 }
 
 func TestCollectDatabaseDNSRecordsSkipsUnresolvedOwner(t *testing.T) {
-	previousDB := database.DB
-	db, err := gorm.Open(sqlite.Open("file:dns-pusher-owner-test?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("open test database: %v", err)
-	}
-	database.DB = db
-	t.Cleanup(func() { database.DB = previousDB })
-	if err := db.AutoMigrate(&database.DatabaseInstance{}, &database.DatabaseLocation{}, &database.NodeMetadata{}); err != nil {
-		t.Fatalf("migrate test database: %v", err)
-	}
-
 	databaseID := "db-dns-pusher-owner-test"
-	containerID := "container-dns-pusher-owner-test"
-	if err := db.Create(&database.DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
-		t.Fatalf("create database instance: %v", err)
-	}
-	if err := db.Create(&database.DatabaseLocation{
-		ID:          database.DatabaseLocationID(databaseID, containerID),
-		DatabaseID:  databaseID,
-		NodeID:      "missing-owner-node",
-		NodeIP:      "203.0.113.55",
-		ContainerID: containerID,
-		Status:      "running",
-		UpdatedAt:   time.Now(),
-	}).Error; err != nil {
-		t.Fatalf("create database location: %v", err)
-	}
-
 	records := collectDatabaseDNSRecords(
 		[]databaseDNSRow{{DatabaseID: databaseID}},
 		map[string][]string{"default": {"192.0.2.10"}},
 		60,
+		func(gotDatabaseID string, _ map[string][]string) ([]string, error) {
+			if gotDatabaseID != databaseID {
+				t.Fatalf("resolver database ID = %q, want %q", gotDatabaseID, databaseID)
+			}
+			return nil, errors.New("synthetic unresolved owner")
+		},
 	)
 	if len(records) != 0 {
 		t.Fatalf("expected unresolved database owner to be omitted, got %#v", records)
