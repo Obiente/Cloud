@@ -73,6 +73,31 @@ func (r *RouteRegistry) SetLocalRoutesOnly(localOnly bool) {
 	r.localOnly = localOnly
 }
 
+func (r *RouteRegistry) StartDatabaseSync(ctx context.Context, interval time.Duration) <-chan struct{} {
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				syncCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				if err := r.LoadFromDatabase(syncCtx); err != nil {
+					logger.Warn("Failed to refresh database routes: %v", err)
+				}
+				cancel()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return done
+}
+
 // NewRouteRegistry creates a new route registry
 func NewRouteRegistry(dockerClient *docker.Client) *RouteRegistry {
 	return &RouteRegistry{
@@ -464,9 +489,7 @@ func reconcileStoppedDatabase(ctx context.Context, instance *database.DatabaseIn
 	if instance == nil {
 		return nil
 	}
-	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
-		Where("id = ?", instance.ID).
-		Update("status", 5).Error; err != nil {
+	if err := database.UpdateDatabaseInstanceStatus(ctx, instance.ID, 5); err != nil {
 		return fmt.Errorf("update database instance status: %w", err)
 	}
 	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "stopped"); err != nil {
@@ -479,9 +502,7 @@ func reconcileRunningDatabase(ctx context.Context, instance *database.DatabaseIn
 	if instance == nil {
 		return nil
 	}
-	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
-		Where("id = ?", instance.ID).
-		Update("status", 3).Error; err != nil {
+	if err := database.UpdateDatabaseInstanceStatus(ctx, instance.ID, 3); err != nil {
 		return fmt.Errorf("update database instance status: %w", err)
 	}
 	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "running"); err != nil {

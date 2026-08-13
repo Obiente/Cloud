@@ -152,6 +152,20 @@ func (r *DatabaseRepository) Update(ctx context.Context, database *DatabaseInsta
 	return nil
 }
 
+func UpdateDatabaseInstanceStatus(ctx context.Context, databaseID string, status int32) error {
+	if err := DB.WithContext(ctx).Model(&DatabaseInstance{}).
+		Where("id = ?", databaseID).
+		Update("status", status).Error; err != nil {
+		return err
+	}
+	if RedisClient != nil {
+		if err := RedisClient.Delete(ctx, fmt.Sprintf("database:%s", databaseID)); err != nil {
+			return fmt.Errorf("invalidate database instance cache: %w", err)
+		}
+	}
+	return nil
+}
+
 func (r *DatabaseRepository) Delete(ctx context.Context, id string) error {
 	// Soft delete
 	now := time.Now()

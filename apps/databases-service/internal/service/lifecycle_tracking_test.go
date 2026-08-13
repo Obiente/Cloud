@@ -79,6 +79,22 @@ func TestPersistDatabaseConnectionIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestFailedUnpublishedDatabaseRetainsOwnerUntilContainerRemoval(t *testing.T) {
+	containerID := "container-cleanup-retry-test"
+	nodeID := "node-cleanup-retry-test"
+	instance := &database.DatabaseInstance{InstanceID: &containerID, NodeID: &nodeID, Status: 3}
+
+	markUnpublishedDatabaseFailed(instance, false)
+	if instance.Status != 8 || instance.InstanceID == nil || *instance.InstanceID != containerID || instance.NodeID == nil || *instance.NodeID != nodeID {
+		t.Fatalf("failed cleanup lost recovery metadata: %#v", instance)
+	}
+
+	markUnpublishedDatabaseFailed(instance, true)
+	if instance.InstanceID != nil || instance.NodeID != nil {
+		t.Fatalf("successful cleanup retained obsolete ownership metadata: %#v", instance)
+	}
+}
+
 func TestRestoreDatabaseAfterFailedStopKeepsTrackingActive(t *testing.T) {
 	previousDB := database.DB
 	db, err := gorm.Open(sqlite.Open("file:failed-stop-tracking-test?mode=memory&cache=shared"), &gorm.Config{})
@@ -169,7 +185,7 @@ func TestRestoreContainerAfterAutoSleepFailureRestartsRunningRoute(t *testing.T)
 			return nil
 		},
 	}
-	if err := service.restoreContainerAfterAutoSleepFailure(route); err != nil {
+	if err := service.restoreContainerAfterSleepingWriteFailure(route); err != nil {
 		t.Fatalf("restore stopped database container: %v", err)
 	}
 	if startedContainerID != route.ContainerID {
@@ -201,7 +217,7 @@ func TestRestoreContainerAfterAutoSleepFailureRetainsSleepingRouteWhenRestartFai
 			return errors.New("restart failed")
 		},
 	}
-	if err := service.restoreContainerAfterAutoSleepFailure(route); err == nil {
+	if err := service.restoreContainerAfterSleepingWriteFailure(route); err == nil {
 		t.Fatal("expected the failed container restart to be reported")
 	}
 	storedRoute, ok := registry.LookupByID(route.DatabaseID)

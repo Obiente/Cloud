@@ -183,14 +183,7 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 	}
 	dbInstance.Status = 12 // SLEEPING
 	if err := s.persistDatabaseInstance(ctx, dbInstance); err != nil {
-		persistErr := err
-		dbInstance.Status = 3 // The durable status is still RUNNING when every write failed.
-		if restoreErr := s.restoreContainerAfterAutoSleepFailure(route); restoreErr != nil {
-			updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
-			return fmt.Errorf("persist sleeping database status: %v; restore stopped database container: %w", persistErr, restoreErr)
-		}
-		updateDatabaseLocationStatus(ctx, route.DatabaseID, "running")
-		return fmt.Errorf("persist sleeping database status; restored database container to match durable RUNNING state: %w", persistErr)
+		return s.recoverAfterSleepingWriteFailure(dbInstance, route, err)
 	}
 	updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
 
@@ -223,7 +216,50 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 	return nil
 }
 
-func (s *Service) restoreContainerAfterAutoSleepFailure(route *proxy.Route) error {
+func (s *Service) recoverAfterSleepingWriteFailure(instance *database.DatabaseInstance, route *proxy.Route, persistErr error) error {
+	if route == nil {
+		return fmt.Errorf("persist sleeping database status: %w", persistErr)
+	}
+	rollbackCtx, rollbackCancel := s.detachedContext(30 * time.Second)
+	defer rollbackCancel()
+	if instance != nil {
+		instance.Status = 3 // The durable state remains RUNNING until SLEEPING commits.
+	}
+	if restoreErr := s.restoreContainerAfterSleepingWriteFailure(route); restoreErr != nil {
+		if instance != nil {
+			s.retrySleepingIntent(instance, route)
+		}
+		updateDatabaseLocationStatus(rollbackCtx, route.DatabaseID, "sleeping")
+		return fmt.Errorf("persist sleeping database status: %v; restore stopped database container: %w", persistErr, restoreErr)
+	}
+	updateDatabaseLocationStatus(rollbackCtx, route.DatabaseID, "running")
+	return fmt.Errorf("persist sleeping database status; restored database container to match durable RUNNING state: %w", persistErr)
+}
+
+func (s *Service) retrySleepingIntent(instance *database.DatabaseInstance, route *proxy.Route) {
+	if s == nil || s.repo == nil || instance == nil {
+		return
+	}
+	retryInstance := *instance
+	retryInstance.Status = 12
+	go func() {
+		retryCtx, cancel := s.detachedContext(2 * time.Minute)
+		defer cancel()
+		err := retryDatabaseWrite(retryCtx, 24, 5*time.Second, func() error {
+			return s.repo.Update(retryCtx, &retryInstance)
+		})
+		if err != nil {
+			logger.Error("Failed to retain sleeping intent for database %s: %v", retryInstance.ID, err)
+			return
+		}
+		updateDatabaseLocationStatus(retryCtx, retryInstance.ID, "sleeping")
+		if s.routeRegistry != nil && route != nil {
+			s.routeRegistry.MarkStopped(retryInstance.ID, 12)
+		}
+	}()
+}
+
+func (s *Service) restoreContainerAfterSleepingWriteFailure(route *proxy.Route) error {
 	if s == nil || route == nil || route.ContainerID == "" || s.startStoppedDB == nil {
 		if s != nil && s.routeRegistry != nil && route != nil {
 			s.routeRegistry.MarkStopped(route.DatabaseID, 12)

@@ -59,6 +59,54 @@ func TestLoadFromDatabasePreservesAndBackfillsRedisProxyPorts(t *testing.T) {
 	}
 }
 
+func TestControlPlaneDatabaseSyncRefreshesRoutes(t *testing.T) {
+	previousDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:control-plane-route-sync?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+	if err := db.AutoMigrate(&database.DatabaseInstance{}, &database.DatabaseConnection{}); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+
+	registry := NewRouteRegistry(nil)
+	syncCtx, cancel := context.WithCancel(t.Context())
+	done := registry.StartDatabaseSync(syncCtx, 5*time.Millisecond)
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("control-plane route sync did not stop")
+		}
+	})
+
+	instance := &database.DatabaseInstance{ID: "db-control-plane-sync-test", Type: 1, Status: 12}
+	if err := db.Create(instance).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := db.Create(&database.DatabaseConnection{
+		ID:         "conn-control-plane-sync-test",
+		DatabaseID: instance.ID,
+		Username:   "test-user",
+		Password:   "test-secret",
+		Port:       5432,
+	}).Error; err != nil {
+		t.Fatalf("create database connection: %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if route, ok := registry.LookupByID(instance.ID); ok && route.Stopped && route.DBStatus == 12 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("control-plane route registry did not refresh")
+}
+
 func TestDatabaseLocationStatus(t *testing.T) {
 	tests := map[int32]string{
 		0:  "created",

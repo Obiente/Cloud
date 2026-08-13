@@ -385,19 +385,33 @@ func (s *Service) failUnpublishedDatabase(ctx context.Context, instance *databas
 	if redisPort > 0 && s.routeRegistry != nil {
 		s.routeRegistry.ReleaseRedisPort(int(redisPort))
 	}
+	containerRemoved := containerID == ""
 	if s.provisioner != nil && containerID != "" {
-		if err := s.provisioner.DeprovisionDatabase(ctx, containerID); err != nil {
+		cleanupCtx, cleanupCancel := s.detachedContext(2 * time.Minute)
+		if err := s.provisioner.DeprovisionDatabase(cleanupCtx, containerID); err != nil {
 			logger.Error("Failed to remove unpublished database container %s: %v", containerID, err)
+		} else {
+			containerRemoved = true
 		}
+		cleanupCancel()
 	}
 	if instance == nil {
 		return
 	}
-	instance.Status = 8 // FAILED
-	instance.InstanceID = nil
-	instance.NodeID = nil
+	markUnpublishedDatabaseFailed(instance, containerRemoved)
 	if err := s.persistDatabaseInstance(ctx, instance); err != nil {
 		logger.Error("Failed to persist failed database provisioning state: %v", err)
+	}
+}
+
+func markUnpublishedDatabaseFailed(instance *database.DatabaseInstance, containerRemoved bool) {
+	if instance == nil {
+		return
+	}
+	instance.Status = 8 // FAILED
+	if containerRemoved {
+		instance.InstanceID = nil
+		instance.NodeID = nil
 	}
 }
 

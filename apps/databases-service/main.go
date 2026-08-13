@@ -142,6 +142,9 @@ func main() {
 			}
 		}()
 		logger.Info("✓ Database proxy starting")
+	} else if mode.controlPlane {
+		routeRegistry.StartDatabaseSync(shutdownCtx, 10*time.Second)
+		logger.Info("✓ Database control-plane route refresh started")
 	}
 
 	// Health check endpoint

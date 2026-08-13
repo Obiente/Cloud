@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"databases-service/internal/proxy"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -242,11 +244,9 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
-	// Update status to STOPPING temporarily
+	// Report STOPPING to the caller, but retain durable RUNNING until Docker has
+	// stopped and the wakeable SLEEPING transition can be committed.
 	dbInstance.Status = 4 // STOPPING
-	if err := s.repo.Update(ctx, dbInstance); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to sleep database: %w", err))
-	}
 	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
@@ -265,7 +265,10 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		// Update status to SLEEPING (not STOPPED)
 		dbInstance.Status = 12 // SLEEPING
 		if err := s.persistDatabaseInstance(sleepCtx, dbInstance); err != nil {
-			logger.Error("Failed to persist sleeping database status: %v", err)
+			logger.Error("Failed to persist sleeping database status: %v", s.recoverAfterSleepingWriteFailure(dbInstance, &proxy.Route{
+				DatabaseID:  dbInstance.ID,
+				ContainerID: valueOrEmpty(dbInstance.InstanceID),
+			}, err))
 			return
 		}
 		updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
@@ -282,6 +285,13 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		Database: protoDB,
 	})
 	return res, nil
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (s *Service) restoreDatabaseAfterFailedStop(ctx context.Context, dbInstance *database.DatabaseInstance) {
