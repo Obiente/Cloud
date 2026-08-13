@@ -8,6 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=scripts/lib/database-owner.sh
+source "${SCRIPT_DIR}/lib/database-owner.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -62,6 +64,11 @@ echo ""
 
 # Redeploy main stack
 echo -e "${BLUE}🚀 Redeploying main stack '${STACK_NAME}'...${NC}"
+
+# Preserve the Docker node that owns existing standalone database containers.
+if database_owner_required "$COMPOSE_FILE"; then
+  ensure_database_owner_label "$STACK_NAME"
+fi
 
 # Merge docker-compose.base.yml with the compose file
 # YAML anchors don't work across files, so we merge them first

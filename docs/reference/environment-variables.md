@@ -1492,7 +1492,7 @@ docker compose up
 
 ```bash
 # Load from .env file
-docker stack deploy --env-file .env -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ## Security Best Practices

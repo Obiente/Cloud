@@ -213,7 +213,9 @@ echo "🚀 Deploying main stack '$STACK_NAME'..."
 
 # Preserve the Docker node that owns existing standalone database containers.
 # Fresh installations use the already designated PostgreSQL node.
-ensure_database_owner_label "$STACK_NAME"
+if database_owner_required "$COMPOSE_FILE"; then
+  ensure_database_owner_label "$STACK_NAME"
+fi
 
 # Note: We let Docker Swarm create the network automatically from the compose file
 # Pre-creating it manually causes conflicts. Docker Swarm will create it before services.

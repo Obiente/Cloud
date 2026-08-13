@@ -24,6 +24,13 @@ mock_bin="${TEST_DIR}/bin"
 mock_log="${TEST_DIR}/docker.log"
 mkdir -p "$mock_bin"
 
+printf 'services:\n  databases-service:\n' > "${TEST_DIR}/with-databases.yml"
+printf 'services:\n  api-gateway:\n' > "${TEST_DIR}/without-databases.yml"
+database_owner_required "${TEST_DIR}/with-databases.yml" || fail "database service was not detected"
+if database_owner_required "${TEST_DIR}/without-databases.yml"; then
+  fail "database owner was required for an unrelated stack"
+fi
+
 cat > "${mock_bin}/docker" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -73,5 +80,12 @@ if PATH="${mock_bin}:${PATH}" \
   ensure_database_owner_label "test-stack"; then
   fail "multiple database owners were accepted"
 fi
+
+for deploy_script in deploy-swarm.sh force-deploy.sh; do
+  grep -Fq "source \"\${SCRIPT_DIR}/lib/database-owner.sh\"" "${TEST_SCRIPT_DIR}/${deploy_script}" ||
+    fail "${deploy_script} does not load the database owner helper"
+  grep -Fq "ensure_database_owner_label \"\$STACK_NAME\"" "${TEST_SCRIPT_DIR}/${deploy_script}" ||
+    fail "${deploy_script} does not bootstrap the database owner"
+done
 
 printf 'database owner deployment helper tests passed\n'

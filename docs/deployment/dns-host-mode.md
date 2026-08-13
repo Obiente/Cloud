@@ -71,7 +71,7 @@ DNS_REPLICAS=2  # Run DNS on 2 nodes (both must have dns.enabled=true label)
 ### 4. Deploy the Stack
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ## Verification
@@ -144,4 +144,3 @@ dig @<dns-node-ip> deploy-123.my.obiente.cloud
    ```bash
    docker run --rm --network obiente_obiente-network alpine nslookup deploy-123.my.obiente.cloud
    ```
-

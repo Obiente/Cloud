@@ -4,8 +4,9 @@
 
 
 
-# This file requires docker-compose.base.yml to be merged before use
-# Usage: cat docker-compose.base.yml docker-compose.swarm.yml | docker stack deploy -c - obiente
+# This file requires docker-compose.base.yml to be merged before use.
+# Use scripts/deploy-swarm.sh so required node ownership labels are preserved.
+# Usage: ./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 
 # Swarm-specific common environment variables
 # Override ENABLE_SWARM to default to true for Swarm deployments

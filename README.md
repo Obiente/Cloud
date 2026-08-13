@@ -106,7 +106,7 @@ docker swarm init
 # Or build manually, then deploy:
 export DOCKER_BUILDKIT=1
 docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 
 # For multi-node deployments, push images to a registry or use docker save/load
 # docker tag obiente/cloud-api:latest your-registry/obiente/cloud-api:latest

@@ -48,13 +48,13 @@ If you prefer to deploy manually:
 export $(cat .env | grep -v '^#' | xargs)
 
 # Deploy the stack
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 Or use a one-liner:
 
 ```bash
-set -a && source .env && set +a && docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ## Environment Variable Loading
@@ -160,4 +160,3 @@ For multi-line values, use quotes:
 ```bash
 NODE_IPS="region1:ip1,ip2;region2:ip3,ip4"
 ```
-

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+database_owner_required() {
+  grep -q '^  databases-service:' "$1"
+}
+
 ensure_database_owner_label() {
   local stack_name="$1"
   local control_service="${stack_name}_databases-service"

@@ -59,7 +59,7 @@ For production environments:
 docker swarm init
 
 # Deploy the stack
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 
 # Check status
 docker service ls

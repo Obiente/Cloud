@@ -564,7 +564,7 @@ export GATEWAY_DHCP_INTERFACE=eth0  # Interface inside container (connected to O
 2. **Deploy Service**:
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 **Note**: For production, the gateway container should be deployed with `network_mode: host` or have direct access to the SDN bridge. You may need to deploy the service directly on the gateway container rather than in the Swarm cluster.

@@ -122,7 +122,7 @@ func main() {
 	routeRegistry := databaseService.GetRouteRegistry()
 
 	proxyErr := make(chan error, 1)
-	if mode.proxy {
+	if mode.controlPlane || mode.proxy {
 		loadCtx, loadCancel := context.WithTimeout(shutdownCtx, 30*time.Second)
 		if err := routeRegistry.LoadFromDatabase(loadCtx); err != nil {
 			logger.Warn("Failed to load routes from database: %v", err)
@@ -130,7 +130,9 @@ func main() {
 			logger.Info("✓ Routes loaded from database (%d routes)", routeRegistry.RouteCount())
 		}
 		loadCancel()
+	}
 
+	if mode.proxy {
 		// Start proxy in background
 		go func() {
 			if err := proxyServer.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {

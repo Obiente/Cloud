@@ -11,6 +11,7 @@
         "{workspaceRoot}/docker-compose*.yml",
         "{workspaceRoot}/scripts/merge-compose-files.sh",
         "{workspaceRoot}/scripts/deploy-swarm.sh",
+        "{workspaceRoot}/scripts/force-deploy.sh",
         "{workspaceRoot}/scripts/lib/database-owner.sh",
         "{workspaceRoot}/scripts/tests/database-owner-test.sh"
       ],
@@ -18,7 +19,8 @@
         "cwd": "{workspaceRoot}",
         "commands": [
           "bash tools/deployment-preflight/validate-compose.sh all",
-          "shellcheck scripts/deploy-swarm.sh scripts/lib/database-owner.sh scripts/tests/database-owner-test.sh",
+          "bash -n scripts/deploy-swarm.sh scripts/force-deploy.sh",
+          "shellcheck scripts/lib/database-owner.sh scripts/tests/database-owner-test.sh",
           "bash scripts/tests/database-owner-test.sh"
         ],
         "parallel": false

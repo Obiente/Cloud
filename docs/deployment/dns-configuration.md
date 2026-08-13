@@ -51,7 +51,7 @@ Edit your `docker-compose.swarm.yml` or `docker-compose.swarm.ha.yml`:
 ### Step 3: Deploy
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ## Common Configurations
@@ -212,4 +212,3 @@ sudo ss -tulpn | grep :53
 - In Docker Swarm, port 53 must be available on each node where DNS runs
 - DNS queries are load-balanced across all running DNS instances
 - DNS caches responses for 60 seconds to reduce database load
-
