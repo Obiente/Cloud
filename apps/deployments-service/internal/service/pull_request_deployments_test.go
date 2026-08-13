@@ -715,6 +715,119 @@ func TestPullRequestReportRetryBackoffIsBounded(t *testing.T) {
 	}
 }
 
+func TestMergedPullRequestCleanupCompletesGitHubCheckSuccessfully(t *testing.T) {
+	running := int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)
+	record := &database.PullRequestDeployment{
+		Merged:           true,
+		Status:           int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+		ClosedFromStatus: &running,
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Status != "completed" || check.Conclusion != "success" {
+		t.Fatalf("merged cleanup check = %s/%s, want completed/success", check.Status, check.Conclusion)
+	}
+	if check.Title != "Preview cleanup complete" || !strings.Contains(check.Summary, "merged") {
+		t.Fatalf("merged cleanup output = %q / %q", check.Title, check.Summary)
+	}
+}
+
+func TestMergedPullRequestCleanupPreservesUnsuccessfulGitHubChecks(t *testing.T) {
+	tests := []struct {
+		name       string
+		prior      deploymentsv1.PullRequestDeploymentStatus
+		conclusion string
+		title      string
+		summary    string
+	}{
+		{name: "failed", prior: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED, conclusion: "failure", title: "Preview failed"},
+		{name: "rejected", prior: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED, conclusion: "failure", title: "Preview rejected"},
+		{name: "waiting approval", prior: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL, conclusion: "action_required", title: "Maintainer approval required"},
+		{name: "skipped", prior: deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED, conclusion: "skipped", title: "Preview not deployed", summary: "No changed files match this preview scope."},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prior := int32(test.prior)
+			priorError := test.summary
+			record := &database.PullRequestDeployment{
+				Merged:           true,
+				Status:           int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+				ClosedFromStatus: &prior,
+				ClosedFromError:  &priorError,
+			}
+			check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+			if check.Status != "completed" || check.Conclusion != test.conclusion || check.Title != test.title {
+				t.Fatalf("merged cleanup check = %s/%s/%q, want completed/%s/%q", check.Status, check.Conclusion, check.Title, test.conclusion, test.title)
+			}
+			if test.summary != "" && check.Summary != test.summary {
+				t.Fatalf("merged cleanup summary = %q, want %q", check.Summary, test.summary)
+			}
+		})
+	}
+}
+
+func TestPullRequestCleanupRecordsAndPreservesPreviousStatus(t *testing.T) {
+	priorError := "No changed files match this preview scope."
+	record := &database.PullRequestDeployment{
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED),
+		Error:  &priorError,
+	}
+	closedAt := time.Now()
+	closePullRequestDeploymentRecord(record, "Pull request closed.", closedAt)
+	if record.ClosedFromStatus == nil || *record.ClosedFromStatus != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED) {
+		t.Fatalf("closed from status = %v, want skipped", record.ClosedFromStatus)
+	}
+	if record.ClosedFromError == nil || *record.ClosedFromError != priorError {
+		t.Fatalf("closed from error = %v, want %q", record.ClosedFromError, priorError)
+	}
+	if record.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED) || record.ClosedAt == nil || !record.ClosedAt.Equal(closedAt) {
+		t.Fatalf("closed record = status %d at %v", record.Status, record.ClosedAt)
+	}
+
+	closePullRequestDeploymentRecord(record, "Cleanup retried.", closedAt.Add(time.Minute))
+	if *record.ClosedFromStatus != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED) {
+		t.Fatalf("cleanup retry replaced prior status with %d", *record.ClosedFromStatus)
+	}
+	if record.ClosedFromError == nil || *record.ClosedFromError != priorError {
+		t.Fatalf("cleanup retry replaced prior error with %v", record.ClosedFromError)
+	}
+}
+
+func TestUnmergedPullRequestCleanupRemainsCancelled(t *testing.T) {
+	running := int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING)
+	record := &database.PullRequestDeployment{
+		Status:           int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+		ClosedFromStatus: &running,
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Status != "completed" || check.Conclusion != "cancelled" {
+		t.Fatalf("unmerged cleanup check = %s/%s, want completed/cancelled", check.Status, check.Conclusion)
+	}
+}
+
+func TestMergedPullRequestCleanupWithoutRecordedPriorStatusRemainsCancelled(t *testing.T) {
+	record := &database.PullRequestDeployment{
+		Merged: true,
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Status != "completed" || check.Conclusion != "cancelled" {
+		t.Fatalf("legacy merged cleanup check = %s/%s, want completed/cancelled", check.Status, check.Conclusion)
+	}
+}
+
+func TestSkippedCleanupWithoutRecordedReasonUsesGenericSummary(t *testing.T) {
+	skipped := int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED)
+	record := &database.PullRequestDeployment{
+		Merged:           true,
+		Status:           int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+		ClosedFromStatus: &skipped,
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Conclusion != "skipped" || check.Summary != "The preview was not deployed." {
+		t.Fatalf("legacy skipped cleanup check = %s/%q", check.Conclusion, check.Summary)
+	}
+}
+
 func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
 	typeOfConfig := reflect.TypeOf(database.PullRequestDeploymentConfig{})
 	for _, name := range []string{"RedeployOnPush", "CleanupOnClose", "CommentEnabled", "DeploymentStatusEnabled", "CheckRunEnabled"} {
