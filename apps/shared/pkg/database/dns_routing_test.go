@@ -147,6 +147,77 @@ func TestGetDatabaseNodeIPRejectsDefaultFallbackForActiveLocation(t *testing.T) 
 	}
 }
 
+func TestGetDatabaseNodeIPAllowsSingleDefaultAddressForSoleNode(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-single-node-default-test"
+	containerID := "container-single-node-default"
+	nodeID := "node-single-owner"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: "single-owner", IP: "203.0.113.55"}).Error; err != nil {
+		t.Fatalf("create node metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:           DatabaseLocationID(databaseID, containerID),
+		DatabaseID:   databaseID,
+		NodeID:       nodeID,
+		NodeHostname: "single-owner",
+		NodeIP:       "203.0.113.55",
+		ContainerID:  containerID,
+		Status:       "running",
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, map[string][]string{"default": {"192.0.2.10"}})
+	if err != nil {
+		t.Fatalf("resolve sole database owner from simple NODE_IPS mapping: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestGetDatabaseNodeIPRejectsDefaultAddressWithMultipleNodes(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-multiple-node-default-test"
+	containerID := "container-multiple-node-default"
+	nodeID := "node-owner-a"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	for _, node := range []NodeMetadata{
+		{ID: nodeID, Hostname: "owner-a", IP: "203.0.113.55"},
+		{ID: "node-owner-b", Hostname: "owner-b", IP: "203.0.113.56"},
+	} {
+		if err := DB.Create(&node).Error; err != nil {
+			t.Fatalf("create node metadata: %v", err)
+		}
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:           DatabaseLocationID(databaseID, containerID),
+		DatabaseID:   databaseID,
+		NodeID:       nodeID,
+		NodeHostname: "owner-a",
+		NodeIP:       "203.0.113.55",
+		ContainerID:  containerID,
+		Status:       "running",
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, map[string][]string{"default": {"192.0.2.10"}})
+	if err == nil {
+		t.Fatal("expected simple NODE_IPS mapping to remain ambiguous with multiple nodes")
+	}
+	if !strings.Contains(err.Error(), "authoritative DNS fallback is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGetDatabaseNodeIPRejectsAmbiguousRegionFallback(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 

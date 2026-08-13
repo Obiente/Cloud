@@ -134,6 +134,11 @@ func resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[s
 
 	if nodeRegion == "" {
 		if !allowCompatibilityFallback {
+			if ips, found, err := soleNodeDefaultIPs(node, nodeIPMap); err != nil {
+				return nil, err
+			} else if found {
+				return ips, nil
+			}
 			return nil, fmt.Errorf("node %s has no configured IP or region and authoritative DNS fallback is disabled", nodeID)
 		}
 		// If node has no region, only use an unambiguous compatibility fallback.
@@ -158,6 +163,33 @@ func resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[s
 	}
 
 	return ips, nil
+}
+
+func soleNodeDefaultIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
+	defaultIPs := cleanNodeIPs(nodeIPMap["default"])
+	if len(defaultIPs) != 1 {
+		return nil, false, nil
+	}
+
+	nonEmptyMappings := 0
+	for _, rawIPs := range nodeIPMap {
+		if len(cleanNodeIPs(rawIPs)) > 0 {
+			nonEmptyMappings++
+		}
+	}
+	if nonEmptyMappings != 1 {
+		return nil, false, nil
+	}
+
+	var nodeCount int64
+	if err := DB.Model(&NodeMetadata{}).Count(&nodeCount).Error; err != nil {
+		return nil, false, fmt.Errorf("failed to determine whether node %s is the sole configured node: %w", node.ID, err)
+	}
+	if nodeCount != 1 {
+		return nil, false, nil
+	}
+
+	return defaultIPs, true, nil
 }
 
 func nodeSpecificIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
