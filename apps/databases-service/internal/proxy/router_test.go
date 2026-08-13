@@ -2,9 +2,12 @@ package proxy
 
 import (
 	"testing"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestDatabaseLocationStatus(t *testing.T) {
@@ -28,6 +31,90 @@ func TestDatabaseLocationStatus(t *testing.T) {
 		if got := databaseLocationStatus(status); got != want {
 			t.Errorf("databaseLocationStatus(%d) = %q, want %q", status, got, want)
 		}
+	}
+}
+
+func TestDatabaseUptimeNeedsRepairOnlyForMissingLocalInterval(t *testing.T) {
+	if databaseUptimeNeedsRepair(3, true, false, true) {
+		t.Fatal("healthy open interval unexpectedly needs repair")
+	}
+	if databaseUptimeNeedsRepair(3, false, false, false) {
+		t.Fatal("remote database unexpectedly needs local interval repair")
+	}
+	if databaseUptimeNeedsRepair(3, true, true, false) {
+		t.Fatal("location upsert already repaired the missing interval")
+	}
+	if !databaseUptimeNeedsRepair(3, true, false, false) {
+		t.Fatal("missing local running interval did not request repair")
+	}
+}
+
+func TestReconcileStoppedDatabaseClosesTracking(t *testing.T) {
+	previousDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:proxy-stopped-reconciliation?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+	if err := db.AutoMigrate(
+		&database.DatabaseInstance{},
+		&database.DatabaseLocation{},
+		&database.DatabaseUptimeInterval{},
+	); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+
+	databaseID := "db-external-stop-test"
+	containerID := "container-external-stop-test"
+	instance := &database.DatabaseInstance{ID: databaseID, InstanceID: &containerID, Status: 3}
+	if err := db.Create(instance).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := db.Create(&database.DatabaseLocation{
+		ID:          database.DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-external-stop-test",
+		ContainerID: containerID,
+		Status:      "running",
+	}).Error; err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+	if err := db.Create(&database.DatabaseUptimeInterval{
+		ID:          "interval-external-stop-test",
+		DatabaseID:  databaseID,
+		ContainerID: containerID,
+		NodeID:      "node-external-stop-test",
+		StartedAt:   time.Now().Add(-time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("create uptime interval: %v", err)
+	}
+
+	if err := reconcileStoppedDatabase(t.Context(), instance); err != nil {
+		t.Fatalf("reconcile stopped database: %v", err)
+	}
+	var storedInstance database.DatabaseInstance
+	if err := db.First(&storedInstance, "id = ?", databaseID).Error; err != nil {
+		t.Fatalf("load database instance: %v", err)
+	}
+	if storedInstance.Status != 5 {
+		t.Fatalf("database status = %d, want stopped", storedInstance.Status)
+	}
+	var storedLocation database.DatabaseLocation
+	if err := db.First(&storedLocation, "container_id = ?", containerID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if storedLocation.Status != "stopped" {
+		t.Fatalf("location status = %q, want stopped", storedLocation.Status)
+	}
+	var openIntervals int64
+	if err := db.Model(&database.DatabaseUptimeInterval{}).
+		Where("database_id = ? AND ended_at IS NULL", databaseID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 0 {
+		t.Fatalf("open uptime intervals = %d, want 0", openIntervals)
 	}
 }
 

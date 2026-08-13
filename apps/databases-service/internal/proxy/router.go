@@ -215,11 +215,16 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	newUsedRedisPorts := make(map[int]string)
 	var localNode docker.NodeIdentity
 	var localNodeErr error
+	var localContainerStates map[string]bool
 	if r.dockerClient != nil {
 		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
+		if localNodeErr == nil {
+			localContainerStates, localNodeErr = r.dockerClient.ManagedDatabaseContainerStates(ctx)
+		}
 	}
 	knownLocations := make(map[string]databaseLocationSnapshot)
-	if localNodeErr == nil {
+	openUptimeIntervals := make(map[string]bool)
+	if r.dockerClient != nil && localNodeErr == nil {
 		containerIDs := make([]string, 0, len(instances))
 		for _, instance := range instances {
 			if instance.InstanceID != nil && *instance.InstanceID != "" {
@@ -238,6 +243,17 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 						NodeHostname: location.NodeHostname,
 						Status:       location.Status,
 					}
+				}
+			}
+			var openIntervalContainerIDs []string
+			if err := database.DB.WithContext(ctx).
+				Model(&database.DatabaseUptimeInterval{}).
+				Where("container_id IN ? AND ended_at IS NULL", containerIDs).
+				Pluck("container_id", &openIntervalContainerIDs).Error; err != nil {
+				localNodeErr = fmt.Errorf("failed to load database uptime intervals: %w", err)
+			} else {
+				for _, containerID := range openIntervalContainerIDs {
+					openUptimeIntervals[containerID] = true
 				}
 			}
 		}
@@ -269,13 +285,26 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
 		}
-		locationNeedsReconciliation := databaseLocationNeedsReconciliation(&inst, knownLocations[route.ContainerID], localNode)
-		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && locationNeedsReconciliation {
-			if _, err := r.dockerClient.ContainerInspect(ctx, route.ContainerID); err == nil {
+		location := knownLocations[route.ContainerID]
+		locationReconciled := false
+		containerIsLocal := false
+		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
+			containerRunning := false
+			containerRunning, containerIsLocal = localContainerStates[route.ContainerID]
+			if containerIsLocal && inst.Status == 3 && !containerRunning {
+				if err := reconcileStoppedDatabase(ctx, &inst); err != nil {
+					logger.Warn("Failed to reconcile externally stopped database %s: %v", inst.ID, err)
+				} else {
+					inst.Status = 5
+					route.DBStatus = 5
+					route.Stopped = true
+				}
+			} else if containerIsLocal && databaseLocationNeedsReconciliation(&inst, location, localNode) {
 				r.recordDatabaseLocation(ctx, &inst, localNode)
+				locationReconciled = true
 			}
 		}
-		if inst.Status == 3 {
+		if databaseUptimeNeedsRepair(inst.Status, containerIsLocal, locationReconciled, openUptimeIntervals[route.ContainerID]) {
 			if err := database.EnsureDatabaseUptimeInterval(ctx, inst.ID); err != nil {
 				logger.Warn("Failed to reconcile uptime interval for database %s: %v", inst.ID, err)
 			}
@@ -344,6 +373,25 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	r.redisMu.Unlock()
 
 	logger.Info("Loaded %d routes from database", len(instances))
+	return nil
+}
+
+func databaseUptimeNeedsRepair(instanceStatus int32, containerIsLocal, locationReconciled, intervalOpen bool) bool {
+	return instanceStatus == 3 && containerIsLocal && !locationReconciled && !intervalOpen
+}
+
+func reconcileStoppedDatabase(ctx context.Context, instance *database.DatabaseInstance) error {
+	if instance == nil {
+		return nil
+	}
+	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
+		Where("id = ?", instance.ID).
+		Update("status", 5).Error; err != nil {
+		return fmt.Errorf("update database instance status: %w", err)
+	}
+	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "stopped"); err != nil {
+		return fmt.Errorf("update database location status: %w", err)
+	}
 	return nil
 }
 

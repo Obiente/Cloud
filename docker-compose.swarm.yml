@@ -491,12 +491,13 @@ services:
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     deploy:
-      mode: replicated
-      replicas: 1  # Single replica: proxy holds in-memory route state
+      # Each node that can own a standalone database container must also expose
+      # the host-mode database proxy ports used by that container's DNS record.
+      mode: global
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
+        order: stop-first
       restart_policy:
         condition: on-failure
         delay: 10s

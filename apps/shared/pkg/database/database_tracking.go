@@ -150,20 +150,15 @@ func BackfillDatabaseUptimeIntervals() error {
 	now := time.Now().UTC()
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var locations []DatabaseLocation
-		if err := tx.Find(&locations).Error; err != nil {
+		if err := tx.Table("database_locations AS dl").
+			Select("dl.*").
+			Joins("LEFT JOIN database_uptime_intervals AS dui ON dui.database_id = dl.database_id AND dui.container_id = dl.container_id").
+			Where("dui.id IS NULL").
+			Find(&locations).Error; err != nil {
 			return err
 		}
+		intervals := make([]DatabaseUptimeInterval, 0, len(locations))
 		for i := range locations {
-			var count int64
-			if err := tx.Model(&DatabaseUptimeInterval{}).
-				Where("database_id = ? AND container_id = ?", locations[i].DatabaseID, locations[i].ContainerID).
-				Count(&count).Error; err != nil {
-				return err
-			}
-			if count > 0 {
-				continue
-			}
-
 			startedAt := locations[i].CreatedAt.UTC()
 			if startedAt.IsZero() {
 				startedAt = locations[i].UpdatedAt.UTC()
@@ -171,7 +166,7 @@ func BackfillDatabaseUptimeIntervals() error {
 			if startedAt.IsZero() {
 				startedAt = now
 			}
-			interval := &DatabaseUptimeInterval{
+			interval := DatabaseUptimeInterval{
 				ID:          uuid.NewString(),
 				DatabaseID:  locations[i].DatabaseID,
 				ContainerID: locations[i].ContainerID,
@@ -185,11 +180,12 @@ func BackfillDatabaseUptimeIntervals() error {
 				}
 				interval.EndedAt = &endedAt
 			}
-			if err := tx.Create(interval).Error; err != nil {
-				return err
-			}
+			intervals = append(intervals, interval)
 		}
-		return nil
+		if len(intervals) == 0 {
+			return nil
+		}
+		return tx.CreateInBatches(intervals, 500).Error
 	})
 }
 

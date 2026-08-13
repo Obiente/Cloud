@@ -339,6 +339,9 @@ func TestBackfillDatabaseUptimeIntervalsPreservesLegacyTimestamps(t *testing.T) 
 	if err := BackfillDatabaseUptimeIntervals(); err != nil {
 		t.Fatalf("backfill database uptime intervals: %v", err)
 	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("rerun database uptime backfill: %v", err)
+	}
 
 	var intervals []DatabaseUptimeInterval
 	if err := DB.Order("started_at").Find(&intervals).Error; err != nil {

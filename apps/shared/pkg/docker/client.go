@@ -767,6 +767,30 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 	return result.Container, nil
 }
 
+// ManagedDatabaseContainerStates returns the running state of every managed
+// database container owned by this Docker daemon in one API call.
+func (c *Client) ManagedDatabaseContainerStates(ctx context.Context) (map[string]bool, error) {
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+
+	filters := make(client.Filters)
+	filters.Add("label", "cloud.obiente.service=database")
+	result, err := c.api.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("docker: list managed database containers: %w", err)
+	}
+
+	states := make(map[string]bool, len(result.Items))
+	for _, item := range result.Items {
+		states[item.ID] = item.State == "running"
+	}
+	return states, nil
+}
+
 // NetworkConnect connects a container to a network
 func (c *Client) NetworkConnect(ctx context.Context, networkName, containerID string) error {
 	if c == nil || c.api == nil {
