@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DatabaseLocation tracks where managed database containers are running across the cluster
@@ -33,8 +34,8 @@ func (DatabaseLocation) TableName() string { return "database_locations" }
 // counted after a database starts again.
 type DatabaseUptimeInterval struct {
 	ID          string     `gorm:"primaryKey" json:"id"`
-	DatabaseID  string     `gorm:"index;not null" json:"database_id"`
-	ContainerID string     `gorm:"index;not null" json:"container_id"`
+	DatabaseID  string     `gorm:"index;not null;uniqueIndex:idx_database_uptime_open,where:ended_at IS NULL" json:"database_id"`
+	ContainerID string     `gorm:"index;not null;uniqueIndex:idx_database_uptime_open,where:ended_at IS NULL" json:"container_id"`
 	NodeID      string     `gorm:"index;not null" json:"node_id"`
 	StartedAt   time.Time  `gorm:"index;not null" json:"started_at"`
 	EndedAt     *time.Time `gorm:"index" json:"ended_at"`
@@ -185,7 +186,7 @@ func BackfillDatabaseUptimeIntervals() error {
 		if len(intervals) == 0 {
 			return nil
 		}
-		return tx.CreateInBatches(intervals, 500).Error
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(intervals, 500).Error
 	})
 }
 
@@ -227,16 +228,7 @@ func deactivateOtherDatabaseLocations(tx *gorm.DB, databaseID, currentContainerI
 }
 
 func ensureDatabaseUptimeInterval(tx *gorm.DB, location *DatabaseLocation, now time.Time) error {
-	var count int64
-	if err := tx.Model(&DatabaseUptimeInterval{}).
-		Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
-		Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
-	return tx.Create(&DatabaseUptimeInterval{
+	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&DatabaseUptimeInterval{
 		ID:          uuid.NewString(),
 		DatabaseID:  location.DatabaseID,
 		ContainerID: location.ContainerID,

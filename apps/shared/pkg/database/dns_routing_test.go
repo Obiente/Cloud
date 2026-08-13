@@ -385,6 +385,44 @@ func TestBackfillDatabaseUptimeIntervalsPreservesLegacyTimestamps(t *testing.T) 
 	}
 }
 
+func TestDatabaseUptimeIntervalAllowsOnlyOneOpenRowPerContainer(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	location := &DatabaseLocation{
+		DatabaseID:  "db-atomic-uptime-test",
+		ContainerID: "container-atomic-uptime-test",
+		NodeID:      "node-us",
+	}
+	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
+	if err := ensureDatabaseUptimeInterval(DB, location, now); err != nil {
+		t.Fatalf("create first uptime interval: %v", err)
+	}
+	if err := ensureDatabaseUptimeInterval(DB, location, now.Add(time.Second)); err != nil {
+		t.Fatalf("ignore duplicate uptime interval: %v", err)
+	}
+
+	var openIntervals int64
+	if err := DB.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 1 {
+		t.Fatalf("expected one open uptime interval, got %d", openIntervals)
+	}
+
+	duplicate := DatabaseUptimeInterval{
+		ID:          "duplicate-open-interval",
+		DatabaseID:  location.DatabaseID,
+		ContainerID: location.ContainerID,
+		NodeID:      location.NodeID,
+		StartedAt:   now.Add(2 * time.Second),
+	}
+	if err := DB.Create(&duplicate).Error; err == nil {
+		t.Fatal("expected the database to reject a second open uptime interval")
+	}
+}
+
 func setupDNSRoutingTestDB(t *testing.T) {
 	t.Helper()
 	previousDB := DB
