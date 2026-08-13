@@ -14,32 +14,56 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 var revisionImageTagPattern = regexp.MustCompile(`-[a-fA-F0-9]{40}(?:[a-fA-F0-9]{24})?$`)
 
 const registryManifestAccept = "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.index.v1+json"
 
-// retainedRevisionImages keeps the currently deployed image and one prior
-// successful image for rollback. Older build records remain available without
-// retaining every immutable image tag.
+// retainedRevisionImages keeps the currently deployed image, one prior image
+// that passed runtime verification, active build images, and stable mutable
+// tags. Older build records remain available without retaining every immutable
+// revision tag.
 func retainedRevisionImages(builds []*database.BuildHistory, currentImage string) (map[string]struct{}, []string) {
-	kept := make(map[string]struct{}, 2)
+	kept := make(map[string]struct{})
 	if currentImage = strings.TrimSpace(currentImage); currentImage != "" {
 		kept[currentImage] = struct{}{}
 	}
+	rollbackRetained := false
 	for _, build := range builds {
-		if build.Status != 3 || build.ImageName == nil {
+		if build.ImageName == nil {
 			continue
 		}
 		image := strings.TrimSpace(*build.ImageName)
 		if image == "" {
 			continue
 		}
-		kept[image] = struct{}{}
-		if len(kept) >= 2 {
-			break
+
+		// Mutable branch tags do not accumulate and may share a manifest with
+		// an immutable revision tag, so never delete their backing manifest.
+		if !isRevisionTaggedImage(image) {
+			kept[image] = struct{}{}
+			continue
 		}
+		// A preceding cleanup can overlap the next build after the lease is
+		// released. Protect any image already produced by that active build.
+		if build.Status == int32(deploymentsv1.BuildStatus_BUILD_PENDING) ||
+			build.Status == int32(deploymentsv1.BuildStatus_BUILD_BUILDING) {
+			kept[image] = struct{}{}
+			continue
+		}
+		// Runtime startup failures deliberately retain BUILD_SUCCESS with an
+		// error for build-history accuracy, but are not rollback candidates.
+		if build.Status != int32(deploymentsv1.BuildStatus_BUILD_SUCCESS) || build.Error != nil || rollbackRetained {
+			continue
+		}
+		if _, current := kept[image]; current {
+			continue
+		}
+		kept[image] = struct{}{}
+		rollbackRetained = true
 	}
 
 	obsoleteSet := make(map[string]struct{})

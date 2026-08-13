@@ -32,6 +32,7 @@ const (
 	deploymentBuildHeartbeatInterval  = 15 * time.Second
 	deploymentBuildHeartbeatTimeout   = 2 * time.Minute
 	deploymentBuildLegacyOwnerTimeout = 6 * time.Hour
+	deploymentBuildReleaseRetryDelay  = 250 * time.Millisecond
 )
 
 func deploymentBuildControlIsStale(control *database.DeploymentBuildControl, now time.Time) bool {
@@ -141,30 +142,61 @@ func (s *Service) registerDeploymentBuild(ctx context.Context, deploymentID stri
 	return token, nil
 }
 
-func (s *Service) unregisterDeploymentBuild(deploymentID, token string) {
+func (s *Service) unregisterDeploymentBuild(deploymentID, token string) bool {
 	s.activeBuildsMu.Lock()
 	if current, ok := s.activeBuilds[deploymentID]; ok && current.token == token {
 		delete(s.activeBuilds, deploymentID)
 	}
 	s.activeBuildsMu.Unlock()
 	if token == "" {
-		return
+		return true
 	}
 
 	ctx, cancel := s.detachedContext(10 * time.Second)
 	defer cancel()
-	_ = withDistributedLock(ctx, "deployment-build:"+deploymentID, func() error {
+	released := false
+	err := withDistributedLock(ctx, "deployment-build:"+deploymentID, func() error {
 		var control database.DeploymentBuildControl
-		if err := database.DB.WithContext(ctx).Where("deployment_id = ? AND build_token = ?", deploymentID, token).First(&control).Error; err != nil {
+		if err := database.DB.WithContext(ctx).Where("deployment_id = ? AND build_token = ?", deploymentID, token).First(&control).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			released = true
 			return nil
+		} else if err != nil {
+			return err
 		}
+		var result *gorm.DB
 		if control.CancelRequestedAt != nil {
-			return database.DB.WithContext(ctx).Model(&control).Updates(map[string]interface{}{
+			result = database.DB.WithContext(ctx).Model(&control).Updates(map[string]interface{}{
 				"build_token": "", "owner_node_id": "", "heartbeat_at": nil, "updated_at": time.Now(),
-			}).Error
+			})
+		} else {
+			result = database.DB.WithContext(ctx).Delete(&control)
 		}
-		return database.DB.WithContext(ctx).Delete(&control).Error
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("build lease release changed %d rows", result.RowsAffected)
+		}
+		released = true
+		return nil
 	})
+	if err != nil {
+		logger.Debug("[Deployments] Build lease release for %s will be retried: %v", deploymentID, err)
+	}
+	return err == nil && released
+}
+
+func (s *Service) waitForDeploymentBuildRelease(ctx context.Context, deploymentID, token string) bool {
+	for {
+		if s.unregisterDeploymentBuild(deploymentID, token) {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(deploymentBuildReleaseRetryDelay):
+		}
+	}
 }
 
 func (s *Service) cancelDeploymentBuild(deploymentID string) error {

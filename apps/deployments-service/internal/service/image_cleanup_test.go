@@ -12,9 +12,14 @@ func TestRetainedRevisionImagesKeepsCurrentAndRollback(t *testing.T) {
 	previous := "registry.example/obiente/deploy-1:main-" + strings.Repeat("b", 40)
 	old := "registry.example/obiente/deploy-1:main-" + strings.Repeat("a", 40)
 	failed := "registry.example/obiente/deploy-1:main-" + strings.Repeat("d", 64)
+	active := "registry.example/obiente/deploy-1:main-" + strings.Repeat("e", 40)
+	runtimeFailed := "registry.example/obiente/deploy-1:main-" + strings.Repeat("f", 40)
 	manual := "registry.example/obiente/deploy-1:main"
+	runtimeError := "container startup failed"
 	builds := []*database.BuildHistory{
+		{Status: 2, ImageName: &active},
 		{Status: 4, ImageName: &failed},
+		{Status: 3, ImageName: &runtimeFailed, Error: &runtimeError},
 		{Status: 3, ImageName: &current},
 		{Status: 3, ImageName: &previous},
 		{Status: 3, ImageName: &old},
@@ -28,7 +33,13 @@ func TestRetainedRevisionImagesKeepsCurrentAndRollback(t *testing.T) {
 	if _, ok := kept[previous]; !ok {
 		t.Fatal("rollback image was not retained")
 	}
-	wantObsolete := map[string]bool{old: true, failed: true}
+	if _, ok := kept[active]; !ok {
+		t.Fatal("active build image was not retained")
+	}
+	if _, ok := kept[manual]; !ok {
+		t.Fatal("stable mutable tag was not retained")
+	}
+	wantObsolete := map[string]bool{old: true, failed: true, runtimeFailed: true}
 	if len(obsolete) != len(wantObsolete) {
 		t.Fatalf("obsolete images = %v, want %v", obsolete, wantObsolete)
 	}

@@ -745,10 +745,13 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// A terminal preview update may immediately queue the next revision.
 			// Release this build's lease first so that trigger can claim it while
 			// image cleanup continues on a detached context.
-			s.unregisterDeploymentBuild(deploymentID, buildToken)
-			buildLeaseReleased = true
 			completionCtx, completionCancel := s.detachedContext(2 * time.Minute)
 			defer completionCancel()
+			if !s.waitForDeploymentBuildRelease(completionCtx, deploymentID, buildToken) {
+				logger.Warn("[TriggerDeployment] Timed out releasing the completed build lease for %s", deploymentID)
+				return
+			}
+			buildLeaseReleased = true
 			s.updatePullRequestDeploymentRuntime(completionCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
 			if buildResult != nil && buildResult.ImageName != "" {
 				s.cleanupObsoleteRevisionImages(completionCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
