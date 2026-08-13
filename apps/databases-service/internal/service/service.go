@@ -116,10 +116,13 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 
 	// Update DB status to RUNNING
 	dbInstance, err := s.repo.GetByID(ctx, route.DatabaseID)
-	if err == nil {
-		dbInstance.Status = 3 // RUNNING
-		dbInstance.LastStartedAt = timePtr(time.Now())
-		s.repo.Update(ctx, dbInstance)
+	if err != nil {
+		return "", fmt.Errorf("load database before publishing running status: %w", err)
+	}
+	dbInstance.Status = 3 // RUNNING
+	dbInstance.LastStartedAt = timePtr(time.Now())
+	if err := s.persistDatabaseInstance(ctx, dbInstance); err != nil {
+		return "", fmt.Errorf("persist running database status: %w", err)
 	}
 	updateDatabaseLocationStatus(ctx, route.DatabaseID, "running")
 
@@ -165,9 +168,12 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 
 	// Update DB status to SLEEPING
 	dbInstance, err := s.repo.GetByID(ctx, route.DatabaseID)
-	if err == nil {
-		dbInstance.Status = 12 // SLEEPING
-		s.repo.Update(ctx, dbInstance)
+	if err != nil {
+		return fmt.Errorf("load database before publishing sleeping status: %w", err)
+	}
+	dbInstance.Status = 12 // SLEEPING
+	if err := s.persistDatabaseInstance(ctx, dbInstance); err != nil {
+		return fmt.Errorf("persist sleeping database status: %w", err)
 	}
 	updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
 

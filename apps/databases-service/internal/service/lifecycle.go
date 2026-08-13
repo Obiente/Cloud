@@ -64,8 +64,9 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 		// Update status to RUNNING
 		dbInstance.Status = 3 // RUNNING
 		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.repo.Update(startCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(startCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist running database status: %v", err)
+			return
 		}
 		updateDatabaseLocationStatus(startCtx, dbInstance.ID, "running")
 
@@ -131,8 +132,9 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 
 		// Update status to STOPPED
 		dbInstance.Status = 5 // STOPPED
-		if err := s.repo.Update(stopCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(stopCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist stopped database status: %v", err)
+			return
 		}
 		updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "stopped")
 
@@ -200,8 +202,9 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 		// Update status to RUNNING
 		dbInstance.Status = 3 // RUNNING
 		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.repo.Update(restartCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(restartCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist running database status after restart: %v", err)
+			return
 		}
 		updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "running")
 	}()
@@ -261,8 +264,9 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 
 		// Update status to SLEEPING (not STOPPED)
 		dbInstance.Status = 12 // SLEEPING
-		if err := s.repo.Update(sleepCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(sleepCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist sleeping database status: %v", err)
+			return
 		}
 		updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
 
@@ -289,6 +293,40 @@ func (s *Service) restoreDatabaseAfterFailedStop(ctx context.Context, dbInstance
 		logger.Error("Failed to restore database status after stop failure: %v", err)
 	}
 	updateDatabaseLocationStatus(ctx, dbInstance.ID, "running")
+}
+
+func (s *Service) persistDatabaseInstance(ctx context.Context, dbInstance *database.DatabaseInstance) error {
+	if s == nil || s.repo == nil {
+		return fmt.Errorf("database repository is unavailable")
+	}
+	return retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return s.repo.Update(ctx, dbInstance)
+	})
+}
+
+func retryDatabaseWrite(ctx context.Context, attempts int, delay time.Duration, update func() error) error {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err = update(); err == nil {
+			return nil
+		}
+		if attempt == attempts {
+			break
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return fmt.Errorf("persist database status: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
+	return fmt.Errorf("persist database status after %d attempts: %w", attempts, err)
 }
 
 // Helper function

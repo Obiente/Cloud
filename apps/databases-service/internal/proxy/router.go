@@ -215,7 +215,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	newUsedRedisPorts := make(map[int]string)
 	var localNode docker.NodeIdentity
 	var localNodeErr error
-	var localContainerStates map[string]bool
+	var localContainerStates map[string]string
 	if r.dockerClient != nil {
 		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
 		if localNodeErr == nil {
@@ -286,7 +286,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			route.ContainerID = *inst.InstanceID
 		}
 		location := knownLocations[route.ContainerID]
-		containerRunning, containerIsLocal := localContainerStates[route.ContainerID]
+		containerState, containerIsLocal := localContainerStates[route.ContainerID]
 		containerOwnedLocally := databaseContainerOwnedLocally(&inst, location, localNode.ID, containerIsLocal)
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && !containerOwnedLocally {
 			// Global proxy tasks only publish routes for containers owned by their
@@ -295,7 +295,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		}
 		locationReconciled := false
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
-			if containerOwnedLocally && inst.Status == 3 && !containerRunning {
+			if containerOwnedLocally && inst.Status == 3 && databaseContainerTerminallyUnavailable(containerState, containerIsLocal) {
 				if err := reconcileStoppedDatabase(ctx, &inst); err != nil {
 					logger.Warn("Failed to reconcile externally stopped database %s: %v", inst.ID, err)
 				} else {
@@ -392,7 +392,22 @@ func databaseContainerOwnedLocally(
 	if strings.TrimSpace(location.NodeID) == strings.TrimSpace(localNodeID) {
 		return true
 	}
+	if strings.TrimSpace(location.NodeID) != "" {
+		return false
+	}
 	return instance != nil && instance.NodeID != nil && strings.TrimSpace(*instance.NodeID) == strings.TrimSpace(localNodeID)
+}
+
+func databaseContainerTerminallyUnavailable(state string, listedLocally bool) bool {
+	if !listedLocally {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "exited", "dead":
+		return true
+	default:
+		return false
+	}
 }
 
 func databaseUptimeNeedsRepair(instanceStatus int32, containerIsLocal, locationReconciled, intervalOpen bool) bool {

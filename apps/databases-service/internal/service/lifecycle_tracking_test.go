@@ -1,6 +1,7 @@
 package databases
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,6 +9,37 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestRetryDatabaseWriteRetriesTransientFailure(t *testing.T) {
+	attempts := 0
+	err := retryDatabaseWrite(t.Context(), 3, 0, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("transient write failure")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("retry database write: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestRetryDatabaseWriteReturnsAfterExhaustion(t *testing.T) {
+	attempts := 0
+	err := retryDatabaseWrite(t.Context(), 2, 0, func() error {
+		attempts++
+		return errors.New("persistent write failure")
+	})
+	if err == nil {
+		t.Fatal("persistent write failure was ignored")
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+}
 
 func TestRestoreDatabaseAfterFailedStopKeepsTrackingActive(t *testing.T) {
 	previousDB := database.DB

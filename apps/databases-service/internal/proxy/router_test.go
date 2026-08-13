@@ -66,6 +66,27 @@ func TestDatabaseContainerOwnedLocallyUsesPersistedOwnerForMissingContainer(t *t
 	if !databaseContainerOwnedLocally(remoteInstance, remoteLocation, localNodeID, true) {
 		t.Fatal("locally listed container did not override stale ownership metadata")
 	}
+
+	staleInstance := &database.DatabaseInstance{NodeID: &localNodeID}
+	if databaseContainerOwnedLocally(staleInstance, remoteLocation, localNodeID, false) {
+		t.Fatal("stale instance owner overrode the authoritative location owner")
+	}
+}
+
+func TestDatabaseContainerTerminallyUnavailableIgnoresTransientStates(t *testing.T) {
+	for _, state := range []string{"running", "restarting", "created", "paused", "removing"} {
+		if databaseContainerTerminallyUnavailable(state, true) {
+			t.Fatalf("transient container state %q was treated as terminal", state)
+		}
+	}
+	for _, state := range []string{"exited", "dead"} {
+		if !databaseContainerTerminallyUnavailable(state, true) {
+			t.Fatalf("terminal container state %q was not reconciled", state)
+		}
+	}
+	if !databaseContainerTerminallyUnavailable("", false) {
+		t.Fatal("missing locally owned container was not treated as terminal")
+	}
 }
 
 func TestReconcileStoppedDatabaseClosesTracking(t *testing.T) {
