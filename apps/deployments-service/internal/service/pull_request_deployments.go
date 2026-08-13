@@ -729,7 +729,7 @@ func (s *Service) RestorePullRequestDeployment(ctx context.Context, req *connect
 	expiresAt := now.Add(time.Duration(config.RestoredPreviewTTLHours) * time.Hour)
 	result := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).
 		Where("id = ? AND merged = ? AND closed_at IS NOT NULL AND active_head_sha IS NULL", record.ID, true).
-		Updates(map[string]interface{}{"preview_deployment_id": nil, "github_deployment_id": nil, "github_deployment_sha": nil, "github_check_run_id": nil, "github_check_run_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "closed_at": nil, "closed_from_status": nil, "restored_at": now, "expires_at": expiresAt, "updated_at": now})
+		Updates(map[string]interface{}{"preview_deployment_id": nil, "github_deployment_id": nil, "github_deployment_sha": nil, "github_check_run_id": nil, "github_check_run_sha": nil, "status": int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_QUEUED), "error": nil, "closed_at": nil, "closed_from_status": nil, "closed_from_error": nil, "restored_at": now, "expires_at": expiresAt, "updated_at": now})
 	if result.Error != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restore pull request environment: %w", result.Error))
 	}
@@ -1658,6 +1658,7 @@ func closePullRequestDeploymentRecord(record *database.PullRequestDeployment, re
 	if record.ClosedFromStatus == nil && record.Status != int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED) {
 		closedFromStatus := record.Status
 		record.ClosedFromStatus = &closedFromStatus
+		record.ClosedFromError = record.Error
 	}
 	record.Status, record.ActiveHeadSHA, record.ClosedAt, record.UpdatedAt = int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED), nil, &now, now
 	if reason != "" {
@@ -2223,7 +2224,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 		record.GitHubCheckRunID, record.GitHubCheckRunSHA = nil, nil
 	}
 	record.HeadSHA, record.IgnoredHeadSHA, record.HeadRef, record.BaseRef, record.FromFork, record.Draft = payload.PullRequest.Head.SHA, nil, headRef, baseRef, fromFork, payload.PullRequest.Draft
-	record.ClosedAt, record.ClosedFromStatus, record.UpdatedAt = nil, nil, now
+	record.ClosedAt, record.ClosedFromStatus, record.ClosedFromError, record.UpdatedAt = nil, nil, nil, now
 	if reconcilingRestoredPreview {
 		record.Merged = true
 		record.RestoredAt = restoredAt
@@ -2301,6 +2302,7 @@ func (s *Service) processPullRequestWebhookLocked(ctx context.Context, config da
 			"expires_at":             record.ExpiresAt,
 			"closed_at":              nil,
 			"closed_from_status":     nil,
+			"closed_from_error":      nil,
 			"restored_at":            record.RestoredAt,
 			"updated_at":             record.UpdatedAt,
 		}
@@ -2610,7 +2612,11 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 		case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_FAILED:
 			status, conclusion, title, summary = "completed", "failure", "Preview failed", "The preview did not deploy successfully. Open Obiente Cloud for build output."
 		case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_SKIPPED:
-			status, conclusion, title, summary = "completed", "skipped", "Preview not deployed", stringValue(record.Error)
+			summary = strings.TrimSpace(stringValue(record.ClosedFromError))
+			if summary == "" {
+				summary = "The preview was not deployed."
+			}
+			status, conclusion, title = "completed", "skipped", "Preview not deployed"
 		case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_WAITING_APPROVAL:
 			status, conclusion, title, summary = "completed", "action_required", "Maintainer approval required", "Approve the current revision in Obiente before it can run."
 		case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED:
