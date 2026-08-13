@@ -85,6 +85,14 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 }
 
 func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	return resolveNodeIPs(nodeID, explicitNodeIP, nodeIPMap, true)
+}
+
+func resolveAuthoritativeNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	return resolveNodeIPs(nodeID, explicitNodeIP, nodeIPMap, false)
+}
+
+func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string, allowCompatibilityFallback bool) ([]string, error) {
 	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); configuredNodeIP(explicitNodeIP, nodeIPMap) {
 		return []string{explicitNodeIP}, nil
 	}
@@ -93,9 +101,12 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 	var nodeRegion string
 
 	if err := DB.First(&node, "id = ?", nodeID).Error; err != nil {
-		// Older records may refer to a node that predates node metadata. Only use
-		// an unassigned compatibility fallback when it is unambiguous.
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if !allowCompatibilityFallback {
+				return nil, fmt.Errorf("node %s not found and authoritative DNS fallback is disabled", nodeID)
+			}
+			// Older records may refer to a node that predates node metadata. Only use
+			// an unassigned compatibility fallback when it is unambiguous.
 			return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s not found", nodeID))
 		}
 		return nil, fmt.Errorf("failed to find node %s: %w", nodeID, err)
@@ -107,17 +118,24 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 
 	nodeRegion = node.Region
 
-	// If node has no region, only use an unambiguous compatibility fallback.
 	if nodeRegion == "" {
+		if !allowCompatibilityFallback {
+			return nil, fmt.Errorf("node %s has no configured IP or region and authoritative DNS fallback is disabled", nodeID)
+		}
+		// If node has no region, only use an unambiguous compatibility fallback.
 		return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s has no IP or region", nodeID))
 	}
 
 	// Get node IPs for this region
 	ips, ok := nodeIPMap[nodeRegion]
 	if !ok || len(ips) == 0 {
-		// Fallback to "default" region if the node's region doesn't exist
-		if defaultIPs, defaultOk := nodeIPMap["default"]; defaultOk && len(defaultIPs) > 0 {
-			return defaultIPs, nil
+		// Compatibility callers may use the historical default region. An
+		// authoritative database owner must never be replaced by another node.
+		if allowCompatibilityFallback {
+			defaultIPs := cleanNodeIPs(nodeIPMap["default"])
+			if len(defaultIPs) > 0 {
+				return defaultIPs, nil
+			}
 		}
 		return nil, fmt.Errorf("no node IP configured for region: %s", nodeRegion)
 	}
@@ -204,7 +222,7 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 	}
 	if len(locations) > 0 {
 		location := locations[0]
-		ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
+		ips, err := resolveAuthoritativeNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve active database location on node %s: %w", location.NodeID, err)
 		}
@@ -212,7 +230,7 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 	}
 
 	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
-		return resolvePreferredNodeIPs(*dbInstance.NodeID, "", nodeIPMap)
+		return resolveAuthoritativeNodeIPs(*dbInstance.NodeID, "", nodeIPMap)
 	}
 
 	return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("database %s has no recorded host node", databaseID))

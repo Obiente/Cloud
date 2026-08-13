@@ -87,6 +87,38 @@ func TestGetDatabaseNodeIPDoesNotFallBackFromUnresolvedActiveLocation(t *testing
 	}
 }
 
+func TestGetDatabaseNodeIPRejectsDefaultFallbackForActiveLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-authoritative-default-test"
+	containerID := "container-authoritative-default"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-without-metadata",
+		NodeIP:      "203.0.113.55",
+		ContainerID: containerID,
+		Status:      "running",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, map[string][]string{
+		"default": {"192.0.2.10"},
+		"eu-west": {"198.51.100.20"},
+	})
+	if err == nil {
+		t.Fatal("expected authoritative location to reject the default fallback")
+	}
+	if !strings.Contains(err.Error(), "authoritative DNS fallback is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGetDatabaseNodeIPRejectsAmbiguousRegionFallback(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 

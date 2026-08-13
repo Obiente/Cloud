@@ -124,9 +124,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
 			if err := s.provisioner.StopDatabase(stopCtx, *dbInstance.InstanceID); err != nil {
 				logger.Error("Failed to stop database container: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(stopCtx, dbInstance)
-				updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "failed")
+				s.restoreDatabaseAfterFailedStop(stopCtx, dbInstance)
 				return
 			}
 		}
@@ -256,9 +254,7 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
 			if err := s.provisioner.StopDatabase(sleepCtx, *dbInstance.InstanceID); err != nil {
 				logger.Error("Failed to stop database container for sleep: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(sleepCtx, dbInstance)
-				updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "failed")
+				s.restoreDatabaseAfterFailedStop(sleepCtx, dbInstance)
 				return
 			}
 		}
@@ -282,6 +278,17 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		Database: protoDB,
 	})
 	return res, nil
+}
+
+func (s *Service) restoreDatabaseAfterFailedStop(ctx context.Context, dbInstance *database.DatabaseInstance) {
+	if dbInstance == nil {
+		return
+	}
+	dbInstance.Status = 3 // RUNNING: a failed stop must keep proxy, metrics, and uptime tracking active.
+	if err := s.repo.Update(ctx, dbInstance); err != nil {
+		logger.Error("Failed to restore database status after stop failure: %v", err)
+	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "running")
 }
 
 // Helper function

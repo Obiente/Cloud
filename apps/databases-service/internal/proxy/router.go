@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,13 @@ type Route struct {
 	DBStatus         int32     // Database status code (5=STOPPED, 12=SLEEPING)
 	AutoSleepSeconds int32     // Auto-sleep after inactivity (0 = disabled)
 	LastConnectionAt time.Time // Last time a client connected
+}
+
+type databaseLocationSnapshot struct {
+	NodeID       string
+	NodeIP       string
+	NodeHostname string
+	Status       string
 }
 
 // WakeFunc starts a sleeping database container and returns the new container IP
@@ -210,7 +218,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	if r.dockerClient != nil {
 		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
 	}
-	knownLocationNodes := make(map[string]string)
+	knownLocations := make(map[string]databaseLocationSnapshot)
 	if localNodeErr == nil {
 		containerIDs := make([]string, 0, len(instances))
 		for _, instance := range instances {
@@ -224,7 +232,12 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 				localNodeErr = fmt.Errorf("failed to load database locations: %w", err)
 			} else {
 				for _, location := range locations {
-					knownLocationNodes[location.ContainerID] = location.NodeID
+					knownLocations[location.ContainerID] = databaseLocationSnapshot{
+						NodeID:       location.NodeID,
+						NodeIP:       location.NodeIP,
+						NodeHostname: location.NodeHostname,
+						Status:       location.Status,
+					}
 				}
 			}
 		}
@@ -256,7 +269,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
 		}
-		locationNeedsReconciliation := inst.NodeID == nil || *inst.NodeID != localNode.ID || knownLocationNodes[route.ContainerID] != localNode.ID
+		locationNeedsReconciliation := databaseLocationNeedsReconciliation(&inst, knownLocations[route.ContainerID], localNode)
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && locationNeedsReconciliation {
 			if _, err := r.dockerClient.ContainerInspect(ctx, route.ContainerID); err == nil {
 				r.recordDatabaseLocation(ctx, &inst, localNode)
@@ -332,6 +345,19 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func databaseLocationNeedsReconciliation(instance *database.DatabaseInstance, location databaseLocationSnapshot, localNode docker.NodeIdentity) bool {
+	if instance == nil {
+		return false
+	}
+	if instance.NodeID == nil || strings.TrimSpace(*instance.NodeID) != strings.TrimSpace(localNode.ID) {
+		return true
+	}
+	return strings.TrimSpace(location.NodeID) != strings.TrimSpace(localNode.ID) ||
+		strings.TrimSpace(location.NodeIP) != strings.TrimSpace(localNode.IP) ||
+		strings.TrimSpace(location.NodeHostname) != strings.TrimSpace(localNode.Hostname) ||
+		location.Status != databaseLocationStatus(instance.Status)
 }
 
 func (r *RouteRegistry) recordDatabaseLocation(ctx context.Context, instance *database.DatabaseInstance, node docker.NodeIdentity) {
