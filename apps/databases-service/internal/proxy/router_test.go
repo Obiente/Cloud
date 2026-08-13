@@ -107,6 +107,42 @@ func TestControlPlaneDatabaseSyncRefreshesRoutes(t *testing.T) {
 	t.Fatal("control-plane route registry did not refresh")
 }
 
+func TestLocalRouteRefreshRetainsSnapshotWithoutNodeDiscovery(t *testing.T) {
+	previousDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:local-route-refresh-retention?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+	if err := db.AutoMigrate(&database.DatabaseInstance{}, &database.DatabaseConnection{}); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+	instance := &database.DatabaseInstance{ID: "db-route-retention-test", Type: 1, Status: 3}
+	if err := db.Create(instance).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := db.Create(&database.DatabaseConnection{ID: "conn-route-retention-test", DatabaseID: instance.ID, Port: 5432}).Error; err != nil {
+		t.Fatalf("create database connection: %v", err)
+	}
+
+	registry := NewRouteRegistry(nil)
+	registry.SetLocalRoutesOnly(true)
+	registry.Register(&Route{
+		DatabaseID:   instance.ID,
+		ContainerID:  "container-route-retention-test",
+		ContainerIP:  "obiente-db-route-retention-test",
+		InternalPort: 5432,
+	})
+	if err := registry.LoadFromDatabase(t.Context()); err == nil {
+		t.Fatal("expected local refresh without Docker discovery to fail")
+	}
+	route, ok := registry.LookupByID(instance.ID)
+	if !ok || route.ContainerIP != "obiente-db-route-retention-test" || route.ContainerID != "container-route-retention-test" {
+		t.Fatalf("working route snapshot was replaced: %#v", route)
+	}
+}
+
 func TestDatabaseLocationStatus(t *testing.T) {
 	tests := map[int32]string{
 		0:  "created",

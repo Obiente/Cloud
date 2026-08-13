@@ -271,6 +271,14 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			localContainerStates, localNodeErr = r.dockerClient.ManagedDatabaseContainerStates(ctx)
 		}
 	}
+	if localRoutesOnly {
+		if r.dockerClient == nil {
+			return fmt.Errorf("cannot refresh local database routes: Docker client is unavailable")
+		}
+		if localNodeErr != nil {
+			return fmt.Errorf("cannot refresh local database routes: %w", localNodeErr)
+		}
+	}
 	knownLocations := make(map[string]databaseLocationSnapshot)
 	openUptimeIntervals := make(map[string]bool)
 	if r.dockerClient != nil && localNodeErr == nil {
