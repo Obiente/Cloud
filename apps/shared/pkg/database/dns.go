@@ -115,6 +115,11 @@ func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string
 	if node.IP = strings.TrimSpace(node.IP); configuredNodeIP(node.IP, nodeIPMap) {
 		return []string{node.IP}, nil
 	}
+	if ips, found, err := nodeSpecificIPs(node, nodeIPMap); err != nil {
+		return nil, err
+	} else if found {
+		return ips, nil
+	}
 
 	nodeRegion = node.Region
 
@@ -127,8 +132,8 @@ func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string
 	}
 
 	// Get node IPs for this region
-	ips, ok := nodeIPMap[nodeRegion]
-	if !ok || len(ips) == 0 {
+	ips := cleanNodeIPs(nodeIPMap[nodeRegion])
+	if len(ips) == 0 {
 		// Compatibility callers may use the historical default region. An
 		// authoritative database owner must never be replaced by another node.
 		if allowCompatibilityFallback {
@@ -139,8 +144,29 @@ func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string
 		}
 		return nil, fmt.Errorf("no node IP configured for region: %s", nodeRegion)
 	}
+	if !allowCompatibilityFallback && len(ips) != 1 {
+		return nil, fmt.Errorf("region %s contains %d node IPs; configure exactly one NODE_IPS entry for node %s or hostname %s", nodeRegion, len(ips), node.ID, node.Hostname)
+	}
 
 	return ips, nil
+}
+
+func nodeSpecificIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
+	keys := []string{strings.TrimSpace(node.ID), strings.TrimSpace(node.Hostname)}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		ips := cleanNodeIPs(nodeIPMap[key])
+		if len(ips) == 0 {
+			continue
+		}
+		if len(ips) != 1 {
+			return nil, false, fmt.Errorf("NODE_IPS entry %s contains %d addresses; node-specific entries must contain exactly one address", key, len(ips))
+		}
+		return ips, true, nil
+	}
+	return nil, false, nil
 }
 
 func configuredNodeIP(candidate string, nodeIPMap map[string][]string) bool {
@@ -265,10 +291,10 @@ func GetDeploymentRegion(deploymentID string) (string, error) {
 }
 
 // ParseNodeIPsFromEnv parses the NODE_IPS environment variable
-// Format: "region1:ip1,ip2;region2:ip3,ip4"
+// Format: "key1:ip1,ip2;key2:ip3,ip4", where keys may identify regions or nodes.
 // Also supports simple format: "ip1,ip2" (defaults to "default" region)
 // Also supports space-separated format: "region1:ip1,ip2 region2:ip3,ip4" (when semicolons are not present)
-// Returns a map of region -> []IP addresses
+// Returns a map of region or node key -> []IP addresses
 func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 	result := make(map[string][]string)
 
@@ -300,7 +326,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 		regions = strings.Split(nodeIPsEnv, ";")
 	} else {
 		// Space-separated format: use regex to find all "region:ip" patterns
-		// Pattern matches: word characters (region name), colon, then IP address(es) optionally separated by commas
+		// Pattern matches region/node keys, a colon, then IP address(es) optionally separated by commas.
 		// This handles formats like:
 		// - "us:1.2.3.4 nl:5.6.7.8"
 		// - "us 1.2.3.4 nl:5.6.7.8" (region name followed by space and IP)
@@ -308,7 +334,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 
 		// First, try to find all patterns that match "region:ip" or "region:ip1,ip2"
 		// Pattern: one or more word chars, colon, then IP addresses (dots and numbers) possibly separated by commas
-		re := regexp.MustCompile(`\w+:\d+\.\d+\.\d+\.\d+(?:,\d+\.\d+\.\d+\.\d+)*`)
+		re := regexp.MustCompile(`[A-Za-z0-9_.-]+:\d+\.\d+\.\d+\.\d+(?:,\d+\.\d+\.\d+\.\d+)*`)
 		matches := re.FindAllString(nodeIPsEnv, -1)
 
 		if len(matches) > 0 {
@@ -317,7 +343,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 		} else {
 			// Fallback: try to handle "region IP" format (region name followed by space and IP)
 			// Pattern: word chars (region), space, IP address
-			re2 := regexp.MustCompile(`(\w+)\s+(\d+\.\d+\.\d+\.\d+)`)
+			re2 := regexp.MustCompile(`([A-Za-z0-9_.-]+)\s+(\d+\.\d+\.\d+\.\d+)`)
 			matches2 := re2.FindAllStringSubmatch(nodeIPsEnv, -1)
 			for _, match := range matches2 {
 				if len(match) >= 3 {

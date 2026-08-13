@@ -216,7 +216,7 @@ func currentDatabaseLocation(tx *gorm.DB, databaseID string) (*DatabaseLocation,
 }
 
 func deactivateOtherDatabaseLocations(tx *gorm.DB, databaseID, currentContainerID string, now time.Time) error {
-	activeStatuses := []string{"running", "restarting", "starting", "created"}
+	activeStatuses := []string{"running", "restarting", "starting", "created", "sleeping"}
 	if err := tx.Model(&DatabaseLocation{}).
 		Where("database_id = ? AND container_id <> ? AND status IN ?", databaseID, currentContainerID, activeStatuses).
 		Updates(map[string]interface{}{"status": "stopped", "updated_at": now}).Error; err != nil {

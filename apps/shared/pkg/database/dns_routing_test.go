@@ -209,6 +209,60 @@ func TestResolvePreferredNodeIPsIgnoresUnconfiguredAdvertiseAddress(t *testing.T
 	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
+func TestResolveAuthoritativeNodeIPsUsesNodeSpecificAddress(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-owner",
+		Hostname: "owner-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create owner node metadata: %v", err)
+	}
+
+	ips, err := resolveAuthoritativeNodeIPs("node-owner", "203.0.113.55", map[string][]string{
+		"node-owner": {"192.0.2.11"},
+		"us-east":    {"192.0.2.10", "192.0.2.11"},
+	})
+	if err != nil {
+		t.Fatalf("resolve node-specific owner address: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.11")
+}
+
+func TestResolveAuthoritativeNodeIPsRejectsAmbiguousRegion(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-owner",
+		Hostname: "owner-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create owner node metadata: %v", err)
+	}
+
+	_, err := resolveAuthoritativeNodeIPs("node-owner", "203.0.113.55", map[string][]string{
+		"us-east": {"192.0.2.10", "192.0.2.11"},
+	})
+	if err == nil {
+		t.Fatal("expected an ambiguous regional owner mapping to fail")
+	}
+	if !strings.Contains(err.Error(), "configure exactly one NODE_IPS entry for node node-owner") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseNodeIPsFromEnvPreservesNodeHostnameKeys(t *testing.T) {
+	nodeIPs, err := ParseNodeIPsFromEnv("owner-node:192.0.2.10 backup.node:198.51.100.20")
+	if err != nil {
+		t.Fatalf("parse node-specific IP mappings: %v", err)
+	}
+	assertNodeIPs(t, nodeIPs["owner-node"], "192.0.2.10")
+	assertNodeIPs(t, nodeIPs["backup.node"], "198.51.100.20")
+}
+
 func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 
@@ -246,6 +300,60 @@ func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 	if locations[0].ID != existing.ID || locations[0].NodeIP != "192.0.2.10" {
 		t.Fatalf("unexpected reconciled location: %#v", locations[0])
 	}
+}
+
+func TestUpsertDatabaseLocationDeactivatesSupersededSleepingOwner(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-superseded-sleeping-owner-test"
+	currentContainerID := "container-current-owner"
+	currentNodeID := "node-current-owner"
+	if err := DB.Create(&DatabaseInstance{
+		ID:         databaseID,
+		InstanceID: &currentContainerID,
+		NodeID:     &currentNodeID,
+	}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: currentNodeID, Hostname: "current-owner", IP: "192.0.2.10"}).Error; err != nil {
+		t.Fatalf("create current owner metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          "superseded-sleeping-location",
+		DatabaseID:  databaseID,
+		NodeID:      "node-old-owner",
+		NodeIP:      "198.51.100.20",
+		ContainerID: "container-old-owner",
+		Status:      "sleeping",
+	}).Error; err != nil {
+		t.Fatalf("create superseded sleeping location: %v", err)
+	}
+	if err := UpsertDatabaseLocation(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, currentContainerID),
+		DatabaseID:  databaseID,
+		NodeID:      currentNodeID,
+		NodeIP:      "192.0.2.10",
+		ContainerID: currentContainerID,
+		Status:      "running",
+	}); err != nil {
+		t.Fatalf("upsert current database location: %v", err)
+	}
+	if err := UpdateDatabaseLocationStatus(t.Context(), databaseID, "stopped"); err != nil {
+		t.Fatalf("stop current database location: %v", err)
+	}
+
+	var oldLocation DatabaseLocation
+	if err := DB.First(&oldLocation, "id = ?", "superseded-sleeping-location").Error; err != nil {
+		t.Fatalf("load superseded sleeping location: %v", err)
+	}
+	if oldLocation.Status != "stopped" {
+		t.Fatalf("expected superseded sleeping location to be stopped, got %q", oldLocation.Status)
+	}
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve current database owner: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
 func TestUpdateDatabaseLocationStatus(t *testing.T) {

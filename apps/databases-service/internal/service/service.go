@@ -34,6 +34,7 @@ type Service struct {
 	routeRegistry     *proxy.RouteRegistry
 	backgroundCtx     context.Context
 	proxyEnabled      bool
+	startStoppedDB    func(context.Context, string) error
 }
 
 func NewService(
@@ -75,6 +76,9 @@ func NewService(
 		routeRegistry:     registry,
 		backgroundCtx:     backgroundCtx,
 		proxyEnabled:      true,
+	}
+	if prov != nil {
+		svc.startStoppedDB = prov.StartDatabase
 	}
 
 	// Wire wake/sleep callbacks
@@ -179,7 +183,14 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 	}
 	dbInstance.Status = 12 // SLEEPING
 	if err := s.persistDatabaseInstance(ctx, dbInstance); err != nil {
-		return fmt.Errorf("persist sleeping database status: %w", err)
+		persistErr := err
+		dbInstance.Status = 3 // The durable status is still RUNNING when every write failed.
+		if restoreErr := s.restoreContainerAfterAutoSleepFailure(route); restoreErr != nil {
+			updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
+			return fmt.Errorf("persist sleeping database status: %v; restore stopped database container: %w", persistErr, restoreErr)
+		}
+		updateDatabaseLocationStatus(ctx, route.DatabaseID, "running")
+		return fmt.Errorf("persist sleeping database status; restored database container to match durable RUNNING state: %w", persistErr)
 	}
 	updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
 
@@ -209,6 +220,28 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 	}()
 
 	logger.Info("Database %s put to sleep", route.DatabaseID)
+	return nil
+}
+
+func (s *Service) restoreContainerAfterAutoSleepFailure(route *proxy.Route) error {
+	if s == nil || route == nil || route.ContainerID == "" || s.startStoppedDB == nil {
+		if s != nil && s.routeRegistry != nil && route != nil {
+			s.routeRegistry.MarkStopped(route.DatabaseID, 12)
+		}
+		return fmt.Errorf("database container restore is unavailable")
+	}
+
+	restoreCtx, cancel := s.detachedContext(time.Minute)
+	defer cancel()
+	if err := s.startStoppedDB(restoreCtx, route.ContainerID); err != nil {
+		if s.routeRegistry != nil {
+			s.routeRegistry.MarkStopped(route.DatabaseID, 12)
+		}
+		return err
+	}
+	if s.routeRegistry != nil {
+		s.routeRegistry.MarkRunning(route.DatabaseID, fmt.Sprintf("obiente-%s", route.DatabaseID))
+	}
 	return nil
 }
 

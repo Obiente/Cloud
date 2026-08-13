@@ -1,9 +1,12 @@
 package databases
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"databases-service/internal/proxy"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"gorm.io/driver/sqlite"
@@ -109,5 +112,68 @@ func TestRestoreDatabaseAfterFailedStopKeepsTrackingActive(t *testing.T) {
 	}
 	if openIntervals != 1 {
 		t.Fatalf("expected one open uptime interval, got %d", openIntervals)
+	}
+}
+
+func TestRestoreContainerAfterAutoSleepFailureRestartsRunningRoute(t *testing.T) {
+	registry := proxy.NewRouteRegistry(nil)
+	route := &proxy.Route{
+		DatabaseID:  "db-auto-sleep-rollback-test",
+		ContainerID: "container-auto-sleep-rollback-test",
+		ContainerIP: "obiente-db-auto-sleep-rollback-test",
+		DBStatus:    3,
+	}
+	registry.Register(route)
+
+	startedContainerID := ""
+	service := &Service{
+		backgroundCtx: t.Context(),
+		routeRegistry: registry,
+		startStoppedDB: func(_ context.Context, containerID string) error {
+			startedContainerID = containerID
+			return nil
+		},
+	}
+	if err := service.restoreContainerAfterAutoSleepFailure(route); err != nil {
+		t.Fatalf("restore stopped database container: %v", err)
+	}
+	if startedContainerID != route.ContainerID {
+		t.Fatalf("started container %q, want %q", startedContainerID, route.ContainerID)
+	}
+	storedRoute, ok := registry.LookupByID(route.DatabaseID)
+	if !ok {
+		t.Fatal("restored route is missing")
+	}
+	if storedRoute.Stopped || storedRoute.DBStatus != 3 {
+		t.Fatalf("expected running route after rollback, got %#v", storedRoute)
+	}
+}
+
+func TestRestoreContainerAfterAutoSleepFailureRetainsSleepingRouteWhenRestartFails(t *testing.T) {
+	registry := proxy.NewRouteRegistry(nil)
+	route := &proxy.Route{
+		DatabaseID:  "db-auto-sleep-retry-test",
+		ContainerID: "container-auto-sleep-retry-test",
+		ContainerIP: "obiente-db-auto-sleep-retry-test",
+		DBStatus:    3,
+	}
+	registry.Register(route)
+
+	service := &Service{
+		backgroundCtx: t.Context(),
+		routeRegistry: registry,
+		startStoppedDB: func(context.Context, string) error {
+			return errors.New("restart failed")
+		},
+	}
+	if err := service.restoreContainerAfterAutoSleepFailure(route); err == nil {
+		t.Fatal("expected the failed container restart to be reported")
+	}
+	storedRoute, ok := registry.LookupByID(route.DatabaseID)
+	if !ok {
+		t.Fatal("sleeping route is missing")
+	}
+	if !storedRoute.Stopped || storedRoute.DBStatus != 12 {
+		t.Fatalf("expected sleeping route after failed rollback, got %#v", storedRoute)
 	}
 }
