@@ -192,11 +192,35 @@ func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 func TestUpdateDatabaseLocationStatus(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 
+	containerID := "container-status-test"
+	if err := DB.Create(&DatabaseInstance{ID: "db-status-test", InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	historical := &DatabaseLocation{
+		ID:          "historical-location-status-test",
+		DatabaseID:  "db-status-test",
+		NodeID:      "node-old",
+		ContainerID: "container-old-status-test",
+		Status:      "running",
+	}
+	if err := DB.Create(historical).Error; err != nil {
+		t.Fatalf("create historical database location: %v", err)
+	}
+	if err := DB.Create(&DatabaseUptimeInterval{
+		ID:          "historical-interval-status-test",
+		DatabaseID:  historical.DatabaseID,
+		ContainerID: historical.ContainerID,
+		NodeID:      historical.NodeID,
+		StartedAt:   time.Now().Add(-time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("create historical uptime interval: %v", err)
+	}
+
 	location := &DatabaseLocation{
 		ID:          "location-status-test",
 		DatabaseID:  "db-status-test",
 		NodeID:      "node-us",
-		ContainerID: "container-status-test",
+		ContainerID: containerID,
 		Status:      "running",
 	}
 	if err := UpsertDatabaseLocation(location); err != nil {
@@ -230,8 +254,72 @@ func TestUpdateDatabaseLocationStatus(t *testing.T) {
 	if err := DB.Order("started_at").Find(&intervals, "database_id = ?", location.DatabaseID).Error; err != nil {
 		t.Fatalf("load uptime intervals: %v", err)
 	}
-	if len(intervals) != 2 || intervals[1].EndedAt != nil {
-		t.Fatalf("expected a closed interval followed by an open interval, got %#v", intervals)
+	if len(intervals) != 3 {
+		t.Fatalf("expected historical and current uptime intervals, got %#v", intervals)
+	}
+	var historicalAfter DatabaseLocation
+	if err := DB.First(&historicalAfter, "id = ?", historical.ID).Error; err != nil {
+		t.Fatalf("load historical location: %v", err)
+	}
+	if historicalAfter.Status != "stopped" {
+		t.Fatalf("expected historical location to remain stopped, got %q", historicalAfter.Status)
+	}
+	var openIntervals int64
+	if err := DB.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND ended_at IS NULL", location.DatabaseID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 1 {
+		t.Fatalf("expected exactly one open interval for the current container, got %d", openIntervals)
+	}
+}
+
+func TestBackfillDatabaseUptimeIntervalsPreservesLegacyTimestamps(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	runningStart := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
+	stoppedStart := time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC)
+	stoppedEnd := time.Date(2026, time.May, 3, 0, 0, 0, 0, time.UTC)
+	locations := []DatabaseLocation{
+		{
+			ID:          "legacy-running-location",
+			DatabaseID:  "db-legacy-running",
+			NodeID:      "node-us",
+			ContainerID: "container-legacy-running",
+			Status:      "running",
+			CreatedAt:   runningStart,
+			UpdatedAt:   runningStart.Add(time.Hour),
+		},
+		{
+			ID:          "legacy-stopped-location",
+			DatabaseID:  "db-legacy-stopped",
+			NodeID:      "node-nl",
+			ContainerID: "container-legacy-stopped",
+			Status:      "stopped",
+			CreatedAt:   stoppedStart,
+			UpdatedAt:   stoppedEnd,
+		},
+	}
+	if err := DB.Create(&locations).Error; err != nil {
+		t.Fatalf("create legacy database locations: %v", err)
+	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("backfill database uptime intervals: %v", err)
+	}
+
+	var intervals []DatabaseUptimeInterval
+	if err := DB.Order("started_at").Find(&intervals).Error; err != nil {
+		t.Fatalf("load backfilled uptime intervals: %v", err)
+	}
+	if len(intervals) != 2 {
+		t.Fatalf("expected two backfilled intervals, got %d", len(intervals))
+	}
+	if !intervals[0].StartedAt.Equal(stoppedStart) || intervals[0].EndedAt == nil || !intervals[0].EndedAt.Equal(stoppedEnd) {
+		t.Fatalf("unexpected stopped legacy interval: %#v", intervals[0])
+	}
+	if !intervals[1].StartedAt.Equal(runningStart) || intervals[1].EndedAt != nil {
+		t.Fatalf("unexpected running legacy interval: %#v", intervals[1])
 	}
 }
 

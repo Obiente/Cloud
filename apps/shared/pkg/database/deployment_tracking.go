@@ -129,6 +129,9 @@ func InitDeploymentTracking() error {
 	); err != nil {
 		return err
 	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		return fmt.Errorf("backfill database uptime intervals: %w", err)
+	}
 
 	// Note: DeploymentMetrics and DeploymentUsageHourly are now handled by InitMetricsTables
 	// to use the separate metrics database
