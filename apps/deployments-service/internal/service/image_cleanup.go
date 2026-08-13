@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	"gorm.io/gorm"
 )
 
 var revisionImageTagPattern = regexp.MustCompile(`-[a-fA-F0-9]{40}(?:[a-fA-F0-9]{24})?$`)
@@ -97,13 +99,91 @@ func cleanupCallerOwnsLiveImage(callerImage string, liveImage *string) bool {
 	return liveImage != nil && strings.TrimSpace(callerImage) != "" && strings.TrimSpace(callerImage) == strings.TrimSpace(*liveImage)
 }
 
+func revisionImageAliases(deploymentID, branch, commitSHA, registryURL string) []string {
+	commitSHA = strings.TrimSpace(commitSHA)
+	if !isGitHubCommitSHA(commitSHA) {
+		return nil
+	}
+	localImage := fmt.Sprintf("obiente/%s:%s", deploymentID, dockerBuildImageTag(branch, commitSHA))
+	aliases := []string{localImage}
+	if parsed, err := url.Parse(registryURL); err == nil && parsed.Host != "" {
+		aliases = append(aliases, parsed.Host+"/"+localImage)
+	}
+	return aliases
+}
+
+func activeRevisionImages(builds []*database.BuildHistory, deploymentID, registryURL string) map[string]struct{} {
+	protected := make(map[string]struct{})
+	for _, build := range builds {
+		if build.Status != int32(deploymentsv1.BuildStatus_BUILD_PENDING) &&
+			build.Status != int32(deploymentsv1.BuildStatus_BUILD_BUILDING) {
+			continue
+		}
+		if build.ImageName != nil {
+			for _, image := range localImageAliases(registryURL, strings.TrimSpace(*build.ImageName)) {
+				if image != "" {
+					protected[image] = struct{}{}
+				}
+			}
+		}
+		if build.CommitSHA != nil {
+			for _, image := range revisionImageAliases(deploymentID, build.Branch, *build.CommitSHA, registryURL) {
+				protected[image] = struct{}{}
+			}
+		}
+	}
+	return protected
+}
+
+func (s *Service) currentRevisionImageReservations(ctx context.Context, deploymentID, organizationID, registryURL string) (map[string]struct{}, bool, error) {
+	var builds []*database.BuildHistory
+	if err := database.DB.WithContext(ctx).
+		Where("deployment_id = ? AND organization_id = ? AND status IN ?", deploymentID, organizationID, []int32{
+			int32(deploymentsv1.BuildStatus_BUILD_PENDING),
+			int32(deploymentsv1.BuildStatus_BUILD_BUILDING),
+		}).
+		Find(&builds).Error; err != nil {
+		return nil, false, err
+	}
+	protected := activeRevisionImages(builds, deploymentID, registryURL)
+
+	// A queued preview head is reserved before TriggerDeployment creates its
+	// build-history row. Protect both the queued head and the currently active
+	// head so force-pushing back to an older SHA cannot race image cleanup.
+	var preview database.PullRequestDeployment
+	previewErr := database.DB.WithContext(ctx).
+		Select("head_sha", "active_head_sha", "head_ref").
+		Where("preview_deployment_id = ? AND closed_at IS NULL", deploymentID).
+		First(&preview).Error
+	if previewErr == nil {
+		for _, commitSHA := range []string{preview.HeadSHA, stringValue(preview.ActiveHeadSHA)} {
+			for _, image := range revisionImageAliases(deploymentID, preview.HeadRef, commitSHA, registryURL) {
+				protected[image] = struct{}{}
+			}
+		}
+	} else if !errors.Is(previewErr, gorm.ErrRecordNotFound) {
+		return nil, false, previewErr
+	}
+
+	var control database.DeploymentBuildControl
+	controlErr := database.DB.WithContext(ctx).
+		Select("build_token", "cancel_requested_at").
+		Where("deployment_id = ?", deploymentID).
+		First(&control).Error
+	if controlErr != nil && !errors.Is(controlErr, gorm.ErrRecordNotFound) {
+		return nil, false, controlErr
+	}
+	activeLeaseWithoutRevision := controlErr == nil && control.BuildToken != "" && control.CancelRequestedAt == nil && len(protected) == 0
+	return protected, activeLeaseWithoutRevision, nil
+}
+
 func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentID, organizationID, callerImage string) {
 	// Read through the database instead of the deployment repository cache. A
 	// cleanup can be delayed while newer revisions finish, and only the actual
 	// live image may determine which preceding revision is rollback-safe.
 	var deployment database.Deployment
 	if err := database.DB.WithContext(ctx).
-		Select("image").
+		Select("image", "branch").
 		Where("id = ? AND deleted_at IS NULL", deploymentID).
 		First(&deployment).Error; err != nil {
 		logger.Warn("[ImageCleanup] Failed to read live image for deployment %s: %v", deploymentID, err)
@@ -130,6 +210,14 @@ func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentI
 	client := &http.Client{Timeout: 15 * time.Second}
 	protectedDigests := make(map[string]map[string]struct{})
 	unsafeRepositories := make(map[string]struct{})
+	activeImages, activeUnknown, err := s.currentRevisionImageReservations(ctx, deploymentID, organizationID, registryURL)
+	if err != nil || activeUnknown {
+		logger.Warn("[ImageCleanup] Skipping cleanup for deployment %s because active revision ownership could not be established: %v", deploymentID, err)
+		return
+	}
+	for image := range activeImages {
+		kept[image] = struct{}{}
+	}
 	for image := range kept {
 		repository, tag, ok := splitRegistryImage(registryURL, image)
 		if !ok {
@@ -148,6 +236,15 @@ func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentI
 	}
 
 	for _, image := range obsolete {
+		activeImages, activeUnknown, err = s.currentRevisionImageReservations(ctx, deploymentID, organizationID, registryURL)
+		if err != nil || activeUnknown {
+			logger.Warn("[ImageCleanup] Stopping cleanup for deployment %s because active revision ownership changed: %v", deploymentID, err)
+			return
+		}
+		if _, active := activeImages[image]; active {
+			logger.Info("[ImageCleanup] Retaining image %s because an active build owns its revision", image)
+			continue
+		}
 		if repository, tag, ok := splitRegistryImage(registryURL, image); ok {
 			if _, unsafe := unsafeRepositories[repository]; !unsafe {
 				digest, err := registryManifestDigest(ctx, client, registryURL, repository, tag)

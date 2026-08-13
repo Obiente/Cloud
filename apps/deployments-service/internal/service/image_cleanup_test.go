@@ -86,3 +86,26 @@ func TestCleanupCallerMustOwnLiveImage(t *testing.T) {
 		t.Fatalf("obsolete images = %v, want only delayed caller revision A", obsolete)
 	}
 }
+
+func TestActiveRevisionImagesProtectsCommitBeforeImageExists(t *testing.T) {
+	commitSHA := strings.Repeat("a", 40)
+	builds := []*database.BuildHistory{
+		{
+			Status:       2,
+			DeploymentID: "deploy-1",
+			Branch:       "feature/reused",
+			CommitSHA:    &commitSHA,
+			ImageName:    nil,
+		},
+	}
+	protected := activeRevisionImages(builds, "deploy-1", "https://registry.example:5000")
+	tag := dockerBuildImageTag("feature/reused", commitSHA)
+	for _, image := range []string{
+		"obiente/deploy-1:" + tag,
+		"registry.example:5000/obiente/deploy-1:" + tag,
+	} {
+		if _, ok := protected[image]; !ok {
+			t.Fatalf("active revision image %q was not protected", image)
+		}
+	}
+}
