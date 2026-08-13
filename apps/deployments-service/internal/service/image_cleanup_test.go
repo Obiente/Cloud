@@ -57,3 +57,32 @@ func TestSplitRegistryImage(t *testing.T) {
 		t.Fatalf("unexpected registry image split: repository=%q tag=%q ok=%v", repository, tag, ok)
 	}
 }
+
+func TestCleanupCallerMustOwnLiveImage(t *testing.T) {
+	revisionA := "registry.example/obiente/deploy-1:main-" + strings.Repeat("a", 40)
+	revisionB := "registry.example/obiente/deploy-1:main-" + strings.Repeat("b", 40)
+	revisionC := "registry.example/obiente/deploy-1:main-" + strings.Repeat("c", 40)
+
+	if cleanupCallerOwnsLiveImage(revisionA, &revisionC) {
+		t.Fatal("delayed cleanup for revision A accepted newer live revision C")
+	}
+	if !cleanupCallerOwnsLiveImage("  "+revisionC+"  ", &revisionC) {
+		t.Fatal("cleanup for the live revision was rejected")
+	}
+	if cleanupCallerOwnsLiveImage(revisionC, nil) {
+		t.Fatal("cleanup without a live deployment image was accepted")
+	}
+
+	builds := []*database.BuildHistory{
+		{Status: 3, ImageName: &revisionC},
+		{Status: 3, ImageName: &revisionB},
+		{Status: 3, ImageName: &revisionA},
+	}
+	kept, obsolete := retainedRevisionImages(builds, revisionC)
+	if _, ok := kept[revisionB]; !ok {
+		t.Fatal("live revision C did not retain revision B for rollback")
+	}
+	if len(obsolete) != 1 || obsolete[0] != revisionA {
+		t.Fatalf("obsolete images = %v, want only delayed caller revision A", obsolete)
+	}
+}

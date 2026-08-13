@@ -93,7 +93,28 @@ func isRevisionTaggedImage(image string) bool {
 	return lastColon > lastSlash && revisionImageTagPattern.MatchString(image[lastColon+1:])
 }
 
-func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentID, organizationID, currentImage string) {
+func cleanupCallerOwnsLiveImage(callerImage string, liveImage *string) bool {
+	return liveImage != nil && strings.TrimSpace(callerImage) != "" && strings.TrimSpace(callerImage) == strings.TrimSpace(*liveImage)
+}
+
+func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentID, organizationID, callerImage string) {
+	// Read through the database instead of the deployment repository cache. A
+	// cleanup can be delayed while newer revisions finish, and only the actual
+	// live image may determine which preceding revision is rollback-safe.
+	var deployment database.Deployment
+	if err := database.DB.WithContext(ctx).
+		Select("image").
+		Where("id = ? AND deleted_at IS NULL", deploymentID).
+		First(&deployment).Error; err != nil {
+		logger.Warn("[ImageCleanup] Failed to read live image for deployment %s: %v", deploymentID, err)
+		return
+	}
+	if !cleanupCallerOwnsLiveImage(callerImage, deployment.Image) {
+		logger.Info("[ImageCleanup] Skipping stale cleanup for deployment %s because a newer image is live", deploymentID)
+		return
+	}
+	currentImage := strings.TrimSpace(*deployment.Image)
+
 	builds, _, err := s.buildHistoryRepo.ListBuilds(ctx, deploymentID, organizationID, 0, 0)
 	if err != nil {
 		logger.Warn("[ImageCleanup] Failed to list build images for deployment %s: %v", deploymentID, err)
