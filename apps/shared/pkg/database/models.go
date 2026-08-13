@@ -137,6 +137,7 @@ type PullRequestDeployment struct {
 	ApprovedAt           *time.Time `json:"approved_at"`
 	ExpiresAt            time.Time  `gorm:"index;not null" json:"expires_at"`
 	ClosedAt             *time.Time `gorm:"index" json:"closed_at"`
+	ClosedFromStatus     *int32     `json:"closed_from_status"`
 	RestoredAt           *time.Time `gorm:"index" json:"restored_at"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
