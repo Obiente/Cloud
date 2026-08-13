@@ -125,7 +125,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	// Start async rebuild with log streaming
 	go func() {
 		defer buildCancel()
-		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
+		buildLeaseReleased := false
+		defer func() {
+			if !buildLeaseReleased {
+				s.unregisterDeploymentBuild(deploymentID, buildToken)
+			}
+		}()
 		buildCtx = orchestrator.WithTargetNode(buildCtx, targetNodeID)
 
 		// Recover from panics to ensure deployment status is always updated
@@ -736,9 +741,17 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 			previewStatusFinalized = true
-			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+
+			// A terminal preview update may immediately queue the next revision.
+			// Release this build's lease first so that trigger can claim it while
+			// image cleanup continues on a detached context.
+			s.unregisterDeploymentBuild(deploymentID, buildToken)
+			buildLeaseReleased = true
+			completionCtx, completionCancel := s.detachedContext(2 * time.Minute)
+			defer completionCancel()
+			s.updatePullRequestDeploymentRuntime(completionCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
 			if buildResult != nil && buildResult.ImageName != "" {
-				s.cleanupObsoleteRevisionImages(buildCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
+				s.cleanupObsoleteRevisionImages(completionCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
 			}
 		}
 	}()

@@ -62,3 +62,13 @@ func TestDockerBuildImageTagKeepsManualBuildTagsStable(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldRemoveIntermediateImageProtectsFallbackFinalImage(t *testing.T) {
+	finalImage := "obiente/deploy-1:main-" + strings.Repeat("a", 40)
+	if shouldRemoveIntermediateImage(finalImage, finalImage) {
+		t.Fatal("fallback image sharing the final tag was marked for removal")
+	}
+	if !shouldRemoveIntermediateImage("obiente/deploy-1-railpack:main", finalImage) {
+		t.Fatal("distinct intermediate image was not marked for removal")
+	}
+}

@@ -80,6 +80,10 @@ func dockerBuildImageTag(ref, commitSHA string) string {
 	return base + "-" + commitSHA
 }
 
+func shouldRemoveIntermediateImage(intermediateImage, finalImage string) bool {
+	return intermediateImage != "" && intermediateImage != finalImage
+}
+
 func NewRailpackStrategy() *RailpackStrategy {
 	return &RailpackStrategy{}
 }
@@ -2391,8 +2395,12 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	// The Railpack image is only an intermediate stage. Keeping its immutable
 	// revision tag would double local image retention for every static build.
-	if err := exec.CommandContext(ctx, "docker", "image", "rm", railpackImageName).Run(); err != nil {
-		writeBuildLog("⚠️  Could not remove intermediate Railpack image %s: %v", railpackImageName, err)
+	// The fallback builder can reuse the final name; in that case the final
+	// build has already replaced the intermediate tag and it must stay intact.
+	if shouldRemoveIntermediateImage(railpackImageName, finalImageName) {
+		if err := exec.CommandContext(ctx, "docker", "image", "rm", railpackImageName).Run(); err != nil {
+			writeBuildLog("⚠️  Could not remove intermediate Railpack image %s: %v", railpackImageName, err)
+		}
 	}
 
 	// Nginx always uses port 80
