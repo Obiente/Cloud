@@ -28,7 +28,6 @@ import (
 type RailpackStrategy struct{}
 
 var dockerTagPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
-var gitCommitPattern = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)
 
 // dockerImageTag keeps ordinary branch tags stable while converting refs such
 // as feat/example into a deterministic, collision-resistant Docker tag.
@@ -68,10 +67,10 @@ func dockerImageTag(ref string) string {
 func dockerBuildImageTag(ref, commitSHA string) string {
 	base := dockerImageTag(ref)
 	commitSHA = strings.ToLower(strings.TrimSpace(commitSHA))
-	if !gitCommitPattern.MatchString(commitSHA) {
+	if !isGitHubCommitSHA(commitSHA) {
 		return base
 	}
-	const maxBaseLength = 128 - 1 - 40
+	maxBaseLength := 128 - 1 - len(commitSHA)
 	if len(base) > maxBaseLength {
 		base = strings.TrimRight(base[:maxBaseLength], ".-")
 	}
@@ -2390,8 +2389,11 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	writeBuildLog("✅ Created minimal nginx image")
 
-	// Clean up Railpack image (optional - we could keep it for caching)
-	// exec.CommandContext(ctx, "docker", "rmi", railpackImageName).Run()
+	// The Railpack image is only an intermediate stage. Keeping its immutable
+	// revision tag would double local image retention for every static build.
+	if err := exec.CommandContext(ctx, "docker", "image", "rm", railpackImageName).Run(); err != nil {
+		writeBuildLog("⚠️  Could not remove intermediate Railpack image %s: %v", railpackImageName, err)
+	}
 
 	// Nginx always uses port 80
 	port := 80

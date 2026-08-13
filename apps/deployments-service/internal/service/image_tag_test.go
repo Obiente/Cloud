@@ -46,6 +46,12 @@ func TestDockerBuildImageTagIncludesExactRevision(t *testing.T) {
 	if len(longTag) > 128 || !strings.HasSuffix(longTag, "-"+first) || !valid.MatchString(longTag) {
 		t.Fatalf("long revision tag is invalid: %q", longTag)
 	}
+
+	sha256Revision := strings.Repeat("C", 64)
+	sha256Tag := dockerBuildImageTag(strings.Repeat("feature/", 40), sha256Revision)
+	if len(sha256Tag) > 128 || !strings.HasSuffix(sha256Tag, "-"+strings.ToLower(sha256Revision)) || !valid.MatchString(sha256Tag) {
+		t.Fatalf("64-character revision tag is invalid: %q", sha256Tag)
+	}
 }
 
 func TestDockerBuildImageTagKeepsManualBuildTagsStable(t *testing.T) {

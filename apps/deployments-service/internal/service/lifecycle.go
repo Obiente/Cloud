@@ -737,6 +737,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 			previewStatusFinalized = true
 			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+			if buildResult != nil && buildResult.ImageName != "" {
+				s.cleanupObsoleteRevisionImages(buildCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
+			}
 		}
 	}()
 
