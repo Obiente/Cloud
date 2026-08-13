@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -151,8 +152,28 @@ func UpdateDatabaseRuntimeStatus(ctx context.Context, databaseID string, instanc
 		return err
 	}
 	if RedisClient != nil {
-		if err := RedisClient.Delete(ctx, fmt.Sprintf("database:%s", databaseID)); err != nil {
-			return fmt.Errorf("invalidate database instance cache: %w", err)
+		var cacheErr error
+		for attempt := 1; attempt <= 3; attempt++ {
+			if cacheErr = RedisClient.Delete(ctx, fmt.Sprintf("database:%s", databaseID)); cacheErr == nil {
+				break
+			}
+			if attempt < 3 {
+				timer := time.NewTimer(100 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					attempt = 3
+				case <-timer.C:
+				}
+			}
+		}
+		if cacheErr != nil {
+			logger.Warn("Database %s runtime status committed, but cache invalidation failed: %v", databaseID, cacheErr)
 		}
 	}
 	return nil
