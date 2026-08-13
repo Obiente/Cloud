@@ -2,12 +2,15 @@ package deployments
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestRetainedRevisionImagesKeepsCurrentAndRollback(t *testing.T) {
@@ -87,6 +90,40 @@ func TestCleanupCallerMustOwnLiveImage(t *testing.T) {
 	}
 	if len(obsolete) != 1 || obsolete[0] != revisionA {
 		t.Fatalf("obsolete images = %v, want only delayed caller revision A", obsolete)
+	}
+}
+
+func TestCurrentDeploymentImageReadsNewRollout(t *testing.T) {
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "-"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	if err := db.AutoMigrate(&database.Deployment{}); err != nil {
+		t.Fatalf("migrate sqlite db: %v", err)
+	}
+	previousDB := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+
+	revisionA := "registry.example/obiente/deploy-1:main-" + strings.Repeat("a", 40)
+	revisionB := "registry.example/obiente/deploy-1:main-" + strings.Repeat("b", 40)
+	if err := db.Create(&database.Deployment{ID: "deploy-1", Image: &revisionA}).Error; err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	if err := db.Model(&database.Deployment{}).Where("id = ?", "deploy-1").Update("image", revisionB).Error; err != nil {
+		t.Fatalf("update deployment image: %v", err)
+	}
+
+	liveImage, err := currentDeploymentImage(context.Background(), "deploy-1")
+	if err != nil {
+		t.Fatalf("read current deployment image: %v", err)
+	}
+	if cleanupCallerOwnsLiveImage(revisionA, liveImage) {
+		t.Fatal("stale cleanup still owned the image after a newer rollout completed")
+	}
+	if !cleanupCallerOwnsLiveImage(revisionB, liveImage) {
+		t.Fatalf("live image = %v, want revision B", liveImage)
 	}
 }
 
