@@ -344,6 +344,15 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		}
 		locationReconciled := false
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
+			if containerIsLocal && databaseContainerIsRunning(containerState) && (inst.Status == 5 || inst.Status == 12) {
+				if err := reconcileRunningDatabase(ctx, &inst); err != nil {
+					logger.Warn("Failed to reconcile externally started database %s: %v", inst.ID, err)
+				} else {
+					inst.Status = 3
+					route.DBStatus = 3
+					route.Stopped = false
+				}
+			}
 			if containerOwnedLocally && inst.Status == 3 && databaseContainerTerminallyUnavailable(containerState, containerIsLocal) {
 				if err := reconcileStoppedDatabase(ctx, &inst); err != nil {
 					logger.Warn("Failed to reconcile externally stopped database %s: %v", inst.ID, err)
@@ -443,6 +452,10 @@ func databaseContainerTerminallyUnavailable(state string, listedLocally bool) bo
 	}
 }
 
+func databaseContainerIsRunning(state string) bool {
+	return strings.EqualFold(strings.TrimSpace(state), "running")
+}
+
 func databaseUptimeNeedsRepair(instanceStatus int32, containerIsLocal, locationReconciled, intervalOpen bool) bool {
 	return instanceStatus == 3 && containerIsLocal && !locationReconciled && !intervalOpen
 }
@@ -457,6 +470,21 @@ func reconcileStoppedDatabase(ctx context.Context, instance *database.DatabaseIn
 		return fmt.Errorf("update database instance status: %w", err)
 	}
 	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "stopped"); err != nil {
+		return fmt.Errorf("update database location status: %w", err)
+	}
+	return nil
+}
+
+func reconcileRunningDatabase(ctx context.Context, instance *database.DatabaseInstance) error {
+	if instance == nil {
+		return nil
+	}
+	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
+		Where("id = ?", instance.ID).
+		Update("status", 3).Error; err != nil {
+		return fmt.Errorf("update database instance status: %w", err)
+	}
+	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "running"); err != nil {
 		return fmt.Errorf("update database location status: %w", err)
 	}
 	return nil

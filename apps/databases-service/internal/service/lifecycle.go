@@ -304,6 +304,15 @@ func (s *Service) persistDatabaseInstance(ctx context.Context, dbInstance *datab
 	})
 }
 
+func (s *Service) persistDatabaseConnection(ctx context.Context, connection *database.DatabaseConnection) error {
+	if s == nil || s.connRepo == nil {
+		return fmt.Errorf("database connection repository is unavailable")
+	}
+	return retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return s.connRepo.CreateOrUpdate(ctx, connection)
+	})
+}
+
 func retryDatabaseWrite(ctx context.Context, attempts int, delay time.Duration, update func() error) error {
 	if attempts < 1 {
 		attempts = 1

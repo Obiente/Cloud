@@ -207,6 +207,69 @@ func TestReconcileStoppedDatabaseClosesTracking(t *testing.T) {
 	}
 }
 
+func TestReconcileRunningDatabaseReopensTracking(t *testing.T) {
+	previousDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:proxy-running-reconciliation?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+	if err := db.AutoMigrate(
+		&database.DatabaseInstance{},
+		&database.DatabaseLocation{},
+		&database.DatabaseUptimeInterval{},
+	); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+
+	databaseID := "db-external-start-test"
+	containerID := "container-external-start-test"
+	instance := &database.DatabaseInstance{ID: databaseID, InstanceID: &containerID, Status: 12}
+	if err := db.Create(instance).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := db.Create(&database.DatabaseLocation{
+		ID:          database.DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-external-start-test",
+		ContainerID: containerID,
+		Status:      "sleeping",
+	}).Error; err != nil {
+		t.Fatalf("create sleeping database location: %v", err)
+	}
+
+	if !databaseContainerIsRunning(" running ") {
+		t.Fatal("running container state was not recognized")
+	}
+	if err := reconcileRunningDatabase(t.Context(), instance); err != nil {
+		t.Fatalf("reconcile running database: %v", err)
+	}
+	var storedInstance database.DatabaseInstance
+	if err := db.First(&storedInstance, "id = ?", databaseID).Error; err != nil {
+		t.Fatalf("load database instance: %v", err)
+	}
+	if storedInstance.Status != 3 {
+		t.Fatalf("database status = %d, want running", storedInstance.Status)
+	}
+	var storedLocation database.DatabaseLocation
+	if err := db.First(&storedLocation, "container_id = ?", containerID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if storedLocation.Status != "running" {
+		t.Fatalf("location status = %q, want running", storedLocation.Status)
+	}
+	var openIntervals int64
+	if err := db.Model(&database.DatabaseUptimeInterval{}).
+		Where("database_id = ? AND ended_at IS NULL", databaseID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 1 {
+		t.Fatalf("open uptime intervals = %d, want 1", openIntervals)
+	}
+}
+
 func TestDatabaseLocationNeedsReconciliation(t *testing.T) {
 	nodeID := "node-routing-test"
 	instance := &database.DatabaseInstance{NodeID: &nodeID, Status: 3}

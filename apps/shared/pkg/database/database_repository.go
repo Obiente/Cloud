@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DatabaseRepository struct {
@@ -198,6 +199,16 @@ func NewDatabaseConnectionRepository(db *gorm.DB) *DatabaseConnectionRepository 
 
 func (r *DatabaseConnectionRepository) Create(ctx context.Context, conn *DatabaseConnection) error {
 	return r.db.WithContext(ctx).Create(conn).Error
+}
+
+func (r *DatabaseConnectionRepository) CreateOrUpdate(ctx context.Context, conn *DatabaseConnection) error {
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "database_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"database_name", "username", "password", "host", "port", "proxy_port",
+			"ssl_required", "ssl_certificate", "updated_at",
+		}),
+	}).Create(conn).Error
 }
 
 func (r *DatabaseConnectionRepository) GetByDatabaseID(ctx context.Context, databaseID string) (*DatabaseConnection, error) {

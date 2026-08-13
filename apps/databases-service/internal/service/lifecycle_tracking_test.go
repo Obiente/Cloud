@@ -44,6 +44,41 @@ func TestRetryDatabaseWriteReturnsAfterExhaustion(t *testing.T) {
 	}
 }
 
+func TestPersistDatabaseConnectionIsIdempotent(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:connection-persistence-test?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	if err := db.AutoMigrate(&database.DatabaseConnection{}); err != nil {
+		t.Fatalf("migrate database connection: %v", err)
+	}
+	service := &Service{connRepo: database.NewDatabaseConnectionRepository(db)}
+	connection := &database.DatabaseConnection{
+		ID:           "conn-persistence-test",
+		DatabaseID:   "db-persistence-test",
+		DatabaseName: "db-persistence-test",
+		Username:     "test-user",
+		Password:     "test-secret",
+		Host:         "db-persistence-test.example.test",
+		Port:         5432,
+	}
+	if err := service.persistDatabaseConnection(t.Context(), connection); err != nil {
+		t.Fatalf("persist database connection: %v", err)
+	}
+	connection.Password = "updated-test-secret"
+	if err := service.persistDatabaseConnection(t.Context(), connection); err != nil {
+		t.Fatalf("repeat database connection persistence: %v", err)
+	}
+
+	var stored []database.DatabaseConnection
+	if err := db.Find(&stored).Error; err != nil {
+		t.Fatalf("load database connections: %v", err)
+	}
+	if len(stored) != 1 || stored[0].Password != connection.Password {
+		t.Fatalf("unexpected persisted connections: %#v", stored)
+	}
+}
+
 func TestRestoreDatabaseAfterFailedStopKeepsTrackingActive(t *testing.T) {
 	previousDB := database.DB
 	db, err := gorm.Open(sqlite.Open("file:failed-stop-tracking-test?mode=memory&cache=shared"), &gorm.Config{})
