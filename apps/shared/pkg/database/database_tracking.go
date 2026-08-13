@@ -209,6 +209,49 @@ func EnsureDatabaseUptimeInterval(ctx context.Context, databaseID string) error 
 func BackfillDatabaseUptimeIntervals() error {
 	now := time.Now().UTC()
 	return DB.Transaction(func(tx *gorm.DB) error {
+		var instances []DatabaseInstance
+		if err := tx.Select("id", "instance_id").Find(&instances).Error; err != nil {
+			return err
+		}
+		authoritativeContainers := make(map[string]string, len(instances))
+		for i := range instances {
+			if instances[i].InstanceID != nil && *instances[i].InstanceID != "" {
+				authoritativeContainers[instances[i].ID] = *instances[i].InstanceID
+			}
+		}
+
+		var legacyLocations []DatabaseLocation
+		if err := tx.Order("database_id, updated_at DESC").Find(&legacyLocations).Error; err != nil {
+			return err
+		}
+		for i := range legacyLocations {
+			location := &legacyLocations[i]
+			if location.Status == "running" && authoritativeContainers[location.DatabaseID] == "" {
+				authoritativeContainers[location.DatabaseID] = location.ContainerID
+			}
+		}
+		for i := range legacyLocations {
+			location := &legacyLocations[i]
+			currentContainerID := authoritativeContainers[location.DatabaseID]
+			if location.Status != "running" || currentContainerID == "" || location.ContainerID == currentContainerID {
+				continue
+			}
+			endedAt := location.UpdatedAt.UTC()
+			if endedAt.IsZero() {
+				endedAt = now
+			}
+			if err := tx.Model(&DatabaseLocation{}).
+				Where("id = ?", location.ID).
+				Update("status", "stopped").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&DatabaseUptimeInterval{}).
+				Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
+				Update("ended_at", endedAt).Error; err != nil {
+				return err
+			}
+		}
+
 		var locations []DatabaseLocation
 		if err := tx.Table("database_locations AS dl").
 			Select("dl.*").

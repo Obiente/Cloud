@@ -299,10 +299,11 @@ func (s *Service) restoreDatabaseAfterFailedStop(ctx context.Context, dbInstance
 		return
 	}
 	dbInstance.Status = 3 // RUNNING: a failed stop must keep proxy, metrics, and uptime tracking active.
-	if err := s.repo.Update(ctx, dbInstance); err != nil {
-		logger.Error("Failed to restore database status after stop failure: %v", err)
+	if err := retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return database.UpdateDatabaseRuntimeStatus(ctx, dbInstance.ID, 3, "running")
+	}); err != nil {
+		logger.Error("Failed to atomically restore database after stop failure: %v", err)
 	}
-	updateDatabaseLocationStatus(ctx, dbInstance.ID, "running")
 }
 
 func (s *Service) persistDatabaseInstance(ctx context.Context, dbInstance *database.DatabaseInstance) error {

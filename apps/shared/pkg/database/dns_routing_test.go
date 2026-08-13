@@ -556,6 +556,58 @@ func TestBackfillDatabaseUptimeIntervalsPreservesLegacyTimestamps(t *testing.T) 
 	}
 }
 
+func TestBackfillDatabaseUptimeIntervalsClosesSupersededRunningLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-legacy-multiple-running-test"
+	currentContainerID := "container-legacy-current"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &currentContainerID, Status: 3}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	oldUpdatedAt := time.Date(2026, time.May, 2, 0, 0, 0, 0, time.UTC)
+	locations := []DatabaseLocation{
+		{
+			ID:          "legacy-superseded-running-location",
+			DatabaseID:  databaseID,
+			NodeID:      "node-legacy-old",
+			ContainerID: "container-legacy-old",
+			Status:      "running",
+			CreatedAt:   oldUpdatedAt.Add(-time.Hour),
+			UpdatedAt:   oldUpdatedAt,
+		},
+		{
+			ID:          "legacy-current-running-location",
+			DatabaseID:  databaseID,
+			NodeID:      "node-legacy-current",
+			ContainerID: currentContainerID,
+			Status:      "running",
+			CreatedAt:   oldUpdatedAt.Add(time.Hour),
+			UpdatedAt:   oldUpdatedAt.Add(2 * time.Hour),
+		},
+	}
+	if err := DB.Create(&locations).Error; err != nil {
+		t.Fatalf("create legacy running locations: %v", err)
+	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("backfill database uptime intervals: %v", err)
+	}
+
+	var openIntervals []DatabaseUptimeInterval
+	if err := DB.Where("database_id = ? AND ended_at IS NULL", databaseID).Find(&openIntervals).Error; err != nil {
+		t.Fatalf("load open uptime intervals: %v", err)
+	}
+	if len(openIntervals) != 1 || openIntervals[0].ContainerID != currentContainerID {
+		t.Fatalf("unexpected authoritative open intervals: %#v", openIntervals)
+	}
+	var superseded DatabaseLocation
+	if err := DB.First(&superseded, "id = ?", locations[0].ID).Error; err != nil {
+		t.Fatalf("load superseded database location: %v", err)
+	}
+	if superseded.Status != "stopped" {
+		t.Fatalf("superseded location status = %q, want stopped", superseded.Status)
+	}
+}
+
 func TestDatabaseUptimeIntervalAllowsOnlyOneOpenRowPerContainer(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 

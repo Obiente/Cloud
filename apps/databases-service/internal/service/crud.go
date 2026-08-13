@@ -295,7 +295,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 
 		if err := s.persistDatabaseConnection(provisionCtx, dbConn); err != nil {
 			logger.Error("Failed to persist connection record; removing unpublished database container: %v", err)
-			s.failUnpublishedDatabase(provisionCtx, dbInstance, result.ContainerID, dbConn.ProxyPort)
+			s.failUnpublishedDatabase(dbInstance, result.ContainerID, dbConn.ProxyPort)
 			return
 		}
 
@@ -303,7 +303,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		if err := s.persistDatabaseInstance(provisionCtx, dbInstance); err != nil {
 			logger.Error("Failed to persist running database instance; removing unpublished database container: %v", err)
 			_ = s.connRepo.Delete(provisionCtx, id)
-			s.failUnpublishedDatabase(provisionCtx, dbInstance, result.ContainerID, dbConn.ProxyPort)
+			s.failUnpublishedDatabase(dbInstance, result.ContainerID, dbConn.ProxyPort)
 			return
 		}
 
@@ -381,7 +381,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 	return res, nil
 }
 
-func (s *Service) failUnpublishedDatabase(ctx context.Context, instance *database.DatabaseInstance, containerID string, redisPort int32) {
+func (s *Service) failUnpublishedDatabase(instance *database.DatabaseInstance, containerID string, redisPort int32) {
 	if redisPort > 0 && s.routeRegistry != nil {
 		s.routeRegistry.ReleaseRedisPort(int(redisPort))
 	}
@@ -399,7 +399,9 @@ func (s *Service) failUnpublishedDatabase(ctx context.Context, instance *databas
 		return
 	}
 	markUnpublishedDatabaseFailed(instance, containerRemoved)
-	if err := s.persistDatabaseInstance(ctx, instance); err != nil {
+	failedCtx, failedCancel := s.detachedContext(30 * time.Second)
+	defer failedCancel()
+	if err := s.persistDatabaseInstance(failedCtx, instance); err != nil {
 		logger.Error("Failed to persist failed database provisioning state: %v", err)
 	}
 }
