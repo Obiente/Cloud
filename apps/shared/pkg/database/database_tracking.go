@@ -2,7 +2,11 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // DatabaseLocation tracks where managed database containers are running across the cluster
@@ -23,6 +27,12 @@ type DatabaseLocation struct {
 
 func (DatabaseLocation) TableName() string { return "database_locations" }
 
+// DatabaseLocationID returns a stable primary key for a database container's
+// location record, allowing startup reconciliation to safely upsert it.
+func DatabaseLocationID(databaseID, containerID string) string {
+	return fmt.Sprintf("%s:%s", databaseID, containerID)
+}
+
 // GetDatabaseLocations returns all locations where a database is running
 func GetDatabaseLocations(databaseID string) ([]DatabaseLocation, error) {
 	var locations []DatabaseLocation
@@ -39,6 +49,13 @@ func GetAllDatabaseLocations(databaseID string) ([]DatabaseLocation, error) {
 
 // UpsertDatabaseLocation creates or updates a database location
 func UpsertDatabaseLocation(location *DatabaseLocation) error {
+	var existing DatabaseLocation
+	if err := DB.Where("container_id = ?", location.ContainerID).First(&existing).Error; err == nil {
+		location.ID = existing.ID
+		location.CreatedAt = existing.CreatedAt
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	return DB.Save(location).Error
 }
 

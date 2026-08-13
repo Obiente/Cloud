@@ -93,19 +93,10 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 	var nodeRegion string
 
 	if err := DB.First(&node, "id = ?", nodeID).Error; err != nil {
-		// If node doesn't exist (e.g., was deleted), fall back to default region
+		// Older records may refer to a node that predates node metadata. Only use
+		// an unassigned compatibility fallback when it is unambiguous.
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Node not found - use fallback logic
-			if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-				return ips, nil
-			}
-			// Try to find any region in the map as fallback
-			for region := range nodeIPMap {
-				if ips := nodeIPMap[region]; len(ips) > 0 {
-					return ips, nil
-				}
-			}
-			return nil, fmt.Errorf("node %s not found and no default node IP configured", nodeID)
+			return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s not found", nodeID))
 		}
 		return nil, fmt.Errorf("failed to find node %s: %w", nodeID, err)
 	}
@@ -116,19 +107,9 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 
 	nodeRegion = node.Region
 
-	// If node has no region, try to find a default or return error
+	// If node has no region, only use an unambiguous compatibility fallback.
 	if nodeRegion == "" {
-		// Try to find "default" region first, then any region as fallback
-		if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-			return ips, nil
-		}
-		// Try to find any region in the map as fallback
-		for region := range nodeIPMap {
-			if ips := nodeIPMap[region]; len(ips) > 0 {
-				return ips, nil
-			}
-		}
-		return nil, fmt.Errorf("node %s has no region configured and no default region found", nodeID)
+		return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s has no IP or region", nodeID))
 	}
 
 	// Get node IPs for this region
@@ -142,6 +123,43 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 	}
 
 	return ips, nil
+}
+
+func compatibilityNodeIPs(nodeIPMap map[string][]string, reason string) ([]string, error) {
+	if ips := cleanNodeIPs(nodeIPMap["default"]); len(ips) > 0 {
+		return ips, nil
+	}
+
+	var onlyRegionIPs []string
+	regions := 0
+	for region, rawIPs := range nodeIPMap {
+		if region == "default" {
+			continue
+		}
+		ips := cleanNodeIPs(rawIPs)
+		if len(ips) == 0 {
+			continue
+		}
+		regions++
+		onlyRegionIPs = ips
+	}
+	if regions == 1 {
+		return onlyRegionIPs, nil
+	}
+	if regions > 1 {
+		return nil, fmt.Errorf("%s and NODE_IPS contains %d regions; refusing ambiguous cross-node DNS fallback", reason, regions)
+	}
+	return nil, fmt.Errorf("%s and no fallback node IP is configured", reason)
+}
+
+func cleanNodeIPs(rawIPs []string) []string {
+	ips := make([]string, 0, len(rawIPs))
+	for _, ip := range rawIPs {
+		if ip = strings.TrimSpace(ip); ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return ips
 }
 
 // GetDatabaseNodeIP returns the node IPs for a managed database domain.
@@ -163,29 +181,24 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 		return nil, fmt.Errorf("failed to query database %s: %w", databaseID, err)
 	}
 
-	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
-		var node NodeMetadata
-		if err := DB.First(&node, "id = ?", *dbInstance.NodeID).Error; err == nil {
-			nodeRegion := node.Region
-			if nodeRegion != "" {
-				if ips, ok := nodeIPMap[nodeRegion]; ok && len(ips) > 0 {
-					return ips, nil
-				}
-			}
-		}
+	var locations []DatabaseLocation
+	if err := DB.Where("database_id = ? AND status IN ?", databaseID, []string{"running", "restarting", "starting", "created"}).
+		Order("updated_at DESC").
+		Find(&locations).Error; err != nil {
+		return nil, fmt.Errorf("failed to query database locations: %w", err)
 	}
-
-	if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-		return ips, nil
-	}
-
-	for _, ips := range nodeIPMap {
-		if len(ips) > 0 {
+	if len(locations) > 0 {
+		location := locations[0]
+		if ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap); err == nil {
 			return ips, nil
 		}
 	}
 
-	return nil, fmt.Errorf("no node IPs configured for database %s", databaseID)
+	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
+		return resolvePreferredNodeIPs(*dbInstance.NodeID, "", nodeIPMap)
+	}
+
+	return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("database %s has no recorded host node", databaseID))
 }
 
 // GetDeploymentRegion returns the region where a deployment is running

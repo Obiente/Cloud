@@ -258,7 +258,21 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		dbInstance.InstanceID = &result.ContainerID
 		dbInstance.Host = &result.Host
 		dbInstance.Port = &port
+		dbInstance.NodeID = &result.NodeID
 		dbInstance.Status = 3 // RUNNING
+
+		if err := database.UpsertDatabaseLocation(&database.DatabaseLocation{
+			ID:           database.DatabaseLocationID(id, result.ContainerID),
+			DatabaseID:   id,
+			NodeID:       result.NodeID,
+			NodeHostname: result.NodeHostname,
+			NodeIP:       result.NodeIP,
+			ContainerID:  result.ContainerID,
+			Status:       "running",
+			Port:         port,
+		}); err != nil {
+			logger.Warn("Failed to record database location: %v", err)
+		}
 
 		// Create connection record
 		connID := fmt.Sprintf("conn-%s", uuid.NewString())

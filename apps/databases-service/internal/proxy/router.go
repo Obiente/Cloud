@@ -205,6 +205,11 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	newRoutes := make(map[string]*Route, len(instances))
 	newRoutesByID := make(map[string]*Route, len(instances))
 	newUsedRedisPorts := make(map[int]string)
+	var localNode docker.NodeIdentity
+	var localNodeErr error
+	if r.dockerClient != nil {
+		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
+	}
 
 	for _, inst := range instances {
 		dbType := databaseTypeIntToString(inst.Type)
@@ -231,6 +236,12 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
+		}
+		locationNeedsReconciliation := inst.NodeID == nil || *inst.NodeID != localNode.ID
+		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && locationNeedsReconciliation {
+			if _, err := r.dockerClient.ContainerInspect(ctx, route.ContainerID); err == nil {
+				r.recordDatabaseLocation(ctx, &inst, localNode)
+			}
 		}
 
 		// Load connection credentials
@@ -297,6 +308,34 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func (r *RouteRegistry) recordDatabaseLocation(ctx context.Context, instance *database.DatabaseInstance, node docker.NodeIdentity) {
+	if instance == nil || instance.InstanceID == nil || node.ID == "" {
+		return
+	}
+
+	containerID := *instance.InstanceID
+	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
+		Where("id = ?", instance.ID).
+		Update("node_id", node.ID).Error; err != nil {
+		logger.Warn("Failed to record host node for database %s: %v", instance.ID, err)
+		return
+	}
+	instance.NodeID = &node.ID
+
+	if err := database.UpsertDatabaseLocation(&database.DatabaseLocation{
+		ID:           database.DatabaseLocationID(instance.ID, containerID),
+		DatabaseID:   instance.ID,
+		NodeID:       node.ID,
+		NodeHostname: node.Hostname,
+		NodeIP:       node.IP,
+		ContainerID:  containerID,
+		Status:       "running",
+		Port:         int32(standardPort(databaseTypeIntToString(instance.Type))),
+	}); err != nil {
+		logger.Warn("Failed to reconcile location for database %s: %v", instance.ID, err)
+	}
 }
 
 // StartIPRefresh starts a background goroutine that refreshes container IPs

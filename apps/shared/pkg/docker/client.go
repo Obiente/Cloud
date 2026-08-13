@@ -31,6 +31,13 @@ type Client struct {
 	api client.APIClient
 }
 
+// NodeIdentity identifies the Docker node that owns locally managed resources.
+type NodeIdentity struct {
+	ID       string
+	Hostname string
+	IP       string
+}
+
 // New constructs a Docker client using environment variables and API version
 // negotiation so it works across Docker Desktop and remote engines.
 func New() (*Client, error) {
@@ -51,6 +58,34 @@ func (c *Client) Close() error {
 		return nil
 	}
 	return c.api.Close()
+}
+
+// CurrentNodeIdentity returns the identity of the Docker daemon backing this
+// client. In Swarm mode the stable Swarm node ID is used; standalone daemons
+// use the same local-<hostname> convention as the orchestrator node registry.
+func (c *Client) CurrentNodeIdentity(ctx context.Context) (NodeIdentity, error) {
+	if c == nil || c.api == nil {
+		return NodeIdentity{}, ErrUninitialized
+	}
+
+	result, err := c.api.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return NodeIdentity{}, fmt.Errorf("docker: inspect daemon identity: %w", err)
+	}
+
+	identity := NodeIdentity{
+		ID:       strings.TrimSpace(result.Info.Swarm.NodeID),
+		Hostname: strings.TrimSpace(result.Info.Name),
+		IP:       strings.TrimSpace(result.Info.Swarm.NodeAddr),
+	}
+	if identity.ID == "" {
+		identity.ID = "local-" + identity.Hostname
+	}
+	if identity.ID == "local-" {
+		return NodeIdentity{}, fmt.Errorf("docker: daemon hostname is empty")
+	}
+
+	return identity, nil
 }
 
 // ContainerConfig represents configuration for creating a container
