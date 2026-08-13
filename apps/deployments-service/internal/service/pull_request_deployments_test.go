@@ -715,6 +715,30 @@ func TestPullRequestReportRetryBackoffIsBounded(t *testing.T) {
 	}
 }
 
+func TestMergedPullRequestCleanupCompletesGitHubCheckSuccessfully(t *testing.T) {
+	record := &database.PullRequestDeployment{
+		Merged: true,
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Status != "completed" || check.Conclusion != "success" {
+		t.Fatalf("merged cleanup check = %s/%s, want completed/success", check.Status, check.Conclusion)
+	}
+	if check.Title != "Preview cleanup complete" || !strings.Contains(check.Summary, "merged") {
+		t.Fatalf("merged cleanup output = %q / %q", check.Title, check.Summary)
+	}
+}
+
+func TestUnmergedPullRequestCleanupRemainsCancelled(t *testing.T) {
+	record := &database.PullRequestDeployment{
+		Status: int32(deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED),
+	}
+	check := githubPRCheckRun(record, &database.Deployment{Name: "NC Native"}, "")
+	if check.Status != "completed" || check.Conclusion != "cancelled" {
+		t.Fatalf("unmerged cleanup check = %s/%s, want completed/cancelled", check.Status, check.Conclusion)
+	}
+}
+
 func TestPullRequestBooleanSettingsDoNotHaveORMDefaults(t *testing.T) {
 	typeOfConfig := reflect.TypeOf(database.PullRequestDeploymentConfig{})
 	for _, name := range []string{"RedeployOnPush", "CleanupOnClose", "CommentEnabled", "DeploymentStatusEnabled", "CheckRunEnabled"} {

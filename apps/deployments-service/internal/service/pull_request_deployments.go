@@ -2588,7 +2588,11 @@ func githubPRCheckRun(record *database.PullRequestDeployment, source *database.D
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_REJECTED:
 		status, conclusion, title, summary = "completed", "failure", "Preview rejected", "A maintainer rejected this preview."
 	case deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_CLOSED:
-		status, conclusion, title, summary = "completed", "cancelled", "Preview removed", "The pull request environment has been removed."
+		if record.Merged {
+			status, conclusion, title, summary = "completed", "success", "Preview cleanup complete", "The pull request was merged and its preview environment has been removed."
+		} else {
+			status, conclusion, title, summary = "completed", "cancelled", "Preview removed", "The pull request environment has been removed."
+		}
 	}
 	return githubclient.CheckRunUpdate{Name: "Obiente Preview · " + sourceName(source, record.SourceDeploymentID), HeadSHA: record.HeadSHA, DetailsURL: detailsURL, ExternalID: record.ID, Status: status, Conclusion: conclusion, Title: title, Summary: summary}
 }
