@@ -315,6 +315,9 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			}
 		}
 	}
+	if localRoutesOnly && localNodeErr != nil {
+		return fmt.Errorf("cannot refresh local database routes: %w", localNodeErr)
+	}
 
 	for _, inst := range instances {
 		dbType := databaseTypeIntToString(inst.Type)
@@ -497,11 +500,8 @@ func reconcileStoppedDatabase(ctx context.Context, instance *database.DatabaseIn
 	if instance == nil {
 		return nil
 	}
-	if err := database.UpdateDatabaseInstanceStatus(ctx, instance.ID, 5); err != nil {
-		return fmt.Errorf("update database instance status: %w", err)
-	}
-	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "stopped"); err != nil {
-		return fmt.Errorf("update database location status: %w", err)
+	if err := database.UpdateDatabaseRuntimeStatus(ctx, instance.ID, 5, "stopped"); err != nil {
+		return fmt.Errorf("update stopped database runtime status: %w", err)
 	}
 	return nil
 }
@@ -510,11 +510,8 @@ func reconcileRunningDatabase(ctx context.Context, instance *database.DatabaseIn
 	if instance == nil {
 		return nil
 	}
-	if err := database.UpdateDatabaseInstanceStatus(ctx, instance.ID, 3); err != nil {
-		return fmt.Errorf("update database instance status: %w", err)
-	}
-	if err := database.UpdateDatabaseLocationStatus(ctx, instance.ID, "running"); err != nil {
-		return fmt.Errorf("update database location status: %w", err)
+	if err := database.UpdateDatabaseRuntimeStatus(ctx, instance.ID, 3, "running"); err != nil {
+		return fmt.Errorf("update running database runtime status: %w", err)
 	}
 	return nil
 }

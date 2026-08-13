@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -231,6 +232,21 @@ func TestResolveAuthoritativeNodeIPsUsesNodeSpecificAddress(t *testing.T) {
 	assertNodeIPs(t, ips, "192.0.2.11")
 }
 
+func TestResolveAuthoritativeLocationUsesExactMappingWithoutMetadata(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	ips, err := resolveAuthoritativeLocationNodeIPs(
+		"node-without-metadata",
+		"owner-without-metadata",
+		"203.0.113.55",
+		map[string][]string{"owner-without-metadata": {"192.0.2.10"}},
+	)
+	if err != nil {
+		t.Fatalf("resolve exact owner mapping without node metadata: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
 func TestResolveAuthoritativeNodeIPsRejectsAmbiguousRegion(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 
@@ -439,6 +455,53 @@ func TestUpdateDatabaseLocationStatus(t *testing.T) {
 	}
 	if openIntervals != 1 {
 		t.Fatalf("expected exactly one open interval for the current container, got %d", openIntervals)
+	}
+}
+
+func TestUpdateDatabaseRuntimeStatusRollsBackSplitTransition(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-atomic-runtime-status-test"
+	containerID := "container-atomic-runtime-status-test"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID, Status: 3}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := UpsertDatabaseLocation(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-atomic-runtime-status-test",
+		ContainerID: containerID,
+		Status:      "running",
+	}); err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+
+	callbackName := "test:fail-runtime-location-update"
+	if err := DB.Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Table == "database_locations" {
+			tx.AddError(errors.New("synthetic location update failure"))
+		}
+	}); err != nil {
+		t.Fatalf("register failing update callback: %v", err)
+	}
+	t.Cleanup(func() { _ = DB.Callback().Update().Remove(callbackName) })
+
+	if err := UpdateDatabaseRuntimeStatus(t.Context(), databaseID, 5, "stopped"); err == nil {
+		t.Fatal("expected split runtime transition to fail")
+	}
+	var instance DatabaseInstance
+	if err := DB.First(&instance, "id = ?", databaseID).Error; err != nil {
+		t.Fatalf("load database instance: %v", err)
+	}
+	if instance.Status != 3 {
+		t.Fatalf("instance status committed without its location: %d", instance.Status)
+	}
+	var location DatabaseLocation
+	if err := DB.First(&location, "container_id = ?", containerID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if location.Status != "running" {
+		t.Fatalf("location status changed despite rollback: %q", location.Status)
 	}
 }
 

@@ -120,6 +120,44 @@ func UpdateDatabaseLocationStatus(ctx context.Context, databaseID, status string
 	})
 }
 
+// UpdateDatabaseRuntimeStatus commits the instance and its location/uptime
+// state together so reconciliation cannot leave a split lifecycle transition.
+func UpdateDatabaseRuntimeStatus(ctx context.Context, databaseID string, instanceStatus int32, locationStatus string) error {
+	now := time.Now().UTC()
+	if err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&DatabaseInstance{}).
+			Where("id = ?", databaseID).
+			Update("status", instanceStatus).Error; err != nil {
+			return err
+		}
+		location, err := currentDatabaseLocation(tx, databaseID)
+		if err != nil || location == nil {
+			return err
+		}
+		if err := deactivateOtherDatabaseLocations(tx, databaseID, location.ContainerID, now); err != nil {
+			return err
+		}
+		if err := tx.Model(&DatabaseLocation{}).
+			Where("id = ?", location.ID).
+			Updates(map[string]interface{}{"status": locationStatus, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if locationStatus != "running" {
+			return closeDatabaseUptimeIntervals(tx, databaseID, location.ContainerID, now)
+		}
+		location.Status = locationStatus
+		return ensureDatabaseUptimeInterval(tx, location, now)
+	}); err != nil {
+		return err
+	}
+	if RedisClient != nil {
+		if err := RedisClient.Delete(ctx, fmt.Sprintf("database:%s", databaseID)); err != nil {
+			return fmt.Errorf("invalidate database instance cache: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnsureDatabaseUptimeInterval backfills an open interval for a running
 // location discovered during startup reconciliation.
 func EnsureDatabaseUptimeInterval(ctx context.Context, databaseID string) error {

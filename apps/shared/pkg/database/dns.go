@@ -85,16 +85,25 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 }
 
 func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
-	return resolveNodeIPs(nodeID, explicitNodeIP, nodeIPMap, true)
+	return resolveNodeIPs(nodeID, "", explicitNodeIP, nodeIPMap, true)
 }
 
 func resolveAuthoritativeNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
-	return resolveNodeIPs(nodeID, explicitNodeIP, nodeIPMap, false)
+	return resolveNodeIPs(nodeID, "", explicitNodeIP, nodeIPMap, false)
 }
 
-func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string, allowCompatibilityFallback bool) ([]string, error) {
+func resolveAuthoritativeLocationNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	return resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP, nodeIPMap, false)
+}
+
+func resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[string][]string, allowCompatibilityFallback bool) ([]string, error) {
 	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); configuredNodeIP(explicitNodeIP, nodeIPMap) {
 		return []string{explicitNodeIP}, nil
+	}
+	if ips, found, err := keyedNodeIPs(nodeIPMap, nodeID, nodeHostname); err != nil {
+		return nil, err
+	} else if found {
+		return ips, nil
 	}
 
 	var node NodeMetadata
@@ -152,8 +161,12 @@ func resolveNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string
 }
 
 func nodeSpecificIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
-	keys := []string{strings.TrimSpace(node.ID), strings.TrimSpace(node.Hostname)}
+	return keyedNodeIPs(nodeIPMap, node.ID, node.Hostname)
+}
+
+func keyedNodeIPs(nodeIPMap map[string][]string, keys ...string) ([]string, bool, error) {
 	for _, key := range keys {
+		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
 		}
@@ -248,7 +261,7 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 	}
 	if len(locations) > 0 {
 		location := locations[0]
-		ips, err := resolveAuthoritativeNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
+		ips, err := resolveAuthoritativeLocationNodeIPs(location.NodeID, location.NodeHostname, location.NodeIP, nodeIPMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve active database location on node %s: %w", location.NodeID, err)
 		}
