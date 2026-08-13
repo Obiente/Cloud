@@ -446,12 +446,29 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	r.routesByID = newRoutesByID
 	r.mu.Unlock()
 
-	r.redisMu.Lock()
-	r.usedRedisPorts = newUsedRedisPorts
-	r.redisMu.Unlock()
+	r.replaceRedisReservations(newUsedRedisPorts)
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func (r *RouteRegistry) replaceRedisReservations(snapshot map[int]string) {
+	r.redisMu.Lock()
+	defer r.redisMu.Unlock()
+
+	representedDatabases := make(map[string]struct{}, len(snapshot))
+	for _, databaseID := range snapshot {
+		representedDatabases[databaseID] = struct{}{}
+	}
+	for port, databaseID := range r.usedRedisPorts {
+		if _, represented := representedDatabases[databaseID]; represented {
+			continue
+		}
+		if _, occupied := snapshot[port]; !occupied {
+			snapshot[port] = databaseID
+		}
+	}
+	r.usedRedisPorts = snapshot
 }
 
 func (r *RouteRegistry) validRedisPort(port int) bool {

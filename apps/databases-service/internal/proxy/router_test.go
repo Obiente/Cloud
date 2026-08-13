@@ -59,6 +59,24 @@ func TestLoadFromDatabasePreservesAndBackfillsRedisProxyPorts(t *testing.T) {
 	}
 }
 
+func TestRedisRefreshPreservesInflightPortReservation(t *testing.T) {
+	registry := NewRouteRegistry(nil)
+	registry.usedRedisPorts[16379] = "db-redis-creating"
+	registry.usedRedisPorts[16381] = "db-redis-running"
+
+	registry.replaceRedisReservations(map[int]string{16380: "db-redis-running"})
+
+	if got := registry.usedRedisPorts[16379]; got != "db-redis-creating" {
+		t.Fatalf("in-flight reservation owner = %q, want db-redis-creating", got)
+	}
+	if got := registry.usedRedisPorts[16380]; got != "db-redis-running" {
+		t.Fatalf("persisted reservation owner = %q, want db-redis-running", got)
+	}
+	if _, exists := registry.usedRedisPorts[16381]; exists {
+		t.Fatal("stale reservation for a persisted database was retained")
+	}
+}
+
 func TestControlPlaneDatabaseSyncRefreshesRoutes(t *testing.T) {
 	previousDB := database.DB
 	db, err := gorm.Open(sqlite.Open("file:control-plane-route-sync?mode=memory&cache=shared"), &gorm.Config{})
