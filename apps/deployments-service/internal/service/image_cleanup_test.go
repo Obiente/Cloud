@@ -1,6 +1,9 @@
 package deployments
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -107,5 +110,37 @@ func TestActiveRevisionImagesProtectsCommitBeforeImageExists(t *testing.T) {
 		if _, ok := protected[image]; !ok {
 			t.Fatalf("active revision image %q was not protected", image)
 		}
+	}
+}
+
+func TestProtectRegistryImageDigestsIncludesNewActiveRevision(t *testing.T) {
+	const digest = "sha256:output-identical"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodHead {
+			t.Fatalf("method = %s, want HEAD", request.Method)
+		}
+		response.Header().Set("Docker-Content-Digest", digest)
+		response.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	registryHost := strings.TrimPrefix(server.URL, "http://")
+	activeImage := registryHost + "/obiente/deploy-1:main-" + strings.Repeat("b", 40)
+	protectedDigests := make(map[string]map[string]struct{})
+	unsafeRepositories := make(map[string]struct{})
+	protectRegistryImageDigests(
+		context.Background(),
+		server.Client(),
+		server.URL,
+		map[string]struct{}{activeImage: {}},
+		protectedDigests,
+		unsafeRepositories,
+	)
+
+	if _, protected := protectedDigests["obiente/deploy-1"][digest]; !protected {
+		t.Fatalf("newly active manifest digest %q was not protected", digest)
+	}
+	if len(unsafeRepositories) != 0 {
+		t.Fatalf("unexpected unsafe repositories: %v", unsafeRepositories)
 	}
 }

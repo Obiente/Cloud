@@ -218,22 +218,7 @@ func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentI
 	for image := range activeImages {
 		kept[image] = struct{}{}
 	}
-	for image := range kept {
-		repository, tag, ok := splitRegistryImage(registryURL, image)
-		if !ok {
-			continue
-		}
-		digest, err := registryManifestDigest(ctx, client, registryURL, repository, tag)
-		if err != nil {
-			unsafeRepositories[repository] = struct{}{}
-			logger.Warn("[ImageCleanup] Keeping registry repository %s unchanged because protected image %s could not be resolved: %v", repository, image, err)
-			continue
-		}
-		if protectedDigests[repository] == nil {
-			protectedDigests[repository] = make(map[string]struct{})
-		}
-		protectedDigests[repository][digest] = struct{}{}
-	}
+	protectRegistryImageDigests(ctx, client, registryURL, kept, protectedDigests, unsafeRepositories)
 
 	for _, image := range obsolete {
 		activeImages, activeUnknown, err = s.currentRevisionImageReservations(ctx, deploymentID, organizationID, registryURL)
@@ -245,6 +230,10 @@ func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentI
 			logger.Info("[ImageCleanup] Retaining image %s because an active build owns its revision", image)
 			continue
 		}
+		// Registry manifest deletion is digest-wide: another active tag can
+		// point at the same output even when its revision name differs. Refresh
+		// active digests immediately before every deletion decision.
+		protectRegistryImageDigests(ctx, client, registryURL, activeImages, protectedDigests, unsafeRepositories)
 		if repository, tag, ok := splitRegistryImage(registryURL, image); ok {
 			if _, unsafe := unsafeRepositories[repository]; !unsafe {
 				digest, err := registryManifestDigest(ctx, client, registryURL, repository, tag)
@@ -265,6 +254,28 @@ func (s *Service) cleanupObsoleteRevisionImages(ctx context.Context, deploymentI
 				logger.Debug("[ImageCleanup] Could not remove local image tag %s: %v", localImage, err)
 			}
 		}
+	}
+}
+
+func protectRegistryImageDigests(ctx context.Context, client *http.Client, registryURL string, images map[string]struct{}, protectedDigests map[string]map[string]struct{}, unsafeRepositories map[string]struct{}) {
+	for image := range images {
+		repository, tag, ok := splitRegistryImage(registryURL, image)
+		if !ok {
+			continue
+		}
+		if _, unsafe := unsafeRepositories[repository]; unsafe {
+			continue
+		}
+		digest, err := registryManifestDigest(ctx, client, registryURL, repository, tag)
+		if err != nil {
+			unsafeRepositories[repository] = struct{}{}
+			logger.Warn("[ImageCleanup] Keeping registry repository %s unchanged because protected image %s could not be resolved: %v", repository, image, err)
+			continue
+		}
+		if protectedDigests[repository] == nil {
+			protectedDigests[repository] = make(map[string]struct{})
+		}
+		protectedDigests[repository][digest] = struct{}{}
 	}
 }
 

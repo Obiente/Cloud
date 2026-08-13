@@ -745,13 +745,20 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// A terminal preview update may immediately queue the next revision.
 			// Release this build's lease first so that trigger can claim it while
 			// image cleanup continues on a detached context.
-			completionCtx, completionCancel := s.detachedContext(2 * time.Minute)
-			defer completionCancel()
-			if !s.waitForDeploymentBuildRelease(completionCtx, deploymentID, buildToken) {
-				logger.Warn("[TriggerDeployment] Timed out releasing the completed build lease for %s", deploymentID)
+			initialReleaseCtx, initialReleaseCancel := s.detachedContext(2 * time.Minute)
+			continuationCtx, continuationCancel := s.detachedContext(0)
+			released := waitForDeploymentBuildReleaseWithContinuation(initialReleaseCtx, continuationCtx, func(ctx context.Context) bool {
+				return s.waitForDeploymentBuildRelease(ctx, deploymentID, buildToken)
+			})
+			initialReleaseCancel()
+			continuationCancel()
+			if !released {
+				logger.Warn("[TriggerDeployment] Stopped waiting to release the completed build lease for %s because the service is shutting down", deploymentID)
 				return
 			}
 			buildLeaseReleased = true
+			completionCtx, completionCancel := s.detachedContext(2 * time.Minute)
+			defer completionCancel()
 			s.updatePullRequestDeploymentRuntime(completionCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
 			if buildResult != nil && buildResult.ImageName != "" {
 				s.cleanupObsoleteRevisionImages(completionCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
@@ -764,6 +771,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		Status:       "DEPLOYING",
 	})
 	return res, nil
+}
+
+func waitForDeploymentBuildReleaseWithContinuation(initialCtx, continuationCtx context.Context, waitForRelease func(context.Context) bool) bool {
+	if waitForRelease(initialCtx) {
+		return true
+	}
+	logger.Warn("[TriggerDeployment] Initial completed build lease release window elapsed; continuing release retries in the background")
+	return waitForRelease(continuationCtx)
 }
 
 func (s *Service) finalizeInterruptedBuildHistory(buildID string, startedAt time.Time) {
