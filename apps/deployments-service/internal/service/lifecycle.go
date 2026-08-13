@@ -125,7 +125,12 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	// Start async rebuild with log streaming
 	go func() {
 		defer buildCancel()
-		defer s.unregisterDeploymentBuild(deploymentID, buildToken)
+		buildLeaseReleased := false
+		defer func() {
+			if !buildLeaseReleased {
+				s.unregisterDeploymentBuild(deploymentID, buildToken)
+			}
+		}()
 		buildCtx = orchestrator.WithTargetNode(buildCtx, targetNodeID)
 
 		// Recover from panics to ensure deployment status is always updated
@@ -736,7 +741,28 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 			previewStatusFinalized = true
-			s.updatePullRequestDeploymentRuntime(buildCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+
+			// A terminal preview update may immediately queue the next revision.
+			// Release this build's lease first so that trigger can claim it while
+			// image cleanup continues on a detached context.
+			initialReleaseCtx, initialReleaseCancel := s.detachedContext(2 * time.Minute)
+			continuationCtx, continuationCancel := s.detachedContext(0)
+			released := waitForDeploymentBuildReleaseWithContinuation(initialReleaseCtx, continuationCtx, func(ctx context.Context) bool {
+				return s.waitForDeploymentBuildRelease(ctx, deploymentID, buildToken)
+			})
+			initialReleaseCancel()
+			continuationCancel()
+			if !released {
+				logger.Warn("[TriggerDeployment] Stopped waiting to release the completed build lease for %s because the service is shutting down", deploymentID)
+				return
+			}
+			buildLeaseReleased = true
+			completionCtx, completionCancel := s.detachedContext(2 * time.Minute)
+			defer completionCancel()
+			s.updatePullRequestDeploymentRuntime(completionCtx, deploymentID, commitSHA, deploymentsv1.PullRequestDeploymentStatus_PULL_REQUEST_DEPLOYMENT_RUNNING, "")
+			if buildResult != nil && buildResult.ImageName != "" {
+				s.cleanupObsoleteRevisionImages(completionCtx, deploymentID, dbDeployment.OrganizationID, buildResult.ImageName)
+			}
 		}
 	}()
 
@@ -745,6 +771,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		Status:       "DEPLOYING",
 	})
 	return res, nil
+}
+
+func waitForDeploymentBuildReleaseWithContinuation(initialCtx, continuationCtx context.Context, waitForRelease func(context.Context) bool) bool {
+	if waitForRelease(initialCtx) {
+		return true
+	}
+	logger.Warn("[TriggerDeployment] Initial completed build lease release window elapsed; continuing release retries in the background")
+	return waitForRelease(continuationCtx)
 }
 
 func (s *Service) finalizeInterruptedBuildHistory(buildID string, startedAt time.Time) {

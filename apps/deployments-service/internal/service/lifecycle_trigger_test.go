@@ -53,6 +53,35 @@ func TestInterruptedBuildHistoryIsFinalizedWithDetachedContext(t *testing.T) {
 	}
 }
 
+func TestUnregisterDeploymentBuildConfirmsDurableRelease(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	service := NewService(context.Background(), database.NewDeploymentRepository(db, nil), nil, nil)
+	control := database.DeploymentBuildControl{
+		DeploymentID: "deployment-complete",
+		BuildToken:   "completed-token",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := db.Create(&control).Error; err != nil {
+		t.Fatalf("seed build lease: %v", err)
+	}
+	service.activeBuilds[control.DeploymentID] = activeDeploymentBuild{token: control.BuildToken}
+
+	if !service.unregisterDeploymentBuild(control.DeploymentID, control.BuildToken) {
+		t.Fatal("completed build lease was not confirmed released")
+	}
+	var count int64
+	if err := db.Model(&database.DeploymentBuildControl{}).Where("deployment_id = ?", control.DeploymentID).Count(&count).Error; err != nil {
+		t.Fatalf("count build leases: %v", err)
+	}
+	if count != 0 {
+		t.Fatal("completed build lease remained durable after confirmed release")
+	}
+	if _, active := service.activeBuilds[control.DeploymentID]; active {
+		t.Fatal("completed build lease remained active in memory")
+	}
+}
+
 func TestRequestedDeploymentCommitSHARequiresSystemPrincipal(t *testing.T) {
 	commitSHA := strings.Repeat("a", 40)
 

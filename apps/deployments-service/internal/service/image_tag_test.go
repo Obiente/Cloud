@@ -29,3 +29,46 @@ func TestDockerImageTagSanitizesGitRefsDeterministically(t *testing.T) {
 		t.Fatalf("long ref produced invalid Docker tag %q", long)
 	}
 }
+
+func TestDockerBuildImageTagIncludesExactRevision(t *testing.T) {
+	first := strings.Repeat("a", 40)
+	second := strings.Repeat("b", 40)
+	firstTag := dockerBuildImageTag("feat/preview", first)
+	secondTag := dockerBuildImageTag("feat/preview", second)
+	valid := regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
+	if firstTag == secondTag {
+		t.Fatal("different revisions reused the same Docker tag")
+	}
+	if !strings.HasSuffix(firstTag, "-"+first) || !valid.MatchString(firstTag) {
+		t.Fatalf("revision tag is invalid or does not retain the commit: %q", firstTag)
+	}
+	longTag := dockerBuildImageTag(strings.Repeat("feature/", 40), strings.ToUpper(first))
+	if len(longTag) > 128 || !strings.HasSuffix(longTag, "-"+first) || !valid.MatchString(longTag) {
+		t.Fatalf("long revision tag is invalid: %q", longTag)
+	}
+
+	sha256Revision := strings.Repeat("C", 64)
+	sha256Tag := dockerBuildImageTag(strings.Repeat("feature/", 40), sha256Revision)
+	if len(sha256Tag) > 128 || !strings.HasSuffix(sha256Tag, "-"+strings.ToLower(sha256Revision)) || !valid.MatchString(sha256Tag) {
+		t.Fatalf("64-character revision tag is invalid: %q", sha256Tag)
+	}
+}
+
+func TestDockerBuildImageTagKeepsManualBuildTagsStable(t *testing.T) {
+	want := dockerImageTag("main")
+	for _, commit := range []string{"", "not-a-commit", strings.Repeat("a", 39)} {
+		if got := dockerBuildImageTag("main", commit); got != want {
+			t.Fatalf("manual build tag changed for commit %q: got %q, want %q", commit, got, want)
+		}
+	}
+}
+
+func TestShouldRemoveIntermediateImageProtectsFallbackFinalImage(t *testing.T) {
+	finalImage := "obiente/deploy-1:main-" + strings.Repeat("a", 40)
+	if shouldRemoveIntermediateImage(finalImage, finalImage) {
+		t.Fatal("fallback image sharing the final tag was marked for removal")
+	}
+	if !shouldRemoveIntermediateImage("obiente/deploy-1-railpack:main", finalImage) {
+		t.Fatal("distinct intermediate image was not marked for removal")
+	}
+}

@@ -61,6 +61,29 @@ func dockerImageTag(ref string) string {
 	return base + "-" + digest
 }
 
+// dockerBuildImageTag gives exact-revision builds an immutable image reference.
+// Reusing a branch-only tag can leave an orchestrator service unchanged even
+// after a newer commit was built and pushed under that same tag.
+func dockerBuildImageTag(ref, commitSHA string) string {
+	base := dockerImageTag(ref)
+	commitSHA = strings.ToLower(strings.TrimSpace(commitSHA))
+	if !isGitHubCommitSHA(commitSHA) {
+		return base
+	}
+	maxBaseLength := 128 - 1 - len(commitSHA)
+	if len(base) > maxBaseLength {
+		base = strings.TrimRight(base[:maxBaseLength], ".-")
+	}
+	if base == "" {
+		base = "ref"
+	}
+	return base + "-" + commitSHA
+}
+
+func shouldRemoveIntermediateImage(intermediateImage, finalImage string) bool {
+	return intermediateImage != "" && intermediateImage != finalImage
+}
+
 func NewRailpackStrategy() *RailpackStrategy {
 	return &RailpackStrategy{}
 }
@@ -195,7 +218,7 @@ func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerBuildImageTag(deployment.Branch, config.CommitSHA))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -945,7 +968,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 	writeBuildLog("   ✅ Repository cloned successfully")
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerBuildImageTag(deployment.Branch, config.CommitSHA))
 
 	// Determine build working directory (default to repo root)
 	buildWorkDir := buildDir
@@ -1766,7 +1789,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
+	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerBuildImageTag(deployment.Branch, config.CommitSHA))
 
 	// Use configured Dockerfile path or default to "Dockerfile"
 	dockerfile := config.DockerfilePath
@@ -2125,7 +2148,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	// Step 1: Use Railpack to build the application
 	// This will create an image with all dependencies and built files
-	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, dockerImageTag(deployment.Branch))
+	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, dockerBuildImageTag(deployment.Branch, config.CommitSHA))
 
 	writeBuildLog := func(format string, args ...interface{}) {
 		msg := fmt.Sprintf(format, args...)
@@ -2361,7 +2384,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to write Dockerfile: %w", err)}, nil
 	}
 
-	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerImageTag(deployment.Branch))
+	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, dockerBuildImageTag(deployment.Branch, config.CommitSHA))
 
 	// Build final minimal nginx image
 	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", nil, DockerfileBuildOptions{}, config.LogWriter, config.LogWriterErr); err != nil {
@@ -2370,8 +2393,15 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 
 	writeBuildLog("✅ Created minimal nginx image")
 
-	// Clean up Railpack image (optional - we could keep it for caching)
-	// exec.CommandContext(ctx, "docker", "rmi", railpackImageName).Run()
+	// The Railpack image is only an intermediate stage. Keeping its immutable
+	// revision tag would double local image retention for every static build.
+	// The fallback builder can reuse the final name; in that case the final
+	// build has already replaced the intermediate tag and it must stay intact.
+	if shouldRemoveIntermediateImage(railpackImageName, finalImageName) {
+		if err := exec.CommandContext(ctx, "docker", "image", "rm", railpackImageName).Run(); err != nil {
+			writeBuildLog("⚠️  Could not remove intermediate Railpack image %s: %v", railpackImageName, err)
+		}
+	}
 
 	// Nginx always uses port 80
 	port := 80
