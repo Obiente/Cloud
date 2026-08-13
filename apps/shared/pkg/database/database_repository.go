@@ -211,7 +211,7 @@ func (r *DatabaseConnectionRepository) GetByDatabaseID(ctx context.Context, data
 func (r *DatabaseConnectionRepository) Update(ctx context.Context, conn *DatabaseConnection) error {
 	return r.db.WithContext(ctx).
 		Model(conn).
-		Select("username", "password", "database_name", "host", "port", "ssl_required", "ssl_certificate", "updated_at").
+		Select("username", "password", "database_name", "host", "port", "proxy_port", "ssl_required", "ssl_certificate", "updated_at").
 		Updates(conn).Error
 }
 

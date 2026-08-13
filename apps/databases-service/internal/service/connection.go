@@ -70,14 +70,17 @@ func (s *Service) GetDatabaseConnectionInfo(ctx context.Context, req *connect.Re
 	case databasesv1.DatabaseType_MONGODB:
 		externalPort = 27017
 	case databasesv1.DatabaseType_REDIS:
-		// Use allocated port from registry
-		if s.routeRegistry != nil {
+		if conn.ProxyPort > 0 {
+			externalPort = conn.ProxyPort
+		} else if s.routeRegistry != nil {
+			// Legacy records are backfilled by the route registry on first load.
 			if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok && route.RedisPort > 0 {
 				externalPort = int32(route.RedisPort)
 			} else {
 				if err := s.routeRegistry.LoadFromDatabase(ctx); err == nil {
 					if route, ok := s.routeRegistry.LookupByID(req.Msg.GetDatabaseId()); ok && route.RedisPort > 0 {
 						externalPort = int32(route.RedisPort)
+						conn.ProxyPort = externalPort
 						break
 					}
 				}

@@ -33,6 +33,7 @@ type Service struct {
 	proxy             *proxy.Proxy
 	routeRegistry     *proxy.RouteRegistry
 	backgroundCtx     context.Context
+	proxyEnabled      bool
 }
 
 func NewService(
@@ -73,6 +74,7 @@ func NewService(
 		proxy:             proxyServer,
 		routeRegistry:     registry,
 		backgroundCtx:     backgroundCtx,
+		proxyEnabled:      true,
 	}
 
 	// Wire wake/sleep callbacks
@@ -80,6 +82,10 @@ func NewService(
 	registry.OnSleep = svc.sleepDatabaseAuto
 
 	return svc
+}
+
+func (s *Service) SetProxyEnabled(enabled bool) {
+	s.proxyEnabled = enabled
 }
 
 func (s *Service) detachedContext(timeout time.Duration) (context.Context, context.CancelFunc) {

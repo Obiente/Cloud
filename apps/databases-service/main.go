@@ -107,6 +107,7 @@ func main() {
 	connRepo := database.NewDatabaseConnectionRepository(database.DB)
 	backupRepo := database.NewDatabaseBackupRepository(database.DB)
 	databaseService := databasessvc.NewService(shutdownCtx, databaseRepo, connRepo, backupRepo)
+	databaseService.SetProxyEnabled(mode.proxy)
 
 	if mode.controlPlane {
 		// Register the control-plane RPCs only on the node-local owner task.
@@ -120,6 +121,7 @@ func main() {
 	// Load existing routes and start proxy
 	proxyServer := databaseService.GetProxy()
 	routeRegistry := databaseService.GetRouteRegistry()
+	routeRegistry.SetLocalRoutesOnly(mode.proxy && !mode.controlPlane)
 
 	proxyErr := make(chan error, 1)
 	if mode.controlPlane || mode.proxy {

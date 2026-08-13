@@ -55,6 +55,33 @@ func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
 	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
+func TestGetDatabaseNodeIPUsesSleepingLocationForWakeableDatabase(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-sleeping-location-test"
+	staleNodeID := "node-nl"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &staleNodeID, Status: 12}).Error; err != nil {
+		t.Fatalf("create sleeping database instance: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, "container-sleeping"),
+		DatabaseID:  databaseID,
+		NodeID:      "node-us",
+		NodeIP:      "192.0.2.10",
+		ContainerID: "container-sleeping",
+		Status:      "sleeping",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create sleeping database location: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve sleeping database location IP: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
 func TestGetDatabaseNodeIPDoesNotFallBackFromUnresolvedActiveLocation(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 

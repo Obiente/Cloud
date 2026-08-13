@@ -215,7 +215,7 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 	}
 
 	var locations []DatabaseLocation
-	if err := DB.Where("database_id = ? AND status IN ?", databaseID, []string{"running", "restarting", "starting", "created"}).
+	if err := DB.Where("database_id = ? AND status IN ?", databaseID, []string{"running", "restarting", "starting", "created", "sleeping"}).
 		Order("updated_at DESC").
 		Find(&locations).Error; err != nil {
 		return nil, fmt.Errorf("failed to query database locations: %w", err)

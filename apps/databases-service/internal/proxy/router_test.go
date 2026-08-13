@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,54 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestLoadFromDatabasePreservesAndBackfillsRedisProxyPorts(t *testing.T) {
+	previousDB := database.DB
+	db, err := gorm.Open(sqlite.Open("file:redis-proxy-port-routing?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+	if err := db.AutoMigrate(&database.DatabaseInstance{}, &database.DatabaseConnection{}); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+
+	instances := []database.DatabaseInstance{
+		{ID: "db-redis-existing", Type: 4, Status: 3},
+		{ID: "db-redis-legacy", Type: 4, Status: 3},
+	}
+	if err := db.Create(&instances).Error; err != nil {
+		t.Fatalf("create Redis instances: %v", err)
+	}
+	connections := []database.DatabaseConnection{
+		{ID: "conn-redis-existing", DatabaseID: instances[0].ID, ProxyPort: 16380},
+		{ID: "conn-redis-legacy", DatabaseID: instances[1].ID},
+	}
+	if err := db.Create(&connections).Error; err != nil {
+		t.Fatalf("create Redis connections: %v", err)
+	}
+
+	registry := NewRouteRegistry(nil)
+	if err := registry.LoadFromDatabase(context.Background()); err != nil {
+		t.Fatalf("load Redis routes: %v", err)
+	}
+	existingRoute, ok := registry.LookupByID(instances[0].ID)
+	if !ok || existingRoute.RedisPort != 16380 {
+		t.Fatalf("persisted Redis proxy port was not preserved: %#v", existingRoute)
+	}
+	legacyRoute, ok := registry.LookupByID(instances[1].ID)
+	if !ok || legacyRoute.RedisPort == 0 || legacyRoute.RedisPort == existingRoute.RedisPort {
+		t.Fatalf("legacy Redis proxy port was not uniquely backfilled: %#v", legacyRoute)
+	}
+	var storedLegacy database.DatabaseConnection
+	if err := db.First(&storedLegacy, "database_id = ?", instances[1].ID).Error; err != nil {
+		t.Fatalf("load backfilled Redis connection: %v", err)
+	}
+	if int(storedLegacy.ProxyPort) != legacyRoute.RedisPort {
+		t.Fatalf("stored proxy port %d does not match route %d", storedLegacy.ProxyPort, legacyRoute.RedisPort)
+	}
+}
 
 func TestDatabaseLocationStatus(t *testing.T) {
 	tests := map[int32]string{

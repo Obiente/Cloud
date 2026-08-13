@@ -297,6 +297,14 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 			Port:         port,
 			SSLRequired:  true,
 		}
+		if req.Msg.GetType() == databasesv1.DatabaseType_REDIS && s.routeRegistry != nil {
+			redisPort, err := s.routeRegistry.AllocateRedisPort(id)
+			if err != nil {
+				logger.Error("Failed to allocate Redis port: %v", err)
+			} else {
+				dbConn.ProxyPort = int32(redisPort)
+			}
+		}
 
 		if err := s.connRepo.Create(provisionCtx, dbConn); err != nil {
 			logger.Warn("Failed to create connection record: %v", err)
@@ -329,17 +337,13 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 
 			// Allocate Redis port if needed
 			if dbType == "redis" {
-				if redisPort, err := s.routeRegistry.AllocateRedisPort(id); err == nil {
-					route.RedisPort = redisPort
-				} else {
-					logger.Error("Failed to allocate Redis port: %v", err)
-				}
+				route.RedisPort = int(dbConn.ProxyPort)
 			}
 
 			s.routeRegistry.Register(route)
 
 			// Start Redis listener if needed
-			if route.RedisPort > 0 && s.proxy != nil {
+			if route.RedisPort > 0 && s.proxy != nil && s.proxyEnabled {
 				if err := s.proxy.StartRedisListener(route); err != nil {
 					logger.Error("Failed to start Redis listener: %v", err)
 				}

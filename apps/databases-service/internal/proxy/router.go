@@ -51,6 +51,7 @@ type RouteRegistry struct {
 	routesByID   map[string]*Route // keyed by database ID
 	dockerClient *docker.Client
 	stopRefresh  chan struct{}
+	localOnly    bool
 
 	// Wake/sleep callbacks (set by service layer)
 	OnWake  WakeFunc
@@ -61,6 +62,15 @@ type RouteRegistry struct {
 	redisPortStart int
 	redisPortEnd   int
 	usedRedisPorts map[int]string // port -> database ID
+}
+
+// SetLocalRoutesOnly limits published proxy routes to containers owned by the
+// local Docker daemon. Control-plane registries retain the global allocation
+// snapshot without opening remote listeners.
+func (r *RouteRegistry) SetLocalRoutesOnly(localOnly bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.localOnly = localOnly
 }
 
 // NewRouteRegistry creates a new route registry
@@ -208,11 +218,25 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	for id, route := range r.routesByID {
 		existingRoutes[id] = route
 	}
+	localRoutesOnly := r.localOnly
 	r.mu.RUnlock()
 
 	newRoutes := make(map[string]*Route, len(instances))
 	newRoutesByID := make(map[string]*Route, len(instances))
 	newUsedRedisPorts := make(map[int]string)
+	for _, inst := range instances {
+		if databaseTypeIntToString(inst.Type) != "redis" {
+			continue
+		}
+		conn := connMap[inst.ID]
+		if conn == nil || !r.validRedisPort(int(conn.ProxyPort)) {
+			continue
+		}
+		port := int(conn.ProxyPort)
+		if _, used := newUsedRedisPorts[port]; !used {
+			newUsedRedisPorts[port] = inst.ID
+		}
+	}
 	var localNode docker.NodeIdentity
 	var localNodeErr error
 	var localContainerStates map[string]string
@@ -285,10 +309,35 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
 		}
+		if dbType == "redis" {
+			conn := connMap[inst.ID]
+			port := 0
+			if conn != nil && r.validRedisPort(int(conn.ProxyPort)) && newUsedRedisPorts[int(conn.ProxyPort)] == inst.ID {
+				port = int(conn.ProxyPort)
+			} else {
+				var err error
+				port, err = r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
+				if err != nil {
+					logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
+					continue
+				}
+				if conn != nil {
+					if err := database.DB.WithContext(ctx).Model(&database.DatabaseConnection{}).
+						Where("database_id = ?", inst.ID).
+						Update("proxy_port", port).Error; err != nil {
+						logger.Error("Failed to persist Redis proxy port for %s: %v", inst.ID, err)
+						continue
+					}
+					conn.ProxyPort = int32(port)
+				}
+			}
+			route.RedisPort = port
+			newUsedRedisPorts[port] = inst.ID
+		}
 		location := knownLocations[route.ContainerID]
 		containerState, containerIsLocal := localContainerStates[route.ContainerID]
 		containerOwnedLocally := databaseContainerOwnedLocally(&inst, location, localNode.ID, containerIsLocal)
-		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && !containerOwnedLocally {
+		if localRoutesOnly && route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && !containerOwnedLocally {
 			// Global proxy tasks only publish routes for containers owned by their
 			// local Docker daemon. Owner-specific DNS sends clients to that task.
 			continue
@@ -322,22 +371,13 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		// Only resolve IPs for running databases
 		if route.Stopped {
-			if dbType == "redis" {
-				port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
-				if err != nil {
-					logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
-				} else {
-					route.RedisPort = port
-					newUsedRedisPorts[port] = inst.ID
-				}
-			}
 			newRoutes[route.DatabaseID] = route
 			newRoutesByID[route.DatabaseID] = route
 			continue
 		}
 
 		// Ensure container is on the correct network, then resolve IP
-		if route.ContainerID != "" && r.dockerClient != nil {
+		if route.ContainerID != "" && r.dockerClient != nil && containerOwnedLocally {
 			r.reconcileContainerNetwork(ctx, route.ContainerID)
 
 			if ip, err := r.resolveContainerIP(ctx, route.ContainerID); err == nil {
@@ -350,17 +390,6 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 					route.ContainerIP = ip
 				}
 			}
-		}
-
-		// Allocate Redis port if needed
-		if dbType == "redis" {
-			port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
-			if err != nil {
-				logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
-				continue
-			}
-			route.RedisPort = port
-			newUsedRedisPorts[port] = inst.ID
 		}
 
 		newRoutes[route.DatabaseID] = route
@@ -378,6 +407,10 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func (r *RouteRegistry) validRedisPort(port int) bool {
+	return port >= r.redisPortStart && port <= r.redisPortEnd
 }
 
 func databaseContainerOwnedLocally(
