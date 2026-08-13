@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -26,6 +27,20 @@ type DatabaseLocation struct {
 }
 
 func (DatabaseLocation) TableName() string { return "database_locations" }
+
+// DatabaseUptimeInterval records one continuous period in which a managed
+// database was running. Separate intervals prevent stopped time from being
+// counted after a database starts again.
+type DatabaseUptimeInterval struct {
+	ID          string     `gorm:"primaryKey" json:"id"`
+	DatabaseID  string     `gorm:"index;not null" json:"database_id"`
+	ContainerID string     `gorm:"index;not null" json:"container_id"`
+	NodeID      string     `gorm:"index;not null" json:"node_id"`
+	StartedAt   time.Time  `gorm:"index;not null" json:"started_at"`
+	EndedAt     *time.Time `gorm:"index" json:"ended_at"`
+}
+
+func (DatabaseUptimeInterval) TableName() string { return "database_uptime_intervals" }
 
 // DatabaseLocationID returns a stable primary key for a database container's
 // location record, allowing startup reconciliation to safely upsert it.
@@ -49,14 +64,22 @@ func GetAllDatabaseLocations(databaseID string) ([]DatabaseLocation, error) {
 
 // UpsertDatabaseLocation creates or updates a database location
 func UpsertDatabaseLocation(location *DatabaseLocation) error {
-	var existing DatabaseLocation
-	if err := DB.Where("container_id = ?", location.ContainerID).First(&existing).Error; err == nil {
-		location.ID = existing.ID
-		location.CreatedAt = existing.CreatedAt
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	return DB.Save(location).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var existing DatabaseLocation
+		if err := tx.Where("container_id = ?", location.ContainerID).First(&existing).Error; err == nil {
+			location.ID = existing.ID
+			location.CreatedAt = existing.CreatedAt
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Save(location).Error; err != nil {
+			return err
+		}
+		if location.Status == "running" {
+			return ensureDatabaseUptimeInterval(tx, location, time.Now().UTC())
+		}
+		return closeDatabaseUptimeIntervals(tx, location.DatabaseID, time.Now().UTC())
+	})
 }
 
 // DeleteDatabaseLocation removes a database location
@@ -67,12 +90,71 @@ func DeleteDatabaseLocation(containerID string) error {
 // UpdateDatabaseLocationStatus keeps location-based metrics aligned with the
 // managed database lifecycle.
 func UpdateDatabaseLocationStatus(ctx context.Context, databaseID, status string) error {
-	return DB.WithContext(ctx).Model(&DatabaseLocation{}).
-		Where("database_id = ?", databaseID).
-		Updates(map[string]interface{}{
-			"status":     status,
-			"updated_at": time.Now(),
-		}).Error
+	now := time.Now().UTC()
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var locations []DatabaseLocation
+		if err := tx.Where("database_id = ?", databaseID).Find(&locations).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&DatabaseLocation{}).
+			Where("database_id = ?", databaseID).
+			Updates(map[string]interface{}{"status": status, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if status != "running" {
+			return closeDatabaseUptimeIntervals(tx, databaseID, now)
+		}
+		for i := range locations {
+			locations[i].Status = status
+			if err := ensureDatabaseUptimeInterval(tx, &locations[i], now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// EnsureDatabaseUptimeInterval backfills an open interval for a running
+// location discovered during startup reconciliation.
+func EnsureDatabaseUptimeInterval(ctx context.Context, databaseID string) error {
+	now := time.Now().UTC()
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var locations []DatabaseLocation
+		if err := tx.Where("database_id = ? AND status = ?", databaseID, "running").Find(&locations).Error; err != nil {
+			return err
+		}
+		for i := range locations {
+			if err := ensureDatabaseUptimeInterval(tx, &locations[i], now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func ensureDatabaseUptimeInterval(tx *gorm.DB, location *DatabaseLocation, now time.Time) error {
+	var count int64
+	if err := tx.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return tx.Create(&DatabaseUptimeInterval{
+		ID:          uuid.NewString(),
+		DatabaseID:  location.DatabaseID,
+		ContainerID: location.ContainerID,
+		NodeID:      location.NodeID,
+		StartedAt:   now,
+	}).Error
+}
+
+func closeDatabaseUptimeIntervals(tx *gorm.DB, databaseID string, now time.Time) error {
+	return tx.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND ended_at IS NULL", databaseID).
+		Update("ended_at", now).Error
 }
 
 // RecordDatabaseMetrics records database metrics

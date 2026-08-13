@@ -125,6 +125,7 @@ func InitDeploymentTracking() error {
 		&GameServerDomainVerification{},
 		&GameServerLocation{},
 		&DatabaseLocation{},
+		&DatabaseUptimeInterval{},
 	); err != nil {
 		return err
 	}

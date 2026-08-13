@@ -204,9 +204,11 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 	}
 	if len(locations) > 0 {
 		location := locations[0]
-		if ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap); err == nil {
-			return ips, nil
+		ips, err := resolvePreferredNodeIPs(location.NodeID, location.NodeIP, nodeIPMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve active database location on node %s: %w", location.NodeID, err)
 		}
+		return ips, nil
 	}
 
 	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {

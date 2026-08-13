@@ -262,6 +262,11 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 				r.recordDatabaseLocation(ctx, &inst, localNode)
 			}
 		}
+		if inst.Status == 3 {
+			if err := database.EnsureDatabaseUptimeInterval(ctx, inst.ID); err != nil {
+				logger.Warn("Failed to reconcile uptime interval for database %s: %v", inst.ID, err)
+			}
+		}
 
 		// Load connection credentials
 		if conn, ok := connMap[inst.ID]; ok {

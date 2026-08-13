@@ -55,6 +55,38 @@ func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
 	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
+func TestGetDatabaseNodeIPDoesNotFallBackFromUnresolvedActiveLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-authoritative-location-test"
+	staleNodeID := "node-nl"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &staleNodeID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: staleNodeID, Hostname: "nl-host", Region: "nl"}).Error; err != nil {
+		t.Fatalf("create stale node metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, "container-authoritative"),
+		DatabaseID:  databaseID,
+		NodeID:      "node-current",
+		NodeIP:      "203.0.113.55",
+		ContainerID: "container-authoritative",
+		Status:      "running",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err == nil {
+		t.Fatal("expected unresolved active location to remain authoritative")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve active database location") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestGetDatabaseNodeIPRejectsAmbiguousRegionFallback(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 
@@ -167,7 +199,7 @@ func TestUpdateDatabaseLocationStatus(t *testing.T) {
 		ContainerID: "container-status-test",
 		Status:      "running",
 	}
-	if err := DB.Create(location).Error; err != nil {
+	if err := UpsertDatabaseLocation(location); err != nil {
 		t.Fatalf("create database location: %v", err)
 	}
 
@@ -182,6 +214,25 @@ func TestUpdateDatabaseLocationStatus(t *testing.T) {
 	if updated.Status != "sleeping" {
 		t.Fatalf("expected sleeping location status, got %q", updated.Status)
 	}
+
+	var firstInterval DatabaseUptimeInterval
+	if err := DB.First(&firstInterval, "database_id = ?", location.DatabaseID).Error; err != nil {
+		t.Fatalf("load closed uptime interval: %v", err)
+	}
+	if firstInterval.EndedAt == nil {
+		t.Fatal("expected sleeping transition to close the running interval")
+	}
+
+	if err := UpdateDatabaseLocationStatus(t.Context(), location.DatabaseID, "running"); err != nil {
+		t.Fatalf("restart database location: %v", err)
+	}
+	var intervals []DatabaseUptimeInterval
+	if err := DB.Order("started_at").Find(&intervals, "database_id = ?", location.DatabaseID).Error; err != nil {
+		t.Fatalf("load uptime intervals: %v", err)
+	}
+	if len(intervals) != 2 || intervals[1].EndedAt != nil {
+		t.Fatalf("expected a closed interval followed by an open interval, got %#v", intervals)
+	}
 }
 
 func setupDNSRoutingTestDB(t *testing.T) {
@@ -191,7 +242,7 @@ func setupDNSRoutingTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
-	if err := db.AutoMigrate(&DatabaseInstance{}, &DatabaseLocation{}, &NodeMetadata{}); err != nil {
+	if err := db.AutoMigrate(&DatabaseInstance{}, &DatabaseLocation{}, &DatabaseUptimeInterval{}, &NodeMetadata{}); err != nil {
 		t.Fatalf("migrate test database: %v", err)
 	}
 	DB = db

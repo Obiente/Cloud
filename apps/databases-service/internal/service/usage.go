@@ -76,40 +76,17 @@ func (s *Service) GetDatabaseUsage(ctx context.Context, req *connect.Request[dat
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to calculate usage: %w", err))
 	}
 
-	// Calculate uptime from database_locations
-	var uptime struct {
-		UptimeSeconds int64
+	// Sum only the portions of running intervals that overlap the requested
+	// month. This excludes stopped time and clamps long-running databases to the
+	// month boundary.
+	requestedMonthEnd := requestedMonthStart.AddDate(0, 1, 0)
+	var uptimeIntervals []database.DatabaseUptimeInterval
+	if err := database.DB.WithContext(ctx).
+		Where("database_id = ? AND started_at < ? AND (ended_at IS NULL OR ended_at > ?)", databaseID, requestedMonthEnd, requestedMonthStart).
+		Find(&uptimeIntervals).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to calculate database uptime: %w", err))
 	}
-	if month == now.Format("2006-01") {
-		database.DB.Table("database_locations dl").
-			Select(`
-				COALESCE(SUM(EXTRACT(EPOCH FROM (
-					CASE
-						WHEN dl.status = 'running' THEN NOW() - dl.created_at
-						WHEN dl.updated_at > dl.created_at THEN dl.updated_at - dl.created_at
-						ELSE '0 seconds'::interval
-					END
-				))), 0)::bigint as uptime_seconds
-			`).
-			Where("dl.database_id = ? AND (dl.created_at >= ? OR dl.updated_at >= ?)", databaseID, monthStart, monthStart).
-			Scan(&uptime)
-	} else {
-		database.DB.Table("database_locations dl").
-			Select(`
-				COALESCE(SUM(EXTRACT(EPOCH FROM (
-					CASE
-						WHEN dl.status = 'running' AND dl.updated_at <= ? THEN ?::timestamp - dl.created_at
-						WHEN dl.updated_at > dl.created_at AND dl.updated_at <= ? THEN dl.updated_at - dl.created_at
-						WHEN dl.created_at >= ? AND dl.created_at < ? THEN ?::timestamp - dl.created_at
-						ELSE '0 seconds'::interval
-					END
-				))), 0)::bigint as uptime_seconds
-			`, monthEnd, monthEnd, monthEnd, requestedMonthStart, monthEnd, monthEnd).
-			Where("dl.database_id = ? AND ((dl.created_at >= ? AND dl.created_at <= ?) OR (dl.updated_at >= ? AND dl.updated_at <= ?))",
-				databaseID, requestedMonthStart, monthEnd, requestedMonthStart, monthEnd).
-			Scan(&uptime)
-	}
-	currentMetrics.UptimeSeconds = uptime.UptimeSeconds
+	currentMetrics.UptimeSeconds = databaseUptimeSeconds(uptimeIntervals, requestedMonthStart, requestedMonthEnd, now)
 
 	// Calculate estimated monthly usage
 	var estimatedMonthly common.ContainerUsageMetrics
@@ -126,12 +103,12 @@ func (s *Service) GetDatabaseUsage(ctx context.Context, req *connect.Request[dat
 
 	// Build response
 	currentProto := &databasesv1.DatabaseUsageMetrics{
-		CpuCoreSeconds:    currentMetrics.CPUCoreSeconds,
-		MemoryByteSeconds: currentMetrics.MemoryByteSeconds,
-		BandwidthRxBytes:  currentMetrics.BandwidthRxBytes,
-		BandwidthTxBytes:  currentMetrics.BandwidthTxBytes,
-		StorageBytes:      currentMetrics.StorageBytes,
-		UptimeSeconds:     currentMetrics.UptimeSeconds,
+		CpuCoreSeconds:     currentMetrics.CPUCoreSeconds,
+		MemoryByteSeconds:  currentMetrics.MemoryByteSeconds,
+		BandwidthRxBytes:   currentMetrics.BandwidthRxBytes,
+		BandwidthTxBytes:   currentMetrics.BandwidthTxBytes,
+		StorageBytes:       currentMetrics.StorageBytes,
+		UptimeSeconds:      currentMetrics.UptimeSeconds,
 		EstimatedCostCents: currTotalCost,
 	}
 	currCPUCostPtr := int64(currCPUCost)
@@ -144,12 +121,12 @@ func (s *Service) GetDatabaseUsage(ctx context.Context, req *connect.Request[dat
 	currentProto.StorageCostCents = &currStorageCostPtr
 
 	estimatedProto := &databasesv1.DatabaseUsageMetrics{
-		CpuCoreSeconds:    estimatedMonthly.CPUCoreSeconds,
-		MemoryByteSeconds: estimatedMonthly.MemoryByteSeconds,
-		BandwidthRxBytes:  estimatedMonthly.BandwidthRxBytes,
-		BandwidthTxBytes:  estimatedMonthly.BandwidthTxBytes,
-		StorageBytes:      estimatedMonthly.StorageBytes,
-		UptimeSeconds:     estimatedMonthly.UptimeSeconds,
+		CpuCoreSeconds:     estimatedMonthly.CPUCoreSeconds,
+		MemoryByteSeconds:  estimatedMonthly.MemoryByteSeconds,
+		BandwidthRxBytes:   estimatedMonthly.BandwidthRxBytes,
+		BandwidthTxBytes:   estimatedMonthly.BandwidthTxBytes,
+		StorageBytes:       estimatedMonthly.StorageBytes,
+		UptimeSeconds:      estimatedMonthly.UptimeSeconds,
 		EstimatedCostCents: estTotalCost,
 	}
 	estCPUCostPtr := int64(estCPUCost)
@@ -170,4 +147,25 @@ func (s *Service) GetDatabaseUsage(ctx context.Context, req *connect.Request[dat
 	}
 
 	return connect.NewResponse(response), nil
+}
+
+func databaseUptimeSeconds(intervals []database.DatabaseUptimeInterval, periodStart, periodEnd, now time.Time) int64 {
+	var uptime time.Duration
+	for _, interval := range intervals {
+		start := interval.StartedAt
+		if start.Before(periodStart) {
+			start = periodStart
+		}
+		end := now
+		if interval.EndedAt != nil {
+			end = *interval.EndedAt
+		}
+		if end.After(periodEnd) {
+			end = periodEnd
+		}
+		if end.After(start) {
+			uptime += end.Sub(start)
+		}
+	}
+	return int64(uptime / time.Second)
 }
