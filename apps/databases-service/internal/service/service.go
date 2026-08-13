@@ -100,9 +100,11 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 	}
 
 	logger.Info("Waking database %s", route.DatabaseID)
+	updateDatabaseLocationStatus(ctx, route.DatabaseID, "starting")
 
 	// Start the container
 	if err := s.provisioner.StartDatabase(ctx, route.ContainerID); err != nil {
+		updateDatabaseLocationStatus(ctx, route.DatabaseID, "failed")
 		return "", fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -119,6 +121,7 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 		dbInstance.LastStartedAt = timePtr(time.Now())
 		s.repo.Update(ctx, dbInstance)
 	}
+	updateDatabaseLocationStatus(ctx, route.DatabaseID, "running")
 
 	// Update route
 	s.routeRegistry.MarkRunning(route.DatabaseID, ip)
@@ -152,9 +155,11 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 	}
 
 	logger.Info("Auto-sleeping database %s due to inactivity", route.DatabaseID)
+	updateDatabaseLocationStatus(ctx, route.DatabaseID, "stopping")
 
 	// Stop the container
 	if err := s.provisioner.StopDatabase(ctx, route.ContainerID); err != nil {
+		updateDatabaseLocationStatus(ctx, route.DatabaseID, "running")
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
@@ -164,6 +169,7 @@ func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) err
 		dbInstance.Status = 12 // SLEEPING
 		s.repo.Update(ctx, dbInstance)
 	}
+	updateDatabaseLocationStatus(ctx, route.DatabaseID, "sleeping")
 
 	// Update route
 	s.routeRegistry.MarkStopped(route.DatabaseID, 12)

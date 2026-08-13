@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
@@ -43,6 +44,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "starting")
 
 	// Start the database container asynchronously
 	go func() {
@@ -54,6 +56,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 				logger.Error("Failed to start database container: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(startCtx, dbInstance)
+				updateDatabaseLocationStatus(startCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -64,6 +67,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 		if err := s.repo.Update(startCtx, dbInstance); err != nil {
 			logger.Error("Failed to update database status: %v", err)
 		}
+		updateDatabaseLocationStatus(startCtx, dbInstance.ID, "running")
 
 		// Update route registry
 		if s.routeRegistry != nil {
@@ -110,6 +114,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
 	go func() {
@@ -121,6 +126,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 				logger.Error("Failed to stop database container: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(stopCtx, dbInstance)
+				updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -130,6 +136,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 		if err := s.repo.Update(stopCtx, dbInstance); err != nil {
 			logger.Error("Failed to update database status: %v", err)
 		}
+		updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "stopped")
 
 		// Update route registry - STOPPED means no auto-wake
 		if s.routeRegistry != nil {
@@ -175,6 +182,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "starting")
 
 	// Restart the database container asynchronously
 	go func() {
@@ -186,6 +194,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 				logger.Error("Failed to restart database container: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(restartCtx, dbInstance)
+				updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -196,6 +205,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 		if err := s.repo.Update(restartCtx, dbInstance); err != nil {
 			logger.Error("Failed to update database status: %v", err)
 		}
+		updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "running")
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -236,6 +246,7 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to sleep database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
 	go func() {
@@ -247,6 +258,7 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 				logger.Error("Failed to stop database container for sleep: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(sleepCtx, dbInstance)
+				updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -256,6 +268,7 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		if err := s.repo.Update(sleepCtx, dbInstance); err != nil {
 			logger.Error("Failed to update database status: %v", err)
 		}
+		updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
 
 		// Update route registry - SLEEPING means auto-wake on connect
 		if s.routeRegistry != nil {
@@ -274,4 +287,10 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 // Helper function
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func updateDatabaseLocationStatus(ctx context.Context, databaseID, status string) {
+	if err := database.UpdateDatabaseLocationStatus(ctx, databaseID, status); err != nil {
+		logger.Warn("Failed to update database %s location status to %s: %v", databaseID, status, err)
+	}
 }

@@ -507,6 +507,7 @@ func (s *Service) DeleteDatabase(ctx context.Context, req *connect.Request[datab
 		// Update status to DELETING
 		dbInstance.Status = 9 // DELETING
 		s.repo.Update(deleteCtx, dbInstance)
+		updateDatabaseLocationStatus(deleteCtx, dbInstance.ID, "deleting")
 
 		// Unregister route from proxy
 		if s.routeRegistry != nil {

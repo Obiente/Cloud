@@ -64,6 +64,17 @@ func DeleteDatabaseLocation(containerID string) error {
 	return DB.Where("container_id = ?", containerID).Delete(&DatabaseLocation{}).Error
 }
 
+// UpdateDatabaseLocationStatus keeps location-based metrics aligned with the
+// managed database lifecycle.
+func UpdateDatabaseLocationStatus(ctx context.Context, databaseID, status string) error {
+	return DB.WithContext(ctx).Model(&DatabaseLocation{}).
+		Where("database_id = ?", databaseID).
+		Updates(map[string]interface{}{
+			"status":     status,
+			"updated_at": time.Now(),
+		}).Error
+}
+
 // RecordDatabaseMetrics records database metrics
 func RecordDatabaseMetrics(ctx context.Context, metrics *DatabaseMetrics) error {
 	targetDB := MetricsDB

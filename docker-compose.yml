@@ -272,6 +272,7 @@ services:
       dockerfile: apps/databases-service/Dockerfile
     environment:
       PORT: 3014
+      ENABLE_SWARM: ${ENABLE_SWARM:-false}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     depends_on:
       postgres:

@@ -85,7 +85,7 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 }
 
 func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
-	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); explicitNodeIP != "" {
+	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); configuredNodeIP(explicitNodeIP, nodeIPMap) {
 		return []string{explicitNodeIP}, nil
 	}
 
@@ -101,7 +101,7 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 		return nil, fmt.Errorf("failed to find node %s: %w", nodeID, err)
 	}
 
-	if node.IP = strings.TrimSpace(node.IP); node.IP != "" {
+	if node.IP = strings.TrimSpace(node.IP); configuredNodeIP(node.IP, nodeIPMap) {
 		return []string{node.IP}, nil
 	}
 
@@ -123,6 +123,21 @@ func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string
 	}
 
 	return ips, nil
+}
+
+func configuredNodeIP(candidate string, nodeIPMap map[string][]string) bool {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return false
+	}
+	for _, rawIPs := range nodeIPMap {
+		for _, configuredIP := range rawIPs {
+			if strings.TrimSpace(configuredIP) == candidate {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func compatibilityNodeIPs(nodeIPMap map[string][]string, reason string) ([]string, error) {

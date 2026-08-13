@@ -488,6 +488,7 @@ services:
     image: ghcr.io/obiente/cloud-databases-service:latest
     environment:
       PORT: 3014
+      ENABLE_SWARM: ${ENABLE_SWARM:-true}
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     deploy:
       mode: replicated

@@ -19,6 +19,8 @@ import (
 	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
+
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 )
 
 // ErrUninitialized is returned when a client method is invoked before the
@@ -74,9 +76,11 @@ func (c *Client) CurrentNodeIdentity(ctx context.Context) (NodeIdentity, error) 
 	}
 
 	identity := NodeIdentity{
-		ID:       strings.TrimSpace(result.Info.Swarm.NodeID),
 		Hostname: strings.TrimSpace(result.Info.Name),
 		IP:       strings.TrimSpace(result.Info.Swarm.NodeAddr),
+	}
+	if utils.IsSwarmModeEnabled() {
+		identity.ID = strings.TrimSpace(result.Info.Swarm.NodeID)
 	}
 	if identity.ID == "" {
 		identity.ID = "local-" + identity.Hostname

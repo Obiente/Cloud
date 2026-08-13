@@ -17,7 +17,7 @@ func TestGetDatabaseNodeIPPrefersRecordedHost(t *testing.T) {
 	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &nodeID}).Error; err != nil {
 		t.Fatalf("create database instance: %v", err)
 	}
-	if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: "us-host", IP: "104.243.46.110"}).Error; err != nil {
+	if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: "us-host", IP: "192.0.2.10"}).Error; err != nil {
 		t.Fatalf("create node metadata: %v", err)
 	}
 
@@ -25,7 +25,7 @@ func TestGetDatabaseNodeIPPrefersRecordedHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve database node IP: %v", err)
 	}
-	assertNodeIPs(t, ips, "104.243.46.110")
+	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
 func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
@@ -40,7 +40,7 @@ func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
 		ID:          DatabaseLocationID(databaseID, "container-1"),
 		DatabaseID:  databaseID,
 		NodeID:      "node-us",
-		NodeIP:      "104.243.46.110",
+		NodeIP:      "192.0.2.10",
 		ContainerID: "container-1",
 		Status:      "running",
 		UpdatedAt:   time.Now(),
@@ -52,7 +52,7 @@ func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve database location IP: %v", err)
 	}
-	assertNodeIPs(t, ips, "104.243.46.110")
+	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
 func TestGetDatabaseNodeIPRejectsAmbiguousRegionFallback(t *testing.T) {
@@ -80,11 +80,11 @@ func TestGetDatabaseNodeIPAllowsSingleRegionCompatibilityFallback(t *testing.T) 
 		t.Fatalf("create database instance: %v", err)
 	}
 
-	ips, err := GetDatabaseNodeIP(databaseID, map[string][]string{"us-east": {"104.243.46.110"}})
+	ips, err := GetDatabaseNodeIP(databaseID, map[string][]string{"us-east": {"192.0.2.10"}})
 	if err != nil {
 		t.Fatalf("resolve legacy single-region database: %v", err)
 	}
-	assertNodeIPs(t, ips, "104.243.46.110")
+	assertNodeIPs(t, ips, "192.0.2.10")
 }
 
 func TestResolvePreferredNodeIPsRejectsAmbiguousUnknownNode(t *testing.T) {
@@ -99,6 +99,25 @@ func TestResolvePreferredNodeIPsRejectsAmbiguousUnknownNode(t *testing.T) {
 	}
 }
 
+func TestResolvePreferredNodeIPsIgnoresUnconfiguredAdvertiseAddress(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-private",
+		Hostname: "private-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create private node metadata: %v", err)
+	}
+
+	ips, err := resolvePreferredNodeIPs("node-private", "203.0.113.55", multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve configured public address: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
 func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 	setupDNSRoutingTestDB(t)
 
@@ -106,7 +125,7 @@ func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 		ID:          "legacy-location-id",
 		DatabaseID:  "db-upsert-test",
 		NodeID:      "node-nl",
-		NodeIP:      "175.110.112.242",
+		NodeIP:      "198.51.100.20",
 		ContainerID: "container-upsert",
 		Status:      "running",
 	}
@@ -118,7 +137,7 @@ func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 		ID:          DatabaseLocationID("db-upsert-test", "container-upsert"),
 		DatabaseID:  "db-upsert-test",
 		NodeID:      "node-us",
-		NodeIP:      "104.243.46.110",
+		NodeIP:      "192.0.2.10",
 		ContainerID: "container-upsert",
 		Status:      "running",
 	}
@@ -133,8 +152,35 @@ func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
 	if len(locations) != 1 {
 		t.Fatalf("expected one location, got %d", len(locations))
 	}
-	if locations[0].ID != existing.ID || locations[0].NodeIP != "104.243.46.110" {
+	if locations[0].ID != existing.ID || locations[0].NodeIP != "192.0.2.10" {
 		t.Fatalf("unexpected reconciled location: %#v", locations[0])
+	}
+}
+
+func TestUpdateDatabaseLocationStatus(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	location := &DatabaseLocation{
+		ID:          "location-status-test",
+		DatabaseID:  "db-status-test",
+		NodeID:      "node-us",
+		ContainerID: "container-status-test",
+		Status:      "running",
+	}
+	if err := DB.Create(location).Error; err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+
+	if err := UpdateDatabaseLocationStatus(t.Context(), location.DatabaseID, "sleeping"); err != nil {
+		t.Fatalf("update database location status: %v", err)
+	}
+
+	var updated DatabaseLocation
+	if err := DB.First(&updated, "id = ?", location.ID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if updated.Status != "sleeping" {
+		t.Fatalf("expected sleeping location status, got %q", updated.Status)
 	}
 }
 
@@ -154,8 +200,8 @@ func setupDNSRoutingTestDB(t *testing.T) {
 
 func multiRegionNodeIPs() map[string][]string {
 	return map[string][]string{
-		"us-east": {"104.243.46.110"},
-		"nl":      {"175.110.112.242"},
+		"us-east": {"192.0.2.10"},
+		"nl":      {"198.51.100.20"},
 	}
 }
 

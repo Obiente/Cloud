@@ -210,6 +210,25 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	if r.dockerClient != nil {
 		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
 	}
+	knownLocationNodes := make(map[string]string)
+	if localNodeErr == nil {
+		containerIDs := make([]string, 0, len(instances))
+		for _, instance := range instances {
+			if instance.InstanceID != nil && *instance.InstanceID != "" {
+				containerIDs = append(containerIDs, *instance.InstanceID)
+			}
+		}
+		if len(containerIDs) > 0 {
+			var locations []database.DatabaseLocation
+			if err := database.DB.WithContext(ctx).Where("container_id IN ?", containerIDs).Find(&locations).Error; err != nil {
+				localNodeErr = fmt.Errorf("failed to load database locations: %w", err)
+			} else {
+				for _, location := range locations {
+					knownLocationNodes[location.ContainerID] = location.NodeID
+				}
+			}
+		}
+	}
 
 	for _, inst := range instances {
 		dbType := databaseTypeIntToString(inst.Type)
@@ -237,7 +256,7 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
 		}
-		locationNeedsReconciliation := inst.NodeID == nil || *inst.NodeID != localNode.ID
+		locationNeedsReconciliation := inst.NodeID == nil || *inst.NodeID != localNode.ID || knownLocationNodes[route.ContainerID] != localNode.ID
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && locationNeedsReconciliation {
 			if _, err := r.dockerClient.ContainerInspect(ctx, route.ContainerID); err == nil {
 				r.recordDatabaseLocation(ctx, &inst, localNode)
@@ -331,10 +350,41 @@ func (r *RouteRegistry) recordDatabaseLocation(ctx context.Context, instance *da
 		NodeHostname: node.Hostname,
 		NodeIP:       node.IP,
 		ContainerID:  containerID,
-		Status:       "running",
+		Status:       databaseLocationStatus(instance.Status),
 		Port:         int32(standardPort(databaseTypeIntToString(instance.Type))),
 	}); err != nil {
 		logger.Warn("Failed to reconcile location for database %s: %v", instance.ID, err)
+	}
+}
+
+func databaseLocationStatus(status int32) string {
+	switch status {
+	case 1:
+		return "creating"
+	case 2:
+		return "starting"
+	case 3:
+		return "running"
+	case 4:
+		return "stopping"
+	case 5:
+		return "stopped"
+	case 6:
+		return "backing_up"
+	case 7:
+		return "restoring"
+	case 8:
+		return "failed"
+	case 9:
+		return "deleting"
+	case 10:
+		return "deleted"
+	case 11:
+		return "suspended"
+	case 12:
+		return "sleeping"
+	default:
+		return "created"
 	}
 }
 
