@@ -489,10 +489,67 @@ services:
     environment:
       PORT: 3014
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
+      DATABASES_SERVICE_MODE: control-plane
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     deploy:
-      # Each node that can own a standalone database container must also expose
-      # the host-mode database proxy ports used by that container's DNS record.
+      mode: replicated
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+      placement:
+        constraints:
+          # Keep all node-local provisioning/lifecycle calls on the same Docker
+          # daemon that owns managed database containers.
+          - node.labels.databases.enabled == true
+      labels:
+        - "cloud.obiente.service=databases-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.databases-service.entrypoints=web"
+        - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
+        - "traefik.docker.network=obiente_obiente-network"  # Ensure Traefik targets the shared overlay network
+        - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.databases-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.databases-service-secure.service=databases-service"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3014/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    dns_search: []
+    networks:
+      - obiente-network
+      - obiente-databases
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Global data-plane proxy. Every possible database owner node exposes the
+  # host-mode listeners used by owner-specific database DNS records.
+  databases-proxy:
+    image: ghcr.io/obiente/cloud-databases-service:latest
+    environment:
+      PORT: 3014
+      ENABLE_SWARM: ${ENABLE_SWARM:-true}
+      DATABASES_SERVICE_MODE: proxy
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
+    deploy:
       mode: global
       update_config:
         parallelism: 1
@@ -511,17 +568,8 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
-        - "cloud.obiente.service=databases-service"
-        - "cloud.obiente.traefik=true"
-        - "traefik.enable=true"
-        - "traefik.http.routers.databases-service.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
-        - "traefik.http.routers.databases-service.entrypoints=web"
-        - "traefik.http.services.databases-service.loadbalancer.server.port=3014"
-        - "traefik.docker.network=obiente_obiente-network"  # Ensure Traefik targets the shared overlay network
-        - "traefik.http.routers.databases-service-secure.rule=Host(`databases-service.${DOMAIN:-localhost}`)"
-        - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
-        - "traefik.http.routers.databases-service-secure.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.databases-service-secure.service=databases-service"
+        - "cloud.obiente.service=databases-proxy"
+        - "cloud.obiente.traefik=false"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3014/health || exit 1"]
       interval: 30s

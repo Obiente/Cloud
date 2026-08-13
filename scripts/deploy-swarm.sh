@@ -11,6 +11,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=scripts/lib/database-owner.sh
+source "${SCRIPT_DIR}/lib/database-owner.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -208,6 +210,10 @@ fi
 
 echo ""
 echo "🚀 Deploying main stack '$STACK_NAME'..."
+
+# Preserve the Docker node that owns existing standalone database containers.
+# Fresh installations use the already designated PostgreSQL node.
+ensure_database_owner_label "$STACK_NAME"
 
 # Note: We let Docker Swarm create the network automatically from the compose file
 # Pre-creating it manually causes conflicts. Docker Swarm will create it before services.

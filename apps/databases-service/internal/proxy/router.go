@@ -286,12 +286,16 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			route.ContainerID = *inst.InstanceID
 		}
 		location := knownLocations[route.ContainerID]
+		containerRunning, containerIsLocal := localContainerStates[route.ContainerID]
+		containerOwnedLocally := databaseContainerOwnedLocally(&inst, location, localNode.ID, containerIsLocal)
+		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && !containerOwnedLocally {
+			// Global proxy tasks only publish routes for containers owned by their
+			// local Docker daemon. Owner-specific DNS sends clients to that task.
+			continue
+		}
 		locationReconciled := false
-		containerIsLocal := false
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
-			containerRunning := false
-			containerRunning, containerIsLocal = localContainerStates[route.ContainerID]
-			if containerIsLocal && inst.Status == 3 && !containerRunning {
+			if containerOwnedLocally && inst.Status == 3 && !containerRunning {
 				if err := reconcileStoppedDatabase(ctx, &inst); err != nil {
 					logger.Warn("Failed to reconcile externally stopped database %s: %v", inst.ID, err)
 				} else {
@@ -374,6 +378,21 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func databaseContainerOwnedLocally(
+	instance *database.DatabaseInstance,
+	location databaseLocationSnapshot,
+	localNodeID string,
+	containerListedLocally bool,
+) bool {
+	if containerListedLocally || localNodeID == "" {
+		return containerListedLocally
+	}
+	if strings.TrimSpace(location.NodeID) == strings.TrimSpace(localNodeID) {
+		return true
+	}
+	return instance != nil && instance.NodeID != nil && strings.TrimSpace(*instance.NodeID) == strings.TrimSpace(localNodeID)
 }
 
 func databaseUptimeNeedsRepair(instanceStatus int32, containerIsLocal, locationReconciled, intervalOpen bool) bool {

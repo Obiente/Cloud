@@ -49,6 +49,25 @@ func TestDatabaseUptimeNeedsRepairOnlyForMissingLocalInterval(t *testing.T) {
 	}
 }
 
+func TestDatabaseContainerOwnedLocallyUsesPersistedOwnerForMissingContainer(t *testing.T) {
+	localNodeID := "node-local-owner-test"
+	instance := &database.DatabaseInstance{NodeID: &localNodeID}
+	location := databaseLocationSnapshot{NodeID: localNodeID}
+	if !databaseContainerOwnedLocally(instance, location, localNodeID, false) {
+		t.Fatal("missing container with a persisted local owner was treated as remote")
+	}
+
+	remoteNodeID := "node-remote-owner-test"
+	remoteInstance := &database.DatabaseInstance{NodeID: &remoteNodeID}
+	remoteLocation := databaseLocationSnapshot{NodeID: remoteNodeID}
+	if databaseContainerOwnedLocally(remoteInstance, remoteLocation, localNodeID, false) {
+		t.Fatal("remote container was treated as locally owned")
+	}
+	if !databaseContainerOwnedLocally(remoteInstance, remoteLocation, localNodeID, true) {
+		t.Fatal("locally listed container did not override stale ownership metadata")
+	}
+}
+
 func TestReconcileStoppedDatabaseClosesTracking(t *testing.T) {
 	previousDB := database.DB
 	db, err := gorm.Open(sqlite.Open("file:proxy-stopped-reconciliation?mode=memory&cache=shared"), &gorm.Config{})
