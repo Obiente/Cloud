@@ -11,6 +11,7 @@ readonly DEFAULT_STATE_DIR="/var/lib/obiente/preview-tls"
 readonly DEFAULT_RENEW_DAYS="30"
 readonly DEFAULT_STACK_NAME="obiente"
 readonly CERTIFICATE_NAME="preview-wildcard"
+readonly LEGO_ACCOUNT_ID="preview-tls"
 readonly LEGO_CONTAINER_STATE_DIR="/var/lib/lego"
 
 log() {
@@ -495,6 +496,7 @@ run_lego() {
     --log.format text
     run
     --path "$LEGO_CONTAINER_STATE_DIR"
+    --account-id "$LEGO_ACCOUNT_ID"
     --cert.name "$CERTIFICATE_NAME"
     --email "$email"
     --accept-tos
