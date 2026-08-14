@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
@@ -53,7 +55,7 @@ func TestStackRollbackRestoresVolumePreparationOnlyForSingleService(t *testing.T
 	}
 }
 
-func TestUnchangedSwarmStackServicesUsesSpecifications(t *testing.T) {
+func TestUnchangedSwarmStackServicesUsesTaskTemplates(t *testing.T) {
 	before := map[string]string{
 		"deploy-app_api":    `{"Name":"api","TaskTemplate":{"ContainerSpec":{"Image":"example/api:v1"}}}`,
 		"deploy-app_worker": `{"Name":"worker","TaskTemplate":{"ContainerSpec":{"Image":"example/worker:v1"}}}`,
@@ -66,6 +68,31 @@ func TestUnchangedSwarmStackServicesUsesSpecifications(t *testing.T) {
 	want := []string{"deploy-app_worker"}
 	if got := unchangedSwarmStackServices(before, after); !reflect.DeepEqual(got, want) {
 		t.Fatalf("unchangedSwarmStackServices() = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseCurrentSwarmTaskIDsIgnoresHistoricalTasks(t *testing.T) {
+	got := parseCurrentSwarmTaskIDs("deploy-app.1\tcurrent-a\n\\_ deploy-app.1\told-a\ndeploy-app.2\tcurrent-b\n")
+	if _, found := got["old-a"]; found {
+		t.Fatal("historical task was treated as current")
+	}
+	for _, taskID := range []string{"current-a", "current-b"} {
+		if _, found := got[taskID]; !found {
+			t.Fatalf("current task %s was omitted", taskID)
+		}
+	}
+}
+
+func TestObsoleteComposeSwarmLocationsKeepsCurrentAndLegacyRows(t *testing.T) {
+	locations := []database.DeploymentLocation{
+		{ContainerID: "current-container", ServiceID: "service-example", TaskID: "current-task"},
+		{ContainerID: "stale-container", ServiceID: "service-example", TaskID: "stale-task"},
+		{ContainerID: "plain-container"},
+	}
+	current := map[string]struct{}{"current-task": {}}
+	got := obsoleteComposeSwarmLocations(locations, current)
+	if len(got) != 1 || got[0].ContainerID != "stale-container" {
+		t.Fatalf("obsolete locations = %#v, want only stale-container", got)
 	}
 }
 

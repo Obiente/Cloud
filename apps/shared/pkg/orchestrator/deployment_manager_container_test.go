@@ -44,6 +44,15 @@ func TestDockerNetworkMissingRecognizesDockerInspectMessage(t *testing.T) {
 	}
 }
 
+func TestIsMissingSwarmServiceOutput(t *testing.T) {
+	if !isMissingSwarmServiceOutput("Error: no such service: deploy-example") {
+		t.Fatal("Docker's missing-service error was not recognized")
+	}
+	if isMissingSwarmServiceOutput("error during connect: connection refused") {
+		t.Fatal("daemon connectivity error was treated as a missing service")
+	}
+}
+
 func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T) {
 	t.Parallel()
 	want := []string{

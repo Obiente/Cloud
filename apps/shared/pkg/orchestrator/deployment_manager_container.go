@@ -528,6 +528,23 @@ func existingSwarmServiceConstraints(ctx context.Context, serviceName string) ([
 	return constraints, nil
 }
 
+func isMissingSwarmServiceOutput(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+	return strings.Contains(normalized, "no such service") || strings.Contains(normalized, "service not found")
+}
+
+func swarmServiceRuntimeFingerprint(ctx context.Context, serviceName string, allowMissing bool) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{.ID}}\t{{.Version.Index}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if allowMissing && isMissingSwarmServiceOutput(string(output)) {
+			return "", nil
+		}
+		return "", fmt.Errorf("inspect Swarm service runtime: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 func isSwarmNodeIDConstraint(constraint string) bool {
 	normalized := strings.ReplaceAll(strings.TrimSpace(constraint), " ", "")
 	return strings.HasPrefix(normalized, "node.id==")
@@ -1586,8 +1603,15 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
+	beforeRuntime, err := swarmServiceRuntimeFingerprint(dockerCtx, swarmServiceName, true)
+	if err != nil {
+		return "", "", fmt.Errorf("inspect service before creation: %w", err)
+	}
 
 	if err := cmd.Run(); err != nil {
+		serviceCreated = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
+			return swarmServiceRuntimeFingerprint(inspectCtx, swarmServiceName, true)
+		})
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
 		// Check if the error is due to context cancellation
@@ -2238,9 +2262,16 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
+	beforeRuntime, err := swarmServiceRuntimeFingerprint(dockerCtx, swarmServiceName, false)
+	if err != nil {
+		return "", "", fmt.Errorf("inspect service before update: %w", err)
+	}
 
 	logger.Info("[DeploymentManager] Updating Swarm service %s with zero-downtime strategy (start-first)", swarmServiceName)
 	if err := cmd.Run(); err != nil {
+		volumePreparationCommitted = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
+			return swarmServiceRuntimeFingerprint(inspectCtx, swarmServiceName, false)
+		})
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
 		if dockerCtx.Err() == context.DeadlineExceeded {

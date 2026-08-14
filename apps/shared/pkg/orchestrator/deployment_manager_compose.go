@@ -75,19 +75,19 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
-	beforeSpecs, err := swarmStackServiceSpecs(ctx, projectName, true)
+	beforeTaskTemplates, err := swarmStackTaskTemplates(ctx, projectName, true)
 	if err != nil {
 		return fmt.Errorf("inspect services before Compose restart: %w", err)
 	}
 	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
 		return err
 	}
-	afterSpecs, err := swarmStackServiceSpecs(ctx, projectName, false)
+	afterTaskTemplates, err := swarmStackTaskTemplates(ctx, projectName, false)
 	if err != nil {
 		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
 	}
 	forcedRestart := false
-	for _, serviceName := range unchangedSwarmStackServices(beforeSpecs, afterSpecs) {
+	for _, serviceName := range unchangedSwarmStackServices(beforeTaskTemplates, afterTaskTemplates) {
 		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--detach=true", "--force", serviceName)
 		forceOutput, forceErr := forceCmd.CombinedOutput()
 		if forceErr != nil {
@@ -117,7 +117,7 @@ func unchangedSwarmStackServices(before, after map[string]string) []string {
 	return serviceNames
 }
 
-func swarmStackServiceSpecs(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
+func swarmStackTaskTemplates(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
 	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
 	output, err := listCmd.CombinedOutput()
 	if err != nil {
@@ -133,20 +133,20 @@ func swarmStackServiceSpecs(ctx context.Context, projectName string, allowMissin
 		}
 		return nil, fmt.Errorf("stack %s has no services", projectName)
 	}
-	specs := make(map[string]string, len(serviceNames))
+	taskTemplates := make(map[string]string, len(serviceNames))
 	for _, serviceName := range serviceNames {
-		inspectCmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{json .Spec}}")
+		inspectCmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{json .Spec.TaskTemplate}}")
 		inspectOutput, inspectErr := inspectCmd.CombinedOutput()
 		if inspectErr != nil {
 			return nil, fmt.Errorf("inspect specification for service %s: %w (%s)", serviceName, inspectErr, strings.TrimSpace(string(inspectOutput)))
 		}
-		spec := strings.TrimSpace(string(inspectOutput))
-		if spec == "" {
-			return nil, fmt.Errorf("inspect specification for service %s returned no data", serviceName)
+		taskTemplate := strings.TrimSpace(string(inspectOutput))
+		if taskTemplate == "" {
+			return nil, fmt.Errorf("inspect task template for service %s returned no data", serviceName)
 		}
-		specs[serviceName] = spec
+		taskTemplates[serviceName] = taskTemplate
 	}
-	return specs, nil
+	return taskTemplates, nil
 }
 
 func isMissingSwarmStackOutput(output string) bool {
@@ -829,6 +829,59 @@ func swarmTaskSlot(labels map[string]string) string {
 	return strings.TrimSpace(slot)
 }
 
+func parseCurrentSwarmTaskIDs(output string) map[string]struct{} {
+	taskIDs := make(map[string]struct{})
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name := strings.TrimSpace(parts[0])
+		if strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_") {
+			continue
+		}
+		if taskID := strings.TrimSpace(parts[1]); taskID != "" {
+			taskIDs[taskID] = struct{}{}
+		}
+	}
+	return taskIDs
+}
+
+func currentSwarmStackTaskIDs(ctx context.Context, projectName string) (map[string]struct{}, error) {
+	cmd := exec.CommandContext(ctx, "docker", "stack", "ps", projectName, "--no-trunc", "--format", "{{.Name}}\t{{.ID}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("inspect current stack tasks: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return parseCurrentSwarmTaskIDs(string(output)), nil
+}
+
+func obsoleteComposeSwarmLocations(locations []database.DeploymentLocation, currentTaskIDs map[string]struct{}) []database.DeploymentLocation {
+	obsolete := make([]database.DeploymentLocation, 0)
+	for _, location := range locations {
+		if location.ServiceID == "" || location.TaskID == "" {
+			continue
+		}
+		if _, current := currentTaskIDs[location.TaskID]; !current {
+			obsolete = append(obsolete, location)
+		}
+	}
+	return obsolete
+}
+
+func (dm *DeploymentManager) reconcileComposeSwarmLocations(ctx context.Context, deploymentID string, currentTaskIDs map[string]struct{}) error {
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
+	if err != nil {
+		return fmt.Errorf("list deployment locations for Swarm reconciliation: %w", err)
+	}
+	for _, location := range obsoleteComposeSwarmLocations(locations, currentTaskIDs) {
+		if err := dm.registry.UnregisterDeployment(ctx, location.ContainerID); err != nil {
+			return fmt.Errorf("remove obsolete Swarm task location %s: %w", location.TaskID, err)
+		}
+	}
+	return nil
+}
+
 // registerComposeContainers finds containers created by a compose project and registers them
 func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, deploymentID string, projectName string) error {
 	// Check if we're in Swarm mode
@@ -839,8 +892,14 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: make(client.Filters)})
 	containers := containersResult.Items
 	containers = containers[:0] // Clear the list but keep the type
+	var currentTaskIDs map[string]struct{}
 
 	if isSwarmMode {
+		var err error
+		currentTaskIDs, err = currentSwarmStackTaskIDs(ctx, projectName)
+		if err != nil {
+			return err
+		}
 		// In Swarm mode, containers are created by services in the stack
 		// List containers with the deployment ID label (set by our Traefik label injection)
 		filterArgs := make(client.Filters)
@@ -868,6 +927,13 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 				}
 			}
 		}
+		currentContainers := containers[:0]
+		for _, cnt := range containers {
+			if _, current := currentTaskIDs[cnt.Labels["com.docker.swarm.task.id"]]; current {
+				currentContainers = append(currentContainers, cnt)
+			}
+		}
+		containers = currentContainers
 	} else {
 		// In non-Swarm mode, list containers with the compose project label
 		// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
@@ -903,7 +969,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	}
 
 	// Also try listing all containers with compose labels and filter manually (fallback)
-	if len(containers) == 0 {
+	if len(containers) == 0 && !isSwarmMode {
 		logger.Info("[DeploymentManager] Still no containers found, listing all containers with compose labels")
 		allFilterArgs := make(client.Filters)
 		allFilterArgs.Add("label", "com.docker.compose.project")
@@ -924,6 +990,13 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	}
 
 	if len(containers) == 0 {
+		if isSwarmMode {
+			if err := dm.reconcileComposeSwarmLocations(ctx, deploymentID, currentTaskIDs); err != nil {
+				return err
+			}
+			logger.Info("[DeploymentManager] No local containers remain for converged Swarm stack %s", projectName)
+			return nil
+		}
 		logger.Info("[DeploymentManager] WARNING: No containers found for compose project %s (deployment %s). "+
 			"This might indicate the compose file failed to create containers. Checking all containers...", projectName, deploymentID)
 
@@ -1021,6 +1094,11 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		} else {
 			logger.Info("[DeploymentManager] Registered compose container %s (service: %s, status: %s) for deployment %s",
 				cnt.ID[:12], serviceName, containerStatus, deploymentID)
+		}
+	}
+	if isSwarmMode {
+		if err := dm.reconcileComposeSwarmLocations(ctx, deploymentID, currentTaskIDs); err != nil {
+			return err
 		}
 	}
 
