@@ -108,12 +108,16 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		// using these exact binds during creation so a preparation failure cannot
 		// occur after the previous workload has been removed. Read-only restriction
 		// remains deferred until every sequential replica replacement succeeds.
-		plainContainerBinds, _, plainVolumePreparation, err = preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+		plainContainerBinds, _, plainVolumePreparation, err = preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
 		if err != nil {
 			return fmt.Errorf("prepare deployment volumes: %w", err)
 		}
 		defer func() {
-			if retErr == nil || plainReplacementStarted {
+			if retErr == nil {
+				return
+			}
+			if plainReplacementStarted {
+				plainVolumePreparation.Commit()
 				return
 			}
 			if rollbackErr := plainVolumePreparation.Rollback(); rollbackErr != nil {
@@ -861,8 +865,12 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	// CreateDeployment replaces them by name. Validate and prepare every declared
 	// bind first so a stable host-volume error leaves the current workload intact.
 	if !utils.IsSwarmModeEnabled() {
-		if _, _, _, err := preparedSanitizedVolumeMounts(deploymentID, deploymentVolumes); err != nil {
+		_, _, preparation, err := preparedSanitizedVolumeMounts(ctx, deploymentID, deploymentVolumes)
+		if err != nil {
 			return fmt.Errorf("prepare deployment volumes before restart: %w", err)
+		}
+		if err := preparation.Rollback(); err != nil {
+			return fmt.Errorf("restore deployment volumes after restart preflight: %w", err)
 		}
 	}
 

@@ -133,6 +133,47 @@ func TestWaitForNextSwarmPollStopsWithContext(t *testing.T) {
 	}
 }
 
+func TestDeploymentVolumeLockSerializesAndHonorsContext(t *testing.T) {
+	deploymentID := "volume-lock-context-test"
+	releaseFirst, err := acquireDeploymentVolumeLock(context.Background(), deploymentID)
+	if err != nil {
+		t.Fatalf("acquire first deployment volume lock: %v", err)
+	}
+	defer releaseFirst()
+
+	waitCtx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		release, acquireErr := acquireDeploymentVolumeLock(waitCtx, deploymentID)
+		if acquireErr == nil {
+			release()
+		}
+		result <- acquireErr
+	}()
+	<-started
+	select {
+	case acquireErr := <-result:
+		t.Fatalf("second lock acquisition completed before release: %v", acquireErr)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	if acquireErr := <-result; !errors.Is(acquireErr, context.Canceled) {
+		t.Fatalf("canceled lock acquisition error = %v, want context cancellation", acquireErr)
+	}
+}
+
+func TestTerminalSwarmRolloutFailure(t *testing.T) {
+	terminal := fmt.Errorf("deploy service: %w", &SwarmRolloutError{ServiceName: "deploy-example", State: "failed"})
+	if !terminalSwarmRolloutFailure(terminal) {
+		t.Fatal("typed rollout failure was not terminal")
+	}
+	if terminalSwarmRolloutFailure(fmt.Errorf("wait for convergence: %w", context.DeadlineExceeded)) {
+		t.Fatal("caller deadline was classified as a terminal rollout failure")
+	}
+}
+
 func TestParseSwarmServiceRunPolicyUsesDesiredGlobalTasks(t *testing.T) {
 	policy, err := parseSwarmServiceRunPolicy([]byte(`{
   "Spec": {

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -72,12 +73,15 @@ type volumeRootPreparation struct {
 	states           map[string]volumeRootState
 	paths            []string
 	deferredReadOnly []string
+	releaseLock      func()
+	releaseOnce      sync.Once
 }
 
 func (preparation *volumeRootPreparation) Rollback() error {
 	if preparation == nil {
 		return nil
 	}
+	defer preparation.release()
 	return rollbackVolumeRootStates(preparation.states, preparation.paths)
 }
 
@@ -85,6 +89,7 @@ func (preparation *volumeRootPreparation) ApplyDeferredReadOnly() error {
 	if preparation == nil {
 		return nil
 	}
+	defer preparation.release()
 	for _, path := range preparation.deferredReadOnly {
 		if err := ensureReadOnlyBindDir(path); err != nil {
 			return fmt.Errorf("restrict read-only volume directory %s: %w", path, err)
@@ -92,6 +97,65 @@ func (preparation *volumeRootPreparation) ApplyDeferredReadOnly() error {
 	}
 	preparation.deferredReadOnly = nil
 	return nil
+}
+
+func (preparation *volumeRootPreparation) Commit() {
+	if preparation != nil {
+		preparation.release()
+	}
+}
+
+func (preparation *volumeRootPreparation) release() {
+	if preparation == nil || preparation.releaseLock == nil {
+		return
+	}
+	preparation.releaseOnce.Do(preparation.releaseLock)
+}
+
+type deploymentVolumeLock struct {
+	token chan struct{}
+	refs  int
+}
+
+var deploymentVolumeLocks = struct {
+	sync.Mutex
+	locks map[string]*deploymentVolumeLock
+}{locks: make(map[string]*deploymentVolumeLock)}
+
+func acquireDeploymentVolumeLock(ctx context.Context, deploymentID string) (func(), error) {
+	deploymentVolumeLocks.Lock()
+	lock := deploymentVolumeLocks.locks[deploymentID]
+	if lock == nil {
+		lock = &deploymentVolumeLock{token: make(chan struct{}, 1)}
+		lock.token <- struct{}{}
+		deploymentVolumeLocks.locks[deploymentID] = lock
+	}
+	lock.refs++
+	deploymentVolumeLocks.Unlock()
+
+	select {
+	case <-ctx.Done():
+		releaseDeploymentVolumeLockReference(deploymentID, lock)
+		return nil, ctx.Err()
+	case <-lock.token:
+	}
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			lock.token <- struct{}{}
+			releaseDeploymentVolumeLockReference(deploymentID, lock)
+		})
+	}, nil
+}
+
+func releaseDeploymentVolumeLockReference(deploymentID string, lock *deploymentVolumeLock) {
+	deploymentVolumeLocks.Lock()
+	defer deploymentVolumeLocks.Unlock()
+	lock.refs--
+	if lock.refs == 0 && deploymentVolumeLocks.locks[deploymentID] == lock {
+		delete(deploymentVolumeLocks.locks, deploymentID)
+	}
 }
 
 func snapshotVolumeRootState(path string) (volumeRootState, error) {
@@ -216,8 +280,22 @@ func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]s
 	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
 }
 
-func preparedSanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
-	return preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+func preparedSanitizedVolumeMounts(ctx context.Context, deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
+	release, err := acquireDeploymentVolumeLock(ctx, deploymentID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	binds, mountFlags, preparation, err := preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+	if err != nil {
+		release()
+		return nil, nil, nil, err
+	}
+	if len(preparation.paths) == 0 {
+		release()
+	} else {
+		preparation.releaseLock = release
+	}
+	return binds, mountFlags, preparation, nil
 }
 
 func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
@@ -1241,7 +1319,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
 	if err != nil {
 		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
 	}
@@ -1251,10 +1329,15 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 			return
 		}
 		if serviceCreated {
+			if !terminalSwarmRolloutFailure(retErr) {
+				volumePreparation.Commit()
+				return
+			}
 			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cleanupCancel()
 			cleanupCmd := exec.CommandContext(cleanupCtx, "docker", "service", "rm", swarmServiceName)
 			if cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
+				volumePreparation.Commit()
 				retErr = fmt.Errorf("%w; remove failed Swarm service before restoring volume permissions: %v (%s); prepared permissions retained", retErr, cleanupErr, strings.TrimSpace(string(cleanupOutput)))
 				return
 			}
@@ -1950,13 +2033,17 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
 	}
-	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
 	if err != nil {
 		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
 	}
 	volumePreparationCommitted := false
 	defer func() {
-		if retErr == nil || volumePreparationCommitted {
+		if retErr == nil {
+			return
+		}
+		if volumePreparationCommitted {
+			volumePreparation.Commit()
 			return
 		}
 		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
@@ -2163,6 +2250,11 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		return serviceID, task.ContainerID, err
 	}
 	return serviceID, task.ContainerID, nil
+}
+
+func terminalSwarmRolloutFailure(err error) bool {
+	var rolloutErr *SwarmRolloutError
+	return errors.As(err, &rolloutErr)
 }
 
 func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) (*swarmConvergedTask, error) {

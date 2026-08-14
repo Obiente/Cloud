@@ -164,13 +164,16 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	var sanitizer *ComposeSanitizer
+	var releaseVolumeLock func()
 	volumePreparationCommitted := false
 	defer func() {
-		if retErr == nil || volumePreparationCommitted || sanitizer == nil {
-			return
+		if retErr != nil && !volumePreparationCommitted && sanitizer != nil {
+			if rollbackErr := sanitizer.rollbackVolumePreparation(); rollbackErr != nil {
+				retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+			}
 		}
-		if rollbackErr := sanitizer.rollbackVolumePreparation(); rollbackErr != nil {
-			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+		if releaseVolumeLock != nil {
+			releaseVolumeLock()
 		}
 	}()
 
@@ -182,6 +185,13 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	}
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
+	if deploymentID != "" && sanitizeVolumeName(deploymentID) == deploymentID {
+		var lockErr error
+		releaseVolumeLock, lockErr = acquireDeploymentVolumeLock(ctx, deploymentID)
+		if lockErr != nil {
+			return fmt.Errorf("wait for deployment volume preparation: %w", lockErr)
+		}
+	}
 	sanitizer = NewComposeSanitizer(deploymentID)
 	if sanitizer.GetSafeBaseDir() != "" {
 		legacyProjectRoot, err := storedComposeProvesLegacyProjectRoot(deploymentID, sanitizer.GetSafeBaseDir())
