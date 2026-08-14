@@ -48,7 +48,7 @@ func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, dep
 		return fmt.Errorf("stack %s has no services after deployment", projectName)
 	}
 	for _, serviceName := range serviceNames {
-		if _, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, serviceName); err != nil {
+		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); err != nil {
 			return fmt.Errorf("wait for stack service %s: %w", serviceName, err)
 		}
 	}

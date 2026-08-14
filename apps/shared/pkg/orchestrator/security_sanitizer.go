@@ -1,11 +1,13 @@
 package orchestrator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,6 +19,7 @@ type ComposeSanitizer struct {
 	volumeRootStates    map[string]volumeRootState
 	preparedVolumeRoots []string
 	preparedVolumeSet   map[string]struct{}
+	preparedWritable    map[string]bool
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -84,6 +87,7 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 	cs.volumeRootStates = make(map[string]volumeRootState)
 	cs.preparedVolumeRoots = nil
 	cs.preparedVolumeSet = make(map[string]struct{})
+	cs.preparedWritable = make(map[string]bool)
 	defer func() {
 		if err == nil || len(cs.preparedVolumeRoots) == 0 {
 			return
@@ -511,6 +515,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 		// Check volume type
 		volType, _ := v["type"].(string)
+		readOnly, _ := v["read_only"].(bool)
 
 		// If it has a source, check if it's a bind mount (absolute path) or named volume
 		if source, ok := v["source"].(string); ok {
@@ -521,29 +526,37 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 				}
 			} else if volType == "bind" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") || strings.ContainsRune(source, filepath.Separator) {
 				// Bind mount - sanitize absolute and relative paths.
-				sanitizedSource, err := cs.sanitizeHostPath(source, serviceName)
+				sanitizedSource, err := cs.sanitizeHostPath(source, serviceName, readOnly)
 				if err != nil {
 					return nil, err
 				}
-				return map[string]interface{}{
+				result := map[string]interface{}{
 					"type":   "bind",
 					"source": sanitizedSource,
 					"target": target,
-				}, nil
+				}
+				if readOnly {
+					result["read_only"] = true
+				}
+				return result, nil
 			} else if source == "" || sanitizeVolumeName(source) != source {
 				return nil, fmt.Errorf("invalid volume source %q", source)
 			}
 			if source != "" && sanitizeVolumeName(source) == source {
 				// Named volume - convert to a bind mount beneath the selected root.
 				obienteVolumePath := filepath.Join(cs.safeBaseDir, source)
-				if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
+				if err := cs.prepareBindDir(obienteVolumePath, !readOnly); err != nil {
 					return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 				}
-				return map[string]interface{}{
+				result := map[string]interface{}{
 					"type":   "bind",
 					"source": obienteVolumePath,
 					"target": target,
-				}, nil
+				}
+				if readOnly {
+					result["read_only"] = true
+				}
+				return result, nil
 			}
 			return nil, fmt.Errorf("invalid volume source %q", source)
 		}
@@ -573,6 +586,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 		hostPath := strings.TrimSpace(parts[0])
 		containerPath := strings.TrimSpace(parts[1])
+		readOnly := composeShortVolumeReadOnly(containerPath)
 
 		// A source matching the platform volume-name grammar is a named volume.
 		// Every other source is treated as a bind path and must pass containment.
@@ -581,7 +595,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			volumeName := hostPath
 			obienteVolumePath := filepath.Join(cs.safeBaseDir, volumeName)
 			// Ensure directory exists
-			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
+			if err := cs.prepareBindDir(obienteVolumePath, !readOnly); err != nil {
 				return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 			}
 			// Return as bind mount
@@ -589,7 +603,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		}
 
 		// It's a bind mount - sanitize host path
-		sanitizedHostPath, err := cs.sanitizeHostPath(hostPath, serviceName)
+		sanitizedHostPath, err := cs.sanitizeHostPath(hostPath, serviceName, readOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -613,8 +627,21 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 	return vol, nil
 }
 
+func composeShortVolumeReadOnly(containerAndMode string) bool {
+	parts := strings.Split(containerAndMode, ":")
+	if len(parts) < 2 {
+		return false
+	}
+	for _, option := range strings.Split(parts[len(parts)-1], ",") {
+		if strings.TrimSpace(option) == "ro" {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeHostPath transforms a host path to a safe user directory
-func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string) (string, error) {
+func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string, readOnly bool) (string, error) {
 	if strings.ContainsRune(hostPath, '\x00') {
 		return "", fmt.Errorf("volume source contains a null byte")
 	}
@@ -662,7 +689,7 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	}
 
 	// Ensure directory exists
-	if err := cs.prepareWritableBindDir(safePath); err != nil {
+	if err := cs.prepareBindDir(safePath, !readOnly); err != nil {
 		return "", fmt.Errorf("prepare volume directory %s: %w", safePath, err)
 	}
 
@@ -676,27 +703,24 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 	}
 	// Convert named volume definitions to bind mounts beneath the selected root.
 	if volMap, ok := volData.(map[string]interface{}); ok {
-		// If it's an empty map or only has driver_opts, convert to bind mount
-		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
-			// This is a named volume - convert to bind mount specification
-			obienteVolumePath := filepath.Join(cs.safeBaseDir, volName)
-			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
-				return fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
-			}
-
+		// Empty named-volume definitions are resolved from service references.
+		if len(volMap) == 0 {
 			// Replace with bind mount configuration
-			// Note: We can't fully represent bind mounts in top-level volumes,
-			// but we'll ensure the directory exists and remove the volume definition
-			// The actual bind mount will be created in sanitizeVolumeBinding
+			// The actual bind and its access mode are prepared from each service
+			// reference, so an unused definition does not create host state.
 			delete(volMap, "driver")
 			delete(volMap, "driver_opts")
 		} else {
 			// Handle driver_opts with device/bind mounts
 			if driverOpts, ok := volMap["driver_opts"].(map[string]interface{}); ok {
+				readOnly := false
+				if options, ok := driverOpts["o"].(string); ok {
+					readOnly = composeBindOptionsReadOnly(options)
+				}
 				// Check for device or type=bind options
 				if device, ok := driverOpts["device"].(string); ok {
 					// Transform device path to safe directory
-					sanitizedDevice, err := cs.sanitizeHostPath(device, "volume-"+volName)
+					sanitizedDevice, err := cs.sanitizeHostPath(device, "volume-"+volName, readOnly)
 					if err != nil {
 						return err
 					}
@@ -715,18 +739,37 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 	return nil
 }
 
-func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
-	if _, prepared := cs.preparedVolumeSet[path]; prepared {
+func composeBindOptionsReadOnly(options string) bool {
+	for _, option := range strings.Split(options, ",") {
+		if strings.TrimSpace(option) == "ro" {
+			return true
+		}
+	}
+	return false
+}
+
+func (cs *ComposeSanitizer) prepareBindDir(path string, writable bool) error {
+	if _, prepared := cs.preparedVolumeSet[path]; !prepared {
+		state, err := snapshotVolumeRootState(path)
+		if err != nil {
+			return err
+		}
+		cs.volumeRootStates[path] = state
+		cs.preparedVolumeRoots = append(cs.preparedVolumeRoots, path)
+		cs.preparedVolumeSet[path] = struct{}{}
+	} else if cs.preparedWritable[path] || !writable {
 		return nil
 	}
-	state, err := snapshotVolumeRootState(path)
-	if err != nil {
-		return err
+
+	cs.preparedWritable[path] = writable
+	if writable {
+		return ensureWritableBindDir(path)
 	}
-	cs.volumeRootStates[path] = state
-	cs.preparedVolumeRoots = append(cs.preparedVolumeRoots, path)
-	cs.preparedVolumeSet[path] = struct{}{}
-	return ensureWritableBindDir(path)
+	return ensureReadOnlyBindDir(path)
+}
+
+func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
+	return cs.prepareBindDir(path, true)
 }
 
 func (cs *ComposeSanitizer) rollbackVolumePreparation() error {
@@ -734,43 +777,32 @@ func (cs *ComposeSanitizer) rollbackVolumePreparation() error {
 	cs.volumeRootStates = nil
 	cs.preparedVolumeRoots = nil
 	cs.preparedVolumeSet = nil
+	cs.preparedWritable = nil
 	return err
 }
 
 func ensureWritableBindDir(path string) error {
-	// Keep the deployment hierarchy non-writable. Only the final mount root needs
-	// to accept files from an arbitrary workload identity.
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(path, 0o777); err != nil {
-		return err
-	}
 	// Workload images may run as any non-root UID/GID. Make only the isolated
 	// bind root universally writable so a fresh volume can be initialized. This
 	// is intentionally non-recursive: changing application-owned contents can
 	// break mode-sensitive data, and UID migrations remain the application's
-	// responsibility.
-	return os.Chmod(path, 0o777)
+	// responsibility. Descriptor-relative traversal rejects symlinks in every
+	// component and prevents chmod from escaping the deployment root.
+	return secureChmodDirectory(path, 0o777, true)
 }
 
 func ensureReadOnlyBindDir(path string) error {
 	existingMode := os.FileMode(0o755)
-	if info, err := os.Stat(path); err == nil {
-		existingMode = info.Mode().Perm()
-	} else if !os.IsNotExist(err) {
+	if mode, err := secureDirectoryMode(path); err == nil {
+		existingMode = mode
+	} else if !errors.Is(err, unix.ENOENT) {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		return err
-	}
-	// MkdirAll preserves the mode of an existing directory. Remove group and
+	// Preserve the mode of an existing directory. Remove group and
 	// other write access when a writable volume becomes read-only, without
-	// broadening an intentionally more restrictive existing mode.
-	return os.Chmod(path, existingMode&^0o022)
+	// broadening an intentionally more restrictive existing mode or discarding
+	// setgid/setuid/sticky semantics used by host-side maintenance.
+	return secureChmodDirectory(path, existingMode&^0o022, true)
 }
 
 // sanitizeBindOptions sanitizes bind mount options

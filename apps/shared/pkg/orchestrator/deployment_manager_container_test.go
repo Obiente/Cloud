@@ -86,6 +86,25 @@ func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T)
 	}
 }
 
+func TestParseSwarmTaskSummaryRecognizesStoppedServiceOutcomes(t *testing.T) {
+	t.Parallel()
+
+	completed := parseSwarmTaskSummary("Complete 3 seconds ago\tShutdown\t\n")
+	if completed.active || !completed.completed || completed.failed {
+		t.Fatalf("completed task summary = %#v", completed)
+	}
+
+	active := parseSwarmTaskSummary("Running 2 seconds ago\tRunning\t\n")
+	if !active.active || active.completed || active.failed {
+		t.Fatalf("active task summary = %#v", active)
+	}
+
+	failed := parseSwarmTaskSummary("Rejected 1 second ago\tShutdown\tpermission denied\n")
+	if failed.active || failed.completed || !failed.failed {
+		t.Fatalf("failed task summary = %#v", failed)
+	}
+}
+
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
 	t.Parallel()
 	first := PreviewIngressNetworkNameForDeployment("preview-one")

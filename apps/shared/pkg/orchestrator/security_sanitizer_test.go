@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -494,6 +495,57 @@ func TestEnsureReadOnlyBindDirPreservesRestrictiveMode(t *testing.T) {
 	}
 }
 
+func TestEnsureReadOnlyBindDirPreservesSetgid(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "shared-data")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("create setgid volume root: %v", err)
+	}
+	if err := os.Chmod(dir, 0o750|os.ModeSetgid); err != nil {
+		t.Fatalf("set setgid volume root mode: %v", err)
+	}
+
+	if err := ensureReadOnlyBindDir(dir); err != nil {
+		t.Fatalf("prepare setgid read-only bind directory: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat setgid read-only bind directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o750 {
+		t.Fatalf("read-only permissions = %#o, want 0750", got)
+	}
+	if info.Mode()&os.ModeSetgid == 0 {
+		t.Fatal("read-only preparation removed setgid")
+	}
+}
+
+func TestEnsureWritableBindDirRejectsSymlinkComponents(t *testing.T) {
+	root := t.TempDir()
+	safeBase := filepath.Join(root, "safe")
+	hostTarget := filepath.Join(root, "host-target")
+	if err := os.MkdirAll(safeBase, 0o755); err != nil {
+		t.Fatalf("create safe base: %v", err)
+	}
+	if err := os.MkdirAll(hostTarget, 0o700); err != nil {
+		t.Fatalf("create host target: %v", err)
+	}
+	if err := os.Symlink(hostTarget, filepath.Join(safeBase, "link")); err != nil {
+		t.Fatalf("create malicious volume symlink: %v", err)
+	}
+
+	if err := ensureWritableBindDir(filepath.Join(safeBase, "link", "nested")); err == nil {
+		t.Fatal("expected writable bind preparation to reject a symlink component")
+	}
+	info, err := os.Stat(hostTarget)
+	if err != nil {
+		t.Fatalf("stat host target: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("host target mode changed through symlink to %#o", got)
+	}
+}
+
 func TestSanitizeComposeYAMLFailsWhenVolumePreparationFails(t *testing.T) {
 	safeBaseDir := t.TempDir()
 	conflictingPath := filepath.Join(safeBaseDir, "app", "data")
@@ -678,6 +730,87 @@ volumes:
 	wantSource := filepath.Join(safeBaseDir, "cache")
 	if strings.SplitN(appVolume, ":", 2)[0] != wantSource || workerVolume["source"] != wantSource {
 		t.Fatalf("named volumes did not use selected root %q: app=%q worker=%#v", wantSource, appVolume, workerVolume)
+	}
+}
+
+func TestSanitizeComposeYAMLRestrictsReadOnlyNamedVolumeRoot(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	volumeRoot := filepath.Join(safeBaseDir, "cache")
+	if err := os.MkdirAll(volumeRoot, 0o777); err != nil {
+		t.Fatalf("create writable named volume root: %v", err)
+	}
+	if err := os.Chmod(volumeRoot, 0o777); err != nil {
+		t.Fatalf("set writable named volume root mode: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-read-only-volume-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - cache:/data:ro
+volumes:
+  cache: {}
+`
+
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err != nil {
+		t.Fatalf("sanitize read-only named volume: %v", err)
+	}
+	info, err := os.Stat(volumeRoot)
+	if err != nil {
+		t.Fatalf("stat read-only named volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("read-only named volume mode = %#o, want 0755", got)
+	}
+}
+
+func TestSanitizeComposeYAMLKeepsSharedVolumeWritableWhenAnyBindingWrites(t *testing.T) {
+	orders := []string{
+		`  reader:
+    image: example.invalid/reader:latest
+    volumes:
+      - cache:/data:ro
+  writer:
+    image: example.invalid/writer:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /data
+`,
+		`  writer:
+    image: example.invalid/writer:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /data
+  reader:
+    image: example.invalid/reader:latest
+    volumes:
+      - cache:/data:ro
+`,
+	}
+	for index, services := range orders {
+		t.Run(fmt.Sprintf("order-%d", index), func(t *testing.T) {
+			safeBaseDir := t.TempDir()
+			sanitizer := &ComposeSanitizer{
+				deploymentID: "compose-mixed-access-volume-test",
+				safeBaseDir:  safeBaseDir,
+			}
+			composeYAML := "services:\n" + services + "volumes:\n  cache: {}\n"
+			if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err != nil {
+				t.Fatalf("sanitize shared mixed-access volume: %v", err)
+			}
+			info, err := os.Stat(filepath.Join(safeBaseDir, "cache"))
+			if err != nil {
+				t.Fatalf("stat shared volume root: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o777 {
+				t.Fatalf("shared mixed-access volume mode = %#o, want 0777", got)
+			}
+		})
 	}
 }
 

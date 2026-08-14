@@ -23,12 +23,24 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
+	"golang.org/x/sys/unix"
 )
 
 type swarmConvergedTask struct {
 	ServiceID   string
 	TaskID      string
 	ContainerID string
+}
+
+type swarmServiceRunPolicy struct {
+	desiredReplicas int64
+	restartNone     bool
+}
+
+type swarmTaskSummary struct {
+	active    bool
+	completed bool
+	failed    bool
 }
 
 // Container operations for deployments
@@ -63,17 +75,113 @@ func (preparation *volumeRootPreparation) Rollback() error {
 }
 
 func snapshotVolumeRootState(path string) (volumeRootState, error) {
-	info, err := os.Stat(path)
+	mode, err := secureDirectoryMode(path)
 	if err == nil {
 		return volumeRootState{
 			existed: true,
-			mode:    info.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky),
+			mode:    mode,
 		}, nil
 	}
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, unix.ENOENT) {
 		return volumeRootState{}, err
 	}
 	return volumeRootState{}, nil
+}
+
+func secureOpenDirectory(path string, create bool) (int, error) {
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		return -1, fmt.Errorf("directory path %q is not absolute", path)
+	}
+	currentFD, err := unix.Open(string(filepath.Separator), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, err
+	}
+	if cleaned == string(filepath.Separator) {
+		return currentFD, nil
+	}
+
+	for _, component := range strings.Split(strings.TrimPrefix(cleaned, string(filepath.Separator)), string(filepath.Separator)) {
+		if component == "" || component == "." || component == ".." {
+			unix.Close(currentFD)
+			return -1, fmt.Errorf("directory path %q contains an unsafe component", path)
+		}
+		nextFD, openErr := unix.Openat(currentFD, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if errors.Is(openErr, unix.ENOENT) && create {
+			if mkdirErr := unix.Mkdirat(currentFD, component, 0o755); mkdirErr != nil && !errors.Is(mkdirErr, unix.EEXIST) {
+				unix.Close(currentFD)
+				return -1, mkdirErr
+			}
+			nextFD, openErr = unix.Openat(currentFD, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		}
+		if openErr != nil {
+			unix.Close(currentFD)
+			return -1, fmt.Errorf("open directory component %q without following symlinks: %w", component, openErr)
+		}
+		unix.Close(currentFD)
+		currentFD = nextFD
+	}
+	return currentFD, nil
+}
+
+func fileModeFromUnix(mode uint32) os.FileMode {
+	result := os.FileMode(mode & 0o777)
+	if mode&unix.S_ISUID != 0 {
+		result |= os.ModeSetuid
+	}
+	if mode&unix.S_ISGID != 0 {
+		result |= os.ModeSetgid
+	}
+	if mode&unix.S_ISVTX != 0 {
+		result |= os.ModeSticky
+	}
+	return result
+}
+
+func unixModeFromFileMode(mode os.FileMode) uint32 {
+	result := uint32(mode.Perm())
+	if mode&os.ModeSetuid != 0 {
+		result |= unix.S_ISUID
+	}
+	if mode&os.ModeSetgid != 0 {
+		result |= unix.S_ISGID
+	}
+	if mode&os.ModeSticky != 0 {
+		result |= unix.S_ISVTX
+	}
+	return result
+}
+
+func secureDirectoryMode(path string) (os.FileMode, error) {
+	fd, err := secureOpenDirectory(path, false)
+	if err != nil {
+		return 0, err
+	}
+	defer unix.Close(fd)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return 0, err
+	}
+	return fileModeFromUnix(stat.Mode), nil
+}
+
+func secureChmodDirectory(path string, mode os.FileMode, create bool) error {
+	fd, err := secureOpenDirectory(path, create)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	return unix.Fchmod(fd, unixModeFromFileMode(mode))
+}
+
+func secureRemoveEmptyDirectory(path string) error {
+	cleaned := filepath.Clean(path)
+	parentFD, err := secureOpenDirectory(filepath.Dir(cleaned), false)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parentFD)
+	return unix.Unlinkat(parentFD, filepath.Base(cleaned), unix.AT_REMOVEDIR)
 }
 
 func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
@@ -161,14 +269,14 @@ func rollbackVolumeRootStates(states map[string]volumeRootState, paths []string)
 		path := paths[i]
 		state := states[path]
 		if state.existed {
-			if err := os.Chmod(path, state.mode); err != nil {
+			if err := secureChmodDirectory(path, state.mode, false); err != nil {
 				rollbackErrors = append(rollbackErrors, fmt.Errorf("restore mode for %s: %w", path, err))
 			}
 			continue
 		}
 		// A path created by this preflight has not been mounted yet. Remove it
 		// only if it is still empty, preserving any concurrently created data.
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		if err := secureRemoveEmptyDirectory(path); err != nil && !errors.Is(err, unix.ENOENT) {
 			rollbackErrors = append(rollbackErrors, fmt.Errorf("remove newly created root %s: %w", path, err))
 		}
 	}
@@ -2031,6 +2139,133 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 		ServiceName: swarmServiceName,
 		State:       "timeout",
 		Message:     "timed out waiting for the service to converge",
+		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+	}
+}
+
+func inspectSwarmServiceRunPolicy(ctx context.Context, swarmServiceName string) (swarmServiceRunPolicy, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", swarmServiceName, "--format", "{{json .Spec}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: %w", err)
+	}
+	var spec struct {
+		Mode struct {
+			Replicated *struct {
+				Replicas *uint64 `json:"Replicas"`
+			} `json:"Replicated"`
+		} `json:"Mode"`
+		TaskTemplate struct {
+			RestartPolicy *struct {
+				Condition string `json:"Condition"`
+			} `json:"RestartPolicy"`
+		} `json:"TaskTemplate"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output), &spec); err != nil {
+		return swarmServiceRunPolicy{}, fmt.Errorf("decode service run policy: %w", err)
+	}
+	policy := swarmServiceRunPolicy{desiredReplicas: -1}
+	if spec.Mode.Replicated != nil {
+		policy.desiredReplicas = 1
+		if spec.Mode.Replicated.Replicas != nil {
+			policy.desiredReplicas = int64(*spec.Mode.Replicated.Replicas)
+		}
+	}
+	policy.restartNone = spec.TaskTemplate.RestartPolicy != nil && strings.EqualFold(spec.TaskTemplate.RestartPolicy.Condition, "none")
+	return policy, nil
+}
+
+func parseSwarmTaskSummary(output string) swarmTaskSummary {
+	var summary swarmTaskSummary
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		current := strings.ToLower(strings.TrimSpace(parts[0]))
+		desired := strings.ToLower(strings.TrimSpace(parts[1]))
+		taskErr := ""
+		if len(parts) == 3 {
+			taskErr = strings.TrimSpace(parts[2])
+		}
+		if desired == "running" || strings.HasPrefix(current, "running") || strings.HasPrefix(current, "starting") || strings.HasPrefix(current, "preparing") || strings.HasPrefix(current, "pending") || strings.HasPrefix(current, "assigned") || strings.HasPrefix(current, "accepted") || strings.HasPrefix(current, "new") {
+			summary.active = true
+		}
+		if strings.HasPrefix(current, "complete") && taskErr == "" {
+			summary.completed = true
+		}
+		if strings.HasPrefix(current, "failed") || strings.HasPrefix(current, "rejected") || taskErr != "" {
+			summary.failed = true
+		}
+	}
+	return summary
+}
+
+func inspectSwarmTaskSummary(ctx context.Context, swarmServiceName string) (swarmTaskSummary, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "ps", swarmServiceName, "--no-trunc", "--format", "{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return swarmTaskSummary{}, fmt.Errorf("inspect service tasks: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return parseSwarmTaskSummary(string(output)), nil
+}
+
+func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) error {
+	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+	if err != nil {
+		return err
+	}
+	if policy.desiredReplicas != 0 && !policy.restartNone {
+		_, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, swarmServiceName)
+		return err
+	}
+
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
+		if err != nil {
+			return err
+		}
+		switch updateState {
+		case "paused", "rollback_completed", "rollback_paused":
+			return &SwarmRolloutError{
+				ServiceName: swarmServiceName,
+				State:       updateState,
+				Message:     updateMessage,
+				Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+			}
+		case "rollback_started":
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		updateConverged := updateState == "" || updateState == "completed"
+
+		summary, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+		if err != nil {
+			return err
+		}
+		if updateConverged && policy.desiredReplicas == 0 && !summary.active {
+			return nil
+		}
+		if updateConverged && policy.restartNone && !summary.active {
+			if summary.completed {
+				return nil
+			}
+			if summary.failed {
+				return &SwarmRolloutError{
+					ServiceName: swarmServiceName,
+					State:       "failed",
+					Message:     "one-shot service did not complete successfully",
+					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+				}
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return &SwarmRolloutError{
+		ServiceName: swarmServiceName,
+		State:       "timeout",
+		Message:     "timed out waiting for intentionally stopped service",
 		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
 	}
 }
