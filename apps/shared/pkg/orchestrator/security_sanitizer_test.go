@@ -709,6 +709,9 @@ func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sanitize Compose with shared relative bind: %v", err)
 	}
+	if sanitizer.HasExistingVolumeRoots() {
+		t.Fatal("fresh relative binds were reported as pre-existing volume roots")
+	}
 
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
@@ -803,6 +806,100 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeBindStorage(t *testing.T) {
 	}
 	if contents, err := os.ReadFile(marker); err != nil || string(contents) != "preserve me" {
 		t.Fatalf("legacy volume content changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestSanitizeComposeYAMLReusesPersistedPerServiceRelativeBindStorage(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	appPath := filepath.Join(safeBaseDir, "app", "data")
+	workerPath := filepath.Join(safeBaseDir, "worker", "data")
+	for _, path := range []string{appPath, workerPath} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatalf("create persisted per-service bind %s: %v", path, err)
+		}
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-persisted-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+		persistedComposeYaml: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+  worker:
+    volumes:
+      - type: bind
+        source: %s
+        target: /workspace
+`, appPath, workerPath),
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - .:/workspace
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - ./data:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with persisted per-service binds: %v", err)
+	}
+	if !sanitizer.HasExistingVolumeRoots() {
+		t.Fatal("persisted per-service binds were not reported as existing volume roots")
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	if source := strings.SplitN(appVolume, ":", 2)[0]; source != appPath {
+		t.Fatalf("persisted app project-root source = %q, want %q", source, appPath)
+	}
+	if source := strings.SplitN(workerVolume, ":", 2)[0]; source != workerPath {
+		t.Fatalf("persisted worker relative source = %q, want %q", source, workerPath)
+	}
+}
+
+func TestSanitizeComposeYAMLIgnoresUnrelatedPersistedBindForRelativeSource(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	unrelatedPath := filepath.Join(safeBaseDir, "unrelated", "data")
+	if err := os.MkdirAll(unrelatedPath, 0o700); err != nil {
+		t.Fatalf("create unrelated persisted bind: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-unrelated-persisted-bind-test",
+		safeBaseDir:  safeBaseDir,
+		persistedComposeYaml: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+`, unrelatedPath),
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with unrelated persisted bind: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	want := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
+	if source := strings.SplitN(volume, ":", 2)[0]; source != want {
+		t.Fatalf("source derived from unrelated persisted bind = %q, want %q", source, want)
 	}
 }
 

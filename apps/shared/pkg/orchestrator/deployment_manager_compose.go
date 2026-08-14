@@ -197,10 +197,20 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	var sanitizer *ComposeSanitizer
 	var releaseVolumeLock func()
 	volumePreparationCommitted := false
+	releaseVolumeNodePinOnFailure := false
 	defer func() {
+		volumePreparationRolledBack := true
 		if retErr != nil && !volumePreparationCommitted && sanitizer != nil {
 			if rollbackErr := sanitizer.rollbackVolumePreparation(); rollbackErr != nil {
+				volumePreparationRolledBack = false
 				retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+			}
+		}
+		if retErr != nil && !volumePreparationCommitted && volumePreparationRolledBack && releaseVolumeNodePinOnFailure {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if releaseErr := database.ReleaseDeploymentVolumeNode(cleanupCtx, deploymentID, dm.nodeID); releaseErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("release unused deployment volume node pin: %w", releaseErr))
 			}
 		}
 		if releaseVolumeLock != nil {
@@ -225,14 +235,20 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	}
 	var recordedLegacyRoot string
 	var hasRecordedLegacyRoot bool
+	var persistedComposeYaml string
 	if deploymentID != "" && sanitizeVolumeName(deploymentID) == deploymentID {
 		var metadataErr error
+		var hasPersistedCompose bool
+		persistedComposeYaml, hasPersistedCompose, metadataErr = storedComposeFile(deploymentID)
+		if metadataErr != nil {
+			return fmt.Errorf("inspect persisted Compose file: %w", metadataErr)
+		}
 		recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = recordedLegacyProjectRoot(deploymentID)
 		if metadataErr != nil {
 			return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
 		}
-		if !hasRecordedLegacyRoot {
-			recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = storedComposeLegacyProjectRoot(deploymentID)
+		if !hasRecordedLegacyRoot && hasPersistedCompose {
+			recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = persistedComposeLegacyProjectRoot(persistedComposeYaml, deploymentID)
 			if metadataErr != nil {
 				return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
 			}
@@ -247,6 +263,7 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	} else {
 		sanitizer = NewComposeSanitizer(deploymentID)
 	}
+	sanitizer.persistedComposeYaml = persistedComposeYaml
 	if isSwarmMode {
 		sanitizer.swarmVolumeNodeID = dm.nodeID
 	}
@@ -257,9 +274,11 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		logger.Info("[DeploymentManager] Sanitized compose YAML for deployment %s (volumes mapped to: %s)", deploymentID, sanitizer.GetSafeBaseDir())
 	}
 	if isSwarmMode && sanitizer.UsesLocalBindVolumes() {
-		if err := database.PinDeploymentVolumeNode(ctx, deploymentID, dm.nodeID); err != nil {
+		pinAcquired, err := database.PinDeploymentVolumeNode(ctx, deploymentID, dm.nodeID)
+		if err != nil {
 			return fmt.Errorf("pin deployment-local volumes to Swarm node: %w", err)
 		}
+		releaseVolumeNodePinOnFailure = pinAcquired && !sanitizer.HasExistingVolumeRoots()
 	}
 
 	// Get routing rules (create default if none exist)
@@ -701,6 +720,22 @@ func swarmStackServiceRuntimeFingerprints(ctx context.Context, projectName strin
 }
 
 func storedComposeLegacyProjectRoot(deploymentID string) (string, bool, error) {
+	contents, found, err := storedComposeFile(deploymentID)
+	if err != nil || !found {
+		return "", false, err
+	}
+	recordedRoot, proven, err := persistedComposeLegacyProjectRoot(contents, deploymentID)
+	if err != nil || !proven {
+		return "", false, err
+	}
+	validatedRoot, err := validateLegacyProjectRoot(recordedRoot, deploymentID)
+	if err != nil {
+		return "", false, err
+	}
+	return validatedRoot, true, nil
+}
+
+func storedComposeFile(deploymentID string) (string, bool, error) {
 	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
 		return "", false, fmt.Errorf("invalid deployment identifier")
 	}
@@ -717,17 +752,7 @@ func storedComposeLegacyProjectRoot(deploymentID string) (string, bool, error) {
 			return "", false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
 		}
 		if found {
-			recordedRoot, proven, proveErr := persistedComposeLegacyProjectRoot(string(contents), deploymentID)
-			if proveErr != nil {
-				return "", false, fmt.Errorf("inspect persisted Compose file in %s: %w", deployDir, proveErr)
-			}
-			if proven {
-				validatedRoot, validateErr := validateLegacyProjectRoot(recordedRoot, deploymentID)
-				if validateErr != nil {
-					return "", false, fmt.Errorf("validate persisted Compose project root in %s: %w", deployDir, validateErr)
-				}
-				return validatedRoot, true, nil
-			}
+			return string(contents), true, nil
 		}
 	}
 	return "", false, nil

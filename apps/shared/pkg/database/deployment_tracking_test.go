@@ -111,16 +111,28 @@ func TestPinDeploymentVolumeNodeRejectsAffinityMove(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-one"); err != nil {
+	if acquired, err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-one"); err != nil || !acquired {
 		t.Fatalf("pin initial volume node: %v", err)
 	}
-	if err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-one"); err != nil {
+	if acquired, err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-one"); err != nil || acquired {
 		t.Fatalf("repeat volume node pin: %v", err)
 	}
-	if err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-two"); err == nil {
+	if _, err := PinDeploymentVolumeNode(ctx, "deployment-affinity", "worker-two"); err == nil {
 		t.Fatal("moving an existing volume node affinity succeeded")
 	}
 	if got, err := GetDeploymentVolumeNode(ctx, "deployment-affinity"); err != nil || got != "worker-one" {
 		t.Fatalf("deployment volume node = %q, %v; want worker-one", got, err)
+	}
+	if err := ReleaseDeploymentVolumeNode(ctx, "deployment-affinity", "worker-two"); err != nil {
+		t.Fatalf("release volume node with wrong owner: %v", err)
+	}
+	if got, err := GetDeploymentVolumeNode(ctx, "deployment-affinity"); err != nil || got != "worker-one" {
+		t.Fatalf("volume node after mismatched release = %q, %v; want worker-one", got, err)
+	}
+	if err := ReleaseDeploymentVolumeNode(ctx, "deployment-affinity", "worker-one"); err != nil {
+		t.Fatalf("release volume node: %v", err)
+	}
+	if got, err := GetDeploymentVolumeNode(ctx, "deployment-affinity"); err != nil || got != "" {
+		t.Fatalf("released deployment volume node = %q, %v; want empty", got, err)
 	}
 }

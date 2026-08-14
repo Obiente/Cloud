@@ -263,29 +263,39 @@ func GetAllDeploymentLocationsByDeploymentIDs(deploymentIDs []string) (map[strin
 // PinDeploymentVolumeNode records the immutable owner of node-local deployment
 // volumes. A concurrent deployment on another manager must not move that
 // affinity after data may already have been created on the original node.
-func PinDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) error {
+func PinDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) (bool, error) {
 	deploymentID = strings.TrimSpace(deploymentID)
 	nodeID = strings.TrimSpace(nodeID)
 	if deploymentID == "" || nodeID == "" {
-		return fmt.Errorf("deployment ID and volume node ID are required")
+		return false, fmt.Errorf("deployment ID and volume node ID are required")
 	}
 	result := DB.WithContext(ctx).
 		Model(&Deployment{}).
 		Where("id = ? AND deleted_at IS NULL", deploymentID).
-		Where("volume_node_id IS NULL OR volume_node_id = '' OR volume_node_id = ?", nodeID).
+		Where("volume_node_id IS NULL OR volume_node_id = ''").
 		Update("volume_node_id", nodeID)
 	if result.Error != nil {
-		return result.Error
+		return false, result.Error
 	}
 	if result.RowsAffected == 1 {
-		return nil
+		return true, nil
 	}
 
 	var deployment Deployment
 	if err := DB.WithContext(ctx).Select("id", "volume_node_id").Where("id = ? AND deleted_at IS NULL", deploymentID).First(&deployment).Error; err != nil {
-		return err
+		return false, err
 	}
-	return fmt.Errorf("deployment %s local volumes are already pinned to node %s", deploymentID, deployment.VolumeNodeID)
+	if strings.TrimSpace(deployment.VolumeNodeID) == nodeID {
+		return false, nil
+	}
+	return false, fmt.Errorf("deployment %s local volumes are already pinned to node %s", deploymentID, deployment.VolumeNodeID)
+}
+
+func ReleaseDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) error {
+	return DB.WithContext(ctx).
+		Model(&Deployment{}).
+		Where("id = ? AND deleted_at IS NULL AND volume_node_id = ?", strings.TrimSpace(deploymentID), strings.TrimSpace(nodeID)).
+		Update("volume_node_id", "").Error
 }
 
 func GetDeploymentVolumeNode(ctx context.Context, deploymentID string) (string, error) {
