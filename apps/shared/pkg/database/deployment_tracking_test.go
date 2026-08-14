@@ -79,6 +79,61 @@ func TestRecordDeploymentLocationPreservesSwarmReplicaSlots(t *testing.T) {
 	if locations[1].HealthStatus != "healthy" || !locations[1].LastHealthCheck.Equal(lastHealthCheck) || locations[1].CPUUsage != 27.5 || locations[1].MemoryUsage != 4096 {
 		t.Fatalf("slot 2 sampled runtime state was not preserved: %#v", locations[1])
 	}
+	duplicate := DeploymentLocation{
+		ID:           "duplicate-slot-location",
+		DeploymentID: "deployment-replicas",
+		NodeID:       "node-example",
+		ContainerID:  "duplicate-slot-container",
+		ServiceID:    "service-example",
+		TaskSlot:     "1",
+		Status:       "running",
+	}
+	if err := DB.Create(&duplicate).Error; err == nil {
+		t.Fatal("database accepted a duplicate Swarm service slot")
+	}
+}
+
+func TestRecordDeploymentLocationTransfersNodeCountsForMovedSlot(t *testing.T) {
+	originalDB := DB
+	t.Cleanup(func() { DB = originalDB })
+
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open deployment tracking database: %v", err)
+	}
+	DB = db
+	if err := DB.AutoMigrate(&DeploymentLocation{}, &NodeMetadata{}); err != nil {
+		t.Fatalf("migrate deployment locations: %v", err)
+	}
+	for _, nodeID := range []string{"node-origin", "node-destination"} {
+		if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: nodeID, Status: "ready", Availability: "active"}).Error; err != nil {
+			t.Fatalf("create node %s: %v", nodeID, err)
+		}
+	}
+
+	record := func(containerID, nodeID string) {
+		t.Helper()
+		if err := RecordDeploymentLocation(&DeploymentLocation{
+			DeploymentID: "deployment-moved-slot",
+			NodeID:       nodeID,
+			ContainerID:  containerID,
+			ServiceID:    "service-moved-slot",
+			TaskSlot:     "1",
+			Status:       "running",
+		}); err != nil {
+			t.Fatalf("record deployment location on %s: %v", nodeID, err)
+		}
+	}
+	record("container-on-origin", "node-origin")
+	record("container-on-destination", "node-destination")
+
+	var nodes []NodeMetadata
+	if err := DB.Order("id").Find(&nodes).Error; err != nil {
+		t.Fatalf("list nodes: %v", err)
+	}
+	if len(nodes) != 2 || nodes[0].DeploymentCount != 1 || nodes[1].DeploymentCount != 0 {
+		t.Fatalf("node deployment counts after slot move = %#v, want destination=1 and origin=0", nodes)
+	}
 }
 
 func TestRecordDeploymentLocationDoesNotServiceUpsertWithoutTaskSlot(t *testing.T) {
