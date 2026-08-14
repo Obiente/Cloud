@@ -425,19 +425,23 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		cmd.Stderr = &stderr
 		cmd.Stdout = &stdout
 
-		// Once Docker accepts the command, a stack can be partially updated even
-		// when the CLI later reports an error. Keep writable preparation in place
-		// for any replacement tasks and defer restrictive modes until convergence.
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("start stack deployment: %w", err)
+		beforeRuntime, err := swarmStackRuntimeFingerprint(ctx, projectName)
+		if err != nil {
+			return fmt.Errorf("inspect stack before deployment: %w", err)
 		}
-		volumePreparationCommitted = true
-		if err := cmd.Wait(); err != nil {
+		if err := cmd.Run(); err != nil {
+			// A failed stack deploy can still update a subset of services. Retain
+			// broadened writable roots only when the daemon accepted observable
+			// work, or when a post-failure inspection cannot prove that it did not.
+			volumePreparationCommitted = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
+				return swarmStackRuntimeFingerprint(inspectCtx, projectName)
+			})
 			errorOutput := stderr.String()
 			stdOutput := stdout.String()
 			logger.Error("[DeploymentManager] Failed to deploy stack for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
 			return fmt.Errorf("failed to deploy stack: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
+		volumePreparationCommitted = true
 		if err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName); err != nil {
 			return fmt.Errorf("stack deployment did not converge: %w", err)
 		}
@@ -451,19 +455,23 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		cmd.Stderr = &stderr
 		cmd.Stdout = &stdout
 
-		// Compose may recreate some services before a later service fails. Do not
-		// restore modes beneath already replaced containers; read-only restrictions
-		// are applied only after the complete project update succeeds.
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("start Compose deployment: %w", err)
+		beforeRuntime, err := composeProjectRuntimeFingerprint(ctx, projectName)
+		if err != nil {
+			return fmt.Errorf("inspect Compose project before deployment: %w", err)
 		}
-		volumePreparationCommitted = true
-		if err := cmd.Wait(); err != nil {
+		if err := cmd.Run(); err != nil {
+			// Compose can recreate an early service before a later service fails.
+			// Retain writable roots only after an observable container-generation
+			// change, or when post-failure inspection cannot rule one out.
+			volumePreparationCommitted = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
+				return composeProjectRuntimeFingerprint(inspectCtx, projectName)
+			})
 			errorOutput := stderr.String()
 			stdOutput := stdout.String()
 			logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
 			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
+		volumePreparationCommitted = true
 	}
 	if err := sanitizer.applyDeferredReadOnly(); err != nil {
 		return fmt.Errorf("apply read-only Compose volume permissions: %w", err)
@@ -531,6 +539,52 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	// List containers created by this compose project and register them
 	return dm.registerComposeContainers(ctx, deploymentID, projectName)
+}
+
+func deploymentRuntimeChangedAfterFailure(before string, inspect func(context.Context) (string, error)) bool {
+	inspectCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	after, err := inspect(inspectCtx)
+	if err != nil {
+		// Without a reliable post-state, restoring permissions could break a
+		// replacement that the daemon accepted before connectivity was lost.
+		return true
+	}
+	return after != before
+}
+
+func composeProjectRuntimeFingerprint(ctx context.Context, projectName string) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "ps", "--all", "--no-trunc", "--filter", "label=com.docker.compose.project="+projectName, "--format", "{{.ID}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("list project containers: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	containerIDs := strings.Fields(string(output))
+	sort.Strings(containerIDs)
+	return strings.Join(containerIDs, ","), nil
+}
+
+func swarmStackRuntimeFingerprint(ctx context.Context, projectName string) (string, error) {
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		if isMissingSwarmStackOutput(string(output)) {
+			return "", nil
+		}
+		return "", fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	versions := make([]string, 0, len(serviceNames))
+	for _, serviceName := range serviceNames {
+		inspectCmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{.ID}}\t{{.Version.Index}}")
+		inspectOutput, inspectErr := inspectCmd.CombinedOutput()
+		if inspectErr != nil {
+			return "", fmt.Errorf("inspect stack service %s version: %w (%s)", serviceName, inspectErr, strings.TrimSpace(string(inspectOutput)))
+		}
+		versions = append(versions, serviceName+"\t"+strings.TrimSpace(string(inspectOutput)))
+	}
+	sort.Strings(versions)
+	return strings.Join(versions, "\n"), nil
 }
 
 func storedComposeProvesLegacyProjectRoot(deploymentID, safeBaseDir string) (bool, error) {

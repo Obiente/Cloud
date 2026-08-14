@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -97,6 +99,30 @@ func TestPersistLegacyProjectRootMetadataRejectsSymlink(t *testing.T) {
 	contents, err := os.ReadFile(target)
 	if err != nil || string(contents) != "preserve me" {
 		t.Fatalf("symlink target changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestDeploymentRuntimeChangedAfterFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		before  string
+		after   string
+		err     error
+		changed bool
+	}{
+		{name: "daemon rejected before mutation", before: "container-a", after: "container-a", changed: false},
+		{name: "partial replacement", before: "container-a", after: "container-b", changed: true},
+		{name: "unknown post-state", before: "container-a", err: errors.New("daemon unavailable"), changed: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := deploymentRuntimeChangedAfterFailure(test.before, func(context.Context) (string, error) {
+				return test.after, test.err
+			})
+			if got != test.changed {
+				t.Fatalf("deploymentRuntimeChangedAfterFailure = %t, want %t", got, test.changed)
+			}
+		})
 	}
 }
 

@@ -812,6 +812,9 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("preserve me"), 0o600); err != nil {
 		t.Fatalf("create legacy project-root content: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "cache"), 0o755); err != nil {
+		t.Fatalf("create stale namespaced project-root child: %v", err)
+	}
 	sanitizer := &ComposeSanitizer{
 		deploymentID:      "compose-legacy-relative-root-test",
 		safeBaseDir:       safeBaseDir,
@@ -822,6 +825,7 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
     image: example/app:latest
     volumes:
       - .:/workspace
+      - ./cache:/workspace/cache
 `
 
 	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
@@ -833,9 +837,12 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 		t.Fatalf("parse sanitized Compose: %v", err)
 	}
 	services := compose["services"].(map[string]interface{})
-	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
-	if source := strings.SplitN(volume, ":", 2)[0]; source != safeBaseDir {
+	volumes := services["app"].(map[string]interface{})["volumes"].([]interface{})
+	if source := strings.SplitN(volumes[0].(string), ":", 2)[0]; source != safeBaseDir {
 		t.Fatalf("legacy project-root source = %q, want %q", source, safeBaseDir)
+	}
+	if source := strings.SplitN(volumes[1].(string), ":", 2)[0]; source != filepath.Join(safeBaseDir, "cache") {
+		t.Fatalf("missing legacy project-root child source = %q, want %q", source, filepath.Join(safeBaseDir, "cache"))
 	}
 }
 

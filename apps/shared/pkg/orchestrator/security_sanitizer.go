@@ -213,10 +213,15 @@ func (cs *ComposeSanitizer) snapshotLegacyRelativeBindPaths(compose map[string]i
 		}
 	}
 	for _, source := range relativeSources {
-		if source == "." {
-			if cs.legacyProjectRoot {
+		if cs.legacyProjectRoot {
+			if source == "." {
 				cs.legacyRelativePaths[source] = cs.safeBaseDir
+			} else {
+				cs.legacyRelativePaths[source] = filepath.Join(cs.safeBaseDir, source)
 			}
+			continue
+		}
+		if source == "." {
 			continue
 		}
 		firstComponent := strings.Split(source, string(filepath.Separator))[0]
@@ -807,7 +812,9 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 		pathScope = relativeComposeBindScope
 		namespacedRelativePath := filepath.Join(relativeComposeProjectRoot, relativePath)
 		namespacedPath := filepath.Join(cs.safeBaseDir, pathScope, namespacedRelativePath)
-		if _, err := os.Lstat(namespacedPath); err == nil {
+		if legacyPath, found := cs.legacyRelativePaths[hostPath]; cs.legacyProjectRoot && found {
+			safePath = legacyPath
+		} else if _, err := os.Lstat(namespacedPath); err == nil {
 			safePath = namespacedPath
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return "", fmt.Errorf("inspect namespaced relative volume directory %s: %w", namespacedPath, err)
