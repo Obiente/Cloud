@@ -2178,15 +2178,19 @@ func inspectSwarmServiceRunPolicy(ctx context.Context, swarmServiceName string) 
 func parseSwarmTaskSummary(output string) swarmTaskSummary {
 	var summary swarmTaskSummary
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "\t", 3)
-		if len(parts) < 2 {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 4)
+		if len(parts) < 3 {
 			continue
 		}
-		current := strings.ToLower(strings.TrimSpace(parts[0]))
-		desired := strings.ToLower(strings.TrimSpace(parts[1]))
+		name := strings.TrimSpace(parts[0])
+		if strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_") {
+			continue
+		}
+		current := strings.ToLower(strings.TrimSpace(parts[1]))
+		desired := strings.ToLower(strings.TrimSpace(parts[2]))
 		taskErr := ""
-		if len(parts) == 3 {
-			taskErr = strings.TrimSpace(parts[2])
+		if len(parts) == 4 {
+			taskErr = strings.TrimSpace(parts[3])
 		}
 		if desired == "running" || strings.HasPrefix(current, "running") || strings.HasPrefix(current, "starting") || strings.HasPrefix(current, "preparing") || strings.HasPrefix(current, "pending") || strings.HasPrefix(current, "assigned") || strings.HasPrefix(current, "accepted") || strings.HasPrefix(current, "new") {
 			summary.active = true
@@ -2202,7 +2206,7 @@ func parseSwarmTaskSummary(output string) swarmTaskSummary {
 }
 
 func inspectSwarmTaskSummary(ctx context.Context, swarmServiceName string) (swarmTaskSummary, error) {
-	cmd := exec.CommandContext(ctx, "docker", "service", "ps", swarmServiceName, "--no-trunc", "--format", "{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}")
+	cmd := exec.CommandContext(ctx, "docker", "service", "ps", swarmServiceName, "--no-trunc", "--format", "{{.Name}}\t{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return swarmTaskSummary{}, fmt.Errorf("inspect service tasks: %w (%s)", err, strings.TrimSpace(string(output)))

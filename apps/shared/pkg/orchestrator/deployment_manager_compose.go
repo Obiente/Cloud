@@ -84,7 +84,7 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 		if forceErr != nil {
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
 		}
-		if _, waitErr := dm.waitForSwarmServiceConverged(ctx, deploymentID, serviceName); waitErr != nil {
+		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); waitErr != nil {
 			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
 		}
 	}
