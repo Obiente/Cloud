@@ -609,13 +609,24 @@ func ensureWritableBindDir(path string) error {
 	if err := os.MkdirAll(path, 0o777); err != nil {
 		return err
 	}
-	// Workload images may run as any non-root UID/GID. The platform cannot safely
-	// infer a named image user without executing image-specific tooling, so make
-	// only the isolated bind root universally writable. The sticky bit prevents
-	// one runtime identity from deleting another identity's entries, and this is
+	// Workload images may run as any non-root UID/GID, and that identity can
+	// legitimately change across image upgrades or between services sharing a
+	// volume. Make only the isolated bind root universally writable. This is
 	// intentionally non-recursive so existing application data keeps its modes
 	// and ownership.
-	return os.Chmod(path, 0o777|os.ModeSticky)
+	return os.Chmod(path, 0o777)
+}
+
+func ensureReadOnlyBindDir(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+	// MkdirAll preserves the mode of an existing directory. Reset the mount root
+	// when a previously writable volume is changed to read-only.
+	return os.Chmod(path, 0o755)
 }
 
 // sanitizeBindOptions sanitizes bind mount options

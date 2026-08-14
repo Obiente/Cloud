@@ -360,10 +360,13 @@ func TestSanitizedVolumeMountsPrepareWritableAndReadOnlyRoots(t *testing.T) {
 	volumeRoot := t.TempDir()
 	deploymentID := "deploy-volume-permission-test"
 
-	binds, mountFlags := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
+	binds, mountFlags, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
 		{Name: "data", MountPath: "/data"},
 		{Name: "assets", MountPath: "/assets", ReadOnly: true},
 	})
+	if err != nil {
+		t.Fatalf("prepare sanitized volume mounts: %v", err)
+	}
 
 	writablePath := filepath.Join(volumeRoot, deploymentID, "data")
 	readOnlyPath := filepath.Join(volumeRoot, deploymentID, "assets")
@@ -389,8 +392,8 @@ func TestSanitizedVolumeMountsPrepareWritableAndReadOnlyRoots(t *testing.T) {
 	if got := writableInfo.Mode().Perm(); got != 0o777 {
 		t.Fatalf("writable volume mode = %#o, want 0777", got)
 	}
-	if writableInfo.Mode()&os.ModeSticky == 0 {
-		t.Fatal("writable volume root is missing the sticky bit")
+	if writableInfo.Mode()&os.ModeSticky != 0 {
+		t.Fatal("writable volume root unexpectedly has the sticky bit")
 	}
 
 	readOnlyInfo, err := os.Stat(readOnlyPath)
@@ -402,6 +405,50 @@ func TestSanitizedVolumeMountsPrepareWritableAndReadOnlyRoots(t *testing.T) {
 	}
 	if readOnlyInfo.Mode()&os.ModeSticky != 0 {
 		t.Fatal("read-only volume root unexpectedly has the sticky bit")
+	}
+}
+
+func TestSanitizedVolumeMountsRestoreReadOnlyRootPermissions(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-read-only-transition-test"
+	volume := DeploymentVolume{Name: "data", MountPath: "/data"}
+
+	if _, _, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{volume}); err != nil {
+		t.Fatalf("prepare writable volume root: %v", err)
+	}
+	volume.ReadOnly = true
+	if _, _, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{volume}); err != nil {
+		t.Fatalf("prepare read-only volume root: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(volumeRoot, deploymentID, "data"))
+	if err != nil {
+		t.Fatalf("stat transitioned volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("transitioned read-only volume mode = %#o, want 0755", got)
+	}
+}
+
+func TestSanitizedVolumeMountsFailClosedWhenPreparationFails(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-volume-error-test"
+	deploymentRoot := filepath.Join(volumeRoot, deploymentID)
+	if err := os.MkdirAll(deploymentRoot, 0o755); err != nil {
+		t.Fatalf("create deployment volume root: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(deploymentRoot, "data"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting volume path: %v", err)
+	}
+
+	binds, mountFlags, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
+		{Name: "data", MountPath: "/data"},
+	})
+	if err == nil {
+		t.Fatal("expected volume preparation failure")
+	}
+	if len(binds) != 0 || len(mountFlags) != 0 {
+		t.Fatalf("failed preparation returned mounts: binds=%#v flags=%#v", binds, mountFlags)
 	}
 }
 

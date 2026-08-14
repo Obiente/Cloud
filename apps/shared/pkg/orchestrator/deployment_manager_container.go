@@ -44,11 +44,11 @@ const (
 
 const deploymentVolumeRoot = "/var/lib/obiente/volumes"
 
-func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
+func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
 	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
 }
 
-func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
+func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
 	binds := make([]string, 0, len(volumes))
 	mountFlags := make([]string, 0, len(volumes))
 	for _, volume := range volumes {
@@ -61,13 +61,12 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		hostPath := filepath.Join(volumeRoot, deploymentID, name)
 		var err error
 		if volume.ReadOnly {
-			err = os.MkdirAll(hostPath, 0o755)
+			err = ensureReadOnlyBindDir(hostPath)
 		} else {
 			err = ensureWritableBindDir(hostPath)
 		}
 		if err != nil {
-			logger.Warn("[DeploymentManager] Failed to create volume directory %s: %v", hostPath, err)
-			continue
+			return nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
 		}
 
 		bind := fmt.Sprintf("%s:%s", hostPath, mountPath)
@@ -79,7 +78,7 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		binds = append(binds, bind)
 		mountFlags = append(mountFlags, mountFlag)
 	}
-	return binds, mountFlags
+	return binds, mountFlags, nil
 }
 
 func sanitizeVolumeName(name string) string {
@@ -757,7 +756,10 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	nanoCPUs := int64(cpuCores * 1e9)
 
 	// Host configuration
-	binds, _ := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	binds, _, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	if err != nil {
+		return "", fmt.Errorf("prepare deployment volumes: %w", err)
+	}
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
 		Binds:        binds,
@@ -967,7 +969,10 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	if err != nil {
+		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
+	}
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount", mountFlag)
 	}
@@ -1636,7 +1641,10 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
 	}
-	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	if err != nil {
+		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
+	}
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount-add", mountFlag)
 	}

@@ -418,8 +418,8 @@ func TestEnsureWritableBindDir_MakesDirectoryWritable(t *testing.T) {
 	if got := info.Mode().Perm(); got != 0o777 {
 		t.Fatalf("expected directory mode 0777, got %#o", got)
 	}
-	if info.Mode()&os.ModeSticky == 0 {
-		t.Fatal("expected writable bind directory to have the sticky bit")
+	if info.Mode()&os.ModeSticky != 0 {
+		t.Fatal("writable bind directory unexpectedly has the sticky bit")
 	}
 }
 
