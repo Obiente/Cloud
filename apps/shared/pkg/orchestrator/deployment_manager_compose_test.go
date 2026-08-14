@@ -53,11 +53,19 @@ func TestStackRollbackRestoresVolumePreparationOnlyForSingleService(t *testing.T
 	}
 }
 
-func TestParseCurrentSwarmTaskGenerationIgnoresHistoryAndOrder(t *testing.T) {
-	first := parseCurrentSwarmTaskGeneration("deploy-app.2\ttask-b\n\\_ deploy-app.1\told-task\ndeploy-app.1\ttask-a\n")
-	second := parseCurrentSwarmTaskGeneration("deploy-app.1\ttask-a\ndeploy-app.2\ttask-b\n")
-	if first != "task-a,task-b" || second != first {
-		t.Fatalf("task generations = %q and %q, want stable current generation", first, second)
+func TestUnchangedSwarmStackServicesUsesSpecifications(t *testing.T) {
+	before := map[string]string{
+		"deploy-app_api":    `{"Name":"api","TaskTemplate":{"ContainerSpec":{"Image":"example/api:v1"}}}`,
+		"deploy-app_worker": `{"Name":"worker","TaskTemplate":{"ContainerSpec":{"Image":"example/worker:v1"}}}`,
+	}
+	after := map[string]string{
+		"deploy-app_api":    `{"Name":"api","TaskTemplate":{"ContainerSpec":{"Image":"example/api:v2"}}}`,
+		"deploy-app_worker": before["deploy-app_worker"],
+		"deploy-app_new":    `{"Name":"new"}`,
+	}
+	want := []string{"deploy-app_worker"}
+	if got := unchangedSwarmStackServices(before, after); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unchangedSwarmStackServices() = %#v, want %#v", got, want)
 	}
 }
 

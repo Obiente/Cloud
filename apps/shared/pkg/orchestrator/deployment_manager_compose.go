@@ -75,22 +75,19 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
-	beforeTasks, err := swarmStackTaskGenerations(ctx, projectName, true)
+	beforeSpecs, err := swarmStackServiceSpecs(ctx, projectName, true)
 	if err != nil {
 		return fmt.Errorf("inspect services before Compose restart: %w", err)
 	}
 	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
 		return err
 	}
-	afterTasks, err := swarmStackTaskGenerations(ctx, projectName, false)
+	afterSpecs, err := swarmStackServiceSpecs(ctx, projectName, false)
 	if err != nil {
 		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
 	}
-	for serviceName, beforeGeneration := range beforeTasks {
-		afterGeneration, stillExists := afterTasks[serviceName]
-		if !stillExists || afterGeneration != beforeGeneration {
-			continue
-		}
+	forcedRestart := false
+	for _, serviceName := range unchangedSwarmStackServices(beforeSpecs, afterSpecs) {
 		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--detach=true", "--force", serviceName)
 		forceOutput, forceErr := forceCmd.CombinedOutput()
 		if forceErr != nil {
@@ -99,11 +96,28 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); waitErr != nil {
 			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
 		}
+		forcedRestart = true
+	}
+	if forcedRestart {
+		// DeployComposeFile registered the pre-force tasks. Refresh the stable
+		// service rows after every requested replacement has converged.
+		return dm.registerComposeContainers(ctx, deploymentID, projectName)
 	}
 	return nil
 }
 
-func swarmStackTaskGenerations(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
+func unchangedSwarmStackServices(before, after map[string]string) []string {
+	serviceNames := make([]string, 0, len(before))
+	for serviceName, beforeSpec := range before {
+		if afterSpec, stillExists := after[serviceName]; stillExists && afterSpec == beforeSpec {
+			serviceNames = append(serviceNames, serviceName)
+		}
+	}
+	sort.Strings(serviceNames)
+	return serviceNames
+}
+
+func swarmStackServiceSpecs(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
 	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
 	output, err := listCmd.CombinedOutput()
 	if err != nil {
@@ -119,39 +133,24 @@ func swarmStackTaskGenerations(ctx context.Context, projectName string, allowMis
 		}
 		return nil, fmt.Errorf("stack %s has no services", projectName)
 	}
-	generations := make(map[string]string, len(serviceNames))
+	specs := make(map[string]string, len(serviceNames))
 	for _, serviceName := range serviceNames {
-		psCmd := exec.CommandContext(ctx, "docker", "service", "ps", serviceName, "--no-trunc", "--format", "{{.Name}}\t{{.ID}}")
-		psOutput, psErr := psCmd.CombinedOutput()
-		if psErr != nil {
-			return nil, fmt.Errorf("inspect current tasks for service %s: %w (%s)", serviceName, psErr, strings.TrimSpace(string(psOutput)))
+		inspectCmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{json .Spec}}")
+		inspectOutput, inspectErr := inspectCmd.CombinedOutput()
+		if inspectErr != nil {
+			return nil, fmt.Errorf("inspect specification for service %s: %w (%s)", serviceName, inspectErr, strings.TrimSpace(string(inspectOutput)))
 		}
-		generations[serviceName] = parseCurrentSwarmTaskGeneration(string(psOutput))
+		spec := strings.TrimSpace(string(inspectOutput))
+		if spec == "" {
+			return nil, fmt.Errorf("inspect specification for service %s returned no data", serviceName)
+		}
+		specs[serviceName] = spec
 	}
-	return generations, nil
+	return specs, nil
 }
 
 func isMissingSwarmStackOutput(output string) bool {
 	return strings.Contains(strings.ToLower(output), "nothing found in stack")
-}
-
-func parseCurrentSwarmTaskGeneration(output string) string {
-	var taskIDs []string
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "\t", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		name := strings.TrimSpace(parts[0])
-		if strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_") {
-			continue
-		}
-		if taskID := strings.TrimSpace(parts[1]); taskID != "" {
-			taskIDs = append(taskIDs, taskID)
-		}
-	}
-	sort.Strings(taskIDs)
-	return strings.Join(taskIDs, ",")
 }
 
 // DeployIsolatedComposeFile routes an untrusted preview through a dedicated
@@ -856,6 +855,14 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 
 		return fmt.Errorf("no containers found for compose project %s", projectName)
 	}
+	if isSwarmMode {
+		// ContainerList is normally newest-first. Register oldest-first so the
+		// stable service row ends on the latest replacement task even when
+		// stopped task containers are still retained by the daemon.
+		sort.SliceStable(containers, func(i, j int) bool {
+			return containers[i].Created < containers[j].Created
+		})
+	}
 
 	logger.Info("[DeploymentManager] Found %d container(s) for compose project %s", len(containers), projectName)
 
@@ -912,6 +919,8 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 			NodeID:       dm.nodeID,
 			NodeHostname: dm.nodeHostname,
 			ContainerID:  cnt.ID,
+			ServiceID:    cnt.Labels["com.docker.swarm.service.id"],
+			TaskID:       cnt.Labels["com.docker.swarm.task.id"],
 			Status:       containerStatus,
 			Port:         publicPort,
 			Domain:       "", // Will be set from deployment config
@@ -928,8 +937,12 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		}
 	}
 
-	if runningCount == 0 {
+	if runningCount == 0 && !isSwarmMode {
 		return fmt.Errorf("no running containers found for compose project %s (%d containers found but all are stopped)", projectName, len(containers))
+	}
+	if runningCount == 0 {
+		logger.Info("[DeploymentManager] Registered %d completed Swarm task container(s) for deployment %s", len(containers), deploymentID)
+		return nil
 	}
 
 	logger.Info("[DeploymentManager] Successfully registered %d running container(s) for deployment %s", runningCount, deploymentID)
