@@ -866,6 +866,16 @@ volumes:
 	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err != nil {
 		t.Fatalf("sanitize read-only named volume: %v", err)
 	}
+	beforeApply, err := os.Stat(volumeRoot)
+	if err != nil {
+		t.Fatalf("stat deferred read-only named volume root: %v", err)
+	}
+	if got := beforeApply.Mode().Perm(); got != 0o777 {
+		t.Fatalf("read-only mode changed during preflight to %#o, want 0777", got)
+	}
+	if err := sanitizer.applyDeferredReadOnly(); err != nil {
+		t.Fatalf("apply deferred read-only named volume mode: %v", err)
+	}
 	info, err := os.Stat(volumeRoot)
 	if err != nil {
 		t.Fatalf("stat read-only named volume root: %v", err)

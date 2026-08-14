@@ -63,8 +63,9 @@ type volumeRootState struct {
 }
 
 type volumeRootPreparation struct {
-	states map[string]volumeRootState
-	paths  []string
+	states           map[string]volumeRootState
+	paths            []string
+	deferredReadOnly []string
 }
 
 func (preparation *volumeRootPreparation) Rollback() error {
@@ -72,6 +73,19 @@ func (preparation *volumeRootPreparation) Rollback() error {
 		return nil
 	}
 	return rollbackVolumeRootStates(preparation.states, preparation.paths)
+}
+
+func (preparation *volumeRootPreparation) ApplyDeferredReadOnly() error {
+	if preparation == nil {
+		return nil
+	}
+	for _, path := range preparation.deferredReadOnly {
+		if err := ensureReadOnlyBindDir(path); err != nil {
+			return fmt.Errorf("restrict read-only volume directory %s: %w", path, err)
+		}
+	}
+	preparation.deferredReadOnly = nil
+	return nil
 }
 
 func snapshotVolumeRootState(path string) (volumeRootState, error) {
@@ -174,6 +188,14 @@ func secureChmodDirectory(path string, mode os.FileMode, create bool) error {
 	return unix.Fchmod(fd, unixModeFromFileMode(mode))
 }
 
+func secureEnsureDirectory(path string) error {
+	fd, err := secureOpenDirectory(path, true)
+	if err != nil {
+		return err
+	}
+	return unix.Close(fd)
+}
+
 func secureRemoveEmptyDirectory(path string) error {
 	cleaned := filepath.Clean(path)
 	parentFD, err := secureOpenDirectory(filepath.Dir(cleaned), false)
@@ -185,8 +207,7 @@ func secureRemoveEmptyDirectory(path string) error {
 }
 
 func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
-	binds, mountFlags, _, err := preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
-	return binds, mountFlags, err
+	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
 }
 
 func preparedSanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
@@ -194,8 +215,17 @@ func preparedSanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolu
 }
 
 func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
-	binds, mountFlags, _, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, volumes)
-	return binds, mountFlags, err
+	binds, mountFlags, preparation, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, volumes)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := preparation.ApplyDeferredReadOnly(); err != nil {
+		if rollbackErr := preparation.Rollback(); rollbackErr != nil {
+			return nil, nil, fmt.Errorf("%w; restore previous volume permissions: %v", err, rollbackErr)
+		}
+		return nil, nil, err
+	}
+	return binds, mountFlags, nil
 }
 
 func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
@@ -226,6 +256,7 @@ func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []
 
 	preparedPaths := make(map[string]struct{}, len(writablePaths))
 	preparedOrder := make([]string, 0, len(writablePaths))
+	deferredReadOnly := make([]string, 0, len(writablePaths))
 	for _, volume := range volumes {
 		name := sanitizeVolumeName(volume.Name)
 		mountPath := sanitizeContainerMountPath(volume.MountPath)
@@ -240,7 +271,8 @@ func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []
 			if writablePaths[hostPath] {
 				err = ensureWritableBindDir(hostPath)
 			} else {
-				err = ensureReadOnlyBindDir(hostPath)
+				err = secureEnsureDirectory(hostPath)
+				deferredReadOnly = append(deferredReadOnly, hostPath)
 			}
 			if err != nil {
 				if rollbackErr := rollbackVolumeRootStates(originalStates, preparedOrder); rollbackErr != nil {
@@ -260,7 +292,11 @@ func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []
 		binds = append(binds, bind)
 		mountFlags = append(mountFlags, mountFlag)
 	}
-	return binds, mountFlags, &volumeRootPreparation{states: originalStates, paths: preparedOrder}, nil
+	return binds, mountFlags, &volumeRootPreparation{
+		states:           originalStates,
+		paths:            preparedOrder,
+		deferredReadOnly: deferredReadOnly,
+	}, nil
 }
 
 func rollbackVolumeRootStates(states map[string]volumeRootState, paths []string) error {
@@ -1083,7 +1119,7 @@ func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serv
 	}
 }
 
-func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (string, string, error) {
+func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1185,6 +1221,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"--name", swarmServiceName,
 		"--network", swarmNetworkName, // Use the dynamically determined Swarm network name
 		"--replicas", "1",
+		"--detach=true",
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 
@@ -1198,10 +1235,28 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	_, mountFlags, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 	if err != nil {
 		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
 	}
+	serviceCreated := false
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		if serviceCreated {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cleanupCancel()
+			cleanupCmd := exec.CommandContext(cleanupCtx, "docker", "service", "rm", swarmServiceName)
+			if cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
+				retErr = fmt.Errorf("%w; remove failed Swarm service before restoring volume permissions: %v (%s); prepared permissions retained", retErr, cleanupErr, strings.TrimSpace(string(cleanupOutput)))
+				return
+			}
+		}
+		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
+			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+		}
+	}()
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount", mountFlag)
 	}
@@ -1445,7 +1500,8 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		return "", "", fmt.Errorf("failed to create Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
 
-	serviceID := strings.TrimSpace(stdout.String())
+	serviceCreated = true
+	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Created Swarm service %s (ID: %s)", swarmServiceName, serviceID)
 	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
@@ -1666,7 +1722,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	taskCmd := exec.CommandContext(ctx, "docker", taskArgs...)
 	var taskStdout bytes.Buffer
 	taskCmd.Stdout = &taskStdout
-	var containerID string
+	containerID = ""
 	if err := taskCmd.Run(); err == nil {
 		taskIDs := strings.TrimSpace(taskStdout.String())
 		if taskIDs != "" {
@@ -1767,6 +1823,9 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		}
 	}
 
+	if err := volumePreparation.ApplyDeferredReadOnly(); err != nil {
+		return "", "", err
+	}
 	return serviceID, containerID, nil
 }
 
@@ -1847,6 +1906,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 
 	// Build docker service update command
 	args := []string{"service", "update",
+		"--detach=true",
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 	if config.NetworkName != "" && swarmNetworkName != sharedNetworkName {
@@ -1880,8 +1940,9 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	if err != nil {
 		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
 	}
+	volumePreparationCommitted := false
 	defer func() {
-		if retErr == nil {
+		if retErr == nil || volumePreparationCommitted {
 			return
 		}
 		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
@@ -2068,6 +2129,11 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		logger.Error("[DeploymentManager] Failed to update Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
 		return "", "", fmt.Errorf("failed to update Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
+	// Docker has accepted the new service specification. From this point it may
+	// start replacement tasks asynchronously, so restoring preflight modes could
+	// break the accepted revision. Read-only restrictions remain deferred until
+	// the rollout reaches a terminal successful state.
+	volumePreparationCommitted = true
 
 	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
@@ -2079,13 +2145,15 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	if task.ServiceID != "" {
 		serviceID = task.ServiceID
 	}
+	if err := volumePreparation.ApplyDeferredReadOnly(); err != nil {
+		return serviceID, task.ContainerID, err
+	}
 	return serviceID, task.ContainerID, nil
 }
 
 func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) (*swarmConvergedTask, error) {
-	deadline := time.Now().Add(2 * time.Minute)
 	rollbackDiagnostics := ""
-	for time.Now().Before(deadline) {
+	for {
 		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return nil, err
@@ -2132,14 +2200,20 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 			return nil, rolloutErr
 		}
 
-		time.Sleep(2 * time.Second)
+		if err := waitForNextSwarmPoll(ctx); err != nil {
+			return nil, fmt.Errorf("wait for service %s convergence: %w", swarmServiceName, err)
+		}
 	}
+}
 
-	return nil, &SwarmRolloutError{
-		ServiceName: swarmServiceName,
-		State:       "timeout",
-		Message:     "timed out waiting for the service to converge",
-		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+func waitForNextSwarmPoll(ctx context.Context) error {
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
@@ -2224,8 +2298,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 		return err
 	}
 
-	deadline := time.Now().Add(2 * time.Minute)
-	for time.Now().Before(deadline) {
+	for {
 		_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return err
@@ -2239,7 +2312,9 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 				Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
 			}
 		case "rollback_started":
-			time.Sleep(2 * time.Second)
+			if err := waitForNextSwarmPoll(ctx); err != nil {
+				return fmt.Errorf("wait for service %s rollback: %w", swarmServiceName, err)
+			}
 			continue
 		}
 		updateConverged := updateState == "" || updateState == "completed"
@@ -2264,13 +2339,9 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 				return nil
 			}
 		}
-		time.Sleep(2 * time.Second)
-	}
-	return &SwarmRolloutError{
-		ServiceName: swarmServiceName,
-		State:       "timeout",
-		Message:     "timed out waiting for intentionally stopped service",
-		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+		if err := waitForNextSwarmPoll(ctx); err != nil {
+			return fmt.Errorf("wait for intentionally stopped service %s: %w", swarmServiceName, err)
+		}
 	}
 }
 

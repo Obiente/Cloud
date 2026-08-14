@@ -354,7 +354,14 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		cmd.Stderr = &stderr
 		cmd.Stdout = &stdout
 
-		if err := cmd.Run(); err != nil {
+		// Once Docker accepts the command, a stack can be partially updated even
+		// when the CLI later reports an error. Keep writable preparation in place
+		// for any replacement tasks and defer restrictive modes until convergence.
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("start stack deployment: %w", err)
+		}
+		volumePreparationCommitted = true
+		if err := cmd.Wait(); err != nil {
 			errorOutput := stderr.String()
 			stdOutput := stdout.String()
 			logger.Error("[DeploymentManager] Failed to deploy stack for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
@@ -373,14 +380,23 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		cmd.Stderr = &stderr
 		cmd.Stdout = &stdout
 
-		if err := cmd.Run(); err != nil {
+		// Compose may recreate some services before a later service fails. Do not
+		// restore modes beneath already replaced containers; read-only restrictions
+		// are applied only after the complete project update succeeds.
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("start Compose deployment: %w", err)
+		}
+		volumePreparationCommitted = true
+		if err := cmd.Wait(); err != nil {
 			errorOutput := stderr.String()
 			stdOutput := stdout.String()
 			logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
 			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
 	}
-	volumePreparationCommitted = true
+	if err := sanitizer.applyDeferredReadOnly(); err != nil {
+		return fmt.Errorf("apply read-only Compose volume permissions: %w", err)
+	}
 
 	stdOutput := stdout.String()
 	if isSwarmMode {

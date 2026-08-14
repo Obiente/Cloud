@@ -23,6 +23,8 @@ type ComposeSanitizer struct {
 	preparedWritable     map[string]bool
 	composeServiceNames  []string
 	relativeBindServices map[string][]string
+	deferredReadOnly     []string
+	deferredReadOnlySet  map[string]struct{}
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -94,6 +96,8 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 	cs.preparedVolumeRoots = nil
 	cs.preparedVolumeSet = make(map[string]struct{})
 	cs.preparedWritable = make(map[string]bool)
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = make(map[string]struct{})
 	defer func() {
 		if err == nil || len(cs.preparedVolumeRoots) == 0 {
 			return
@@ -881,7 +885,14 @@ func (cs *ComposeSanitizer) prepareBindDir(path string, writable bool) error {
 	if writable {
 		return ensureWritableBindDir(path)
 	}
-	return ensureReadOnlyBindDir(path)
+	if err := secureEnsureDirectory(path); err != nil {
+		return err
+	}
+	if _, deferred := cs.deferredReadOnlySet[path]; !deferred {
+		cs.deferredReadOnly = append(cs.deferredReadOnly, path)
+		cs.deferredReadOnlySet[path] = struct{}{}
+	}
+	return nil
 }
 
 func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
@@ -894,7 +905,23 @@ func (cs *ComposeSanitizer) rollbackVolumePreparation() error {
 	cs.preparedVolumeRoots = nil
 	cs.preparedVolumeSet = nil
 	cs.preparedWritable = nil
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = nil
 	return err
+}
+
+func (cs *ComposeSanitizer) applyDeferredReadOnly() error {
+	for _, path := range cs.deferredReadOnly {
+		if cs.preparedWritable[path] {
+			continue
+		}
+		if err := ensureReadOnlyBindDir(path); err != nil {
+			return fmt.Errorf("restrict read-only volume directory %s: %w", path, err)
+		}
+	}
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = nil
+	return nil
 }
 
 func ensureWritableBindDir(path string) error {

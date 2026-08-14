@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSwarmIngressProxyServiceNameUsesCurrentStack(t *testing.T) {
@@ -112,6 +113,18 @@ func TestParseSwarmTaskSummaryRecognizesStoppedServiceOutcomes(t *testing.T) {
 	mixedCurrentOutcomes := parseSwarmTaskSummary("deploy-app.1\tComplete 3 seconds ago\tShutdown\t\ndeploy-app.2\tFailed 2 seconds ago\tShutdown\texit code 1\n")
 	if !mixedCurrentOutcomes.completed || !mixedCurrentOutcomes.failed {
 		t.Fatalf("mixed current task outcomes = %#v, want both completion and failure recorded", mixedCurrentOutcomes)
+	}
+}
+
+func TestWaitForNextSwarmPollStopsWithContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	if err := waitForNextSwarmPoll(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled Swarm poll error = %v, want context cancellation", err)
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("canceled Swarm poll took %v", elapsed)
 	}
 }
 
@@ -473,6 +486,42 @@ func TestSanitizedVolumeMountsRestoreReadOnlyRootPermissions(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o755 {
 		t.Fatalf("transitioned read-only volume mode = %#o, want 0755", got)
+	}
+}
+
+func TestPreparedSanitizedVolumeMountsDefersReadOnlyRestriction(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-deferred-read-only-test"
+	volumePath := filepath.Join(volumeRoot, deploymentID, "data")
+	if err := os.MkdirAll(volumePath, 0o777); err != nil {
+		t.Fatalf("create writable volume root: %v", err)
+	}
+	if err := os.Chmod(volumePath, 0o777); err != nil {
+		t.Fatalf("set writable volume mode: %v", err)
+	}
+
+	_, _, preparation, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
+		{Name: "data", MountPath: "/data", ReadOnly: true},
+	})
+	if err != nil {
+		t.Fatalf("prepare read-only volume transition: %v", err)
+	}
+	info, err := os.Stat(volumePath)
+	if err != nil {
+		t.Fatalf("stat deferred read-only root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o777 {
+		t.Fatalf("preflight read-only mode = %#o, want existing 0777", got)
+	}
+	if err := preparation.ApplyDeferredReadOnly(); err != nil {
+		t.Fatalf("apply deferred read-only mode: %v", err)
+	}
+	info, err = os.Stat(volumePath)
+	if err != nil {
+		t.Fatalf("stat restricted read-only root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("applied read-only mode = %#o, want 0755", got)
 	}
 }
 
