@@ -37,7 +37,11 @@ func (s *Service) GetDeploymentEnvVars(ctx context.Context, req *connect.Request
 func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentEnvVarsResponse], error) {
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -59,7 +63,7 @@ func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Requ
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentUpdate, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	_, err := s.repo.GetByID(ctx, deploymentID)
+	_, err = s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}

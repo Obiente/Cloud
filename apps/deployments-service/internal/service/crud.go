@@ -1085,7 +1085,11 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 }
 
 func (s *Service) deploymentDeletionForwardTarget(ctx context.Context, deploymentID string) (string, error) {
-	if volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID); err == nil && volumeNodeID != "" {
+	volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve deployment volume owner: %w", err)
+	}
+	if volumeNodeID != "" {
 		if s.manager == nil {
 			return "", fmt.Errorf("deployment volumes are owned by node %s, but the local orchestrator is unavailable", volumeNodeID)
 		}

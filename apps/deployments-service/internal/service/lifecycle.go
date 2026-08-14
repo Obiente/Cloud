@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 const deploymentStatusStreamPollInterval = 1500 * time.Millisecond
@@ -47,13 +49,17 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		return nil, err
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, forwardNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
-		headers, err := triggerDeploymentForwardHeaders(ctx, req, targetNodeID)
+		headers, err := triggerDeploymentForwardHeaders(ctx, req, forwardNodeID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
-		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, forwardNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
 		}
@@ -944,12 +950,16 @@ func (s *Service) StreamDeploymentStatus(ctx context.Context, req *connect.Reque
 	}
 }
 
-func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string) {
+func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string, error) {
 	if s.manager == nil {
-		return false, ""
+		return false, "", nil
 	}
-	if volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID); err == nil && volumeNodeID != "" {
-		return volumeNodeID != s.manager.GetNodeID(), volumeNodeID
+	volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID)
+	if err != nil {
+		return false, "", fmt.Errorf("resolve deployment volume owner: %w", err)
+	}
+	if volumeNodeID != "" {
+		return volumeNodeID != s.manager.GetNodeID(), volumeNodeID, nil
 	}
 
 	var location database.DeploymentLocation
@@ -957,13 +967,16 @@ func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID s
 		Where("deployment_id = ?", deploymentID).
 		Order("updated_at DESC").
 		First(&location).Error; err != nil {
-		return false, ""
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("resolve deployment runtime owner: %w", err)
 	}
 	if strings.TrimSpace(location.NodeID) == "" {
-		return false, ""
+		return false, "", nil
 	}
 
-	return location.NodeID != s.manager.GetNodeID(), location.NodeID
+	return location.NodeID != s.manager.GetNodeID(), location.NodeID, nil
 }
 
 // StartDeployment starts a stopped deployment
@@ -1002,7 +1015,11 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -1231,7 +1248,11 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StopDeployment", headers, &deploymentsv1.StopDeploymentResponse{})
@@ -1277,7 +1298,11 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/RestartDeployment", headers, &deploymentsv1.RestartDeploymentResponse{})

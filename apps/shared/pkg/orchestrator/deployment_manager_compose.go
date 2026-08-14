@@ -57,27 +57,33 @@ func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, dep
 	if len(serviceNames) == 0 {
 		return false, fmt.Errorf("stack %s has no services after deployment", projectName)
 	}
-	ignoreExistingRollbacks := make(map[string]bool, len(serviceNames))
+	ignoredRollbackFingerprints := make(map[string]string, len(serviceNames))
 	for _, serviceName := range serviceNames {
 		afterUpdate, inspectErr := swarmServiceUpdateFingerprint(ctx, serviceName)
 		if inspectErr != nil {
 			return false, fmt.Errorf("inspect stack service %s update status after deployment: %w", serviceName, inspectErr)
 		}
 		beforeUpdate, existedBefore := beforeServiceUpdates[serviceName]
-		ignoreExistingRollback := existedBefore && beforeUpdate == afterUpdate
-		ignoreExistingRollbacks[serviceName] = ignoreExistingRollback
-		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoreExistingRollback); err != nil {
-			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("wait for stack service %s: %w", serviceName, err)
+		if existedBefore && beforeUpdate == afterUpdate {
+			ignoredRollbackFingerprints[serviceName] = afterUpdate
 		}
 	}
-	// A service that converged early can regress while a later service is still
-	// settling. Recheck every service once the initial stack-wide wait finishes.
-	for _, serviceName := range serviceNames {
-		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoreExistingRollbacks[serviceName]); err != nil {
-			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("recheck stack service %s: %w", serviceName, err)
+	for {
+		allConverged := true
+		for _, serviceName := range serviceNames {
+			converged, inspectErr := dm.inspectSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoredRollbackFingerprints[serviceName])
+			if inspectErr != nil {
+				return stackRollbackRestoresVolumePreparation(serviceNames, inspectErr), fmt.Errorf("wait for stack service %s: %w", serviceName, inspectErr)
+			}
+			allConverged = allConverged && converged
+		}
+		if allConverged {
+			return false, nil
+		}
+		if err := waitForNextSwarmPoll(ctx); err != nil {
+			return false, fmt.Errorf("wait for stack %s convergence: %w", projectName, err)
 		}
 	}
-	return false, nil
 }
 
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
@@ -127,7 +133,7 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
 		}
 		refreshForcedTasks = true
-		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, false); waitErr != nil {
+		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ""); waitErr != nil {
 			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
 		}
 	}

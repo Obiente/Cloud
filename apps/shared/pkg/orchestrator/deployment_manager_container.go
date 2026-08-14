@@ -2701,83 +2701,84 @@ func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSum
 	return successfulTasks
 }
 
-func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string, ignoreExistingRollback bool) error {
+func (dm *DeploymentManager) inspectSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName, ignoredRollbackFingerprint string) (bool, error) {
 	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
 	if err != nil {
-		return err
-	}
-	if !policy.job && !policy.global && policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
-		_, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, swarmServiceName)
-		return err
+		return false, err
 	}
 
-	for {
-		if policy.global {
-			policy, err = inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
-			if err != nil {
-				return err
-			}
+	_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	if ignoredRollbackFingerprint != "" && updateState == "rollback_completed" {
+		currentFingerprint, fingerprintErr := swarmServiceUpdateFingerprint(ctx, swarmServiceName)
+		if fingerprintErr != nil {
+			return false, fingerprintErr
 		}
-		_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
-		if err != nil {
-			return err
-		}
-		if ignoreExistingRollback && updateState == "rollback_completed" {
+		if currentFingerprint == ignoredRollbackFingerprint {
 			updateState = ""
 		}
-		switch updateState {
-		case "paused", "rollback_completed", "rollback_paused":
-			return &SwarmRolloutError{
-				ServiceName: swarmServiceName,
-				State:       updateState,
-				Message:     updateMessage,
-				Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
-			}
-		case "rollback_started":
-			if err := waitForNextSwarmPoll(ctx); err != nil {
-				return fmt.Errorf("wait for service %s rollback: %w", swarmServiceName, err)
-			}
-			continue
+	}
+	switch updateState {
+	case "paused", "rollback_completed", "rollback_paused":
+		return false, &SwarmRolloutError{
+			ServiceName: swarmServiceName,
+			State:       updateState,
+			Message:     updateMessage,
+			Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
 		}
-		updateConverged := updateState == "" || updateState == "completed"
+	case "rollback_started":
+		return false, nil
+	}
+	if updateState != "" && updateState != "completed" {
+		return false, nil
+	}
 
-		summary, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+	summary, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	if !policy.job && policy.desiredReplicas == 0 && !summary.active {
+		return true, nil
+	}
+	terminalFailure := false
+	if summary.failed && !summary.progressing {
+		terminalFailure, err = confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
+		if err != nil {
+			return false, err
+		}
+	}
+	if terminalFailure {
+		return false, &SwarmRolloutError{
+			ServiceName: swarmServiceName,
+			State:       "failed",
+			Message:     "Swarm service did not reach its desired task state",
+			Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+		}
+	}
+	requiredSuccessful := policy.desiredReplicas
+	if policy.job {
+		requiredSuccessful = policy.desiredCompletions
+	}
+	if !policy.job && requiredSuccessful < 1 {
+		requiredSuccessful = 1
+	}
+	successfulTasks := successfulSwarmTaskCount(policy, summary)
+	return !summary.failed && !summary.progressing && successfulTasks >= requiredSuccessful, nil
+}
+
+func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName, ignoredRollbackFingerprint string) error {
+	for {
+		converged, err := dm.inspectSwarmStackServiceConverged(ctx, deploymentID, swarmServiceName, ignoredRollbackFingerprint)
 		if err != nil {
 			return err
 		}
-		if updateConverged && !policy.job && policy.desiredReplicas == 0 && !summary.active {
+		if converged {
 			return nil
 		}
-		if updateConverged && (policy.global || policy.job || policy.restartNone || policy.restartOnFailure) {
-			terminalFailure := false
-			if summary.failed && !summary.progressing {
-				terminalFailure, err = confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
-				if err != nil {
-					return err
-				}
-			}
-			if terminalFailure {
-				return &SwarmRolloutError{
-					ServiceName: swarmServiceName,
-					State:       "failed",
-					Message:     "one-shot service did not complete successfully",
-					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
-				}
-			}
-			requiredSuccessful := policy.desiredReplicas
-			if policy.job {
-				requiredSuccessful = policy.desiredCompletions
-			}
-			if !policy.job && requiredSuccessful < 1 {
-				requiredSuccessful = 1
-			}
-			successfulTasks := successfulSwarmTaskCount(policy, summary)
-			if !summary.failed && !summary.progressing && successfulTasks >= requiredSuccessful {
-				return nil
-			}
-		}
 		if err := waitForNextSwarmPoll(ctx); err != nil {
-			return fmt.Errorf("wait for intentionally stopped service %s: %w", swarmServiceName, err)
+			return fmt.Errorf("wait for service %s convergence: %w", swarmServiceName, err)
 		}
 	}
 }
