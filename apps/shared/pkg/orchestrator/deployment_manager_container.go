@@ -2241,34 +2241,49 @@ func waitForNextSwarmPoll(ctx context.Context) error {
 }
 
 func inspectSwarmServiceRunPolicy(ctx context.Context, swarmServiceName string) (swarmServiceRunPolicy, error) {
-	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", swarmServiceName, "--format", "{{json .Spec}}")
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", swarmServiceName, "--format", "{{json .}}")
 	output, err := cmd.Output()
 	if err != nil {
 		return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: %w", err)
 	}
-	var spec struct {
-		Mode struct {
-			Replicated *struct {
-				Replicas *uint64 `json:"Replicas"`
-			} `json:"Replicated"`
-		} `json:"Mode"`
-		TaskTemplate struct {
-			RestartPolicy *struct {
-				Condition string `json:"Condition"`
-			} `json:"RestartPolicy"`
-		} `json:"TaskTemplate"`
+	return parseSwarmServiceRunPolicy(output)
+}
+
+func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
+	var service struct {
+		Spec struct {
+			Mode struct {
+				Replicated *struct {
+					Replicas *uint64 `json:"Replicas"`
+				} `json:"Replicated"`
+				Global *struct{} `json:"Global"`
+			} `json:"Mode"`
+			TaskTemplate struct {
+				RestartPolicy *struct {
+					Condition string `json:"Condition"`
+				} `json:"RestartPolicy"`
+			} `json:"TaskTemplate"`
+		} `json:"Spec"`
+		ServiceStatus *struct {
+			DesiredTasks uint64 `json:"DesiredTasks"`
+		} `json:"ServiceStatus"`
 	}
-	if err := json.Unmarshal(bytes.TrimSpace(output), &spec); err != nil {
+	if err := json.Unmarshal(bytes.TrimSpace(output), &service); err != nil {
 		return swarmServiceRunPolicy{}, fmt.Errorf("decode service run policy: %w", err)
 	}
 	policy := swarmServiceRunPolicy{desiredReplicas: -1}
-	if spec.Mode.Replicated != nil {
+	if service.Spec.Mode.Replicated != nil {
 		policy.desiredReplicas = 1
-		if spec.Mode.Replicated.Replicas != nil {
-			policy.desiredReplicas = int64(*spec.Mode.Replicated.Replicas)
+		if service.Spec.Mode.Replicated.Replicas != nil {
+			policy.desiredReplicas = int64(*service.Spec.Mode.Replicated.Replicas)
 		}
+	} else if service.Spec.Mode.Global != nil {
+		if service.ServiceStatus == nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global service is missing desired task status")
+		}
+		policy.desiredReplicas = int64(service.ServiceStatus.DesiredTasks)
 	}
-	policy.restartNone = spec.TaskTemplate.RestartPolicy != nil && strings.EqualFold(spec.TaskTemplate.RestartPolicy.Condition, "none")
+	policy.restartNone = service.Spec.TaskTemplate.RestartPolicy != nil && strings.EqualFold(service.Spec.TaskTemplate.RestartPolicy.Condition, "none")
 	return policy, nil
 }
 

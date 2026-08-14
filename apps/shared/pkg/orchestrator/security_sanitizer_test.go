@@ -807,6 +807,48 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 	}
 }
 
+func TestSanitizeComposeYAMLKeepsNamedAndRelativeSourcesDistinctAcrossRedeploys(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	composeYAML := `services:
+  database:
+    image: example/database:latest
+    volumes:
+      - data:/var/lib/database
+  importer:
+    image: example/importer:latest
+    volumes:
+      - ./data:/input
+volumes:
+  data: {}
+`
+	wantNamed := filepath.Join(safeBaseDir, "data")
+	wantRelative := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		sanitizer := &ComposeSanitizer{
+			deploymentID: "compose-distinct-source-test",
+			safeBaseDir:  safeBaseDir,
+		}
+		sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+		if err != nil {
+			t.Fatalf("sanitize named/relative sources on attempt %d: %v", attempt, err)
+		}
+		var compose map[string]interface{}
+		if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+			t.Fatalf("parse sanitized Compose on attempt %d: %v", attempt, err)
+		}
+		services := compose["services"].(map[string]interface{})
+		namedVolume := services["database"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		relativeVolume := services["importer"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		if source := strings.SplitN(namedVolume, ":", 2)[0]; source != wantNamed {
+			t.Fatalf("attempt %d named source = %q, want %q", attempt, source, wantNamed)
+		}
+		if source := strings.SplitN(relativeVolume, ":", 2)[0]; source != wantRelative {
+			t.Fatalf("attempt %d relative source = %q, want %q", attempt, source, wantRelative)
+		}
+	}
+}
+
 func TestSanitizeComposeYAMLUsesSelectedRootForNamedVolumes(t *testing.T) {
 	safeBaseDir := t.TempDir()
 	sanitizer := &ComposeSanitizer{

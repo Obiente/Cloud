@@ -22,6 +22,7 @@ type ComposeSanitizer struct {
 	preparedWritable    map[string]bool
 	deferredReadOnly    []string
 	deferredReadOnlySet map[string]struct{}
+	legacyRelativePaths map[string]string
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -113,6 +114,9 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 	// docker stack deploy does not accept Compose's top-level project name.
 	// Obiente controls the stack/project name with the deployment ID instead.
 	delete(compose, "name")
+	if err := cs.snapshotLegacyRelativeBindPaths(compose); err != nil {
+		return "", err
+	}
 
 	// Sanitize services
 	if services, ok := compose["services"].(map[string]interface{}); ok {
@@ -148,6 +152,98 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 	}
 
 	return string(sanitizedYaml), nil
+}
+
+func composeVolumeSource(volume interface{}) (source string, relativeBind bool, namedVolume bool) {
+	switch typed := volume.(type) {
+	case string:
+		if !strings.Contains(typed, ":") {
+			return "", false, false
+		}
+		source = strings.TrimSpace(strings.SplitN(typed, ":", 2)[0])
+		if source != "" && sanitizeVolumeName(source) == source {
+			return source, false, true
+		}
+	case map[string]interface{}:
+		var ok bool
+		source, ok = typed["source"].(string)
+		if !ok {
+			return "", false, false
+		}
+		source = strings.TrimSpace(source)
+		volumeType, _ := typed["type"].(string)
+		if strings.EqualFold(strings.TrimSpace(volumeType), "volume") {
+			return source, false, source != ""
+		}
+		if !strings.EqualFold(strings.TrimSpace(volumeType), "bind") && !filepath.IsAbs(source) && !strings.HasPrefix(source, "~") && !strings.ContainsRune(source, filepath.Separator) {
+			return "", false, false
+		}
+	default:
+		return "", false, false
+	}
+	if source == "" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") {
+		return source, false, false
+	}
+	return filepath.Clean(source), true, false
+}
+
+func (cs *ComposeSanitizer) snapshotLegacyRelativeBindPaths(compose map[string]interface{}) error {
+	cs.legacyRelativePaths = make(map[string]string)
+	namedSources := make(map[string]struct{})
+	if volumes, ok := compose["volumes"].(map[string]interface{}); ok {
+		for name := range volumes {
+			namedSources[name] = struct{}{}
+		}
+	}
+	var relativeSources []string
+	if services, ok := compose["services"].(map[string]interface{}); ok {
+		for _, serviceData := range services {
+			service, _ := serviceData.(map[string]interface{})
+			volumes, _ := service["volumes"].([]interface{})
+			for _, volume := range volumes {
+				source, relativeBind, namedVolume := composeVolumeSource(volume)
+				if namedVolume {
+					namedSources[source] = struct{}{}
+				}
+				if relativeBind {
+					relativeSources = append(relativeSources, source)
+				}
+			}
+		}
+	}
+	for _, source := range relativeSources {
+		if source == "." {
+			entries, err := os.ReadDir(cs.safeBaseDir)
+			if err != nil {
+				return fmt.Errorf("inspect legacy relative project root %s: %w", cs.safeBaseDir, err)
+			}
+			for _, entry := range entries {
+				if entry.Name() == relativeComposeBindScope {
+					continue
+				}
+				if _, named := namedSources[entry.Name()]; !named {
+					cs.legacyRelativePaths[source] = cs.safeBaseDir
+					break
+				}
+			}
+			continue
+		}
+		firstComponent := strings.Split(source, string(filepath.Separator))[0]
+		if _, named := namedSources[firstComponent]; named {
+			continue
+		}
+		candidate := filepath.Join(cs.safeBaseDir, source)
+		_, err := os.Lstat(candidate)
+		switch {
+		case err == nil:
+			cs.legacyRelativePaths[source] = candidate
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		default:
+			return fmt.Errorf("inspect legacy relative volume directory %s: %w", candidate, err)
+		}
+	}
+	return nil
 }
 
 // SanitizeUntrustedComposeYAML removes host- and cluster-control options from
@@ -697,15 +793,17 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	pathScope := serviceName
 	safePath := ""
 	if isDeploymentRelative {
-		legacyPath, found, err := cs.existingLegacyRelativeBindPath(hostPath, relativePath)
-		if err != nil {
-			return "", err
-		}
-		if found {
+		pathScope = relativeComposeBindScope
+		namespacedRelativePath := filepath.Join(relativeComposeProjectRoot, relativePath)
+		namespacedPath := filepath.Join(cs.safeBaseDir, pathScope, namespacedRelativePath)
+		if _, err := os.Lstat(namespacedPath); err == nil {
+			safePath = namespacedPath
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect namespaced relative volume directory %s: %w", namespacedPath, err)
+		} else if legacyPath, found := cs.legacyRelativePaths[hostPath]; found {
 			safePath = legacyPath
 		} else {
-			pathScope = relativeComposeBindScope
-			relativePath = filepath.Join(relativeComposeProjectRoot, relativePath)
+			relativePath = namespacedRelativePath
 		}
 	} else if serviceName == relativeComposeBindScope {
 		return "", fmt.Errorf("service name %q conflicts with the relative bind namespace", serviceName)
@@ -727,34 +825,6 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	}
 
 	return safePath, nil
-}
-
-// existingLegacyRelativeBindPath preserves the actual pre-namespace layout.
-// Short and long non-absolute sources were historically treated as named
-// volumes and joined directly beneath the deployment root.
-func (cs *ComposeSanitizer) existingLegacyRelativeBindPath(sourceKey, relativePath string) (string, bool, error) {
-	if sourceKey == "." {
-		entries, err := os.ReadDir(cs.safeBaseDir)
-		if err != nil {
-			return "", false, fmt.Errorf("inspect legacy relative project root %s: %w", cs.safeBaseDir, err)
-		}
-		for _, entry := range entries {
-			if entry.Name() != relativeComposeBindScope {
-				return cs.safeBaseDir, true, nil
-			}
-		}
-		return "", false, nil
-	}
-	candidate := filepath.Join(cs.safeBaseDir, relativePath)
-	_, err := os.Lstat(candidate)
-	switch {
-	case err == nil:
-		return candidate, true, nil
-	case errors.Is(err, os.ErrNotExist):
-		return "", false, nil
-	default:
-		return "", false, fmt.Errorf("inspect legacy relative volume directory %s: %w", candidate, err)
-	}
 }
 
 // sanitizeVolumeDefinition sanitizes top-level volume definitions

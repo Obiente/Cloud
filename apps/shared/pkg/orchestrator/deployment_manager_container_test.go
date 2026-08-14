@@ -133,6 +133,38 @@ func TestWaitForNextSwarmPollStopsWithContext(t *testing.T) {
 	}
 }
 
+func TestParseSwarmServiceRunPolicyUsesDesiredGlobalTasks(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"Global": {}},
+    "TaskTemplate": {"RestartPolicy": {"Condition": "none"}}
+  },
+  "ServiceStatus": {"RunningTasks": 1, "DesiredTasks": 3}
+}`))
+	if err != nil {
+		t.Fatalf("parse global service run policy: %v", err)
+	}
+	if policy.desiredReplicas != 3 || !policy.restartNone {
+		t.Fatalf("global service run policy = %#v, want 3 desired restart-none tasks", policy)
+	}
+}
+
+func TestParseSwarmServiceRunPolicyUsesReplicatedSpec(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"Replicated": {"Replicas": 2}},
+    "TaskTemplate": {"RestartPolicy": {"Condition": "any"}}
+  },
+  "ServiceStatus": {"RunningTasks": 1, "DesiredTasks": 5}
+}`))
+	if err != nil {
+		t.Fatalf("parse replicated service run policy: %v", err)
+	}
+	if policy.desiredReplicas != 2 || policy.restartNone {
+		t.Fatalf("replicated service run policy = %#v, want 2 desired restarting tasks", policy)
+	}
+}
+
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
 	t.Parallel()
 	first := PreviewIngressNetworkNameForDeployment("preview-one")
