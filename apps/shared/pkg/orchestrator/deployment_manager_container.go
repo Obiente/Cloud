@@ -33,9 +33,11 @@ type swarmConvergedTask struct {
 }
 
 type swarmServiceRunPolicy struct {
-	desiredReplicas  int64
-	restartNone      bool
-	restartOnFailure bool
+	desiredReplicas    int64
+	desiredCompletions int64
+	job                bool
+	restartNone        bool
+	restartOnFailure   bool
 }
 
 type swarmTaskSummary struct {
@@ -2266,7 +2268,12 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 				Replicated *struct {
 					Replicas *uint64 `json:"Replicas"`
 				} `json:"Replicated"`
-				Global *struct{} `json:"Global"`
+				Global        *struct{} `json:"Global"`
+				ReplicatedJob *struct {
+					MaxConcurrent    *uint64 `json:"MaxConcurrent"`
+					TotalCompletions *uint64 `json:"TotalCompletions"`
+				} `json:"ReplicatedJob"`
+				GlobalJob *struct{} `json:"GlobalJob"`
 			} `json:"Mode"`
 			TaskTemplate struct {
 				RestartPolicy *struct {
@@ -2275,23 +2282,63 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 			} `json:"TaskTemplate"`
 		} `json:"Spec"`
 		ServiceStatus *struct {
-			DesiredTasks uint64 `json:"DesiredTasks"`
+			DesiredTasks   uint64 `json:"DesiredTasks"`
+			CompletedTasks uint64 `json:"CompletedTasks"`
 		} `json:"ServiceStatus"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(output), &service); err != nil {
 		return swarmServiceRunPolicy{}, fmt.Errorf("decode service run policy: %w", err)
 	}
-	policy := swarmServiceRunPolicy{desiredReplicas: -1}
+	policy := swarmServiceRunPolicy{desiredReplicas: -1, desiredCompletions: -1}
 	if service.Spec.Mode.Replicated != nil {
 		policy.desiredReplicas = 1
 		if service.Spec.Mode.Replicated.Replicas != nil {
-			policy.desiredReplicas = int64(*service.Spec.Mode.Replicated.Replicas)
+			count, err := swarmTaskCount(*service.Spec.Mode.Replicated.Replicas)
+			if err != nil {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: replicated task count: %w", err)
+			}
+			policy.desiredReplicas = count
 		}
 	} else if service.Spec.Mode.Global != nil {
 		if service.ServiceStatus == nil {
 			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global service is missing desired task status")
 		}
-		policy.desiredReplicas = int64(service.ServiceStatus.DesiredTasks)
+		count, err := swarmTaskCount(service.ServiceStatus.DesiredTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global task count: %w", err)
+		}
+		policy.desiredReplicas = count
+	} else if service.Spec.Mode.ReplicatedJob != nil {
+		policy.job = true
+		desired := uint64(1)
+		if service.Spec.Mode.ReplicatedJob.MaxConcurrent != nil {
+			desired = *service.Spec.Mode.ReplicatedJob.MaxConcurrent
+		}
+		if service.Spec.Mode.ReplicatedJob.TotalCompletions != nil {
+			desired = *service.Spec.Mode.ReplicatedJob.TotalCompletions
+		}
+		count, err := swarmTaskCount(desired)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: replicated job completion count: %w", err)
+		}
+		policy.desiredCompletions = count
+	} else if service.Spec.Mode.GlobalJob != nil {
+		policy.job = true
+		if service.ServiceStatus == nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job is missing desired task status")
+		}
+		desired, err := swarmTaskCount(service.ServiceStatus.DesiredTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job desired task count: %w", err)
+		}
+		completed, err := swarmTaskCount(service.ServiceStatus.CompletedTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job completed task count: %w", err)
+		}
+		if desired > int64(1<<63-1)-completed {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job task count exceeds int64")
+		}
+		policy.desiredCompletions = desired + completed
 	}
 	if service.Spec.TaskTemplate.RestartPolicy != nil {
 		condition := strings.ToLower(strings.TrimSpace(service.Spec.TaskTemplate.RestartPolicy.Condition))
@@ -2299,6 +2346,13 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 		policy.restartOnFailure = condition == "on-failure"
 	}
 	return policy, nil
+}
+
+func swarmTaskCount(value uint64) (int64, error) {
+	if value > uint64(1<<63-1) {
+		return 0, fmt.Errorf("%d exceeds int64", value)
+	}
+	return int64(value), nil
 }
 
 func parseSwarmTaskSummary(output string) swarmTaskSummary {
@@ -2355,7 +2409,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	if policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
+	if !policy.job && policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
 		_, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, swarmServiceName)
 		return err
 	}
@@ -2385,10 +2439,10 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 		if err != nil {
 			return err
 		}
-		if updateConverged && policy.desiredReplicas == 0 && !summary.active {
+		if updateConverged && !policy.job && policy.desiredReplicas == 0 && !summary.active {
 			return nil
 		}
-		if updateConverged && (policy.restartNone || policy.restartOnFailure) {
+		if updateConverged && (policy.job || policy.restartNone || policy.restartOnFailure) {
 			if summary.failed {
 				return &SwarmRolloutError{
 					ServiceName: swarmServiceName,
@@ -2398,11 +2452,14 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 				}
 			}
 			requiredSuccessful := policy.desiredReplicas
-			if requiredSuccessful < 1 {
+			if policy.job {
+				requiredSuccessful = policy.desiredCompletions
+			}
+			if !policy.job && requiredSuccessful < 1 {
 				requiredSuccessful = 1
 			}
 			successfulTasks := summary.completedCount
-			if policy.restartOnFailure {
+			if !policy.job && policy.restartOnFailure {
 				successfulTasks += summary.running
 			}
 			if !summary.progressing && successfulTasks >= requiredSuccessful {

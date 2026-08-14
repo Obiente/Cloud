@@ -181,6 +181,53 @@ func TestParseSwarmServiceRunPolicyRecognizesOnFailure(t *testing.T) {
 	}
 }
 
+func TestParseSwarmServiceRunPolicyUsesReplicatedJobCompletions(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"ReplicatedJob": {"MaxConcurrent": 2, "TotalCompletions": 5}},
+    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure"}}
+  },
+  "ServiceStatus": {"RunningTasks": 2, "DesiredTasks": 2, "CompletedTasks": 1}
+}`))
+	if err != nil {
+		t.Fatalf("parse replicated-job run policy: %v", err)
+	}
+	if !policy.job || policy.desiredCompletions != 5 || policy.desiredReplicas != -1 {
+		t.Fatalf("replicated-job run policy = %#v, want 5 required completions", policy)
+	}
+}
+
+func TestParseSwarmServiceRunPolicyDefaultsReplicatedJobCompletions(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"ReplicatedJob": {"MaxConcurrent": 3}},
+    "TaskTemplate": {}
+  }
+}`))
+	if err != nil {
+		t.Fatalf("parse default replicated-job run policy: %v", err)
+	}
+	if !policy.job || policy.desiredCompletions != 3 {
+		t.Fatalf("replicated-job run policy = %#v, want MaxConcurrent completions", policy)
+	}
+}
+
+func TestParseSwarmServiceRunPolicyUsesGlobalJobTasks(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"GlobalJob": {}},
+    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure"}}
+  },
+  "ServiceStatus": {"RunningTasks": 2, "DesiredTasks": 2, "CompletedTasks": 3}
+}`))
+	if err != nil {
+		t.Fatalf("parse global-job run policy: %v", err)
+	}
+	if !policy.job || policy.desiredCompletions != 5 || policy.desiredReplicas != -1 {
+		t.Fatalf("global-job run policy = %#v, want 5 required completions", policy)
+	}
+}
+
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
 	t.Parallel()
 	first := PreviewIngressNetworkNameForDeployment("preview-one")
