@@ -41,6 +41,8 @@ type swarmServiceRunPolicy struct {
 	restartOnFailure   bool
 	restartAny         bool
 	restartMaxAttempts int64
+	restartDelay       time.Duration
+	restartWindow      time.Duration
 }
 
 type swarmTaskSummary struct {
@@ -2341,12 +2343,18 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 			if summaryErr != nil {
 				return nil, summaryErr
 			}
-			if summary.failed && summary.running < requiredRunning && !summary.progressing && swarmTaskFailureIsTerminal(policy, summary) {
-				return nil, &SwarmRolloutError{
-					ServiceName: swarmServiceName,
-					State:       "failed",
-					Message:     "current Swarm task generation failed before reaching the desired replica count",
-					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+			if summary.failed && summary.running < requiredRunning && !summary.progressing {
+				terminal, confirmErr := confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
+				if confirmErr != nil {
+					return nil, confirmErr
+				}
+				if terminal {
+					return nil, &SwarmRolloutError{
+						ServiceName: swarmServiceName,
+						State:       "failed",
+						Message:     "current Swarm task generation failed before reaching the desired replica count",
+						Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+					}
 				}
 			}
 		case "rollback_started":
@@ -2424,7 +2432,9 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 			TaskTemplate struct {
 				RestartPolicy *struct {
 					Condition   string  `json:"Condition"`
+					Delay       *int64  `json:"Delay"`
 					MaxAttempts *uint64 `json:"MaxAttempts"`
+					Window      *int64  `json:"Window"`
 				} `json:"RestartPolicy"`
 			} `json:"TaskTemplate"`
 		} `json:"Spec"`
@@ -2498,6 +2508,18 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart attempt count: %w", err)
 			}
 			policy.restartMaxAttempts = attempts
+		}
+		if service.Spec.TaskTemplate.RestartPolicy.Delay != nil {
+			if *service.Spec.TaskTemplate.RestartPolicy.Delay < 0 {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart delay cannot be negative")
+			}
+			policy.restartDelay = time.Duration(*service.Spec.TaskTemplate.RestartPolicy.Delay)
+		}
+		if service.Spec.TaskTemplate.RestartPolicy.Window != nil {
+			if *service.Spec.TaskTemplate.RestartPolicy.Window < 0 {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart window cannot be negative")
+			}
+			policy.restartWindow = time.Duration(*service.Spec.TaskTemplate.RestartPolicy.Window)
 		}
 	}
 	return policy, nil
@@ -2589,9 +2611,45 @@ func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskS
 	if !policy.restartOnFailure && !policy.restartAny {
 		return true
 	}
+	// When Window is configured, Docker only counts failures within that
+	// interval. The aggregate task history does not reveal when the scheduler
+	// reset its attempt counter, so it cannot prove exhaustion on its own.
+	if policy.restartWindow > 0 {
+		return false
+	}
 	// MaxAttempts counts retries after the initial execution, while
 	// failedAttempts counts every failed task generation including the first.
 	return policy.restartMaxAttempts >= 0 && summary.failedAttempts > policy.restartMaxAttempts
+}
+
+func confirmSwarmTaskFailureTerminal(ctx context.Context, swarmServiceName string, policy swarmServiceRunPolicy, summary swarmTaskSummary) (bool, error) {
+	if swarmTaskFailureIsTerminal(policy, summary) {
+		return true, nil
+	}
+	if !summary.failed || policy.restartWindow <= 0 || policy.restartMaxAttempts < 0 || summary.failedAttempts <= policy.restartMaxAttempts {
+		return false, nil
+	}
+
+	// With a restart window, rely on the scheduler rather than historical
+	// failure arithmetic. Wait beyond the configured retry delay, then require
+	// the complete task summary to remain unchanged before treating it as final.
+	stabilityDelay := policy.restartDelay + 2*time.Second
+	if stabilityDelay < policy.restartDelay {
+		stabilityDelay = time.Duration(1<<63 - 1)
+	}
+	timer := time.NewTimer(stabilityDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-timer.C:
+	}
+
+	after, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	return after == summary, nil
 }
 
 func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSummary) int64 {
@@ -2644,7 +2702,14 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 			return nil
 		}
 		if updateConverged && (policy.job || policy.restartNone || policy.restartOnFailure) {
-			if swarmTaskFailureIsTerminal(policy, summary) {
+			terminalFailure := false
+			if summary.failed && !summary.progressing {
+				terminalFailure, err = confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
+				if err != nil {
+					return err
+				}
+			}
+			if terminalFailure {
 				return &SwarmRolloutError{
 					ServiceName: swarmServiceName,
 					State:       "failed",

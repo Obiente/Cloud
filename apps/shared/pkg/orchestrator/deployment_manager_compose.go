@@ -57,6 +57,7 @@ func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, dep
 	if len(serviceNames) == 0 {
 		return false, fmt.Errorf("stack %s has no services after deployment", projectName)
 	}
+	ignoreExistingRollbacks := make(map[string]bool, len(serviceNames))
 	for _, serviceName := range serviceNames {
 		afterUpdate, inspectErr := swarmServiceUpdateFingerprint(ctx, serviceName)
 		if inspectErr != nil {
@@ -64,8 +65,16 @@ func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, dep
 		}
 		beforeUpdate, existedBefore := beforeServiceUpdates[serviceName]
 		ignoreExistingRollback := existedBefore && beforeUpdate == afterUpdate
+		ignoreExistingRollbacks[serviceName] = ignoreExistingRollback
 		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoreExistingRollback); err != nil {
 			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("wait for stack service %s: %w", serviceName, err)
+		}
+	}
+	// A service that converged early can regress while a later service is still
+	// settling. Recheck every service once the initial stack-wide wait finishes.
+	for _, serviceName := range serviceNames {
+		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoreExistingRollbacks[serviceName]); err != nil {
+			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("recheck stack service %s: %w", serviceName, err)
 		}
 	}
 	return false, nil
@@ -75,13 +84,24 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, "")
 }
 
-func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) (retErr error) {
 	if !utils.IsSwarmModeEnabled() {
 		// composeUpArgs already includes --force-recreate.
 		return dm.DeployComposeFile(ctx, deploymentID, composeYaml)
 	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+	refreshForcedTasks := false
+	defer func() {
+		if !refreshForcedTasks {
+			return
+		}
+		refreshCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if err := dm.registerComposeContainers(refreshCtx, deploymentID, projectName); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("refresh Compose task locations after forced restart: %w", err))
+		}
+	}()
 	beforeTaskTemplates, err := swarmStackTaskTemplates(ctx, projectName, true)
 	if err != nil {
 		return fmt.Errorf("inspect services before Compose restart: %w", err)
@@ -93,22 +113,16 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 	if err != nil {
 		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
 	}
-	forcedRestart := false
 	for _, serviceName := range unchangedSwarmStackServices(beforeTaskTemplates, afterTaskTemplates) {
 		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--detach=true", "--force", serviceName)
 		forceOutput, forceErr := forceCmd.CombinedOutput()
 		if forceErr != nil {
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
 		}
+		refreshForcedTasks = true
 		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, false); waitErr != nil {
 			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
 		}
-		forcedRestart = true
-	}
-	if forcedRestart {
-		// DeployComposeFile registered the pre-force tasks. Refresh the stable
-		// service rows after every requested replacement has converged.
-		return dm.registerComposeContainers(ctx, deploymentID, projectName)
 	}
 	return nil
 }

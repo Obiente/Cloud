@@ -231,14 +231,14 @@ func TestParseSwarmServiceRunPolicyRecognizesOnFailure(t *testing.T) {
 	policy, err := parseSwarmServiceRunPolicy([]byte(`{
   "Spec": {
     "Mode": {"Replicated": {"Replicas": 1}},
-    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure", "MaxAttempts": 3}}
+    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure", "Delay": 1000000000, "MaxAttempts": 3, "Window": 5000000000}}
   },
   "ServiceStatus": {"RunningTasks": 0, "DesiredTasks": 1}
 }`))
 	if err != nil {
 		t.Fatalf("parse on-failure service run policy: %v", err)
 	}
-	if policy.desiredReplicas != 1 || policy.restartNone || !policy.restartOnFailure || policy.restartMaxAttempts != 3 {
+	if policy.desiredReplicas != 1 || policy.restartNone || !policy.restartOnFailure || policy.restartMaxAttempts != 3 || policy.restartDelay != time.Second || policy.restartWindow != 5*time.Second {
 		t.Fatalf("on-failure service run policy = %#v", policy)
 	}
 }
@@ -273,6 +273,9 @@ func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
 	}
 	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{}, summary) {
 		t.Fatal("failure without an on-failure retry policy was not terminal")
+	}
+	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 2, restartWindow: 30 * time.Second}, summary) {
+		t.Fatal("aggregate failure history was terminal despite a configured restart window")
 	}
 }
 
