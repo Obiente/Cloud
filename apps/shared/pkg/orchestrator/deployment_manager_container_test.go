@@ -81,9 +81,9 @@ func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T
 
 func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T) {
 	t.Parallel()
-	existing := []string{"node.labels.pool==customer", "node.id==old-node"}
+	existing := []string{"node.id!=other-node", "node.id==selected-node"}
 	want := []string{
-		"--constraint-rm", "node.id==old-node",
+		"--constraint-rm", "node.id==selected-node",
 		"--constraint-add", "node.id==selected-node",
 	}
 	got, err := swarmNodePlacementUpdateArgs(existing, "selected-node", true)
@@ -94,6 +94,7 @@ func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T)
 		t.Fatalf("placement update args = %#v, want %#v", got, want)
 	}
 
+	existing = []string{"node.labels.pool==customer", "node.id==old-node"}
 	want = []string{"--constraint-rm", "node.id==old-node"}
 	got, err = swarmNodePlacementUpdateArgs(existing, "", false)
 	if err != nil {
@@ -105,6 +106,11 @@ func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T)
 
 	if _, err := swarmNodePlacementUpdateArgs([]string{"node.id != selected-node"}, "selected-node", true); err == nil {
 		t.Fatal("selected-node exclusion should be rejected for local binds")
+	}
+	for _, constraint := range []string{"node.id == other-node", "node.hostname == worker", "node.role == worker", "node.labels.pool == customer"} {
+		if _, err := swarmNodePlacementUpdateArgs([]string{constraint}, "selected-node", true); err == nil {
+			t.Fatalf("incompatible or unverifiable constraint %q should be rejected for local binds", constraint)
+		}
 	}
 }
 
@@ -206,7 +212,7 @@ func TestParseSwarmServiceRunPolicyUsesDesiredGlobalTasks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse global service run policy: %v", err)
 	}
-	if policy.desiredReplicas != 3 || !policy.restartNone {
+	if policy.desiredReplicas != 3 || !policy.restartNone || !policy.global {
 		t.Fatalf("global service run policy = %#v, want 3 desired restart-none tasks", policy)
 	}
 }

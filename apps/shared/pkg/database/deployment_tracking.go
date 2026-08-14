@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/moby/moby/client"
@@ -259,6 +260,45 @@ func GetAllDeploymentLocationsByDeploymentIDs(deploymentIDs []string) (map[strin
 	return grouped, nil
 }
 
+// PinDeploymentVolumeNode records the immutable owner of node-local deployment
+// volumes. A concurrent deployment on another manager must not move that
+// affinity after data may already have been created on the original node.
+func PinDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) error {
+	deploymentID = strings.TrimSpace(deploymentID)
+	nodeID = strings.TrimSpace(nodeID)
+	if deploymentID == "" || nodeID == "" {
+		return fmt.Errorf("deployment ID and volume node ID are required")
+	}
+	result := DB.WithContext(ctx).
+		Model(&Deployment{}).
+		Where("id = ? AND deleted_at IS NULL", deploymentID).
+		Where("volume_node_id IS NULL OR volume_node_id = '' OR volume_node_id = ?", nodeID).
+		Update("volume_node_id", nodeID)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 1 {
+		return nil
+	}
+
+	var deployment Deployment
+	if err := DB.WithContext(ctx).Select("id", "volume_node_id").Where("id = ? AND deleted_at IS NULL", deploymentID).First(&deployment).Error; err != nil {
+		return err
+	}
+	return fmt.Errorf("deployment %s local volumes are already pinned to node %s", deploymentID, deployment.VolumeNodeID)
+}
+
+func GetDeploymentVolumeNode(ctx context.Context, deploymentID string) (string, error) {
+	var deployment Deployment
+	if err := DB.WithContext(ctx).
+		Select("id", "volume_node_id").
+		Where("id = ? AND deleted_at IS NULL", deploymentID).
+		First(&deployment).Error; err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(deployment.VolumeNodeID), nil
+}
+
 // GetNodeByID returns node metadata by ID
 func GetNodeByID(nodeID string) (*NodeMetadata, error) {
 	var node NodeMetadata
@@ -337,12 +377,10 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 //   - otherwise, fall back to container_id
 func RecordDeploymentLocation(location *DeploymentLocation) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if location.ServiceID != "" {
+		if location.ServiceID != "" && location.TaskSlot != "" {
 			var existingByService DeploymentLocation
 			serviceQuery := tx.Where("deployment_id = ? AND service_id = ?", location.DeploymentID, location.ServiceID)
-			if location.TaskSlot != "" {
-				serviceQuery = serviceQuery.Where("task_slot = ?", location.TaskSlot)
-			}
+			serviceQuery = serviceQuery.Where("task_slot = ?", location.TaskSlot)
 			serviceResult := serviceQuery.First(&existingByService)
 			if serviceResult.Error == nil {
 				location.ID = existingByService.ID

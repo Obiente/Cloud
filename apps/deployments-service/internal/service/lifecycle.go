@@ -945,8 +945,11 @@ func (s *Service) StreamDeploymentStatus(ctx context.Context, req *connect.Reque
 }
 
 func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string) {
-	if s.manager == nil || s.forwarder == nil {
+	if s.manager == nil {
 		return false, ""
+	}
+	if volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID); err == nil && volumeNodeID != "" {
+		return volumeNodeID != s.manager.GetNodeID(), volumeNodeID
 	}
 
 	var location database.DeploymentLocation
@@ -956,8 +959,11 @@ func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID s
 		First(&location).Error; err != nil {
 		return false, ""
 	}
+	if strings.TrimSpace(location.NodeID) == "" {
+		return false, ""
+	}
 
-	return s.shouldForwardToNode(&location)
+	return location.NodeID != s.manager.GetNodeID(), location.NodeID
 }
 
 // StartDeployment starts a stopped deployment

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/moby/moby/api/types/swarm"
 	"github.com/moby/moby/client"
 )
 
@@ -381,6 +384,7 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 
 			containerID := task.Status.ContainerStatus.ContainerID
 			activeContainers[containerID] = true
+			taskSlot := stableSwarmTaskSlot(svc.Spec.Mode, task)
 
 			location := &database.DeploymentLocation{
 				ID:              fmt.Sprintf("loc-%s-%s", deploymentID, containerID[:12]),
@@ -389,6 +393,7 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 				ContainerID:     containerID,
 				ServiceID:       svc.ID,
 				TaskID:          task.ID,
+				TaskSlot:        taskSlot,
 				Status:          string(task.Status.State),
 				Domain:          domain,
 				NodeHostname:    task.NodeID,
@@ -431,6 +436,16 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func stableSwarmTaskSlot(mode swarm.ServiceMode, task swarm.Task) string {
+	if mode.Global != nil || mode.GlobalJob != nil {
+		return strings.TrimSpace(task.NodeID)
+	}
+	if task.Slot > 0 {
+		return strconv.Itoa(task.Slot)
+	}
+	return ""
 }
 
 func isTaskActive(state string) bool {

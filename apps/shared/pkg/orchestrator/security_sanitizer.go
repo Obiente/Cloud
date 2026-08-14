@@ -24,6 +24,7 @@ type ComposeSanitizer struct {
 	deferredReadOnlySet map[string]struct{}
 	legacyRelativePaths map[string]string
 	legacyProjectRoot   bool
+	usesLocalBind       bool
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -438,6 +439,7 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 			}
 		}
 		service["volumes"] = sanitizedVolumes
+		cs.usesLocalBind = cs.usesLocalBind || hasLocalBind
 		if hasLocalBind && cs.swarmVolumeNodeID != "" {
 			if err := pinComposeServiceToNode(service, cs.swarmVolumeNodeID); err != nil {
 				return fmt.Errorf("service %s placement: %w", serviceName, err)
@@ -532,10 +534,13 @@ func pinComposeServiceToNode(service map[string]interface{}, nodeID string) erro
 	constraints := make([]interface{}, 0, len(existing)+1)
 	for _, raw := range existing {
 		constraint, ok := raw.(string)
-		if ok && excludesSwarmNodeID(constraint, nodeID) {
-			return fmt.Errorf("constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+		if !ok {
+			return fmt.Errorf("cannot validate non-string placement constraint against required local-volume node %s", strings.TrimSpace(nodeID))
 		}
-		if !ok || isSwarmNodeIDConstraint(constraint) {
+		if err := validateSwarmConstraintForPinnedNode(constraint, nodeID); err != nil {
+			return err
+		}
+		if isSwarmNodeIDConstraint(constraint) {
 			continue
 		}
 		constraints = append(constraints, constraint)
@@ -543,6 +548,10 @@ func pinComposeServiceToNode(service map[string]interface{}, nodeID string) erro
 	constraints = append(constraints, fmt.Sprintf("node.id == %s", strings.TrimSpace(nodeID)))
 	placement["constraints"] = constraints
 	return nil
+}
+
+func (cs *ComposeSanitizer) UsesLocalBindVolumes() bool {
+	return cs.usesLocalBind
 }
 
 // sanitizeDNS applies safe DNS defaults for Compose deployments.

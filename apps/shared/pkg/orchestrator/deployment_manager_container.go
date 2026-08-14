@@ -37,6 +37,7 @@ type swarmServiceRunPolicy struct {
 	desiredReplicas    int64
 	desiredCompletions int64
 	job                bool
+	global             bool
 	restartNone        bool
 	restartOnFailure   bool
 	restartAny         bool
@@ -553,15 +554,46 @@ func isSwarmNodeIDConstraint(constraint string) bool {
 }
 
 func excludesSwarmNodeID(constraint, nodeID string) bool {
-	normalized := strings.ReplaceAll(strings.TrimSpace(constraint), " ", "")
-	return normalized == "node.id!="+strings.TrimSpace(nodeID)
+	key, operator, value, ok := parseSwarmPlacementConstraint(constraint)
+	if !ok || key != "node.id" {
+		return false
+	}
+	nodeID = strings.TrimSpace(nodeID)
+	return (operator == "==" && value != nodeID) || (operator == "!=" && value == nodeID)
+}
+
+func parseSwarmPlacementConstraint(constraint string) (key, operator, value string, ok bool) {
+	constraint = strings.TrimSpace(constraint)
+	for _, candidate := range []string{"==", "!="} {
+		before, after, found := strings.Cut(constraint, candidate)
+		if found && strings.TrimSpace(before) != "" && strings.TrimSpace(after) != "" {
+			return strings.TrimSpace(before), candidate, strings.TrimSpace(after), true
+		}
+	}
+	return "", "", "", false
+}
+
+func validateSwarmConstraintForPinnedNode(constraint, nodeID string) error {
+	key, _, _, ok := parseSwarmPlacementConstraint(constraint)
+	if !ok {
+		return fmt.Errorf("cannot validate placement constraint %q against required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	if key != "node.id" {
+		return fmt.Errorf("cannot validate placement constraint %q against required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	if excludesSwarmNodeID(constraint, nodeID) {
+		return fmt.Errorf("placement constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	return nil
 }
 
 func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBinds bool) ([]string, error) {
 	args := make([]string, 0, 4)
 	for _, constraint := range existing {
-		if hasLocalBinds && excludesSwarmNodeID(constraint, nodeID) {
-			return nil, fmt.Errorf("placement constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+		if hasLocalBinds {
+			if err := validateSwarmConstraintForPinnedNode(constraint, nodeID); err != nil {
+				return nil, err
+			}
 		}
 		if isSwarmNodeIDConstraint(constraint) {
 			args = append(args, "--constraint-rm", constraint)
@@ -2324,6 +2356,13 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 	}
 	rollbackDiagnostics := ""
 	for {
+		if policy.global {
+			policy, err = inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+			if err != nil {
+				return nil, err
+			}
+			requiredRunning = policy.desiredReplicas
+		}
 		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return nil, err
@@ -2332,7 +2371,7 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 		switch updateState {
 		case "", "completed":
 			tasks, taskErr := dm.currentRunningSwarmTasks(ctx, swarmServiceName)
-			if taskErr == nil && int64(len(tasks)) >= requiredRunning {
+			if taskErr == nil && requiredRunning > 0 && int64(len(tasks)) >= requiredRunning {
 				task := tasks[0]
 				if task.ServiceID == "" {
 					task.ServiceID = serviceID
@@ -2342,6 +2381,9 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 			summary, summaryErr := inspectSwarmTaskSummary(ctx, swarmServiceName)
 			if summaryErr != nil {
 				return nil, summaryErr
+			}
+			if policy.global && requiredRunning == 0 && !summary.active {
+				return nil, nil
 			}
 			if summary.failed && summary.running < requiredRunning && !summary.progressing {
 				terminal, confirmErr := confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
@@ -2457,6 +2499,7 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 			policy.desiredReplicas = count
 		}
 	} else if service.Spec.Mode.Global != nil {
+		policy.global = true
 		if service.ServiceStatus == nil {
 			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global service is missing desired task status")
 		}
@@ -2481,6 +2524,7 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 		policy.desiredCompletions = count
 	} else if service.Spec.Mode.GlobalJob != nil {
 		policy.job = true
+		policy.global = true
 		if service.ServiceStatus == nil {
 			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job is missing desired task status")
 		}
@@ -2665,12 +2709,18 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	if !policy.job && policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
+	if !policy.job && !policy.global && policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
 		_, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, swarmServiceName)
 		return err
 	}
 
 	for {
+		if policy.global {
+			policy, err = inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+			if err != nil {
+				return err
+			}
+		}
 		_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return err
@@ -2701,7 +2751,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 		if updateConverged && !policy.job && policy.desiredReplicas == 0 && !summary.active {
 			return nil
 		}
-		if updateConverged && (policy.job || policy.restartNone || policy.restartOnFailure) {
+		if updateConverged && (policy.global || policy.job || policy.restartNone || policy.restartOnFailure) {
 			terminalFailure := false
 			if summary.failed && !summary.progressing {
 				terminalFailure, err = confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)

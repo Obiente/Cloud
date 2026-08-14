@@ -1105,13 +1105,15 @@ func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
       replicas: 2
       placement:
         constraints:
-          - node.labels.pool == customer
-          - node.id == old-node
+          - node.id == selected-node
 `
 
 	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
 	if err != nil {
 		t.Fatalf("sanitize Compose Swarm placement: %v", err)
+	}
+	if !sanitizer.UsesLocalBindVolumes() {
+		t.Fatal("local bind volume was not recorded for durable node affinity")
 	}
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
@@ -1125,9 +1127,40 @@ func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
 	}
 	placement := deploy["placement"].(map[string]interface{})
 	constraints := placement["constraints"].([]interface{})
-	want := []interface{}{"node.labels.pool == customer", "node.id == selected-node"}
+	want := []interface{}{"node.id == selected-node"}
 	if !reflect.DeepEqual(constraints, want) {
 		t.Fatalf("placement constraints = %#v, want %#v", constraints, want)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsUnverifiableConstraintForLocalVolume(t *testing.T) {
+	for _, constraint := range []string{
+		"node.hostname == another-worker",
+		"node.role == worker",
+		"node.labels.pool == customer",
+		"engine.labels.storage == local",
+	} {
+		t.Run(constraint, func(t *testing.T) {
+			sanitizer := &ComposeSanitizer{
+				deploymentID:      "compose-volume-constraint-test",
+				safeBaseDir:       t.TempDir(),
+				swarmVolumeNodeID: "selected-node",
+			}
+			composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      placement:
+        constraints:
+          - %s
+`, constraint)
+
+			if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "cannot validate placement constraint") {
+				t.Fatalf("unverifiable placement constraint error = %v", err)
+			}
+		})
 	}
 }
 
@@ -1175,6 +1208,9 @@ func TestSanitizeComposeYAMLDoesNotPinPortableSwarmVolumes(t *testing.T) {
 	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
 	if err != nil {
 		t.Fatalf("sanitize Compose with portable volumes: %v", err)
+	}
+	if sanitizer.UsesLocalBindVolumes() {
+		t.Fatal("portable volumes were recorded as node-local binds")
 	}
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {

@@ -249,6 +249,11 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	} else {
 		logger.Info("[DeploymentManager] Sanitized compose YAML for deployment %s (volumes mapped to: %s)", deploymentID, sanitizer.GetSafeBaseDir())
 	}
+	if isSwarmMode && sanitizer.UsesLocalBindVolumes() {
+		if err := database.PinDeploymentVolumeNode(ctx, deploymentID, dm.nodeID); err != nil {
+			return fmt.Errorf("pin deployment-local volumes to Swarm node: %w", err)
+		}
+	}
 
 	// Get routing rules (create default if none exist)
 	routings, _ := database.GetDeploymentRoutings(deploymentID)
