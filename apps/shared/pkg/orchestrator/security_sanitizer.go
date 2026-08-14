@@ -262,6 +262,40 @@ func persistedComposeProvesLegacyProjectRoot(composeYaml, safeBaseDir string) (b
 	return false, nil
 }
 
+func persistedComposeLegacyProjectRoot(composeYaml, deploymentID string) (string, bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	allowedRoots := map[string]struct{}{
+		filepath.Join("/var/lib/obiente/volumes", deploymentID):         {},
+		filepath.Join("/var/obiente/tmp/obiente-volumes", deploymentID): {},
+		filepath.Join("/tmp/obiente-volumes", deploymentID):             {},
+		filepath.Join(os.TempDir(), "obiente-volumes", deploymentID):    {},
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	var recordedRoot string
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			candidate := filepath.Clean(source)
+			if namedVolume || !filepath.IsAbs(candidate) {
+				continue
+			}
+			if _, allowed := allowedRoots[candidate]; !allowed {
+				continue
+			}
+			if recordedRoot != "" && recordedRoot != candidate {
+				return "", false, fmt.Errorf("persisted Compose file references conflicting managed project roots %q and %q", recordedRoot, candidate)
+			}
+			recordedRoot = candidate
+		}
+	}
+	return recordedRoot, recordedRoot != "", nil
+}
+
 // SanitizeUntrustedComposeYAML removes host- and cluster-control options from
 // repository Compose files before they are allowed into the normal deployment
 // sanitizer. It is used for pull request previews, where every byte of the

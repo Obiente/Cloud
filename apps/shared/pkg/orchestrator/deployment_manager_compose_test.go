@@ -91,8 +91,26 @@ func TestObsoleteComposeSwarmLocationsKeepsCurrentAndLegacyRows(t *testing.T) {
 	}
 	current := map[string]struct{}{"current-task": {}}
 	got := obsoleteComposeSwarmLocations(locations, current)
-	if len(got) != 1 || got[0].ContainerID != "stale-container" {
-		t.Fatalf("obsolete locations = %#v, want only stale-container", got)
+	if len(got) != 2 || got[0].ContainerID != "stale-container" || got[1].ContainerID != "plain-container" {
+		t.Fatalf("obsolete locations = %#v, want stale and pre-upgrade rows", got)
+	}
+}
+
+func TestPersistedComposeLegacyProjectRootRecoversFallback(t *testing.T) {
+	deploymentID := "compose-persisted-fallback-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - %s:/workspace
+`, recordedRoot)
+	got, found, err := persistedComposeLegacyProjectRoot(composeYAML, deploymentID)
+	if err != nil {
+		t.Fatalf("extract persisted legacy root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("persisted legacy root found=%t root=%q, want %q", found, got, recordedRoot)
 	}
 }
 

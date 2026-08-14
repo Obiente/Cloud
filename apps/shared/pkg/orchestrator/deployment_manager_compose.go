@@ -204,6 +204,12 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		if metadataErr != nil {
 			return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
 		}
+		if !hasRecordedLegacyRoot {
+			recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = storedComposeLegacyProjectRoot(deploymentID)
+			if metadataErr != nil {
+				return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
+			}
+		}
 	}
 	if hasRecordedLegacyRoot {
 		sanitizer = &ComposeSanitizer{
@@ -213,16 +219,6 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		}
 	} else {
 		sanitizer = NewComposeSanitizer(deploymentID)
-	}
-	if !hasRecordedLegacyRoot && sanitizer.GetSafeBaseDir() != "" {
-		legacyProjectRoot, found, err := storedComposeLegacyProjectRoot(deploymentID, sanitizer.GetSafeBaseDir())
-		if err != nil {
-			return fmt.Errorf("inspect persisted Compose volume metadata: %w", err)
-		}
-		if found {
-			sanitizer.safeBaseDir = legacyProjectRoot
-			sanitizer.legacyProjectRoot = true
-		}
 	}
 	if isSwarmMode {
 		sanitizer.swarmVolumeNodeID = dm.nodeID
@@ -627,12 +623,9 @@ func swarmStackRuntimeFingerprint(ctx context.Context, projectName string) (stri
 	return strings.Join(versions, "\n"), nil
 }
 
-func storedComposeLegacyProjectRoot(deploymentID, preferredSafeBaseDir string) (string, bool, error) {
+func storedComposeLegacyProjectRoot(deploymentID string) (string, bool, error) {
 	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
 		return "", false, fmt.Errorf("invalid deployment identifier")
-	}
-	if !filepath.IsAbs(preferredSafeBaseDir) {
-		return "", false, fmt.Errorf("volume root %q is not absolute", preferredSafeBaseDir)
 	}
 	possibleDirs := []string{
 		"/var/lib/obiente/deployments",
@@ -647,12 +640,16 @@ func storedComposeLegacyProjectRoot(deploymentID, preferredSafeBaseDir string) (
 			return "", false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
 		}
 		if found {
-			proven, proveErr := persistedComposeProvesLegacyProjectRoot(string(contents), preferredSafeBaseDir)
+			recordedRoot, proven, proveErr := persistedComposeLegacyProjectRoot(string(contents), deploymentID)
 			if proveErr != nil {
 				return "", false, fmt.Errorf("inspect persisted Compose file in %s: %w", deployDir, proveErr)
 			}
 			if proven {
-				return preferredSafeBaseDir, true, nil
+				validatedRoot, validateErr := validateLegacyProjectRoot(recordedRoot, deploymentID)
+				if validateErr != nil {
+					return "", false, fmt.Errorf("validate persisted Compose project root in %s: %w", deployDir, validateErr)
+				}
+				return validatedRoot, true, nil
 			}
 		}
 	}
@@ -693,7 +690,11 @@ func parseLegacyProjectRootMetadata(metadata []byte, deploymentID string) (strin
 	if len(lines) != 2 || lines[0] != "legacy-relative-project-root-v1" {
 		return "", fmt.Errorf("invalid legacy project-root metadata format")
 	}
-	recordedRoot := filepath.Clean(lines[1])
+	return validateLegacyProjectRoot(lines[1], deploymentID)
+}
+
+func validateLegacyProjectRoot(root, deploymentID string) (string, error) {
+	recordedRoot := filepath.Clean(root)
 	if !filepath.IsAbs(recordedRoot) {
 		return "", fmt.Errorf("recorded volume root %q is not absolute", recordedRoot)
 	}
@@ -861,6 +862,7 @@ func obsoleteComposeSwarmLocations(locations []database.DeploymentLocation, curr
 	obsolete := make([]database.DeploymentLocation, 0)
 	for _, location := range locations {
 		if location.ServiceID == "" || location.TaskID == "" {
+			obsolete = append(obsolete, location)
 			continue
 		}
 		if _, current := currentTaskIDs[location.TaskID]; !current {
@@ -1034,6 +1036,9 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		// Verify container is actually running by inspecting it
 		containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, cnt.ID, client.ContainerInspectOptions{})
 		if err != nil {
+			if isSwarmMode {
+				return fmt.Errorf("inspect current Swarm container %s: %w", cnt.ID, err)
+			}
 			logger.Warn("[DeploymentManager] Failed to inspect container %s: %v", cnt.ID[:12], err)
 			continue
 		}
