@@ -330,10 +330,18 @@ func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
 
 func TestNonJobRestartNoneCountsRunningTasksAsSuccessful(t *testing.T) {
 	policy := swarmServiceRunPolicy{desiredReplicas: 2, restartNone: true}
-	summary := swarmTaskSummary{running: 2, active: true}
+	summary := swarmTaskSummary{running: 2, completedCount: 3, active: true, completed: true}
 	successfulTasks := successfulSwarmTaskCount(policy, summary)
-	if successfulTasks < policy.desiredReplicas {
-		t.Fatalf("running tasks counted as %d successful tasks, want at least %d", successfulTasks, policy.desiredReplicas)
+	if successfulTasks != policy.desiredReplicas {
+		t.Fatalf("ordinary service successful tasks = %d, want %d running tasks only", successfulTasks, policy.desiredReplicas)
+	}
+}
+
+func TestNonJobCompletedTaskDoesNotSatisfyRunningReplicas(t *testing.T) {
+	policy := swarmServiceRunPolicy{desiredReplicas: 1, restartNone: true}
+	summary := swarmTaskSummary{completedCount: 1, completed: true}
+	if got := successfulSwarmTaskCount(policy, summary); got != 0 {
+		t.Fatalf("ordinary completed task counted as %d successful running tasks, want 0", got)
 	}
 }
 

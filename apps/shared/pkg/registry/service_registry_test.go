@@ -1,9 +1,13 @@
 package registry
 
 import (
+	"context"
 	"testing"
 
 	"github.com/moby/moby/api/types/swarm"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestStableSwarmTaskSlot(t *testing.T) {
@@ -81,5 +85,23 @@ func TestShouldRecordSwarmTaskPrefersRunningReplacement(t *testing.T) {
 				t.Fatalf("shouldRecordSwarmTask() = %t, want %t", got, test.want)
 			}
 		})
+	}
+}
+
+func TestUnregisterDeploymentIsIdempotent(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:registry-unregister-idempotent?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open registry test database: %v", err)
+	}
+	if err := db.AutoMigrate(&database.DeploymentLocation{}); err != nil {
+		t.Fatalf("migrate deployment locations: %v", err)
+	}
+	previousDB := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = previousDB })
+
+	registry := &ServiceRegistry{}
+	if err := registry.UnregisterDeployment(context.Background(), "already-removed-container"); err != nil {
+		t.Fatalf("unregister already-removed deployment location: %v", err)
 	}
 }

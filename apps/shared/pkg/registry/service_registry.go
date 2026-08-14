@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moby/moby/api/types/swarm"
 	"github.com/moby/moby/client"
+	"gorm.io/gorm"
 )
 
 // ServiceRegistry tracks all deployments across the cluster
@@ -111,6 +113,9 @@ func (sr *ServiceRegistry) UnregisterDeployment(ctx context.Context, containerID
 	// Get deployment info before deletion
 	var location database.DeploymentLocation
 	if err := database.DB.Where("container_id = ?", containerID).First(&location).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return fmt.Errorf("deployment location not found: %w", err)
 	}
 

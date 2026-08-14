@@ -463,6 +463,13 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	// Set project name to deployment ID to avoid conflicts
 	// Note: Docker Compose normalizes project names (lowercase, etc.), but we'll use the label to find containers
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+	var plainTransitionContainers []container.Summary
+	if isSwarmMode {
+		plainTransitionContainers, err = dm.plainComposeContainersForSwarmTransition(ctx, projectName)
+		if err != nil {
+			return fmt.Errorf("inspect plain Compose runtime before Swarm migration: %w", err)
+		}
+	}
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -541,6 +548,9 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 				volumePreparationCommitted = false
 			}
 			return fmt.Errorf("stack deployment did not converge: %w", err)
+		}
+		if err := dm.removePlainComposeContainersAfterSwarmTransition(ctx, plainTransitionContainers); err != nil {
+			return fmt.Errorf("remove superseded plain Compose runtime after Swarm migration: %w", err)
 		}
 	} else {
 		// In non-Swarm mode, use docker compose (creates containers)
@@ -636,6 +646,49 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	// List containers created by this compose project and register them
 	return dm.registerComposeContainers(ctx, deploymentID, projectName)
+}
+
+func selectPlainComposeTransitionContainers(containers []container.Summary) ([]container.Summary, error) {
+	selected := make([]container.Summary, 0, len(containers))
+	for _, candidate := range containers {
+		if strings.TrimSpace(candidate.Labels["com.docker.swarm.service.id"]) != "" {
+			continue
+		}
+		if candidate.Labels["cloud.obiente.managed"] != "true" {
+			return nil, fmt.Errorf("refusing to remove unmanaged Compose container %s", candidate.ID)
+		}
+		selected = append(selected, candidate)
+	}
+	return selected, nil
+}
+
+func (dm *DeploymentManager) plainComposeContainersForSwarmTransition(ctx context.Context, projectName string) ([]container.Summary, error) {
+	filterArgs := make(client.Filters)
+	filterArgs.Add("label", "com.docker.compose.project="+projectName)
+	result, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filterArgs})
+	if err != nil {
+		return nil, fmt.Errorf("list Compose project containers: %w", err)
+	}
+	return selectPlainComposeTransitionContainers(result.Items)
+}
+
+func (dm *DeploymentManager) removePlainComposeContainersAfterSwarmTransition(ctx context.Context, containers []container.Summary) error {
+	var removalErrors []error
+	for _, legacyContainer := range containers {
+		timeout := 10 * time.Second
+		if err := dm.dockerHelper.StopContainer(ctx, legacyContainer.ID, timeout); err != nil {
+			removalErrors = append(removalErrors, fmt.Errorf("stop plain Compose container %s: %w", legacyContainer.ID, err))
+			continue
+		}
+		if err := dm.dockerHelper.RemoveContainer(ctx, legacyContainer.ID, true); err != nil {
+			removalErrors = append(removalErrors, fmt.Errorf("remove plain Compose container %s: %w", legacyContainer.ID, err))
+			continue
+		}
+		if err := dm.registry.UnregisterDeployment(ctx, legacyContainer.ID); err != nil {
+			removalErrors = append(removalErrors, fmt.Errorf("unregister plain Compose container %s: %w", legacyContainer.ID, err))
+		}
+	}
+	return errors.Join(removalErrors...)
 }
 
 func deploymentRuntimeChangedAfterFailure(before string, inspect func(context.Context) (string, error)) bool {

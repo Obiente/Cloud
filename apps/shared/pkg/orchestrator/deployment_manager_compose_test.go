@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
 	"golang.org/x/sys/unix"
@@ -304,6 +305,38 @@ func TestDeploymentRuntimeChangedAfterFailure(t *testing.T) {
 				t.Fatalf("deploymentRuntimeChangedAfterFailure = %t, want %t", got, test.changed)
 			}
 		})
+	}
+}
+
+func TestSelectPlainComposeTransitionContainers(t *testing.T) {
+	managedPlain := container.Summary{
+		ID: "plain-container",
+		Labels: map[string]string{
+			"cloud.obiente.managed":      "true",
+			"com.docker.compose.project": "deploy-example",
+		},
+	}
+	swarmTask := container.Summary{
+		ID: "swarm-container",
+		Labels: map[string]string{
+			"cloud.obiente.managed":         "true",
+			"com.docker.compose.project":    "deploy-example",
+			"com.docker.swarm.service.id":   "service-example",
+			"com.docker.swarm.service.name": "deploy-example-app",
+		},
+	}
+
+	selected, err := selectPlainComposeTransitionContainers([]container.Summary{managedPlain, swarmTask})
+	if err != nil {
+		t.Fatalf("select plain Compose transition containers: %v", err)
+	}
+	if len(selected) != 1 || selected[0].ID != managedPlain.ID {
+		t.Fatalf("selected transition containers = %#v, want only managed plain container", selected)
+	}
+
+	unmanagedPlain := container.Summary{ID: "unmanaged-container", Labels: map[string]string{}}
+	if _, err := selectPlainComposeTransitionContainers([]container.Summary{unmanagedPlain}); err == nil {
+		t.Fatal("unmanaged plain Compose container was accepted for transition cleanup")
 	}
 }
 

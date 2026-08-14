@@ -2671,11 +2671,10 @@ func confirmSwarmTaskFailureTerminal(ctx context.Context, swarmServiceName strin
 }
 
 func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSummary) int64 {
-	successfulTasks := summary.completedCount
-	if !policy.job {
-		successfulTasks += summary.running
+	if policy.job {
+		return summary.completedCount
 	}
-	return successfulTasks
+	return summary.running
 }
 
 func (dm *DeploymentManager) inspectSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName, ignoredRollbackFingerprint string) (bool, error) {

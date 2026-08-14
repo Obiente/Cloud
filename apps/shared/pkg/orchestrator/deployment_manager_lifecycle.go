@@ -220,6 +220,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 								ContainerID:  rolloutErr.ContainerID,
 								ServiceID:    rolloutErr.ServiceID,
 								TaskID:       rolloutErr.TaskID,
+								TaskSlot:     "1",
 								Status:       "running",
 								Port:         publicPort,
 								Domain:       config.Domain,
@@ -342,6 +343,12 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				NodeHostname: dm.nodeHostname,
 				ContainerID:  containerID,
 				ServiceID:    serviceID,
+				TaskSlot: func() string {
+					if isSwarmMode {
+						return "1"
+					}
+					return ""
+				}(),
 				Status:       "running",
 				Port:         publicPort,
 				Domain:       config.Domain,
