@@ -14,6 +14,18 @@ import (
 	"connectrpc.com/connect"
 )
 
+func TestComposeDeploymentNeedsContainerVerification(t *testing.T) {
+	t.Setenv("ENABLE_SWARM", "false")
+	if !composeDeploymentNeedsContainerVerification() {
+		t.Fatal("non-Swarm Compose deployment must verify a running container")
+	}
+
+	t.Setenv("ENABLE_SWARM", "true")
+	if composeDeploymentNeedsContainerVerification() {
+		t.Fatal("Swarm Compose deployment already performs job-aware convergence")
+	}
+}
+
 func TestAbortedDeletionClearsIdleCancellationMarker(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	service := NewService(context.Background(), database.NewDeploymentRepository(db, nil), nil, nil)
