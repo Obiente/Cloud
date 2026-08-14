@@ -838,7 +838,7 @@ func swarmStartCommandUpdateArgs(startCommand *string) []string {
 	return args
 }
 
-func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string, binds []string) (string, error) {
+func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string, binds []string) (containerID string, runtimeChanged bool, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -951,7 +951,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	if containerPortNum > 0 {
 		containerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", containerPortNum))
 		if err != nil {
-			return "", fmt.Errorf("invalid port %d: %w", containerPortNum, err)
+			return "", false, fmt.Errorf("invalid port %d: %w", containerPortNum, err)
 		}
 		exposedPorts[containerPort] = struct{}{}
 
@@ -1146,9 +1146,11 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			logger.Info("[DeploymentManager] Container name conflict for %s: %v. Attempting to remove and retry...", name, err)
 
 			// Try to remove the conflicting container
-			if removeErr := dm.removeContainerByName(ctx, name); removeErr != nil {
+			removed, removeErr := dm.removeContainerByName(ctx, name)
+			runtimeChanged = runtimeChanged || removed
+			if removeErr != nil {
 				logger.Info("[DeploymentManager] Failed to remove conflicting container %s: %v", name, removeErr)
-				return "", fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
+				return "", runtimeChanged, fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
 			}
 
 			// Retry container creation once
@@ -1160,14 +1162,14 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 				Name:             name,
 			})
 			if err != nil {
-				return "", fmt.Errorf("failed to create container after removing conflicting container: %w", err)
+				return "", runtimeChanged, fmt.Errorf("failed to create container after removing conflicting container: %w", err)
 			}
 		} else {
-			return "", fmt.Errorf("failed to create container: %w", err)
+			return "", false, fmt.Errorf("failed to create container: %w", err)
 		}
 	}
 
-	return createResp.ID, nil
+	return createResp.ID, true, nil
 }
 
 func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serviceName, nodeID, output string) {
@@ -2711,7 +2713,7 @@ func (dm *DeploymentManager) currentRunningSwarmTasks(ctx context.Context, swarm
 }
 
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)
-func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
+func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) (runtimeChanged bool, retErr error) {
 	// Try to find container by name
 	containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
@@ -2719,7 +2721,7 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 	})
 	containers := containersResult.Items
 	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
+		return false, fmt.Errorf("failed to list containers: %w", err)
 	}
 
 	// Remove all containers with this name (should only be one, but handle multiple)
@@ -2731,20 +2733,22 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 				if container.State == "running" {
 					if err := dm.dockerHelper.StopContainer(ctx, container.ID, 10*time.Second); err != nil {
 						logger.Warn("[DeploymentManager] Failed to stop container %s: %v", container.ID[:12], err)
+					} else {
+						runtimeChanged = true
 					}
 				}
 
 				// Remove container
 				if err := dm.dockerHelper.RemoveContainer(ctx, container.ID, true); err != nil {
-					return fmt.Errorf("failed to remove container %s: %w", container.ID[:12], err)
+					return runtimeChanged, fmt.Errorf("failed to remove container %s: %w", container.ID[:12], err)
 				}
 
 				logger.Info("[DeploymentManager] Removed existing container %s (%s)", containerName, container.ID[:12])
-				return nil
+				return true, nil
 			}
 		}
 	}
 
 	// Container not found - that's OK, just return
-	return nil
+	return false, nil
 }

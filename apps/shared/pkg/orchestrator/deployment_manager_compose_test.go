@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -99,6 +100,32 @@ func TestPersistLegacyProjectRootMetadataRejectsSymlink(t *testing.T) {
 	contents, err := os.ReadFile(target)
 	if err != nil || string(contents) != "preserve me" {
 		t.Fatalf("symlink target changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestRemoveIncompleteLegacyProjectRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	dirFD, err := secureOpenDirectory(deployDir, false)
+	if err != nil {
+		t.Fatalf("open deployment directory: %v", err)
+	}
+	defer unix.Close(dirFD)
+	fileFD, err := unix.Openat(dirFD, legacyProjectRootMetadataFile, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		t.Fatalf("create incomplete metadata: %v", err)
+	}
+	if _, err := unix.Write(fileFD, []byte("partial")); err != nil {
+		unix.Close(fileFD)
+		t.Fatalf("write incomplete metadata: %v", err)
+	}
+	if err := unix.Close(fileFD); err != nil {
+		t.Fatalf("close incomplete metadata: %v", err)
+	}
+	if err := removeIncompleteLegacyProjectRootMetadata(dirFD); err != nil {
+		t.Fatalf("remove incomplete metadata: %v", err)
+	}
+	if _, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile); err != nil || found {
+		t.Fatalf("incomplete metadata still present: found=%t err=%v", found, err)
 	}
 }
 

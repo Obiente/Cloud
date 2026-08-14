@@ -707,20 +707,31 @@ func persistLegacyProjectRootMetadata(deployDir, safeBaseDir string) error {
 	file := os.NewFile(uintptr(fileFD), legacyProjectRootMetadataFile)
 	if file == nil {
 		unix.Close(fileFD)
-		return fmt.Errorf("open newly created metadata")
+		return errors.Join(fmt.Errorf("open newly created metadata"), removeIncompleteLegacyProjectRootMetadata(dirFD))
 	}
 	if _, err := file.WriteString(expected); err != nil {
-		file.Close()
-		return err
+		closeErr := file.Close()
+		return errors.Join(err, closeErr, removeIncompleteLegacyProjectRootMetadata(dirFD))
 	}
 	if err := file.Sync(); err != nil {
-		file.Close()
-		return err
+		closeErr := file.Close()
+		return errors.Join(err, closeErr, removeIncompleteLegacyProjectRootMetadata(dirFD))
 	}
 	if err := file.Close(); err != nil {
-		return err
+		return errors.Join(err, removeIncompleteLegacyProjectRootMetadata(dirFD))
 	}
 	return unix.Fsync(dirFD)
+}
+
+func removeIncompleteLegacyProjectRootMetadata(dirFD int) error {
+	err := unix.Unlinkat(dirFD, legacyProjectRootMetadataFile, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("remove incomplete legacy project-root metadata: %w", err)
+	}
+	return nil
 }
 
 // registerComposeContainers finds containers created by a compose project and registers them

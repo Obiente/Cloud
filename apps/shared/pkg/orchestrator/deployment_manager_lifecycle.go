@@ -227,12 +227,15 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			} else {
 				// In non-Swarm mode, create plain containers
 				// Remove existing container with this name if it exists (for redeployments)
-				plainReplacementStarted = true
-				if err := dm.removeContainerByName(ctx, containerName); err != nil {
-					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
+				removed, removeErr := dm.removeContainerByName(ctx, containerName)
+				plainReplacementStarted = plainReplacementStarted || removed
+				if removeErr != nil {
+					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, removeErr)
 				}
 
-				containerID, err = dm.createContainer(ctx, config, containerName, i, serviceName, plainContainerBinds)
+				var createdOrRemoved bool
+				containerID, createdOrRemoved, err = dm.createContainer(ctx, config, containerName, i, serviceName, plainContainerBinds)
+				plainReplacementStarted = plainReplacementStarted || createdOrRemoved
 				if err != nil {
 					return fmt.Errorf("failed to create container: %w", err)
 				}
