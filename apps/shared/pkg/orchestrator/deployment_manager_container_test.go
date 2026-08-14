@@ -477,6 +477,42 @@ func TestSanitizedVolumeMountsFailClosedWhenPreparationFails(t *testing.T) {
 	}
 }
 
+func TestSanitizedVolumeMountsRestoreEarlierModesOnPreparationFailure(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-volume-rollback-test"
+	deploymentRoot := filepath.Join(volumeRoot, deploymentID)
+	readOnlyPath := filepath.Join(deploymentRoot, "existing")
+	conflictingPath := filepath.Join(deploymentRoot, "conflict")
+	if err := os.MkdirAll(readOnlyPath, 0o777); err != nil {
+		t.Fatalf("create existing writable root: %v", err)
+	}
+	if err := os.Chmod(readOnlyPath, 0o777); err != nil {
+		t.Fatalf("set existing writable mode: %v", err)
+	}
+	if err := os.WriteFile(conflictingPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting volume path: %v", err)
+	}
+
+	binds, mountFlags, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
+		{Name: "existing", MountPath: "/existing", ReadOnly: true},
+		{Name: "conflict", MountPath: "/conflict"},
+	})
+	if err == nil {
+		t.Fatal("expected volume preparation failure")
+	}
+	if len(binds) != 0 || len(mountFlags) != 0 {
+		t.Fatalf("failed preparation returned mounts: binds=%#v flags=%#v", binds, mountFlags)
+	}
+
+	info, statErr := os.Stat(readOnlyPath)
+	if statErr != nil {
+		t.Fatalf("stat restored volume root: %v", statErr)
+	}
+	if got := info.Mode().Perm(); got != 0o777 {
+		t.Fatalf("restored volume mode = %#o, want 0777", got)
+	}
+}
+
 func TestHTTPHealthcheckCommandUsesSafePath(t *testing.T) {
 	t.Parallel()
 

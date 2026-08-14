@@ -827,10 +827,11 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	logger.Info("[RestartDeployment] Deployment %s loaded from DB - HealthcheckType: %v, HealthcheckPort: %v, HealthcheckPath: %v, HealthcheckExpectedStatus: %v, HealthcheckCustomCommand: %v",
 		deploymentID, deployment.HealthcheckType, deployment.HealthcheckPort, deployment.HealthcheckPath, deployment.HealthcheckExpectedStatus, deployment.HealthcheckCustomCommand)
 
-	// For compose deployments, stop and redeploy (which already updates configs)
+	// Compose up/stack deploy replaces the running services after sanitization and
+	// volume preparation succeed, so keep the current revision live during the
+	// preflight.
 	if deployment.ComposeYaml != "" {
-		logger.Info("[DeploymentManager] Compose-based deployment - stopping and redeploying to update configs")
-		_ = dm.StopComposeDeployment(ctx, deploymentID)
+		logger.Info("[DeploymentManager] Compose-based deployment - redeploying to update configs")
 		return dm.DeployComposeFile(ctx, deploymentID, deployment.ComposeYaml)
 	}
 

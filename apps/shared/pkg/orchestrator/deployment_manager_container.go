@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -44,6 +45,25 @@ const (
 
 const deploymentVolumeRoot = "/var/lib/obiente/volumes"
 
+type volumeRootState struct {
+	existed bool
+	mode    os.FileMode
+}
+
+func snapshotVolumeRootState(path string) (volumeRootState, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return volumeRootState{
+			existed: true,
+			mode:    info.Mode() & (os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky),
+		}, nil
+	}
+	if !os.IsNotExist(err) {
+		return volumeRootState{}, err
+	}
+	return volumeRootState{}, nil
+}
+
 func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
 	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
 }
@@ -65,7 +85,17 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		}
 	}
 
+	originalStates := make(map[string]volumeRootState, len(writablePaths))
+	for hostPath := range writablePaths {
+		state, err := snapshotVolumeRootState(hostPath)
+		if err != nil {
+			return nil, nil, fmt.Errorf("inspect volume directory %s: %w", hostPath, err)
+		}
+		originalStates[hostPath] = state
+	}
+
 	preparedPaths := make(map[string]struct{}, len(writablePaths))
+	preparedOrder := make([]string, 0, len(writablePaths))
 	for _, volume := range volumes {
 		name := sanitizeVolumeName(volume.Name)
 		mountPath := sanitizeContainerMountPath(volume.MountPath)
@@ -75,6 +105,7 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 
 		hostPath := filepath.Join(volumeRoot, deploymentID, name)
 		if _, prepared := preparedPaths[hostPath]; !prepared {
+			preparedOrder = append(preparedOrder, hostPath)
 			var err error
 			if writablePaths[hostPath] {
 				err = ensureWritableBindDir(hostPath)
@@ -82,6 +113,9 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 				err = ensureReadOnlyBindDir(hostPath)
 			}
 			if err != nil {
+				if rollbackErr := rollbackVolumeRootStates(originalStates, preparedOrder); rollbackErr != nil {
+					return nil, nil, fmt.Errorf("prepare volume directory %s: %w; restore previous volume permissions: %v", hostPath, err, rollbackErr)
+				}
 				return nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
 			}
 			preparedPaths[hostPath] = struct{}{}
@@ -97,6 +131,26 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		mountFlags = append(mountFlags, mountFlag)
 	}
 	return binds, mountFlags, nil
+}
+
+func rollbackVolumeRootStates(states map[string]volumeRootState, paths []string) error {
+	rollbackErrors := make([]error, 0)
+	for i := len(paths) - 1; i >= 0; i-- {
+		path := paths[i]
+		state := states[path]
+		if state.existed {
+			if err := os.Chmod(path, state.mode); err != nil {
+				rollbackErrors = append(rollbackErrors, fmt.Errorf("restore mode for %s: %w", path, err))
+			}
+			continue
+		}
+		// A path created by this preflight has not been mounted yet. Remove it
+		// only if it is still empty, preserving any concurrently created data.
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			rollbackErrors = append(rollbackErrors, fmt.Errorf("remove newly created root %s: %w", path, err))
+		}
+	}
+	return errors.Join(rollbackErrors...)
 }
 
 func sanitizeVolumeName(name string) string {

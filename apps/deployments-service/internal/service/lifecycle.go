@@ -1273,8 +1273,8 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 
 	// Check if this is a compose-based deployment
 	if dbDep.ComposeYaml != "" && s.manager != nil {
-		// For compose deployments, restart by stopping and starting again
-		_ = s.manager.StopComposeDeployment(ctx, deploymentID)
+		// Compose up/stack deploy performs the replacement only after sanitizer
+		// and volume preparation have succeeded.
 		if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
 			logger.Warn("[RestartDeployment] Failed to restart compose deployment %s: %v", deploymentID, err)
 			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_failed", err.Error(), nil)

@@ -526,3 +526,41 @@ func TestSanitizeComposeYAMLFailsWhenVolumePreparationFails(t *testing.T) {
 		t.Fatalf("unexpected Compose sanitization error: %v", err)
 	}
 }
+
+func TestSanitizeComposeYAMLRestoresEarlierVolumeModesOnFailure(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	existingPath := filepath.Join(safeBaseDir, "app", "existing")
+	conflictingPath := filepath.Join(safeBaseDir, "app", "conflict")
+	if err := os.MkdirAll(existingPath, 0o700); err != nil {
+		t.Fatalf("create existing Compose volume root: %v", err)
+	}
+	if err := os.Chmod(existingPath, 0o700); err != nil {
+		t.Fatalf("set existing Compose volume mode: %v", err)
+	}
+	if err := os.WriteFile(conflictingPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting Compose volume path: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-rollback-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - /existing:/existing
+      - /conflict:/conflict
+`
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected Compose volume preparation failure")
+	}
+
+	info, err := os.Stat(existingPath)
+	if err != nil {
+		t.Fatalf("stat restored Compose volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("restored Compose volume mode = %#o, want 0700", got)
+	}
+}

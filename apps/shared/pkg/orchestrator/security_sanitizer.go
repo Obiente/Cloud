@@ -11,8 +11,11 @@ import (
 
 // ComposeSanitizer sanitizes Docker Compose YAML to prevent security issues
 type ComposeSanitizer struct {
-	deploymentID string
-	safeBaseDir  string // Base directory where user volumes should be stored
+	deploymentID        string
+	safeBaseDir         string // Base directory where user volumes should be stored
+	volumeRootStates    map[string]volumeRootState
+	preparedVolumeRoots []string
+	preparedVolumeSet   map[string]struct{}
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -62,7 +65,19 @@ func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 
 // SanitizeComposeYAML sanitizes a Docker Compose YAML string
 // It transforms volumes and removes host port bindings
-func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, error) {
+func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedResult string, err error) {
+	cs.volumeRootStates = make(map[string]volumeRootState)
+	cs.preparedVolumeRoots = nil
+	cs.preparedVolumeSet = make(map[string]struct{})
+	defer func() {
+		if err == nil || len(cs.preparedVolumeRoots) == 0 {
+			return
+		}
+		if rollbackErr := rollbackVolumeRootStates(cs.volumeRootStates, cs.preparedVolumeRoots); rollbackErr != nil {
+			err = fmt.Errorf("%w; restore previous volume permissions: %v", err, rollbackErr)
+		}
+	}()
+
 	// Parse YAML
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
@@ -470,7 +485,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			} else {
 				// Named volume - convert to bind mount in /var/lib/obiente
 				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
-				if err := ensureWritableBindDir(obienteVolumePath); err != nil {
+				if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 					return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 				}
 				return map[string]interface{}{
@@ -514,7 +529,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			volumeName := hostPath
 			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volumeName)
 			// Ensure directory exists
-			if err := ensureWritableBindDir(obienteVolumePath); err != nil {
+			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 				return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 			}
 			// Return as bind mount
@@ -536,7 +551,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 	if volStr != "" && !strings.Contains(volStr, "/") && !strings.Contains(volStr, ":") {
 		// This is a named volume - convert to bind mount
 		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
-		if err := ensureWritableBindDir(obienteVolumePath); err != nil {
+		if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 			return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 		}
 		// Return as bind mount with default container path
@@ -579,7 +594,7 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	safePath := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
 
 	// Ensure directory exists
-	if err := ensureWritableBindDir(safePath); err != nil {
+	if err := cs.prepareWritableBindDir(safePath); err != nil {
 		return "", fmt.Errorf("prepare volume directory %s: %w", safePath, err)
 	}
 
@@ -595,7 +610,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
 			// This is a named volume - convert to bind mount specification
 			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
-			if err := ensureWritableBindDir(obienteVolumePath); err != nil {
+			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 				return fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 			}
 
@@ -628,6 +643,20 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 		}
 	}
 	return nil
+}
+
+func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
+	if _, prepared := cs.preparedVolumeSet[path]; prepared {
+		return nil
+	}
+	state, err := snapshotVolumeRootState(path)
+	if err != nil {
+		return err
+	}
+	cs.volumeRootStates[path] = state
+	cs.preparedVolumeRoots = append(cs.preparedVolumeRoots, path)
+	cs.preparedVolumeSet[path] = struct{}{}
+	return ensureWritableBindDir(path)
 }
 
 func ensureWritableBindDir(path string) error {
