@@ -119,18 +119,41 @@ func (preparation *volumeRootPreparation) release() {
 }
 
 var deploymentVolumeLockRoot = "/var/lib/obiente/volume-locks"
+var deploymentVolumeLockFallbackRoots = []string{
+	"/var/obiente/tmp/volume-locks",
+	filepath.Join(os.TempDir(), "obiente-volume-locks"),
+}
+
+func openDeploymentVolumeLock(deploymentID string) (int, error) {
+	lockRoots := make([]string, 0, 1+len(deploymentVolumeLockFallbackRoots))
+	lockRoots = append(lockRoots, deploymentVolumeLockRoot)
+	lockRoots = append(lockRoots, deploymentVolumeLockFallbackRoots...)
+
+	var openErrors []error
+	for _, lockRoot := range lockRoots {
+		if err := os.MkdirAll(lockRoot, 0o755); err != nil {
+			openErrors = append(openErrors, fmt.Errorf("create %s: %w", lockRoot, err))
+			continue
+		}
+		lockPath := filepath.Join(lockRoot, deploymentID+".lock")
+		fd, err := unix.Open(lockPath, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+		if err != nil {
+			openErrors = append(openErrors, fmt.Errorf("open %s: %w", lockPath, err))
+			continue
+		}
+		return fd, nil
+	}
+
+	return -1, errors.Join(openErrors...)
+}
 
 func acquireDeploymentVolumeLock(ctx context.Context, deploymentID string) (func(), error) {
 	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
 		return nil, fmt.Errorf("invalid deployment ID for volume lock")
 	}
-	if err := os.MkdirAll(deploymentVolumeLockRoot, 0o755); err != nil {
-		return nil, fmt.Errorf("create deployment volume lock directory: %w", err)
-	}
-	lockPath := filepath.Join(deploymentVolumeLockRoot, deploymentID+".lock")
-	fd, err := unix.Open(lockPath, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	fd, err := openDeploymentVolumeLock(deploymentID)
 	if err != nil {
-		return nil, fmt.Errorf("open deployment volume lock: %w", err)
+		return nil, fmt.Errorf("open deployment volume lock in a writable root: %w", err)
 	}
 
 	for {

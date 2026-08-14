@@ -956,6 +956,9 @@ func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID s
 	}
 	volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, "", nil
+		}
 		return false, "", fmt.Errorf("resolve deployment volume owner: %w", err)
 	}
 	if volumeNodeID != "" {

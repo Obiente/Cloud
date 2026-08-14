@@ -162,8 +162,13 @@ func TestWaitForNextSwarmPollStopsWithContext(t *testing.T) {
 
 func TestDeploymentVolumeLockSerializesAndHonorsContext(t *testing.T) {
 	previousLockRoot := deploymentVolumeLockRoot
+	previousFallbackRoots := deploymentVolumeLockFallbackRoots
 	deploymentVolumeLockRoot = t.TempDir()
-	t.Cleanup(func() { deploymentVolumeLockRoot = previousLockRoot })
+	deploymentVolumeLockFallbackRoots = nil
+	t.Cleanup(func() {
+		deploymentVolumeLockRoot = previousLockRoot
+		deploymentVolumeLockFallbackRoots = previousFallbackRoots
+	})
 
 	deploymentID := "volume-lock-context-test"
 	releaseFirst, err := acquireDeploymentVolumeLock(context.Background(), deploymentID)
@@ -200,6 +205,33 @@ func TestDeploymentVolumeLockSerializesAndHonorsContext(t *testing.T) {
 		t.Fatalf("reacquire released deployment volume lock: %v", err)
 	}
 	releaseNext()
+}
+
+func TestDeploymentVolumeLockUsesWritableFallbackRoot(t *testing.T) {
+	previousLockRoot := deploymentVolumeLockRoot
+	previousFallbackRoots := deploymentVolumeLockFallbackRoots
+	blockedRoot := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedRoot, []byte("blocked"), 0o600); err != nil {
+		t.Fatalf("create blocked primary lock root: %v", err)
+	}
+	fallbackRoot := filepath.Join(t.TempDir(), "locks")
+	deploymentVolumeLockRoot = blockedRoot
+	deploymentVolumeLockFallbackRoots = []string{fallbackRoot}
+	t.Cleanup(func() {
+		deploymentVolumeLockRoot = previousLockRoot
+		deploymentVolumeLockFallbackRoots = previousFallbackRoots
+	})
+
+	const deploymentID = "volume-lock-fallback-test"
+	release, err := acquireDeploymentVolumeLock(context.Background(), deploymentID)
+	if err != nil {
+		t.Fatalf("acquire deployment volume lock from fallback root: %v", err)
+	}
+	release()
+
+	if _, err := os.Stat(filepath.Join(fallbackRoot, deploymentID+".lock")); err != nil {
+		t.Fatalf("stat fallback deployment volume lock: %v", err)
+	}
 }
 
 func TestTerminalSwarmRolloutFailure(t *testing.T) {
