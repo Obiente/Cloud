@@ -455,6 +455,37 @@ func TestEnsureWritableBindDirPreservesExistingContents(t *testing.T) {
 	}
 }
 
+func TestEnsureWritableBindDirPreservesExistingSpecialBits(t *testing.T) {
+	for name, specialBit := range map[string]os.FileMode{
+		"sticky": os.ModeSticky,
+		"setgid": os.ModeSetgid,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "data")
+			if err := os.MkdirAll(dir, 0o770); err != nil {
+				t.Fatalf("create existing volume root: %v", err)
+			}
+			if err := os.Chmod(dir, 0o770|specialBit); err != nil {
+				t.Fatalf("set existing special bit: %v", err)
+			}
+
+			if err := ensureWritableBindDir(dir); err != nil {
+				t.Fatalf("prepare existing writable bind directory: %v", err)
+			}
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatalf("stat writable bind directory: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o777 {
+				t.Fatalf("writable permissions = %#o, want 0777", got)
+			}
+			if info.Mode()&specialBit == 0 {
+				t.Fatalf("writable preparation removed %s bit", name)
+			}
+		})
+	}
+}
+
 func TestEnsureWritableBindDirKeepsParentHierarchyRestricted(t *testing.T) {
 	root := t.TempDir()
 	parent := filepath.Join(root, "deploy-volume-test")

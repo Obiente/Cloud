@@ -947,13 +947,22 @@ func (cs *ComposeSanitizer) applyDeferredReadOnly() error {
 }
 
 func ensureWritableBindDir(path string) error {
+	existingMode := os.FileMode(0)
+	if mode, err := secureDirectoryMode(path); err == nil {
+		existingMode = mode
+	} else if !errors.Is(err, unix.ENOENT) {
+		return err
+	}
 	// Workload images may run as any non-root UID/GID. Make only the isolated
 	// bind root universally writable so a fresh volume can be initialized. This
 	// is intentionally non-recursive: changing application-owned contents can
 	// break mode-sensitive data, and UID migrations remain the application's
-	// responsibility. Descriptor-relative traversal rejects symlinks in every
-	// component and prevents chmod from escaping the deployment root.
-	return secureChmodDirectory(path, 0o777, true)
+	// responsibility. Preserve special bits deliberately applied to an existing
+	// root, but do not impose sticky or setgid semantics on a new one.
+	// Descriptor-relative traversal rejects symlinks in every component and
+	// prevents chmod from escaping the deployment root.
+	specialBits := existingMode & (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+	return secureChmodDirectory(path, 0o777|specialBits, true)
 }
 
 func ensureReadOnlyBindDir(path string) error {

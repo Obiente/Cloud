@@ -520,6 +520,46 @@ func TestSanitizedVolumeMountsPrepareWritableAndReadOnlyRoots(t *testing.T) {
 	}
 }
 
+func TestSanitizedVolumeMountsPreserveWritableRootSpecialBits(t *testing.T) {
+	for name, specialBit := range map[string]os.FileMode{
+		"sticky": os.ModeSticky,
+		"setgid": os.ModeSetgid,
+	} {
+		t.Run(name, func(t *testing.T) {
+			volumeRoot := t.TempDir()
+			deploymentID := "deploy-existing-volume-mode-test"
+			volumePath := filepath.Join(volumeRoot, deploymentID, "data")
+			if err := os.MkdirAll(volumePath, 0o770); err != nil {
+				t.Fatalf("create existing volume root: %v", err)
+			}
+			if err := os.Chmod(volumePath, 0o770|specialBit); err != nil {
+				t.Fatalf("set existing special bit: %v", err)
+			}
+
+			_, _, preparation, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{{
+				Name:      "data",
+				MountPath: "/data",
+			}})
+			if err != nil {
+				t.Fatalf("prepare sanitized volume mount: %v", err)
+			}
+			if preparation == nil {
+				t.Fatal("expected volume preparation")
+			}
+			info, err := os.Stat(volumePath)
+			if err != nil {
+				t.Fatalf("stat writable volume root: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o777 {
+				t.Fatalf("writable permissions = %#o, want 0777", got)
+			}
+			if info.Mode()&specialBit == 0 {
+				t.Fatalf("writable mount preparation removed %s bit", name)
+			}
+		})
+	}
+}
+
 func TestSanitizedVolumeMountsRestoreReadOnlyRootPermissions(t *testing.T) {
 	volumeRoot := t.TempDir()
 	deploymentID := "deploy-read-only-transition-test"
