@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -13,13 +14,15 @@ import (
 
 // ComposeSanitizer sanitizes Docker Compose YAML to prevent security issues
 type ComposeSanitizer struct {
-	deploymentID        string
-	safeBaseDir         string // Base directory where user volumes should be stored
-	swarmVolumeNodeID   string // Node that owns deployment-local bind roots in Swarm mode
-	volumeRootStates    map[string]volumeRootState
-	preparedVolumeRoots []string
-	preparedVolumeSet   map[string]struct{}
-	preparedWritable    map[string]bool
+	deploymentID         string
+	safeBaseDir          string // Base directory where user volumes should be stored
+	swarmVolumeNodeID    string // Node that owns deployment-local bind roots in Swarm mode
+	volumeRootStates     map[string]volumeRootState
+	preparedVolumeRoots  []string
+	preparedVolumeSet    map[string]struct{}
+	preparedWritable     map[string]bool
+	composeServiceNames  []string
+	relativeBindServices map[string][]string
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -112,6 +115,21 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 
 	// Sanitize services
 	if services, ok := compose["services"].(map[string]interface{}); ok {
+		cs.composeServiceNames = cs.composeServiceNames[:0]
+		cs.relativeBindServices = make(map[string][]string)
+		for serviceName := range services {
+			cs.composeServiceNames = append(cs.composeServiceNames, serviceName)
+		}
+		sort.Strings(cs.composeServiceNames)
+		for _, serviceName := range cs.composeServiceNames {
+			service, _ := services[serviceName].(map[string]interface{})
+			volumes, _ := service["volumes"].([]interface{})
+			for _, volume := range volumes {
+				if source, ok := composeRelativeBindSource(volume); ok {
+					cs.relativeBindServices[source] = append(cs.relativeBindServices[source], serviceName)
+				}
+			}
+		}
 		for serviceName, serviceData := range services {
 			if service, ok := serviceData.(map[string]interface{}); ok {
 				if err := cs.sanitizeService(service, serviceName); err != nil {
@@ -144,6 +162,40 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 	}
 
 	return string(sanitizedYaml), nil
+}
+
+func composeRelativeBindSource(volume interface{}) (string, bool) {
+	var source string
+	switch typed := volume.(type) {
+	case string:
+		if !strings.Contains(typed, ":") {
+			return "", false
+		}
+		source = strings.TrimSpace(strings.SplitN(typed, ":", 2)[0])
+		if source != "" && sanitizeVolumeName(source) == source {
+			return "", false
+		}
+	case map[string]interface{}:
+		var ok bool
+		source, ok = typed["source"].(string)
+		if !ok {
+			return "", false
+		}
+		source = strings.TrimSpace(source)
+		volumeType, _ := typed["type"].(string)
+		if strings.EqualFold(strings.TrimSpace(volumeType), "volume") {
+			return "", false
+		}
+		if !strings.EqualFold(strings.TrimSpace(volumeType), "bind") && !filepath.IsAbs(source) && !strings.HasPrefix(source, "~") && !strings.ContainsRune(source, filepath.Separator) {
+			return "", false
+		}
+	default:
+		return "", false
+	}
+	if source == "" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") {
+		return "", false
+	}
+	return filepath.Clean(source), true
 }
 
 // SanitizeUntrustedComposeYAML removes host- and cluster-control options from
@@ -276,6 +328,7 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	// Sanitize volumes
 	if volumes, ok := service["volumes"].([]interface{}); ok {
 		sanitizedVolumes := []interface{}{}
+		hasLocalBind := false
 		for _, vol := range volumes {
 			sanitized, err := cs.sanitizeVolumeBinding(vol, serviceName)
 			if err != nil {
@@ -283,10 +336,11 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 			}
 			if sanitized != nil {
 				sanitizedVolumes = append(sanitizedVolumes, sanitized)
+				hasLocalBind = hasLocalBind || composeVolumeUsesHostBind(sanitized)
 			}
 		}
 		service["volumes"] = sanitizedVolumes
-		if len(sanitizedVolumes) > 0 && cs.swarmVolumeNodeID != "" {
+		if hasLocalBind && cs.swarmVolumeNodeID != "" {
 			pinComposeServiceToNode(service, cs.swarmVolumeNodeID)
 		}
 	}
@@ -348,6 +402,18 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	}
 
 	return nil
+}
+
+func composeVolumeUsesHostBind(volume interface{}) bool {
+	switch typed := volume.(type) {
+	case string:
+		return strings.Contains(typed, ":")
+	case map[string]interface{}:
+		volumeType, _ := typed["type"].(string)
+		return strings.EqualFold(strings.TrimSpace(volumeType), "bind")
+	default:
+		return false
+	}
 }
 
 func pinComposeServiceToNode(service map[string]interface{}, nodeID string) {
@@ -677,16 +743,27 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	// while retaining their parent/child relationship. Absolute and home-relative
 	// sources retain the existing per-service isolation.
 	pathScope := serviceName
+	safePath := ""
 	if isDeploymentRelative {
-		pathScope = relativeComposeBindScope
-		relativePath = filepath.Join(relativeComposeProjectRoot, relativePath)
+		legacyPath, found, err := cs.existingLegacyRelativeBindPath(hostPath, relativePath, serviceName)
+		if err != nil {
+			return "", err
+		}
+		if found {
+			safePath = legacyPath
+		} else {
+			pathScope = relativeComposeBindScope
+			relativePath = filepath.Join(relativeComposeProjectRoot, relativePath)
+		}
 	} else if serviceName == relativeComposeBindScope {
 		return "", fmt.Errorf("service name %q conflicts with the relative bind namespace", serviceName)
 	}
 	if relativePath == "" || strings.Trim(relativePath, ".") == "" {
 		relativePath = "data"
 	}
-	safePath := filepath.Join(cs.safeBaseDir, pathScope, relativePath)
+	if safePath == "" {
+		safePath = filepath.Join(cs.safeBaseDir, pathScope, relativePath)
+	}
 	rel, err := filepath.Rel(cs.safeBaseDir, safePath)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("sanitized volume source escapes the deployment root")
@@ -698,6 +775,41 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	}
 
 	return safePath, nil
+}
+
+// existingLegacyRelativeBindPath preserves data created by the pre-namespace
+// sanitizer, which stored relative binds beneath a service-named directory.
+// A shared source with multiple legacy copies is ambiguous and must be migrated
+// explicitly rather than silently selecting or stranding one copy.
+func (cs *ComposeSanitizer) existingLegacyRelativeBindPath(sourceKey, relativePath, currentService string) (string, bool, error) {
+	if relativePath == "" || strings.Trim(relativePath, ".") == "" {
+		relativePath = "data"
+	}
+	serviceNames := cs.relativeBindServices[sourceKey]
+	if len(serviceNames) == 0 {
+		serviceNames = []string{currentService}
+	}
+
+	var existing []string
+	for _, serviceName := range serviceNames {
+		candidate := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
+		_, err := os.Lstat(candidate)
+		switch {
+		case err == nil:
+			existing = append(existing, candidate)
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		default:
+			return "", false, fmt.Errorf("inspect legacy relative volume directory %s: %w", candidate, err)
+		}
+	}
+	if len(existing) == 0 {
+		return "", false, nil
+	}
+	if len(existing) > 1 {
+		return "", false, fmt.Errorf("relative volume source %q has multiple legacy storage directories; migrate them before redeploying", relativePath)
+	}
+	return existing[0], true, nil
 }
 
 // sanitizeVolumeDefinition sanitizes top-level volume definitions

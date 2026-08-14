@@ -730,6 +730,78 @@ func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) 
 	}
 }
 
+func TestSanitizeComposeYAMLReusesLegacyRelativeBindStorage(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	legacyPath := filepath.Join(safeBaseDir, "app", "data")
+	if err := os.MkdirAll(legacyPath, 0o700); err != nil {
+		t.Fatalf("create legacy relative bind: %v", err)
+	}
+	marker := filepath.Join(legacyPath, "existing.dat")
+	if err := os.WriteFile(marker, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create legacy volume content: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-legacy-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - ./data:/data
+  worker:
+    image: example/worker:latest
+    volumes:
+      - ./data:/data
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with legacy relative bind: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	for _, serviceName := range []string{"app", "worker"} {
+		volume := services[serviceName].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		if source := strings.SplitN(volume, ":", 2)[0]; source != legacyPath {
+			t.Fatalf("%s legacy relative source = %q, want %q", serviceName, source, legacyPath)
+		}
+	}
+	if contents, err := os.ReadFile(marker); err != nil || string(contents) != "preserve me" {
+		t.Fatalf("legacy volume content changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsAmbiguousLegacyRelativeBindStorage(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	for _, serviceName := range []string{"app", "worker"} {
+		if err := os.MkdirAll(filepath.Join(safeBaseDir, serviceName, "data"), 0o700); err != nil {
+			t.Fatalf("create %s legacy relative bind: %v", serviceName, err)
+		}
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-ambiguous-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - ./data:/data
+  worker:
+    image: example/worker:latest
+    volumes:
+      - ./data:/data
+`
+
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "multiple legacy storage directories") {
+		t.Fatalf("ambiguous legacy relative bind error = %v", err)
+	}
+}
+
 func TestSanitizeComposeYAMLUsesSelectedRootForNamedVolumes(t *testing.T) {
 	safeBaseDir := t.TempDir()
 	sanitizer := &ComposeSanitizer{
@@ -888,6 +960,43 @@ func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
 	want := []interface{}{"node.labels.pool == customer", "node.id == selected-node"}
 	if !reflect.DeepEqual(constraints, want) {
 		t.Fatalf("placement constraints = %#v, want %#v", constraints, want)
+	}
+}
+
+func TestSanitizeComposeYAMLDoesNotPinPortableSwarmVolumes(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-portable-volume-placement-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - /data
+      - type: tmpfs
+        target: /tmp
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with portable volumes: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+	deploy := app["deploy"].(map[string]interface{})
+	placement := deploy["placement"].(map[string]interface{})
+	want := []interface{}{"node.role == worker"}
+	if constraints := placement["constraints"].([]interface{}); !reflect.DeepEqual(constraints, want) {
+		t.Fatalf("portable-volume placement constraints = %#v, want %#v", constraints, want)
 	}
 }
 
