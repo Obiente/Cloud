@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -56,6 +58,45 @@ func TestIsMissingSwarmStackOutput(t *testing.T) {
 				t.Fatalf("isMissingSwarmStackOutput(%q) = %t, want %t", test.output, got, test.want)
 			}
 		})
+	}
+}
+
+func TestPersistLegacyProjectRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	volumeRoot := filepath.Join(t.TempDir(), "volumes", "deploy-example")
+	if err := persistLegacyProjectRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("persist legacy project-root metadata: %v", err)
+	}
+	contents, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+	if err != nil {
+		t.Fatalf("read legacy project-root metadata: %v", err)
+	}
+	if !found || string(contents) != legacyProjectRootMetadataContents(volumeRoot) {
+		t.Fatalf("metadata found=%t contents=%q", found, contents)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("repeat metadata persistence: %v", err)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, filepath.Join(t.TempDir(), "different")); err == nil {
+		t.Fatal("expected mismatched volume-root metadata to be rejected")
+	}
+}
+
+func TestPersistLegacyProjectRootMetadataRejectsSymlink(t *testing.T) {
+	deployDir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "target")
+	if err := os.WriteFile(target, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create symlink target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(deployDir, legacyProjectRootMetadataFile)); err != nil {
+		t.Fatalf("create metadata symlink: %v", err)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, filepath.Join(t.TempDir(), "volumes")); err == nil {
+		t.Fatal("expected metadata symlink to be rejected")
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil || string(contents) != "preserve me" {
+		t.Fatalf("symlink target changed: contents=%q err=%v", contents, err)
 	}
 }
 

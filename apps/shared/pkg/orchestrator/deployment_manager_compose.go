@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,12 +20,15 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/client"
+	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
 
 // Compose operations for deployments
 
 const legacyPreviewIngressNetworkName = "obiente-preview-ingress"
+
+const legacyProjectRootMetadataFile = ".obiente-legacy-relative-project-root-v1"
 
 func PreviewIngressNetworkNameForDeployment(deploymentID string) string {
 	return fmt.Sprintf("deployment-%s", deploymentID)
@@ -179,6 +183,13 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
 	sanitizer = NewComposeSanitizer(deploymentID)
+	if sanitizer.GetSafeBaseDir() != "" {
+		legacyProjectRoot, err := storedComposeProvesLegacyProjectRoot(deploymentID, sanitizer.GetSafeBaseDir())
+		if err != nil {
+			return fmt.Errorf("inspect persisted Compose volume metadata: %w", err)
+		}
+		sanitizer.legacyProjectRoot = legacyProjectRoot
+	}
 	if isSwarmMode {
 		sanitizer.swarmVolumeNodeID = dm.nodeID
 	}
@@ -351,6 +362,11 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	if deployDir == "" {
 		return fmt.Errorf("failed to create deployment directory in any of the attempted locations")
 	}
+	if sanitizer.legacyProjectRoot {
+		if err := persistLegacyProjectRootMetadata(deployDir, sanitizer.GetSafeBaseDir()); err != nil {
+			return fmt.Errorf("persist legacy project-root volume metadata: %w", err)
+		}
+	}
 
 	composeFile := filepath.Join(deployDir, "docker-compose.yml")
 	if err := os.WriteFile(composeFile, []byte(sanitizedYaml), 0644); err != nil {
@@ -515,6 +531,132 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	// List containers created by this compose project and register them
 	return dm.registerComposeContainers(ctx, deploymentID, projectName)
+}
+
+func storedComposeProvesLegacyProjectRoot(deploymentID, safeBaseDir string) (bool, error) {
+	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
+		return false, fmt.Errorf("invalid deployment identifier")
+	}
+	if !filepath.IsAbs(safeBaseDir) {
+		return false, fmt.Errorf("volume root %q is not absolute", safeBaseDir)
+	}
+	possibleDirs := []string{
+		"/var/lib/obiente/deployments",
+		"/var/obiente/tmp/obiente-deployments",
+		"/tmp/obiente-deployments",
+		os.TempDir(),
+	}
+	for _, baseDir := range possibleDirs {
+		deployDir := filepath.Join(baseDir, deploymentID)
+		metadata, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+		if err != nil {
+			return false, fmt.Errorf("read legacy project-root metadata in %s: %w", deployDir, err)
+		}
+		if found {
+			expected := legacyProjectRootMetadataContents(safeBaseDir)
+			if string(metadata) != expected {
+				return false, fmt.Errorf("legacy project-root metadata in %s does not match the selected volume root", deployDir)
+			}
+			return true, nil
+		}
+
+		contents, found, err := readDeploymentFileNoFollow(deployDir, "docker-compose.yml")
+		if err != nil {
+			return false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
+		}
+		if found {
+			proven, proveErr := persistedComposeProvesLegacyProjectRoot(string(contents), safeBaseDir)
+			if proveErr != nil {
+				return false, fmt.Errorf("inspect persisted Compose file in %s: %w", deployDir, proveErr)
+			}
+			if proven {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func legacyProjectRootMetadataContents(safeBaseDir string) string {
+	return "legacy-relative-project-root-v1\n" + filepath.Clean(safeBaseDir) + "\n"
+}
+
+func readDeploymentFileNoFollow(deployDir, name string) ([]byte, bool, error) {
+	dirFD, err := secureOpenDirectory(deployDir, false)
+	if errors.Is(err, unix.ENOENT) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	defer unix.Close(dirFD)
+
+	fileFD, err := unix.Openat(dirFD, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	file := os.NewFile(uintptr(fileFD), name)
+	if file == nil {
+		unix.Close(fileFD)
+		return nil, false, fmt.Errorf("open %s", name)
+	}
+	defer file.Close()
+	var stat unix.Stat_t
+	if err := unix.Fstat(fileFD, &stat); err != nil {
+		return nil, false, err
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return nil, false, fmt.Errorf("%s is not a regular file", name)
+	}
+	contents, err := io.ReadAll(file)
+	if err != nil {
+		return nil, false, err
+	}
+	return contents, true, nil
+}
+
+func persistLegacyProjectRootMetadata(deployDir, safeBaseDir string) error {
+	expected := legacyProjectRootMetadataContents(safeBaseDir)
+	dirFD, err := secureOpenDirectory(deployDir, false)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dirFD)
+
+	fileFD, err := unix.Openat(dirFD, legacyProjectRootMetadataFile, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if errors.Is(err, unix.EEXIST) {
+		contents, found, readErr := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+		if readErr != nil {
+			return readErr
+		}
+		if !found || string(contents) != expected {
+			return fmt.Errorf("existing metadata does not match the selected volume root")
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	file := os.NewFile(uintptr(fileFD), legacyProjectRootMetadataFile)
+	if file == nil {
+		unix.Close(fileFD)
+		return fmt.Errorf("open newly created metadata")
+	}
+	if _, err := file.WriteString(expected); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return unix.Fsync(dirFD)
 }
 
 // registerComposeContainers finds containers created by a compose project and registers them

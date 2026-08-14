@@ -23,6 +23,7 @@ type ComposeSanitizer struct {
 	deferredReadOnly    []string
 	deferredReadOnlySet map[string]struct{}
 	legacyRelativePaths map[string]string
+	legacyProjectRoot   bool
 }
 
 const DefaultMaxUntrustedComposeServices = 8
@@ -213,18 +214,8 @@ func (cs *ComposeSanitizer) snapshotLegacyRelativeBindPaths(compose map[string]i
 	}
 	for _, source := range relativeSources {
 		if source == "." {
-			entries, err := os.ReadDir(cs.safeBaseDir)
-			if err != nil {
-				return fmt.Errorf("inspect legacy relative project root %s: %w", cs.safeBaseDir, err)
-			}
-			for _, entry := range entries {
-				if entry.Name() == relativeComposeBindScope {
-					continue
-				}
-				if _, named := namedSources[entry.Name()]; !named {
-					cs.legacyRelativePaths[source] = cs.safeBaseDir
-					break
-				}
+			if cs.legacyProjectRoot {
+				cs.legacyRelativePaths[source] = cs.safeBaseDir
 			}
 			continue
 		}
@@ -244,6 +235,26 @@ func (cs *ComposeSanitizer) snapshotLegacyRelativeBindPaths(compose map[string]i
 		}
 	}
 	return nil
+}
+
+func persistedComposeProvesLegacyProjectRoot(composeYaml, safeBaseDir string) (bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	wantSource := filepath.Clean(safeBaseDir)
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			if !namedVolume && filepath.IsAbs(source) && filepath.Clean(source) == wantSource {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // SanitizeUntrustedComposeYAML removes host- and cluster-control options from

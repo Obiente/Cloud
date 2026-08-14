@@ -782,8 +782,9 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 		t.Fatalf("create legacy project-root content: %v", err)
 	}
 	sanitizer := &ComposeSanitizer{
-		deploymentID: "compose-legacy-relative-root-test",
-		safeBaseDir:  safeBaseDir,
+		deploymentID:      "compose-legacy-relative-root-test",
+		safeBaseDir:       safeBaseDir,
+		legacyProjectRoot: true,
 	}
 	composeYAML := `services:
   app:
@@ -804,6 +805,78 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
 	if source := strings.SplitN(volume, ":", 2)[0]; source != safeBaseDir {
 		t.Fatalf("legacy project-root source = %q, want %q", source, safeBaseDir)
+	}
+}
+
+func TestSanitizeComposeYAMLDoesNotInferLegacyProjectRootFromUnrelatedBindData(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(safeBaseDir, "web", "var", "lib", "app"), 0o755); err != nil {
+		t.Fatalf("create unrelated absolute-bind data: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-project-root-evidence-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - .:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with unrelated bind data: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot)
+	if source := strings.SplitN(volume, ":", 2)[0]; source != wantSource {
+		t.Fatalf("project-root source = %q, want isolated namespace %q", source, wantSource)
+	}
+}
+
+func TestPersistedComposeProvesLegacyProjectRoot(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	tests := []struct {
+		name        string
+		composeYAML string
+		want        bool
+	}{
+		{
+			name: "exact legacy root bind",
+			composeYAML: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+`, safeBaseDir),
+			want: true,
+		},
+		{
+			name: "unrelated descendant bind",
+			composeYAML: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/data
+`, filepath.Join(safeBaseDir, "web", "data")),
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := persistedComposeProvesLegacyProjectRoot(test.composeYAML, safeBaseDir)
+			if err != nil {
+				t.Fatalf("persistedComposeProvesLegacyProjectRoot returned error: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("persistedComposeProvesLegacyProjectRoot = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 
