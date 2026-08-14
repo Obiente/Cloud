@@ -39,6 +39,7 @@ type swarmServiceRunPolicy struct {
 	job                bool
 	restartNone        bool
 	restartOnFailure   bool
+	restartMaxAttempts int64
 }
 
 type swarmTaskSummary struct {
@@ -48,6 +49,7 @@ type swarmTaskSummary struct {
 	completed      bool
 	completedCount int64
 	failed         bool
+	failedAttempts int64
 }
 
 // Container operations for deployments
@@ -2045,7 +2047,13 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 			return
 		}
 		if volumePreparationCommitted {
-			volumePreparation.Commit()
+			if RollbackPreserved(retErr) {
+				if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
+					retErr = fmt.Errorf("%w; restore previous volume permissions after Swarm rollback: %v", retErr, rollbackErr)
+				}
+			} else {
+				volumePreparation.Commit()
+			}
 			return
 		}
 		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
@@ -2371,7 +2379,8 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 			} `json:"Mode"`
 			TaskTemplate struct {
 				RestartPolicy *struct {
-					Condition string `json:"Condition"`
+					Condition   string  `json:"Condition"`
+					MaxAttempts *uint64 `json:"MaxAttempts"`
 				} `json:"RestartPolicy"`
 			} `json:"TaskTemplate"`
 		} `json:"Spec"`
@@ -2383,7 +2392,7 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 	if err := json.Unmarshal(bytes.TrimSpace(output), &service); err != nil {
 		return swarmServiceRunPolicy{}, fmt.Errorf("decode service run policy: %w", err)
 	}
-	policy := swarmServiceRunPolicy{desiredReplicas: -1, desiredCompletions: -1}
+	policy := swarmServiceRunPolicy{desiredReplicas: -1, desiredCompletions: -1, restartMaxAttempts: -1}
 	if service.Spec.Mode.Replicated != nil {
 		policy.desiredReplicas = 1
 		if service.Spec.Mode.Replicated.Replicas != nil {
@@ -2438,6 +2447,13 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 		condition := strings.ToLower(strings.TrimSpace(service.Spec.TaskTemplate.RestartPolicy.Condition))
 		policy.restartNone = condition == "none"
 		policy.restartOnFailure = condition == "on-failure"
+		if service.Spec.TaskTemplate.RestartPolicy.MaxAttempts != nil && *service.Spec.TaskTemplate.RestartPolicy.MaxAttempts > 0 {
+			attempts, err := swarmTaskCount(*service.Spec.TaskTemplate.RestartPolicy.MaxAttempts)
+			if err != nil {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart attempt count: %w", err)
+			}
+			policy.restartMaxAttempts = attempts
+		}
 	}
 	return policy, nil
 }
@@ -2451,15 +2467,21 @@ func swarmTaskCount(value uint64) (int64, error) {
 
 func parseSwarmTaskSummary(output string) swarmTaskSummary {
 	var summary swarmTaskSummary
+	currentFailed := false
+	countingFailedAttempts := false
+	currentFailedAttempts := int64(0)
+	flushFailedAttempts := func() {
+		if currentFailed && currentFailedAttempts > summary.failedAttempts {
+			summary.failedAttempts = currentFailedAttempts
+		}
+	}
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
 		parts := strings.SplitN(strings.TrimSpace(line), "\t", 4)
 		if len(parts) < 3 {
 			continue
 		}
 		name := strings.TrimSpace(parts[0])
-		if strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_") {
-			continue
-		}
+		historical := strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_")
 		current := strings.ToLower(strings.TrimSpace(parts[1]))
 		desired := strings.ToLower(strings.TrimSpace(parts[2]))
 		taskErr := ""
@@ -2467,6 +2489,22 @@ func parseSwarmTaskSummary(output string) swarmTaskSummary {
 			taskErr = strings.TrimSpace(parts[3])
 		}
 		isFailed := strings.HasPrefix(current, "failed") || strings.HasPrefix(current, "rejected") || taskErr != ""
+		if !historical {
+			flushFailedAttempts()
+			currentFailed = isFailed
+			countingFailedAttempts = isFailed
+			currentFailedAttempts = 0
+		}
+		if countingFailedAttempts {
+			if isFailed {
+				currentFailedAttempts++
+			} else {
+				countingFailedAttempts = false
+			}
+		}
+		if historical {
+			continue
+		}
 		isRunning := desired == "running" && strings.HasPrefix(current, "running") && !isFailed
 		isProgressing := desired == "running" && !isRunning && !isFailed
 		if isRunning {
@@ -2486,6 +2524,7 @@ func parseSwarmTaskSummary(output string) swarmTaskSummary {
 			summary.failed = true
 		}
 	}
+	flushFailedAttempts()
 	return summary
 }
 
@@ -2496,6 +2535,16 @@ func inspectSwarmTaskSummary(ctx context.Context, swarmServiceName string) (swar
 		return swarmTaskSummary{}, fmt.Errorf("inspect service tasks: %w (%s)", err, strings.TrimSpace(string(output)))
 	}
 	return parseSwarmTaskSummary(string(output)), nil
+}
+
+func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskSummary) bool {
+	if !summary.failed {
+		return false
+	}
+	if !policy.restartOnFailure {
+		return true
+	}
+	return policy.restartMaxAttempts >= 0 && summary.failedAttempts >= policy.restartMaxAttempts
 }
 
 func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) error {
@@ -2537,7 +2586,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 			return nil
 		}
 		if updateConverged && (policy.job || policy.restartNone || policy.restartOnFailure) {
-			if summary.failed {
+			if swarmTaskFailureIsTerminal(policy, summary) {
 				return &SwarmRolloutError{
 					ServiceName: swarmServiceName,
 					State:       "failed",
@@ -2556,7 +2605,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 			if !policy.job && policy.restartOnFailure {
 				successfulTasks += summary.running
 			}
-			if !summary.progressing && successfulTasks >= requiredSuccessful {
+			if !summary.failed && !summary.progressing && successfulTasks >= requiredSuccessful {
 				return nil
 			}
 		}

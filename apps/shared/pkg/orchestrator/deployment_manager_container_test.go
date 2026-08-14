@@ -210,15 +210,38 @@ func TestParseSwarmServiceRunPolicyRecognizesOnFailure(t *testing.T) {
 	policy, err := parseSwarmServiceRunPolicy([]byte(`{
   "Spec": {
     "Mode": {"Replicated": {"Replicas": 1}},
-    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure"}}
+    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure", "MaxAttempts": 3}}
   },
   "ServiceStatus": {"RunningTasks": 0, "DesiredTasks": 1}
 }`))
 	if err != nil {
 		t.Fatalf("parse on-failure service run policy: %v", err)
 	}
-	if policy.desiredReplicas != 1 || policy.restartNone || !policy.restartOnFailure {
+	if policy.desiredReplicas != 1 || policy.restartNone || !policy.restartOnFailure || policy.restartMaxAttempts != 3 {
 		t.Fatalf("on-failure service run policy = %#v", policy)
+	}
+}
+
+func TestParseSwarmTaskSummaryCountsConsecutiveFailedAttempts(t *testing.T) {
+	summary := parseSwarmTaskSummary("deploy-app.1\tFailed 1 second ago\tShutdown\texit code 1\n\\_ deploy-app.1\tRejected 2 seconds ago\tShutdown\timage not found\n\\_ deploy-app.1\tShutdown 3 seconds ago\tShutdown\t\n\\_ deploy-app.1\tFailed 4 seconds ago\tShutdown\told failure\n")
+	if !summary.failed || summary.failedAttempts != 2 {
+		t.Fatalf("failed task summary = %#v, want 2 consecutive current attempts", summary)
+	}
+}
+
+func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
+	summary := swarmTaskSummary{failed: true, failedAttempts: 2}
+	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 3}, summary) {
+		t.Fatal("failure became terminal while a configured retry remained")
+	}
+	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 2}, summary) {
+		t.Fatal("exhausted configured retries were not terminal")
+	}
+	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: -1}, summary) {
+		t.Fatal("unlimited retry policy was terminal")
+	}
+	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{}, summary) {
+		t.Fatal("failure without an on-failure retry policy was not terminal")
 	}
 }
 
