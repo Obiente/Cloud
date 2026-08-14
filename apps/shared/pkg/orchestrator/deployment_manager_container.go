@@ -39,6 +39,7 @@ type swarmServiceRunPolicy struct {
 	job                bool
 	restartNone        bool
 	restartOnFailure   bool
+	restartAny         bool
 	restartMaxAttempts int64
 }
 
@@ -2297,7 +2298,7 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 			if summaryErr != nil {
 				return nil, summaryErr
 			}
-			if summary.failed && summary.running < requiredRunning && !summary.progressing {
+			if summary.failed && summary.running < requiredRunning && !summary.progressing && swarmTaskFailureIsTerminal(policy, summary) {
 				return nil, &SwarmRolloutError{
 					ServiceName: swarmServiceName,
 					State:       "failed",
@@ -2447,6 +2448,7 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 		condition := strings.ToLower(strings.TrimSpace(service.Spec.TaskTemplate.RestartPolicy.Condition))
 		policy.restartNone = condition == "none"
 		policy.restartOnFailure = condition == "on-failure"
+		policy.restartAny = condition == "any"
 		if service.Spec.TaskTemplate.RestartPolicy.MaxAttempts != nil && *service.Spec.TaskTemplate.RestartPolicy.MaxAttempts > 0 {
 			attempts, err := swarmTaskCount(*service.Spec.TaskTemplate.RestartPolicy.MaxAttempts)
 			if err != nil {
@@ -2541,7 +2543,7 @@ func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskS
 	if !summary.failed {
 		return false
 	}
-	if !policy.restartOnFailure {
+	if !policy.restartOnFailure && !policy.restartAny {
 		return true
 	}
 	return policy.restartMaxAttempts >= 0 && summary.failedAttempts >= policy.restartMaxAttempts

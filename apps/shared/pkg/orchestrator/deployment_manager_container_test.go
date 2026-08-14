@@ -201,7 +201,7 @@ func TestParseSwarmServiceRunPolicyUsesReplicatedSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse replicated service run policy: %v", err)
 	}
-	if policy.desiredReplicas != 2 || policy.restartNone {
+	if policy.desiredReplicas != 2 || policy.restartNone || !policy.restartAny {
 		t.Fatalf("replicated service run policy = %#v, want 2 desired restarting tasks", policy)
 	}
 }
@@ -239,6 +239,12 @@ func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
 	}
 	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: -1}, summary) {
 		t.Fatal("unlimited retry policy was terminal")
+	}
+	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartAny: true, restartMaxAttempts: -1}, summary) {
+		t.Fatal("unlimited restart-any policy was terminal")
+	}
+	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartAny: true, restartMaxAttempts: 2}, summary) {
+		t.Fatal("exhausted restart-any attempts were not terminal")
 	}
 	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{}, summary) {
 		t.Fatal("failure without an on-failure retry policy was not terminal")
