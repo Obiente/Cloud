@@ -20,6 +20,12 @@ type ComposeSanitizer struct {
 
 const DefaultMaxUntrustedComposeServices = 8
 
+// Keep deployment-relative bind sources in a namespace that cannot be mistaken
+// for an ordinary Compose service directory. This preserves sharing when two
+// services mount the same relative source while absolute sources remain
+// isolated by service as before.
+const relativeComposeBindScope = "@obiente-relative-binds"
+
 type UntrustedComposeLimits struct {
 	MaxServices      int
 	TotalMemoryBytes int64
@@ -584,6 +590,7 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	if strings.ContainsRune(hostPath, '\x00') {
 		return "", fmt.Errorf("volume source contains a null byte")
 	}
+	isDeploymentRelative := !filepath.IsAbs(hostPath) && !strings.HasPrefix(hostPath, "~")
 	// Clean the path to prevent directory traversal
 	hostPath = filepath.Clean(hostPath)
 
@@ -611,9 +618,16 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 		relativePath = "data"
 	}
 
-	// Create safe path under user's directory
-	// Structure: {safeBaseDir}/{serviceName}/{sanitized_path}
-	safePath := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
+	// Deployment-relative Compose sources are resolved once for the deployment,
+	// just as Compose resolves them against one project directory. Absolute and
+	// home-relative sources retain the existing per-service isolation.
+	pathScope := serviceName
+	if isDeploymentRelative {
+		pathScope = relativeComposeBindScope
+	} else if serviceName == relativeComposeBindScope {
+		return "", fmt.Errorf("service name %q conflicts with the relative bind namespace", serviceName)
+	}
+	safePath := filepath.Join(cs.safeBaseDir, pathScope, relativePath)
 	rel, err := filepath.Rel(cs.safeBaseDir, safePath)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("sanitized volume source escapes the deployment root")

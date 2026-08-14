@@ -602,6 +602,45 @@ func TestSanitizeComposeYAMLRejectsRelativeVolumeTraversal(t *testing.T) {
 	}
 }
 
+func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-shared-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/var/lib/app
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - type: bind
+        source: ./data
+        target: /var/lib/worker
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with shared relative bind: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(map[string]interface{})
+	appSource := strings.SplitN(appVolume, ":", 2)[0]
+	workerSource := workerVolume["source"].(string)
+	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, "data")
+	if appSource != wantSource || workerSource != wantSource {
+		t.Fatalf("shared relative sources = %q and %q, want %q", appSource, workerSource, wantSource)
+	}
+}
+
 func TestSanitizeComposeYAMLRejectsUnsafePathIdentifiers(t *testing.T) {
 	composeYAML := `services:
   app:

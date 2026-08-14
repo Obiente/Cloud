@@ -837,6 +837,16 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 
 	// For image-based deployments, recreate containers with updated configs
 	logger.Info("[DeploymentManager] Image-based deployment - recreating containers to update configs")
+	deploymentVolumes := parseStoredDockerfileVolumes(deployment.DockerfileVolumes)
+
+	// Legacy non-Swarm restarts remove containers by their recorded IDs before
+	// CreateDeployment replaces them by name. Validate and prepare every declared
+	// bind first so a stable host-volume error leaves the current workload intact.
+	if !utils.IsSwarmModeEnabled() {
+		if _, _, err := sanitizedVolumeMounts(deploymentID, deploymentVolumes); err != nil {
+			return fmt.Errorf("prepare deployment volumes before restart: %w", err)
+		}
+	}
 
 	// Get all locations to stop and remove existing containers
 	locations, err := database.GetAllDeploymentLocations(deploymentID)
@@ -955,7 +965,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		CPUShares:                 cpuShares,
 		Replicas:                  replicas,
 		StartCommand:              deployment.StartCommand,
-		Volumes:                   parseStoredDockerfileVolumes(deployment.DockerfileVolumes),
+		Volumes:                   deploymentVolumes,
 		HealthcheckType:           deployment.HealthcheckType,
 		HealthcheckPort:           deployment.HealthcheckPort,
 		HealthcheckPath:           deployment.HealthcheckPath,
