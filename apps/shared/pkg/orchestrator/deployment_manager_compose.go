@@ -47,7 +47,7 @@ func stackRollbackRestoresVolumePreparation(serviceNames []string, err error) bo
 	return len(serviceNames) == 1 && RollbackPreserved(err)
 }
 
-func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, deploymentID, projectName string) (bool, error) {
+func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, deploymentID, projectName string, beforeServiceUpdates map[string]string) (bool, error) {
 	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
 	output, err := listCmd.CombinedOutput()
 	if err != nil {
@@ -58,7 +58,13 @@ func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, dep
 		return false, fmt.Errorf("stack %s has no services after deployment", projectName)
 	}
 	for _, serviceName := range serviceNames {
-		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); err != nil {
+		afterUpdate, inspectErr := swarmServiceUpdateFingerprint(ctx, serviceName)
+		if inspectErr != nil {
+			return false, fmt.Errorf("inspect stack service %s update status after deployment: %w", serviceName, inspectErr)
+		}
+		beforeUpdate, existedBefore := beforeServiceUpdates[serviceName]
+		ignoreExistingRollback := existedBefore && beforeUpdate == afterUpdate
+		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, ignoreExistingRollback); err != nil {
 			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("wait for stack service %s: %w", serviceName, err)
 		}
 	}
@@ -94,7 +100,7 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 		if forceErr != nil {
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
 		}
-		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); waitErr != nil {
+		if waitErr := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName, false); waitErr != nil {
 			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
 		}
 		forcedRestart = true
@@ -459,6 +465,10 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		if err != nil {
 			return fmt.Errorf("inspect stack before deployment: %w", err)
 		}
+		beforeServiceUpdates, err := swarmStackServiceUpdateFingerprints(ctx, projectName, true)
+		if err != nil {
+			return fmt.Errorf("inspect stack rollout status before deployment: %w", err)
+		}
 		if err := cmd.Run(); err != nil {
 			// A failed stack deploy can still update a subset of services. Retain
 			// broadened writable roots only when the daemon accepted observable
@@ -472,7 +482,7 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			return fmt.Errorf("failed to deploy stack: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
 		volumePreparationCommitted = true
-		rollbackRestoredPreviousRevision, err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName)
+		rollbackRestoredPreviousRevision, err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName, beforeServiceUpdates)
 		if err != nil {
 			if rollbackRestoredPreviousRevision {
 				// A single-service stack that completed its rollback cannot have
@@ -601,26 +611,67 @@ func composeProjectRuntimeFingerprint(ctx context.Context, projectName string) (
 }
 
 func swarmStackRuntimeFingerprint(ctx context.Context, projectName string) (string, error) {
-	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
-	output, err := listCmd.CombinedOutput()
+	serviceRuntimes, err := swarmStackServiceRuntimeFingerprints(ctx, projectName, true)
 	if err != nil {
-		if isMissingSwarmStackOutput(string(output)) {
-			return "", nil
-		}
-		return "", fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
+		return "", err
 	}
-	serviceNames := strings.Fields(string(output))
-	versions := make([]string, 0, len(serviceNames))
-	for _, serviceName := range serviceNames {
-		inspectCmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{.ID}}\t{{.Version.Index}}")
-		inspectOutput, inspectErr := inspectCmd.CombinedOutput()
-		if inspectErr != nil {
-			return "", fmt.Errorf("inspect stack service %s version: %w (%s)", serviceName, inspectErr, strings.TrimSpace(string(inspectOutput)))
-		}
-		versions = append(versions, serviceName+"\t"+strings.TrimSpace(string(inspectOutput)))
+	versions := make([]string, 0, len(serviceRuntimes))
+	for serviceName, runtime := range serviceRuntimes {
+		versions = append(versions, serviceName+"\t"+runtime)
 	}
 	sort.Strings(versions)
 	return strings.Join(versions, "\n"), nil
+}
+
+func swarmServiceUpdateFingerprint(ctx context.Context, serviceName string) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{json .UpdateStatus}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("inspect Swarm service update status: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func swarmStackServiceUpdateFingerprints(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		if allowMissing && isMissingSwarmStackOutput(string(output)) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	updates := make(map[string]string, len(serviceNames))
+	for _, serviceName := range serviceNames {
+		update, inspectErr := swarmServiceUpdateFingerprint(ctx, serviceName)
+		if inspectErr != nil {
+			return nil, fmt.Errorf("inspect stack service %s update status: %w", serviceName, inspectErr)
+		}
+		updates[serviceName] = update
+	}
+	return updates, nil
+}
+
+func swarmStackServiceRuntimeFingerprints(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		if allowMissing && isMissingSwarmStackOutput(string(output)) {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	serviceRuntimes := make(map[string]string, len(serviceNames))
+	for _, serviceName := range serviceNames {
+		runtime, inspectErr := swarmServiceRuntimeFingerprint(ctx, serviceName, false)
+		if inspectErr != nil {
+			return nil, fmt.Errorf("inspect stack service %s version: %w", serviceName, inspectErr)
+		}
+		serviceRuntimes[serviceName] = runtime
+	}
+	return serviceRuntimes, nil
 }
 
 func storedComposeLegacyProjectRoot(deploymentID string) (string, bool, error) {

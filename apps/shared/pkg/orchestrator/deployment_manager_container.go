@@ -2589,7 +2589,9 @@ func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskS
 	if !policy.restartOnFailure && !policy.restartAny {
 		return true
 	}
-	return policy.restartMaxAttempts >= 0 && summary.failedAttempts >= policy.restartMaxAttempts
+	// MaxAttempts counts retries after the initial execution, while
+	// failedAttempts counts every failed task generation including the first.
+	return policy.restartMaxAttempts >= 0 && summary.failedAttempts > policy.restartMaxAttempts
 }
 
 func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSummary) int64 {
@@ -2600,7 +2602,7 @@ func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSum
 	return successfulTasks
 }
 
-func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) error {
+func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string, ignoreExistingRollback bool) error {
 	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
 	if err != nil {
 		return err
@@ -2614,6 +2616,9 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 		_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return err
+		}
+		if ignoreExistingRollback && updateState == "rollback_completed" {
+			updateState = ""
 		}
 		switch updateState {
 		case "paused", "rollback_completed", "rollback_paused":

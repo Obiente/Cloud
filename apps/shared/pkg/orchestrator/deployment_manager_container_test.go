@@ -255,6 +255,10 @@ func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
 	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 3}, summary) {
 		t.Fatal("failure became terminal while a configured retry remained")
 	}
+	if swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 2}, summary) {
+		t.Fatal("initial execution was counted as one of the configured retries")
+	}
+	summary.failedAttempts = 3
 	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{restartOnFailure: true, restartMaxAttempts: 2}, summary) {
 		t.Fatal("exhausted configured retries were not terminal")
 	}
