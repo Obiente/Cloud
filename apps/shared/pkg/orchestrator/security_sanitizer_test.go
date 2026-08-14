@@ -688,9 +688,45 @@ func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
 	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(map[string]interface{})
 	appSource := strings.SplitN(appVolume, ":", 2)[0]
 	workerSource := workerVolume["source"].(string)
-	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, "data")
+	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
 	if appSource != wantSource || workerSource != wantSource {
 		t.Fatalf("shared relative sources = %q and %q, want %q", appSource, workerSource, wantSource)
+	}
+}
+
+func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-relative-root-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - .:/workspace
+      - ./data:/workspace/data
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with project-root binds: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volumes := services["app"].(map[string]interface{})["volumes"].([]interface{})
+	projectSource := strings.SplitN(volumes[0].(string), ":", 2)[0]
+	dataSource := strings.SplitN(volumes[1].(string), ":", 2)[0]
+	wantProjectSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot)
+	if projectSource != wantProjectSource {
+		t.Fatalf("project-root source = %q, want %q", projectSource, wantProjectSource)
+	}
+	if want := filepath.Join(projectSource, "data"); dataSource != want {
+		t.Fatalf("project data source = %q, want %q", dataSource, want)
 	}
 }
 

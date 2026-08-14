@@ -108,6 +108,11 @@ func TestParseSwarmTaskSummaryRecognizesStoppedServiceOutcomes(t *testing.T) {
 	if currentFailureWithSuccessfulHistory.completed || !currentFailureWithSuccessfulHistory.failed {
 		t.Fatalf("historical completion masked current failure: %#v", currentFailureWithSuccessfulHistory)
 	}
+
+	mixedCurrentOutcomes := parseSwarmTaskSummary("deploy-app.1\tComplete 3 seconds ago\tShutdown\t\ndeploy-app.2\tFailed 2 seconds ago\tShutdown\texit code 1\n")
+	if !mixedCurrentOutcomes.completed || !mixedCurrentOutcomes.failed {
+		t.Fatalf("mixed current task outcomes = %#v, want both completion and failure recorded", mixedCurrentOutcomes)
+	}
 }
 
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {

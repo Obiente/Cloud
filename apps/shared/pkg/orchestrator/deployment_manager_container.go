@@ -2252,9 +2252,6 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 			return nil
 		}
 		if updateConverged && policy.restartNone && !summary.active {
-			if summary.completed {
-				return nil
-			}
 			if summary.failed {
 				return &SwarmRolloutError{
 					ServiceName: swarmServiceName,
@@ -2262,6 +2259,9 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 					Message:     "one-shot service did not complete successfully",
 					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
 				}
+			}
+			if summary.completed {
+				return nil
 			}
 		}
 		time.Sleep(2 * time.Second)
