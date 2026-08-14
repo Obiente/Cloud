@@ -405,7 +405,9 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 		}
 		service["volumes"] = sanitizedVolumes
 		if hasLocalBind && cs.swarmVolumeNodeID != "" {
-			pinComposeServiceToNode(service, cs.swarmVolumeNodeID)
+			if err := pinComposeServiceToNode(service, cs.swarmVolumeNodeID); err != nil {
+				return fmt.Errorf("service %s placement: %w", serviceName, err)
+			}
 		}
 	}
 
@@ -480,7 +482,7 @@ func composeVolumeUsesHostBind(volume interface{}) bool {
 	}
 }
 
-func pinComposeServiceToNode(service map[string]interface{}, nodeID string) {
+func pinComposeServiceToNode(service map[string]interface{}, nodeID string) error {
 	deploy, _ := service["deploy"].(map[string]interface{})
 	if deploy == nil {
 		deploy = make(map[string]interface{})
@@ -496,6 +498,9 @@ func pinComposeServiceToNode(service map[string]interface{}, nodeID string) {
 	constraints := make([]interface{}, 0, len(existing)+1)
 	for _, raw := range existing {
 		constraint, ok := raw.(string)
+		if ok && excludesSwarmNodeID(constraint, nodeID) {
+			return fmt.Errorf("constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+		}
 		if !ok || isSwarmNodeIDConstraint(constraint) {
 			continue
 		}
@@ -503,6 +508,7 @@ func pinComposeServiceToNode(service map[string]interface{}, nodeID string) {
 	}
 	constraints = append(constraints, fmt.Sprintf("node.id == %s", strings.TrimSpace(nodeID)))
 	placement["constraints"] = constraints
+	return nil
 }
 
 // sanitizeDNS applies safe DNS defaults for Compose deployments.

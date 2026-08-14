@@ -77,13 +77,25 @@ func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T)
 		"--constraint-rm", "node.id==old-node",
 		"--constraint-add", "node.id==selected-node",
 	}
-	if got := swarmNodePlacementUpdateArgs(existing, "selected-node", true); !reflect.DeepEqual(got, want) {
+	got, err := swarmNodePlacementUpdateArgs(existing, "selected-node", true)
+	if err != nil {
+		t.Fatalf("placement update args: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("placement update args = %#v, want %#v", got, want)
 	}
 
 	want = []string{"--constraint-rm", "node.id==old-node"}
-	if got := swarmNodePlacementUpdateArgs(existing, "", false); !reflect.DeepEqual(got, want) {
+	got, err = swarmNodePlacementUpdateArgs(existing, "", false)
+	if err != nil {
+		t.Fatalf("placement removal args: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("placement removal args = %#v, want %#v", got, want)
+	}
+
+	if _, err := swarmNodePlacementUpdateArgs([]string{"node.id != selected-node"}, "selected-node", true); err == nil {
+		t.Fatal("selected-node exclusion should be rejected for local binds")
 	}
 }
 
@@ -248,6 +260,15 @@ func TestSwarmTaskFailureWaitsForPermittedRetries(t *testing.T) {
 	}
 	if !swarmTaskFailureIsTerminal(swarmServiceRunPolicy{}, summary) {
 		t.Fatal("failure without an on-failure retry policy was not terminal")
+	}
+}
+
+func TestNonJobRestartNoneCountsRunningTasksAsSuccessful(t *testing.T) {
+	policy := swarmServiceRunPolicy{desiredReplicas: 2, restartNone: true}
+	summary := swarmTaskSummary{running: 2, active: true}
+	successfulTasks := successfulSwarmTaskCount(policy, summary)
+	if successfulTasks < policy.desiredReplicas {
+		t.Fatalf("running tasks counted as %d successful tasks, want at least %d", successfulTasks, policy.desiredReplicas)
 	}
 }
 

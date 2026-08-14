@@ -1131,6 +1131,28 @@ func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
 	}
 }
 
+func TestSanitizeComposeYAMLRejectsSelectedNodeExclusionForLocalVolume(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-volume-exclusion-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      placement:
+        constraints:
+          - node.id != selected-node
+`
+
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "excludes required local-volume node") {
+		t.Fatalf("selected-node exclusion error = %v", err)
+	}
+}
+
 func TestSanitizeComposeYAMLDoesNotPinPortableSwarmVolumes(t *testing.T) {
 	sanitizer := &ComposeSanitizer{
 		deploymentID:      "compose-portable-volume-placement-test",

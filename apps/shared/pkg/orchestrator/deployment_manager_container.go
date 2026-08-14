@@ -533,9 +533,17 @@ func isSwarmNodeIDConstraint(constraint string) bool {
 	return strings.HasPrefix(normalized, "node.id==")
 }
 
-func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBinds bool) []string {
+func excludesSwarmNodeID(constraint, nodeID string) bool {
+	normalized := strings.ReplaceAll(strings.TrimSpace(constraint), " ", "")
+	return normalized == "node.id!="+strings.TrimSpace(nodeID)
+}
+
+func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBinds bool) ([]string, error) {
 	args := make([]string, 0, 4)
 	for _, constraint := range existing {
+		if hasLocalBinds && excludesSwarmNodeID(constraint, nodeID) {
+			return nil, fmt.Errorf("placement constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+		}
 		if isSwarmNodeIDConstraint(constraint) {
 			args = append(args, "--constraint-rm", constraint)
 		}
@@ -543,7 +551,7 @@ func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBind
 	if hasLocalBinds && strings.TrimSpace(nodeID) != "" {
 		args = append(args, "--constraint-add", fmt.Sprintf("node.id==%s", strings.TrimSpace(nodeID)))
 	}
-	return args
+	return args, nil
 }
 
 func containsString(values []string, target string) bool {
@@ -2071,7 +2079,11 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	if len(mountFlags) > 0 && strings.TrimSpace(config.TargetNodeID) == "" {
 		return "", "", fmt.Errorf("target node is required for Swarm services with local bind volumes")
 	}
-	args = append(args, swarmNodePlacementUpdateArgs(existingConstraints, config.TargetNodeID, len(mountFlags) > 0)...)
+	placementArgs, err := swarmNodePlacementUpdateArgs(existingConstraints, config.TargetNodeID, len(mountFlags) > 0)
+	if err != nil {
+		return "", "", err
+	}
+	args = append(args, placementArgs...)
 
 	// Update health check based on configuration
 	// Check healthcheck type (default to UNSPECIFIED if not set)
@@ -2549,6 +2561,14 @@ func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskS
 	return policy.restartMaxAttempts >= 0 && summary.failedAttempts >= policy.restartMaxAttempts
 }
 
+func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSummary) int64 {
+	successfulTasks := summary.completedCount
+	if !policy.job {
+		successfulTasks += summary.running
+	}
+	return successfulTasks
+}
+
 func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) error {
 	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
 	if err != nil {
@@ -2603,10 +2623,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 			if !policy.job && requiredSuccessful < 1 {
 				requiredSuccessful = 1
 			}
-			successfulTasks := summary.completedCount
-			if !policy.job && policy.restartOnFailure {
-				successfulTasks += summary.running
-			}
+			successfulTasks := successfulSwarmTaskCount(policy, summary)
 			if !summary.failed && !summary.progressing && successfulTasks >= requiredSuccessful {
 				return nil
 			}
