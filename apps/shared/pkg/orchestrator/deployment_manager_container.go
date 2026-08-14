@@ -51,6 +51,21 @@ func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]s
 func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
 	binds := make([]string, 0, len(volumes))
 	mountFlags := make([]string, 0, len(volumes))
+	writablePaths := make(map[string]bool, len(volumes))
+	for _, volume := range volumes {
+		name := sanitizeVolumeName(volume.Name)
+		if name == "" || sanitizeContainerMountPath(volume.MountPath) == "" {
+			continue
+		}
+		hostPath := filepath.Join(volumeRoot, deploymentID, name)
+		if !volume.ReadOnly {
+			writablePaths[hostPath] = true
+		} else if _, exists := writablePaths[hostPath]; !exists {
+			writablePaths[hostPath] = false
+		}
+	}
+
+	preparedPaths := make(map[string]struct{}, len(writablePaths))
 	for _, volume := range volumes {
 		name := sanitizeVolumeName(volume.Name)
 		mountPath := sanitizeContainerMountPath(volume.MountPath)
@@ -59,14 +74,17 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		}
 
 		hostPath := filepath.Join(volumeRoot, deploymentID, name)
-		var err error
-		if volume.ReadOnly {
-			err = ensureReadOnlyBindDir(hostPath)
-		} else {
-			err = ensureWritableBindDir(hostPath)
-		}
-		if err != nil {
-			return nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
+		if _, prepared := preparedPaths[hostPath]; !prepared {
+			var err error
+			if writablePaths[hostPath] {
+				err = ensureWritableBindDir(hostPath)
+			} else {
+				err = ensureReadOnlyBindDir(hostPath)
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
+			}
+			preparedPaths[hostPath] = struct{}{}
 		}
 
 		bind := fmt.Sprintf("%s:%s", hostPath, mountPath)

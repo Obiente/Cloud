@@ -430,6 +430,31 @@ func TestSanitizedVolumeMountsRestoreReadOnlyRootPermissions(t *testing.T) {
 	}
 }
 
+func TestSanitizedVolumeMountsKeepSharedRootWritable(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-shared-volume-test"
+	volumes := []DeploymentVolume{
+		{Name: "shared", MountPath: "/data"},
+		{Name: "shared", MountPath: "/snapshot", ReadOnly: true},
+	}
+
+	binds, _, err := sanitizedVolumeMountsAt(volumeRoot, deploymentID, volumes)
+	if err != nil {
+		t.Fatalf("prepare shared volume root: %v", err)
+	}
+	if len(binds) != 2 || !strings.HasSuffix(binds[0], ":/data") || !strings.HasSuffix(binds[1], ":/snapshot:ro") {
+		t.Fatalf("shared volume binds = %#v", binds)
+	}
+
+	info, err := os.Stat(filepath.Join(volumeRoot, deploymentID, "shared"))
+	if err != nil {
+		t.Fatalf("stat shared volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o777 {
+		t.Fatalf("shared volume mode = %#o, want 0777", got)
+	}
+}
+
 func TestSanitizedVolumeMountsFailClosedWhenPreparationFails(t *testing.T) {
 	volumeRoot := t.TempDir()
 	deploymentID := "deploy-volume-error-test"

@@ -473,3 +473,56 @@ func TestEnsureWritableBindDirKeepsParentHierarchyRestricted(t *testing.T) {
 		t.Fatal("deployment volume parent unexpectedly has the sticky bit")
 	}
 }
+
+func TestEnsureReadOnlyBindDirPreservesRestrictiveMode(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "private-data")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("create restrictive volume root: %v", err)
+	}
+
+	if err := ensureReadOnlyBindDir(dir); err != nil {
+		t.Fatalf("prepare read-only bind directory: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat read-only bind directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("read-only bind mode = %#o, want 0700", got)
+	}
+}
+
+func TestSanitizeComposeYAMLFailsWhenVolumePreparationFails(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	conflictingPath := filepath.Join(safeBaseDir, "app", "data")
+	if err := os.MkdirAll(filepath.Dir(conflictingPath), 0o755); err != nil {
+		t.Fatalf("create service volume parent: %v", err)
+	}
+	if err := os.WriteFile(conflictingPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting volume path: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-error-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - type: bind
+        source: /data
+        target: /data
+`
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err == nil {
+		t.Fatal("expected Compose volume preparation failure")
+	}
+	if sanitized != "" {
+		t.Fatalf("failed sanitization returned output: %q", sanitized)
+	}
+	if !strings.Contains(err.Error(), "prepare volume directory") {
+		t.Fatalf("unexpected Compose sanitization error: %v", err)
+	}
+}
