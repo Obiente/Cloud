@@ -2152,6 +2152,14 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 }
 
 func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) (*swarmConvergedTask, error) {
+	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+	if err != nil {
+		return nil, err
+	}
+	requiredRunning := int64(1)
+	if policy.desiredReplicas > 0 {
+		requiredRunning = policy.desiredReplicas
+	}
 	rollbackDiagnostics := ""
 	for {
 		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
@@ -2161,8 +2169,9 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 
 		switch updateState {
 		case "", "completed":
-			task, taskErr := dm.currentRunningSwarmTask(ctx, swarmServiceName)
-			if taskErr == nil && task != nil && task.ContainerID != "" {
+			tasks, taskErr := dm.currentRunningSwarmTasks(ctx, swarmServiceName)
+			if taskErr == nil && int64(len(tasks)) >= requiredRunning {
+				task := tasks[0]
 				if task.ServiceID == "" {
 					task.ServiceID = serviceID
 				}
@@ -2423,6 +2432,17 @@ func (dm *DeploymentManager) inspectSwarmServiceUpdate(ctx context.Context, swar
 }
 
 func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmServiceName string) (*swarmConvergedTask, error) {
+	tasks, err := dm.currentRunningSwarmTasks(ctx, swarmServiceName)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no converged running task found for swarm service %s", swarmServiceName)
+	}
+	return tasks[0], nil
+}
+
+func (dm *DeploymentManager) currentRunningSwarmTasks(ctx context.Context, swarmServiceName string) ([]*swarmConvergedTask, error) {
 	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}", "--no-trunc"}
 	cmd := exec.CommandContext(ctx, "docker", taskArgs...)
 	var stdout bytes.Buffer
@@ -2433,6 +2453,7 @@ func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmS
 		return nil, fmt.Errorf("failed to inspect swarm tasks for %s: %w (stderr: %s)", swarmServiceName, err, stderr.String())
 	}
 
+	var tasks []*swarmConvergedTask
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -2473,11 +2494,10 @@ func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmS
 			task.ContainerID = strings.TrimSpace(taskParts[1])
 		}
 		if task.ContainerID != "" {
-			return task, nil
+			tasks = append(tasks, task)
 		}
 	}
-
-	return nil, fmt.Errorf("no converged running task found for swarm service %s", swarmServiceName)
+	return tasks, nil
 }
 
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)

@@ -21,7 +21,7 @@ import (
 
 // Lifecycle operations for deployments
 
-func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) error {
+func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) (retErr error) {
 	logger.Info("[DeploymentManager] Creating deployment %s", config.DeploymentID)
 
 	// Apply plan limits to cap memory and CPU
@@ -101,14 +101,25 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	completedSwarmOperations := 0
 	var plainContainerBinds []string
+	var plainVolumePreparation *volumeRootPreparation
+	plainReplacementStarted := false
 	if !isSwarmMode {
 		// Prepare every declared volume before replacing any live container. Keep
 		// using these exact binds during creation so a preparation failure cannot
-		// occur after the previous workload has been removed.
-		plainContainerBinds, _, err = sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+		// occur after the previous workload has been removed. Read-only restriction
+		// remains deferred until every sequential replica replacement succeeds.
+		plainContainerBinds, _, plainVolumePreparation, err = preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 		if err != nil {
 			return fmt.Errorf("prepare deployment volumes: %w", err)
 		}
+		defer func() {
+			if retErr == nil || plainReplacementStarted {
+				return
+			}
+			if rollbackErr := plainVolumePreparation.Rollback(); rollbackErr != nil {
+				retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+			}
+		}()
 	}
 
 	// Create containers/services for each service and replica
@@ -212,6 +223,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			} else {
 				// In non-Swarm mode, create plain containers
 				// Remove existing container with this name if it exists (for redeployments)
+				plainReplacementStarted = true
 				if err := dm.removeContainerByName(ctx, containerName); err != nil {
 					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
 				}
@@ -300,6 +312,11 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				logger.Info("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
 					containerID[:12], config.DeploymentID, serviceName)
 			}
+		}
+	}
+	if !isSwarmMode {
+		if err := plainVolumePreparation.ApplyDeferredReadOnly(); err != nil {
+			return fmt.Errorf("apply read-only deployment volume permissions: %w", err)
 		}
 	}
 
@@ -844,7 +861,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	// CreateDeployment replaces them by name. Validate and prepare every declared
 	// bind first so a stable host-volume error leaves the current workload intact.
 	if !utils.IsSwarmModeEnabled() {
-		if _, _, err := sanitizedVolumeMounts(deploymentID, deploymentVolumes); err != nil {
+		if _, _, _, err := preparedSanitizedVolumeMounts(deploymentID, deploymentVolumes); err != nil {
 			return fmt.Errorf("prepare deployment volumes before restart: %w", err)
 		}
 	}

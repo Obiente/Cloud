@@ -732,7 +732,7 @@ func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) 
 
 func TestSanitizeComposeYAMLReusesLegacyRelativeBindStorage(t *testing.T) {
 	safeBaseDir := t.TempDir()
-	legacyPath := filepath.Join(safeBaseDir, "app", "data")
+	legacyPath := filepath.Join(safeBaseDir, "data")
 	if err := os.MkdirAll(legacyPath, 0o700); err != nil {
 		t.Fatalf("create legacy relative bind: %v", err)
 	}
@@ -775,30 +775,35 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeBindStorage(t *testing.T) {
 	}
 }
 
-func TestSanitizeComposeYAMLRejectsAmbiguousLegacyRelativeBindStorage(t *testing.T) {
+func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
 	safeBaseDir := t.TempDir()
-	for _, serviceName := range []string{"app", "worker"} {
-		if err := os.MkdirAll(filepath.Join(safeBaseDir, serviceName, "data"), 0o700); err != nil {
-			t.Fatalf("create %s legacy relative bind: %v", serviceName, err)
-		}
+	marker := filepath.Join(safeBaseDir, "existing.dat")
+	if err := os.WriteFile(marker, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create legacy project-root content: %v", err)
 	}
 	sanitizer := &ComposeSanitizer{
-		deploymentID: "compose-ambiguous-relative-bind-test",
+		deploymentID: "compose-legacy-relative-root-test",
 		safeBaseDir:  safeBaseDir,
 	}
 	composeYAML := `services:
   app:
     image: example/app:latest
     volumes:
-      - ./data:/data
-  worker:
-    image: example/worker:latest
-    volumes:
-      - ./data:/data
+      - .:/workspace
 `
 
-	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "multiple legacy storage directories") {
-		t.Fatalf("ambiguous legacy relative bind error = %v", err)
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with legacy project root: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	if source := strings.SplitN(volume, ":", 2)[0]; source != safeBaseDir {
+		t.Fatalf("legacy project-root source = %q, want %q", source, safeBaseDir)
 	}
 }
 
