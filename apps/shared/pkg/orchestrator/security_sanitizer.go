@@ -601,10 +601,21 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 }
 
 func ensureWritableBindDir(path string) error {
-	if err := os.MkdirAll(path, 0o755); err != nil {
+	// Keep the deployment hierarchy non-writable. Only the final mount root needs
+	// to accept files from an arbitrary workload identity.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.Chmod(path, 0o777)
+	if err := os.MkdirAll(path, 0o777); err != nil {
+		return err
+	}
+	// Workload images may run as any non-root UID/GID. The platform cannot safely
+	// infer a named image user without executing image-specific tooling, so make
+	// only the isolated bind root universally writable. The sticky bit prevents
+	// one runtime identity from deleting another identity's entries, and this is
+	// intentionally non-recursive so existing application data keeps its modes
+	// and ownership.
+	return os.Chmod(path, 0o777|os.ModeSticky)
 }
 
 // sanitizeBindOptions sanitizes bind mount options

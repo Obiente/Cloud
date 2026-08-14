@@ -418,4 +418,58 @@ func TestEnsureWritableBindDir_MakesDirectoryWritable(t *testing.T) {
 	if got := info.Mode().Perm(); got != 0o777 {
 		t.Fatalf("expected directory mode 0777, got %#o", got)
 	}
+	if info.Mode()&os.ModeSticky == 0 {
+		t.Fatal("expected writable bind directory to have the sticky bit")
+	}
+}
+
+func TestEnsureWritableBindDirPreservesExistingContents(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	child := filepath.Join(dir, "existing.dat")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("create existing volume root: %v", err)
+	}
+	if err := os.WriteFile(child, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create existing volume content: %v", err)
+	}
+
+	if err := ensureWritableBindDir(dir); err != nil {
+		t.Fatalf("prepare existing writable bind directory: %v", err)
+	}
+
+	contents, err := os.ReadFile(child)
+	if err != nil {
+		t.Fatalf("read existing volume content: %v", err)
+	}
+	if string(contents) != "preserve me" {
+		t.Fatalf("existing volume content changed to %q", contents)
+	}
+	info, err := os.Stat(child)
+	if err != nil {
+		t.Fatalf("stat existing volume content: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("existing child mode changed to %#o", got)
+	}
+}
+
+func TestEnsureWritableBindDirKeepsParentHierarchyRestricted(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "deploy-volume-test")
+	dir := filepath.Join(parent, "data")
+
+	if err := ensureWritableBindDir(dir); err != nil {
+		t.Fatalf("prepare writable bind directory: %v", err)
+	}
+
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("stat deployment volume parent: %v", err)
+	}
+	if got := parentInfo.Mode().Perm(); got != 0o755 {
+		t.Fatalf("deployment volume parent mode = %#o, want 0755", got)
+	}
+	if parentInfo.Mode()&os.ModeSticky != 0 {
+		t.Fatal("deployment volume parent unexpectedly has the sticky bit")
+	}
 }

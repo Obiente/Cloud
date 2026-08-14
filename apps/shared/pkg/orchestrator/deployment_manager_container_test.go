@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -351,6 +353,55 @@ func TestDockerfileVolumeSanitizers(t *testing.T) {
 				t.Fatalf("sanitizeContainerMountPath(%q) = %q, want empty", mount, got)
 			}
 		})
+	}
+}
+
+func TestSanitizedVolumeMountsPrepareWritableAndReadOnlyRoots(t *testing.T) {
+	volumeRoot := t.TempDir()
+	deploymentID := "deploy-volume-permission-test"
+
+	binds, mountFlags := sanitizedVolumeMountsAt(volumeRoot, deploymentID, []DeploymentVolume{
+		{Name: "data", MountPath: "/data"},
+		{Name: "assets", MountPath: "/assets", ReadOnly: true},
+	})
+
+	writablePath := filepath.Join(volumeRoot, deploymentID, "data")
+	readOnlyPath := filepath.Join(volumeRoot, deploymentID, "assets")
+	wantBinds := []string{
+		writablePath + ":/data",
+		readOnlyPath + ":/assets:ro",
+	}
+	wantMountFlags := []string{
+		"type=bind,src=" + writablePath + ",dst=/data",
+		"type=bind,src=" + readOnlyPath + ",dst=/assets,readonly",
+	}
+	if !reflect.DeepEqual(binds, wantBinds) {
+		t.Fatalf("binds = %#v, want %#v", binds, wantBinds)
+	}
+	if !reflect.DeepEqual(mountFlags, wantMountFlags) {
+		t.Fatalf("mount flags = %#v, want %#v", mountFlags, wantMountFlags)
+	}
+
+	writableInfo, err := os.Stat(writablePath)
+	if err != nil {
+		t.Fatalf("stat writable volume root: %v", err)
+	}
+	if got := writableInfo.Mode().Perm(); got != 0o777 {
+		t.Fatalf("writable volume mode = %#o, want 0777", got)
+	}
+	if writableInfo.Mode()&os.ModeSticky == 0 {
+		t.Fatal("writable volume root is missing the sticky bit")
+	}
+
+	readOnlyInfo, err := os.Stat(readOnlyPath)
+	if err != nil {
+		t.Fatalf("stat read-only volume root: %v", err)
+	}
+	if got := readOnlyInfo.Mode().Perm(); got != 0o755 {
+		t.Fatalf("read-only volume mode = %#o, want 0755", got)
+	}
+	if readOnlyInfo.Mode()&os.ModeSticky != 0 {
+		t.Fatal("read-only volume root unexpectedly has the sticky bit")
 	}
 }
 

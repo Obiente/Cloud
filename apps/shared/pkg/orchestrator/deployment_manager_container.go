@@ -42,7 +42,13 @@ const (
 	swarmMaxCPUReservation      = 0.10
 )
 
+const deploymentVolumeRoot = "/var/lib/obiente/volumes"
+
 func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
+	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+}
+
+func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
 	binds := make([]string, 0, len(volumes))
 	mountFlags := make([]string, 0, len(volumes))
 	for _, volume := range volumes {
@@ -52,8 +58,14 @@ func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]s
 			continue
 		}
 
-		hostPath := filepath.Join("/var/lib/obiente/volumes", deploymentID, name)
-		if err := os.MkdirAll(hostPath, 0o755); err != nil {
+		hostPath := filepath.Join(volumeRoot, deploymentID, name)
+		var err error
+		if volume.ReadOnly {
+			err = os.MkdirAll(hostPath, 0o755)
+		} else {
+			err = ensureWritableBindDir(hostPath)
+		}
+		if err != nil {
 			logger.Warn("[DeploymentManager] Failed to create volume directory %s: %v", hostPath, err)
 			continue
 		}
