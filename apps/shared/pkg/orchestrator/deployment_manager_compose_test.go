@@ -78,6 +78,7 @@ func TestStackDeployArgs(t *testing.T) {
 		"--with-registry-auth=true",
 		"--resolve-image",
 		"always",
+		"--prune",
 		"deploy-123",
 	}
 

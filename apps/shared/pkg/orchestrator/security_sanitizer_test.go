@@ -564,3 +564,61 @@ func TestSanitizeComposeYAMLRestoresEarlierVolumeModesOnFailure(t *testing.T) {
 		t.Fatalf("restored Compose volume mode = %#o, want 0700", got)
 	}
 }
+
+func TestSanitizeComposeYAMLRejectsRelativeVolumeTraversal(t *testing.T) {
+	root := t.TempDir()
+	safeBaseDir := filepath.Join(root, "safe")
+	escapedPath := filepath.Join(root, "escape")
+	if err := os.MkdirAll(safeBaseDir, 0o755); err != nil {
+		t.Fatalf("create safe Compose root: %v", err)
+	}
+	if err := os.MkdirAll(escapedPath, 0o700); err != nil {
+		t.Fatalf("create traversal target: %v", err)
+	}
+	if err := os.Chmod(escapedPath, 0o700); err != nil {
+		t.Fatalf("set traversal target mode: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-traversal-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ../../escape:/data
+`
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected relative volume traversal to be rejected")
+	}
+
+	info, err := os.Stat(escapedPath)
+	if err != nil {
+		t.Fatalf("stat traversal target: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("traversal target mode = %#o, want 0700", got)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsUnsafePathIdentifiers(t *testing.T) {
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+`
+	if _, err := NewComposeSanitizer("../escape").SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected unsafe deployment identifier to be rejected")
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-name-test",
+		safeBaseDir:  t.TempDir(),
+	}
+	unsafeVolumeYAML := composeYAML + `volumes:
+  ../escape: {}
+`
+	if _, err := sanitizer.SanitizeComposeYAML(unsafeVolumeYAML); err == nil {
+		t.Fatal("expected unsafe top-level volume name to be rejected")
+	}
+}

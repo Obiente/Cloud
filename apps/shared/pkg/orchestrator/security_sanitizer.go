@@ -28,6 +28,11 @@ type UntrustedComposeLimits struct {
 
 // NewComposeSanitizer creates a new compose sanitizer for a deployment
 func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
+	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
+		// SanitizeComposeYAML will reject the invalid identifier before preparing
+		// any volume. Avoid joining it into host paths here.
+		return &ComposeSanitizer{deploymentID: deploymentID}
+	}
 	// Determine safe base directory for user volumes
 	// All volumes should go to /var/lib/obiente/volumes/{deploymentID}
 	// This keeps Obiente Cloud volumes separate from Docker's default volumes
@@ -66,6 +71,9 @@ func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 // SanitizeComposeYAML sanitizes a Docker Compose YAML string
 // It transforms volumes and removes host port bindings
 func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedResult string, err error) {
+	if cs.deploymentID == "" || sanitizeVolumeName(cs.deploymentID) != cs.deploymentID {
+		return "", fmt.Errorf("invalid deployment identifier for Compose volume paths")
+	}
 	cs.volumeRootStates = make(map[string]volumeRootState)
 	cs.preparedVolumeRoots = nil
 	cs.preparedVolumeSet = make(map[string]struct{})
@@ -73,7 +81,7 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedRe
 		if err == nil || len(cs.preparedVolumeRoots) == 0 {
 			return
 		}
-		if rollbackErr := rollbackVolumeRootStates(cs.volumeRootStates, cs.preparedVolumeRoots); rollbackErr != nil {
+		if rollbackErr := cs.rollbackVolumePreparation(); rollbackErr != nil {
 			err = fmt.Errorf("%w; restore previous volume permissions: %v", err, rollbackErr)
 		}
 	}()
@@ -471,8 +479,13 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 		// If it has a source, check if it's a bind mount (absolute path) or named volume
 		if source, ok := v["source"].(string); ok {
-			if strings.HasPrefix(source, "/") {
-				// Bind mount with absolute path - sanitize it
+			source = strings.TrimSpace(source)
+			if volType == "volume" {
+				if source == "" || sanitizeVolumeName(source) != source {
+					return nil, fmt.Errorf("invalid named volume source %q", source)
+				}
+			} else if volType == "bind" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") || strings.ContainsRune(source, filepath.Separator) {
+				// Bind mount - sanitize absolute and relative paths.
 				sanitizedSource, err := cs.sanitizeHostPath(source, serviceName)
 				if err != nil {
 					return nil, err
@@ -482,7 +495,10 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 					"source": sanitizedSource,
 					"target": target,
 				}, nil
-			} else {
+			} else if source == "" || sanitizeVolumeName(source) != source {
+				return nil, fmt.Errorf("invalid volume source %q", source)
+			}
+			if source != "" && sanitizeVolumeName(source) == source {
 				// Named volume - convert to bind mount in /var/lib/obiente
 				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
 				if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
@@ -494,6 +510,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 					"target": target,
 				}, nil
 			}
+			return nil, fmt.Errorf("invalid volume source %q", source)
 		}
 
 		// Check if it's explicitly a named volume type (without source, just name reference)
@@ -522,8 +539,9 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		hostPath := strings.TrimSpace(parts[0])
 		containerPath := strings.TrimSpace(parts[1])
 
-		// Check if it's a named volume (no leading slash, not an absolute path)
-		if !strings.HasPrefix(hostPath, "/") && !strings.HasPrefix(hostPath, "~") && !filepath.IsAbs(hostPath) {
+		// A source matching the platform volume-name grammar is a named volume.
+		// Every other source is treated as a bind path and must pass containment.
+		if hostPath != "" && sanitizeVolumeName(hostPath) == hostPath {
 			// Named volume - convert to bind mount in /var/lib/obiente
 			// Structure: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
 			volumeName := hostPath
@@ -548,7 +566,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 	// Not a bind mount string, likely a named volume reference
 	// If it looks like a named volume (no path separators, simple name), convert to bind mount
-	if volStr != "" && !strings.Contains(volStr, "/") && !strings.Contains(volStr, ":") {
+	if volStr != "" && !strings.Contains(volStr, ":") && sanitizeVolumeName(volStr) == volStr {
 		// This is a named volume - convert to bind mount
 		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
 		if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
@@ -563,6 +581,9 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 // sanitizeHostPath transforms a host path to a safe user directory
 func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string) (string, error) {
+	if strings.ContainsRune(hostPath, '\x00') {
+		return "", fmt.Errorf("volume source contains a null byte")
+	}
 	// Clean the path to prevent directory traversal
 	hostPath = filepath.Clean(hostPath)
 
@@ -571,18 +592,19 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	relativePath = strings.TrimPrefix(relativePath, "~/")
 	relativePath = strings.TrimPrefix(relativePath, "~")
 
-	// If it's an absolute path, extract the basename and relative components
-	if filepath.IsAbs(hostPath) {
-		// Extract meaningful parts while preventing traversal
-		parts := strings.Split(relativePath, string(filepath.Separator))
-		safeParts := []string{}
-		for _, part := range parts {
-			if part != "" && part != "." && part != ".." {
-				safeParts = append(safeParts, part)
-			}
+	// Extract meaningful parts and reject traversal for both absolute and
+	// relative bind sources.
+	parts := strings.Split(relativePath, string(filepath.Separator))
+	safeParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == ".." {
+			return "", fmt.Errorf("volume source %q contains path traversal", hostPath)
 		}
-		relativePath = strings.Join(safeParts, string(filepath.Separator))
+		if part != "" && part != "." {
+			safeParts = append(safeParts, part)
+		}
 	}
+	relativePath = strings.Join(safeParts, string(filepath.Separator))
 
 	// If relative path is empty or just dots, use a default name
 	if relativePath == "" || strings.Trim(relativePath, ".") == "" {
@@ -592,6 +614,10 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	// Create safe path under user's directory
 	// Structure: {safeBaseDir}/{serviceName}/{sanitized_path}
 	safePath := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
+	rel, err := filepath.Rel(cs.safeBaseDir, safePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("sanitized volume source escapes the deployment root")
+	}
 
 	// Ensure directory exists
 	if err := cs.prepareWritableBindDir(safePath); err != nil {
@@ -603,6 +629,9 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 
 // sanitizeVolumeDefinition sanitizes top-level volume definitions
 func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData interface{}) error {
+	if volName == "" || sanitizeVolumeName(volName) != volName {
+		return fmt.Errorf("invalid top-level volume name %q", volName)
+	}
 	// Convert named volume definitions to bind mounts pointing to /var/lib/obiente
 	// This ensures all volumes are stored in Obiente's directory structure
 	if volMap, ok := volData.(map[string]interface{}); ok {
@@ -657,6 +686,14 @@ func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
 	cs.preparedVolumeRoots = append(cs.preparedVolumeRoots, path)
 	cs.preparedVolumeSet[path] = struct{}{}
 	return ensureWritableBindDir(path)
+}
+
+func (cs *ComposeSanitizer) rollbackVolumePreparation() error {
+	err := rollbackVolumeRootStates(cs.volumeRootStates, cs.preparedVolumeRoots)
+	cs.volumeRootStates = nil
+	cs.preparedVolumeRoots = nil
+	cs.preparedVolumeSet = nil
+	return err
 }
 
 func ensureWritableBindDir(path string) error {

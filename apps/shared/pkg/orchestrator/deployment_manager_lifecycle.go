@@ -832,7 +832,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	// preflight.
 	if deployment.ComposeYaml != "" {
 		logger.Info("[DeploymentManager] Compose-based deployment - redeploying to update configs")
-		return dm.DeployComposeFile(ctx, deploymentID, deployment.ComposeYaml)
+		return dm.RestartComposeFile(ctx, deploymentID, deployment.ComposeYaml)
 	}
 
 	// For image-based deployments, recreate containers with updated configs

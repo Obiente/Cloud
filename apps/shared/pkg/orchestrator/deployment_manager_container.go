@@ -50,6 +50,18 @@ type volumeRootState struct {
 	mode    os.FileMode
 }
 
+type volumeRootPreparation struct {
+	states map[string]volumeRootState
+	paths  []string
+}
+
+func (preparation *volumeRootPreparation) Rollback() error {
+	if preparation == nil {
+		return nil
+	}
+	return rollbackVolumeRootStates(preparation.states, preparation.paths)
+}
+
 func snapshotVolumeRootState(path string) (volumeRootState, error) {
 	info, err := os.Stat(path)
 	if err == nil {
@@ -65,10 +77,20 @@ func snapshotVolumeRootState(path string) (volumeRootState, error) {
 }
 
 func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
-	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+	binds, mountFlags, _, err := preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+	return binds, mountFlags, err
+}
+
+func preparedSanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
+	return preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
 }
 
 func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
+	binds, mountFlags, _, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, volumes)
+	return binds, mountFlags, err
+}
+
+func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
 	binds := make([]string, 0, len(volumes))
 	mountFlags := make([]string, 0, len(volumes))
 	writablePaths := make(map[string]bool, len(volumes))
@@ -89,7 +111,7 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 	for hostPath := range writablePaths {
 		state, err := snapshotVolumeRootState(hostPath)
 		if err != nil {
-			return nil, nil, fmt.Errorf("inspect volume directory %s: %w", hostPath, err)
+			return nil, nil, nil, fmt.Errorf("inspect volume directory %s: %w", hostPath, err)
 		}
 		originalStates[hostPath] = state
 	}
@@ -114,9 +136,9 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 			}
 			if err != nil {
 				if rollbackErr := rollbackVolumeRootStates(originalStates, preparedOrder); rollbackErr != nil {
-					return nil, nil, fmt.Errorf("prepare volume directory %s: %w; restore previous volume permissions: %v", hostPath, err, rollbackErr)
+					return nil, nil, nil, fmt.Errorf("prepare volume directory %s: %w; restore previous volume permissions: %v", hostPath, err, rollbackErr)
 				}
-				return nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
+				return nil, nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
 			}
 			preparedPaths[hostPath] = struct{}{}
 		}
@@ -130,7 +152,7 @@ func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []Deployme
 		binds = append(binds, bind)
 		mountFlags = append(mountFlags, mountFlag)
 	}
-	return binds, mountFlags, nil
+	return binds, mountFlags, &volumeRootPreparation{states: originalStates, paths: preparedOrder}, nil
 }
 
 func rollbackVolumeRootStates(states map[string]volumeRootState, paths []string) error {
@@ -1605,7 +1627,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 // updateSwarmService updates an existing Swarm service with new configuration
 // This enables zero-downtime deployments by using docker service update with start-first strategy
-func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string) (string, string, error) {
+func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1709,10 +1731,18 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
 	}
-	_, mountFlags, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 	if err != nil {
 		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
 	}
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
+			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+		}
+	}()
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount-add", mountFlag)
 	}
@@ -1886,7 +1916,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		return "", "", fmt.Errorf("failed to update Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
 
-	serviceID := strings.TrimSpace(stdout.String())
+	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
 
 	task, err := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)

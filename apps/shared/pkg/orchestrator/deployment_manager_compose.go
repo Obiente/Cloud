@@ -34,11 +34,43 @@ func composeUpArgs(projectName, composeFile string) []string {
 }
 
 func stackDeployArgs(projectName, composeFile string) []string {
-	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "always", projectName}
+	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "always", "--prune", projectName}
 }
 
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, "")
+}
+
+func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
+		return err
+	}
+	if !utils.IsSwarmModeEnabled() {
+		// composeUpArgs already includes --force-recreate.
+		return nil
+	}
+
+	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("list services before forced Compose restart: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	if len(serviceNames) == 0 {
+		return fmt.Errorf("forced Compose restart found no services in stack %s", projectName)
+	}
+	for _, serviceName := range serviceNames {
+		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--force", serviceName)
+		forceOutput, forceErr := forceCmd.CombinedOutput()
+		if forceErr != nil {
+			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
+		}
+		if _, waitErr := dm.waitForSwarmServiceConverged(ctx, deploymentID, serviceName); waitErr != nil {
+			return fmt.Errorf("wait for forced restart of service %s: %w", serviceName, waitErr)
+		}
+	}
+	return nil
 }
 
 // DeployIsolatedComposeFile routes an untrusted preview through a dedicated
@@ -51,8 +83,18 @@ func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, depl
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, ingressNetworkName)
 }
 
-func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) error {
+func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) (retErr error) {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
+	var sanitizer *ComposeSanitizer
+	volumePreparationCommitted := false
+	defer func() {
+		if retErr == nil || volumePreparationCommitted || sanitizer == nil {
+			return
+		}
+		if rollbackErr := sanitizer.rollbackVolumePreparation(); rollbackErr != nil {
+			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+		}
+	}()
 
 	// Ensure per-deployment network exists before deploying
 	// This provides isolation from other deployments (while services stay on obiente-network for Traefik discovery)
@@ -62,7 +104,7 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	}
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
-	sanitizer := NewComposeSanitizer(deploymentID)
+	sanitizer = NewComposeSanitizer(deploymentID)
 	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
 	if err != nil {
 		return fmt.Errorf("refusing to deploy compose YAML that could not be sanitized: %w", err)
@@ -316,6 +358,7 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
 	}
+	volumePreparationCommitted = true
 
 	stdOutput := stdout.String()
 	if isSwarmMode {
