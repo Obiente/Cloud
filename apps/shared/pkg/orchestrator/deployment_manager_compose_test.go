@@ -147,6 +147,9 @@ func TestRecordedLegacyProjectRootPrecedesNewRootSelection(t *testing.T) {
 	if err := persistLegacyProjectRootMetadata(deployDir, recordedRoot); err != nil {
 		t.Fatalf("persist recorded volume root: %v", err)
 	}
+	if err := os.RemoveAll(recordedRoot); err != nil {
+		t.Fatalf("remove recorded fallback root: %v", err)
+	}
 
 	got, found, err := recordedLegacyProjectRoot(deploymentID)
 	if err != nil {
@@ -154,6 +157,9 @@ func TestRecordedLegacyProjectRootPrecedesNewRootSelection(t *testing.T) {
 	}
 	if !found || got != recordedRoot {
 		t.Fatalf("recorded volume root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+	if info, err := os.Stat(recordedRoot); err != nil || !info.IsDir() {
+		t.Fatalf("recorded fallback root was not recreated: info=%v err=%v", info, err)
 	}
 }
 

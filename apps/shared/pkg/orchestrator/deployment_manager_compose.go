@@ -19,6 +19,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
@@ -712,7 +713,7 @@ func parseLegacyProjectRootMetadata(metadata []byte, deploymentID string) (strin
 	if !allowed {
 		return "", fmt.Errorf("recorded volume root %q is outside managed volume roots", recordedRoot)
 	}
-	dirFD, err := secureOpenDirectory(recordedRoot, false)
+	dirFD, err := secureOpenDirectory(recordedRoot, true)
 	if err != nil {
 		return "", fmt.Errorf("open recorded volume root %q: %w", recordedRoot, err)
 	}
@@ -887,11 +888,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	// Check if we're in Swarm mode
 	isSwarmMode := utils.IsSwarmModeEnabled()
 
-	// containers will be initialized from ContainerList - type inferred from return value
-	// We initialize with an empty list to establish the type, then reassign in branches
-	containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: make(client.Filters)})
-	containers := containersResult.Items
-	containers = containers[:0] // Clear the list but keep the type
+	var containers []container.Summary
 	var currentTaskIDs map[string]struct{}
 
 	if isSwarmMode {
@@ -906,10 +903,13 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		filterArgs.Add("label", fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID))
 
 		// Assign to containers - type already established
-		containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgs,
 		})
+		if err != nil {
+			return fmt.Errorf("list Swarm containers by deployment label: %w", err)
+		}
 		containers = containersResult.Items
 
 		// Fallback: try listing containers by stack name
@@ -918,12 +918,13 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 			// In Swarm, containers have com.docker.swarm.service.name label
 			// Service names are in format: {stack}_{service}
 			allContainersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
-			if err == nil {
-				for _, cnt := range allContainersResult.Items {
-					serviceName := cnt.Labels["com.docker.swarm.service.name"]
-					if strings.HasPrefix(serviceName, projectName+"_") || strings.HasPrefix(serviceName, strings.ToLower(projectName)+"_") {
-						containers = append(containers, cnt)
-					}
+			if err != nil {
+				return fmt.Errorf("list Swarm containers by stack name: %w", err)
+			}
+			for _, cnt := range allContainersResult.Items {
+				serviceName := cnt.Labels["com.docker.swarm.service.name"]
+				if strings.HasPrefix(serviceName, projectName+"_") || strings.HasPrefix(serviceName, strings.ToLower(projectName)+"_") {
+					containers = append(containers, cnt)
 				}
 			}
 		}
