@@ -114,9 +114,16 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
 	}
 	for _, serviceName := range unchangedSwarmStackServices(beforeTaskTemplates, afterTaskTemplates) {
+		beforeForceRuntime, inspectErr := swarmServiceRuntimeFingerprint(ctx, serviceName, false)
+		if inspectErr != nil {
+			return fmt.Errorf("inspect service %s before forced restart: %w", serviceName, inspectErr)
+		}
 		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--detach=true", "--force", serviceName)
 		forceOutput, forceErr := forceCmd.CombinedOutput()
 		if forceErr != nil {
+			refreshForcedTasks = refreshForcedTasks || deploymentRuntimeChangedAfterFailure(beforeForceRuntime, func(inspectCtx context.Context) (string, error) {
+				return swarmServiceRuntimeFingerprint(inspectCtx, serviceName, false)
+			})
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
 		}
 		refreshForcedTasks = true

@@ -118,50 +118,47 @@ func (preparation *volumeRootPreparation) release() {
 	preparation.releaseOnce.Do(preparation.releaseLock)
 }
 
-type deploymentVolumeLock struct {
-	token chan struct{}
-	refs  int
-}
-
-var deploymentVolumeLocks = struct {
-	sync.Mutex
-	locks map[string]*deploymentVolumeLock
-}{locks: make(map[string]*deploymentVolumeLock)}
+var deploymentVolumeLockRoot = "/var/lib/obiente/volume-locks"
 
 func acquireDeploymentVolumeLock(ctx context.Context, deploymentID string) (func(), error) {
-	deploymentVolumeLocks.Lock()
-	lock := deploymentVolumeLocks.locks[deploymentID]
-	if lock == nil {
-		lock = &deploymentVolumeLock{token: make(chan struct{}, 1)}
-		lock.token <- struct{}{}
-		deploymentVolumeLocks.locks[deploymentID] = lock
+	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
+		return nil, fmt.Errorf("invalid deployment ID for volume lock")
 	}
-	lock.refs++
-	deploymentVolumeLocks.Unlock()
+	if err := os.MkdirAll(deploymentVolumeLockRoot, 0o755); err != nil {
+		return nil, fmt.Errorf("create deployment volume lock directory: %w", err)
+	}
+	lockPath := filepath.Join(deploymentVolumeLockRoot, deploymentID+".lock")
+	fd, err := unix.Open(lockPath, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open deployment volume lock: %w", err)
+	}
 
-	select {
-	case <-ctx.Done():
-		releaseDeploymentVolumeLockReference(deploymentID, lock)
-		return nil, ctx.Err()
-	case <-lock.token:
+	for {
+		err = unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
+			_ = unix.Close(fd)
+			return nil, fmt.Errorf("lock deployment volumes: %w", err)
+		}
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			_ = unix.Close(fd)
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
 	}
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
-			lock.token <- struct{}{}
-			releaseDeploymentVolumeLockReference(deploymentID, lock)
+			_ = unix.Flock(fd, unix.LOCK_UN)
+			_ = unix.Close(fd)
 		})
 	}, nil
-}
-
-func releaseDeploymentVolumeLockReference(deploymentID string, lock *deploymentVolumeLock) {
-	deploymentVolumeLocks.Lock()
-	defer deploymentVolumeLocks.Unlock()
-	lock.refs--
-	if lock.refs == 0 && deploymentVolumeLocks.locks[deploymentID] == lock {
-		delete(deploymentVolumeLocks.locks, deploymentID)
-	}
 }
 
 func snapshotVolumeRootState(path string) (volumeRootState, error) {

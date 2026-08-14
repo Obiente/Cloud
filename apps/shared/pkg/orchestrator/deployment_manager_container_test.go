@@ -161,6 +161,10 @@ func TestWaitForNextSwarmPollStopsWithContext(t *testing.T) {
 }
 
 func TestDeploymentVolumeLockSerializesAndHonorsContext(t *testing.T) {
+	previousLockRoot := deploymentVolumeLockRoot
+	deploymentVolumeLockRoot = t.TempDir()
+	t.Cleanup(func() { deploymentVolumeLockRoot = previousLockRoot })
+
 	deploymentID := "volume-lock-context-test"
 	releaseFirst, err := acquireDeploymentVolumeLock(context.Background(), deploymentID)
 	if err != nil {
@@ -189,6 +193,13 @@ func TestDeploymentVolumeLockSerializesAndHonorsContext(t *testing.T) {
 	if acquireErr := <-result; !errors.Is(acquireErr, context.Canceled) {
 		t.Fatalf("canceled lock acquisition error = %v, want context cancellation", acquireErr)
 	}
+
+	releaseFirst()
+	releaseNext, err := acquireDeploymentVolumeLock(context.Background(), deploymentID)
+	if err != nil {
+		t.Fatalf("reacquire released deployment volume lock: %v", err)
+	}
+	releaseNext()
 }
 
 func TestTerminalSwarmRolloutFailure(t *testing.T) {
