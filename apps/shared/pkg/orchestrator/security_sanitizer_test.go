@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -638,6 +639,86 @@ func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
 	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, "data")
 	if appSource != wantSource || workerSource != wantSource {
 		t.Fatalf("shared relative sources = %q and %q, want %q", appSource, workerSource, wantSource)
+	}
+}
+
+func TestSanitizeComposeYAMLUsesSelectedRootForNamedVolumes(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-named-volume-root-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - cache:/var/lib/app
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /var/lib/worker
+volumes:
+  cache: {}
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose named volumes: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(map[string]interface{})
+	wantSource := filepath.Join(safeBaseDir, "cache")
+	if strings.SplitN(appVolume, ":", 2)[0] != wantSource || workerVolume["source"] != wantSource {
+		t.Fatalf("named volumes did not use selected root %q: app=%q worker=%#v", wantSource, appVolume, workerVolume)
+	}
+}
+
+func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-volume-placement-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.labels.pool == customer
+          - node.id == old-node
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose Swarm placement: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+	deploy := app["deploy"].(map[string]interface{})
+	if deploy["replicas"] != 2 {
+		t.Fatalf("deployment replicas changed: %#v", deploy["replicas"])
+	}
+	placement := deploy["placement"].(map[string]interface{})
+	constraints := placement["constraints"].([]interface{})
+	want := []interface{}{"node.labels.pool == customer", "node.id == selected-node"}
+	if !reflect.DeepEqual(constraints, want) {
+		t.Fatalf("placement constraints = %#v, want %#v", constraints, want)
 	}
 }
 

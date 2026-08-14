@@ -37,6 +37,24 @@ func stackDeployArgs(projectName, composeFile string) []string {
 	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "always", "--prune", projectName}
 }
 
+func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, deploymentID, projectName string) error {
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("list services while waiting for stack %s: %w (%s)", projectName, err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	if len(serviceNames) == 0 {
+		return fmt.Errorf("stack %s has no services after deployment", projectName)
+	}
+	for _, serviceName := range serviceNames {
+		if _, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, serviceName); err != nil {
+			return fmt.Errorf("wait for stack service %s: %w", serviceName, err)
+		}
+	}
+	return nil
+}
+
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, "")
 }
@@ -85,6 +103,7 @@ func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, depl
 
 func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) (retErr error) {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
+	isSwarmMode := utils.IsSwarmModeEnabled()
 	var sanitizer *ComposeSanitizer
 	volumePreparationCommitted := false
 	defer func() {
@@ -105,6 +124,9 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
 	sanitizer = NewComposeSanitizer(deploymentID)
+	if isSwarmMode {
+		sanitizer.swarmVolumeNodeID = dm.nodeID
+	}
 	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
 	if err != nil {
 		return fmt.Errorf("refusing to deploy compose YAML that could not be sanitized: %w", err)
@@ -284,9 +306,6 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	// Note: Docker Compose normalizes project names (lowercase, etc.), but we'll use the label to find containers
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
-	// Check if we're in Swarm mode using ENABLE_SWARM environment variable
-	isSwarmMode := utils.IsSwarmModeEnabled()
-
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -340,6 +359,9 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			stdOutput := stdout.String()
 			logger.Error("[DeploymentManager] Failed to deploy stack for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
 			return fmt.Errorf("failed to deploy stack: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+		}
+		if err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName); err != nil {
+			return fmt.Errorf("stack deployment did not converge: %w", err)
 		}
 	} else {
 		// In non-Swarm mode, use docker compose (creates containers)

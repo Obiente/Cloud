@@ -69,6 +69,23 @@ func TestSwarmServiceNetworkUpdateRemovesInspectedLegacyAttachments(t *testing.T
 	}
 }
 
+func TestSwarmNodePlacementUpdateArgsReconcilesLocalBindConstraint(t *testing.T) {
+	t.Parallel()
+	existing := []string{"node.labels.pool==customer", "node.id==old-node"}
+	want := []string{
+		"--constraint-rm", "node.id==old-node",
+		"--constraint-add", "node.id==selected-node",
+	}
+	if got := swarmNodePlacementUpdateArgs(existing, "selected-node", true); !reflect.DeepEqual(got, want) {
+		t.Fatalf("placement update args = %#v, want %#v", got, want)
+	}
+
+	want = []string{"--constraint-rm", "node.id==old-node"}
+	if got := swarmNodePlacementUpdateArgs(existing, "", false); !reflect.DeepEqual(got, want) {
+		t.Fatalf("placement removal args = %#v, want %#v", got, want)
+	}
+}
+
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
 	t.Parallel()
 	first := PreviewIngressNetworkNameForDeployment("preview-one")

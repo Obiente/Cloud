@@ -13,6 +13,7 @@ import (
 type ComposeSanitizer struct {
 	deploymentID        string
 	safeBaseDir         string // Base directory where user volumes should be stored
+	swarmVolumeNodeID   string // Node that owns deployment-local bind roots in Swarm mode
 	volumeRootStates    map[string]volumeRootState
 	preparedVolumeRoots []string
 	preparedVolumeSet   map[string]struct{}
@@ -278,6 +279,9 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 			}
 		}
 		service["volumes"] = sanitizedVolumes
+		if len(sanitizedVolumes) > 0 && cs.swarmVolumeNodeID != "" {
+			pinComposeServiceToNode(service, cs.swarmVolumeNodeID)
+		}
 	}
 
 	// Sanitize ports - remove host port publishing and keep container ports as
@@ -337,6 +341,31 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	}
 
 	return nil
+}
+
+func pinComposeServiceToNode(service map[string]interface{}, nodeID string) {
+	deploy, _ := service["deploy"].(map[string]interface{})
+	if deploy == nil {
+		deploy = make(map[string]interface{})
+		service["deploy"] = deploy
+	}
+	placement, _ := deploy["placement"].(map[string]interface{})
+	if placement == nil {
+		placement = make(map[string]interface{})
+		deploy["placement"] = placement
+	}
+
+	existing, _ := placement["constraints"].([]interface{})
+	constraints := make([]interface{}, 0, len(existing)+1)
+	for _, raw := range existing {
+		constraint, ok := raw.(string)
+		if !ok || isSwarmNodeIDConstraint(constraint) {
+			continue
+		}
+		constraints = append(constraints, constraint)
+	}
+	constraints = append(constraints, fmt.Sprintf("node.id == %s", strings.TrimSpace(nodeID)))
+	placement["constraints"] = constraints
 }
 
 // sanitizeDNS applies safe DNS defaults for Compose deployments.
@@ -505,8 +534,8 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 				return nil, fmt.Errorf("invalid volume source %q", source)
 			}
 			if source != "" && sanitizeVolumeName(source) == source {
-				// Named volume - convert to bind mount in /var/lib/obiente
-				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
+				// Named volume - convert to a bind mount beneath the selected root.
+				obienteVolumePath := filepath.Join(cs.safeBaseDir, source)
 				if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 					return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 				}
@@ -548,10 +577,9 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		// A source matching the platform volume-name grammar is a named volume.
 		// Every other source is treated as a bind path and must pass containment.
 		if hostPath != "" && sanitizeVolumeName(hostPath) == hostPath {
-			// Named volume - convert to bind mount in /var/lib/obiente
-			// Structure: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+			// Named volume - convert to a bind mount beneath the selected root.
 			volumeName := hostPath
-			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volumeName)
+			obienteVolumePath := filepath.Join(cs.safeBaseDir, volumeName)
 			// Ensure directory exists
 			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 				return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
@@ -574,7 +602,7 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 	// If it looks like a named volume (no path separators, simple name), convert to bind mount
 	if volStr != "" && !strings.Contains(volStr, ":") && sanitizeVolumeName(volStr) == volStr {
 		// This is a named volume - convert to bind mount
-		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
+		obienteVolumePath := filepath.Join(cs.safeBaseDir, volStr)
 		if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 			return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 		}
@@ -646,13 +674,12 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 	if volName == "" || sanitizeVolumeName(volName) != volName {
 		return fmt.Errorf("invalid top-level volume name %q", volName)
 	}
-	// Convert named volume definitions to bind mounts pointing to /var/lib/obiente
-	// This ensures all volumes are stored in Obiente's directory structure
+	// Convert named volume definitions to bind mounts beneath the selected root.
 	if volMap, ok := volData.(map[string]interface{}); ok {
 		// If it's an empty map or only has driver_opts, convert to bind mount
 		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
 			// This is a named volume - convert to bind mount specification
-			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
+			obienteVolumePath := filepath.Join(cs.safeBaseDir, volName)
 			if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
 				return fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
 			}

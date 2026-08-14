@@ -284,6 +284,37 @@ func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) (
 	return names, nil
 }
 
+func existingSwarmServiceConstraints(ctx context.Context, serviceName string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.Placement.Constraints}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("inspect service placement constraints: %w", err)
+	}
+	var constraints []string
+	if err := json.Unmarshal(bytes.TrimSpace(output), &constraints); err != nil {
+		return nil, fmt.Errorf("decode service placement constraints: %w", err)
+	}
+	return constraints, nil
+}
+
+func isSwarmNodeIDConstraint(constraint string) bool {
+	normalized := strings.ReplaceAll(strings.TrimSpace(constraint), " ", "")
+	return strings.HasPrefix(normalized, "node.id==")
+}
+
+func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBinds bool) []string {
+	args := make([]string, 0, 4)
+	for _, constraint := range existing {
+		if isSwarmNodeIDConstraint(constraint) {
+			args = append(args, "--constraint-rm", constraint)
+		}
+	}
+	if hasLocalBinds && strings.TrimSpace(nodeID) != "" {
+		args = append(args, "--constraint-add", fmt.Sprintf("node.id==%s", strings.TrimSpace(nodeID)))
+	}
+	return args
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -1066,6 +1097,12 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount", mountFlag)
 	}
+	if len(mountFlags) > 0 {
+		if strings.TrimSpace(config.TargetNodeID) == "" {
+			return "", "", fmt.Errorf("target node is required for Swarm services with local bind volumes")
+		}
+		args = append(args, "--constraint", fmt.Sprintf("node.id==%s", strings.TrimSpace(config.TargetNodeID)))
+	}
 
 	// Add health check based on configuration
 	// Check healthcheck type (default to UNSPECIFIED if not set)
@@ -1746,6 +1783,14 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount-add", mountFlag)
 	}
+	existingConstraints, err := existingSwarmServiceConstraints(ctx, swarmServiceName)
+	if err != nil {
+		return "", "", err
+	}
+	if len(mountFlags) > 0 && strings.TrimSpace(config.TargetNodeID) == "" {
+		return "", "", fmt.Errorf("target node is required for Swarm services with local bind volumes")
+	}
+	args = append(args, swarmNodePlacementUpdateArgs(existingConstraints, config.TargetNodeID, len(mountFlags) > 0)...)
 
 	// Update health check based on configuration
 	// Check healthcheck type (default to UNSPECIFIED if not set)

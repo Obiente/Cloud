@@ -52,6 +52,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	logger.Info("[DeploymentManager] Selected node %s (%s) for deployment %s",
 		targetNode.ID, targetNode.Hostname, config.DeploymentID)
+	config.TargetNodeID = targetNode.ID
 
 	// Check if we're on the target node
 	if targetNode.ID != dm.nodeID {
