@@ -223,6 +223,22 @@ func TestPersistLegacyProjectRootMetadata(t *testing.T) {
 	}
 }
 
+func TestDeploymentMetadataDirectoryUnavailableOnlyMatchesTraversalPermissions(t *testing.T) {
+	directoryPermissionError := &deploymentMetadataDirectoryError{
+		path: "/synthetic/unavailable",
+		err:  unix.EACCES,
+	}
+	if !deploymentMetadataDirectoryUnavailable(directoryPermissionError) {
+		t.Fatal("directory traversal permission error was not treated as an unavailable fallback root")
+	}
+	if deploymentMetadataDirectoryUnavailable(unix.EACCES) {
+		t.Fatal("plain file permission error was treated as an unavailable fallback root")
+	}
+	if deploymentMetadataDirectoryUnavailable(&deploymentMetadataDirectoryError{path: "/synthetic/invalid", err: unix.ELOOP}) {
+		t.Fatal("unsafe metadata directory error was treated as an unavailable fallback root")
+	}
+}
+
 func TestPersistLegacyProjectRootMetadataRejectsSymlink(t *testing.T) {
 	deployDir := t.TempDir()
 	target := filepath.Join(t.TempDir(), "target")

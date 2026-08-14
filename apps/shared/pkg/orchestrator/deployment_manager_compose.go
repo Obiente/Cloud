@@ -755,6 +755,9 @@ func storedComposeFile(deploymentID string) (string, bool, error) {
 		deployDir := filepath.Join(baseDir, deploymentID)
 		contents, found, err := readDeploymentFileNoFollow(deployDir, "docker-compose.yml")
 		if err != nil {
+			if deploymentMetadataDirectoryUnavailable(err) {
+				continue
+			}
 			return "", false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
 		}
 		if found {
@@ -776,6 +779,9 @@ func recordedLegacyProjectRoot(deploymentID string) (string, bool, error) {
 		deployDir := filepath.Join(baseDir, deploymentID)
 		metadata, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
 		if err != nil {
+			if deploymentMetadataDirectoryUnavailable(err) {
+				continue
+			}
 			return "", false, fmt.Errorf("read legacy project-root metadata in %s: %w", deployDir, err)
 		}
 		if !found {
@@ -836,13 +842,32 @@ func legacyProjectRootMetadataContents(safeBaseDir string) string {
 	return "legacy-relative-project-root-v1\n" + filepath.Clean(safeBaseDir) + "\n"
 }
 
+type deploymentMetadataDirectoryError struct {
+	path string
+	err  error
+}
+
+func (err *deploymentMetadataDirectoryError) Error() string {
+	return fmt.Sprintf("open deployment metadata directory %s: %v", err.path, err.err)
+}
+
+func (err *deploymentMetadataDirectoryError) Unwrap() error {
+	return err.err
+}
+
+func deploymentMetadataDirectoryUnavailable(err error) bool {
+	var directoryErr *deploymentMetadataDirectoryError
+	return errors.As(err, &directoryErr) &&
+		(errors.Is(directoryErr.err, unix.EACCES) || errors.Is(directoryErr.err, unix.EPERM))
+}
+
 func readDeploymentFileNoFollow(deployDir, name string) ([]byte, bool, error) {
 	dirFD, err := secureOpenDirectory(deployDir, false)
 	if errors.Is(err, unix.ENOENT) {
 		return nil, false, nil
 	}
 	if err != nil {
-		return nil, false, err
+		return nil, false, &deploymentMetadataDirectoryError{path: deployDir, err: err}
 	}
 	defer unix.Close(dirFD)
 
