@@ -1299,7 +1299,7 @@ func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serv
 	}
 }
 
-func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, mountFlags []string) (serviceID string, containerID string, retErr error) {
+func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, mountFlags []string, markMutationAttempted func()) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1659,6 +1659,9 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		return "", "", fmt.Errorf("inspect service before creation: %w", err)
 	}
 
+	if markMutationAttempted != nil {
+		markMutationAttempted()
+	}
 	if err := cmd.Run(); err != nil {
 		serviceCreated = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
 			return swarmServiceRuntimeFingerprint(inspectCtx, swarmServiceName, true)
@@ -2013,7 +2016,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 // updateSwarmService updates an existing Swarm service with new configuration
 // This enables zero-downtime deployments by using docker service update with start-first strategy
-func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string, mountFlags []string) (serviceID string, containerID string, retErr error) {
+func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string, mountFlags []string, markMutationAttempted func()) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -2288,6 +2291,9 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	logger.Info("[DeploymentManager] Updating Swarm service %s with zero-downtime strategy (start-first)", swarmServiceName)
+	if markMutationAttempted != nil {
+		markMutationAttempted()
+	}
 	if err := cmd.Run(); err != nil {
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()

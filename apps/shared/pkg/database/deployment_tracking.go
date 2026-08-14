@@ -380,7 +380,7 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 		}).Error
 }
 
-func deploymentLocationUpdateValues(location *DeploymentLocation) map[string]interface{} {
+func deploymentLocationUpdateValues(location *DeploymentLocation, preserveRuntimeState bool) map[string]interface{} {
 	updatedAt := location.UpdatedAt
 	if updatedAt.IsZero() {
 		updatedAt = time.Now()
@@ -389,7 +389,7 @@ func deploymentLocationUpdateValues(location *DeploymentLocation) map[string]int
 	if healthStatus == "" {
 		healthStatus = "unknown"
 	}
-	return map[string]interface{}{
+	values := map[string]interface{}{
 		"deployment_id":     location.DeploymentID,
 		"node_id":           location.NodeID,
 		"node_hostname":     location.NodeHostname,
@@ -407,6 +407,13 @@ func deploymentLocationUpdateValues(location *DeploymentLocation) map[string]int
 		"memory_usage":      location.MemoryUsage,
 		"updated_at":        updatedAt,
 	}
+	if preserveRuntimeState {
+		delete(values, "health_status")
+		delete(values, "last_health_check")
+		delete(values, "cpu_usage")
+		delete(values, "memory_usage")
+	}
+	return values
 }
 
 // RecordDeploymentLocation records a new deployment location
@@ -423,7 +430,8 @@ func RecordDeploymentLocation(location *DeploymentLocation) error {
 			serviceResult := serviceQuery.First(&existingByService)
 			if serviceResult.Error == nil {
 				location.ID = existingByService.ID
-				if err := tx.Model(&existingByService).Updates(deploymentLocationUpdateValues(location)).Error; err != nil {
+				preserveRuntimeState := existingByService.ContainerID == location.ContainerID
+				if err := tx.Model(&existingByService).Updates(deploymentLocationUpdateValues(location, preserveRuntimeState)).Error; err != nil {
 					return err
 				}
 				return nil
@@ -440,7 +448,7 @@ func RecordDeploymentLocation(location *DeploymentLocation) error {
 		if result.Error == nil {
 			// Location exists - update it (don't change ID)
 			location.ID = existing.ID
-			if err := tx.Model(&existing).Updates(deploymentLocationUpdateValues(location)).Error; err != nil {
+			if err := tx.Model(&existing).Updates(deploymentLocationUpdateValues(location, true)).Error; err != nil {
 				return err
 			}
 		} else if result.Error == gorm.ErrRecordNotFound {

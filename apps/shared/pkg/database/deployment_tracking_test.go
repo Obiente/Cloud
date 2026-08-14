@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -45,6 +46,18 @@ func TestRecordDeploymentLocationPreservesSwarmReplicaSlots(t *testing.T) {
 		t.Fatalf("seed stale slot metadata: %v", err)
 	}
 	record("location-slot-2", "container-slot-2", "2")
+	lastHealthCheck := time.Now().Add(-time.Minute).UTC()
+	if err := DB.Model(&DeploymentLocation{}).
+		Where("deployment_id = ? AND service_id = ? AND task_slot = ?", "deployment-replicas", "service-example", "2").
+		Updates(map[string]interface{}{
+			"health_status":     "healthy",
+			"last_health_check": lastHealthCheck,
+			"cpu_usage":         27.5,
+			"memory_usage":      4096,
+		}).Error; err != nil {
+		t.Fatalf("seed sampled slot runtime state: %v", err)
+	}
+	record("location-slot-2-refresh", "container-slot-2", "2")
 	record("location-slot-1-new", "container-slot-1-new", "1")
 
 	var locations []DeploymentLocation
@@ -62,6 +75,9 @@ func TestRecordDeploymentLocationPreservesSwarmReplicaSlots(t *testing.T) {
 	}
 	if locations[1].TaskSlot != "2" || locations[1].ContainerID != "container-slot-2" {
 		t.Fatalf("slot 2 location = %#v, want preserved replica", locations[1])
+	}
+	if locations[1].HealthStatus != "healthy" || !locations[1].LastHealthCheck.Equal(lastHealthCheck) || locations[1].CPUUsage != 27.5 || locations[1].MemoryUsage != 4096 {
+		t.Fatalf("slot 2 sampled runtime state was not preserved: %#v", locations[1])
 	}
 }
 

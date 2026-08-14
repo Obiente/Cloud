@@ -103,6 +103,9 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	var swarmMountFlags []string
 	var swarmVolumePreparation *volumeRootPreparation
 	swarmOperationAttempted := false
+	markSwarmOperationAttempted := func() {
+		swarmOperationAttempted = true
+	}
 	releaseSwarmVolumePinOnFailure := false
 	var plainContainerBinds []string
 	var plainVolumePreparation *volumeRootPreparation
@@ -196,8 +199,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				if serviceExists {
 					// Service exists - update it for zero-downtime deployment
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
-					swarmOperationAttempted = true
-					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName, swarmMountFlags)
+					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName, swarmMountFlags, markSwarmOperationAttempted)
 					if err != nil {
 						var rolloutErr *SwarmRolloutError
 						if errors.As(err, &rolloutErr) && rolloutErr.ContainerID != "" {
@@ -241,8 +243,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				} else {
 					// Service doesn't exist - create it
 					logger.Info("[DeploymentManager] Creating new Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
-					swarmOperationAttempted = true
-					serviceID, containerID, err = dm.createSwarmService(ctx, config, serviceName, i, swarmMountFlags)
+					serviceID, containerID, err = dm.createSwarmService(ctx, config, serviceName, i, swarmMountFlags, markSwarmOperationAttempted)
 					if err != nil {
 						return fmt.Errorf("failed to create Swarm service: %w", err)
 					}
