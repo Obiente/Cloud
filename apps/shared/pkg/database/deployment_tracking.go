@@ -380,6 +380,35 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 		}).Error
 }
 
+func deploymentLocationUpdateValues(location *DeploymentLocation) map[string]interface{} {
+	updatedAt := location.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = time.Now()
+	}
+	healthStatus := location.HealthStatus
+	if healthStatus == "" {
+		healthStatus = "unknown"
+	}
+	return map[string]interface{}{
+		"deployment_id":     location.DeploymentID,
+		"node_id":           location.NodeID,
+		"node_hostname":     location.NodeHostname,
+		"node_ip":           location.NodeIP,
+		"container_id":      location.ContainerID,
+		"service_id":        location.ServiceID,
+		"task_id":           location.TaskID,
+		"task_slot":         location.TaskSlot,
+		"status":            location.Status,
+		"port":              location.Port,
+		"domain":            location.Domain,
+		"health_status":     healthStatus,
+		"last_health_check": location.LastHealthCheck,
+		"cpu_usage":         location.CPUUsage,
+		"memory_usage":      location.MemoryUsage,
+		"updated_at":        updatedAt,
+	}
+}
+
 // RecordDeploymentLocation records a new deployment location
 // Uses upsert logic:
 //   - for Swarm-backed services, prefer a stable logical row keyed by
@@ -394,7 +423,7 @@ func RecordDeploymentLocation(location *DeploymentLocation) error {
 			serviceResult := serviceQuery.First(&existingByService)
 			if serviceResult.Error == nil {
 				location.ID = existingByService.ID
-				if err := tx.Model(&existingByService).Updates(location).Error; err != nil {
+				if err := tx.Model(&existingByService).Updates(deploymentLocationUpdateValues(location)).Error; err != nil {
 					return err
 				}
 				return nil
@@ -411,7 +440,7 @@ func RecordDeploymentLocation(location *DeploymentLocation) error {
 		if result.Error == nil {
 			// Location exists - update it (don't change ID)
 			location.ID = existing.ID
-			if err := tx.Model(&existing).Updates(location).Error; err != nil {
+			if err := tx.Model(&existing).Updates(deploymentLocationUpdateValues(location)).Error; err != nil {
 				return err
 			}
 		} else if result.Error == gorm.ErrRecordNotFound {

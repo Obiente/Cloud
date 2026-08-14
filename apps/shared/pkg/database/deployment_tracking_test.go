@@ -39,6 +39,11 @@ func TestRecordDeploymentLocationPreservesSwarmReplicaSlots(t *testing.T) {
 	}
 
 	record("location-slot-1", "container-slot-1-old", "1")
+	if err := DB.Model(&DeploymentLocation{}).
+		Where("deployment_id = ? AND service_id = ? AND task_slot = ?", "deployment-replicas", "service-example", "1").
+		Updates(map[string]interface{}{"port": 8080, "domain": "old.example.invalid", "node_ip": "old-node-address"}).Error; err != nil {
+		t.Fatalf("seed stale slot metadata: %v", err)
+	}
 	record("location-slot-2", "container-slot-2", "2")
 	record("location-slot-1-new", "container-slot-1-new", "1")
 
@@ -51,6 +56,9 @@ func TestRecordDeploymentLocationPreservesSwarmReplicaSlots(t *testing.T) {
 	}
 	if locations[0].TaskSlot != "1" || locations[0].ContainerID != "container-slot-1-new" {
 		t.Fatalf("slot 1 location = %#v, want replacement container", locations[0])
+	}
+	if locations[0].Port != 0 || locations[0].Domain != "" || locations[0].NodeIP != "" {
+		t.Fatalf("slot 1 stale metadata was not cleared: %#v", locations[0])
 	}
 	if locations[1].TaskSlot != "2" || locations[1].ContainerID != "container-slot-2" {
 		t.Fatalf("slot 2 location = %#v, want preserved replica", locations[1])
