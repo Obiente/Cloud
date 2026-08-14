@@ -67,14 +67,14 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
-	beforeTasks, err := swarmStackTaskGenerations(ctx, projectName)
+	beforeTasks, err := swarmStackTaskGenerations(ctx, projectName, true)
 	if err != nil {
 		return fmt.Errorf("inspect services before Compose restart: %w", err)
 	}
 	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
 		return err
 	}
-	afterTasks, err := swarmStackTaskGenerations(ctx, projectName)
+	afterTasks, err := swarmStackTaskGenerations(ctx, projectName, false)
 	if err != nil {
 		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
 	}
@@ -95,14 +95,20 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 	return nil
 }
 
-func swarmStackTaskGenerations(ctx context.Context, projectName string) (map[string]string, error) {
+func swarmStackTaskGenerations(ctx context.Context, projectName string, allowMissing bool) (map[string]string, error) {
 	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
 	output, err := listCmd.CombinedOutput()
 	if err != nil {
+		if allowMissing && isMissingSwarmStackOutput(string(output)) {
+			return map[string]string{}, nil
+		}
 		return nil, fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
 	}
 	serviceNames := strings.Fields(string(output))
 	if len(serviceNames) == 0 {
+		if allowMissing {
+			return map[string]string{}, nil
+		}
 		return nil, fmt.Errorf("stack %s has no services", projectName)
 	}
 	generations := make(map[string]string, len(serviceNames))
@@ -115,6 +121,10 @@ func swarmStackTaskGenerations(ctx context.Context, projectName string) (map[str
 		generations[serviceName] = parseCurrentSwarmTaskGeneration(string(psOutput))
 	}
 	return generations, nil
+}
+
+func isMissingSwarmStackOutput(output string) bool {
+	return strings.Contains(strings.ToLower(output), "nothing found in stack")
 }
 
 func parseCurrentSwarmTaskGeneration(output string) string {

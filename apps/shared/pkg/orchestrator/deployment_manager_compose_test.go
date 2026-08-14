@@ -38,6 +38,27 @@ func TestParseCurrentSwarmTaskGenerationIgnoresHistoryAndOrder(t *testing.T) {
 	}
 }
 
+func TestIsMissingSwarmStackOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{name: "docker missing stack", output: "Nothing found in stack: deploy-example", want: true},
+		{name: "case insensitive", output: "nothing found in stack: deploy-example", want: true},
+		{name: "daemon failure", output: "error during connect: connection refused", want: false},
+		{name: "missing docker binary", output: "executable file not found", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isMissingSwarmStackOutput(test.output); got != test.want {
+				t.Fatalf("isMissingSwarmStackOutput(%q) = %t, want %t", test.output, got, test.want)
+			}
+		})
+	}
+}
+
 func TestInjectSwarmRollingUpdatePolicy(t *testing.T) {
 	input := `services:
   app:
