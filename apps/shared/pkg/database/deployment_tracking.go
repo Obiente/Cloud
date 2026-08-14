@@ -15,17 +15,18 @@ import (
 // DeploymentLocation tracks where deployments are running across the cluster
 type DeploymentLocation struct {
 	ID              string    `gorm:"primaryKey" json:"id"`
-	DeploymentID    string    `gorm:"index;not null" json:"deployment_id"`
-	NodeID          string    `gorm:"index;not null" json:"node_id"`          // Swarm node ID
-	NodeHostname    string    `json:"node_hostname"`                          // Swarm node hostname
-	NodeIP          string    `json:"node_ip"`                                // Node IP address
-	ContainerID     string    `gorm:"uniqueIndex" json:"container_id"`        // Docker container ID
-	ServiceID       string    `gorm:"index" json:"service_id"`                // Docker service ID (if using services)
-	TaskID          string    `json:"task_id"`                                // Swarm task ID
-	Status          string    `gorm:"index;not null" json:"status"`           // running, stopped, failed, etc.
-	Port            int       `json:"port"`                                   // Assigned port for this deployment
-	Domain          string    `gorm:"index" json:"domain"`                    // Custom domain for this deployment
-	HealthStatus    string    `gorm:"default:'unknown'" json:"health_status"` // healthy, unhealthy, unknown
+	DeploymentID    string    `gorm:"index;index:idx_deployment_service_slot,priority:1;not null" json:"deployment_id"`
+	NodeID          string    `gorm:"index;not null" json:"node_id"`                                        // Swarm node ID
+	NodeHostname    string    `json:"node_hostname"`                                                        // Swarm node hostname
+	NodeIP          string    `json:"node_ip"`                                                              // Node IP address
+	ContainerID     string    `gorm:"uniqueIndex" json:"container_id"`                                      // Docker container ID
+	ServiceID       string    `gorm:"index;index:idx_deployment_service_slot,priority:2" json:"service_id"` // Docker service ID (if using services)
+	TaskID          string    `json:"task_id"`                                                              // Swarm task ID
+	TaskSlot        string    `gorm:"index:idx_deployment_service_slot,priority:3" json:"task_slot"`        // Stable Swarm replica slot or global node ID
+	Status          string    `gorm:"index;not null" json:"status"`                                         // running, stopped, failed, etc.
+	Port            int       `json:"port"`                                                                 // Assigned port for this deployment
+	Domain          string    `gorm:"index" json:"domain"`                                                  // Custom domain for this deployment
+	HealthStatus    string    `gorm:"default:'unknown'" json:"health_status"`                               // healthy, unhealthy, unknown
 	LastHealthCheck time.Time `json:"last_health_check"`
 	CPUUsage        float64   `json:"cpu_usage"`    // CPU usage percentage
 	MemoryUsage     int64     `json:"memory_usage"` // Memory usage in bytes
@@ -331,13 +332,18 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 
 // RecordDeploymentLocation records a new deployment location
 // Uses upsert logic:
-//   - for Swarm-backed services, prefer a stable logical row keyed by deployment_id + service_id
+//   - for Swarm-backed services, prefer a stable logical row keyed by
+//     deployment_id + service_id + task_slot
 //   - otherwise, fall back to container_id
 func RecordDeploymentLocation(location *DeploymentLocation) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
 		if location.ServiceID != "" {
 			var existingByService DeploymentLocation
-			serviceResult := tx.Where("deployment_id = ? AND service_id = ?", location.DeploymentID, location.ServiceID).First(&existingByService)
+			serviceQuery := tx.Where("deployment_id = ? AND service_id = ?", location.DeploymentID, location.ServiceID)
+			if location.TaskSlot != "" {
+				serviceQuery = serviceQuery.Where("task_slot = ?", location.TaskSlot)
+			}
+			serviceResult := serviceQuery.First(&existingByService)
 			if serviceResult.Error == nil {
 				location.ID = existingByService.ID
 				if err := tx.Model(&existingByService).Updates(location).Error; err != nil {

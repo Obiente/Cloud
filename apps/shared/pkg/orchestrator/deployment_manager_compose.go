@@ -195,13 +195,33 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			return fmt.Errorf("wait for deployment volume preparation: %w", lockErr)
 		}
 	}
-	sanitizer = NewComposeSanitizer(deploymentID)
-	if sanitizer.GetSafeBaseDir() != "" {
-		legacyProjectRoot, err := storedComposeProvesLegacyProjectRoot(deploymentID, sanitizer.GetSafeBaseDir())
+	var recordedLegacyRoot string
+	var hasRecordedLegacyRoot bool
+	if deploymentID != "" && sanitizeVolumeName(deploymentID) == deploymentID {
+		var metadataErr error
+		recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = recordedLegacyProjectRoot(deploymentID)
+		if metadataErr != nil {
+			return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
+		}
+	}
+	if hasRecordedLegacyRoot {
+		sanitizer = &ComposeSanitizer{
+			deploymentID:      deploymentID,
+			safeBaseDir:       recordedLegacyRoot,
+			legacyProjectRoot: true,
+		}
+	} else {
+		sanitizer = NewComposeSanitizer(deploymentID)
+	}
+	if !hasRecordedLegacyRoot && sanitizer.GetSafeBaseDir() != "" {
+		legacyProjectRoot, found, err := storedComposeLegacyProjectRoot(deploymentID, sanitizer.GetSafeBaseDir())
 		if err != nil {
 			return fmt.Errorf("inspect persisted Compose volume metadata: %w", err)
 		}
-		sanitizer.legacyProjectRoot = legacyProjectRoot
+		if found {
+			sanitizer.safeBaseDir = legacyProjectRoot
+			sanitizer.legacyProjectRoot = true
+		}
 	}
 	if isSwarmMode {
 		sanitizer.swarmVolumeNodeID = dm.nodeID
@@ -606,12 +626,12 @@ func swarmStackRuntimeFingerprint(ctx context.Context, projectName string) (stri
 	return strings.Join(versions, "\n"), nil
 }
 
-func storedComposeProvesLegacyProjectRoot(deploymentID, safeBaseDir string) (bool, error) {
+func storedComposeLegacyProjectRoot(deploymentID, preferredSafeBaseDir string) (string, bool, error) {
 	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
-		return false, fmt.Errorf("invalid deployment identifier")
+		return "", false, fmt.Errorf("invalid deployment identifier")
 	}
-	if !filepath.IsAbs(safeBaseDir) {
-		return false, fmt.Errorf("volume root %q is not absolute", safeBaseDir)
+	if !filepath.IsAbs(preferredSafeBaseDir) {
+		return "", false, fmt.Errorf("volume root %q is not absolute", preferredSafeBaseDir)
 	}
 	possibleDirs := []string{
 		"/var/lib/obiente/deployments",
@@ -621,33 +641,85 @@ func storedComposeProvesLegacyProjectRoot(deploymentID, safeBaseDir string) (boo
 	}
 	for _, baseDir := range possibleDirs {
 		deployDir := filepath.Join(baseDir, deploymentID)
-		metadata, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
-		if err != nil {
-			return false, fmt.Errorf("read legacy project-root metadata in %s: %w", deployDir, err)
-		}
-		if found {
-			expected := legacyProjectRootMetadataContents(safeBaseDir)
-			if string(metadata) != expected {
-				return false, fmt.Errorf("legacy project-root metadata in %s does not match the selected volume root", deployDir)
-			}
-			return true, nil
-		}
-
 		contents, found, err := readDeploymentFileNoFollow(deployDir, "docker-compose.yml")
 		if err != nil {
-			return false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
+			return "", false, fmt.Errorf("read persisted Compose file in %s: %w", deployDir, err)
 		}
 		if found {
-			proven, proveErr := persistedComposeProvesLegacyProjectRoot(string(contents), safeBaseDir)
+			proven, proveErr := persistedComposeProvesLegacyProjectRoot(string(contents), preferredSafeBaseDir)
 			if proveErr != nil {
-				return false, fmt.Errorf("inspect persisted Compose file in %s: %w", deployDir, proveErr)
+				return "", false, fmt.Errorf("inspect persisted Compose file in %s: %w", deployDir, proveErr)
 			}
 			if proven {
-				return true, nil
+				return preferredSafeBaseDir, true, nil
 			}
 		}
 	}
-	return false, nil
+	return "", false, nil
+}
+
+func recordedLegacyProjectRoot(deploymentID string) (string, bool, error) {
+	possibleDirs := []string{
+		"/var/lib/obiente/deployments",
+		"/var/obiente/tmp/obiente-deployments",
+		"/tmp/obiente-deployments",
+		os.TempDir(),
+	}
+	var recordedRoot string
+	for _, baseDir := range possibleDirs {
+		deployDir := filepath.Join(baseDir, deploymentID)
+		metadata, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+		if err != nil {
+			return "", false, fmt.Errorf("read legacy project-root metadata in %s: %w", deployDir, err)
+		}
+		if !found {
+			continue
+		}
+		candidateRoot, parseErr := parseLegacyProjectRootMetadata(metadata, deploymentID)
+		if parseErr != nil {
+			return "", false, fmt.Errorf("validate legacy project-root metadata in %s: %w", deployDir, parseErr)
+		}
+		if recordedRoot != "" && recordedRoot != candidateRoot {
+			return "", false, fmt.Errorf("conflicting legacy project-root metadata: %q and %q", recordedRoot, candidateRoot)
+		}
+		recordedRoot = candidateRoot
+	}
+	return recordedRoot, recordedRoot != "", nil
+}
+
+func parseLegacyProjectRootMetadata(metadata []byte, deploymentID string) (string, error) {
+	lines := strings.Split(strings.TrimSuffix(string(metadata), "\n"), "\n")
+	if len(lines) != 2 || lines[0] != "legacy-relative-project-root-v1" {
+		return "", fmt.Errorf("invalid legacy project-root metadata format")
+	}
+	recordedRoot := filepath.Clean(lines[1])
+	if !filepath.IsAbs(recordedRoot) {
+		return "", fmt.Errorf("recorded volume root %q is not absolute", recordedRoot)
+	}
+	allowedParents := []string{
+		"/var/lib/obiente/volumes",
+		"/var/obiente/tmp/obiente-volumes",
+		"/tmp/obiente-volumes",
+		filepath.Join(os.TempDir(), "obiente-volumes"),
+	}
+	allowed := false
+	for _, parent := range allowedParents {
+		if recordedRoot == filepath.Join(parent, deploymentID) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return "", fmt.Errorf("recorded volume root %q is outside managed volume roots", recordedRoot)
+	}
+	dirFD, err := secureOpenDirectory(recordedRoot, false)
+	if err != nil {
+		return "", fmt.Errorf("open recorded volume root %q: %w", recordedRoot, err)
+	}
+	if err := unix.Close(dirFD); err != nil {
+		return "", fmt.Errorf("close recorded volume root %q: %w", recordedRoot, err)
+	}
+	return recordedRoot, nil
 }
 
 func legacyProjectRootMetadataContents(safeBaseDir string) string {
@@ -741,6 +813,20 @@ func removeIncompleteLegacyProjectRootMetadata(dirFD int) error {
 		return fmt.Errorf("remove incomplete legacy project-root metadata: %w", err)
 	}
 	return nil
+}
+
+func swarmTaskSlot(labels map[string]string) string {
+	serviceName := strings.TrimSpace(labels["com.docker.swarm.service.name"])
+	taskName := strings.TrimSpace(labels["com.docker.swarm.task.name"])
+	if serviceName == "" || !strings.HasPrefix(taskName, serviceName+".") {
+		return ""
+	}
+	remainder := strings.TrimPrefix(taskName, serviceName+".")
+	slot, _, found := strings.Cut(remainder, ".")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(slot)
 }
 
 // registerComposeContainers finds containers created by a compose project and registers them
@@ -921,6 +1007,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 			ContainerID:  cnt.ID,
 			ServiceID:    cnt.Labels["com.docker.swarm.service.id"],
 			TaskID:       cnt.Labels["com.docker.swarm.task.id"],
+			TaskSlot:     swarmTaskSlot(cnt.Labels),
 			Status:       containerStatus,
 			Port:         publicPort,
 			Domain:       "", // Will be set from deployment config

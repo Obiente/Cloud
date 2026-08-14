@@ -69,6 +69,67 @@ func TestUnchangedSwarmStackServicesUsesSpecifications(t *testing.T) {
 	}
 }
 
+func TestSwarmTaskSlotUsesStableReplicaIdentity(t *testing.T) {
+	labels := map[string]string{
+		"com.docker.swarm.service.name": "deploy-example_api",
+		"com.docker.swarm.task.name":    "deploy-example_api.2.current-task",
+	}
+	if got := swarmTaskSlot(labels); got != "2" {
+		t.Fatalf("swarmTaskSlot() = %q, want %q", got, "2")
+	}
+	labels["com.docker.swarm.task.name"] = "unrelated.2.current-task"
+	if got := swarmTaskSlot(labels); got != "" {
+		t.Fatalf("swarmTaskSlot() accepted unrelated task name: %q", got)
+	}
+}
+
+func TestParseLegacyProjectRootMetadataUsesRecordedManagedRoot(t *testing.T) {
+	deploymentID := "compose-metadata-root-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	if err := os.MkdirAll(recordedRoot, 0o755); err != nil {
+		t.Fatalf("create recorded volume root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(recordedRoot) })
+
+	got, err := parseLegacyProjectRootMetadata([]byte(legacyProjectRootMetadataContents(recordedRoot)), deploymentID)
+	if err != nil {
+		t.Fatalf("parse recorded volume root: %v", err)
+	}
+	if got != recordedRoot {
+		t.Fatalf("recorded volume root = %q, want %q", got, recordedRoot)
+	}
+	if _, err := parseLegacyProjectRootMetadata([]byte("legacy-relative-project-root-v1\n/etc\n"), deploymentID); err == nil {
+		t.Fatal("metadata outside managed volume roots should be rejected")
+	}
+}
+
+func TestRecordedLegacyProjectRootPrecedesNewRootSelection(t *testing.T) {
+	deploymentID := fmt.Sprintf("compose-recorded-root-test-%d", os.Getpid())
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	deployDir := filepath.Join("/tmp/obiente-deployments", deploymentID)
+	if err := os.MkdirAll(recordedRoot, 0o755); err != nil {
+		t.Fatalf("create recorded volume root: %v", err)
+	}
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
+		t.Fatalf("create deployment metadata directory: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(recordedRoot)
+		_ = os.RemoveAll(deployDir)
+	})
+	if err := persistLegacyProjectRootMetadata(deployDir, recordedRoot); err != nil {
+		t.Fatalf("persist recorded volume root: %v", err)
+	}
+
+	got, found, err := recordedLegacyProjectRoot(deploymentID)
+	if err != nil {
+		t.Fatalf("read recorded volume root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("recorded volume root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+}
+
 func TestIsMissingSwarmStackOutput(t *testing.T) {
 	tests := []struct {
 		name   string
