@@ -503,7 +503,7 @@ func swarmStartCommandUpdateArgs(startCommand *string) []string {
 	return args
 }
 
-func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
+func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string, binds []string) (string, error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -774,10 +774,6 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	nanoCPUs := int64(cpuCores * 1e9)
 
 	// Host configuration
-	binds, _, err := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
-	if err != nil {
-		return "", fmt.Errorf("prepare deployment volumes: %w", err)
-	}
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
 		Binds:        binds,

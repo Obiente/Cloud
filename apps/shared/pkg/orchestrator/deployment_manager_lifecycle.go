@@ -99,6 +99,16 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	// Check if we're in Swarm mode
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	completedSwarmOperations := 0
+	var plainContainerBinds []string
+	if !isSwarmMode {
+		// Prepare every declared volume before replacing any live container. Keep
+		// using these exact binds during creation so a preparation failure cannot
+		// occur after the previous workload has been removed.
+		plainContainerBinds, _, err = sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+		if err != nil {
+			return fmt.Errorf("prepare deployment volumes: %w", err)
+		}
+	}
 
 	// Create containers/services for each service and replica
 	for _, serviceName := range serviceNames {
@@ -205,7 +215,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
 				}
 
-				containerID, err = dm.createContainer(ctx, config, containerName, i, serviceName)
+				containerID, err = dm.createContainer(ctx, config, containerName, i, serviceName, plainContainerBinds)
 				if err != nil {
 					return fmt.Errorf("failed to create container: %w", err)
 				}
