@@ -375,10 +375,7 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 			if task.ServiceID != svc.ID {
 				continue
 			}
-			if !isTaskActive(string(task.Status.State)) {
-				continue
-			}
-			if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
+			if !shouldRecordSwarmTask(task) {
 				continue
 			}
 
@@ -446,6 +443,13 @@ func stableSwarmTaskSlot(mode swarm.ServiceMode, task swarm.Task) string {
 		return strconv.Itoa(task.Slot)
 	}
 	return ""
+}
+
+func shouldRecordSwarmTask(task swarm.Task) bool {
+	return task.DesiredState == swarm.TaskStateRunning &&
+		isTaskActive(string(task.Status.State)) &&
+		task.Status.ContainerStatus != nil &&
+		strings.TrimSpace(task.Status.ContainerStatus.ContainerID) != ""
 }
 
 func isTaskActive(state string) bool {

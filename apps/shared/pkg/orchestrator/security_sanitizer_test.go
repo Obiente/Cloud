@@ -728,6 +728,40 @@ func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
 	}
 }
 
+func TestSanitizeComposeYAMLRejectsWritableParentBindHierarchy(t *testing.T) {
+	tests := []struct {
+		name    string
+		volumes string
+	}{
+		{
+			name: "parent before child",
+			volumes: `
+      - .:/workspace
+      - ./data:/workspace/data:ro`,
+		},
+		{
+			name: "child before parent",
+			volumes: `
+      - ./data:/workspace/data:ro
+      - .:/workspace`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sanitizer := &ComposeSanitizer{
+				deploymentID: "compose-bind-hierarchy-test",
+				safeBaseDir:  t.TempDir(),
+			}
+			composeYAML := "services:\n  app:\n    image: example.invalid/app\n    volumes:" + test.volumes + "\n"
+			_, err := sanitizer.SanitizeComposeYAML(composeYAML)
+			if err == nil || (!strings.Contains(err.Error(), "mounted source") && !strings.Contains(err.Error(), "nested beneath writable source")) {
+				t.Fatalf("sanitize writable parent bind hierarchy error = %v, want hierarchy rejection", err)
+			}
+		})
+	}
+}
+
 func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) {
 	safeBaseDir := t.TempDir()
 	sanitizer := &ComposeSanitizer{
@@ -738,7 +772,7 @@ func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) 
   app:
     image: example/app:latest
     volumes:
-      - .:/workspace
+      - .:/workspace:ro
       - ./data:/workspace/data
 `
 
@@ -921,7 +955,7 @@ func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
   app:
     image: example/app:latest
     volumes:
-      - .:/workspace
+      - .:/workspace:ro
       - ./cache:/workspace/cache
 `
 

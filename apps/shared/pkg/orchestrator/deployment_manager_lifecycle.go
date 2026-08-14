@@ -100,10 +100,54 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	// Check if we're in Swarm mode
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	completedSwarmOperations := 0
+	var swarmMountFlags []string
+	var swarmVolumePreparation *volumeRootPreparation
+	swarmOperationAttempted := false
+	releaseSwarmVolumePinOnFailure := false
 	var plainContainerBinds []string
 	var plainVolumePreparation *volumeRootPreparation
 	plainReplacementStarted := false
-	if !isSwarmMode {
+	if isSwarmMode {
+		// One preparation and lock cover the entire deployment. In particular,
+		// read-only host modes are not applied while an earlier service has
+		// converged but later services still have old writable tasks running.
+		_, swarmMountFlags, swarmVolumePreparation, err = preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
+		if err != nil {
+			return fmt.Errorf("prepare deployment volumes: %w", err)
+		}
+		if len(swarmMountFlags) > 0 {
+			pinAcquired, pinErr := database.PinDeploymentVolumeNode(ctx, config.DeploymentID, dm.nodeID)
+			if pinErr != nil {
+				if rollbackErr := swarmVolumePreparation.Rollback(); rollbackErr != nil {
+					return fmt.Errorf("pin deployment-local volumes to Swarm node: %w; restore volume permissions: %v", pinErr, rollbackErr)
+				}
+				return fmt.Errorf("pin deployment-local volumes to Swarm node: %w", pinErr)
+			}
+			releaseSwarmVolumePinOnFailure = pinAcquired && !swarmVolumePreparation.HasExistingRoots()
+		}
+		defer func() {
+			if retErr == nil {
+				return
+			}
+			if swarmOperationAttempted {
+				// Once any service operation begins, Docker may have accepted a new
+				// task specification even if its CLI call later fails. Retaining the
+				// prepared writable modes is safer than breaking either revision.
+				swarmVolumePreparation.Commit()
+				return
+			}
+			if rollbackErr := swarmVolumePreparation.Rollback(); rollbackErr != nil {
+				retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+			}
+			if releaseSwarmVolumePinOnFailure {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				if releaseErr := database.ReleaseDeploymentVolumeNode(cleanupCtx, config.DeploymentID, dm.nodeID); releaseErr != nil {
+					retErr = errors.Join(retErr, fmt.Errorf("release unused deployment volume node pin: %w", releaseErr))
+				}
+			}
+		}()
+	} else {
 		// Prepare every declared volume before replacing any live container. Keep
 		// using these exact binds during creation so a preparation failure cannot
 		// occur after the previous workload has been removed. Read-only restriction
@@ -152,7 +196,8 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				if serviceExists {
 					// Service exists - update it for zero-downtime deployment
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
-					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
+					swarmOperationAttempted = true
+					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName, swarmMountFlags)
 					if err != nil {
 						var rolloutErr *SwarmRolloutError
 						if errors.As(err, &rolloutErr) && rolloutErr.ContainerID != "" {
@@ -195,7 +240,8 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				} else {
 					// Service doesn't exist - create it
 					logger.Info("[DeploymentManager] Creating new Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
-					serviceID, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
+					swarmOperationAttempted = true
+					serviceID, containerID, err = dm.createSwarmService(ctx, config, serviceName, i, swarmMountFlags)
 					if err != nil {
 						return fmt.Errorf("failed to create Swarm service: %w", err)
 					}
@@ -321,7 +367,11 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			}
 		}
 	}
-	if !isSwarmMode {
+	if isSwarmMode {
+		if err := swarmVolumePreparation.ApplyDeferredReadOnly(); err != nil {
+			return fmt.Errorf("apply read-only deployment volume permissions: %w", err)
+		}
+	} else {
 		if err := plainVolumePreparation.ApplyDeferredReadOnly(); err != nil {
 			return fmt.Errorf("apply read-only deployment volume permissions: %w", err)
 		}

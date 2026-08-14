@@ -1069,7 +1069,30 @@ func composeBindOptionsReadOnly(options string) bool {
 	return false
 }
 
+func strictDescendantPath(parent, child string) bool {
+	relative, err := filepath.Rel(parent, child)
+	return err == nil && relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func (cs *ComposeSanitizer) rejectWritableBindHierarchy(path string, writable bool) error {
+	for preparedPath, preparedWritable := range cs.preparedWritable {
+		if preparedPath == path {
+			continue
+		}
+		if preparedWritable && strictDescendantPath(preparedPath, path) {
+			return fmt.Errorf("volume source %s is nested beneath writable source %s", path, preparedPath)
+		}
+		if writable && strictDescendantPath(path, preparedPath) {
+			return fmt.Errorf("writable volume source %s contains another mounted source %s", path, preparedPath)
+		}
+	}
+	return nil
+}
+
 func (cs *ComposeSanitizer) prepareBindDir(path string, writable bool) error {
+	if err := cs.rejectWritableBindHierarchy(path, writable); err != nil {
+		return err
+	}
 	if _, prepared := cs.preparedVolumeSet[path]; !prepared {
 		state, err := snapshotVolumeRootState(path)
 		if err != nil {

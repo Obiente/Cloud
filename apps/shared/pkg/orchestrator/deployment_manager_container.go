@@ -111,6 +111,18 @@ func (preparation *volumeRootPreparation) Commit() {
 	}
 }
 
+func (preparation *volumeRootPreparation) HasExistingRoots() bool {
+	if preparation == nil {
+		return false
+	}
+	for _, state := range preparation.states {
+		if state.existed {
+			return true
+		}
+	}
+	return false
+}
+
 func (preparation *volumeRootPreparation) release() {
 	if preparation == nil || preparation.releaseLock == nil {
 		return
@@ -1287,7 +1299,7 @@ func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serv
 	}
 }
 
-func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (serviceID string, containerID string, retErr error) {
+func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, mountFlags []string) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1403,31 +1415,16 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
-	if err != nil {
-		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
-	}
 	serviceCreated := false
 	defer func() {
-		if retErr == nil {
+		if retErr == nil || !serviceCreated || !terminalSwarmRolloutFailure(retErr) {
 			return
 		}
-		if serviceCreated {
-			if !terminalSwarmRolloutFailure(retErr) {
-				volumePreparation.Commit()
-				return
-			}
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cleanupCancel()
-			cleanupCmd := exec.CommandContext(cleanupCtx, "docker", "service", "rm", swarmServiceName)
-			if cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
-				volumePreparation.Commit()
-				retErr = fmt.Errorf("%w; remove failed Swarm service before restoring volume permissions: %v (%s); prepared permissions retained", retErr, cleanupErr, strings.TrimSpace(string(cleanupOutput)))
-				return
-			}
-		}
-		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
-			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		cleanupCmd := exec.CommandContext(cleanupCtx, "docker", "service", "rm", swarmServiceName)
+		if cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
+			retErr = fmt.Errorf("%w; remove failed Swarm service: %v (%s)", retErr, cleanupErr, strings.TrimSpace(string(cleanupOutput)))
 		}
 	}()
 	for _, mountFlag := range mountFlags {
@@ -2011,15 +2008,12 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		serviceID = convergedTask.ServiceID
 	}
 	containerID = convergedTask.ContainerID
-	if err := volumePreparation.ApplyDeferredReadOnly(); err != nil {
-		return "", "", err
-	}
 	return serviceID, containerID, nil
 }
 
 // updateSwarmService updates an existing Swarm service with new configuration
 // This enables zero-downtime deployments by using docker service update with start-first strategy
-func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string) (serviceID string, containerID string, retErr error) {
+func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string, mountFlags []string) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -2124,29 +2118,6 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
 	}
-	_, mountFlags, volumePreparation, err := preparedSanitizedVolumeMounts(ctx, config.DeploymentID, config.Volumes)
-	if err != nil {
-		return "", "", fmt.Errorf("prepare deployment volumes: %w", err)
-	}
-	volumePreparationCommitted := false
-	defer func() {
-		if retErr == nil {
-			return
-		}
-		if volumePreparationCommitted {
-			if RollbackPreserved(retErr) {
-				if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
-					retErr = fmt.Errorf("%w; restore previous volume permissions after Swarm rollback: %v", retErr, rollbackErr)
-				}
-			} else {
-				volumePreparation.Commit()
-			}
-			return
-		}
-		if rollbackErr := volumePreparation.Rollback(); rollbackErr != nil {
-			retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
-		}
-	}()
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount-add", mountFlag)
 	}
@@ -2316,16 +2287,8 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
-	beforeRuntime, err := swarmServiceRuntimeFingerprint(dockerCtx, swarmServiceName, false)
-	if err != nil {
-		return "", "", fmt.Errorf("inspect service before update: %w", err)
-	}
-
 	logger.Info("[DeploymentManager] Updating Swarm service %s with zero-downtime strategy (start-first)", swarmServiceName)
 	if err := cmd.Run(); err != nil {
-		volumePreparationCommitted = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
-			return swarmServiceRuntimeFingerprint(inspectCtx, swarmServiceName, false)
-		})
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
 		if dockerCtx.Err() == context.DeadlineExceeded {
@@ -2338,12 +2301,6 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		logger.Error("[DeploymentManager] Failed to update Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
 		return "", "", fmt.Errorf("failed to update Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
-	// Docker has accepted the new service specification. From this point it may
-	// start replacement tasks asynchronously, so restoring preflight modes could
-	// break the accepted revision. Read-only restrictions remain deferred until
-	// the rollout reaches a terminal successful state.
-	volumePreparationCommitted = true
-
 	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
 
@@ -2353,9 +2310,6 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	}
 	if task.ServiceID != "" {
 		serviceID = task.ServiceID
-	}
-	if err := volumePreparation.ApplyDeferredReadOnly(); err != nil {
-		return serviceID, task.ContainerID, err
 	}
 	return serviceID, task.ContainerID, nil
 }
