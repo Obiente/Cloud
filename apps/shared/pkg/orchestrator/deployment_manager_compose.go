@@ -29,7 +29,10 @@ import (
 
 const legacyPreviewIngressNetworkName = "obiente-preview-ingress"
 
-const legacyProjectRootMetadataFile = ".obiente-legacy-relative-project-root-v1"
+const (
+	legacyProjectRootMetadataFile    = ".obiente-legacy-relative-project-root-v1"
+	deploymentVolumeRootMetadataFile = ".obiente-volume-root-v1"
+)
 
 func PreviewIngressNetworkNameForDeployment(deploymentID string) string {
 	return fmt.Sprintf("deployment-%s", deploymentID)
@@ -241,6 +244,8 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	}
 	var recordedLegacyRoot string
 	var hasRecordedLegacyRoot bool
+	var recordedVolumeRoot string
+	var hasRecordedVolumeRoot bool
 	var persistedComposeYaml string
 	if deploymentID != "" && sanitizeVolumeName(deploymentID) == deploymentID {
 		var metadataErr error
@@ -253,18 +258,41 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		if metadataErr != nil {
 			return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
 		}
+		recordedVolumeRoot, hasRecordedVolumeRoot, metadataErr = recordedDeploymentVolumeRoot(deploymentID)
+		if metadataErr != nil {
+			return fmt.Errorf("inspect persisted Compose volume root: %w", metadataErr)
+		}
 		if !hasRecordedLegacyRoot && hasPersistedCompose {
 			recordedLegacyRoot, hasRecordedLegacyRoot, metadataErr = persistedComposeLegacyProjectRoot(persistedComposeYaml, deploymentID)
 			if metadataErr != nil {
 				return fmt.Errorf("inspect persisted Compose volume metadata: %w", metadataErr)
 			}
 		}
+		if !hasRecordedVolumeRoot && hasPersistedCompose {
+			recordedVolumeRoot, hasRecordedVolumeRoot, metadataErr = persistedComposeManagedVolumeRoot(persistedComposeYaml, deploymentID)
+			if metadataErr != nil {
+				return fmt.Errorf("inspect persisted Compose volume root: %w", metadataErr)
+			}
+			if hasRecordedVolumeRoot {
+				recordedVolumeRoot, metadataErr = validateLegacyProjectRoot(recordedVolumeRoot, deploymentID)
+				if metadataErr != nil {
+					return fmt.Errorf("validate persisted Compose volume root: %w", metadataErr)
+				}
+			}
+		}
+		if hasRecordedLegacyRoot {
+			if hasRecordedVolumeRoot && recordedVolumeRoot != recordedLegacyRoot {
+				return fmt.Errorf("conflicting persisted Compose volume roots %q and %q", recordedVolumeRoot, recordedLegacyRoot)
+			}
+			recordedVolumeRoot = recordedLegacyRoot
+			hasRecordedVolumeRoot = true
+		}
 	}
-	if hasRecordedLegacyRoot {
+	if hasRecordedVolumeRoot {
 		sanitizer = &ComposeSanitizer{
 			deploymentID:      deploymentID,
-			safeBaseDir:       recordedLegacyRoot,
-			legacyProjectRoot: true,
+			safeBaseDir:       recordedVolumeRoot,
+			legacyProjectRoot: hasRecordedLegacyRoot,
 		}
 	} else {
 		sanitizer = NewComposeSanitizer(deploymentID)
@@ -448,6 +476,9 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 	if deployDir == "" {
 		return fmt.Errorf("failed to create deployment directory in any of the attempted locations")
+	}
+	if err := persistDeploymentVolumeRootMetadata(deployDir, sanitizer.GetSafeBaseDir()); err != nil {
+		return fmt.Errorf("persist selected Compose volume root: %w", err)
 	}
 	if sanitizer.legacyProjectRoot {
 		if err := persistLegacyProjectRootMetadata(deployDir, sanitizer.GetSafeBaseDir()); err != nil {
@@ -820,6 +851,38 @@ func storedComposeFile(deploymentID string) (string, bool, error) {
 	return "", false, nil
 }
 
+func recordedDeploymentVolumeRoot(deploymentID string) (string, bool, error) {
+	possibleDirs := []string{
+		"/var/lib/obiente/deployments",
+		"/var/obiente/tmp/obiente-deployments",
+		"/tmp/obiente-deployments",
+		os.TempDir(),
+	}
+	var recordedRoot string
+	for _, baseDir := range possibleDirs {
+		deployDir := filepath.Join(baseDir, deploymentID)
+		metadata, found, err := readDeploymentFileNoFollow(deployDir, deploymentVolumeRootMetadataFile)
+		if err != nil {
+			if deploymentMetadataDirectoryUnavailable(err) {
+				continue
+			}
+			return "", false, fmt.Errorf("read deployment volume-root metadata in %s: %w", deployDir, err)
+		}
+		if !found {
+			continue
+		}
+		candidateRoot, parseErr := parseDeploymentVolumeRootMetadata(metadata, deploymentID)
+		if parseErr != nil {
+			return "", false, fmt.Errorf("validate deployment volume-root metadata in %s: %w", deployDir, parseErr)
+		}
+		if recordedRoot != "" && recordedRoot != candidateRoot {
+			return "", false, fmt.Errorf("conflicting deployment volume-root metadata: %q and %q", recordedRoot, candidateRoot)
+		}
+		recordedRoot = candidateRoot
+	}
+	return recordedRoot, recordedRoot != "", nil
+}
+
 func recordedLegacyProjectRoot(deploymentID string) (string, bool, error) {
 	possibleDirs := []string{
 		"/var/lib/obiente/deployments",
@@ -860,20 +923,42 @@ func parseLegacyProjectRootMetadata(metadata []byte, deploymentID string) (strin
 	return validateLegacyProjectRoot(lines[1], deploymentID)
 }
 
-func validateLegacyProjectRoot(root, deploymentID string) (string, error) {
-	recordedRoot := filepath.Clean(root)
-	if !filepath.IsAbs(recordedRoot) {
-		return "", fmt.Errorf("recorded volume root %q is not absolute", recordedRoot)
+func parseDeploymentVolumeRootMetadata(metadata []byte, deploymentID string) (string, error) {
+	lines := strings.Split(strings.TrimSuffix(string(metadata), "\n"), "\n")
+	if len(lines) != 2 || lines[0] != "deployment-volume-root-v1" {
+		return "", fmt.Errorf("invalid deployment volume-root metadata format")
 	}
-	allowedParents := []string{
+	return validateLegacyProjectRoot(lines[1], deploymentID)
+}
+
+func managedDeploymentVolumeRoots(deploymentID string) []string {
+	parents := []string{
 		"/var/lib/obiente/volumes",
 		"/var/obiente/tmp/obiente-volumes",
 		"/tmp/obiente-volumes",
 		filepath.Join(os.TempDir(), "obiente-volumes"),
 	}
+	roots := make([]string, 0, len(parents))
+	seen := make(map[string]struct{}, len(parents))
+	for _, parent := range parents {
+		root := filepath.Join(parent, deploymentID)
+		if _, exists := seen[root]; exists {
+			continue
+		}
+		seen[root] = struct{}{}
+		roots = append(roots, root)
+	}
+	return roots
+}
+
+func validateLegacyProjectRoot(root, deploymentID string) (string, error) {
+	recordedRoot := filepath.Clean(root)
+	if !filepath.IsAbs(recordedRoot) {
+		return "", fmt.Errorf("recorded volume root %q is not absolute", recordedRoot)
+	}
 	allowed := false
-	for _, parent := range allowedParents {
-		if recordedRoot == filepath.Join(parent, deploymentID) {
+	for _, managedRoot := range managedDeploymentVolumeRoots(deploymentID) {
+		if recordedRoot == managedRoot {
 			allowed = true
 			break
 		}
@@ -893,6 +978,10 @@ func validateLegacyProjectRoot(root, deploymentID string) (string, error) {
 
 func legacyProjectRootMetadataContents(safeBaseDir string) string {
 	return "legacy-relative-project-root-v1\n" + filepath.Clean(safeBaseDir) + "\n"
+}
+
+func deploymentVolumeRootMetadataContents(safeBaseDir string) string {
+	return "deployment-volume-root-v1\n" + filepath.Clean(safeBaseDir) + "\n"
 }
 
 type deploymentMetadataDirectoryError struct {
@@ -952,16 +1041,23 @@ func readDeploymentFileNoFollow(deployDir, name string) ([]byte, bool, error) {
 }
 
 func persistLegacyProjectRootMetadata(deployDir, safeBaseDir string) error {
-	expected := legacyProjectRootMetadataContents(safeBaseDir)
+	return persistVolumeRootMetadata(deployDir, legacyProjectRootMetadataFile, legacyProjectRootMetadataContents(safeBaseDir))
+}
+
+func persistDeploymentVolumeRootMetadata(deployDir, safeBaseDir string) error {
+	return persistVolumeRootMetadata(deployDir, deploymentVolumeRootMetadataFile, deploymentVolumeRootMetadataContents(safeBaseDir))
+}
+
+func persistVolumeRootMetadata(deployDir, metadataFile, expected string) error {
 	dirFD, err := secureOpenDirectory(deployDir, false)
 	if err != nil {
 		return err
 	}
 	defer unix.Close(dirFD)
 
-	fileFD, err := unix.Openat(dirFD, legacyProjectRootMetadataFile, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	fileFD, err := unix.Openat(dirFD, metadataFile, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
 	if errors.Is(err, unix.EEXIST) {
-		contents, found, readErr := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+		contents, found, readErr := readDeploymentFileNoFollow(deployDir, metadataFile)
 		if readErr != nil {
 			return readErr
 		}
@@ -973,32 +1069,36 @@ func persistLegacyProjectRootMetadata(deployDir, safeBaseDir string) error {
 	if err != nil {
 		return err
 	}
-	file := os.NewFile(uintptr(fileFD), legacyProjectRootMetadataFile)
+	file := os.NewFile(uintptr(fileFD), metadataFile)
 	if file == nil {
 		unix.Close(fileFD)
-		return errors.Join(fmt.Errorf("open newly created metadata"), removeIncompleteLegacyProjectRootMetadata(dirFD))
+		return errors.Join(fmt.Errorf("open newly created metadata"), removeIncompleteVolumeRootMetadata(dirFD, metadataFile))
 	}
 	if _, err := file.WriteString(expected); err != nil {
 		closeErr := file.Close()
-		return errors.Join(err, closeErr, removeIncompleteLegacyProjectRootMetadata(dirFD))
+		return errors.Join(err, closeErr, removeIncompleteVolumeRootMetadata(dirFD, metadataFile))
 	}
 	if err := file.Sync(); err != nil {
 		closeErr := file.Close()
-		return errors.Join(err, closeErr, removeIncompleteLegacyProjectRootMetadata(dirFD))
+		return errors.Join(err, closeErr, removeIncompleteVolumeRootMetadata(dirFD, metadataFile))
 	}
 	if err := file.Close(); err != nil {
-		return errors.Join(err, removeIncompleteLegacyProjectRootMetadata(dirFD))
+		return errors.Join(err, removeIncompleteVolumeRootMetadata(dirFD, metadataFile))
 	}
 	return unix.Fsync(dirFD)
 }
 
 func removeIncompleteLegacyProjectRootMetadata(dirFD int) error {
-	err := unix.Unlinkat(dirFD, legacyProjectRootMetadataFile, 0)
+	return removeIncompleteVolumeRootMetadata(dirFD, legacyProjectRootMetadataFile)
+}
+
+func removeIncompleteVolumeRootMetadata(dirFD int, metadataFile string) error {
+	err := unix.Unlinkat(dirFD, metadataFile, 0)
 	if errors.Is(err, unix.ENOENT) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("remove incomplete legacy project-root metadata: %w", err)
+		return fmt.Errorf("remove incomplete volume-root metadata: %w", err)
 	}
 	return nil
 }

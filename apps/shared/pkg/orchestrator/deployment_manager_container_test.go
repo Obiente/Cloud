@@ -1035,3 +1035,24 @@ func TestRollbackPreserved(t *testing.T) {
 		t.Fatal("RollbackPreserved() = true for ordinary failure")
 	}
 }
+
+func TestVolumeRootPreparationRollbackFinalizesBeforeUnlock(t *testing.T) {
+	locked := true
+	preparation := &volumeRootPreparation{
+		states: map[string]volumeRootState{},
+		releaseLock: func() {
+			locked = false
+		},
+	}
+	if err := preparation.rollbackAndFinalize(func() error {
+		if !locked {
+			return errors.New("deployment volume lock released before finalization")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("rollback and finalize: %v", err)
+	}
+	if locked {
+		t.Fatal("deployment volume lock remained held after finalization")
+	}
+}

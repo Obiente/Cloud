@@ -155,6 +155,14 @@ func EnforceUniqueDeploymentLocationSlots(db *gorm.DB) error {
 	if !db.Migrator().HasTable("deployment_locations") {
 		return nil
 	}
+	// Older installations predate task_slot. Add only that column before the
+	// deduplication query; a full AutoMigrate here could try to create the
+	// unique index before legacy duplicate rows have been removed.
+	if !db.Migrator().HasColumn(&DeploymentLocation{}, "TaskSlot") {
+		if err := db.Migrator().AddColumn(&DeploymentLocation{}, "TaskSlot"); err != nil {
+			return fmt.Errorf("add deployment location task slot column: %w", err)
+		}
+	}
 	if db.Migrator().HasIndex(&DeploymentLocation{}, "idx_deployment_service_slot_unique") {
 		return nil
 	}

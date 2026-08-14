@@ -84,11 +84,26 @@ type volumeRootPreparation struct {
 }
 
 func (preparation *volumeRootPreparation) Rollback() error {
+	return preparation.rollbackAndFinalize(nil)
+}
+
+// rollbackAndFinalize keeps the per-deployment lock held while finalize runs.
+// Callers use this when cleanup changes durable ownership state that a waiting
+// deployment must not observe between filesystem rollback and lock release.
+func (preparation *volumeRootPreparation) rollbackAndFinalize(finalize func() error) error {
 	if preparation == nil {
+		if finalize != nil {
+			return finalize()
+		}
 		return nil
 	}
 	defer preparation.release()
-	return rollbackVolumeRootStates(preparation.states, preparation.paths)
+	rollbackErr := rollbackVolumeRootStates(preparation.states, preparation.paths)
+	var finalizeErr error
+	if finalize != nil {
+		finalizeErr = finalize()
+	}
+	return errors.Join(rollbackErr, finalizeErr)
 }
 
 func (preparation *volumeRootPreparation) ApplyDeferredReadOnly() error {

@@ -115,6 +115,39 @@ func TestPersistedComposeLegacyProjectRootRecoversFallback(t *testing.T) {
 	}
 }
 
+func TestPersistedComposeManagedVolumeRootRecoversNamedVolumeFallback(t *testing.T) {
+	deploymentID := "compose-named-volume-fallback-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - %s:/var/lib/app
+`, filepath.Join(recordedRoot, "app-data"))
+	got, found, err := persistedComposeManagedVolumeRoot(composeYAML, deploymentID)
+	if err != nil {
+		t.Fatalf("extract persisted managed volume root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("persisted managed root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+}
+
+func TestPersistedComposeManagedVolumeRootRejectsConflicts(t *testing.T) {
+	deploymentID := "compose-conflicting-volume-roots-test"
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/var/lib/app
+  worker:
+    volumes:
+      - %s:/var/lib/worker
+`, filepath.Join("/var/lib/obiente/volumes", deploymentID, "app-data"), filepath.Join("/tmp/obiente-volumes", deploymentID, "worker-data"))
+	if _, _, err := persistedComposeManagedVolumeRoot(composeYAML, deploymentID); err == nil {
+		t.Fatal("conflicting persisted managed volume roots were accepted")
+	}
+}
+
 func TestSwarmTaskSlotUsesStableReplicaIdentity(t *testing.T) {
 	labels := map[string]string{
 		"com.docker.swarm.service.name": "deploy-example_api",
@@ -221,6 +254,33 @@ func TestPersistLegacyProjectRootMetadata(t *testing.T) {
 	}
 	if err := persistLegacyProjectRootMetadata(deployDir, filepath.Join(t.TempDir(), "different")); err == nil {
 		t.Fatal("expected mismatched volume-root metadata to be rejected")
+	}
+}
+
+func TestPersistDeploymentVolumeRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	deploymentID := "compose-volume-root-metadata-test"
+	volumeRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	if err := os.MkdirAll(volumeRoot, 0o755); err != nil {
+		t.Fatalf("create deployment volume root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(volumeRoot) })
+	if err := persistDeploymentVolumeRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("persist deployment volume-root metadata: %v", err)
+	}
+	contents, found, err := readDeploymentFileNoFollow(deployDir, deploymentVolumeRootMetadataFile)
+	if err != nil {
+		t.Fatalf("read deployment volume-root metadata: %v", err)
+	}
+	if !found {
+		t.Fatal("deployment volume-root metadata was not created")
+	}
+	got, err := parseDeploymentVolumeRootMetadata(contents, deploymentID)
+	if err != nil {
+		t.Fatalf("parse deployment volume-root metadata: %v", err)
+	}
+	if got != volumeRoot {
+		t.Fatalf("deployment volume root = %q, want %q", got, volumeRoot)
 	}
 }
 

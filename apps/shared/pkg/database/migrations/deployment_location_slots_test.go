@@ -9,6 +9,43 @@ import (
 	"gorm.io/gorm"
 )
 
+type legacyDeploymentLocationWithoutTaskSlot struct {
+	ID           string `gorm:"primaryKey"`
+	DeploymentID string
+	NodeID       string
+	ContainerID  string
+	ServiceID    string
+	Status       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+func (legacyDeploymentLocationWithoutTaskSlot) TableName() string {
+	return "deployment_locations"
+}
+
+func TestEnforceUniqueDeploymentLocationSlotsAddsMissingColumn(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open legacy deployment tracking database: %v", err)
+	}
+	if err := db.AutoMigrate(&legacyDeploymentLocationWithoutTaskSlot{}); err != nil {
+		t.Fatalf("migrate legacy deployment locations: %v", err)
+	}
+	if db.Migrator().HasColumn(&database.DeploymentLocation{}, "TaskSlot") {
+		t.Fatal("legacy deployment locations unexpectedly contain task_slot")
+	}
+	if err := enforceUniqueDeploymentLocationSlots(db); err != nil {
+		t.Fatalf("enforce unique deployment slots on legacy schema: %v", err)
+	}
+	if !db.Migrator().HasColumn(&database.DeploymentLocation{}, "TaskSlot") {
+		t.Fatal("migration did not add task_slot")
+	}
+	if !db.Migrator().HasIndex(&database.DeploymentLocation{}, "idx_deployment_service_slot_unique") {
+		t.Fatal("migration did not create the unique slot index")
+	}
+}
+
 func TestEnforceUniqueDeploymentLocationSlots(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

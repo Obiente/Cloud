@@ -139,15 +139,19 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				swarmVolumePreparation.Commit()
 				return
 			}
-			if rollbackErr := swarmVolumePreparation.Rollback(); rollbackErr != nil {
-				retErr = fmt.Errorf("%w; restore previous volume permissions: %v", retErr, rollbackErr)
-			}
-			if releaseSwarmVolumePinOnFailure {
+			cleanupErr := swarmVolumePreparation.rollbackAndFinalize(func() error {
+				if !releaseSwarmVolumePinOnFailure {
+					return nil
+				}
 				cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				defer cancel()
 				if releaseErr := database.ReleaseDeploymentVolumeNode(cleanupCtx, config.DeploymentID, dm.nodeID); releaseErr != nil {
-					retErr = errors.Join(retErr, fmt.Errorf("release unused deployment volume node pin: %w", releaseErr))
+					return fmt.Errorf("release unused deployment volume node pin: %w", releaseErr)
 				}
+				return nil
+			})
+			if cleanupErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("clean up failed deployment volumes: %w", cleanupErr))
 			}
 		}()
 	} else {

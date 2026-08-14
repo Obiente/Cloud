@@ -380,11 +380,9 @@ func persistedComposeLegacyProjectRoot(composeYaml, deploymentID string) (string
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
 		return "", false, fmt.Errorf("parse persisted Compose metadata: %w", err)
 	}
-	allowedRoots := map[string]struct{}{
-		filepath.Join("/var/lib/obiente/volumes", deploymentID):         {},
-		filepath.Join("/var/obiente/tmp/obiente-volumes", deploymentID): {},
-		filepath.Join("/tmp/obiente-volumes", deploymentID):             {},
-		filepath.Join(os.TempDir(), "obiente-volumes", deploymentID):    {},
+	allowedRoots := make(map[string]struct{})
+	for _, root := range managedDeploymentVolumeRoots(deploymentID) {
+		allowedRoots[root] = struct{}{}
 	}
 	services, _ := compose["services"].(map[string]interface{})
 	var recordedRoot string
@@ -404,6 +402,41 @@ func persistedComposeLegacyProjectRoot(composeYaml, deploymentID string) (string
 				return "", false, fmt.Errorf("persisted Compose file references conflicting managed project roots %q and %q", recordedRoot, candidate)
 			}
 			recordedRoot = candidate
+		}
+	}
+	return recordedRoot, recordedRoot != "", nil
+}
+
+// persistedComposeManagedVolumeRoot recovers the selected deployment root
+// from any previously sanitized bind. In particular, named volumes are stored
+// one level beneath this root, so checking only for a bind of the root itself
+// would silently remap their data when a different fallback becomes writable.
+func persistedComposeManagedVolumeRoot(composeYaml, deploymentID string) (string, bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	var recordedRoot string
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			candidate := filepath.Clean(source)
+			if namedVolume || !filepath.IsAbs(candidate) {
+				continue
+			}
+			for _, managedRoot := range managedDeploymentVolumeRoots(deploymentID) {
+				if candidate != managedRoot && !strings.HasPrefix(candidate, managedRoot+string(filepath.Separator)) {
+					continue
+				}
+				if recordedRoot != "" && recordedRoot != managedRoot {
+					return "", false, fmt.Errorf("persisted Compose file references conflicting managed volume roots %q and %q", recordedRoot, managedRoot)
+				}
+				recordedRoot = managedRoot
+				break
+			}
 		}
 	}
 	return recordedRoot, recordedRoot != "", nil
