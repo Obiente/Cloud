@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -32,6 +33,23 @@ func TestComposeUpArgs(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("composeUpArgs mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestStackRollbackRestoresVolumePreparationOnlyForSingleService(t *testing.T) {
+	rollbackErr := fmt.Errorf("wait for service: %w", &SwarmRolloutError{
+		ServiceName:             "deploy-example_worker",
+		State:                   "rollback_completed",
+		PreviousRevisionRunning: true,
+	})
+	if !stackRollbackRestoresVolumePreparation([]string{"deploy-example_worker"}, rollbackErr) {
+		t.Fatal("single-service completed rollback should restore prepared volume modes")
+	}
+	if stackRollbackRestoresVolumePreparation([]string{"deploy-example_api", "deploy-example_worker"}, rollbackErr) {
+		t.Fatal("multi-service rollback must retain prepared volume modes")
+	}
+	if stackRollbackRestoresVolumePreparation([]string{"deploy-example_worker"}, errors.New("update failed")) {
+		t.Fatal("unconfirmed rollback must retain prepared volume modes")
 	}
 }
 

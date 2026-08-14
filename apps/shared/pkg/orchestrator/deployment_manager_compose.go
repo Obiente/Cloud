@@ -42,22 +42,26 @@ func stackDeployArgs(projectName, composeFile string) []string {
 	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "always", "--prune", projectName}
 }
 
-func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, deploymentID, projectName string) error {
+func stackRollbackRestoresVolumePreparation(serviceNames []string, err error) bool {
+	return len(serviceNames) == 1 && RollbackPreserved(err)
+}
+
+func (dm *DeploymentManager) waitForSwarmStackConverged(ctx context.Context, deploymentID, projectName string) (bool, error) {
 	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
 	output, err := listCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("list services while waiting for stack %s: %w (%s)", projectName, err, strings.TrimSpace(string(output)))
+		return false, fmt.Errorf("list services while waiting for stack %s: %w (%s)", projectName, err, strings.TrimSpace(string(output)))
 	}
 	serviceNames := strings.Fields(string(output))
 	if len(serviceNames) == 0 {
-		return fmt.Errorf("stack %s has no services after deployment", projectName)
+		return false, fmt.Errorf("stack %s has no services after deployment", projectName)
 	}
 	for _, serviceName := range serviceNames {
 		if err := dm.waitForSwarmStackServiceConverged(ctx, deploymentID, serviceName); err != nil {
-			return fmt.Errorf("wait for stack service %s: %w", serviceName, err)
+			return stackRollbackRestoresVolumePreparation(serviceNames, err), fmt.Errorf("wait for stack service %s: %w", serviceName, err)
 		}
 	}
-	return nil
+	return false, nil
 }
 
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
@@ -452,7 +456,13 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 			return fmt.Errorf("failed to deploy stack: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
 		volumePreparationCommitted = true
-		if err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName); err != nil {
+		rollbackRestoredPreviousRevision, err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName)
+		if err != nil {
+			if rollbackRestoredPreviousRevision {
+				// A single-service stack that completed its rollback cannot have
+				// another accepted revision depending on the prepared modes.
+				volumePreparationCommitted = false
+			}
 			return fmt.Errorf("stack deployment did not converge: %w", err)
 		}
 	} else {
