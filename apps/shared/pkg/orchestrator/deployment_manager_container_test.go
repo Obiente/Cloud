@@ -96,7 +96,7 @@ func TestParseSwarmTaskSummaryRecognizesStoppedServiceOutcomes(t *testing.T) {
 	}
 
 	active := parseSwarmTaskSummary("deploy-app.1\tRunning 2 seconds ago\tRunning\t\n")
-	if !active.active || active.completed || active.failed {
+	if !active.active || active.progressing || active.running != 1 || active.completed || active.failed {
 		t.Fatalf("active task summary = %#v", active)
 	}
 
@@ -113,6 +113,11 @@ func TestParseSwarmTaskSummaryRecognizesStoppedServiceOutcomes(t *testing.T) {
 	mixedCurrentOutcomes := parseSwarmTaskSummary("deploy-app.1\tComplete 3 seconds ago\tShutdown\t\ndeploy-app.2\tFailed 2 seconds ago\tShutdown\texit code 1\n")
 	if !mixedCurrentOutcomes.completed || !mixedCurrentOutcomes.failed {
 		t.Fatalf("mixed current task outcomes = %#v, want both completion and failure recorded", mixedCurrentOutcomes)
+	}
+
+	retrying := parseSwarmTaskSummary("deploy-app.1\tPending 1 second ago\tRunning\t\n\\_ deploy-app.1\tRejected 2 seconds ago\tShutdown\timage not found\n")
+	if !retrying.active || !retrying.progressing || retrying.running != 0 || retrying.failed {
+		t.Fatalf("replacement task summary = %#v, want progressing current generation", retrying)
 	}
 }
 

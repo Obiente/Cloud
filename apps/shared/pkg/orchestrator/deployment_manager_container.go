@@ -38,9 +38,11 @@ type swarmServiceRunPolicy struct {
 }
 
 type swarmTaskSummary struct {
-	active    bool
-	completed bool
-	failed    bool
+	active      bool
+	progressing bool
+	running     int64
+	completed   bool
+	failed      bool
 }
 
 // Container operations for deployments
@@ -2177,6 +2179,18 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 				}
 				return task, nil
 			}
+			summary, summaryErr := inspectSwarmTaskSummary(ctx, swarmServiceName)
+			if summaryErr != nil {
+				return nil, summaryErr
+			}
+			if summary.failed && summary.running < requiredRunning && !summary.progressing {
+				return nil, &SwarmRolloutError{
+					ServiceName: swarmServiceName,
+					State:       "failed",
+					Message:     "current Swarm task generation failed before reaching the desired replica count",
+					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+				}
+			}
 		case "rollback_started":
 			// A start-first update can still be serving the previous task while
 			// Docker restores it. Wait for a terminal rollback state before
@@ -2275,13 +2289,22 @@ func parseSwarmTaskSummary(output string) swarmTaskSummary {
 		if len(parts) == 4 {
 			taskErr = strings.TrimSpace(parts[3])
 		}
-		if desired == "running" || strings.HasPrefix(current, "running") || strings.HasPrefix(current, "starting") || strings.HasPrefix(current, "preparing") || strings.HasPrefix(current, "pending") || strings.HasPrefix(current, "assigned") || strings.HasPrefix(current, "accepted") || strings.HasPrefix(current, "new") {
+		isFailed := strings.HasPrefix(current, "failed") || strings.HasPrefix(current, "rejected") || taskErr != ""
+		isRunning := desired == "running" && strings.HasPrefix(current, "running") && !isFailed
+		isProgressing := desired == "running" && !isRunning && !isFailed
+		if isRunning {
+			summary.running++
+		}
+		if isProgressing {
+			summary.progressing = true
+		}
+		if isRunning || isProgressing {
 			summary.active = true
 		}
 		if strings.HasPrefix(current, "complete") && taskErr == "" {
 			summary.completed = true
 		}
-		if strings.HasPrefix(current, "failed") || strings.HasPrefix(current, "rejected") || taskErr != "" {
+		if isFailed {
 			summary.failed = true
 		}
 	}
