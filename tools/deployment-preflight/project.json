@@ -9,11 +9,21 @@
       "inputs": [
         "{projectRoot}/**/*",
         "{workspaceRoot}/docker-compose*.yml",
-        "{workspaceRoot}/scripts/merge-compose-files.sh"
+        "{workspaceRoot}/scripts/merge-compose-files.sh",
+        "{workspaceRoot}/scripts/deploy-swarm.sh",
+        "{workspaceRoot}/scripts/force-deploy.sh",
+        "{workspaceRoot}/scripts/lib/database-owner.sh",
+        "{workspaceRoot}/scripts/tests/database-owner-test.sh"
       ],
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "tools/deployment-preflight/validate-compose.sh all"
+        "commands": [
+          "bash tools/deployment-preflight/validate-compose.sh all",
+          "bash -n scripts/deploy-swarm.sh scripts/force-deploy.sh",
+          "shellcheck scripts/lib/database-owner.sh scripts/tests/database-owner-test.sh",
+          "bash scripts/tests/database-owner-test.sh"
+        ],
+        "parallel": false
       }
     },
     "test-compose": {

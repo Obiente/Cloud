@@ -1184,6 +1184,11 @@ func startDNSPusher(ctx context.Context, productionAPIURL, apiKey, sourceAPI str
 	}
 }
 
+type databaseDNSRow struct {
+	DatabaseID   string
+	DatabaseType string
+}
+
 // pushDNSRecords collects all DNS records and pushes them to the production API
 func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, nodeIPMap map[string][]string) {
 	records := make([]map[string]interface{}, 0)
@@ -1269,10 +1274,6 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 	}
 
 	// Get all provisioned databases and push their DNS records
-	type databaseDNSRow struct {
-		DatabaseID   string
-		DatabaseType string
-	}
 	var databaseRows []databaseDNSRow
 	if err := database.DB.Table("database_instances").
 		Select("id as database_id, type as database_type").
@@ -1280,51 +1281,7 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 		Scan(&databaseRows).Error; err != nil {
 		log.Printf("[DNS Pusher] Failed to query databases: %v", err)
 	} else {
-		// Process each database
-		for _, row := range databaseRows {
-			// Get node IPs for databases (use default region)
-			// Databases are accessed via Traefik on standard ports, so use Traefik IPs
-			var ips []string
-			if defaultIPs, ok := nodeIPMap["default"]; ok && len(defaultIPs) > 0 {
-				ips = defaultIPs
-			} else {
-				// Fallback: get first available IPs from any region
-				for _, regionIPs := range nodeIPMap {
-					if len(regionIPs) > 0 {
-						ips = regionIPs
-						break
-					}
-				}
-			}
-
-			if resolvedIPs, err := database.GetDatabaseNodeIP(row.DatabaseID, nodeIPMap); err == nil && len(resolvedIPs) > 0 {
-				ips = resolvedIPs
-			}
-
-			if len(ips) > 0 {
-				canonicalDomain := database.DefaultMyObienteCloudDomain(row.DatabaseID)
-				records = append(records, map[string]interface{}{
-					"domain":      canonicalDomain,
-					"record_type": "A",
-					"records":     ips,
-					"ttl":         ttl,
-				})
-				log.Printf("[DNS Pusher] Added DNS record for database %s (domain: %s)", row.DatabaseID, canonicalDomain)
-
-				legacyDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DatabaseID)
-				if legacyDomain != canonicalDomain {
-					records = append(records, map[string]interface{}{
-						"domain":      legacyDomain,
-						"record_type": "A",
-						"records":     ips,
-						"ttl":         ttl,
-					})
-					log.Printf("[DNS Pusher] Added legacy DNS record for database %s (domain: %s)", row.DatabaseID, legacyDomain)
-				}
-			} else {
-				log.Printf("[DNS Pusher] No node IPs available for database %s", row.DatabaseID)
-			}
-		}
+		records = append(records, collectDatabaseDNSRecords(databaseRows, nodeIPMap, ttl, database.GetDatabaseNodeIP)...)
 	}
 
 	// Get all running game servers
@@ -1529,6 +1486,47 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 			log.Printf("[DNS Pusher] Push errors: %v", errors)
 		}
 	}
+}
+
+func collectDatabaseDNSRecords(
+	rows []databaseDNSRow,
+	nodeIPMap map[string][]string,
+	ttl int64,
+	resolveNodeIPs func(string, map[string][]string) ([]string, error),
+) []map[string]interface{} {
+	records := make([]map[string]interface{}, 0, len(rows)*2)
+	for _, row := range rows {
+		ips, err := resolveNodeIPs(row.DatabaseID, nodeIPMap)
+		if err != nil {
+			log.Printf("[DNS Pusher] Skipping database %s because its host node could not be resolved: %v", row.DatabaseID, err)
+			continue
+		}
+		if len(ips) == 0 {
+			log.Printf("[DNS Pusher] No node IPs available for database %s", row.DatabaseID)
+			continue
+		}
+
+		canonicalDomain := database.DefaultMyObienteCloudDomain(row.DatabaseID)
+		records = append(records, map[string]interface{}{
+			"domain":      canonicalDomain,
+			"record_type": "A",
+			"records":     ips,
+			"ttl":         ttl,
+		})
+		log.Printf("[DNS Pusher] Added DNS record for database %s (domain: %s)", row.DatabaseID, canonicalDomain)
+
+		legacyDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DatabaseID)
+		if legacyDomain != canonicalDomain {
+			records = append(records, map[string]interface{}{
+				"domain":      legacyDomain,
+				"record_type": "A",
+				"records":     ips,
+				"ttl":         ttl,
+			})
+			log.Printf("[DNS Pusher] Added legacy DNS record for database %s (domain: %s)", row.DatabaseID, legacyDomain)
+		}
+	}
+	return records
 }
 
 func startDelegatedRecordCleanup(ctx context.Context) {

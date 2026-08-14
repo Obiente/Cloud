@@ -19,6 +19,8 @@ import (
 	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
+
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 )
 
 // ErrUninitialized is returned when a client method is invoked before the
@@ -29,6 +31,13 @@ var ErrUninitialized = errors.New("docker: client not initialized")
 // methods used by the dashboard API.
 type Client struct {
 	api client.APIClient
+}
+
+// NodeIdentity identifies the Docker node that owns locally managed resources.
+type NodeIdentity struct {
+	ID       string
+	Hostname string
+	IP       string
 }
 
 // New constructs a Docker client using environment variables and API version
@@ -51,6 +60,36 @@ func (c *Client) Close() error {
 		return nil
 	}
 	return c.api.Close()
+}
+
+// CurrentNodeIdentity returns the identity of the Docker daemon backing this
+// client. In Swarm mode the stable Swarm node ID is used; standalone daemons
+// use the same local-<hostname> convention as the orchestrator node registry.
+func (c *Client) CurrentNodeIdentity(ctx context.Context) (NodeIdentity, error) {
+	if c == nil || c.api == nil {
+		return NodeIdentity{}, ErrUninitialized
+	}
+
+	result, err := c.api.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return NodeIdentity{}, fmt.Errorf("docker: inspect daemon identity: %w", err)
+	}
+
+	identity := NodeIdentity{
+		Hostname: strings.TrimSpace(result.Info.Name),
+		IP:       strings.TrimSpace(result.Info.Swarm.NodeAddr),
+	}
+	if utils.IsSwarmModeEnabled() {
+		identity.ID = strings.TrimSpace(result.Info.Swarm.NodeID)
+	}
+	if identity.ID == "" {
+		identity.ID = "local-" + identity.Hostname
+	}
+	if identity.ID == "local-" {
+		return NodeIdentity{}, fmt.Errorf("docker: daemon hostname is empty")
+	}
+
+	return identity, nil
 }
 
 // ContainerConfig represents configuration for creating a container
@@ -726,6 +765,30 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 		return container.InspectResponse{}, err
 	}
 	return result.Container, nil
+}
+
+// ManagedDatabaseContainerStates returns the Docker runtime state of every
+// managed database container owned by this daemon in one API call.
+func (c *Client) ManagedDatabaseContainerStates(ctx context.Context) (map[string]string, error) {
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+
+	filters := make(client.Filters)
+	filters.Add("label", "cloud.obiente.service=database")
+	result, err := c.api.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("docker: list managed database containers: %w", err)
+	}
+
+	states := make(map[string]string, len(result.Items))
+	for _, item := range result.Items {
+		states[item.ID] = strings.ToLower(strings.TrimSpace(string(item.State)))
+	}
+	return states, nil
 }
 
 // NetworkConnect connects a container to a network

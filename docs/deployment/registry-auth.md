@@ -151,7 +151,7 @@ REGISTRY_USERNAME=obiente REGISTRY_PASSWORD=new-password ./scripts/setup-registr
    ```bash
    docker service update --env-add REGISTRY_PASSWORD=new-password obiente_api
    # Or redeploy the stack
-   docker stack deploy -c docker-compose.swarm.yml obiente
+   ./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
    ```
 3. **Re-authenticate on all Swarm nodes** (if needed):
    ```bash
@@ -239,4 +239,3 @@ If you see certificate errors:
 1. **Check Traefik logs**: `docker service logs obiente_traefik | grep -i certificate`
 2. **Verify domain is accessible**: Ensure `registry.yourdomain.com` resolves to your Traefik IP
 3. **Check Let's Encrypt rate limits**: If you've made many certificate requests, you may need to wait
-

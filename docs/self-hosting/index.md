@@ -48,7 +48,7 @@ For small deployments with basic redundancy:
 
 ```bash
 docker swarm init
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 See [Docker Swarm Deployment](../deployment/docker-swarm.md).
@@ -136,7 +136,7 @@ docker compose up -d
 Internal staging environment:
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ### Small Business

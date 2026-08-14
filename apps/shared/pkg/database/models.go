@@ -1172,6 +1172,7 @@ type DatabaseConnection struct {
 	Password       string    `gorm:"column:password" json:"-"` // Encrypted password, never returned in JSON
 	Host           string    `gorm:"column:host" json:"host"`
 	Port           int32     `gorm:"column:port" json:"port"`
+	ProxyPort      int32     `gorm:"column:proxy_port;default:0" json:"proxy_port"`
 	SSLRequired    bool      `gorm:"column:ssl_required;default:true" json:"ssl_required"`
 	SSLCertificate *string   `gorm:"column:ssl_certificate;type:text" json:"ssl_certificate"`
 	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`

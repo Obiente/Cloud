@@ -892,7 +892,7 @@ mode `0600`; the systemd installer copies it to `/etc/obiente`. See
 
 | Variable   | Type   | Default | Required | Description                                                                                                                                       |
 | ---------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_IPS` | string | -       | ✅       | Node IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`). Used for DNS resolution of deployments and game servers. |
+| `NODE_IPS` | string | -       | ✅       | Public IPs keyed by region or exact Swarm node ID/hostname. Database owners in a multi-node region require a node-specific entry with one IP. |
 | `DNS_IPS`  | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                                                                                     |
 | `DNS_PORT` | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                                                                              |
 
@@ -983,7 +983,7 @@ Two formats are supported:
 ip1,ip2
 ```
 
-**Multi-region format**:
+**Keyed format** (keys may be regions, Swarm node IDs, or node hostnames):
 
 ```
 region1:ip1,ip2;region2:ip3,ip4
@@ -1004,9 +1004,17 @@ NODE_IPS="us-east-1:1.2.3.4,1.2.3.5"
 # Multiple regions
 NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 
+# Exact database owner plus its regional pool
+NODE_IPS="owner-node:192.0.2.10;us-east-1:192.0.2.10,192.0.2.11"
+
 # Explicit default region
 NODE_IPS="default:1.2.3.4"
 ```
+
+An authoritative managed-database record resolves to one owner node. When a
+region contains more than one address, configure a key matching that owner's
+Swarm node ID or hostname; otherwise the DNS service omits the ambiguous record
+instead of sending connections to a proxy without the database route.
 
 **DNS_IPS Format:**
 
@@ -1492,7 +1500,7 @@ docker compose up
 
 ```bash
 # Load from .env file
-docker stack deploy --env-file .env -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ## Security Best Practices

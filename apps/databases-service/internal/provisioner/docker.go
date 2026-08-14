@@ -31,10 +31,13 @@ type DatabaseConfig struct {
 
 // ProvisioningResult contains result information
 type ProvisioningResult struct {
-	ContainerID string // Docker container ID
-	Host        string // Internal hostname
-	Port        int    // Exposed port
-	Status      string // Current status
+	ContainerID  string // Docker container ID
+	Host         string // Internal hostname
+	Port         int    // Exposed port
+	Status       string // Current status
+	NodeID       string // Docker node ID that owns the container
+	NodeHostname string // Docker node hostname
+	NodeIP       string // Public/reachable address reported by Docker
 }
 
 // DatabaseType enum
@@ -81,6 +84,11 @@ func NewDockerProvisioner() (*DockerProvisioner, error) {
 // ProvisionDatabase creates and starts a new database container
 func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *DatabaseConfig) (*ProvisioningResult, error) {
 	logger.Info("Provisioning database: %s (type: %s)", cfg.DatabaseID, cfg.Type.String())
+
+	node, err := p.client.CurrentNodeIdentity(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine database host node: %w", err)
+	}
 
 	// Get image and config for database type
 	image := p.getImageForType(cfg.Type, cfg.Version)
@@ -169,10 +177,13 @@ func (p *DockerProvisioner) ProvisionDatabase(ctx context.Context, cfg *Database
 	logger.Info("Database container provisioned: %s (ID: %s)", containerName, containerID)
 
 	return &ProvisioningResult{
-		ContainerID: containerID,
-		Host:        hostname,
-		Port:        standardPort,
-		Status:      "running",
+		ContainerID:  containerID,
+		Host:         hostname,
+		Port:         standardPort,
+		Status:       "running",
+		NodeID:       node.ID,
+		NodeHostname: node.Hostname,
+		NodeIP:       node.IP,
 	}, nil
 }
 

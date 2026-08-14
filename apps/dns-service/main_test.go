@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -35,6 +36,24 @@ func TestNormalizePreviewACMEChallengeCNAME(t *testing.T) {
 
 	if _, err := normalizePreviewACMEChallengeCNAME(""); err != nil {
 		t.Fatalf("empty optional CNAME: %v", err)
+	}
+}
+
+func TestCollectDatabaseDNSRecordsSkipsUnresolvedOwner(t *testing.T) {
+	databaseID := "db-dns-pusher-owner-test"
+	records := collectDatabaseDNSRecords(
+		[]databaseDNSRow{{DatabaseID: databaseID}},
+		map[string][]string{"default": {"192.0.2.10"}},
+		60,
+		func(gotDatabaseID string, _ map[string][]string) ([]string, error) {
+			if gotDatabaseID != databaseID {
+				t.Fatalf("resolver database ID = %q, want %q", gotDatabaseID, databaseID)
+			}
+			return nil, errors.New("synthetic unresolved owner")
+		},
+	)
+	if len(records) != 0 {
+		t.Fatalf("expected unresolved database owner to be omitted, got %#v", records)
 	}
 }
 

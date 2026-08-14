@@ -10,13 +10,15 @@ The DNS server is integrated into the API service and runs alongside it. It quer
 
 ### Required
 
-- **`NODE_IPS`**: Node IPs per region
+- **`NODE_IPS`**: Public IPs keyed by region or exact Swarm node ID/hostname
   - **Multi-region format**: `"region1:ip1,ip2;region2:ip3,ip4"`
   - **Simple format**: `"ip1,ip2"` (defaults to "default" region)
   - **Examples**:
     - Simple: `NODE_IPS="1.2.3.4"` or `NODE_IPS="1.2.3.4,1.2.3.5"`
     - Multi-region: `NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"`
+    - Node-specific owner: `NODE_IPS="owner-node:192.0.2.10;us-east-1:192.0.2.10,192.0.2.11"`
   - Maps regions to node IP addresses
+  - Managed databases in multi-node regions require a single-IP entry keyed by their owner node ID or hostname
   - Used for DNS resolution of both deployments and game servers
   - Multiple IPs per region enable load balancing
   - If using simple format, deployments and game servers will use the "default" region

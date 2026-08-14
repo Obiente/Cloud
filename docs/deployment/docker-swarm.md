@@ -199,7 +199,7 @@ docker node inspect <node-name-or-id> --pretty
 Deploy to the Swarm cluster:
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 Or use the deploy script (recommended):
@@ -370,7 +370,7 @@ To update after code changes:
 
 ```bash
 # Redeploy the stack
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 
 # Force immediate update
 docker service update --force obiente_api
@@ -525,7 +525,7 @@ docker cp $(docker ps -qf name=redis):/data/dump.rdb ./redis-backup.rdb
 Updates are zero-downtime by default:
 
 ```bash
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 ### Graceful Shutdown

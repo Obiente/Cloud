@@ -4,8 +4,9 @@
 
 
 
-# This file requires docker-compose.base.yml to be merged before use
-# Usage: cat docker-compose.base.yml docker-compose.swarm.yml | docker stack deploy -c - obiente
+# This file requires docker-compose.base.yml to be merged before use.
+# Use scripts/deploy-swarm.sh so required node ownership labels are preserved.
+# Usage: ./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 
 # Swarm-specific common environment variables
 # Override ENABLE_SWARM to default to true for Swarm deployments
@@ -488,10 +489,12 @@ services:
     image: ghcr.io/obiente/cloud-databases-service:latest
     environment:
       PORT: 3014
+      ENABLE_SWARM: ${ENABLE_SWARM:-true}
+      DATABASES_SERVICE_MODE: control-plane
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
     deploy:
       mode: replicated
-      replicas: 1  # Single replica: proxy holds in-memory route state
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -508,6 +511,11 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+      placement:
+        constraints:
+          # Keep all node-local provisioning/lifecycle calls on the same Docker
+          # daemon that owns managed database containers.
+          - node.labels.databases.enabled == true
       labels:
         - "cloud.obiente.service=databases-service"
         - "cloud.obiente.traefik=true"
@@ -520,6 +528,49 @@ services:
         - "traefik.http.routers.databases-service-secure.entrypoints=websecure"
         - "traefik.http.routers.databases-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.databases-service-secure.service=databases-service"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3014/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    dns_search: []
+    networks:
+      - obiente-network
+      - obiente-databases
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Global data-plane proxy. Every possible database owner node exposes the
+  # host-mode listeners used by owner-specific database DNS records.
+  databases-proxy:
+    image: ghcr.io/obiente/cloud-databases-service:latest
+    environment:
+      PORT: 3014
+      ENABLE_SWARM: ${ENABLE_SWARM:-true}
+      DATABASES_SERVICE_MODE: proxy
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis]
+    deploy:
+      mode: global
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+      labels:
+        - "cloud.obiente.service=databases-proxy"
+        - "cloud.obiente.traefik=false"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3014/health || exit 1"]
       interval: 30s

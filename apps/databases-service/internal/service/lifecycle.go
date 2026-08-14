@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"databases-service/internal/proxy"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	databasesv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/databases/v1"
@@ -43,6 +46,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "starting")
 
 	// Start the database container asynchronously
 	go func() {
@@ -54,6 +58,7 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 				logger.Error("Failed to start database container: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(startCtx, dbInstance)
+				updateDatabaseLocationStatus(startCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -61,9 +66,11 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 		// Update status to RUNNING
 		dbInstance.Status = 3 // RUNNING
 		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.repo.Update(startCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(startCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist running database status: %v", err)
+			return
 		}
+		updateDatabaseLocationStatus(startCtx, dbInstance.ID, "running")
 
 		// Update route registry
 		if s.routeRegistry != nil {
@@ -110,6 +117,7 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
 	go func() {
@@ -119,17 +127,18 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
 			if err := s.provisioner.StopDatabase(stopCtx, *dbInstance.InstanceID); err != nil {
 				logger.Error("Failed to stop database container: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(stopCtx, dbInstance)
+				s.restoreDatabaseAfterFailedStop(stopCtx, dbInstance)
 				return
 			}
 		}
 
 		// Update status to STOPPED
 		dbInstance.Status = 5 // STOPPED
-		if err := s.repo.Update(stopCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(stopCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist stopped database status: %v", err)
+			return
 		}
+		updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "stopped")
 
 		// Update route registry - STOPPED means no auto-wake
 		if s.routeRegistry != nil {
@@ -175,6 +184,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart database: %w", err))
 	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "starting")
 
 	// Restart the database container asynchronously
 	go func() {
@@ -186,6 +196,7 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 				logger.Error("Failed to restart database container: %v", err)
 				dbInstance.Status = 8 // FAILED
 				s.repo.Update(restartCtx, dbInstance)
+				updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "failed")
 				return
 			}
 		}
@@ -193,9 +204,11 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 		// Update status to RUNNING
 		dbInstance.Status = 3 // RUNNING
 		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.repo.Update(restartCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(restartCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist running database status after restart: %v", err)
+			return
 		}
+		updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "running")
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -231,11 +244,10 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
-	// Update status to STOPPING temporarily
+	// Report STOPPING to the caller, but retain durable RUNNING until Docker has
+	// stopped and the wakeable SLEEPING transition can be committed.
 	dbInstance.Status = 4 // STOPPING
-	if err := s.repo.Update(ctx, dbInstance); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to sleep database: %w", err))
-	}
+	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
 	go func() {
@@ -245,17 +257,21 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
 			if err := s.provisioner.StopDatabase(sleepCtx, *dbInstance.InstanceID); err != nil {
 				logger.Error("Failed to stop database container for sleep: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(sleepCtx, dbInstance)
+				s.restoreDatabaseAfterFailedStop(sleepCtx, dbInstance)
 				return
 			}
 		}
 
 		// Update status to SLEEPING (not STOPPED)
 		dbInstance.Status = 12 // SLEEPING
-		if err := s.repo.Update(sleepCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database status: %v", err)
+		if err := s.persistDatabaseInstance(sleepCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist sleeping database status: %v", s.recoverAfterSleepingWriteFailure(dbInstance, &proxy.Route{
+				DatabaseID:  dbInstance.ID,
+				ContainerID: valueOrEmpty(dbInstance.InstanceID),
+			}, err))
+			return
 		}
+		updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
 
 		// Update route registry - SLEEPING means auto-wake on connect
 		if s.routeRegistry != nil {
@@ -271,7 +287,75 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 	return res, nil
 }
 
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func (s *Service) restoreDatabaseAfterFailedStop(ctx context.Context, dbInstance *database.DatabaseInstance) {
+	if dbInstance == nil {
+		return
+	}
+	dbInstance.Status = 3 // RUNNING: a failed stop must keep proxy, metrics, and uptime tracking active.
+	if err := retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return database.UpdateDatabaseRuntimeStatus(ctx, dbInstance.ID, 3, "running")
+	}); err != nil {
+		logger.Error("Failed to atomically restore database after stop failure: %v", err)
+	}
+}
+
+func (s *Service) persistDatabaseInstance(ctx context.Context, dbInstance *database.DatabaseInstance) error {
+	if s == nil || s.repo == nil {
+		return fmt.Errorf("database repository is unavailable")
+	}
+	return retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return s.repo.Update(ctx, dbInstance)
+	})
+}
+
+func (s *Service) persistDatabaseConnection(ctx context.Context, connection *database.DatabaseConnection) error {
+	if s == nil || s.connRepo == nil {
+		return fmt.Errorf("database connection repository is unavailable")
+	}
+	return retryDatabaseWrite(ctx, 5, 250*time.Millisecond, func() error {
+		return s.connRepo.CreateOrUpdate(ctx, connection)
+	})
+}
+
+func retryDatabaseWrite(ctx context.Context, attempts int, delay time.Duration, update func() error) error {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err = update(); err == nil {
+			return nil
+		}
+		if attempt == attempts {
+			break
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return fmt.Errorf("persist database status: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
+	return fmt.Errorf("persist database status after %d attempts: %w", attempts, err)
+}
+
 // Helper function
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func updateDatabaseLocationStatus(ctx context.Context, databaseID, status string) {
+	if err := database.UpdateDatabaseLocationStatus(ctx, databaseID, status); err != nil {
+		logger.Warn("Failed to update database %s location status to %s: %v", databaseID, status, err)
+	}
 }

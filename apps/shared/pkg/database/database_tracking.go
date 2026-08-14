@@ -2,7 +2,14 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // DatabaseLocation tracks where managed database containers are running across the cluster
@@ -23,6 +30,26 @@ type DatabaseLocation struct {
 
 func (DatabaseLocation) TableName() string { return "database_locations" }
 
+// DatabaseUptimeInterval records one continuous period in which a managed
+// database was running. Separate intervals prevent stopped time from being
+// counted after a database starts again.
+type DatabaseUptimeInterval struct {
+	ID          string     `gorm:"primaryKey" json:"id"`
+	DatabaseID  string     `gorm:"index;not null;uniqueIndex:idx_database_uptime_open,where:ended_at IS NULL" json:"database_id"`
+	ContainerID string     `gorm:"index;not null;uniqueIndex:idx_database_uptime_open,where:ended_at IS NULL" json:"container_id"`
+	NodeID      string     `gorm:"index;not null" json:"node_id"`
+	StartedAt   time.Time  `gorm:"index;not null" json:"started_at"`
+	EndedAt     *time.Time `gorm:"index" json:"ended_at"`
+}
+
+func (DatabaseUptimeInterval) TableName() string { return "database_uptime_intervals" }
+
+// DatabaseLocationID returns a stable primary key for a database container's
+// location record, allowing startup reconciliation to safely upsert it.
+func DatabaseLocationID(databaseID, containerID string) string {
+	return fmt.Sprintf("%s:%s", databaseID, containerID)
+}
+
 // GetDatabaseLocations returns all locations where a database is running
 func GetDatabaseLocations(databaseID string) ([]DatabaseLocation, error) {
 	var locations []DatabaseLocation
@@ -39,12 +66,283 @@ func GetAllDatabaseLocations(databaseID string) ([]DatabaseLocation, error) {
 
 // UpsertDatabaseLocation creates or updates a database location
 func UpsertDatabaseLocation(location *DatabaseLocation) error {
-	return DB.Save(location).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		var existing DatabaseLocation
+		if err := tx.Where("container_id = ?", location.ContainerID).First(&existing).Error; err == nil {
+			location.ID = existing.ID
+			location.CreatedAt = existing.CreatedAt
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err := tx.Save(location).Error; err != nil {
+			return err
+		}
+		if err := deactivateOtherDatabaseLocations(tx, location.DatabaseID, location.ContainerID, now); err != nil {
+			return err
+		}
+		if location.Status == "running" {
+			return ensureDatabaseUptimeInterval(tx, location, now)
+		}
+		return closeDatabaseUptimeIntervals(tx, location.DatabaseID, location.ContainerID, now)
+	})
 }
 
 // DeleteDatabaseLocation removes a database location
 func DeleteDatabaseLocation(containerID string) error {
 	return DB.Where("container_id = ?", containerID).Delete(&DatabaseLocation{}).Error
+}
+
+// UpdateDatabaseLocationStatus keeps location-based metrics aligned with the
+// managed database lifecycle.
+func UpdateDatabaseLocationStatus(ctx context.Context, databaseID, status string) error {
+	now := time.Now().UTC()
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		location, err := currentDatabaseLocation(tx, databaseID)
+		if err != nil {
+			return err
+		}
+		if location == nil {
+			return nil
+		}
+		if err := deactivateOtherDatabaseLocations(tx, databaseID, location.ContainerID, now); err != nil {
+			return err
+		}
+		if err := tx.Model(&DatabaseLocation{}).
+			Where("id = ?", location.ID).
+			Updates(map[string]interface{}{"status": status, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if status != "running" {
+			return closeDatabaseUptimeIntervals(tx, databaseID, location.ContainerID, now)
+		}
+		location.Status = status
+		return ensureDatabaseUptimeInterval(tx, location, now)
+	})
+}
+
+// UpdateDatabaseRuntimeStatus commits the instance and its location/uptime
+// state together so reconciliation cannot leave a split lifecycle transition.
+func UpdateDatabaseRuntimeStatus(ctx context.Context, databaseID string, instanceStatus int32, locationStatus string) error {
+	now := time.Now().UTC()
+	if err := DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&DatabaseInstance{}).
+			Where("id = ?", databaseID).
+			Update("status", instanceStatus).Error; err != nil {
+			return err
+		}
+		location, err := currentDatabaseLocation(tx, databaseID)
+		if err != nil || location == nil {
+			return err
+		}
+		if err := deactivateOtherDatabaseLocations(tx, databaseID, location.ContainerID, now); err != nil {
+			return err
+		}
+		if err := tx.Model(&DatabaseLocation{}).
+			Where("id = ?", location.ID).
+			Updates(map[string]interface{}{"status": locationStatus, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		if locationStatus != "running" {
+			return closeDatabaseUptimeIntervals(tx, databaseID, location.ContainerID, now)
+		}
+		location.Status = locationStatus
+		return ensureDatabaseUptimeInterval(tx, location, now)
+	}); err != nil {
+		return err
+	}
+	if RedisClient != nil {
+		var cacheErr error
+		for attempt := 1; attempt <= 3; attempt++ {
+			if cacheErr = RedisClient.Delete(ctx, fmt.Sprintf("database:%s", databaseID)); cacheErr == nil {
+				break
+			}
+			if attempt < 3 {
+				timer := time.NewTimer(100 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					attempt = 3
+				case <-timer.C:
+				}
+			}
+		}
+		if cacheErr != nil {
+			logger.Warn("Database %s runtime status committed, but cache invalidation failed: %v", databaseID, cacheErr)
+		}
+	}
+	return nil
+}
+
+// EnsureDatabaseUptimeInterval backfills an open interval for a running
+// location discovered during startup reconciliation.
+func EnsureDatabaseUptimeInterval(ctx context.Context, databaseID string) error {
+	now := time.Now().UTC()
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		location, err := currentDatabaseLocation(tx, databaseID)
+		if err != nil {
+			return err
+		}
+		if location == nil {
+			return nil
+		}
+		if err := deactivateOtherDatabaseLocations(tx, databaseID, location.ContainerID, now); err != nil {
+			return err
+		}
+		if location.Status != "running" {
+			return closeDatabaseUptimeIntervals(tx, databaseID, location.ContainerID, now)
+		}
+		return ensureDatabaseUptimeInterval(tx, location, now)
+	})
+}
+
+// BackfillDatabaseUptimeIntervals preserves the best interval available from
+// legacy location timestamps before usage reads switch to the interval table.
+// A legacy row cannot describe earlier stop/start cycles, so the migration
+// retains its previous continuous-lifetime interpretation without inventing
+// more precise history.
+func BackfillDatabaseUptimeIntervals() error {
+	now := time.Now().UTC()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		var instances []DatabaseInstance
+		if err := tx.Select("id", "instance_id").Find(&instances).Error; err != nil {
+			return err
+		}
+		authoritativeContainers := make(map[string]string, len(instances))
+		for i := range instances {
+			if instances[i].InstanceID != nil && *instances[i].InstanceID != "" {
+				authoritativeContainers[instances[i].ID] = *instances[i].InstanceID
+			}
+		}
+
+		var legacyLocations []DatabaseLocation
+		if err := tx.Order("database_id, updated_at DESC").Find(&legacyLocations).Error; err != nil {
+			return err
+		}
+		for i := range legacyLocations {
+			location := &legacyLocations[i]
+			if location.Status == "running" && authoritativeContainers[location.DatabaseID] == "" {
+				authoritativeContainers[location.DatabaseID] = location.ContainerID
+			}
+		}
+		for i := range legacyLocations {
+			location := &legacyLocations[i]
+			currentContainerID := authoritativeContainers[location.DatabaseID]
+			if location.Status != "running" || currentContainerID == "" || location.ContainerID == currentContainerID {
+				continue
+			}
+			endedAt := location.UpdatedAt.UTC()
+			if endedAt.IsZero() {
+				endedAt = now
+			}
+			if err := tx.Model(&DatabaseLocation{}).
+				Where("id = ?", location.ID).
+				Update("status", "stopped").Error; err != nil {
+				return err
+			}
+			if err := tx.Model(&DatabaseUptimeInterval{}).
+				Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
+				Update("ended_at", endedAt).Error; err != nil {
+				return err
+			}
+		}
+
+		var locations []DatabaseLocation
+		if err := tx.Table("database_locations AS dl").
+			Select("dl.*").
+			Joins("LEFT JOIN database_uptime_intervals AS dui ON dui.database_id = dl.database_id AND dui.container_id = dl.container_id").
+			Where("dui.id IS NULL").
+			Find(&locations).Error; err != nil {
+			return err
+		}
+		intervals := make([]DatabaseUptimeInterval, 0, len(locations))
+		for i := range locations {
+			startedAt := locations[i].CreatedAt.UTC()
+			if startedAt.IsZero() {
+				startedAt = locations[i].UpdatedAt.UTC()
+			}
+			if startedAt.IsZero() {
+				startedAt = now
+			}
+			interval := DatabaseUptimeInterval{
+				ID:          uuid.NewString(),
+				DatabaseID:  locations[i].DatabaseID,
+				ContainerID: locations[i].ContainerID,
+				NodeID:      locations[i].NodeID,
+				StartedAt:   startedAt,
+			}
+			if locations[i].Status != "running" {
+				endedAt := locations[i].UpdatedAt.UTC()
+				if endedAt.IsZero() || endedAt.Before(startedAt) {
+					endedAt = startedAt
+				}
+				interval.EndedAt = &endedAt
+			}
+			intervals = append(intervals, interval)
+		}
+		if len(intervals) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(intervals, 500).Error
+	})
+}
+
+func currentDatabaseLocation(tx *gorm.DB, databaseID string) (*DatabaseLocation, error) {
+	var instance DatabaseInstance
+	if err := tx.Select("instance_id").First(&instance, "id = ?", databaseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	query := tx.Where("database_id = ?", databaseID)
+	if instance.InstanceID != nil && *instance.InstanceID != "" {
+		query = query.Where("container_id = ?", *instance.InstanceID)
+	} else {
+		query = query.Order("updated_at DESC")
+	}
+	var location DatabaseLocation
+	if err := query.First(&location).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &location, nil
+}
+
+func deactivateOtherDatabaseLocations(tx *gorm.DB, databaseID, currentContainerID string, now time.Time) error {
+	activeStatuses := []string{"running", "restarting", "starting", "created", "sleeping"}
+	if err := tx.Model(&DatabaseLocation{}).
+		Where("database_id = ? AND container_id <> ? AND status IN ?", databaseID, currentContainerID, activeStatuses).
+		Updates(map[string]interface{}{"status": "stopped", "updated_at": now}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND container_id <> ? AND ended_at IS NULL", databaseID, currentContainerID).
+		Update("ended_at", now).Error
+}
+
+func ensureDatabaseUptimeInterval(tx *gorm.DB, location *DatabaseLocation, now time.Time) error {
+	return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&DatabaseUptimeInterval{
+		ID:          uuid.NewString(),
+		DatabaseID:  location.DatabaseID,
+		ContainerID: location.ContainerID,
+		NodeID:      location.NodeID,
+		StartedAt:   now,
+	}).Error
+}
+
+func closeDatabaseUptimeIntervals(tx *gorm.DB, databaseID, containerID string, now time.Time) error {
+	return tx.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND container_id = ? AND ended_at IS NULL", databaseID, containerID).
+		Update("ended_at", now).Error
 }
 
 // RecordDatabaseMetrics records database metrics

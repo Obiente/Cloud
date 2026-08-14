@@ -85,63 +85,185 @@ func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]
 }
 
 func resolvePreferredNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
-	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); explicitNodeIP != "" {
+	return resolveNodeIPs(nodeID, "", explicitNodeIP, nodeIPMap, true)
+}
+
+func resolveAuthoritativeNodeIPs(nodeID, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	return resolveNodeIPs(nodeID, "", explicitNodeIP, nodeIPMap, false)
+}
+
+func resolveAuthoritativeLocationNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[string][]string) ([]string, error) {
+	return resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP, nodeIPMap, false)
+}
+
+func resolveNodeIPs(nodeID, nodeHostname, explicitNodeIP string, nodeIPMap map[string][]string, allowCompatibilityFallback bool) ([]string, error) {
+	if explicitNodeIP = strings.TrimSpace(explicitNodeIP); configuredNodeIP(explicitNodeIP, nodeIPMap) {
 		return []string{explicitNodeIP}, nil
+	}
+	if ips, found, err := keyedNodeIPs(nodeIPMap, nodeID, nodeHostname); err != nil {
+		return nil, err
+	} else if found {
+		return ips, nil
 	}
 
 	var node NodeMetadata
 	var nodeRegion string
 
 	if err := DB.First(&node, "id = ?", nodeID).Error; err != nil {
-		// If node doesn't exist (e.g., was deleted), fall back to default region
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Node not found - use fallback logic
-			if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-				return ips, nil
+			if !allowCompatibilityFallback {
+				return nil, fmt.Errorf("node %s not found and authoritative DNS fallback is disabled", nodeID)
 			}
-			// Try to find any region in the map as fallback
-			for region := range nodeIPMap {
-				if ips := nodeIPMap[region]; len(ips) > 0 {
-					return ips, nil
-				}
-			}
-			return nil, fmt.Errorf("node %s not found and no default node IP configured", nodeID)
+			// Older records may refer to a node that predates node metadata. Only use
+			// an unassigned compatibility fallback when it is unambiguous.
+			return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s not found", nodeID))
 		}
 		return nil, fmt.Errorf("failed to find node %s: %w", nodeID, err)
 	}
 
-	if node.IP = strings.TrimSpace(node.IP); node.IP != "" {
+	if node.IP = strings.TrimSpace(node.IP); configuredNodeIP(node.IP, nodeIPMap) {
 		return []string{node.IP}, nil
+	}
+	if ips, found, err := nodeSpecificIPs(node, nodeIPMap); err != nil {
+		return nil, err
+	} else if found {
+		return ips, nil
 	}
 
 	nodeRegion = node.Region
 
-	// If node has no region, try to find a default or return error
 	if nodeRegion == "" {
-		// Try to find "default" region first, then any region as fallback
-		if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
-			return ips, nil
-		}
-		// Try to find any region in the map as fallback
-		for region := range nodeIPMap {
-			if ips := nodeIPMap[region]; len(ips) > 0 {
+		if !allowCompatibilityFallback {
+			if ips, found, err := soleNodeDefaultIPs(node, nodeIPMap); err != nil {
+				return nil, err
+			} else if found {
 				return ips, nil
 			}
+			return nil, fmt.Errorf("node %s has no configured IP or region and authoritative DNS fallback is disabled", nodeID)
 		}
-		return nil, fmt.Errorf("node %s has no region configured and no default region found", nodeID)
+		// If node has no region, only use an unambiguous compatibility fallback.
+		return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("node %s has no IP or region", nodeID))
 	}
 
 	// Get node IPs for this region
-	ips, ok := nodeIPMap[nodeRegion]
-	if !ok || len(ips) == 0 {
-		// Fallback to "default" region if the node's region doesn't exist
-		if defaultIPs, defaultOk := nodeIPMap["default"]; defaultOk && len(defaultIPs) > 0 {
-			return defaultIPs, nil
+	ips := cleanNodeIPs(nodeIPMap[nodeRegion])
+	if len(ips) == 0 {
+		// Compatibility callers may use the historical default region. An
+		// authoritative database owner must never be replaced by another node.
+		if allowCompatibilityFallback {
+			defaultIPs := cleanNodeIPs(nodeIPMap["default"])
+			if len(defaultIPs) > 0 {
+				return defaultIPs, nil
+			}
 		}
 		return nil, fmt.Errorf("no node IP configured for region: %s", nodeRegion)
 	}
+	if !allowCompatibilityFallback && len(ips) != 1 {
+		return nil, fmt.Errorf("region %s contains %d node IPs; configure exactly one NODE_IPS entry for node %s or hostname %s", nodeRegion, len(ips), node.ID, node.Hostname)
+	}
 
 	return ips, nil
+}
+
+func soleNodeDefaultIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
+	defaultIPs := cleanNodeIPs(nodeIPMap["default"])
+	if len(defaultIPs) != 1 {
+		return nil, false, nil
+	}
+
+	nonEmptyMappings := 0
+	for _, rawIPs := range nodeIPMap {
+		if len(cleanNodeIPs(rawIPs)) > 0 {
+			nonEmptyMappings++
+		}
+	}
+	if nonEmptyMappings != 1 {
+		return nil, false, nil
+	}
+
+	var nodeCount int64
+	if err := DB.Model(&NodeMetadata{}).Count(&nodeCount).Error; err != nil {
+		return nil, false, fmt.Errorf("failed to determine whether node %s is the sole configured node: %w", node.ID, err)
+	}
+	if nodeCount != 1 {
+		return nil, false, nil
+	}
+
+	return defaultIPs, true, nil
+}
+
+func nodeSpecificIPs(node NodeMetadata, nodeIPMap map[string][]string) ([]string, bool, error) {
+	return keyedNodeIPs(nodeIPMap, node.ID, node.Hostname)
+}
+
+func keyedNodeIPs(nodeIPMap map[string][]string, keys ...string) ([]string, bool, error) {
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		ips := cleanNodeIPs(nodeIPMap[key])
+		if len(ips) == 0 {
+			continue
+		}
+		if len(ips) != 1 {
+			return nil, false, fmt.Errorf("NODE_IPS entry %s contains %d addresses; node-specific entries must contain exactly one address", key, len(ips))
+		}
+		return ips, true, nil
+	}
+	return nil, false, nil
+}
+
+func configuredNodeIP(candidate string, nodeIPMap map[string][]string) bool {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return false
+	}
+	for _, rawIPs := range nodeIPMap {
+		for _, configuredIP := range rawIPs {
+			if strings.TrimSpace(configuredIP) == candidate {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func compatibilityNodeIPs(nodeIPMap map[string][]string, reason string) ([]string, error) {
+	if ips := cleanNodeIPs(nodeIPMap["default"]); len(ips) > 0 {
+		return ips, nil
+	}
+
+	var onlyRegionIPs []string
+	regions := 0
+	for region, rawIPs := range nodeIPMap {
+		if region == "default" {
+			continue
+		}
+		ips := cleanNodeIPs(rawIPs)
+		if len(ips) == 0 {
+			continue
+		}
+		regions++
+		onlyRegionIPs = ips
+	}
+	if regions == 1 {
+		return onlyRegionIPs, nil
+	}
+	if regions > 1 {
+		return nil, fmt.Errorf("%s and NODE_IPS contains %d regions; refusing ambiguous cross-node DNS fallback", reason, regions)
+	}
+	return nil, fmt.Errorf("%s and no fallback node IP is configured", reason)
+}
+
+func cleanNodeIPs(rawIPs []string) []string {
+	ips := make([]string, 0, len(rawIPs))
+	for _, ip := range rawIPs {
+		if ip = strings.TrimSpace(ip); ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return ips
 }
 
 // GetDatabaseNodeIP returns the node IPs for a managed database domain.
@@ -163,29 +285,26 @@ func GetDatabaseNodeIP(databaseID string, nodeIPMap map[string][]string) ([]stri
 		return nil, fmt.Errorf("failed to query database %s: %w", databaseID, err)
 	}
 
-	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
-		var node NodeMetadata
-		if err := DB.First(&node, "id = ?", *dbInstance.NodeID).Error; err == nil {
-			nodeRegion := node.Region
-			if nodeRegion != "" {
-				if ips, ok := nodeIPMap[nodeRegion]; ok && len(ips) > 0 {
-					return ips, nil
-				}
-			}
-		}
+	var locations []DatabaseLocation
+	if err := DB.Where("database_id = ? AND status IN ?", databaseID, []string{"running", "restarting", "starting", "created", "sleeping"}).
+		Order("updated_at DESC").
+		Find(&locations).Error; err != nil {
+		return nil, fmt.Errorf("failed to query database locations: %w", err)
 	}
-
-	if ips, ok := nodeIPMap["default"]; ok && len(ips) > 0 {
+	if len(locations) > 0 {
+		location := locations[0]
+		ips, err := resolveAuthoritativeLocationNodeIPs(location.NodeID, location.NodeHostname, location.NodeIP, nodeIPMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve active database location on node %s: %w", location.NodeID, err)
+		}
 		return ips, nil
 	}
 
-	for _, ips := range nodeIPMap {
-		if len(ips) > 0 {
-			return ips, nil
-		}
+	if dbInstance.NodeID != nil && *dbInstance.NodeID != "" {
+		return resolveAuthoritativeNodeIPs(*dbInstance.NodeID, "", nodeIPMap)
 	}
 
-	return nil, fmt.Errorf("no node IPs configured for database %s", databaseID)
+	return compatibilityNodeIPs(nodeIPMap, fmt.Sprintf("database %s has no recorded host node", databaseID))
 }
 
 // GetDeploymentRegion returns the region where a deployment is running
@@ -217,10 +336,10 @@ func GetDeploymentRegion(deploymentID string) (string, error) {
 }
 
 // ParseNodeIPsFromEnv parses the NODE_IPS environment variable
-// Format: "region1:ip1,ip2;region2:ip3,ip4"
+// Format: "key1:ip1,ip2;key2:ip3,ip4", where keys may identify regions or nodes.
 // Also supports simple format: "ip1,ip2" (defaults to "default" region)
 // Also supports space-separated format: "region1:ip1,ip2 region2:ip3,ip4" (when semicolons are not present)
-// Returns a map of region -> []IP addresses
+// Returns a map of region or node key -> []IP addresses
 func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 	result := make(map[string][]string)
 
@@ -252,7 +371,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 		regions = strings.Split(nodeIPsEnv, ";")
 	} else {
 		// Space-separated format: use regex to find all "region:ip" patterns
-		// Pattern matches: word characters (region name), colon, then IP address(es) optionally separated by commas
+		// Pattern matches region/node keys, a colon, then IP address(es) optionally separated by commas.
 		// This handles formats like:
 		// - "us:1.2.3.4 nl:5.6.7.8"
 		// - "us 1.2.3.4 nl:5.6.7.8" (region name followed by space and IP)
@@ -260,7 +379,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 
 		// First, try to find all patterns that match "region:ip" or "region:ip1,ip2"
 		// Pattern: one or more word chars, colon, then IP addresses (dots and numbers) possibly separated by commas
-		re := regexp.MustCompile(`\w+:\d+\.\d+\.\d+\.\d+(?:,\d+\.\d+\.\d+\.\d+)*`)
+		re := regexp.MustCompile(`[A-Za-z0-9_.-]+:\d+\.\d+\.\d+\.\d+(?:,\d+\.\d+\.\d+\.\d+)*`)
 		matches := re.FindAllString(nodeIPsEnv, -1)
 
 		if len(matches) > 0 {
@@ -269,7 +388,7 @@ func ParseNodeIPsFromEnv(nodeIPsEnv string) (map[string][]string, error) {
 		} else {
 			// Fallback: try to handle "region IP" format (region name followed by space and IP)
 			// Pattern: word chars (region), space, IP address
-			re2 := regexp.MustCompile(`(\w+)\s+(\d+\.\d+\.\d+\.\d+)`)
+			re2 := regexp.MustCompile(`([A-Za-z0-9_.-]+)\s+(\d+\.\d+\.\d+\.\d+)`)
 			matches2 := re2.FindAllStringSubmatch(nodeIPsEnv, -1)
 			for _, match := range matches2 {
 				if len(match) >= 3 {

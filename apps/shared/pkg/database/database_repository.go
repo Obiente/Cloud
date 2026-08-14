@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type DatabaseRepository struct {
@@ -200,6 +201,16 @@ func (r *DatabaseConnectionRepository) Create(ctx context.Context, conn *Databas
 	return r.db.WithContext(ctx).Create(conn).Error
 }
 
+func (r *DatabaseConnectionRepository) CreateOrUpdate(ctx context.Context, conn *DatabaseConnection) error {
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "database_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"database_name", "username", "password", "host", "port", "proxy_port",
+			"ssl_required", "ssl_certificate", "updated_at",
+		}),
+	}).Create(conn).Error
+}
+
 func (r *DatabaseConnectionRepository) GetByDatabaseID(ctx context.Context, databaseID string) (*DatabaseConnection, error) {
 	var conn DatabaseConnection
 	if err := r.db.WithContext(ctx).Where("database_id = ?", databaseID).First(&conn).Error; err != nil {
@@ -211,7 +222,7 @@ func (r *DatabaseConnectionRepository) GetByDatabaseID(ctx context.Context, data
 func (r *DatabaseConnectionRepository) Update(ctx context.Context, conn *DatabaseConnection) error {
 	return r.db.WithContext(ctx).
 		Model(conn).
-		Select("username", "password", "database_name", "host", "port", "ssl_required", "ssl_certificate", "updated_at").
+		Select("username", "password", "database_name", "host", "port", "proxy_port", "ssl_required", "ssl_certificate", "updated_at").
 		Updates(conn).Error
 }
 

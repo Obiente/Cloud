@@ -258,6 +258,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		dbInstance.InstanceID = &result.ContainerID
 		dbInstance.Host = &result.Host
 		dbInstance.Port = &port
+		dbInstance.NodeID = &result.NodeID
 		dbInstance.Status = 3 // RUNNING
 
 		// Create connection record
@@ -283,14 +284,40 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 			Port:         port,
 			SSLRequired:  true,
 		}
-
-		if err := s.connRepo.Create(provisionCtx, dbConn); err != nil {
-			logger.Warn("Failed to create connection record: %v", err)
+		if req.Msg.GetType() == databasesv1.DatabaseType_REDIS && s.routeRegistry != nil {
+			redisPort, err := s.routeRegistry.AllocateRedisPort(id)
+			if err != nil {
+				logger.Error("Failed to allocate Redis port: %v", err)
+			} else {
+				dbConn.ProxyPort = int32(redisPort)
+			}
 		}
 
-		// Update database with final status
-		if err := s.repo.Update(provisionCtx, dbInstance); err != nil {
-			logger.Error("Failed to update database instance: %v", err)
+		if err := s.persistDatabaseConnection(provisionCtx, dbConn); err != nil {
+			logger.Error("Failed to persist connection record; removing unpublished database container: %v", err)
+			s.failUnpublishedDatabase(dbInstance, result.ContainerID, dbConn.ProxyPort)
+			return
+		}
+
+		// Persist the authoritative instance before publishing a running location.
+		if err := s.persistDatabaseInstance(provisionCtx, dbInstance); err != nil {
+			logger.Error("Failed to persist running database instance; removing unpublished database container: %v", err)
+			_ = s.connRepo.Delete(provisionCtx, id)
+			s.failUnpublishedDatabase(dbInstance, result.ContainerID, dbConn.ProxyPort)
+			return
+		}
+
+		if err := database.UpsertDatabaseLocation(&database.DatabaseLocation{
+			ID:           database.DatabaseLocationID(id, result.ContainerID),
+			DatabaseID:   id,
+			NodeID:       result.NodeID,
+			NodeHostname: result.NodeHostname,
+			NodeIP:       result.NodeIP,
+			ContainerID:  result.ContainerID,
+			Status:       "running",
+			Port:         port,
+		}); err != nil {
+			logger.Warn("Failed to record database location: %v", err)
 		}
 
 		// Register route in proxy
@@ -315,17 +342,13 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 
 			// Allocate Redis port if needed
 			if dbType == "redis" {
-				if redisPort, err := s.routeRegistry.AllocateRedisPort(id); err == nil {
-					route.RedisPort = redisPort
-				} else {
-					logger.Error("Failed to allocate Redis port: %v", err)
-				}
+				route.RedisPort = int(dbConn.ProxyPort)
 			}
 
 			s.routeRegistry.Register(route)
 
 			// Start Redis listener if needed
-			if route.RedisPort > 0 && s.proxy != nil {
+			if route.RedisPort > 0 && s.proxy != nil && s.proxyEnabled {
 				if err := s.proxy.StartRedisListener(route); err != nil {
 					logger.Error("Failed to start Redis listener: %v", err)
 				}
@@ -356,6 +379,42 @@ func (s *Service) CreateDatabase(ctx context.Context, req *connect.Request[datab
 		ConnectionInfo: createConnInfo,
 	})
 	return res, nil
+}
+
+func (s *Service) failUnpublishedDatabase(instance *database.DatabaseInstance, containerID string, redisPort int32) {
+	if redisPort > 0 && s.routeRegistry != nil {
+		s.routeRegistry.ReleaseRedisPort(int(redisPort))
+	}
+	containerRemoved := containerID == ""
+	if s.provisioner != nil && containerID != "" {
+		cleanupCtx, cleanupCancel := s.detachedContext(2 * time.Minute)
+		if err := s.provisioner.DeprovisionDatabase(cleanupCtx, containerID); err != nil {
+			logger.Error("Failed to remove unpublished database container %s: %v", containerID, err)
+		} else {
+			containerRemoved = true
+		}
+		cleanupCancel()
+	}
+	if instance == nil {
+		return
+	}
+	markUnpublishedDatabaseFailed(instance, containerRemoved)
+	failedCtx, failedCancel := s.detachedContext(30 * time.Second)
+	defer failedCancel()
+	if err := s.persistDatabaseInstance(failedCtx, instance); err != nil {
+		logger.Error("Failed to persist failed database provisioning state: %v", err)
+	}
+}
+
+func markUnpublishedDatabaseFailed(instance *database.DatabaseInstance, containerRemoved bool) {
+	if instance == nil {
+		return
+	}
+	instance.Status = 8 // FAILED
+	if containerRemoved {
+		instance.InstanceID = nil
+		instance.NodeID = nil
+	}
 }
 
 // GetDatabase gets a database instance by ID
@@ -493,6 +552,7 @@ func (s *Service) DeleteDatabase(ctx context.Context, req *connect.Request[datab
 		// Update status to DELETING
 		dbInstance.Status = 9 // DELETING
 		s.repo.Update(deleteCtx, dbInstance)
+		updateDatabaseLocationStatus(deleteCtx, dbInstance.ID, "deleting")
 
 		// Unregister route from proxy
 		if s.routeRegistry != nil {

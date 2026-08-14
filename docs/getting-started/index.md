@@ -22,7 +22,7 @@ docker compose up -d
 
 ```bash
 docker swarm init
-docker stack deploy -c docker-compose.swarm.yml obiente
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
 ```
 
 See [Installation Guide](installation.md) for detailed instructions.

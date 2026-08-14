@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,6 +36,22 @@ const (
 	gracefulShutdownMessage = "shutting down server"
 )
 
+type serviceMode struct {
+	controlPlane bool
+	proxy        bool
+}
+
+func parseServiceMode(value string) serviceMode {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "control-plane":
+		return serviceMode{controlPlane: true}
+	case "proxy":
+		return serviceMode{proxy: true}
+	default:
+		return serviceMode{controlPlane: true, proxy: true}
+	}
+}
+
 func main() {
 	// Set log output and flags
 	log.SetOutput(os.Stdout)
@@ -45,6 +62,7 @@ func main() {
 
 	logger.Info("=== Databases Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+	mode := parseServiceMode(os.Getenv("DATABASES_SERVICE_MODE"))
 
 	database.RegisterModels(
 		&database.DatabaseInstance{},
@@ -89,40 +107,55 @@ func main() {
 	connRepo := database.NewDatabaseConnectionRepository(database.DB)
 	backupRepo := database.NewDatabaseBackupRepository(database.DB)
 	databaseService := databasessvc.NewService(shutdownCtx, databaseRepo, connRepo, backupRepo)
+	databaseService.SetProxyEnabled(mode.proxy)
 
-	// Register databases service
-	databasesPath, databasesHandler := databasesv1connect.NewDatabaseServiceHandler(
-		databaseService,
-		connect.WithInterceptors(auditInterceptor, authInterceptor),
-	)
-	mux.Handle(databasesPath, databasesHandler)
+	if mode.controlPlane {
+		// Register the control-plane RPCs only on the node-local owner task.
+		databasesPath, databasesHandler := databasesv1connect.NewDatabaseServiceHandler(
+			databaseService,
+			connect.WithInterceptors(auditInterceptor, authInterceptor),
+		)
+		mux.Handle(databasesPath, databasesHandler)
+	}
 
 	// Load existing routes and start proxy
 	proxyServer := databaseService.GetProxy()
 	routeRegistry := databaseService.GetRouteRegistry()
+	routeRegistry.SetLocalRoutesOnly(mode.proxy && !mode.controlPlane)
 
-	loadCtx, loadCancel := context.WithTimeout(shutdownCtx, 30*time.Second)
-	if err := routeRegistry.LoadFromDatabase(loadCtx); err != nil {
-		logger.Warn("Failed to load routes from database: %v", err)
-	} else {
-		logger.Info("✓ Routes loaded from database (%d routes)", routeRegistry.RouteCount())
-	}
-	loadCancel()
-
-	// Start proxy in background
 	proxyErr := make(chan error, 1)
-	go func() {
-		if err := proxyServer.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-			proxyErr <- err
+	if mode.controlPlane || mode.proxy {
+		loadCtx, loadCancel := context.WithTimeout(shutdownCtx, 30*time.Second)
+		if err := routeRegistry.LoadFromDatabase(loadCtx); err != nil {
+			logger.Warn("Failed to load routes from database: %v", err)
+		} else {
+			logger.Info("✓ Routes loaded from database (%d routes)", routeRegistry.RouteCount())
 		}
-	}()
-	logger.Info("✓ Database proxy starting")
+		loadCancel()
+	}
+
+	if mode.proxy {
+		// Start proxy in background
+		go func() {
+			if err := proxyServer.Start(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+				proxyErr <- err
+			}
+		}()
+		logger.Info("✓ Database proxy starting")
+	} else if mode.controlPlane {
+		routeRegistry.StartDatabaseSync(shutdownCtx, 10*time.Second)
+		logger.Info("✓ Database control-plane route refresh started")
+	}
 
 	// Health check endpoint
 	mux.HandleFunc("/health", health.HandleHealth("databases-service", func() (bool, string, map[string]interface{}) {
 		extra := map[string]interface{}{
-			"proxy_running": proxyServer.Healthy(),
-			"routes":        routeRegistry.RouteCount(),
+			"control_plane": mode.controlPlane,
+			"proxy_enabled": mode.proxy,
+		}
+		if mode.proxy {
+			extra["proxy_running"] = proxyServer.Healthy()
+			extra["routes"] = routeRegistry.RouteCount()
 		}
 
 		databaseReachable := false
@@ -136,28 +169,30 @@ func main() {
 		}
 		extra["database_reachable"] = databaseReachable
 
-		if !proxyServer.Healthy() {
+		if mode.proxy && !proxyServer.Healthy() {
 			return false, "proxy unavailable", extra
 		}
 
-		// Keep liveness healthy while the proxy is running, even if metadata DB is transiently unavailable.
+		// Keep liveness healthy while the selected role is running, even if metadata DB is transiently unavailable.
 		if !databaseReachable {
-			return true, "proxy healthy (database degraded)", extra
+			return true, "service healthy (database degraded)", extra
 		}
 
 		return true, "healthy", extra
 	}))
 
-	// Proxy health endpoint
-	mux.HandleFunc("/health/proxy", func(w http.ResponseWriter, r *http.Request) {
-		if proxyServer.Healthy() {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"healthy","routes":` + fmt.Sprintf("%d", routeRegistry.RouteCount()) + `}`))
-		} else {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"unhealthy"}`))
-		}
-	})
+	if mode.proxy {
+		// Proxy health endpoint
+		mux.HandleFunc("/health/proxy", func(w http.ResponseWriter, r *http.Request) {
+			if proxyServer.Healthy() {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"status":"healthy","routes":` + fmt.Sprintf("%d", routeRegistry.RouteCount()) + `}`))
+			} else {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte(`{"status":"unhealthy"}`))
+			}
+		})
+	}
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -207,9 +242,11 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		// Stop proxy first
-		proxyServer.Stop()
-		logger.Info("✓ Proxy stopped")
+		if mode.proxy {
+			// Stop proxy first
+			proxyServer.Stop()
+			logger.Info("✓ Proxy stopped")
+		}
 
 		if err := httpServer.Shutdown(ctx); err != nil {
 			logger.Warn("Error during server shutdown: %v", err)

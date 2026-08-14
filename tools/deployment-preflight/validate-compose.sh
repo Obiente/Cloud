@@ -78,7 +78,7 @@ validate_swarm_config() {
     vps-service
   )
 
-  validate_compose_file docker-compose.swarm.yml "${core_services[@]}"
+  validate_compose_file docker-compose.swarm.yml "${core_services[@]}" databases-service databases-proxy
   validate_compose_file docker-compose.swarm.dev.yml "${core_services[@]}"
   validate_compose_file docker-compose.swarm.ha.yml \
     etcd \

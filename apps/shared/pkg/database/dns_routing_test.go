@@ -1,0 +1,751 @@
+package database
+
+import (
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+)
+
+func TestGetDatabaseNodeIPPrefersRecordedHost(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	nodeID := "node-us"
+	databaseID := "db-routing-test"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &nodeID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: "us-host", IP: "192.0.2.10"}).Error; err != nil {
+		t.Fatalf("create node metadata: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve database node IP: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestGetDatabaseNodeIPPrefersCurrentLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-location-test"
+	oldNodeID := "node-nl"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &oldNodeID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, "container-1"),
+		DatabaseID:  databaseID,
+		NodeID:      "node-us",
+		NodeIP:      "192.0.2.10",
+		ContainerID: "container-1",
+		Status:      "running",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve database location IP: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestGetDatabaseNodeIPUsesSleepingLocationForWakeableDatabase(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-sleeping-location-test"
+	staleNodeID := "node-nl"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &staleNodeID, Status: 12}).Error; err != nil {
+		t.Fatalf("create sleeping database instance: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, "container-sleeping"),
+		DatabaseID:  databaseID,
+		NodeID:      "node-us",
+		NodeIP:      "192.0.2.10",
+		ContainerID: "container-sleeping",
+		Status:      "sleeping",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create sleeping database location: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve sleeping database location IP: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestGetDatabaseNodeIPDoesNotFallBackFromUnresolvedActiveLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-authoritative-location-test"
+	staleNodeID := "node-nl"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, NodeID: &staleNodeID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: staleNodeID, Hostname: "nl-host", Region: "nl"}).Error; err != nil {
+		t.Fatalf("create stale node metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, "container-authoritative"),
+		DatabaseID:  databaseID,
+		NodeID:      "node-current",
+		NodeIP:      "203.0.113.55",
+		ContainerID: "container-authoritative",
+		Status:      "running",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err == nil {
+		t.Fatal("expected unresolved active location to remain authoritative")
+	}
+	if !strings.Contains(err.Error(), "failed to resolve active database location") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetDatabaseNodeIPRejectsDefaultFallbackForActiveLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-authoritative-default-test"
+	containerID := "container-authoritative-default"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-without-metadata",
+		NodeIP:      "203.0.113.55",
+		ContainerID: containerID,
+		Status:      "running",
+		UpdatedAt:   time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, map[string][]string{
+		"default": {"192.0.2.10"},
+		"eu-west": {"198.51.100.20"},
+	})
+	if err == nil {
+		t.Fatal("expected authoritative location to reject the default fallback")
+	}
+	if !strings.Contains(err.Error(), "authoritative DNS fallback is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetDatabaseNodeIPAllowsSingleDefaultAddressForSoleNode(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-single-node-default-test"
+	containerID := "container-single-node-default"
+	nodeID := "node-single-owner"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: nodeID, Hostname: "single-owner", IP: "203.0.113.55"}).Error; err != nil {
+		t.Fatalf("create node metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:           DatabaseLocationID(databaseID, containerID),
+		DatabaseID:   databaseID,
+		NodeID:       nodeID,
+		NodeHostname: "single-owner",
+		NodeIP:       "203.0.113.55",
+		ContainerID:  containerID,
+		Status:       "running",
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, map[string][]string{"default": {"192.0.2.10"}})
+	if err != nil {
+		t.Fatalf("resolve sole database owner from simple NODE_IPS mapping: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestGetDatabaseNodeIPRejectsDefaultAddressWithMultipleNodes(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-multiple-node-default-test"
+	containerID := "container-multiple-node-default"
+	nodeID := "node-owner-a"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	for _, node := range []NodeMetadata{
+		{ID: nodeID, Hostname: "owner-a", IP: "203.0.113.55"},
+		{ID: "node-owner-b", Hostname: "owner-b", IP: "203.0.113.56"},
+	} {
+		if err := DB.Create(&node).Error; err != nil {
+			t.Fatalf("create node metadata: %v", err)
+		}
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:           DatabaseLocationID(databaseID, containerID),
+		DatabaseID:   databaseID,
+		NodeID:       nodeID,
+		NodeHostname: "owner-a",
+		NodeIP:       "203.0.113.55",
+		ContainerID:  containerID,
+		Status:       "running",
+		UpdatedAt:    time.Now(),
+	}).Error; err != nil {
+		t.Fatalf("create active database location: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, map[string][]string{"default": {"192.0.2.10"}})
+	if err == nil {
+		t.Fatal("expected simple NODE_IPS mapping to remain ambiguous with multiple nodes")
+	}
+	if !strings.Contains(err.Error(), "authoritative DNS fallback is disabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetDatabaseNodeIPRejectsAmbiguousRegionFallback(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-unassigned-test"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+
+	_, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err == nil {
+		t.Fatal("expected unassigned multi-region database resolution to fail")
+	}
+	if !strings.Contains(err.Error(), "refusing ambiguous cross-node DNS fallback") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGetDatabaseNodeIPAllowsSingleRegionCompatibilityFallback(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-legacy-test"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+
+	ips, err := GetDatabaseNodeIP(databaseID, map[string][]string{"us-east": {"192.0.2.10"}})
+	if err != nil {
+		t.Fatalf("resolve legacy single-region database: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestResolvePreferredNodeIPsRejectsAmbiguousUnknownNode(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	_, err := resolvePreferredNodeIPs("missing-node", "", multiRegionNodeIPs())
+	if err == nil {
+		t.Fatal("expected unknown node with multi-region fallback to fail")
+	}
+	if !strings.Contains(err.Error(), "refusing ambiguous cross-node DNS fallback") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResolvePreferredNodeIPsIgnoresUnconfiguredAdvertiseAddress(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-private",
+		Hostname: "private-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create private node metadata: %v", err)
+	}
+
+	ips, err := resolvePreferredNodeIPs("node-private", "203.0.113.55", multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve configured public address: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestResolveAuthoritativeNodeIPsUsesNodeSpecificAddress(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-owner",
+		Hostname: "owner-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create owner node metadata: %v", err)
+	}
+
+	ips, err := resolveAuthoritativeNodeIPs("node-owner", "203.0.113.55", map[string][]string{
+		"node-owner": {"192.0.2.11"},
+		"us-east":    {"192.0.2.10", "192.0.2.11"},
+	})
+	if err != nil {
+		t.Fatalf("resolve node-specific owner address: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.11")
+}
+
+func TestResolveAuthoritativeLocationUsesExactMappingWithoutMetadata(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	ips, err := resolveAuthoritativeLocationNodeIPs(
+		"node-without-metadata",
+		"owner-without-metadata",
+		"203.0.113.55",
+		map[string][]string{"owner-without-metadata": {"192.0.2.10"}},
+	)
+	if err != nil {
+		t.Fatalf("resolve exact owner mapping without node metadata: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestResolveAuthoritativeNodeIPsRejectsAmbiguousRegion(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	if err := DB.Create(&NodeMetadata{
+		ID:       "node-owner",
+		Hostname: "owner-host",
+		IP:       "203.0.113.55",
+		Region:   "us-east",
+	}).Error; err != nil {
+		t.Fatalf("create owner node metadata: %v", err)
+	}
+
+	_, err := resolveAuthoritativeNodeIPs("node-owner", "203.0.113.55", map[string][]string{
+		"us-east": {"192.0.2.10", "192.0.2.11"},
+	})
+	if err == nil {
+		t.Fatal("expected an ambiguous regional owner mapping to fail")
+	}
+	if !strings.Contains(err.Error(), "configure exactly one NODE_IPS entry for node node-owner") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseNodeIPsFromEnvPreservesNodeHostnameKeys(t *testing.T) {
+	nodeIPs, err := ParseNodeIPsFromEnv("owner-node:192.0.2.10 backup.node:198.51.100.20")
+	if err != nil {
+		t.Fatalf("parse node-specific IP mappings: %v", err)
+	}
+	assertNodeIPs(t, nodeIPs["owner-node"], "192.0.2.10")
+	assertNodeIPs(t, nodeIPs["backup.node"], "198.51.100.20")
+}
+
+func TestUpsertDatabaseLocationPreservesExistingPrimaryKey(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	existing := &DatabaseLocation{
+		ID:          "legacy-location-id",
+		DatabaseID:  "db-upsert-test",
+		NodeID:      "node-nl",
+		NodeIP:      "198.51.100.20",
+		ContainerID: "container-upsert",
+		Status:      "running",
+	}
+	if err := DB.Create(existing).Error; err != nil {
+		t.Fatalf("create existing database location: %v", err)
+	}
+
+	updated := &DatabaseLocation{
+		ID:          DatabaseLocationID("db-upsert-test", "container-upsert"),
+		DatabaseID:  "db-upsert-test",
+		NodeID:      "node-us",
+		NodeIP:      "192.0.2.10",
+		ContainerID: "container-upsert",
+		Status:      "running",
+	}
+	if err := UpsertDatabaseLocation(updated); err != nil {
+		t.Fatalf("upsert database location: %v", err)
+	}
+
+	var locations []DatabaseLocation
+	if err := DB.Find(&locations).Error; err != nil {
+		t.Fatalf("query database locations: %v", err)
+	}
+	if len(locations) != 1 {
+		t.Fatalf("expected one location, got %d", len(locations))
+	}
+	if locations[0].ID != existing.ID || locations[0].NodeIP != "192.0.2.10" {
+		t.Fatalf("unexpected reconciled location: %#v", locations[0])
+	}
+}
+
+func TestUpsertDatabaseLocationDeactivatesSupersededSleepingOwner(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-superseded-sleeping-owner-test"
+	currentContainerID := "container-current-owner"
+	currentNodeID := "node-current-owner"
+	if err := DB.Create(&DatabaseInstance{
+		ID:         databaseID,
+		InstanceID: &currentContainerID,
+		NodeID:     &currentNodeID,
+	}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := DB.Create(&NodeMetadata{ID: currentNodeID, Hostname: "current-owner", IP: "192.0.2.10"}).Error; err != nil {
+		t.Fatalf("create current owner metadata: %v", err)
+	}
+	if err := DB.Create(&DatabaseLocation{
+		ID:          "superseded-sleeping-location",
+		DatabaseID:  databaseID,
+		NodeID:      "node-old-owner",
+		NodeIP:      "198.51.100.20",
+		ContainerID: "container-old-owner",
+		Status:      "sleeping",
+	}).Error; err != nil {
+		t.Fatalf("create superseded sleeping location: %v", err)
+	}
+	if err := UpsertDatabaseLocation(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, currentContainerID),
+		DatabaseID:  databaseID,
+		NodeID:      currentNodeID,
+		NodeIP:      "192.0.2.10",
+		ContainerID: currentContainerID,
+		Status:      "running",
+	}); err != nil {
+		t.Fatalf("upsert current database location: %v", err)
+	}
+	if err := UpdateDatabaseLocationStatus(t.Context(), databaseID, "stopped"); err != nil {
+		t.Fatalf("stop current database location: %v", err)
+	}
+
+	var oldLocation DatabaseLocation
+	if err := DB.First(&oldLocation, "id = ?", "superseded-sleeping-location").Error; err != nil {
+		t.Fatalf("load superseded sleeping location: %v", err)
+	}
+	if oldLocation.Status != "stopped" {
+		t.Fatalf("expected superseded sleeping location to be stopped, got %q", oldLocation.Status)
+	}
+	ips, err := GetDatabaseNodeIP(databaseID, multiRegionNodeIPs())
+	if err != nil {
+		t.Fatalf("resolve current database owner: %v", err)
+	}
+	assertNodeIPs(t, ips, "192.0.2.10")
+}
+
+func TestUpdateDatabaseLocationStatus(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	containerID := "container-status-test"
+	if err := DB.Create(&DatabaseInstance{ID: "db-status-test", InstanceID: &containerID}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	historical := &DatabaseLocation{
+		ID:          "historical-location-status-test",
+		DatabaseID:  "db-status-test",
+		NodeID:      "node-old",
+		ContainerID: "container-old-status-test",
+		Status:      "running",
+	}
+	if err := DB.Create(historical).Error; err != nil {
+		t.Fatalf("create historical database location: %v", err)
+	}
+	if err := DB.Create(&DatabaseUptimeInterval{
+		ID:          "historical-interval-status-test",
+		DatabaseID:  historical.DatabaseID,
+		ContainerID: historical.ContainerID,
+		NodeID:      historical.NodeID,
+		StartedAt:   time.Now().Add(-time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("create historical uptime interval: %v", err)
+	}
+
+	location := &DatabaseLocation{
+		ID:          "location-status-test",
+		DatabaseID:  "db-status-test",
+		NodeID:      "node-us",
+		ContainerID: containerID,
+		Status:      "running",
+	}
+	if err := UpsertDatabaseLocation(location); err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+
+	if err := UpdateDatabaseLocationStatus(t.Context(), location.DatabaseID, "sleeping"); err != nil {
+		t.Fatalf("update database location status: %v", err)
+	}
+
+	var updated DatabaseLocation
+	if err := DB.First(&updated, "id = ?", location.ID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if updated.Status != "sleeping" {
+		t.Fatalf("expected sleeping location status, got %q", updated.Status)
+	}
+
+	var firstInterval DatabaseUptimeInterval
+	if err := DB.First(&firstInterval, "database_id = ?", location.DatabaseID).Error; err != nil {
+		t.Fatalf("load closed uptime interval: %v", err)
+	}
+	if firstInterval.EndedAt == nil {
+		t.Fatal("expected sleeping transition to close the running interval")
+	}
+
+	if err := UpdateDatabaseLocationStatus(t.Context(), location.DatabaseID, "running"); err != nil {
+		t.Fatalf("restart database location: %v", err)
+	}
+	var intervals []DatabaseUptimeInterval
+	if err := DB.Order("started_at").Find(&intervals, "database_id = ?", location.DatabaseID).Error; err != nil {
+		t.Fatalf("load uptime intervals: %v", err)
+	}
+	if len(intervals) != 3 {
+		t.Fatalf("expected historical and current uptime intervals, got %#v", intervals)
+	}
+	var historicalAfter DatabaseLocation
+	if err := DB.First(&historicalAfter, "id = ?", historical.ID).Error; err != nil {
+		t.Fatalf("load historical location: %v", err)
+	}
+	if historicalAfter.Status != "stopped" {
+		t.Fatalf("expected historical location to remain stopped, got %q", historicalAfter.Status)
+	}
+	var openIntervals int64
+	if err := DB.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND ended_at IS NULL", location.DatabaseID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 1 {
+		t.Fatalf("expected exactly one open interval for the current container, got %d", openIntervals)
+	}
+}
+
+func TestUpdateDatabaseRuntimeStatusRollsBackSplitTransition(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-atomic-runtime-status-test"
+	containerID := "container-atomic-runtime-status-test"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &containerID, Status: 3}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	if err := UpsertDatabaseLocation(&DatabaseLocation{
+		ID:          DatabaseLocationID(databaseID, containerID),
+		DatabaseID:  databaseID,
+		NodeID:      "node-atomic-runtime-status-test",
+		ContainerID: containerID,
+		Status:      "running",
+	}); err != nil {
+		t.Fatalf("create database location: %v", err)
+	}
+
+	callbackName := "test:fail-runtime-location-update"
+	if err := DB.Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Table == "database_locations" {
+			tx.AddError(errors.New("synthetic location update failure"))
+		}
+	}); err != nil {
+		t.Fatalf("register failing update callback: %v", err)
+	}
+	t.Cleanup(func() { _ = DB.Callback().Update().Remove(callbackName) })
+
+	if err := UpdateDatabaseRuntimeStatus(t.Context(), databaseID, 5, "stopped"); err == nil {
+		t.Fatal("expected split runtime transition to fail")
+	}
+	var instance DatabaseInstance
+	if err := DB.First(&instance, "id = ?", databaseID).Error; err != nil {
+		t.Fatalf("load database instance: %v", err)
+	}
+	if instance.Status != 3 {
+		t.Fatalf("instance status committed without its location: %d", instance.Status)
+	}
+	var location DatabaseLocation
+	if err := DB.First(&location, "container_id = ?", containerID).Error; err != nil {
+		t.Fatalf("load database location: %v", err)
+	}
+	if location.Status != "running" {
+		t.Fatalf("location status changed despite rollback: %q", location.Status)
+	}
+}
+
+func TestBackfillDatabaseUptimeIntervalsPreservesLegacyTimestamps(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	runningStart := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
+	stoppedStart := time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC)
+	stoppedEnd := time.Date(2026, time.May, 3, 0, 0, 0, 0, time.UTC)
+	locations := []DatabaseLocation{
+		{
+			ID:          "legacy-running-location",
+			DatabaseID:  "db-legacy-running",
+			NodeID:      "node-us",
+			ContainerID: "container-legacy-running",
+			Status:      "running",
+			CreatedAt:   runningStart,
+			UpdatedAt:   runningStart.Add(time.Hour),
+		},
+		{
+			ID:          "legacy-stopped-location",
+			DatabaseID:  "db-legacy-stopped",
+			NodeID:      "node-nl",
+			ContainerID: "container-legacy-stopped",
+			Status:      "stopped",
+			CreatedAt:   stoppedStart,
+			UpdatedAt:   stoppedEnd,
+		},
+	}
+	if err := DB.Create(&locations).Error; err != nil {
+		t.Fatalf("create legacy database locations: %v", err)
+	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("backfill database uptime intervals: %v", err)
+	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("rerun database uptime backfill: %v", err)
+	}
+
+	var intervals []DatabaseUptimeInterval
+	if err := DB.Order("started_at").Find(&intervals).Error; err != nil {
+		t.Fatalf("load backfilled uptime intervals: %v", err)
+	}
+	if len(intervals) != 2 {
+		t.Fatalf("expected two backfilled intervals, got %d", len(intervals))
+	}
+	if !intervals[0].StartedAt.Equal(stoppedStart) || intervals[0].EndedAt == nil || !intervals[0].EndedAt.Equal(stoppedEnd) {
+		t.Fatalf("unexpected stopped legacy interval: %#v", intervals[0])
+	}
+	if !intervals[1].StartedAt.Equal(runningStart) || intervals[1].EndedAt != nil {
+		t.Fatalf("unexpected running legacy interval: %#v", intervals[1])
+	}
+}
+
+func TestBackfillDatabaseUptimeIntervalsClosesSupersededRunningLocation(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	databaseID := "db-legacy-multiple-running-test"
+	currentContainerID := "container-legacy-current"
+	if err := DB.Create(&DatabaseInstance{ID: databaseID, InstanceID: &currentContainerID, Status: 3}).Error; err != nil {
+		t.Fatalf("create database instance: %v", err)
+	}
+	oldUpdatedAt := time.Date(2026, time.May, 2, 0, 0, 0, 0, time.UTC)
+	locations := []DatabaseLocation{
+		{
+			ID:          "legacy-superseded-running-location",
+			DatabaseID:  databaseID,
+			NodeID:      "node-legacy-old",
+			ContainerID: "container-legacy-old",
+			Status:      "running",
+			CreatedAt:   oldUpdatedAt.Add(-time.Hour),
+			UpdatedAt:   oldUpdatedAt,
+		},
+		{
+			ID:          "legacy-current-running-location",
+			DatabaseID:  databaseID,
+			NodeID:      "node-legacy-current",
+			ContainerID: currentContainerID,
+			Status:      "running",
+			CreatedAt:   oldUpdatedAt.Add(time.Hour),
+			UpdatedAt:   oldUpdatedAt.Add(2 * time.Hour),
+		},
+	}
+	if err := DB.Create(&locations).Error; err != nil {
+		t.Fatalf("create legacy running locations: %v", err)
+	}
+	if err := BackfillDatabaseUptimeIntervals(); err != nil {
+		t.Fatalf("backfill database uptime intervals: %v", err)
+	}
+
+	var openIntervals []DatabaseUptimeInterval
+	if err := DB.Where("database_id = ? AND ended_at IS NULL", databaseID).Find(&openIntervals).Error; err != nil {
+		t.Fatalf("load open uptime intervals: %v", err)
+	}
+	if len(openIntervals) != 1 || openIntervals[0].ContainerID != currentContainerID {
+		t.Fatalf("unexpected authoritative open intervals: %#v", openIntervals)
+	}
+	var superseded DatabaseLocation
+	if err := DB.First(&superseded, "id = ?", locations[0].ID).Error; err != nil {
+		t.Fatalf("load superseded database location: %v", err)
+	}
+	if superseded.Status != "stopped" {
+		t.Fatalf("superseded location status = %q, want stopped", superseded.Status)
+	}
+}
+
+func TestDatabaseUptimeIntervalAllowsOnlyOneOpenRowPerContainer(t *testing.T) {
+	setupDNSRoutingTestDB(t)
+
+	location := &DatabaseLocation{
+		DatabaseID:  "db-atomic-uptime-test",
+		ContainerID: "container-atomic-uptime-test",
+		NodeID:      "node-us",
+	}
+	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
+	if err := ensureDatabaseUptimeInterval(DB, location, now); err != nil {
+		t.Fatalf("create first uptime interval: %v", err)
+	}
+	if err := ensureDatabaseUptimeInterval(DB, location, now.Add(time.Second)); err != nil {
+		t.Fatalf("ignore duplicate uptime interval: %v", err)
+	}
+
+	var openIntervals int64
+	if err := DB.Model(&DatabaseUptimeInterval{}).
+		Where("database_id = ? AND container_id = ? AND ended_at IS NULL", location.DatabaseID, location.ContainerID).
+		Count(&openIntervals).Error; err != nil {
+		t.Fatalf("count open uptime intervals: %v", err)
+	}
+	if openIntervals != 1 {
+		t.Fatalf("expected one open uptime interval, got %d", openIntervals)
+	}
+
+	duplicate := DatabaseUptimeInterval{
+		ID:          "duplicate-open-interval",
+		DatabaseID:  location.DatabaseID,
+		ContainerID: location.ContainerID,
+		NodeID:      location.NodeID,
+		StartedAt:   now.Add(2 * time.Second),
+	}
+	if err := DB.Create(&duplicate).Error; err == nil {
+		t.Fatal("expected the database to reject a second open uptime interval")
+	}
+}
+
+func setupDNSRoutingTestDB(t *testing.T) {
+	t.Helper()
+	previousDB := DB
+	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	if err := db.AutoMigrate(&DatabaseInstance{}, &DatabaseLocation{}, &DatabaseUptimeInterval{}, &NodeMetadata{}); err != nil {
+		t.Fatalf("migrate test database: %v", err)
+	}
+	DB = db
+	t.Cleanup(func() { DB = previousDB })
+}
+
+func multiRegionNodeIPs() map[string][]string {
+	return map[string][]string{
+		"us-east": {"192.0.2.10"},
+		"nl":      {"198.51.100.20"},
+	}
+}
+
+func assertNodeIPs(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	}
+}

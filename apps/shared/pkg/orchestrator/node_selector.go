@@ -183,7 +183,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 				// Successfully got nodes - sync them
 				// Track all Swarm node IDs to identify nodes that should be removed
 				swarmNodeIDs := make(map[string]bool)
-				
+
 				for _, node := range nodesResult.Items {
 					// Get node info
 					nodeInfoResult, err := ns.dockerClient.NodeInspect(ctx, node.ID, client.NodeInspectOptions{})
@@ -194,7 +194,8 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 
 					hostname := nodeInfo.Description.Hostname
 					nodeID := node.ID
-					
+					nodeIP := strings.TrimSpace(nodeInfo.Status.Addr)
+
 					// Track this node ID as existing in Swarm
 					swarmNodeIDs[nodeID] = true
 
@@ -219,6 +220,10 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 							labelsJSON = string(labelsBytes)
 						}
 					}
+					nodeRegion := strings.TrimSpace(node.Spec.Annotations.Labels["region"])
+					if nodeRegion == "" && hostnameExists {
+						nodeRegion = existingNode.Region
+					}
 
 					var metadata *database.NodeMetadata
 					if hostnameExists && existingNode.ID != nodeID {
@@ -230,6 +235,8 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 						// Update the existing node's ID and other fields
 						existingNode.ID = nodeID
 						existingNode.Hostname = hostname
+						existingNode.IP = nodeIP
+						existingNode.Region = nodeRegion
 						existingNode.Role = string(node.Spec.Role)
 						existingNode.Availability = string(node.Spec.Availability)
 						existingNode.Status = string(node.Status.State)
@@ -253,6 +260,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 						metadata = &database.NodeMetadata{
 							ID:              nodeID,
 							Hostname:        hostname,
+							IP:              nodeIP,
 							Role:            string(node.Spec.Role),
 							Availability:    string(node.Spec.Availability),
 							Status:          string(node.Status.State),
@@ -263,6 +271,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 							DeploymentCount: deploymentCount,
 							MaxDeployments:  ns.maxDeploymentsPerNode,
 							Labels:          labelsJSON,
+							Region:          nodeRegion,
 						}
 					}
 
@@ -272,7 +281,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 					// Also update metrics separately to ensure last_heartbeat is updated
 					database.UpdateNodeMetrics(nodeID, usedCPU, usedMemory)
 				}
-				
+
 				// Clean up nodes that are no longer in the Swarm
 				// Only remove Swarm nodes (those that don't start with "local-")
 				var allDBNodes []database.NodeMetadata
@@ -289,7 +298,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 						}
 					}
 				}
-				
+
 				// Successfully synced all nodes, return
 				return nil
 			}
@@ -311,6 +320,7 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	// Get Swarm field
 	swarmField := v.FieldByName("Swarm")
 	var swarmNodeID string
+	var nodeIP string
 	var controlAvailable bool
 	if swarmField.IsValid() {
 		if nodeIDField := swarmField.FieldByName("NodeID"); nodeIDField.IsValid() {
@@ -318,6 +328,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		}
 		if controlField := swarmField.FieldByName("ControlAvailable"); controlField.IsValid() {
 			controlAvailable = controlField.Bool()
+		}
+		if nodeAddrField := swarmField.FieldByName("NodeAddr"); nodeAddrField.IsValid() {
+			nodeIP = strings.TrimSpace(nodeAddrField.String())
 		}
 	}
 
@@ -358,6 +371,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 			role = string(nodeInfo.Spec.Role)
 			availability = string(nodeInfo.Spec.Availability)
 			status = string(nodeInfo.Status.State)
+			if addr := strings.TrimSpace(nodeInfo.Status.Addr); addr != "" {
+				nodeIP = addr
+			}
 			log.Printf("[NodeSelector] Got role=%s, availability=%s, status=%s from Swarm for node %s", role, availability, status, swarmNodeID)
 		} else {
 			// Can't get node info (might be worker node) - infer from ControlAvailable
@@ -412,6 +428,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 
 		// Update the existing node's ID and other fields
 		existingNode.ID = nodeID
+		if nodeIP != "" {
+			existingNode.IP = nodeIP
+		}
 		existingNode.Role = role
 		existingNode.Availability = availability
 		existingNode.Status = status
@@ -439,6 +458,7 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		metadata = &database.NodeMetadata{
 			ID:              nodeID,
 			Hostname:        name,
+			IP:              nodeIP,
 			Role:            role,
 			Availability:    availability,
 			Status:          status,
@@ -456,6 +476,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	} else {
 		// Node exists with same hostname and ID - just update it
 		metadata = &existingNode
+		if nodeIP != "" {
+			metadata.IP = nodeIP
+		}
 		metadata.Role = role
 		metadata.Availability = availability
 		metadata.Status = status
@@ -608,11 +631,11 @@ func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID s
 		if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
 			cpuDelta := int64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
 			systemDelta := int64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
-			
+
 			// Validate deltas to prevent invalid calculations
 			// Minimum systemDelta: 1 millisecond (1,000,000 nanoseconds) to prevent division by tiny numbers
 			const minSystemDelta = 1_000_000 // 1ms in nanoseconds
-			
+
 			if systemDelta >= minSystemDelta && statsJSON.CPUStats.OnlineCPUs > 0 {
 				// Handle counter wraparound (uint64 overflow)
 				if cpuDelta < 0 {
@@ -621,7 +644,7 @@ func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID s
 					cpuUsage = 0.0
 				} else {
 					cpuUsage = (float64(cpuDelta) / float64(systemDelta)) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
-					
+
 					// Validate the result is physically reasonable
 					maxReasonableCPU := float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
 					if cpuUsage < 0 || cpuUsage > maxReasonableCPU {

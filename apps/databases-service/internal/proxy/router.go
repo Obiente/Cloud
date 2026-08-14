@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,13 @@ type Route struct {
 	LastConnectionAt time.Time // Last time a client connected
 }
 
+type databaseLocationSnapshot struct {
+	NodeID       string
+	NodeIP       string
+	NodeHostname string
+	Status       string
+}
+
 // WakeFunc starts a sleeping database container and returns the new container IP
 type WakeFunc func(ctx context.Context, route *Route) (string, error)
 
@@ -43,6 +51,7 @@ type RouteRegistry struct {
 	routesByID   map[string]*Route // keyed by database ID
 	dockerClient *docker.Client
 	stopRefresh  chan struct{}
+	localOnly    bool
 
 	// Wake/sleep callbacks (set by service layer)
 	OnWake  WakeFunc
@@ -53,6 +62,40 @@ type RouteRegistry struct {
 	redisPortStart int
 	redisPortEnd   int
 	usedRedisPorts map[int]string // port -> database ID
+}
+
+// SetLocalRoutesOnly limits published proxy routes to containers owned by the
+// local Docker daemon. Control-plane registries retain the global allocation
+// snapshot without opening remote listeners.
+func (r *RouteRegistry) SetLocalRoutesOnly(localOnly bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.localOnly = localOnly
+}
+
+func (r *RouteRegistry) StartDatabaseSync(ctx context.Context, interval time.Duration) <-chan struct{} {
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				syncCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				if err := r.LoadFromDatabase(syncCtx); err != nil {
+					logger.Warn("Failed to refresh database routes: %v", err)
+				}
+				cancel()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return done
 }
 
 // NewRouteRegistry creates a new route registry
@@ -200,11 +243,81 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	for id, route := range r.routesByID {
 		existingRoutes[id] = route
 	}
+	localRoutesOnly := r.localOnly
 	r.mu.RUnlock()
 
 	newRoutes := make(map[string]*Route, len(instances))
 	newRoutesByID := make(map[string]*Route, len(instances))
 	newUsedRedisPorts := make(map[int]string)
+	for _, inst := range instances {
+		if databaseTypeIntToString(inst.Type) != "redis" {
+			continue
+		}
+		conn := connMap[inst.ID]
+		if conn == nil || !r.validRedisPort(int(conn.ProxyPort)) {
+			continue
+		}
+		port := int(conn.ProxyPort)
+		if _, used := newUsedRedisPorts[port]; !used {
+			newUsedRedisPorts[port] = inst.ID
+		}
+	}
+	var localNode docker.NodeIdentity
+	var localNodeErr error
+	var localContainerStates map[string]string
+	if r.dockerClient != nil {
+		localNode, localNodeErr = r.dockerClient.CurrentNodeIdentity(ctx)
+		if localNodeErr == nil {
+			localContainerStates, localNodeErr = r.dockerClient.ManagedDatabaseContainerStates(ctx)
+		}
+	}
+	if localRoutesOnly {
+		if r.dockerClient == nil {
+			return fmt.Errorf("cannot refresh local database routes: Docker client is unavailable")
+		}
+		if localNodeErr != nil {
+			return fmt.Errorf("cannot refresh local database routes: %w", localNodeErr)
+		}
+	}
+	knownLocations := make(map[string]databaseLocationSnapshot)
+	openUptimeIntervals := make(map[string]bool)
+	if r.dockerClient != nil && localNodeErr == nil {
+		containerIDs := make([]string, 0, len(instances))
+		for _, instance := range instances {
+			if instance.InstanceID != nil && *instance.InstanceID != "" {
+				containerIDs = append(containerIDs, *instance.InstanceID)
+			}
+		}
+		if len(containerIDs) > 0 {
+			var locations []database.DatabaseLocation
+			if err := database.DB.WithContext(ctx).Where("container_id IN ?", containerIDs).Find(&locations).Error; err != nil {
+				localNodeErr = fmt.Errorf("failed to load database locations: %w", err)
+			} else {
+				for _, location := range locations {
+					knownLocations[location.ContainerID] = databaseLocationSnapshot{
+						NodeID:       location.NodeID,
+						NodeIP:       location.NodeIP,
+						NodeHostname: location.NodeHostname,
+						Status:       location.Status,
+					}
+				}
+			}
+			var openIntervalContainerIDs []string
+			if err := database.DB.WithContext(ctx).
+				Model(&database.DatabaseUptimeInterval{}).
+				Where("container_id IN ? AND ended_at IS NULL", containerIDs).
+				Pluck("container_id", &openIntervalContainerIDs).Error; err != nil {
+				localNodeErr = fmt.Errorf("failed to load database uptime intervals: %w", err)
+			} else {
+				for _, containerID := range openIntervalContainerIDs {
+					openUptimeIntervals[containerID] = true
+				}
+			}
+		}
+	}
+	if localRoutesOnly && localNodeErr != nil {
+		return fmt.Errorf("cannot refresh local database routes: %w", localNodeErr)
+	}
 
 	for _, inst := range instances {
 		dbType := databaseTypeIntToString(inst.Type)
@@ -232,6 +345,68 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 		if inst.InstanceID != nil {
 			route.ContainerID = *inst.InstanceID
 		}
+		if dbType == "redis" {
+			conn := connMap[inst.ID]
+			port := 0
+			if conn != nil && r.validRedisPort(int(conn.ProxyPort)) && newUsedRedisPorts[int(conn.ProxyPort)] == inst.ID {
+				port = int(conn.ProxyPort)
+			} else {
+				var err error
+				port, err = r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
+				if err != nil {
+					logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
+					continue
+				}
+				if conn != nil {
+					if err := database.DB.WithContext(ctx).Model(&database.DatabaseConnection{}).
+						Where("database_id = ?", inst.ID).
+						Update("proxy_port", port).Error; err != nil {
+						logger.Error("Failed to persist Redis proxy port for %s: %v", inst.ID, err)
+						continue
+					}
+					conn.ProxyPort = int32(port)
+				}
+			}
+			route.RedisPort = port
+			newUsedRedisPorts[port] = inst.ID
+		}
+		location := knownLocations[route.ContainerID]
+		containerState, containerIsLocal := localContainerStates[route.ContainerID]
+		containerOwnedLocally := databaseContainerOwnedLocally(&inst, location, localNode.ID, containerIsLocal)
+		if localRoutesOnly && route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil && !containerOwnedLocally {
+			// Global proxy tasks only publish routes for containers owned by their
+			// local Docker daemon. Owner-specific DNS sends clients to that task.
+			continue
+		}
+		locationReconciled := false
+		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
+			if containerIsLocal && databaseContainerIsRunning(containerState) && (inst.Status == 5 || inst.Status == 12) {
+				if err := reconcileRunningDatabase(ctx, &inst); err != nil {
+					logger.Warn("Failed to reconcile externally started database %s: %v", inst.ID, err)
+				} else {
+					inst.Status = 3
+					route.DBStatus = 3
+					route.Stopped = false
+				}
+			}
+			if containerOwnedLocally && inst.Status == 3 && databaseContainerTerminallyUnavailable(containerState, containerIsLocal) {
+				if err := reconcileStoppedDatabase(ctx, &inst); err != nil {
+					logger.Warn("Failed to reconcile externally stopped database %s: %v", inst.ID, err)
+				} else {
+					inst.Status = 5
+					route.DBStatus = 5
+					route.Stopped = true
+				}
+			} else if containerIsLocal && databaseLocationNeedsReconciliation(&inst, location, localNode) {
+				r.recordDatabaseLocation(ctx, &inst, localNode)
+				locationReconciled = true
+			}
+		}
+		if databaseUptimeNeedsRepair(inst.Status, containerIsLocal, locationReconciled, openUptimeIntervals[route.ContainerID]) {
+			if err := database.EnsureDatabaseUptimeInterval(ctx, inst.ID); err != nil {
+				logger.Warn("Failed to reconcile uptime interval for database %s: %v", inst.ID, err)
+			}
+		}
 
 		// Load connection credentials
 		if conn, ok := connMap[inst.ID]; ok {
@@ -241,22 +416,13 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		// Only resolve IPs for running databases
 		if route.Stopped {
-			if dbType == "redis" {
-				port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
-				if err != nil {
-					logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
-				} else {
-					route.RedisPort = port
-					newUsedRedisPorts[port] = inst.ID
-				}
-			}
 			newRoutes[route.DatabaseID] = route
 			newRoutesByID[route.DatabaseID] = route
 			continue
 		}
 
 		// Ensure container is on the correct network, then resolve IP
-		if route.ContainerID != "" && r.dockerClient != nil {
+		if route.ContainerID != "" && r.dockerClient != nil && containerOwnedLocally {
 			r.reconcileContainerNetwork(ctx, route.ContainerID)
 
 			if ip, err := r.resolveContainerIP(ctx, route.ContainerID); err == nil {
@@ -271,17 +437,6 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			}
 		}
 
-		// Allocate Redis port if needed
-		if dbType == "redis" {
-			port, err := r.allocateRedisPortLocked(inst.ID, newUsedRedisPorts)
-			if err != nil {
-				logger.Error("Failed to allocate Redis port for %s: %v", inst.ID, err)
-				continue
-			}
-			route.RedisPort = port
-			newUsedRedisPorts[port] = inst.ID
-		}
-
 		newRoutes[route.DatabaseID] = route
 		newRoutesByID[route.DatabaseID] = route
 	}
@@ -291,12 +446,163 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	r.routesByID = newRoutesByID
 	r.mu.Unlock()
 
-	r.redisMu.Lock()
-	r.usedRedisPorts = newUsedRedisPorts
-	r.redisMu.Unlock()
+	r.replaceRedisReservations(newUsedRedisPorts)
 
 	logger.Info("Loaded %d routes from database", len(instances))
 	return nil
+}
+
+func (r *RouteRegistry) replaceRedisReservations(snapshot map[int]string) {
+	r.redisMu.Lock()
+	defer r.redisMu.Unlock()
+
+	representedDatabases := make(map[string]struct{}, len(snapshot))
+	for _, databaseID := range snapshot {
+		representedDatabases[databaseID] = struct{}{}
+	}
+	for port, databaseID := range r.usedRedisPorts {
+		if _, represented := representedDatabases[databaseID]; represented {
+			continue
+		}
+		if _, occupied := snapshot[port]; !occupied {
+			snapshot[port] = databaseID
+		}
+	}
+	r.usedRedisPorts = snapshot
+}
+
+func (r *RouteRegistry) validRedisPort(port int) bool {
+	return port >= r.redisPortStart && port <= r.redisPortEnd
+}
+
+func databaseContainerOwnedLocally(
+	instance *database.DatabaseInstance,
+	location databaseLocationSnapshot,
+	localNodeID string,
+	containerListedLocally bool,
+) bool {
+	if containerListedLocally || localNodeID == "" {
+		return containerListedLocally
+	}
+	if strings.TrimSpace(location.NodeID) == strings.TrimSpace(localNodeID) {
+		return true
+	}
+	if strings.TrimSpace(location.NodeID) != "" {
+		return false
+	}
+	return instance != nil && instance.NodeID != nil && strings.TrimSpace(*instance.NodeID) == strings.TrimSpace(localNodeID)
+}
+
+func databaseContainerTerminallyUnavailable(state string, listedLocally bool) bool {
+	if !listedLocally {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "exited", "dead":
+		return true
+	default:
+		return false
+	}
+}
+
+func databaseContainerIsRunning(state string) bool {
+	return strings.EqualFold(strings.TrimSpace(state), "running")
+}
+
+func databaseUptimeNeedsRepair(instanceStatus int32, containerIsLocal, locationReconciled, intervalOpen bool) bool {
+	return instanceStatus == 3 && containerIsLocal && !locationReconciled && !intervalOpen
+}
+
+func reconcileStoppedDatabase(ctx context.Context, instance *database.DatabaseInstance) error {
+	if instance == nil {
+		return nil
+	}
+	if err := database.UpdateDatabaseRuntimeStatus(ctx, instance.ID, 5, "stopped"); err != nil {
+		return fmt.Errorf("update stopped database runtime status: %w", err)
+	}
+	return nil
+}
+
+func reconcileRunningDatabase(ctx context.Context, instance *database.DatabaseInstance) error {
+	if instance == nil {
+		return nil
+	}
+	if err := database.UpdateDatabaseRuntimeStatus(ctx, instance.ID, 3, "running"); err != nil {
+		return fmt.Errorf("update running database runtime status: %w", err)
+	}
+	return nil
+}
+
+func databaseLocationNeedsReconciliation(instance *database.DatabaseInstance, location databaseLocationSnapshot, localNode docker.NodeIdentity) bool {
+	if instance == nil {
+		return false
+	}
+	if instance.NodeID == nil || strings.TrimSpace(*instance.NodeID) != strings.TrimSpace(localNode.ID) {
+		return true
+	}
+	return strings.TrimSpace(location.NodeID) != strings.TrimSpace(localNode.ID) ||
+		strings.TrimSpace(location.NodeIP) != strings.TrimSpace(localNode.IP) ||
+		strings.TrimSpace(location.NodeHostname) != strings.TrimSpace(localNode.Hostname) ||
+		location.Status != databaseLocationStatus(instance.Status)
+}
+
+func (r *RouteRegistry) recordDatabaseLocation(ctx context.Context, instance *database.DatabaseInstance, node docker.NodeIdentity) {
+	if instance == nil || instance.InstanceID == nil || node.ID == "" {
+		return
+	}
+
+	containerID := *instance.InstanceID
+	if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).
+		Where("id = ?", instance.ID).
+		Update("node_id", node.ID).Error; err != nil {
+		logger.Warn("Failed to record host node for database %s: %v", instance.ID, err)
+		return
+	}
+	instance.NodeID = &node.ID
+
+	if err := database.UpsertDatabaseLocation(&database.DatabaseLocation{
+		ID:           database.DatabaseLocationID(instance.ID, containerID),
+		DatabaseID:   instance.ID,
+		NodeID:       node.ID,
+		NodeHostname: node.Hostname,
+		NodeIP:       node.IP,
+		ContainerID:  containerID,
+		Status:       databaseLocationStatus(instance.Status),
+		Port:         int32(standardPort(databaseTypeIntToString(instance.Type))),
+	}); err != nil {
+		logger.Warn("Failed to reconcile location for database %s: %v", instance.ID, err)
+	}
+}
+
+func databaseLocationStatus(status int32) string {
+	switch status {
+	case 1:
+		return "creating"
+	case 2:
+		return "starting"
+	case 3:
+		return "running"
+	case 4:
+		return "stopping"
+	case 5:
+		return "stopped"
+	case 6:
+		return "backing_up"
+	case 7:
+		return "restoring"
+	case 8:
+		return "failed"
+	case 9:
+		return "deleting"
+	case 10:
+		return "deleted"
+	case 11:
+		return "suspended"
+	case 12:
+		return "sleeping"
+	default:
+		return "created"
+	}
 }
 
 // StartIPRefresh starts a background goroutine that refreshes container IPs
