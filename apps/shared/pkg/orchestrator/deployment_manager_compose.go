@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,26 +61,29 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 }
 
 func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
-	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
-		return err
-	}
 	if !utils.IsSwarmModeEnabled() {
 		// composeUpArgs already includes --force-recreate.
-		return nil
+		return dm.DeployComposeFile(ctx, deploymentID, composeYaml)
 	}
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
-	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
-	output, err := listCmd.CombinedOutput()
+	beforeTasks, err := swarmStackTaskGenerations(ctx, projectName)
 	if err != nil {
-		return fmt.Errorf("list services before forced Compose restart: %w (%s)", err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("inspect services before Compose restart: %w", err)
 	}
-	serviceNames := strings.Fields(string(output))
-	if len(serviceNames) == 0 {
-		return fmt.Errorf("forced Compose restart found no services in stack %s", projectName)
+	if err := dm.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
+		return err
 	}
-	for _, serviceName := range serviceNames {
-		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--force", serviceName)
+	afterTasks, err := swarmStackTaskGenerations(ctx, projectName)
+	if err != nil {
+		return fmt.Errorf("inspect services after Compose restart deployment: %w", err)
+	}
+	for serviceName, beforeGeneration := range beforeTasks {
+		afterGeneration, stillExists := afterTasks[serviceName]
+		if !stillExists || afterGeneration != beforeGeneration {
+			continue
+		}
+		forceCmd := exec.CommandContext(ctx, "docker", "service", "update", "--detach=true", "--force", serviceName)
 		forceOutput, forceErr := forceCmd.CombinedOutput()
 		if forceErr != nil {
 			return fmt.Errorf("force restart service %s: %w (%s)", serviceName, forceErr, strings.TrimSpace(string(forceOutput)))
@@ -89,6 +93,47 @@ func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentI
 		}
 	}
 	return nil
+}
+
+func swarmStackTaskGenerations(ctx context.Context, projectName string) (map[string]string, error) {
+	listCmd := exec.CommandContext(ctx, "docker", "stack", "services", projectName, "--format", "{{.Name}}")
+	output, err := listCmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("list stack services: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	serviceNames := strings.Fields(string(output))
+	if len(serviceNames) == 0 {
+		return nil, fmt.Errorf("stack %s has no services", projectName)
+	}
+	generations := make(map[string]string, len(serviceNames))
+	for _, serviceName := range serviceNames {
+		psCmd := exec.CommandContext(ctx, "docker", "service", "ps", serviceName, "--no-trunc", "--format", "{{.Name}}\t{{.ID}}")
+		psOutput, psErr := psCmd.CombinedOutput()
+		if psErr != nil {
+			return nil, fmt.Errorf("inspect current tasks for service %s: %w (%s)", serviceName, psErr, strings.TrimSpace(string(psOutput)))
+		}
+		generations[serviceName] = parseCurrentSwarmTaskGeneration(string(psOutput))
+	}
+	return generations, nil
+}
+
+func parseCurrentSwarmTaskGeneration(output string) string {
+	var taskIDs []string
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name := strings.TrimSpace(parts[0])
+		if strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_") {
+			continue
+		}
+		if taskID := strings.TrimSpace(parts[1]); taskID != "" {
+			taskIDs = append(taskIDs, taskID)
+		}
+	}
+	sort.Strings(taskIDs)
+	return strings.Join(taskIDs, ",")
 }
 
 // DeployIsolatedComposeFile routes an untrusted preview through a dedicated

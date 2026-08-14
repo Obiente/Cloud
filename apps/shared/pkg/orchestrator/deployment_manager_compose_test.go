@@ -30,6 +30,14 @@ func TestComposeUpArgs(t *testing.T) {
 	}
 }
 
+func TestParseCurrentSwarmTaskGenerationIgnoresHistoryAndOrder(t *testing.T) {
+	first := parseCurrentSwarmTaskGeneration("deploy-app.2\ttask-b\n\\_ deploy-app.1\told-task\ndeploy-app.1\ttask-a\n")
+	second := parseCurrentSwarmTaskGeneration("deploy-app.1\ttask-a\ndeploy-app.2\ttask-b\n")
+	if first != "task-a,task-b" || second != first {
+		t.Fatalf("task generations = %q and %q, want stable current generation", first, second)
+	}
+}
+
 func TestInjectSwarmRollingUpdatePolicy(t *testing.T) {
 	input := `services:
   app:

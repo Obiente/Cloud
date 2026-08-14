@@ -165,6 +165,22 @@ func TestParseSwarmServiceRunPolicyUsesReplicatedSpec(t *testing.T) {
 	}
 }
 
+func TestParseSwarmServiceRunPolicyRecognizesOnFailure(t *testing.T) {
+	policy, err := parseSwarmServiceRunPolicy([]byte(`{
+  "Spec": {
+    "Mode": {"Replicated": {"Replicas": 1}},
+    "TaskTemplate": {"RestartPolicy": {"Condition": "on-failure"}}
+  },
+  "ServiceStatus": {"RunningTasks": 0, "DesiredTasks": 1}
+}`))
+	if err != nil {
+		t.Fatalf("parse on-failure service run policy: %v", err)
+	}
+	if policy.desiredReplicas != 1 || policy.restartNone || !policy.restartOnFailure {
+		t.Fatalf("on-failure service run policy = %#v", policy)
+	}
+}
+
 func TestPreviewIngressNetworkIsUniquePerDeployment(t *testing.T) {
 	t.Parallel()
 	first := PreviewIngressNetworkNameForDeployment("preview-one")

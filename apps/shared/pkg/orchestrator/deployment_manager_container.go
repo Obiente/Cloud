@@ -33,16 +33,18 @@ type swarmConvergedTask struct {
 }
 
 type swarmServiceRunPolicy struct {
-	desiredReplicas int64
-	restartNone     bool
+	desiredReplicas  int64
+	restartNone      bool
+	restartOnFailure bool
 }
 
 type swarmTaskSummary struct {
-	active      bool
-	progressing bool
-	running     int64
-	completed   bool
-	failed      bool
+	active         bool
+	progressing    bool
+	running        int64
+	completed      bool
+	completedCount int64
+	failed         bool
 }
 
 // Container operations for deployments
@@ -1825,6 +1827,14 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		}
 	}
 
+	convergedTask, err := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)
+	if err != nil {
+		return "", "", err
+	}
+	if convergedTask.ServiceID != "" {
+		serviceID = convergedTask.ServiceID
+	}
+	containerID = convergedTask.ContainerID
 	if err := volumePreparation.ApplyDeferredReadOnly(); err != nil {
 		return "", "", err
 	}
@@ -2283,7 +2293,11 @@ func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
 		}
 		policy.desiredReplicas = int64(service.ServiceStatus.DesiredTasks)
 	}
-	policy.restartNone = service.Spec.TaskTemplate.RestartPolicy != nil && strings.EqualFold(service.Spec.TaskTemplate.RestartPolicy.Condition, "none")
+	if service.Spec.TaskTemplate.RestartPolicy != nil {
+		condition := strings.ToLower(strings.TrimSpace(service.Spec.TaskTemplate.RestartPolicy.Condition))
+		policy.restartNone = condition == "none"
+		policy.restartOnFailure = condition == "on-failure"
+	}
 	return policy, nil
 }
 
@@ -2318,6 +2332,7 @@ func parseSwarmTaskSummary(output string) swarmTaskSummary {
 		}
 		if strings.HasPrefix(current, "complete") && taskErr == "" {
 			summary.completed = true
+			summary.completedCount++
 		}
 		if isFailed {
 			summary.failed = true
@@ -2340,7 +2355,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	if policy.desiredReplicas != 0 && !policy.restartNone {
+	if policy.desiredReplicas != 0 && !policy.restartNone && !policy.restartOnFailure {
 		_, err := dm.waitForSwarmServiceConverged(ctx, deploymentID, swarmServiceName)
 		return err
 	}
@@ -2373,7 +2388,7 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 		if updateConverged && policy.desiredReplicas == 0 && !summary.active {
 			return nil
 		}
-		if updateConverged && policy.restartNone && !summary.active {
+		if updateConverged && (policy.restartNone || policy.restartOnFailure) {
 			if summary.failed {
 				return &SwarmRolloutError{
 					ServiceName: swarmServiceName,
@@ -2382,7 +2397,15 @@ func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Conte
 					Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
 				}
 			}
-			if summary.completed {
+			requiredSuccessful := policy.desiredReplicas
+			if requiredSuccessful < 1 {
+				requiredSuccessful = 1
+			}
+			successfulTasks := summary.completedCount
+			if policy.restartOnFailure {
+				successfulTasks += summary.running
+			}
+			if !summary.progressing && successfulTasks >= requiredSuccessful {
 				return nil
 			}
 		}
