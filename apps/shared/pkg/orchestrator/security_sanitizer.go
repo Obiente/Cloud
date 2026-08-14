@@ -1,21 +1,43 @@
 package orchestrator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
 
 // ComposeSanitizer sanitizes Docker Compose YAML to prevent security issues
 type ComposeSanitizer struct {
-	deploymentID string
-	safeBaseDir  string // Base directory where user volumes should be stored
+	deploymentID         string
+	safeBaseDir          string // Base directory where user volumes should be stored
+	swarmVolumeNodeID    string // Node that owns deployment-local bind roots in Swarm mode
+	volumeRootStates     map[string]volumeRootState
+	preparedVolumeRoots  []string
+	preparedVolumeSet    map[string]struct{}
+	preparedWritable     map[string]bool
+	deferredReadOnly     []string
+	deferredReadOnlySet  map[string]struct{}
+	legacyRelativePaths  map[string]string
+	legacyProjectRoot    bool
+	usesLocalBind        bool
+	persistedComposeYaml string
 }
 
 const DefaultMaxUntrustedComposeServices = 8
+
+// Keep deployment-relative bind sources in a namespace that cannot be mistaken
+// for an ordinary Compose service directory. This preserves sharing when two
+// services mount the same relative source while absolute sources remain
+// isolated by service as before.
+const (
+	relativeComposeBindScope   = "@obiente-relative-binds"
+	relativeComposeProjectRoot = "@project-root"
+)
 
 type UntrustedComposeLimits struct {
 	MaxServices      int
@@ -25,6 +47,11 @@ type UntrustedComposeLimits struct {
 
 // NewComposeSanitizer creates a new compose sanitizer for a deployment
 func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
+	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
+		// SanitizeComposeYAML will reject the invalid identifier before preparing
+		// any volume. Avoid joining it into host paths here.
+		return &ComposeSanitizer{deploymentID: deploymentID}
+	}
 	// Determine safe base directory for user volumes
 	// All volumes should go to /var/lib/obiente/volumes/{deploymentID}
 	// This keeps Obiente Cloud volumes separate from Docker's default volumes
@@ -62,7 +89,25 @@ func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 
 // SanitizeComposeYAML sanitizes a Docker Compose YAML string
 // It transforms volumes and removes host port bindings
-func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, error) {
+func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (sanitizedResult string, err error) {
+	if cs.deploymentID == "" || sanitizeVolumeName(cs.deploymentID) != cs.deploymentID {
+		return "", fmt.Errorf("invalid deployment identifier for Compose volume paths")
+	}
+	cs.volumeRootStates = make(map[string]volumeRootState)
+	cs.preparedVolumeRoots = nil
+	cs.preparedVolumeSet = make(map[string]struct{})
+	cs.preparedWritable = make(map[string]bool)
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = make(map[string]struct{})
+	defer func() {
+		if err == nil || len(cs.preparedVolumeRoots) == 0 {
+			return
+		}
+		if rollbackErr := cs.rollbackVolumePreparation(); rollbackErr != nil {
+			err = fmt.Errorf("%w; restore previous volume permissions: %v", err, rollbackErr)
+		}
+	}()
+
 	// Parse YAML
 	var compose map[string]interface{}
 	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
@@ -72,12 +117,17 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	// docker stack deploy does not accept Compose's top-level project name.
 	// Obiente controls the stack/project name with the deployment ID instead.
 	delete(compose, "name")
+	if err := cs.snapshotLegacyRelativeBindPaths(compose); err != nil {
+		return "", err
+	}
 
 	// Sanitize services
 	if services, ok := compose["services"].(map[string]interface{}); ok {
 		for serviceName, serviceData := range services {
 			if service, ok := serviceData.(map[string]interface{}); ok {
-				cs.sanitizeService(service, serviceName)
+				if err := cs.sanitizeService(service, serviceName); err != nil {
+					return "", fmt.Errorf("sanitize service %q: %w", serviceName, err)
+				}
 				// Add network connection for service discovery
 				cs.addServiceToNetwork(service)
 				// Add service name labels for container identification
@@ -89,7 +139,9 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	// Sanitize volumes (top-level volumes definitions)
 	if volumes, ok := compose["volumes"].(map[string]interface{}); ok {
 		for volName, volData := range volumes {
-			cs.sanitizeVolumeDefinition(volName, volData)
+			if err := cs.sanitizeVolumeDefinition(volName, volData); err != nil {
+				return "", fmt.Errorf("sanitize volume %q: %w", volName, err)
+			}
 		}
 	}
 
@@ -103,6 +155,291 @@ func (cs *ComposeSanitizer) SanitizeComposeYAML(composeYaml string) (string, err
 	}
 
 	return string(sanitizedYaml), nil
+}
+
+func composeVolumeSource(volume interface{}) (source string, relativeBind bool, namedVolume bool) {
+	switch typed := volume.(type) {
+	case string:
+		if !strings.Contains(typed, ":") {
+			return "", false, false
+		}
+		source = strings.TrimSpace(strings.SplitN(typed, ":", 2)[0])
+		if source != "" && sanitizeVolumeName(source) == source {
+			return source, false, true
+		}
+	case map[string]interface{}:
+		var ok bool
+		source, ok = typed["source"].(string)
+		if !ok {
+			return "", false, false
+		}
+		source = strings.TrimSpace(source)
+		volumeType, _ := typed["type"].(string)
+		if strings.EqualFold(strings.TrimSpace(volumeType), "volume") {
+			return source, false, source != ""
+		}
+		if !strings.EqualFold(strings.TrimSpace(volumeType), "bind") && !filepath.IsAbs(source) && !strings.HasPrefix(source, "~") && !strings.ContainsRune(source, filepath.Separator) {
+			return "", false, false
+		}
+	default:
+		return "", false, false
+	}
+	if source == "" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") {
+		return source, false, false
+	}
+	return filepath.Clean(source), true, false
+}
+
+func composeVolumeTarget(volume interface{}) string {
+	switch typed := volume.(type) {
+	case string:
+		parts := strings.SplitN(typed, ":", 3)
+		if len(parts) >= 2 && strings.TrimSpace(parts[1]) != "" {
+			return filepath.Clean(strings.TrimSpace(parts[1]))
+		}
+	case map[string]interface{}:
+		if target, ok := typed["target"].(string); ok && strings.TrimSpace(target) != "" {
+			return filepath.Clean(strings.TrimSpace(target))
+		}
+		if target, ok := typed["bind"].(string); ok && strings.TrimSpace(target) != "" {
+			return filepath.Clean(strings.TrimSpace(target))
+		}
+	}
+	return ""
+}
+
+func legacyRelativeBindKey(serviceName, source string) string {
+	return serviceName + "\x00" + filepath.Clean(source)
+}
+
+func expectedManagedRelativeBindSources(safeBaseDir, serviceName, source string) (map[string]struct{}, error) {
+	if sanitizeVolumeName(serviceName) != serviceName {
+		return nil, fmt.Errorf("invalid Compose service name %q for managed volume paths", serviceName)
+	}
+	cleaned := filepath.Clean(source)
+	if filepath.IsAbs(cleaned) || strings.HasPrefix(cleaned, "~") {
+		return nil, fmt.Errorf("relative volume source %q is not relative", source)
+	}
+	parts := strings.Split(cleaned, string(filepath.Separator))
+	safeParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == ".." {
+			return nil, fmt.Errorf("relative volume source %q contains path traversal", source)
+		}
+		if part != "" && part != "." {
+			safeParts = append(safeParts, part)
+		}
+	}
+	relativePath := filepath.Join(safeParts...)
+	legacyLeaf := relativePath
+	if legacyLeaf == "" {
+		legacyLeaf = "data"
+	}
+	namespacedPath := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, relativePath)
+	legacyServicePath := filepath.Join(safeBaseDir, serviceName, legacyLeaf)
+	legacyProjectPath := filepath.Join(safeBaseDir, relativePath)
+	return map[string]struct{}{
+		filepath.Clean(namespacedPath):    {},
+		filepath.Clean(legacyServicePath): {},
+		filepath.Clean(legacyProjectPath): {},
+	}, nil
+}
+
+func (cs *ComposeSanitizer) snapshotPersistedRelativeBindPaths(compose map[string]interface{}) error {
+	if strings.TrimSpace(cs.persistedComposeYaml) == "" {
+		return nil
+	}
+	var persisted map[string]interface{}
+	if err := yaml.Unmarshal([]byte(cs.persistedComposeYaml), &persisted); err != nil {
+		return fmt.Errorf("parse persisted sanitized Compose file: %w", err)
+	}
+	currentServices, _ := compose["services"].(map[string]interface{})
+	persistedServices, _ := persisted["services"].(map[string]interface{})
+	for serviceName, currentData := range currentServices {
+		currentService, _ := currentData.(map[string]interface{})
+		persistedService, _ := persistedServices[serviceName].(map[string]interface{})
+		persistedVolumes, _ := persistedService["volumes"].([]interface{})
+		currentVolumes, _ := currentService["volumes"].([]interface{})
+		for _, currentVolume := range currentVolumes {
+			currentSource, relativeBind, _ := composeVolumeSource(currentVolume)
+			currentTarget := composeVolumeTarget(currentVolume)
+			if !relativeBind || currentTarget == "" {
+				continue
+			}
+			expectedSources, err := expectedManagedRelativeBindSources(cs.safeBaseDir, serviceName, currentSource)
+			if err != nil {
+				return err
+			}
+			for _, persistedVolume := range persistedVolumes {
+				if composeVolumeTarget(persistedVolume) != currentTarget {
+					continue
+				}
+				persistedSource, _, namedVolume := composeVolumeSource(persistedVolume)
+				if namedVolume || !filepath.IsAbs(persistedSource) {
+					continue
+				}
+				persistedSource = filepath.Clean(persistedSource)
+				if _, expected := expectedSources[persistedSource]; !expected {
+					continue
+				}
+				rel, err := filepath.Rel(cs.safeBaseDir, persistedSource)
+				if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					return fmt.Errorf("persisted relative bind source %s escapes the deployment root", persistedSource)
+				}
+				if _, err := os.Lstat(persistedSource); err == nil {
+					cs.legacyRelativePaths[legacyRelativeBindKey(serviceName, currentSource)] = persistedSource
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("inspect persisted relative bind directory %s: %w", persistedSource, err)
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (cs *ComposeSanitizer) snapshotLegacyRelativeBindPaths(compose map[string]interface{}) error {
+	cs.legacyRelativePaths = make(map[string]string)
+	if err := cs.snapshotPersistedRelativeBindPaths(compose); err != nil {
+		return err
+	}
+	namedSources := make(map[string]struct{})
+	if volumes, ok := compose["volumes"].(map[string]interface{}); ok {
+		for name := range volumes {
+			namedSources[name] = struct{}{}
+		}
+	}
+	var relativeSources []string
+	if services, ok := compose["services"].(map[string]interface{}); ok {
+		for _, serviceData := range services {
+			service, _ := serviceData.(map[string]interface{})
+			volumes, _ := service["volumes"].([]interface{})
+			for _, volume := range volumes {
+				source, relativeBind, namedVolume := composeVolumeSource(volume)
+				if namedVolume {
+					namedSources[source] = struct{}{}
+				}
+				if relativeBind {
+					relativeSources = append(relativeSources, source)
+				}
+			}
+		}
+	}
+	for _, source := range relativeSources {
+		if cs.legacyProjectRoot {
+			if source == "." {
+				cs.legacyRelativePaths[source] = cs.safeBaseDir
+			} else {
+				cs.legacyRelativePaths[source] = filepath.Join(cs.safeBaseDir, source)
+			}
+			continue
+		}
+		if source == "." {
+			continue
+		}
+		firstComponent := strings.Split(source, string(filepath.Separator))[0]
+		if _, named := namedSources[firstComponent]; named {
+			continue
+		}
+		candidate := filepath.Join(cs.safeBaseDir, source)
+		_, err := os.Lstat(candidate)
+		switch {
+		case err == nil:
+			cs.legacyRelativePaths[source] = candidate
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		default:
+			return fmt.Errorf("inspect legacy relative volume directory %s: %w", candidate, err)
+		}
+	}
+	return nil
+}
+
+func persistedComposeProvesLegacyProjectRoot(composeYaml, safeBaseDir string) (bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	wantSource := filepath.Clean(safeBaseDir)
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			if !namedVolume && filepath.IsAbs(source) && filepath.Clean(source) == wantSource {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func persistedComposeLegacyProjectRoot(composeYaml, deploymentID string) (string, bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	allowedRoots := make(map[string]struct{})
+	for _, root := range managedDeploymentVolumeRoots(deploymentID) {
+		allowedRoots[root] = struct{}{}
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	var recordedRoot string
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			candidate := filepath.Clean(source)
+			if namedVolume || !filepath.IsAbs(candidate) {
+				continue
+			}
+			if _, allowed := allowedRoots[candidate]; !allowed {
+				continue
+			}
+			if recordedRoot != "" && recordedRoot != candidate {
+				return "", false, fmt.Errorf("persisted Compose file references conflicting managed project roots %q and %q", recordedRoot, candidate)
+			}
+			recordedRoot = candidate
+		}
+	}
+	return recordedRoot, recordedRoot != "", nil
+}
+
+// persistedComposeManagedVolumeRoot recovers the selected deployment root
+// from any previously sanitized bind. In particular, named volumes are stored
+// one level beneath this root, so checking only for a bind of the root itself
+// would silently remap their data when a different fallback becomes writable.
+func persistedComposeManagedVolumeRoot(composeYaml, deploymentID string) (string, bool, error) {
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", false, fmt.Errorf("parse persisted Compose metadata: %w", err)
+	}
+	services, _ := compose["services"].(map[string]interface{})
+	var recordedRoot string
+	for _, serviceData := range services {
+		service, _ := serviceData.(map[string]interface{})
+		volumes, _ := service["volumes"].([]interface{})
+		for _, volume := range volumes {
+			source, _, namedVolume := composeVolumeSource(volume)
+			candidate := filepath.Clean(source)
+			if namedVolume || !filepath.IsAbs(candidate) {
+				continue
+			}
+			for _, managedRoot := range managedDeploymentVolumeRoots(deploymentID) {
+				if candidate != managedRoot && !strings.HasPrefix(candidate, managedRoot+string(filepath.Separator)) {
+					continue
+				}
+				if recordedRoot != "" && recordedRoot != managedRoot {
+					return "", false, fmt.Errorf("persisted Compose file references conflicting managed volume roots %q and %q", recordedRoot, managedRoot)
+				}
+				recordedRoot = managedRoot
+				break
+			}
+		}
+	}
+	return recordedRoot, recordedRoot != "", nil
 }
 
 // SanitizeUntrustedComposeYAML removes host- and cluster-control options from
@@ -224,7 +561,7 @@ func containsComposeInterpolationMarker(value interface{}) bool {
 }
 
 // sanitizeService sanitizes a single service in the compose file
-func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) {
+func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serviceName string) error {
 	// Sanitize environment variables to ensure proper formatting
 	cs.sanitizeEnvironment(service)
 	cs.sanitizeDNS(service)
@@ -235,12 +572,24 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 	// Sanitize volumes
 	if volumes, ok := service["volumes"].([]interface{}); ok {
 		sanitizedVolumes := []interface{}{}
+		hasLocalBind := false
 		for _, vol := range volumes {
-			if sanitized := cs.sanitizeVolumeBinding(vol, serviceName); sanitized != nil {
+			sanitized, err := cs.sanitizeVolumeBinding(vol, serviceName)
+			if err != nil {
+				return err
+			}
+			if sanitized != nil {
 				sanitizedVolumes = append(sanitizedVolumes, sanitized)
+				hasLocalBind = hasLocalBind || composeVolumeUsesHostBind(sanitized)
 			}
 		}
 		service["volumes"] = sanitizedVolumes
+		cs.usesLocalBind = cs.usesLocalBind || hasLocalBind
+		if hasLocalBind && cs.swarmVolumeNodeID != "" {
+			if err := pinComposeServiceToNode(service, cs.swarmVolumeNodeID); err != nil {
+				return fmt.Errorf("service %s placement: %w", serviceName, err)
+			}
+		}
 	}
 
 	// Sanitize ports - remove host port publishing and keep container ports as
@@ -298,6 +647,65 @@ func (cs *ComposeSanitizer) sanitizeService(service map[string]interface{}, serv
 			delete(service, "cap_add")
 		}
 	}
+
+	return nil
+}
+
+func composeVolumeUsesHostBind(volume interface{}) bool {
+	switch typed := volume.(type) {
+	case string:
+		return strings.Contains(typed, ":")
+	case map[string]interface{}:
+		volumeType, _ := typed["type"].(string)
+		return strings.EqualFold(strings.TrimSpace(volumeType), "bind")
+	default:
+		return false
+	}
+}
+
+func pinComposeServiceToNode(service map[string]interface{}, nodeID string) error {
+	deploy, _ := service["deploy"].(map[string]interface{})
+	if deploy == nil {
+		deploy = make(map[string]interface{})
+		service["deploy"] = deploy
+	}
+	placement, _ := deploy["placement"].(map[string]interface{})
+	if placement == nil {
+		placement = make(map[string]interface{})
+		deploy["placement"] = placement
+	}
+
+	existing, _ := placement["constraints"].([]interface{})
+	constraints := make([]interface{}, 0, len(existing)+1)
+	for _, raw := range existing {
+		constraint, ok := raw.(string)
+		if !ok {
+			return fmt.Errorf("cannot validate non-string placement constraint against required local-volume node %s", strings.TrimSpace(nodeID))
+		}
+		if err := validateSwarmConstraintForPinnedNode(constraint, nodeID); err != nil {
+			return err
+		}
+		if isSwarmNodeIDConstraint(constraint) {
+			continue
+		}
+		constraints = append(constraints, constraint)
+	}
+	constraints = append(constraints, fmt.Sprintf("node.id == %s", strings.TrimSpace(nodeID)))
+	placement["constraints"] = constraints
+	return nil
+}
+
+func (cs *ComposeSanitizer) UsesLocalBindVolumes() bool {
+	return cs.usesLocalBind
+}
+
+func (cs *ComposeSanitizer) HasExistingVolumeRoots() bool {
+	for _, state := range cs.volumeRootStates {
+		if state.existed {
+			return true
+		}
+	}
+	return false
 }
 
 // sanitizeDNS applies safe DNS defaults for Compose deployments.
@@ -425,7 +833,7 @@ func (cs *ComposeSanitizer) sanitizeEnvStringValue(value string) string {
 
 // sanitizeVolumeBinding sanitizes a volume binding
 // Transforms host paths to safe user directories
-func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName string) interface{} {
+func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName string) (interface{}, error) {
 	var volStr string
 
 	switch v := vol.(type) {
@@ -438,32 +846,55 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			target = v["bind"]
 		}
 		if target == nil {
-			return nil // Invalid volume spec - no target
+			return nil, nil // Invalid volume spec - no target
 		}
 
 		// Check volume type
 		volType, _ := v["type"].(string)
+		readOnly, _ := v["read_only"].(bool)
 
 		// If it has a source, check if it's a bind mount (absolute path) or named volume
 		if source, ok := v["source"].(string); ok {
-			if strings.HasPrefix(source, "/") {
-				// Bind mount with absolute path - sanitize it
-				sanitizedSource := cs.sanitizeHostPath(source, serviceName)
-				return map[string]interface{}{
+			source = strings.TrimSpace(source)
+			if volType == "volume" {
+				if source == "" || sanitizeVolumeName(source) != source {
+					return nil, fmt.Errorf("invalid named volume source %q", source)
+				}
+			} else if volType == "bind" || filepath.IsAbs(source) || strings.HasPrefix(source, "~") || strings.ContainsRune(source, filepath.Separator) {
+				// Bind mount - sanitize absolute and relative paths.
+				sanitizedSource, err := cs.sanitizeHostPath(source, serviceName, readOnly)
+				if err != nil {
+					return nil, err
+				}
+				result := map[string]interface{}{
 					"type":   "bind",
 					"source": sanitizedSource,
 					"target": target,
 				}
-			} else {
-				// Named volume - convert to bind mount in /var/lib/obiente
-				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
-				_ = ensureWritableBindDir(obienteVolumePath)
-				return map[string]interface{}{
+				if readOnly {
+					result["read_only"] = true
+				}
+				return result, nil
+			} else if source == "" || sanitizeVolumeName(source) != source {
+				return nil, fmt.Errorf("invalid volume source %q", source)
+			}
+			if source != "" && sanitizeVolumeName(source) == source {
+				// Named volume - convert to a bind mount beneath the selected root.
+				obienteVolumePath := filepath.Join(cs.safeBaseDir, source)
+				if err := cs.prepareBindDir(obienteVolumePath, !readOnly); err != nil {
+					return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
+				}
+				result := map[string]interface{}{
 					"type":   "bind",
 					"source": obienteVolumePath,
 					"target": target,
 				}
+				if readOnly {
+					result["read_only"] = true
+				}
+				return result, nil
 			}
+			return nil, fmt.Errorf("invalid volume source %q", source)
 		}
 
 		// Check if it's explicitly a named volume type (without source, just name reference)
@@ -472,60 +903,85 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 			// In compose, this might be referenced by service name or explicit name
 			// For now, we'll handle it based on the volume definition context
 			// This case is handled in sanitizeVolumeDefinition
-			return vol
+			return vol, nil
 		}
 
 		// No source, no explicit type - could be a simple named volume reference
 		// This case should be handled in string parsing below
-		return vol
+		return vol, nil
 	default:
-		return vol
+		return vol, nil
 	}
 
 	// Parse string format: "host_path:container_path" or "/host:/container" or "named_volume:container_path"
 	if strings.Contains(volStr, ":") {
 		parts := strings.SplitN(volStr, ":", 2)
 		if len(parts) != 2 {
-			return vol
+			return vol, nil
 		}
 
 		hostPath := strings.TrimSpace(parts[0])
 		containerPath := strings.TrimSpace(parts[1])
+		readOnly := composeShortVolumeReadOnly(containerPath)
 
-		// Check if it's a named volume (no leading slash, not an absolute path)
-		if !strings.HasPrefix(hostPath, "/") && !strings.HasPrefix(hostPath, "~") && !filepath.IsAbs(hostPath) {
-			// Named volume - convert to bind mount in /var/lib/obiente
-			// Structure: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+		// A source matching the platform volume-name grammar is a named volume.
+		// Every other source is treated as a bind path and must pass containment.
+		if hostPath != "" && sanitizeVolumeName(hostPath) == hostPath {
+			// Named volume - convert to a bind mount beneath the selected root.
 			volumeName := hostPath
-			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volumeName)
+			obienteVolumePath := filepath.Join(cs.safeBaseDir, volumeName)
 			// Ensure directory exists
-			_ = ensureWritableBindDir(obienteVolumePath)
+			if err := cs.prepareBindDir(obienteVolumePath, !readOnly); err != nil {
+				return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
+			}
 			// Return as bind mount
-			return fmt.Sprintf("%s:%s", obienteVolumePath, containerPath)
+			return fmt.Sprintf("%s:%s", obienteVolumePath, containerPath), nil
 		}
 
 		// It's a bind mount - sanitize host path
-		sanitizedHostPath := cs.sanitizeHostPath(hostPath, serviceName)
+		sanitizedHostPath, err := cs.sanitizeHostPath(hostPath, serviceName, readOnly)
+		if err != nil {
+			return nil, err
+		}
 
 		// Return as string format
-		return fmt.Sprintf("%s:%s", sanitizedHostPath, containerPath)
+		return fmt.Sprintf("%s:%s", sanitizedHostPath, containerPath), nil
 	}
 
 	// Not a bind mount string, likely a named volume reference
 	// If it looks like a named volume (no path separators, simple name), convert to bind mount
-	if volStr != "" && !strings.Contains(volStr, "/") && !strings.Contains(volStr, ":") {
+	if volStr != "" && !strings.Contains(volStr, ":") && sanitizeVolumeName(volStr) == volStr {
 		// This is a named volume - convert to bind mount
-		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
-		_ = ensureWritableBindDir(obienteVolumePath)
+		obienteVolumePath := filepath.Join(cs.safeBaseDir, volStr)
+		if err := cs.prepareWritableBindDir(obienteVolumePath); err != nil {
+			return nil, fmt.Errorf("prepare volume directory %s: %w", obienteVolumePath, err)
+		}
 		// Return as bind mount with default container path
-		return fmt.Sprintf("%s:/data", obienteVolumePath)
+		return fmt.Sprintf("%s:/data", obienteVolumePath), nil
 	}
 
-	return vol
+	return vol, nil
+}
+
+func composeShortVolumeReadOnly(containerAndMode string) bool {
+	parts := strings.Split(containerAndMode, ":")
+	if len(parts) < 2 {
+		return false
+	}
+	for _, option := range strings.Split(parts[len(parts)-1], ",") {
+		if strings.TrimSpace(option) == "ro" {
+			return true
+		}
+	}
+	return false
 }
 
 // sanitizeHostPath transforms a host path to a safe user directory
-func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string) string {
+func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string, readOnly bool) (string, error) {
+	if strings.ContainsRune(hostPath, '\x00') {
+		return "", fmt.Errorf("volume source contains a null byte")
+	}
+	isDeploymentRelative := !filepath.IsAbs(hostPath) && !strings.HasPrefix(hostPath, "~")
 	// Clean the path to prevent directory traversal
 	hostPath = filepath.Clean(hostPath)
 
@@ -534,58 +990,94 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 	relativePath = strings.TrimPrefix(relativePath, "~/")
 	relativePath = strings.TrimPrefix(relativePath, "~")
 
-	// If it's an absolute path, extract the basename and relative components
-	if filepath.IsAbs(hostPath) {
-		// Extract meaningful parts while preventing traversal
-		parts := strings.Split(relativePath, string(filepath.Separator))
-		safeParts := []string{}
-		for _, part := range parts {
-			if part != "" && part != "." && part != ".." {
-				safeParts = append(safeParts, part)
-			}
+	// Extract meaningful parts and reject traversal for both absolute and
+	// relative bind sources.
+	parts := strings.Split(relativePath, string(filepath.Separator))
+	safeParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == ".." {
+			return "", fmt.Errorf("volume source %q contains path traversal", hostPath)
 		}
-		relativePath = strings.Join(safeParts, string(filepath.Separator))
+		if part != "" && part != "." {
+			safeParts = append(safeParts, part)
+		}
 	}
+	relativePath = strings.Join(safeParts, string(filepath.Separator))
 
-	// If relative path is empty or just dots, use a default name
+	// Deployment-relative Compose sources are resolved once for the deployment,
+	// just as Compose resolves them against one project directory. Keep that
+	// project root as an explicit directory so "." and "./data" stay distinct
+	// while retaining their parent/child relationship. Absolute and home-relative
+	// sources retain the existing per-service isolation.
+	pathScope := serviceName
+	safePath := ""
+	if isDeploymentRelative {
+		pathScope = relativeComposeBindScope
+		namespacedRelativePath := filepath.Join(relativeComposeProjectRoot, relativePath)
+		namespacedPath := filepath.Join(cs.safeBaseDir, pathScope, namespacedRelativePath)
+		if legacyPath, found := cs.legacyRelativePaths[legacyRelativeBindKey(serviceName, hostPath)]; found {
+			safePath = legacyPath
+		} else if legacyPath, found := cs.legacyRelativePaths[hostPath]; cs.legacyProjectRoot && found {
+			safePath = legacyPath
+		} else if _, err := os.Lstat(namespacedPath); err == nil {
+			safePath = namespacedPath
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("inspect namespaced relative volume directory %s: %w", namespacedPath, err)
+		} else if legacyPath, found := cs.legacyRelativePaths[hostPath]; found {
+			safePath = legacyPath
+		} else {
+			relativePath = namespacedRelativePath
+		}
+	} else if serviceName == relativeComposeBindScope {
+		return "", fmt.Errorf("service name %q conflicts with the relative bind namespace", serviceName)
+	}
 	if relativePath == "" || strings.Trim(relativePath, ".") == "" {
 		relativePath = "data"
 	}
-
-	// Create safe path under user's directory
-	// Structure: {safeBaseDir}/{serviceName}/{sanitized_path}
-	safePath := filepath.Join(cs.safeBaseDir, serviceName, relativePath)
+	if safePath == "" {
+		safePath = filepath.Join(cs.safeBaseDir, pathScope, relativePath)
+	}
+	rel, err := filepath.Rel(cs.safeBaseDir, safePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("sanitized volume source escapes the deployment root")
+	}
 
 	// Ensure directory exists
-	_ = ensureWritableBindDir(safePath)
+	if err := cs.prepareBindDir(safePath, !readOnly); err != nil {
+		return "", fmt.Errorf("prepare volume directory %s: %w", safePath, err)
+	}
 
-	return safePath
+	return safePath, nil
 }
 
 // sanitizeVolumeDefinition sanitizes top-level volume definitions
-func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData interface{}) {
-	// Convert named volume definitions to bind mounts pointing to /var/lib/obiente
-	// This ensures all volumes are stored in Obiente's directory structure
+func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData interface{}) error {
+	if volName == "" || sanitizeVolumeName(volName) != volName {
+		return fmt.Errorf("invalid top-level volume name %q", volName)
+	}
+	// Convert named volume definitions to bind mounts beneath the selected root.
 	if volMap, ok := volData.(map[string]interface{}); ok {
-		// If it's an empty map or only has driver_opts, convert to bind mount
-		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
-			// This is a named volume - convert to bind mount specification
-			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
-			_ = ensureWritableBindDir(obienteVolumePath)
-
+		// Empty named-volume definitions are resolved from service references.
+		if len(volMap) == 0 {
 			// Replace with bind mount configuration
-			// Note: We can't fully represent bind mounts in top-level volumes,
-			// but we'll ensure the directory exists and remove the volume definition
-			// The actual bind mount will be created in sanitizeVolumeBinding
+			// The actual bind and its access mode are prepared from each service
+			// reference, so an unused definition does not create host state.
 			delete(volMap, "driver")
 			delete(volMap, "driver_opts")
 		} else {
 			// Handle driver_opts with device/bind mounts
 			if driverOpts, ok := volMap["driver_opts"].(map[string]interface{}); ok {
+				readOnly := false
+				if options, ok := driverOpts["o"].(string); ok {
+					readOnly = composeBindOptionsReadOnly(options)
+				}
 				// Check for device or type=bind options
 				if device, ok := driverOpts["device"].(string); ok {
 					// Transform device path to safe directory
-					sanitizedDevice := cs.sanitizeHostPath(device, "volume-"+volName)
+					sanitizedDevice, err := cs.sanitizeHostPath(device, "volume-"+volName, readOnly)
+					if err != nil {
+						return err
+					}
 					driverOpts["device"] = sanitizedDevice
 				}
 				if volType, ok := driverOpts["type"].(string); ok && volType == "bind" {
@@ -598,13 +1090,128 @@ func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData int
 			}
 		}
 	}
+	return nil
+}
+
+func composeBindOptionsReadOnly(options string) bool {
+	for _, option := range strings.Split(options, ",") {
+		if strings.TrimSpace(option) == "ro" {
+			return true
+		}
+	}
+	return false
+}
+
+func strictDescendantPath(parent, child string) bool {
+	relative, err := filepath.Rel(parent, child)
+	return err == nil && relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func (cs *ComposeSanitizer) rejectWritableBindHierarchy(path string, writable bool) error {
+	for preparedPath, preparedWritable := range cs.preparedWritable {
+		if preparedPath == path {
+			continue
+		}
+		if preparedWritable && strictDescendantPath(preparedPath, path) {
+			return fmt.Errorf("volume source %s is nested beneath writable source %s", path, preparedPath)
+		}
+		if writable && strictDescendantPath(path, preparedPath) {
+			return fmt.Errorf("writable volume source %s contains another mounted source %s", path, preparedPath)
+		}
+	}
+	return nil
+}
+
+func (cs *ComposeSanitizer) prepareBindDir(path string, writable bool) error {
+	if err := cs.rejectWritableBindHierarchy(path, writable); err != nil {
+		return err
+	}
+	if _, prepared := cs.preparedVolumeSet[path]; !prepared {
+		state, err := snapshotVolumeRootState(path)
+		if err != nil {
+			return err
+		}
+		cs.volumeRootStates[path] = state
+		cs.preparedVolumeRoots = append(cs.preparedVolumeRoots, path)
+		cs.preparedVolumeSet[path] = struct{}{}
+	} else if cs.preparedWritable[path] || !writable {
+		return nil
+	}
+
+	cs.preparedWritable[path] = writable
+	if writable {
+		return ensureWritableBindDir(path)
+	}
+	if err := secureEnsureDirectory(path); err != nil {
+		return err
+	}
+	if _, deferred := cs.deferredReadOnlySet[path]; !deferred {
+		cs.deferredReadOnly = append(cs.deferredReadOnly, path)
+		cs.deferredReadOnlySet[path] = struct{}{}
+	}
+	return nil
+}
+
+func (cs *ComposeSanitizer) prepareWritableBindDir(path string) error {
+	return cs.prepareBindDir(path, true)
+}
+
+func (cs *ComposeSanitizer) rollbackVolumePreparation() error {
+	err := rollbackVolumeRootStates(cs.volumeRootStates, cs.preparedVolumeRoots)
+	cs.volumeRootStates = nil
+	cs.preparedVolumeRoots = nil
+	cs.preparedVolumeSet = nil
+	cs.preparedWritable = nil
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = nil
+	return err
+}
+
+func (cs *ComposeSanitizer) applyDeferredReadOnly() error {
+	for _, path := range cs.deferredReadOnly {
+		if cs.preparedWritable[path] {
+			continue
+		}
+		if err := ensureReadOnlyBindDir(path); err != nil {
+			return fmt.Errorf("restrict read-only volume directory %s: %w", path, err)
+		}
+	}
+	cs.deferredReadOnly = nil
+	cs.deferredReadOnlySet = nil
+	return nil
 }
 
 func ensureWritableBindDir(path string) error {
-	if err := os.MkdirAll(path, 0o755); err != nil {
+	existingMode := os.FileMode(0)
+	if mode, err := secureDirectoryMode(path); err == nil {
+		existingMode = mode
+	} else if !errors.Is(err, unix.ENOENT) {
 		return err
 	}
-	return os.Chmod(path, 0o777)
+	// Workload images may run as any non-root UID/GID. Make only the isolated
+	// bind root universally writable so a fresh volume can be initialized. This
+	// is intentionally non-recursive: changing application-owned contents can
+	// break mode-sensitive data, and UID migrations remain the application's
+	// responsibility. Preserve special bits deliberately applied to an existing
+	// root, but do not impose sticky or setgid semantics on a new one.
+	// Descriptor-relative traversal rejects symlinks in every component and
+	// prevents chmod from escaping the deployment root.
+	specialBits := existingMode & (os.ModeSetuid | os.ModeSetgid | os.ModeSticky)
+	return secureChmodDirectory(path, 0o777|specialBits, true)
+}
+
+func ensureReadOnlyBindDir(path string) error {
+	existingMode := os.FileMode(0o755)
+	if mode, err := secureDirectoryMode(path); err == nil {
+		existingMode = mode
+	} else if !errors.Is(err, unix.ENOENT) {
+		return err
+	}
+	// Preserve the mode of an existing directory. Remove group and
+	// other write access when a writable volume becomes read-only, without
+	// broadening an intentionally more restrictive existing mode or discarding
+	// setgid/setuid/sticky semantics used by host-side maintenance.
+	return secureChmodDirectory(path, existingMode&^0o022, true)
 }
 
 // sanitizeBindOptions sanitizes bind mount options

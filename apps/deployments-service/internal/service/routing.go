@@ -66,7 +66,11 @@ func (s *Service) GetDeploymentRoutings(ctx context.Context, req *connect.Reques
 func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRoutingsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentRoutingsResponse], error) {
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),

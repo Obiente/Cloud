@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -22,12 +24,36 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
+	"golang.org/x/sys/unix"
 )
 
 type swarmConvergedTask struct {
 	ServiceID   string
 	TaskID      string
 	ContainerID string
+}
+
+type swarmServiceRunPolicy struct {
+	desiredReplicas    int64
+	desiredCompletions int64
+	job                bool
+	global             bool
+	restartNone        bool
+	restartOnFailure   bool
+	restartAny         bool
+	restartMaxAttempts int64
+	restartDelay       time.Duration
+	restartWindow      time.Duration
+}
+
+type swarmTaskSummary struct {
+	active         bool
+	progressing    bool
+	running        int64
+	completed      bool
+	completedCount int64
+	failed         bool
+	failedAttempts int64
 }
 
 // Container operations for deployments
@@ -42,9 +68,332 @@ const (
 	swarmMaxCPUReservation      = 0.10
 )
 
-func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string) {
+const deploymentVolumeRoot = "/var/lib/obiente/volumes"
+
+type volumeRootState struct {
+	existed bool
+	mode    os.FileMode
+}
+
+type volumeRootPreparation struct {
+	states           map[string]volumeRootState
+	paths            []string
+	deferredReadOnly []string
+	releaseLock      func()
+	releaseOnce      sync.Once
+}
+
+func (preparation *volumeRootPreparation) Rollback() error {
+	return preparation.rollbackAndFinalize(nil)
+}
+
+// rollbackAndFinalize keeps the per-deployment lock held while finalize runs.
+// Callers use this when cleanup changes durable ownership state that a waiting
+// deployment must not observe between filesystem rollback and lock release.
+func (preparation *volumeRootPreparation) rollbackAndFinalize(finalize func() error) error {
+	if preparation == nil {
+		if finalize != nil {
+			return finalize()
+		}
+		return nil
+	}
+	defer preparation.release()
+	rollbackErr := rollbackVolumeRootStates(preparation.states, preparation.paths)
+	var finalizeErr error
+	if finalize != nil {
+		finalizeErr = finalize()
+	}
+	return errors.Join(rollbackErr, finalizeErr)
+}
+
+func (preparation *volumeRootPreparation) ApplyDeferredReadOnly() error {
+	if preparation == nil {
+		return nil
+	}
+	defer preparation.release()
+	for _, path := range preparation.deferredReadOnly {
+		if err := ensureReadOnlyBindDir(path); err != nil {
+			return fmt.Errorf("restrict read-only volume directory %s: %w", path, err)
+		}
+	}
+	preparation.deferredReadOnly = nil
+	return nil
+}
+
+func (preparation *volumeRootPreparation) Commit() {
+	if preparation != nil {
+		preparation.release()
+	}
+}
+
+func (preparation *volumeRootPreparation) HasExistingRoots() bool {
+	if preparation == nil {
+		return false
+	}
+	for _, state := range preparation.states {
+		if state.existed {
+			return true
+		}
+	}
+	return false
+}
+
+func (preparation *volumeRootPreparation) release() {
+	if preparation == nil || preparation.releaseLock == nil {
+		return
+	}
+	preparation.releaseOnce.Do(preparation.releaseLock)
+}
+
+var deploymentVolumeLockRoot = "/var/lib/obiente/volume-locks"
+var deploymentVolumeLockFallbackRoots = []string{
+	"/var/obiente/tmp/volume-locks",
+	filepath.Join(os.TempDir(), "obiente-volume-locks"),
+}
+
+func openDeploymentVolumeLock(deploymentID string) (int, error) {
+	lockRoots := make([]string, 0, 1+len(deploymentVolumeLockFallbackRoots))
+	lockRoots = append(lockRoots, deploymentVolumeLockRoot)
+	lockRoots = append(lockRoots, deploymentVolumeLockFallbackRoots...)
+
+	var openErrors []error
+	for _, lockRoot := range lockRoots {
+		if err := os.MkdirAll(lockRoot, 0o755); err != nil {
+			openErrors = append(openErrors, fmt.Errorf("create %s: %w", lockRoot, err))
+			continue
+		}
+		lockPath := filepath.Join(lockRoot, deploymentID+".lock")
+		fd, err := unix.Open(lockPath, unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+		if err != nil {
+			openErrors = append(openErrors, fmt.Errorf("open %s: %w", lockPath, err))
+			continue
+		}
+		return fd, nil
+	}
+
+	return -1, errors.Join(openErrors...)
+}
+
+func acquireDeploymentVolumeLock(ctx context.Context, deploymentID string) (func(), error) {
+	if deploymentID == "" || sanitizeVolumeName(deploymentID) != deploymentID {
+		return nil, fmt.Errorf("invalid deployment ID for volume lock")
+	}
+	fd, err := openDeploymentVolumeLock(deploymentID)
+	if err != nil {
+		return nil, fmt.Errorf("open deployment volume lock in a writable root: %w", err)
+	}
+
+	for {
+		err = unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
+			_ = unix.Close(fd)
+			return nil, fmt.Errorf("lock deployment volumes: %w", err)
+		}
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			_ = unix.Close(fd)
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			_ = unix.Flock(fd, unix.LOCK_UN)
+			_ = unix.Close(fd)
+		})
+	}, nil
+}
+
+func snapshotVolumeRootState(path string) (volumeRootState, error) {
+	mode, err := secureDirectoryMode(path)
+	if err == nil {
+		return volumeRootState{
+			existed: true,
+			mode:    mode,
+		}, nil
+	}
+	if !errors.Is(err, unix.ENOENT) {
+		return volumeRootState{}, err
+	}
+	return volumeRootState{}, nil
+}
+
+func secureOpenDirectory(path string, create bool) (int, error) {
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		return -1, fmt.Errorf("directory path %q is not absolute", path)
+	}
+	currentFD, err := unix.Open(string(filepath.Separator), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, err
+	}
+	if cleaned == string(filepath.Separator) {
+		return currentFD, nil
+	}
+
+	for _, component := range strings.Split(strings.TrimPrefix(cleaned, string(filepath.Separator)), string(filepath.Separator)) {
+		if component == "" || component == "." || component == ".." {
+			unix.Close(currentFD)
+			return -1, fmt.Errorf("directory path %q contains an unsafe component", path)
+		}
+		nextFD, openErr := unix.Openat(currentFD, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		if errors.Is(openErr, unix.ENOENT) && create {
+			if mkdirErr := unix.Mkdirat(currentFD, component, 0o755); mkdirErr != nil && !errors.Is(mkdirErr, unix.EEXIST) {
+				unix.Close(currentFD)
+				return -1, mkdirErr
+			}
+			nextFD, openErr = unix.Openat(currentFD, component, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+		}
+		if openErr != nil {
+			unix.Close(currentFD)
+			return -1, fmt.Errorf("open directory component %q without following symlinks: %w", component, openErr)
+		}
+		unix.Close(currentFD)
+		currentFD = nextFD
+	}
+	return currentFD, nil
+}
+
+func fileModeFromUnix(mode uint32) os.FileMode {
+	result := os.FileMode(mode & 0o777)
+	if mode&unix.S_ISUID != 0 {
+		result |= os.ModeSetuid
+	}
+	if mode&unix.S_ISGID != 0 {
+		result |= os.ModeSetgid
+	}
+	if mode&unix.S_ISVTX != 0 {
+		result |= os.ModeSticky
+	}
+	return result
+}
+
+func unixModeFromFileMode(mode os.FileMode) uint32 {
+	result := uint32(mode.Perm())
+	if mode&os.ModeSetuid != 0 {
+		result |= unix.S_ISUID
+	}
+	if mode&os.ModeSetgid != 0 {
+		result |= unix.S_ISGID
+	}
+	if mode&os.ModeSticky != 0 {
+		result |= unix.S_ISVTX
+	}
+	return result
+}
+
+func secureDirectoryMode(path string) (os.FileMode, error) {
+	fd, err := secureOpenDirectory(path, false)
+	if err != nil {
+		return 0, err
+	}
+	defer unix.Close(fd)
+	var stat unix.Stat_t
+	if err := unix.Fstat(fd, &stat); err != nil {
+		return 0, err
+	}
+	return fileModeFromUnix(stat.Mode), nil
+}
+
+func secureChmodDirectory(path string, mode os.FileMode, create bool) error {
+	fd, err := secureOpenDirectory(path, create)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	return unix.Fchmod(fd, unixModeFromFileMode(mode))
+}
+
+func secureEnsureDirectory(path string) error {
+	fd, err := secureOpenDirectory(path, true)
+	if err != nil {
+		return err
+	}
+	return unix.Close(fd)
+}
+
+func secureRemoveEmptyDirectory(path string) error {
+	cleaned := filepath.Clean(path)
+	parentFD, err := secureOpenDirectory(filepath.Dir(cleaned), false)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(parentFD)
+	return unix.Unlinkat(parentFD, filepath.Base(cleaned), unix.AT_REMOVEDIR)
+}
+
+func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
+	return sanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+}
+
+func preparedSanitizedVolumeMounts(ctx context.Context, deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
+	release, err := acquireDeploymentVolumeLock(ctx, deploymentID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	binds, mountFlags, preparation, err := preparedSanitizedVolumeMountsAt(deploymentVolumeRoot, deploymentID, volumes)
+	if err != nil {
+		release()
+		return nil, nil, nil, err
+	}
+	if len(preparation.paths) == 0 {
+		release()
+	} else {
+		preparation.releaseLock = release
+	}
+	return binds, mountFlags, preparation, nil
+}
+
+func sanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, error) {
+	binds, mountFlags, preparation, err := preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID, volumes)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := preparation.ApplyDeferredReadOnly(); err != nil {
+		if rollbackErr := preparation.Rollback(); rollbackErr != nil {
+			return nil, nil, fmt.Errorf("%w; restore previous volume permissions: %v", err, rollbackErr)
+		}
+		return nil, nil, err
+	}
+	return binds, mountFlags, nil
+}
+
+func preparedSanitizedVolumeMountsAt(volumeRoot, deploymentID string, volumes []DeploymentVolume) ([]string, []string, *volumeRootPreparation, error) {
 	binds := make([]string, 0, len(volumes))
 	mountFlags := make([]string, 0, len(volumes))
+	writablePaths := make(map[string]bool, len(volumes))
+	for _, volume := range volumes {
+		name := sanitizeVolumeName(volume.Name)
+		if name == "" || sanitizeContainerMountPath(volume.MountPath) == "" {
+			continue
+		}
+		hostPath := filepath.Join(volumeRoot, deploymentID, name)
+		if !volume.ReadOnly {
+			writablePaths[hostPath] = true
+		} else if _, exists := writablePaths[hostPath]; !exists {
+			writablePaths[hostPath] = false
+		}
+	}
+
+	originalStates := make(map[string]volumeRootState, len(writablePaths))
+	for hostPath := range writablePaths {
+		state, err := snapshotVolumeRootState(hostPath)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("inspect volume directory %s: %w", hostPath, err)
+		}
+		originalStates[hostPath] = state
+	}
+
+	preparedPaths := make(map[string]struct{}, len(writablePaths))
+	preparedOrder := make([]string, 0, len(writablePaths))
+	deferredReadOnly := make([]string, 0, len(writablePaths))
 	for _, volume := range volumes {
 		name := sanitizeVolumeName(volume.Name)
 		mountPath := sanitizeContainerMountPath(volume.MountPath)
@@ -52,10 +401,23 @@ func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]s
 			continue
 		}
 
-		hostPath := filepath.Join("/var/lib/obiente/volumes", deploymentID, name)
-		if err := os.MkdirAll(hostPath, 0o755); err != nil {
-			logger.Warn("[DeploymentManager] Failed to create volume directory %s: %v", hostPath, err)
-			continue
+		hostPath := filepath.Join(volumeRoot, deploymentID, name)
+		if _, prepared := preparedPaths[hostPath]; !prepared {
+			preparedOrder = append(preparedOrder, hostPath)
+			var err error
+			if writablePaths[hostPath] {
+				err = ensureWritableBindDir(hostPath)
+			} else {
+				err = secureEnsureDirectory(hostPath)
+				deferredReadOnly = append(deferredReadOnly, hostPath)
+			}
+			if err != nil {
+				if rollbackErr := rollbackVolumeRootStates(originalStates, preparedOrder); rollbackErr != nil {
+					return nil, nil, nil, fmt.Errorf("prepare volume directory %s: %w; restore previous volume permissions: %v", hostPath, err, rollbackErr)
+				}
+				return nil, nil, nil, fmt.Errorf("prepare volume directory %s: %w", hostPath, err)
+			}
+			preparedPaths[hostPath] = struct{}{}
 		}
 
 		bind := fmt.Sprintf("%s:%s", hostPath, mountPath)
@@ -67,7 +429,31 @@ func sanitizedVolumeMounts(deploymentID string, volumes []DeploymentVolume) ([]s
 		binds = append(binds, bind)
 		mountFlags = append(mountFlags, mountFlag)
 	}
-	return binds, mountFlags
+	return binds, mountFlags, &volumeRootPreparation{
+		states:           originalStates,
+		paths:            preparedOrder,
+		deferredReadOnly: deferredReadOnly,
+	}, nil
+}
+
+func rollbackVolumeRootStates(states map[string]volumeRootState, paths []string) error {
+	rollbackErrors := make([]error, 0)
+	for i := len(paths) - 1; i >= 0; i-- {
+		path := paths[i]
+		state := states[path]
+		if state.existed {
+			if err := secureChmodDirectory(path, state.mode, false); err != nil {
+				rollbackErrors = append(rollbackErrors, fmt.Errorf("restore mode for %s: %w", path, err))
+			}
+			continue
+		}
+		// A path created by this preflight has not been mounted yet. Remove it
+		// only if it is still empty, preserving any concurrently created data.
+		if err := secureRemoveEmptyDirectory(path); err != nil && !errors.Is(err, unix.ENOENT) {
+			rollbackErrors = append(rollbackErrors, fmt.Errorf("remove newly created root %s: %w", path, err))
+		}
+	}
+	return errors.Join(rollbackErrors...)
 }
 
 func sanitizeVolumeName(name string) string {
@@ -177,6 +563,93 @@ func existingSwarmServiceNetworkNames(ctx context.Context, serviceName string) (
 		names = append(names, networkName)
 	}
 	return names, nil
+}
+
+func existingSwarmServiceConstraints(ctx context.Context, serviceName string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", "--format", "{{json .Spec.TaskTemplate.Placement.Constraints}}", serviceName)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("inspect service placement constraints: %w", err)
+	}
+	var constraints []string
+	if err := json.Unmarshal(bytes.TrimSpace(output), &constraints); err != nil {
+		return nil, fmt.Errorf("decode service placement constraints: %w", err)
+	}
+	return constraints, nil
+}
+
+func isMissingSwarmServiceOutput(output string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(output))
+	return strings.Contains(normalized, "no such service") || strings.Contains(normalized, "service not found")
+}
+
+func swarmServiceRuntimeFingerprint(ctx context.Context, serviceName string, allowMissing bool) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", serviceName, "--format", "{{.ID}}\t{{.Version.Index}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if allowMissing && isMissingSwarmServiceOutput(string(output)) {
+			return "", nil
+		}
+		return "", fmt.Errorf("inspect Swarm service runtime: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func isSwarmNodeIDConstraint(constraint string) bool {
+	normalized := strings.ReplaceAll(strings.TrimSpace(constraint), " ", "")
+	return strings.HasPrefix(normalized, "node.id==")
+}
+
+func excludesSwarmNodeID(constraint, nodeID string) bool {
+	key, operator, value, ok := parseSwarmPlacementConstraint(constraint)
+	if !ok || key != "node.id" {
+		return false
+	}
+	nodeID = strings.TrimSpace(nodeID)
+	return (operator == "==" && value != nodeID) || (operator == "!=" && value == nodeID)
+}
+
+func parseSwarmPlacementConstraint(constraint string) (key, operator, value string, ok bool) {
+	constraint = strings.TrimSpace(constraint)
+	for _, candidate := range []string{"==", "!="} {
+		before, after, found := strings.Cut(constraint, candidate)
+		if found && strings.TrimSpace(before) != "" && strings.TrimSpace(after) != "" {
+			return strings.TrimSpace(before), candidate, strings.TrimSpace(after), true
+		}
+	}
+	return "", "", "", false
+}
+
+func validateSwarmConstraintForPinnedNode(constraint, nodeID string) error {
+	key, _, _, ok := parseSwarmPlacementConstraint(constraint)
+	if !ok {
+		return fmt.Errorf("cannot validate placement constraint %q against required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	if key != "node.id" {
+		return fmt.Errorf("cannot validate placement constraint %q against required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	if excludesSwarmNodeID(constraint, nodeID) {
+		return fmt.Errorf("placement constraint %q excludes required local-volume node %s", constraint, strings.TrimSpace(nodeID))
+	}
+	return nil
+}
+
+func swarmNodePlacementUpdateArgs(existing []string, nodeID string, hasLocalBinds bool) ([]string, error) {
+	args := make([]string, 0, 4)
+	for _, constraint := range existing {
+		if hasLocalBinds {
+			if err := validateSwarmConstraintForPinnedNode(constraint, nodeID); err != nil {
+				return nil, err
+			}
+		}
+		if isSwarmNodeIDConstraint(constraint) {
+			args = append(args, "--constraint-rm", constraint)
+		}
+	}
+	if hasLocalBinds && strings.TrimSpace(nodeID) != "" {
+		args = append(args, "--constraint-add", fmt.Sprintf("node.id==%s", strings.TrimSpace(nodeID)))
+	}
+	return args, nil
 }
 
 func containsString(values []string, target string) bool {
@@ -474,7 +947,7 @@ func swarmStartCommandUpdateArgs(startCommand *string) []string {
 	return args
 }
 
-func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
+func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string, binds []string) (containerID string, runtimeChanged bool, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -587,7 +1060,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	if containerPortNum > 0 {
 		containerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", containerPortNum))
 		if err != nil {
-			return "", fmt.Errorf("invalid port %d: %w", containerPortNum, err)
+			return "", false, fmt.Errorf("invalid port %d: %w", containerPortNum, err)
 		}
 		exposedPorts[containerPort] = struct{}{}
 
@@ -745,7 +1218,6 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	nanoCPUs := int64(cpuCores * 1e9)
 
 	// Host configuration
-	binds, _ := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
 		Binds:        binds,
@@ -783,9 +1255,11 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			logger.Info("[DeploymentManager] Container name conflict for %s: %v. Attempting to remove and retry...", name, err)
 
 			// Try to remove the conflicting container
-			if removeErr := dm.removeContainerByName(ctx, name); removeErr != nil {
+			removed, removeErr := dm.removeContainerByName(ctx, name)
+			runtimeChanged = runtimeChanged || removed
+			if removeErr != nil {
 				logger.Info("[DeploymentManager] Failed to remove conflicting container %s: %v", name, removeErr)
-				return "", fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
+				return "", runtimeChanged, fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
 			}
 
 			// Retry container creation once
@@ -797,14 +1271,14 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 				Name:             name,
 			})
 			if err != nil {
-				return "", fmt.Errorf("failed to create container after removing conflicting container: %w", err)
+				return "", runtimeChanged, fmt.Errorf("failed to create container after removing conflicting container: %w", err)
 			}
 		} else {
-			return "", fmt.Errorf("failed to create container: %w", err)
+			return "", false, fmt.Errorf("failed to create container: %w", err)
 		}
 	}
 
-	return createResp.ID, nil
+	return createResp.ID, true, nil
 }
 
 func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serviceName, nodeID, output string) {
@@ -840,7 +1314,7 @@ func persistDeploymentServiceLogSnapshot(ctx context.Context, deploymentID, serv
 	}
 }
 
-func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (string, string, error) {
+func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, mountFlags []string, markMutationAttempted func()) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -942,6 +1416,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"--name", swarmServiceName,
 		"--network", swarmNetworkName, // Use the dynamically determined Swarm network name
 		"--replicas", "1",
+		"--detach=true",
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 
@@ -955,9 +1430,26 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
+	serviceCreated := false
+	defer func() {
+		if retErr == nil || !serviceCreated || !terminalSwarmRolloutFailure(retErr) {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		cleanupCmd := exec.CommandContext(cleanupCtx, "docker", "service", "rm", swarmServiceName)
+		if cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput(); cleanupErr != nil {
+			retErr = fmt.Errorf("%w; remove failed Swarm service: %v (%s)", retErr, cleanupErr, strings.TrimSpace(string(cleanupOutput)))
+		}
+	}()
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount", mountFlag)
+	}
+	if len(mountFlags) > 0 {
+		if strings.TrimSpace(config.TargetNodeID) == "" {
+			return "", "", fmt.Errorf("target node is required for Swarm services with local bind volumes")
+		}
+		args = append(args, "--constraint", fmt.Sprintf("node.id==%s", strings.TrimSpace(config.TargetNodeID)))
 	}
 
 	// Add health check based on configuration
@@ -1177,8 +1669,18 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
+	beforeRuntime, err := swarmServiceRuntimeFingerprint(dockerCtx, swarmServiceName, true)
+	if err != nil {
+		return "", "", fmt.Errorf("inspect service before creation: %w", err)
+	}
 
+	if markMutationAttempted != nil {
+		markMutationAttempted()
+	}
 	if err := cmd.Run(); err != nil {
+		serviceCreated = deploymentRuntimeChangedAfterFailure(beforeRuntime, func(inspectCtx context.Context) (string, error) {
+			return swarmServiceRuntimeFingerprint(inspectCtx, swarmServiceName, true)
+		})
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
 		// Check if the error is due to context cancellation
@@ -1193,7 +1695,8 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		return "", "", fmt.Errorf("failed to create Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
 
-	serviceID := strings.TrimSpace(stdout.String())
+	serviceCreated = true
+	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Created Swarm service %s (ID: %s)", swarmServiceName, serviceID)
 	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
@@ -1414,7 +1917,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	taskCmd := exec.CommandContext(ctx, "docker", taskArgs...)
 	var taskStdout bytes.Buffer
 	taskCmd.Stdout = &taskStdout
-	var containerID string
+	containerID = ""
 	if err := taskCmd.Run(); err == nil {
 		taskIDs := strings.TrimSpace(taskStdout.String())
 		if taskIDs != "" {
@@ -1515,12 +2018,20 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		}
 	}
 
+	convergedTask, err := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)
+	if err != nil {
+		return "", "", err
+	}
+	if convergedTask.ServiceID != "" {
+		serviceID = convergedTask.ServiceID
+	}
+	containerID = convergedTask.ContainerID
 	return serviceID, containerID, nil
 }
 
 // updateSwarmService updates an existing Swarm service with new configuration
 // This enables zero-downtime deployments by using docker service update with start-first strategy
-func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string) (string, string, error) {
+func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string, mountFlags []string, markMutationAttempted func()) (serviceID string, containerID string, retErr error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1595,6 +2106,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 
 	// Build docker service update command
 	args := []string{"service", "update",
+		"--detach=true",
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 	if config.NetworkName != "" && swarmNetworkName != sharedNetworkName {
@@ -1624,10 +2136,21 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	for _, target := range existingSwarmServiceMountTargets(ctx, swarmServiceName) {
 		args = append(args, "--mount-rm", target)
 	}
-	_, mountFlags := sanitizedVolumeMounts(config.DeploymentID, config.Volumes)
 	for _, mountFlag := range mountFlags {
 		args = append(args, "--mount-add", mountFlag)
 	}
+	existingConstraints, err := existingSwarmServiceConstraints(ctx, swarmServiceName)
+	if err != nil {
+		return "", "", err
+	}
+	if len(mountFlags) > 0 && strings.TrimSpace(config.TargetNodeID) == "" {
+		return "", "", fmt.Errorf("target node is required for Swarm services with local bind volumes")
+	}
+	placementArgs, err := swarmNodePlacementUpdateArgs(existingConstraints, config.TargetNodeID, len(mountFlags) > 0)
+	if err != nil {
+		return "", "", err
+	}
+	args = append(args, placementArgs...)
 
 	// Update health check based on configuration
 	// Check healthcheck type (default to UNSPECIFIED if not set)
@@ -1782,8 +2305,10 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
-
 	logger.Info("[DeploymentManager] Updating Swarm service %s with zero-downtime strategy (start-first)", swarmServiceName)
+	if markMutationAttempted != nil {
+		markMutationAttempted()
+	}
 	if err := cmd.Run(); err != nil {
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
@@ -1797,8 +2322,7 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 		logger.Error("[DeploymentManager] Failed to update Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
 		return "", "", fmt.Errorf("failed to update Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
-
-	serviceID := strings.TrimSpace(stdout.String())
+	serviceID = strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
 
 	task, err := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)
@@ -1811,10 +2335,29 @@ func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *Dep
 	return serviceID, task.ContainerID, nil
 }
 
+func terminalSwarmRolloutFailure(err error) bool {
+	var rolloutErr *SwarmRolloutError
+	return errors.As(err, &rolloutErr)
+}
+
 func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, deploymentID, swarmServiceName string) (*swarmConvergedTask, error) {
-	deadline := time.Now().Add(2 * time.Minute)
+	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+	if err != nil {
+		return nil, err
+	}
+	requiredRunning := int64(1)
+	if policy.desiredReplicas > 0 {
+		requiredRunning = policy.desiredReplicas
+	}
 	rollbackDiagnostics := ""
-	for time.Now().Before(deadline) {
+	for {
+		if policy.global {
+			policy, err = inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+			if err != nil {
+				return nil, err
+			}
+			requiredRunning = policy.desiredReplicas
+		}
 		serviceID, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
 		if err != nil {
 			return nil, err
@@ -1822,12 +2365,34 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 
 		switch updateState {
 		case "", "completed":
-			task, taskErr := dm.currentRunningSwarmTask(ctx, swarmServiceName)
-			if taskErr == nil && task != nil && task.ContainerID != "" {
+			tasks, taskErr := dm.currentRunningSwarmTasks(ctx, swarmServiceName)
+			if taskErr == nil && requiredRunning > 0 && int64(len(tasks)) >= requiredRunning {
+				task := tasks[0]
 				if task.ServiceID == "" {
 					task.ServiceID = serviceID
 				}
 				return task, nil
+			}
+			summary, summaryErr := inspectSwarmTaskSummary(ctx, swarmServiceName)
+			if summaryErr != nil {
+				return nil, summaryErr
+			}
+			if policy.global && requiredRunning == 0 && !summary.active {
+				return nil, nil
+			}
+			if summary.failed && summary.running < requiredRunning && !summary.progressing {
+				terminal, confirmErr := confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
+				if confirmErr != nil {
+					return nil, confirmErr
+				}
+				if terminal {
+					return nil, &SwarmRolloutError{
+						ServiceName: swarmServiceName,
+						State:       "failed",
+						Message:     "current Swarm task generation failed before reaching the desired replica count",
+						Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+					}
+				}
 			}
 		case "rollback_started":
 			// A start-first update can still be serving the previous task while
@@ -1861,14 +2426,357 @@ func (dm *DeploymentManager) waitForSwarmServiceConverged(ctx context.Context, d
 			return nil, rolloutErr
 		}
 
-		time.Sleep(2 * time.Second)
+		if err := waitForNextSwarmPoll(ctx); err != nil {
+			return nil, fmt.Errorf("wait for service %s convergence: %w", swarmServiceName, err)
+		}
+	}
+}
+
+func waitForNextSwarmPoll(ctx context.Context) error {
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func inspectSwarmServiceRunPolicy(ctx context.Context, swarmServiceName string) (swarmServiceRunPolicy, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "inspect", swarmServiceName, "--format", "{{json .}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: %w", err)
+	}
+	return parseSwarmServiceRunPolicy(output)
+}
+
+func parseSwarmServiceRunPolicy(output []byte) (swarmServiceRunPolicy, error) {
+	var service struct {
+		Spec struct {
+			Mode struct {
+				Replicated *struct {
+					Replicas *uint64 `json:"Replicas"`
+				} `json:"Replicated"`
+				Global        *struct{} `json:"Global"`
+				ReplicatedJob *struct {
+					MaxConcurrent    *uint64 `json:"MaxConcurrent"`
+					TotalCompletions *uint64 `json:"TotalCompletions"`
+				} `json:"ReplicatedJob"`
+				GlobalJob *struct{} `json:"GlobalJob"`
+			} `json:"Mode"`
+			TaskTemplate struct {
+				RestartPolicy *struct {
+					Condition   string  `json:"Condition"`
+					Delay       *int64  `json:"Delay"`
+					MaxAttempts *uint64 `json:"MaxAttempts"`
+					Window      *int64  `json:"Window"`
+				} `json:"RestartPolicy"`
+			} `json:"TaskTemplate"`
+		} `json:"Spec"`
+		ServiceStatus *struct {
+			DesiredTasks   uint64 `json:"DesiredTasks"`
+			CompletedTasks uint64 `json:"CompletedTasks"`
+		} `json:"ServiceStatus"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output), &service); err != nil {
+		return swarmServiceRunPolicy{}, fmt.Errorf("decode service run policy: %w", err)
+	}
+	policy := swarmServiceRunPolicy{desiredReplicas: -1, desiredCompletions: -1, restartMaxAttempts: -1}
+	if service.Spec.Mode.Replicated != nil {
+		policy.desiredReplicas = 1
+		if service.Spec.Mode.Replicated.Replicas != nil {
+			count, err := swarmTaskCount(*service.Spec.Mode.Replicated.Replicas)
+			if err != nil {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: replicated task count: %w", err)
+			}
+			policy.desiredReplicas = count
+		}
+	} else if service.Spec.Mode.Global != nil {
+		policy.global = true
+		if service.ServiceStatus == nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global service is missing desired task status")
+		}
+		count, err := swarmTaskCount(service.ServiceStatus.DesiredTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global task count: %w", err)
+		}
+		policy.desiredReplicas = count
+	} else if service.Spec.Mode.ReplicatedJob != nil {
+		policy.job = true
+		desired := uint64(1)
+		if service.Spec.Mode.ReplicatedJob.MaxConcurrent != nil {
+			desired = *service.Spec.Mode.ReplicatedJob.MaxConcurrent
+		}
+		if service.Spec.Mode.ReplicatedJob.TotalCompletions != nil {
+			desired = *service.Spec.Mode.ReplicatedJob.TotalCompletions
+		}
+		count, err := swarmTaskCount(desired)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: replicated job completion count: %w", err)
+		}
+		policy.desiredCompletions = count
+	} else if service.Spec.Mode.GlobalJob != nil {
+		policy.job = true
+		policy.global = true
+		if service.ServiceStatus == nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job is missing desired task status")
+		}
+		desired, err := swarmTaskCount(service.ServiceStatus.DesiredTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job desired task count: %w", err)
+		}
+		completed, err := swarmTaskCount(service.ServiceStatus.CompletedTasks)
+		if err != nil {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job completed task count: %w", err)
+		}
+		if desired > int64(1<<63-1)-completed {
+			return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: global job task count exceeds int64")
+		}
+		policy.desiredCompletions = desired + completed
+	}
+	if service.Spec.TaskTemplate.RestartPolicy != nil {
+		condition := strings.ToLower(strings.TrimSpace(service.Spec.TaskTemplate.RestartPolicy.Condition))
+		policy.restartNone = condition == "none"
+		policy.restartOnFailure = condition == "on-failure"
+		policy.restartAny = condition == "any"
+		if service.Spec.TaskTemplate.RestartPolicy.MaxAttempts != nil && *service.Spec.TaskTemplate.RestartPolicy.MaxAttempts > 0 {
+			attempts, err := swarmTaskCount(*service.Spec.TaskTemplate.RestartPolicy.MaxAttempts)
+			if err != nil {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart attempt count: %w", err)
+			}
+			policy.restartMaxAttempts = attempts
+		}
+		if service.Spec.TaskTemplate.RestartPolicy.Delay != nil {
+			if *service.Spec.TaskTemplate.RestartPolicy.Delay < 0 {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart delay cannot be negative")
+			}
+			policy.restartDelay = time.Duration(*service.Spec.TaskTemplate.RestartPolicy.Delay)
+		}
+		if service.Spec.TaskTemplate.RestartPolicy.Window != nil {
+			if *service.Spec.TaskTemplate.RestartPolicy.Window < 0 {
+				return swarmServiceRunPolicy{}, fmt.Errorf("inspect service run policy: restart window cannot be negative")
+			}
+			policy.restartWindow = time.Duration(*service.Spec.TaskTemplate.RestartPolicy.Window)
+		}
+	}
+	return policy, nil
+}
+
+func swarmTaskCount(value uint64) (int64, error) {
+	if value > uint64(1<<63-1) {
+		return 0, fmt.Errorf("%d exceeds int64", value)
+	}
+	return int64(value), nil
+}
+
+func parseSwarmTaskSummary(output string) swarmTaskSummary {
+	var summary swarmTaskSummary
+	currentFailed := false
+	countingFailedAttempts := false
+	currentFailedAttempts := int64(0)
+	flushFailedAttempts := func() {
+		if currentFailed && currentFailedAttempts > summary.failedAttempts {
+			summary.failedAttempts = currentFailedAttempts
+		}
+	}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 4)
+		if len(parts) < 3 {
+			continue
+		}
+		name := strings.TrimSpace(parts[0])
+		historical := strings.HasPrefix(name, "\\_") || strings.HasPrefix(name, "_")
+		current := strings.ToLower(strings.TrimSpace(parts[1]))
+		desired := strings.ToLower(strings.TrimSpace(parts[2]))
+		taskErr := ""
+		if len(parts) == 4 {
+			taskErr = strings.TrimSpace(parts[3])
+		}
+		isFailed := strings.HasPrefix(current, "failed") || strings.HasPrefix(current, "rejected") || taskErr != ""
+		if !historical {
+			flushFailedAttempts()
+			currentFailed = isFailed
+			countingFailedAttempts = isFailed
+			currentFailedAttempts = 0
+		}
+		if countingFailedAttempts {
+			if isFailed {
+				currentFailedAttempts++
+			} else {
+				countingFailedAttempts = false
+			}
+		}
+		if historical {
+			continue
+		}
+		isRunning := desired == "running" && strings.HasPrefix(current, "running") && !isFailed
+		isProgressing := desired == "running" && !isRunning && !isFailed
+		if isRunning {
+			summary.running++
+		}
+		if isProgressing {
+			summary.progressing = true
+		}
+		if isRunning || isProgressing {
+			summary.active = true
+		}
+		if strings.HasPrefix(current, "complete") && taskErr == "" {
+			summary.completed = true
+			summary.completedCount++
+		}
+		if isFailed {
+			summary.failed = true
+		}
+	}
+	flushFailedAttempts()
+	return summary
+}
+
+func inspectSwarmTaskSummary(ctx context.Context, swarmServiceName string) (swarmTaskSummary, error) {
+	cmd := exec.CommandContext(ctx, "docker", "service", "ps", swarmServiceName, "--no-trunc", "--format", "{{.Name}}\t{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return swarmTaskSummary{}, fmt.Errorf("inspect service tasks: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return parseSwarmTaskSummary(string(output)), nil
+}
+
+func swarmTaskFailureIsTerminal(policy swarmServiceRunPolicy, summary swarmTaskSummary) bool {
+	if !summary.failed {
+		return false
+	}
+	if !policy.restartOnFailure && !policy.restartAny {
+		return true
+	}
+	// When Window is configured, Docker only counts failures within that
+	// interval. The aggregate task history does not reveal when the scheduler
+	// reset its attempt counter, so it cannot prove exhaustion on its own.
+	if policy.restartWindow > 0 {
+		return false
+	}
+	// MaxAttempts counts retries after the initial execution, while
+	// failedAttempts counts every failed task generation including the first.
+	return policy.restartMaxAttempts >= 0 && summary.failedAttempts > policy.restartMaxAttempts
+}
+
+func confirmSwarmTaskFailureTerminal(ctx context.Context, swarmServiceName string, policy swarmServiceRunPolicy, summary swarmTaskSummary) (bool, error) {
+	if swarmTaskFailureIsTerminal(policy, summary) {
+		return true, nil
+	}
+	if !summary.failed || policy.restartWindow <= 0 || policy.restartMaxAttempts < 0 || summary.failedAttempts <= policy.restartMaxAttempts {
+		return false, nil
 	}
 
-	return nil, &SwarmRolloutError{
-		ServiceName: swarmServiceName,
-		State:       "timeout",
-		Message:     "timed out waiting for the service to converge",
-		Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+	// With a restart window, rely on the scheduler rather than historical
+	// failure arithmetic. Wait beyond the configured retry delay, then require
+	// the complete task summary to remain unchanged before treating it as final.
+	stabilityDelay := policy.restartDelay + 2*time.Second
+	if stabilityDelay < policy.restartDelay {
+		stabilityDelay = time.Duration(1<<63 - 1)
+	}
+	timer := time.NewTimer(stabilityDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-timer.C:
+	}
+
+	after, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	return after == summary, nil
+}
+
+func successfulSwarmTaskCount(policy swarmServiceRunPolicy, summary swarmTaskSummary) int64 {
+	if policy.job {
+		return summary.completedCount
+	}
+	return summary.running
+}
+
+func (dm *DeploymentManager) inspectSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName, ignoredRollbackFingerprint string) (bool, error) {
+	policy, err := inspectSwarmServiceRunPolicy(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+
+	_, updateState, updateMessage, err := dm.inspectSwarmServiceUpdate(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	if ignoredRollbackFingerprint != "" && updateState == "rollback_completed" {
+		currentFingerprint, fingerprintErr := swarmServiceUpdateFingerprint(ctx, swarmServiceName)
+		if fingerprintErr != nil {
+			return false, fingerprintErr
+		}
+		if currentFingerprint == ignoredRollbackFingerprint {
+			updateState = ""
+		}
+	}
+	switch updateState {
+	case "paused", "rollback_completed", "rollback_paused":
+		return false, &SwarmRolloutError{
+			ServiceName: swarmServiceName,
+			State:       updateState,
+			Message:     updateMessage,
+			Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+		}
+	case "rollback_started":
+		return false, nil
+	}
+	if updateState != "" && updateState != "completed" {
+		return false, nil
+	}
+
+	summary, err := inspectSwarmTaskSummary(ctx, swarmServiceName)
+	if err != nil {
+		return false, err
+	}
+	if !policy.job && policy.desiredReplicas == 0 && !summary.active {
+		return true, nil
+	}
+	terminalFailure := false
+	if summary.failed && !summary.progressing {
+		terminalFailure, err = confirmSwarmTaskFailureTerminal(ctx, swarmServiceName, policy, summary)
+		if err != nil {
+			return false, err
+		}
+	}
+	if terminalFailure {
+		return false, &SwarmRolloutError{
+			ServiceName: swarmServiceName,
+			State:       "failed",
+			Message:     "Swarm service did not reach its desired task state",
+			Diagnostics: dm.collectSwarmRolloutDiagnostics(ctx, deploymentID, swarmServiceName),
+		}
+	}
+	requiredSuccessful := policy.desiredReplicas
+	if policy.job {
+		requiredSuccessful = policy.desiredCompletions
+	}
+	if !policy.job && requiredSuccessful < 1 {
+		requiredSuccessful = 1
+	}
+	successfulTasks := successfulSwarmTaskCount(policy, summary)
+	return !summary.failed && !summary.progressing && successfulTasks >= requiredSuccessful, nil
+}
+
+func (dm *DeploymentManager) waitForSwarmStackServiceConverged(ctx context.Context, deploymentID, swarmServiceName, ignoredRollbackFingerprint string) error {
+	for {
+		converged, err := dm.inspectSwarmStackServiceConverged(ctx, deploymentID, swarmServiceName, ignoredRollbackFingerprint)
+		if err != nil {
+			return err
+		}
+		if converged {
+			return nil
+		}
+		if err := waitForNextSwarmPoll(ctx); err != nil {
+			return fmt.Errorf("wait for service %s convergence: %w", swarmServiceName, err)
+		}
 	}
 }
 
@@ -1950,6 +2858,17 @@ func (dm *DeploymentManager) inspectSwarmServiceUpdate(ctx context.Context, swar
 }
 
 func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmServiceName string) (*swarmConvergedTask, error) {
+	tasks, err := dm.currentRunningSwarmTasks(ctx, swarmServiceName)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no converged running task found for swarm service %s", swarmServiceName)
+	}
+	return tasks[0], nil
+}
+
+func (dm *DeploymentManager) currentRunningSwarmTasks(ctx context.Context, swarmServiceName string) ([]*swarmConvergedTask, error) {
 	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.CurrentState}}\t{{.DesiredState}}\t{{.Error}}", "--no-trunc"}
 	cmd := exec.CommandContext(ctx, "docker", taskArgs...)
 	var stdout bytes.Buffer
@@ -1960,6 +2879,7 @@ func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmS
 		return nil, fmt.Errorf("failed to inspect swarm tasks for %s: %w (stderr: %s)", swarmServiceName, err, stderr.String())
 	}
 
+	var tasks []*swarmConvergedTask
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -2000,15 +2920,14 @@ func (dm *DeploymentManager) currentRunningSwarmTask(ctx context.Context, swarmS
 			task.ContainerID = strings.TrimSpace(taskParts[1])
 		}
 		if task.ContainerID != "" {
-			return task, nil
+			tasks = append(tasks, task)
 		}
 	}
-
-	return nil, fmt.Errorf("no converged running task found for swarm service %s", swarmServiceName)
+	return tasks, nil
 }
 
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)
-func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
+func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) (runtimeChanged bool, retErr error) {
 	// Try to find container by name
 	containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
@@ -2016,7 +2935,7 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 	})
 	containers := containersResult.Items
 	if err != nil {
-		return fmt.Errorf("failed to list containers: %w", err)
+		return false, fmt.Errorf("failed to list containers: %w", err)
 	}
 
 	// Remove all containers with this name (should only be one, but handle multiple)
@@ -2028,20 +2947,22 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 				if container.State == "running" {
 					if err := dm.dockerHelper.StopContainer(ctx, container.ID, 10*time.Second); err != nil {
 						logger.Warn("[DeploymentManager] Failed to stop container %s: %v", container.ID[:12], err)
+					} else {
+						runtimeChanged = true
 					}
 				}
 
 				// Remove container
 				if err := dm.dockerHelper.RemoveContainer(ctx, container.ID, true); err != nil {
-					return fmt.Errorf("failed to remove container %s: %w", container.ID[:12], err)
+					return runtimeChanged, fmt.Errorf("failed to remove container %s: %w", container.ID[:12], err)
 				}
 
 				logger.Info("[DeploymentManager] Removed existing container %s (%s)", containerName, container.ID[:12])
-				return nil
+				return true, nil
 			}
 		}
 	}
 
 	// Container not found - that's OK, just return
-	return nil
+	return false, nil
 }

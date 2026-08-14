@@ -63,6 +63,7 @@ type Deployment struct {
 	BuildArgs              string  `gorm:"column:build_args;type:jsonb" json:"build_args"`                             // Docker build args for Dockerfile deployments
 	DockerfileVolumes      string  `gorm:"column:dockerfile_volumes;type:jsonb" json:"dockerfile_volumes"`             // Persistent volume mounts for Dockerfile deployments
 	DockerfileBuildOptions string  `gorm:"column:dockerfile_build_options;type:jsonb" json:"dockerfile_build_options"` // Additional Docker build options for Dockerfile deployments
+	VolumeNodeID           string  `gorm:"column:volume_node_id;index" json:"volume_node_id"`                          // Durable owner for node-local deployment volumes
 }
 
 // PullRequestDeploymentConfig configures disposable pull request environments

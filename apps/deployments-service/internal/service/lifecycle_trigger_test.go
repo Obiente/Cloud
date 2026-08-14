@@ -8,11 +8,45 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 )
+
+func TestComposeDeploymentNeedsContainerVerification(t *testing.T) {
+	t.Setenv("ENABLE_SWARM", "false")
+	if !composeDeploymentNeedsContainerVerification() {
+		t.Fatal("non-Swarm Compose deployment must verify a running container")
+	}
+
+	t.Setenv("ENABLE_SWARM", "true")
+	if composeDeploymentNeedsContainerVerification() {
+		t.Fatal("Swarm Compose deployment already performs job-aware convergence")
+	}
+}
+
+func TestDeploymentForwardTargetLeavesMissingDeploymentToLocalValidation(t *testing.T) {
+	db := newDeploymentServiceTestDB(t)
+	if err := db.AutoMigrate(&database.DeploymentLocation{}); err != nil {
+		t.Fatalf("migrate deployment locations: %v", err)
+	}
+	service := NewService(
+		context.Background(),
+		database.NewDeploymentRepository(db, nil),
+		&orchestrator.DeploymentManager{},
+		nil,
+	)
+
+	shouldForward, targetNodeID, err := service.getDeploymentForwardTarget(context.Background(), "missing-deployment")
+	if err != nil {
+		t.Fatalf("resolve missing deployment forward target: %v", err)
+	}
+	if shouldForward || targetNodeID != "" {
+		t.Fatalf("missing deployment forward target = (%t, %q), want local validation", shouldForward, targetNodeID)
+	}
+}
 
 func TestAbortedDeletionClearsIdleCancellationMarker(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)

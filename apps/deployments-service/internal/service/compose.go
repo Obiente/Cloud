@@ -76,7 +76,11 @@ func (s *Service) ValidateDeploymentCompose(ctx context.Context, req *connect.Re
 func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentComposeRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentComposeResponse], error) {
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	deploymentID := req.Msg.GetDeploymentId()
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -131,10 +135,9 @@ func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Requ
 		// If deployment is currently running, redeploy with new compose file
 		if dbDep.Status == int32(deploymentsv1.DeploymentStatus_RUNNING) && s.manager != nil {
 			log.Printf("[UpdateDeploymentCompose] Redeploying running deployment %s with updated compose file", deploymentID)
-			// Stop existing deployment first
-			_ = s.manager.StopComposeDeployment(ctx, deploymentID)
-			_ = s.manager.RemoveComposeDeployment(ctx, deploymentID)
-			// Deploy new compose file
+			// Compose up/stack deploy replaces the project after the new file has
+			// passed sanitization and volume preparation. Keep the current runtime
+			// live if that preflight fails.
 			if err := s.manager.DeployComposeFile(ctx, deploymentID, composeYaml); err != nil {
 				log.Printf("[UpdateDeploymentCompose] Failed to redeploy compose file for deployment %s: %v", deploymentID, err)
 				// Continue anyway - compose file is saved, user can manually redeploy

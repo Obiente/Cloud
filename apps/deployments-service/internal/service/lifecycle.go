@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
@@ -25,9 +27,14 @@ import (
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 )
 
 const deploymentStatusStreamPollInterval = 1500 * time.Millisecond
+
+func composeDeploymentNeedsContainerVerification() bool {
+	return !utils.IsSwarmModeEnabled()
+}
 
 // TriggerDeployment triggers a rebuild and redeployment
 func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest]) (*connect.Response[deploymentsv1.TriggerDeploymentResponse], error) {
@@ -42,13 +49,17 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		return nil, err
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, forwardNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
-		headers, err := triggerDeploymentForwardHeaders(ctx, req, targetNodeID)
+		headers, err := triggerDeploymentForwardHeaders(ctx, req, forwardNodeID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 		}
-		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, forwardNodeID, "/obiente.cloud.deployments.v1.DeploymentService/TriggerDeployment", headers, &deploymentsv1.TriggerDeploymentResponse{})
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
 		}
@@ -694,9 +705,18 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		// buildTime is calculated inside updateBuildStatus
 		updateBuildStatus(3, nil) // BUILD_SUCCESS = 3
 
-		// Verify containers are running
-		streamer.Write([]byte("🔍 Verifying containers are running...\n"))
-		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
+		// Compose deployment performs its own convergence check. In particular,
+		// a stack made only of successful jobs is ready even though it has no
+		// container that remains running afterward.
+		var runtimeVerificationErr error
+		if dbDeployment.ComposeYaml == "" || composeDeploymentNeedsContainerVerification() {
+			streamer.Write([]byte("🔍 Verifying containers are running...\n"))
+			runtimeVerificationErr = s.verifyContainersRunning(buildCtx, deploymentID)
+		} else {
+			streamer.Write([]byte("✅ Compose services reached their configured runtime state\n"))
+		}
+		if runtimeVerificationErr != nil {
+			err := runtimeVerificationErr
 			logger.Warn("[TriggerDeployment] WARNING: Containers not running: %v", err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
 			runtimeFailureMsg := fmt.Sprintf("Deployment startup failed after the build completed: %v", err)
@@ -930,9 +950,19 @@ func (s *Service) StreamDeploymentStatus(ctx context.Context, req *connect.Reque
 	}
 }
 
-func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string) {
-	if s.manager == nil || s.forwarder == nil {
-		return false, ""
+func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID string) (bool, string, error) {
+	if s.manager == nil {
+		return false, "", nil
+	}
+	volumeNodeID, err := database.GetDeploymentVolumeNode(ctx, deploymentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("resolve deployment volume owner: %w", err)
+	}
+	if volumeNodeID != "" {
+		return volumeNodeID != s.manager.GetNodeID(), volumeNodeID, nil
 	}
 
 	var location database.DeploymentLocation
@@ -940,10 +970,16 @@ func (s *Service) getDeploymentForwardTarget(ctx context.Context, deploymentID s
 		Where("deployment_id = ?", deploymentID).
 		Order("updated_at DESC").
 		First(&location).Error; err != nil {
-		return false, ""
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("resolve deployment runtime owner: %w", err)
+	}
+	if strings.TrimSpace(location.NodeID) == "" {
+		return false, "", nil
 	}
 
-	return s.shouldForwardToNode(&location)
+	return location.NodeID != s.manager.GetNodeID(), location.NodeID, nil
 }
 
 // StartDeployment starts a stopped deployment
@@ -982,7 +1018,11 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{
 			"Authorization":                      req.Header().Get("Authorization"),
@@ -1053,23 +1093,24 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 			}
 			logger.Info("[StartDeployment] Successfully deployed compose file for deployment %s", deploymentID)
 
-			// Verify containers are actually running before setting status
-			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
-				logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
-				runtimeFailureMsg := fmt.Sprintf("deployment start did not leave any running containers: %v", err)
-				s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_verification_failed", runtimeFailureMsg, nil)
-				notifyCtx, cancel := s.detachedContext(10 * time.Second)
-				defer cancel()
-				s.notifyDeploymentFailure(
-					notifyCtx,
-					dbDep,
-					"",
-					0,
-					"Deployment Start Failed",
-					fmt.Sprintf("Starting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
-					map[string]string{"error": runtimeFailureMsg},
-				)
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("deployment started but no containers are running: %w", err))
+			if composeDeploymentNeedsContainerVerification() {
+				if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
+					logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
+					runtimeFailureMsg := fmt.Sprintf("deployment start did not leave any running containers: %v", err)
+					s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_start_verification_failed", runtimeFailureMsg, nil)
+					notifyCtx, cancel := s.detachedContext(10 * time.Second)
+					defer cancel()
+					s.notifyDeploymentFailure(
+						notifyCtx,
+						dbDep,
+						"",
+						0,
+						"Deployment Start Failed",
+						fmt.Sprintf("Starting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+						map[string]string{"error": runtimeFailureMsg},
+					)
+					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("deployment started but no containers are running: %w", err))
+				}
 			}
 		} else {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("compose deployment requires orchestrator"))
@@ -1210,7 +1251,11 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StopDeployment", headers, &deploymentsv1.StopDeploymentResponse{})
@@ -1256,7 +1301,11 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	if shouldForward, targetNodeID := s.getDeploymentForwardTarget(ctx, deploymentID); shouldForward {
+	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	if shouldForward {
 		reqBody, _ := json.Marshal(req.Msg)
 		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
 		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/RestartDeployment", headers, &deploymentsv1.RestartDeploymentResponse{})
@@ -1273,9 +1322,9 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 
 	// Check if this is a compose-based deployment
 	if dbDep.ComposeYaml != "" && s.manager != nil {
-		// For compose deployments, restart by stopping and starting again
-		_ = s.manager.StopComposeDeployment(ctx, deploymentID)
-		if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
+		// Compose up/stack deploy performs the replacement only after sanitizer
+		// and volume preparation have succeeded.
+		if err := s.manager.RestartComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
 			logger.Warn("[RestartDeployment] Failed to restart compose deployment %s: %v", deploymentID, err)
 			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_failed", err.Error(), nil)
 			notifyCtx, cancel := s.detachedContext(10 * time.Second)
@@ -1291,21 +1340,23 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 			)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
 		}
-		if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
-			runtimeFailureMsg := fmt.Sprintf("deployment restart did not leave any running containers: %v", err)
-			s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_verification_failed", runtimeFailureMsg, nil)
-			notifyCtx, cancel := s.detachedContext(10 * time.Second)
-			defer cancel()
-			s.notifyDeploymentFailure(
-				notifyCtx,
-				dbDep,
-				"",
-				0,
-				"Deployment Restart Failed",
-				fmt.Sprintf("Restarting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
-				map[string]string{"error": runtimeFailureMsg},
-			)
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
+		if composeDeploymentNeedsContainerVerification() {
+			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
+				runtimeFailureMsg := fmt.Sprintf("deployment restart did not leave any running containers: %v", err)
+				s.captureDeploymentFailureDiagnostics(ctx, deploymentID, "manual_restart_verification_failed", runtimeFailureMsg, nil)
+				notifyCtx, cancel := s.detachedContext(10 * time.Second)
+				defer cancel()
+				s.notifyDeploymentFailure(
+					notifyCtx,
+					dbDep,
+					"",
+					0,
+					"Deployment Restart Failed",
+					fmt.Sprintf("Restarting deployment %s did not leave any running containers. Runtime diagnostics were captured in the deployment logs.", deploymentID),
+					map[string]string{"error": runtimeFailureMsg},
+				)
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
+			}
 		}
 	} else if s.manager != nil {
 		if err := s.manager.RestartDeployment(ctx, deploymentID); err != nil {

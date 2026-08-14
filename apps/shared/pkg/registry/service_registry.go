@@ -3,7 +3,10 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,7 +14,9 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/moby/moby/api/types/swarm"
 	"github.com/moby/moby/client"
+	"gorm.io/gorm"
 )
 
 // ServiceRegistry tracks all deployments across the cluster
@@ -108,6 +113,9 @@ func (sr *ServiceRegistry) UnregisterDeployment(ctx context.Context, containerID
 	// Get deployment info before deletion
 	var location database.DeploymentLocation
 	if err := database.DB.Where("container_id = ?", containerID).First(&location).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return fmt.Errorf("deployment location not found: %w", err)
 	}
 
@@ -372,15 +380,13 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 			if task.ServiceID != svc.ID {
 				continue
 			}
-			if !isTaskActive(string(task.Status.State)) {
-				continue
-			}
-			if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
+			if !shouldRecordSwarmTask(task) {
 				continue
 			}
 
 			containerID := task.Status.ContainerStatus.ContainerID
 			activeContainers[containerID] = true
+			taskSlot := stableSwarmTaskSlot(svc.Spec.Mode, task)
 
 			location := &database.DeploymentLocation{
 				ID:              fmt.Sprintf("loc-%s-%s", deploymentID, containerID[:12]),
@@ -389,6 +395,7 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 				ContainerID:     containerID,
 				ServiceID:       svc.ID,
 				TaskID:          task.ID,
+				TaskSlot:        taskSlot,
 				Status:          string(task.Status.State),
 				Domain:          domain,
 				NodeHostname:    task.NodeID,
@@ -431,6 +438,23 @@ func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func stableSwarmTaskSlot(mode swarm.ServiceMode, task swarm.Task) string {
+	if mode.Global != nil || mode.GlobalJob != nil {
+		return strings.TrimSpace(task.NodeID)
+	}
+	if task.Slot > 0 {
+		return strconv.Itoa(task.Slot)
+	}
+	return ""
+}
+
+func shouldRecordSwarmTask(task swarm.Task) bool {
+	return task.DesiredState == swarm.TaskStateRunning &&
+		isTaskActive(string(task.Status.State)) &&
+		task.Status.ContainerStatus != nil &&
+		strings.TrimSpace(task.Status.ContainerStatus.ContainerID) != ""
 }
 
 func isTaskActive(state string) bool {

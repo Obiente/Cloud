@@ -1,10 +1,19 @@
 package orchestrator
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/moby/moby/api/types/container"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+
+	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,6 +36,367 @@ func TestComposeUpArgs(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("composeUpArgs mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestStackRollbackRestoresVolumePreparationOnlyForSingleService(t *testing.T) {
+	rollbackErr := fmt.Errorf("wait for service: %w", &SwarmRolloutError{
+		ServiceName:             "deploy-example_worker",
+		State:                   "rollback_completed",
+		PreviousRevisionRunning: true,
+	})
+	if !stackRollbackRestoresVolumePreparation([]string{"deploy-example_worker"}, rollbackErr) {
+		t.Fatal("single-service completed rollback should restore prepared volume modes")
+	}
+	if stackRollbackRestoresVolumePreparation([]string{"deploy-example_api", "deploy-example_worker"}, rollbackErr) {
+		t.Fatal("multi-service rollback must retain prepared volume modes")
+	}
+	if stackRollbackRestoresVolumePreparation([]string{"deploy-example_worker"}, errors.New("update failed")) {
+		t.Fatal("unconfirmed rollback must retain prepared volume modes")
+	}
+}
+
+func TestUnchangedSwarmStackServicesUsesTaskTemplates(t *testing.T) {
+	before := map[string]string{
+		"deploy-app_api":    `{"Name":"api","TaskTemplate":{"ContainerSpec":{"Image":"example/api:v1"}}}`,
+		"deploy-app_worker": `{"Name":"worker","TaskTemplate":{"ContainerSpec":{"Image":"example/worker:v1"}}}`,
+	}
+	after := map[string]string{
+		"deploy-app_api":    `{"Name":"api","TaskTemplate":{"ContainerSpec":{"Image":"example/api:v2"}}}`,
+		"deploy-app_worker": before["deploy-app_worker"],
+		"deploy-app_new":    `{"Name":"new"}`,
+	}
+	want := []string{"deploy-app_worker"}
+	if got := unchangedSwarmStackServices(before, after); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unchangedSwarmStackServices() = %#v, want %#v", got, want)
+	}
+}
+
+func TestParseCurrentSwarmTaskIDsIgnoresHistoricalTasks(t *testing.T) {
+	got := parseCurrentSwarmTaskIDs("deploy-app.1\tcurrent-a\n\\_ deploy-app.1\told-a\ndeploy-app.2\tcurrent-b\n")
+	if _, found := got["old-a"]; found {
+		t.Fatal("historical task was treated as current")
+	}
+	for _, taskID := range []string{"current-a", "current-b"} {
+		if _, found := got[taskID]; !found {
+			t.Fatalf("current task %s was omitted", taskID)
+		}
+	}
+}
+
+func TestObsoleteComposeSwarmLocationsKeepsCurrentAndLegacyRows(t *testing.T) {
+	locations := []database.DeploymentLocation{
+		{ContainerID: "current-container", ServiceID: "service-example", TaskID: "current-task"},
+		{ContainerID: "stale-container", ServiceID: "service-example", TaskID: "stale-task"},
+		{ContainerID: "plain-container"},
+	}
+	current := map[string]struct{}{"current-task": {}}
+	got := obsoleteComposeSwarmLocations(locations, current)
+	if len(got) != 2 || got[0].ContainerID != "stale-container" || got[1].ContainerID != "plain-container" {
+		t.Fatalf("obsolete locations = %#v, want stale and pre-upgrade rows", got)
+	}
+}
+
+func TestPersistedComposeLegacyProjectRootRecoversFallback(t *testing.T) {
+	deploymentID := "compose-persisted-fallback-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - %s:/workspace
+`, recordedRoot)
+	got, found, err := persistedComposeLegacyProjectRoot(composeYAML, deploymentID)
+	if err != nil {
+		t.Fatalf("extract persisted legacy root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("persisted legacy root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+}
+
+func TestPersistedComposeManagedVolumeRootRecoversNamedVolumeFallback(t *testing.T) {
+	deploymentID := "compose-named-volume-fallback-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - %s:/var/lib/app
+`, filepath.Join(recordedRoot, "app-data"))
+	got, found, err := persistedComposeManagedVolumeRoot(composeYAML, deploymentID)
+	if err != nil {
+		t.Fatalf("extract persisted managed volume root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("persisted managed root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+}
+
+func TestPersistedComposeManagedVolumeRootRejectsConflicts(t *testing.T) {
+	deploymentID := "compose-conflicting-volume-roots-test"
+	composeYAML := fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/var/lib/app
+  worker:
+    volumes:
+      - %s:/var/lib/worker
+`, filepath.Join("/var/lib/obiente/volumes", deploymentID, "app-data"), filepath.Join("/tmp/obiente-volumes", deploymentID, "worker-data"))
+	if _, _, err := persistedComposeManagedVolumeRoot(composeYAML, deploymentID); err == nil {
+		t.Fatal("conflicting persisted managed volume roots were accepted")
+	}
+}
+
+func TestSwarmTaskSlotUsesStableReplicaIdentity(t *testing.T) {
+	labels := map[string]string{
+		"com.docker.swarm.service.name": "deploy-example_api",
+		"com.docker.swarm.task.name":    "deploy-example_api.2.current-task",
+	}
+	if got := swarmTaskSlot(labels); got != "2" {
+		t.Fatalf("swarmTaskSlot() = %q, want %q", got, "2")
+	}
+	labels["com.docker.swarm.task.name"] = "unrelated.2.current-task"
+	if got := swarmTaskSlot(labels); got != "" {
+		t.Fatalf("swarmTaskSlot() accepted unrelated task name: %q", got)
+	}
+}
+
+func TestParseLegacyProjectRootMetadataUsesRecordedManagedRoot(t *testing.T) {
+	deploymentID := "compose-metadata-root-test"
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	if err := os.MkdirAll(recordedRoot, 0o755); err != nil {
+		t.Fatalf("create recorded volume root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(recordedRoot) })
+
+	got, err := parseLegacyProjectRootMetadata([]byte(legacyProjectRootMetadataContents(recordedRoot)), deploymentID)
+	if err != nil {
+		t.Fatalf("parse recorded volume root: %v", err)
+	}
+	if got != recordedRoot {
+		t.Fatalf("recorded volume root = %q, want %q", got, recordedRoot)
+	}
+	if _, err := parseLegacyProjectRootMetadata([]byte("legacy-relative-project-root-v1\n/etc\n"), deploymentID); err == nil {
+		t.Fatal("metadata outside managed volume roots should be rejected")
+	}
+}
+
+func TestRecordedLegacyProjectRootPrecedesNewRootSelection(t *testing.T) {
+	deploymentID := fmt.Sprintf("compose-recorded-root-test-%d", os.Getpid())
+	recordedRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	deployDir := filepath.Join("/tmp/obiente-deployments", deploymentID)
+	if err := os.MkdirAll(recordedRoot, 0o755); err != nil {
+		t.Fatalf("create recorded volume root: %v", err)
+	}
+	if err := os.MkdirAll(deployDir, 0o755); err != nil {
+		t.Fatalf("create deployment metadata directory: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(recordedRoot)
+		_ = os.RemoveAll(deployDir)
+	})
+	if err := persistLegacyProjectRootMetadata(deployDir, recordedRoot); err != nil {
+		t.Fatalf("persist recorded volume root: %v", err)
+	}
+	if err := os.RemoveAll(recordedRoot); err != nil {
+		t.Fatalf("remove recorded fallback root: %v", err)
+	}
+
+	got, found, err := recordedLegacyProjectRoot(deploymentID)
+	if err != nil {
+		t.Fatalf("read recorded volume root: %v", err)
+	}
+	if !found || got != recordedRoot {
+		t.Fatalf("recorded volume root found=%t root=%q, want %q", found, got, recordedRoot)
+	}
+	if info, err := os.Stat(recordedRoot); err != nil || !info.IsDir() {
+		t.Fatalf("recorded fallback root was not recreated: info=%v err=%v", info, err)
+	}
+}
+
+func TestIsMissingSwarmStackOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{name: "docker missing stack", output: "Nothing found in stack: deploy-example", want: true},
+		{name: "case insensitive", output: "nothing found in stack: deploy-example", want: true},
+		{name: "daemon failure", output: "error during connect: connection refused", want: false},
+		{name: "missing docker binary", output: "executable file not found", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isMissingSwarmStackOutput(test.output); got != test.want {
+				t.Fatalf("isMissingSwarmStackOutput(%q) = %t, want %t", test.output, got, test.want)
+			}
+		})
+	}
+}
+
+func TestPersistLegacyProjectRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	volumeRoot := filepath.Join(t.TempDir(), "volumes", "deploy-example")
+	if err := persistLegacyProjectRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("persist legacy project-root metadata: %v", err)
+	}
+	contents, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile)
+	if err != nil {
+		t.Fatalf("read legacy project-root metadata: %v", err)
+	}
+	if !found || string(contents) != legacyProjectRootMetadataContents(volumeRoot) {
+		t.Fatalf("metadata found=%t contents=%q", found, contents)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("repeat metadata persistence: %v", err)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, filepath.Join(t.TempDir(), "different")); err == nil {
+		t.Fatal("expected mismatched volume-root metadata to be rejected")
+	}
+}
+
+func TestPersistDeploymentVolumeRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	deploymentID := "compose-volume-root-metadata-test"
+	volumeRoot := filepath.Join("/tmp/obiente-volumes", deploymentID)
+	if err := os.MkdirAll(volumeRoot, 0o755); err != nil {
+		t.Fatalf("create deployment volume root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(volumeRoot) })
+	if err := persistDeploymentVolumeRootMetadata(deployDir, volumeRoot); err != nil {
+		t.Fatalf("persist deployment volume-root metadata: %v", err)
+	}
+	contents, found, err := readDeploymentFileNoFollow(deployDir, deploymentVolumeRootMetadataFile)
+	if err != nil {
+		t.Fatalf("read deployment volume-root metadata: %v", err)
+	}
+	if !found {
+		t.Fatal("deployment volume-root metadata was not created")
+	}
+	got, err := parseDeploymentVolumeRootMetadata(contents, deploymentID)
+	if err != nil {
+		t.Fatalf("parse deployment volume-root metadata: %v", err)
+	}
+	if got != volumeRoot {
+		t.Fatalf("deployment volume root = %q, want %q", got, volumeRoot)
+	}
+}
+
+func TestDeploymentMetadataDirectoryUnavailableOnlyMatchesTraversalPermissions(t *testing.T) {
+	directoryPermissionError := &deploymentMetadataDirectoryError{
+		path: "/synthetic/unavailable",
+		err:  unix.EACCES,
+	}
+	if !deploymentMetadataDirectoryUnavailable(directoryPermissionError) {
+		t.Fatal("directory traversal permission error was not treated as an unavailable fallback root")
+	}
+	if deploymentMetadataDirectoryUnavailable(unix.EACCES) {
+		t.Fatal("plain file permission error was treated as an unavailable fallback root")
+	}
+	if deploymentMetadataDirectoryUnavailable(&deploymentMetadataDirectoryError{path: "/synthetic/invalid", err: unix.ELOOP}) {
+		t.Fatal("unsafe metadata directory error was treated as an unavailable fallback root")
+	}
+}
+
+func TestPersistLegacyProjectRootMetadataRejectsSymlink(t *testing.T) {
+	deployDir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "target")
+	if err := os.WriteFile(target, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create symlink target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(deployDir, legacyProjectRootMetadataFile)); err != nil {
+		t.Fatalf("create metadata symlink: %v", err)
+	}
+	if err := persistLegacyProjectRootMetadata(deployDir, filepath.Join(t.TempDir(), "volumes")); err == nil {
+		t.Fatal("expected metadata symlink to be rejected")
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil || string(contents) != "preserve me" {
+		t.Fatalf("symlink target changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestRemoveIncompleteLegacyProjectRootMetadata(t *testing.T) {
+	deployDir := t.TempDir()
+	dirFD, err := secureOpenDirectory(deployDir, false)
+	if err != nil {
+		t.Fatalf("open deployment directory: %v", err)
+	}
+	defer unix.Close(dirFD)
+	fileFD, err := unix.Openat(dirFD, legacyProjectRootMetadataFile, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		t.Fatalf("create incomplete metadata: %v", err)
+	}
+	if _, err := unix.Write(fileFD, []byte("partial")); err != nil {
+		unix.Close(fileFD)
+		t.Fatalf("write incomplete metadata: %v", err)
+	}
+	if err := unix.Close(fileFD); err != nil {
+		t.Fatalf("close incomplete metadata: %v", err)
+	}
+	if err := removeIncompleteLegacyProjectRootMetadata(dirFD); err != nil {
+		t.Fatalf("remove incomplete metadata: %v", err)
+	}
+	if _, found, err := readDeploymentFileNoFollow(deployDir, legacyProjectRootMetadataFile); err != nil || found {
+		t.Fatalf("incomplete metadata still present: found=%t err=%v", found, err)
+	}
+}
+
+func TestDeploymentRuntimeChangedAfterFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		before  string
+		after   string
+		err     error
+		changed bool
+	}{
+		{name: "daemon rejected before mutation", before: "container-a", after: "container-a", changed: false},
+		{name: "partial replacement", before: "container-a", after: "container-b", changed: true},
+		{name: "unknown post-state", before: "container-a", err: errors.New("daemon unavailable"), changed: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := deploymentRuntimeChangedAfterFailure(test.before, func(context.Context) (string, error) {
+				return test.after, test.err
+			})
+			if got != test.changed {
+				t.Fatalf("deploymentRuntimeChangedAfterFailure = %t, want %t", got, test.changed)
+			}
+		})
+	}
+}
+
+func TestSelectPlainComposeTransitionContainers(t *testing.T) {
+	managedPlain := container.Summary{
+		ID: "plain-container",
+		Labels: map[string]string{
+			"cloud.obiente.managed":      "true",
+			"com.docker.compose.project": "deploy-example",
+		},
+	}
+	swarmTask := container.Summary{
+		ID: "swarm-container",
+		Labels: map[string]string{
+			"cloud.obiente.managed":         "true",
+			"com.docker.compose.project":    "deploy-example",
+			"com.docker.swarm.service.id":   "service-example",
+			"com.docker.swarm.service.name": "deploy-example-app",
+		},
+	}
+
+	selected, err := selectPlainComposeTransitionContainers([]container.Summary{managedPlain, swarmTask})
+	if err != nil {
+		t.Fatalf("select plain Compose transition containers: %v", err)
+	}
+	if len(selected) != 1 || selected[0].ID != managedPlain.ID {
+		t.Fatalf("selected transition containers = %#v, want only managed plain container", selected)
+	}
+
+	unmanagedPlain := container.Summary{ID: "unmanaged-container", Labels: map[string]string{}}
+	if _, err := selectPlainComposeTransitionContainers([]container.Summary{unmanagedPlain}); err == nil {
+		t.Fatal("unmanaged plain Compose container was accepted for transition cleanup")
 	}
 }
 
@@ -78,6 +448,7 @@ func TestStackDeployArgs(t *testing.T) {
 		"--with-registry-auth=true",
 		"--resolve-image",
 		"always",
+		"--prune",
 		"deploy-123",
 	}
 

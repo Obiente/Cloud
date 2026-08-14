@@ -70,6 +70,11 @@ func RegisterDeploymentsMigrations(registry *MigrationRegistry) {
 	registry.Register("2026_05_03_003", "Default GitHub integrations to app installs", defaultGitHubIntegrationsToApp)
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
+	registry.Register("2026_08_15_001", "Enforce unique Swarm deployment location slots", enforceUniqueDeploymentLocationSlots)
+}
+
+func enforceUniqueDeploymentLocationSlots(db *gorm.DB) error {
+	return database.EnforceUniqueDeploymentLocationSlots(db)
 }
 
 // RegisterOrganizationsMigrations registers migrations specific to organizations-service.

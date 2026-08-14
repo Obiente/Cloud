@@ -3,11 +3,14 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/moby/moby/client"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -15,17 +18,18 @@ import (
 // DeploymentLocation tracks where deployments are running across the cluster
 type DeploymentLocation struct {
 	ID              string    `gorm:"primaryKey" json:"id"`
-	DeploymentID    string    `gorm:"index;not null" json:"deployment_id"`
-	NodeID          string    `gorm:"index;not null" json:"node_id"`          // Swarm node ID
-	NodeHostname    string    `json:"node_hostname"`                          // Swarm node hostname
-	NodeIP          string    `json:"node_ip"`                                // Node IP address
-	ContainerID     string    `gorm:"uniqueIndex" json:"container_id"`        // Docker container ID
-	ServiceID       string    `gorm:"index" json:"service_id"`                // Docker service ID (if using services)
-	TaskID          string    `json:"task_id"`                                // Swarm task ID
-	Status          string    `gorm:"index;not null" json:"status"`           // running, stopped, failed, etc.
-	Port            int       `json:"port"`                                   // Assigned port for this deployment
-	Domain          string    `gorm:"index" json:"domain"`                    // Custom domain for this deployment
-	HealthStatus    string    `gorm:"default:'unknown'" json:"health_status"` // healthy, unhealthy, unknown
+	DeploymentID    string    `gorm:"index;uniqueIndex:idx_deployment_service_slot_unique,priority:1,where:service_id <> '' AND task_slot <> '';not null" json:"deployment_id"`
+	NodeID          string    `gorm:"index;not null" json:"node_id"`                                                                                                // Swarm node ID
+	NodeHostname    string    `json:"node_hostname"`                                                                                                                // Swarm node hostname
+	NodeIP          string    `json:"node_ip"`                                                                                                                      // Node IP address
+	ContainerID     string    `gorm:"uniqueIndex" json:"container_id"`                                                                                              // Docker container ID
+	ServiceID       string    `gorm:"index;uniqueIndex:idx_deployment_service_slot_unique,priority:2,where:service_id <> '' AND task_slot <> ''" json:"service_id"` // Docker service ID (if using services)
+	TaskID          string    `json:"task_id"`                                                                                                                      // Swarm task ID
+	TaskSlot        string    `gorm:"uniqueIndex:idx_deployment_service_slot_unique,priority:3,where:service_id <> '' AND task_slot <> ''" json:"task_slot"`        // Stable Swarm replica slot or global node ID
+	Status          string    `gorm:"index;not null" json:"status"`                                                                                                 // running, stopped, failed, etc.
+	Port            int       `json:"port"`                                                                                                                         // Assigned port for this deployment
+	Domain          string    `gorm:"index" json:"domain"`                                                                                                          // Custom domain for this deployment
+	HealthStatus    string    `gorm:"default:'unknown'" json:"health_status"`                                                                                       // healthy, unhealthy, unknown
 	LastHealthCheck time.Time `json:"last_health_check"`
 	CPUUsage        float64   `json:"cpu_usage"`    // CPU usage percentage
 	MemoryUsage     int64     `json:"memory_usage"` // Memory usage in bytes
@@ -117,6 +121,11 @@ type DeploymentMetrics struct {
 
 // InitDeploymentTracking creates the tables for deployment tracking
 func InitDeploymentTracking() error {
+	if DB.Migrator().HasTable(&DeploymentLocation{}) {
+		if err := EnforceUniqueDeploymentLocationSlots(DB); err != nil {
+			return fmt.Errorf("enforce unique deployment location slots: %w", err)
+		}
+	}
 	if err := DB.AutoMigrate(
 		&DeploymentLocation{},
 		&NodeMetadata{},
@@ -137,6 +146,65 @@ func InitDeploymentTracking() error {
 	// to use the separate metrics database
 
 	return nil
+}
+
+// EnforceUniqueDeploymentLocationSlots removes legacy duplicates and makes the
+// stable Swarm service/slot identity a database invariant. It is safe to call
+// repeatedly during startup or from the migration registry.
+func EnforceUniqueDeploymentLocationSlots(db *gorm.DB) error {
+	if !db.Migrator().HasTable("deployment_locations") {
+		return nil
+	}
+	// Older installations predate task_slot. Add only that column before the
+	// deduplication query; a full AutoMigrate here could try to create the
+	// unique index before legacy duplicate rows have been removed.
+	if !db.Migrator().HasColumn(&DeploymentLocation{}, "TaskSlot") {
+		if err := db.Migrator().AddColumn(&DeploymentLocation{}, "TaskSlot"); err != nil {
+			return fmt.Errorf("add deployment location task slot column: %w", err)
+		}
+	}
+	if db.Migrator().HasIndex(&DeploymentLocation{}, "idx_deployment_service_slot_unique") {
+		return nil
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`
+			DELETE FROM deployment_locations
+			WHERE id IN (
+				SELECT id FROM (
+					SELECT id,
+						ROW_NUMBER() OVER (
+							PARTITION BY deployment_id, service_id, task_slot
+							ORDER BY updated_at DESC, created_at DESC, id DESC
+						) AS duplicate_rank
+					FROM deployment_locations
+					WHERE service_id <> '' AND task_slot <> ''
+				) ranked_locations
+				WHERE duplicate_rank > 1
+			)
+		`).Error; err != nil {
+			return fmt.Errorf("deduplicate deployment location slots: %w", err)
+		}
+		if tx.Migrator().HasTable("node_metadata") {
+			if err := tx.Exec(`
+				UPDATE node_metadata
+				SET deployment_count = (
+					SELECT COUNT(*)
+					FROM deployment_locations
+					WHERE deployment_locations.node_id = node_metadata.id
+				)
+			`).Error; err != nil {
+				return fmt.Errorf("recalculate node deployment counts: %w", err)
+			}
+		}
+		if err := tx.Exec(`
+			CREATE UNIQUE INDEX idx_deployment_service_slot_unique
+			ON deployment_locations(deployment_id, service_id, task_slot)
+			WHERE service_id <> '' AND task_slot <> ''
+		`).Error; err != nil {
+			return fmt.Errorf("create unique deployment location slot index: %w", err)
+		}
+		return nil
+	})
 }
 
 // createMetricsIndexes creates composite indexes for metrics queries
@@ -258,6 +326,55 @@ func GetAllDeploymentLocationsByDeploymentIDs(deploymentIDs []string) (map[strin
 	return grouped, nil
 }
 
+// PinDeploymentVolumeNode records the immutable owner of node-local deployment
+// volumes. A concurrent deployment on another manager must not move that
+// affinity after data may already have been created on the original node.
+func PinDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) (bool, error) {
+	deploymentID = strings.TrimSpace(deploymentID)
+	nodeID = strings.TrimSpace(nodeID)
+	if deploymentID == "" || nodeID == "" {
+		return false, fmt.Errorf("deployment ID and volume node ID are required")
+	}
+	result := DB.WithContext(ctx).
+		Model(&Deployment{}).
+		Where("id = ? AND deleted_at IS NULL", deploymentID).
+		Where("volume_node_id IS NULL OR volume_node_id = ''").
+		Update("volume_node_id", nodeID)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected == 1 {
+		return true, nil
+	}
+
+	var deployment Deployment
+	if err := DB.WithContext(ctx).Select("id", "volume_node_id").Where("id = ? AND deleted_at IS NULL", deploymentID).First(&deployment).Error; err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(deployment.VolumeNodeID) == nodeID {
+		return false, nil
+	}
+	return false, fmt.Errorf("deployment %s local volumes are already pinned to node %s", deploymentID, deployment.VolumeNodeID)
+}
+
+func ReleaseDeploymentVolumeNode(ctx context.Context, deploymentID, nodeID string) error {
+	return DB.WithContext(ctx).
+		Model(&Deployment{}).
+		Where("id = ? AND deleted_at IS NULL AND volume_node_id = ?", strings.TrimSpace(deploymentID), strings.TrimSpace(nodeID)).
+		Update("volume_node_id", "").Error
+}
+
+func GetDeploymentVolumeNode(ctx context.Context, deploymentID string) (string, error) {
+	var deployment Deployment
+	if err := DB.WithContext(ctx).
+		Select("id", "volume_node_id").
+		Where("id = ? AND deleted_at IS NULL", deploymentID).
+		First(&deployment).Error; err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(deployment.VolumeNodeID), nil
+}
+
 // GetNodeByID returns node metadata by ID
 func GetNodeByID(nodeID string) (*NodeMetadata, error) {
 	var node NodeMetadata
@@ -329,25 +446,127 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 		}).Error
 }
 
+func deploymentLocationUpdateValues(location *DeploymentLocation, preserveRuntimeState bool) map[string]interface{} {
+	updatedAt := location.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = time.Now()
+	}
+	healthStatus := location.HealthStatus
+	if healthStatus == "" {
+		healthStatus = "unknown"
+	}
+	values := map[string]interface{}{
+		"deployment_id":     location.DeploymentID,
+		"node_id":           location.NodeID,
+		"node_hostname":     location.NodeHostname,
+		"node_ip":           location.NodeIP,
+		"container_id":      location.ContainerID,
+		"service_id":        location.ServiceID,
+		"task_id":           location.TaskID,
+		"task_slot":         location.TaskSlot,
+		"status":            location.Status,
+		"port":              location.Port,
+		"domain":            location.Domain,
+		"health_status":     healthStatus,
+		"last_health_check": location.LastHealthCheck,
+		"cpu_usage":         location.CPUUsage,
+		"memory_usage":      location.MemoryUsage,
+		"updated_at":        updatedAt,
+	}
+	if preserveRuntimeState {
+		delete(values, "health_status")
+		delete(values, "last_health_check")
+		delete(values, "cpu_usage")
+		delete(values, "memory_usage")
+	}
+	return values
+}
+
+func transferDeploymentLocationNodeCount(tx *gorm.DB, oldNodeID, newNodeID string) error {
+	if oldNodeID == newNodeID {
+		return nil
+	}
+	if oldNodeID != "" {
+		if err := tx.Model(&NodeMetadata{}).
+			Where("id = ?", oldNodeID).
+			UpdateColumn("deployment_count", gorm.Expr("CASE WHEN deployment_count > 0 THEN deployment_count - 1 ELSE 0 END")).
+			Error; err != nil {
+			return err
+		}
+	}
+	if newNodeID != "" {
+		if err := tx.Model(&NodeMetadata{}).
+			Where("id = ?", newNodeID).
+			UpdateColumn("deployment_count", gorm.Expr("deployment_count + ?", 1)).
+			Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func updateDeploymentLocation(tx *gorm.DB, existing *DeploymentLocation, location *DeploymentLocation) error {
+	oldNodeID := existing.NodeID
+	location.ID = existing.ID
+	preserveRuntimeState := existing.ContainerID == location.ContainerID
+	if err := tx.Model(existing).Updates(deploymentLocationUpdateValues(location, preserveRuntimeState)).Error; err != nil {
+		return err
+	}
+	return transferDeploymentLocationNodeCount(tx, oldNodeID, location.NodeID)
+}
+
+func ensureDeploymentLocationID(location *DeploymentLocation) {
+	if location.ID != "" {
+		return
+	}
+	shortContainerID := location.ContainerID
+	if len(shortContainerID) > 12 {
+		shortContainerID = shortContainerID[:12]
+	}
+	location.ID = fmt.Sprintf("loc-%s-%s", location.DeploymentID, shortContainerID)
+}
+
 // RecordDeploymentLocation records a new deployment location
 // Uses upsert logic:
-//   - for Swarm-backed services, prefer a stable logical row keyed by deployment_id + service_id
+//   - for Swarm-backed services, prefer a stable logical row keyed by
+//     deployment_id + service_id + task_slot
 //   - otherwise, fall back to container_id
 func RecordDeploymentLocation(location *DeploymentLocation) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if location.ServiceID != "" {
-			var existingByService DeploymentLocation
-			serviceResult := tx.Where("deployment_id = ? AND service_id = ?", location.DeploymentID, location.ServiceID).First(&existingByService)
-			if serviceResult.Error == nil {
-				location.ID = existingByService.ID
-				if err := tx.Model(&existingByService).Updates(location).Error; err != nil {
-					return err
+		if location.ServiceID != "" && location.TaskSlot != "" {
+			for attempt := 0; attempt < 3; attempt++ {
+				var existingByService DeploymentLocation
+				serviceResult := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("deployment_id = ? AND service_id = ? AND task_slot = ?", location.DeploymentID, location.ServiceID, location.TaskSlot).
+					First(&existingByService)
+				if serviceResult.Error == nil {
+					return updateDeploymentLocation(tx, &existingByService, location)
 				}
-				return nil
+				if !errors.Is(serviceResult.Error, gorm.ErrRecordNotFound) {
+					return serviceResult.Error
+				}
+
+				var existingByContainer DeploymentLocation
+				containerResult := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+					Where("container_id = ?", location.ContainerID).
+					First(&existingByContainer)
+				if containerResult.Error == nil {
+					return updateDeploymentLocation(tx, &existingByContainer, location)
+				}
+				if !errors.Is(containerResult.Error, gorm.ErrRecordNotFound) {
+					return containerResult.Error
+				}
+
+				ensureDeploymentLocationID(location)
+				createResult := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(location)
+				if createResult.Error != nil {
+					return createResult.Error
+				}
+				if createResult.RowsAffected == 1 {
+					return transferDeploymentLocationNodeCount(tx, "", location.NodeID)
+				}
 			}
-			if serviceResult.Error != nil && serviceResult.Error != gorm.ErrRecordNotFound {
-				return serviceResult.Error
-			}
+			return fmt.Errorf("deployment location slot remained conflicted after retry")
 		}
 
 		// Check if location with this container ID already exists
@@ -356,26 +575,18 @@ func RecordDeploymentLocation(location *DeploymentLocation) error {
 
 		if result.Error == nil {
 			// Location exists - update it (don't change ID)
-			location.ID = existing.ID
-			if err := tx.Model(&existing).Updates(location).Error; err != nil {
-				return err
-			}
+			return updateDeploymentLocation(tx, &existing, location)
 		} else if result.Error == gorm.ErrRecordNotFound {
 			// Location doesn't exist - create new
 			// Ensure ID is set
-			if location.ID == "" {
-				location.ID = fmt.Sprintf("loc-%s-%s", location.DeploymentID, location.ContainerID[:12])
-			}
+			ensureDeploymentLocationID(location)
 
 			if err := tx.Create(location).Error; err != nil {
 				return err
 			}
 
 			// Increment deployment count on the node only for new locations
-			if err := tx.Model(&NodeMetadata{}).
-				Where("id = ?", location.NodeID).
-				UpdateColumn("deployment_count", gorm.Expr("deployment_count + ?", 1)).
-				Error; err != nil {
+			if err := transferDeploymentLocationNodeCount(tx, "", location.NodeID); err != nil {
 				return err
 			}
 		} else {

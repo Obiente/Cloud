@@ -1,8 +1,10 @@
 package orchestrator
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -417,5 +419,961 @@ func TestEnsureWritableBindDir_MakesDirectoryWritable(t *testing.T) {
 
 	if got := info.Mode().Perm(); got != 0o777 {
 		t.Fatalf("expected directory mode 0777, got %#o", got)
+	}
+	if info.Mode()&os.ModeSticky != 0 {
+		t.Fatal("writable bind directory unexpectedly has the sticky bit")
+	}
+}
+
+func TestEnsureWritableBindDirPreservesExistingContents(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "data")
+	child := filepath.Join(dir, "existing.dat")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("create existing volume root: %v", err)
+	}
+	if err := os.WriteFile(child, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create existing volume content: %v", err)
+	}
+
+	if err := ensureWritableBindDir(dir); err != nil {
+		t.Fatalf("prepare existing writable bind directory: %v", err)
+	}
+
+	contents, err := os.ReadFile(child)
+	if err != nil {
+		t.Fatalf("read existing volume content: %v", err)
+	}
+	if string(contents) != "preserve me" {
+		t.Fatalf("existing volume content changed to %q", contents)
+	}
+	info, err := os.Stat(child)
+	if err != nil {
+		t.Fatalf("stat existing volume content: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("existing child mode changed to %#o", got)
+	}
+}
+
+func TestEnsureWritableBindDirPreservesExistingSpecialBits(t *testing.T) {
+	for name, specialBit := range map[string]os.FileMode{
+		"sticky": os.ModeSticky,
+		"setgid": os.ModeSetgid,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "data")
+			if err := os.MkdirAll(dir, 0o770); err != nil {
+				t.Fatalf("create existing volume root: %v", err)
+			}
+			if err := os.Chmod(dir, 0o770|specialBit); err != nil {
+				t.Fatalf("set existing special bit: %v", err)
+			}
+
+			if err := ensureWritableBindDir(dir); err != nil {
+				t.Fatalf("prepare existing writable bind directory: %v", err)
+			}
+			info, err := os.Stat(dir)
+			if err != nil {
+				t.Fatalf("stat writable bind directory: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o777 {
+				t.Fatalf("writable permissions = %#o, want 0777", got)
+			}
+			if info.Mode()&specialBit == 0 {
+				t.Fatalf("writable preparation removed %s bit", name)
+			}
+		})
+	}
+}
+
+func TestEnsureWritableBindDirKeepsParentHierarchyRestricted(t *testing.T) {
+	root := t.TempDir()
+	parent := filepath.Join(root, "deploy-volume-test")
+	dir := filepath.Join(parent, "data")
+
+	if err := ensureWritableBindDir(dir); err != nil {
+		t.Fatalf("prepare writable bind directory: %v", err)
+	}
+
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("stat deployment volume parent: %v", err)
+	}
+	if got := parentInfo.Mode().Perm(); got != 0o755 {
+		t.Fatalf("deployment volume parent mode = %#o, want 0755", got)
+	}
+	if parentInfo.Mode()&os.ModeSticky != 0 {
+		t.Fatal("deployment volume parent unexpectedly has the sticky bit")
+	}
+}
+
+func TestEnsureReadOnlyBindDirPreservesRestrictiveMode(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "private-data")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("create restrictive volume root: %v", err)
+	}
+
+	if err := ensureReadOnlyBindDir(dir); err != nil {
+		t.Fatalf("prepare read-only bind directory: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat read-only bind directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("read-only bind mode = %#o, want 0700", got)
+	}
+}
+
+func TestEnsureReadOnlyBindDirPreservesSetgid(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "shared-data")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("create setgid volume root: %v", err)
+	}
+	if err := os.Chmod(dir, 0o750|os.ModeSetgid); err != nil {
+		t.Fatalf("set setgid volume root mode: %v", err)
+	}
+
+	if err := ensureReadOnlyBindDir(dir); err != nil {
+		t.Fatalf("prepare setgid read-only bind directory: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat setgid read-only bind directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o750 {
+		t.Fatalf("read-only permissions = %#o, want 0750", got)
+	}
+	if info.Mode()&os.ModeSetgid == 0 {
+		t.Fatal("read-only preparation removed setgid")
+	}
+}
+
+func TestEnsureWritableBindDirRejectsSymlinkComponents(t *testing.T) {
+	root := t.TempDir()
+	safeBase := filepath.Join(root, "safe")
+	hostTarget := filepath.Join(root, "host-target")
+	if err := os.MkdirAll(safeBase, 0o755); err != nil {
+		t.Fatalf("create safe base: %v", err)
+	}
+	if err := os.MkdirAll(hostTarget, 0o700); err != nil {
+		t.Fatalf("create host target: %v", err)
+	}
+	if err := os.Symlink(hostTarget, filepath.Join(safeBase, "link")); err != nil {
+		t.Fatalf("create malicious volume symlink: %v", err)
+	}
+
+	if err := ensureWritableBindDir(filepath.Join(safeBase, "link", "nested")); err == nil {
+		t.Fatal("expected writable bind preparation to reject a symlink component")
+	}
+	info, err := os.Stat(hostTarget)
+	if err != nil {
+		t.Fatalf("stat host target: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("host target mode changed through symlink to %#o", got)
+	}
+}
+
+func TestSanitizeComposeYAMLFailsWhenVolumePreparationFails(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	conflictingPath := filepath.Join(safeBaseDir, "app", "data")
+	if err := os.MkdirAll(filepath.Dir(conflictingPath), 0o755); err != nil {
+		t.Fatalf("create service volume parent: %v", err)
+	}
+	if err := os.WriteFile(conflictingPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting volume path: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-error-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - type: bind
+        source: /data
+        target: /data
+`
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err == nil {
+		t.Fatal("expected Compose volume preparation failure")
+	}
+	if sanitized != "" {
+		t.Fatalf("failed sanitization returned output: %q", sanitized)
+	}
+	if !strings.Contains(err.Error(), "prepare volume directory") {
+		t.Fatalf("unexpected Compose sanitization error: %v", err)
+	}
+}
+
+func TestSanitizeComposeYAMLRestoresEarlierVolumeModesOnFailure(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	existingPath := filepath.Join(safeBaseDir, "app", "existing")
+	conflictingPath := filepath.Join(safeBaseDir, "app", "conflict")
+	if err := os.MkdirAll(existingPath, 0o700); err != nil {
+		t.Fatalf("create existing Compose volume root: %v", err)
+	}
+	if err := os.Chmod(existingPath, 0o700); err != nil {
+		t.Fatalf("set existing Compose volume mode: %v", err)
+	}
+	if err := os.WriteFile(conflictingPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("create conflicting Compose volume path: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-rollback-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - /existing:/existing
+      - /conflict:/conflict
+`
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected Compose volume preparation failure")
+	}
+
+	info, err := os.Stat(existingPath)
+	if err != nil {
+		t.Fatalf("stat restored Compose volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("restored Compose volume mode = %#o, want 0700", got)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsRelativeVolumeTraversal(t *testing.T) {
+	root := t.TempDir()
+	safeBaseDir := filepath.Join(root, "safe")
+	escapedPath := filepath.Join(root, "escape")
+	if err := os.MkdirAll(safeBaseDir, 0o755); err != nil {
+		t.Fatalf("create safe Compose root: %v", err)
+	}
+	if err := os.MkdirAll(escapedPath, 0o700); err != nil {
+		t.Fatalf("create traversal target: %v", err)
+	}
+	if err := os.Chmod(escapedPath, 0o700); err != nil {
+		t.Fatalf("set traversal target mode: %v", err)
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-traversal-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ../../escape:/data
+`
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected relative volume traversal to be rejected")
+	}
+
+	info, err := os.Stat(escapedPath)
+	if err != nil {
+		t.Fatalf("stat traversal target: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("traversal target mode = %#o, want 0700", got)
+	}
+}
+
+func TestSanitizeComposeYAMLPreservesSharedRelativeBindSources(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-shared-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/var/lib/app
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - type: bind
+        source: ./data
+        target: /var/lib/worker
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with shared relative bind: %v", err)
+	}
+	if sanitizer.HasExistingVolumeRoots() {
+		t.Fatal("fresh relative binds were reported as pre-existing volume roots")
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(map[string]interface{})
+	appSource := strings.SplitN(appVolume, ":", 2)[0]
+	workerSource := workerVolume["source"].(string)
+	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
+	if appSource != wantSource || workerSource != wantSource {
+		t.Fatalf("shared relative sources = %q and %q, want %q", appSource, workerSource, wantSource)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsWritableParentBindHierarchy(t *testing.T) {
+	tests := []struct {
+		name    string
+		volumes string
+	}{
+		{
+			name: "parent before child",
+			volumes: `
+      - .:/workspace
+      - ./data:/workspace/data:ro`,
+		},
+		{
+			name: "child before parent",
+			volumes: `
+      - ./data:/workspace/data:ro
+      - .:/workspace`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sanitizer := &ComposeSanitizer{
+				deploymentID: "compose-bind-hierarchy-test",
+				safeBaseDir:  t.TempDir(),
+			}
+			composeYAML := "services:\n  app:\n    image: example.invalid/app\n    volumes:" + test.volumes + "\n"
+			_, err := sanitizer.SanitizeComposeYAML(composeYAML)
+			if err == nil || (!strings.Contains(err.Error(), "mounted source") && !strings.Contains(err.Error(), "nested beneath writable source")) {
+				t.Fatalf("sanitize writable parent bind hierarchy error = %v, want hierarchy rejection", err)
+			}
+		})
+	}
+}
+
+func TestSanitizeComposeYAMLPreservesRelativeProjectRootHierarchy(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-relative-root-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - .:/workspace:ro
+      - ./data:/workspace/data
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with project-root binds: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volumes := services["app"].(map[string]interface{})["volumes"].([]interface{})
+	projectSource := strings.SplitN(volumes[0].(string), ":", 2)[0]
+	dataSource := strings.SplitN(volumes[1].(string), ":", 2)[0]
+	wantProjectSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot)
+	if projectSource != wantProjectSource {
+		t.Fatalf("project-root source = %q, want %q", projectSource, wantProjectSource)
+	}
+	if want := filepath.Join(projectSource, "data"); dataSource != want {
+		t.Fatalf("project data source = %q, want %q", dataSource, want)
+	}
+}
+
+func TestSanitizeComposeYAMLReusesLegacyRelativeBindStorage(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	legacyPath := filepath.Join(safeBaseDir, "data")
+	if err := os.MkdirAll(legacyPath, 0o700); err != nil {
+		t.Fatalf("create legacy relative bind: %v", err)
+	}
+	marker := filepath.Join(legacyPath, "existing.dat")
+	if err := os.WriteFile(marker, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create legacy volume content: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-legacy-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - ./data:/data
+  worker:
+    image: example/worker:latest
+    volumes:
+      - ./data:/data
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with legacy relative bind: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	for _, serviceName := range []string{"app", "worker"} {
+		volume := services[serviceName].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		if source := strings.SplitN(volume, ":", 2)[0]; source != legacyPath {
+			t.Fatalf("%s legacy relative source = %q, want %q", serviceName, source, legacyPath)
+		}
+	}
+	if contents, err := os.ReadFile(marker); err != nil || string(contents) != "preserve me" {
+		t.Fatalf("legacy volume content changed: contents=%q err=%v", contents, err)
+	}
+}
+
+func TestSanitizeComposeYAMLReusesPersistedPerServiceRelativeBindStorage(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	appPath := filepath.Join(safeBaseDir, "app", "data")
+	workerPath := filepath.Join(safeBaseDir, "worker", "data")
+	for _, path := range []string{appPath, workerPath} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatalf("create persisted per-service bind %s: %v", path, err)
+		}
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-persisted-relative-bind-test",
+		safeBaseDir:  safeBaseDir,
+		persistedComposeYaml: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+  worker:
+    volumes:
+      - type: bind
+        source: %s
+        target: /workspace
+`, appPath, workerPath),
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - .:/workspace
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - ./data:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with persisted per-service binds: %v", err)
+	}
+	if !sanitizer.HasExistingVolumeRoots() {
+		t.Fatal("persisted per-service binds were not reported as existing volume roots")
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	if source := strings.SplitN(appVolume, ":", 2)[0]; source != appPath {
+		t.Fatalf("persisted app project-root source = %q, want %q", source, appPath)
+	}
+	if source := strings.SplitN(workerVolume, ":", 2)[0]; source != workerPath {
+		t.Fatalf("persisted worker relative source = %q, want %q", source, workerPath)
+	}
+}
+
+func TestSanitizeComposeYAMLIgnoresUnrelatedPersistedBindForRelativeSource(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	unrelatedPath := filepath.Join(safeBaseDir, "unrelated", "data")
+	if err := os.MkdirAll(unrelatedPath, 0o700); err != nil {
+		t.Fatalf("create unrelated persisted bind: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-unrelated-persisted-bind-test",
+		safeBaseDir:  safeBaseDir,
+		persistedComposeYaml: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+`, unrelatedPath),
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with unrelated persisted bind: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	want := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
+	if source := strings.SplitN(volume, ":", 2)[0]; source != want {
+		t.Fatalf("source derived from unrelated persisted bind = %q, want %q", source, want)
+	}
+}
+
+func TestSanitizeComposeYAMLReusesLegacyRelativeProjectRoot(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	marker := filepath.Join(safeBaseDir, "existing.dat")
+	if err := os.WriteFile(marker, []byte("preserve me"), 0o600); err != nil {
+		t.Fatalf("create legacy project-root content: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "cache"), 0o755); err != nil {
+		t.Fatalf("create stale namespaced project-root child: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-legacy-relative-root-test",
+		safeBaseDir:       safeBaseDir,
+		legacyProjectRoot: true,
+	}
+	composeYAML := `services:
+  app:
+    image: example/app:latest
+    volumes:
+      - .:/workspace:ro
+      - ./cache:/workspace/cache
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with legacy project root: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volumes := services["app"].(map[string]interface{})["volumes"].([]interface{})
+	if source := strings.SplitN(volumes[0].(string), ":", 2)[0]; source != safeBaseDir {
+		t.Fatalf("legacy project-root source = %q, want %q", source, safeBaseDir)
+	}
+	if source := strings.SplitN(volumes[1].(string), ":", 2)[0]; source != filepath.Join(safeBaseDir, "cache") {
+		t.Fatalf("missing legacy project-root child source = %q, want %q", source, filepath.Join(safeBaseDir, "cache"))
+	}
+}
+
+func TestSanitizeComposeYAMLDoesNotInferLegacyProjectRootFromUnrelatedBindData(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(safeBaseDir, "web", "var", "lib", "app"), 0o755); err != nil {
+		t.Fatalf("create unrelated absolute-bind data: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-project-root-evidence-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - .:/workspace
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with unrelated bind data: %v", err)
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	volume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	wantSource := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot)
+	if source := strings.SplitN(volume, ":", 2)[0]; source != wantSource {
+		t.Fatalf("project-root source = %q, want isolated namespace %q", source, wantSource)
+	}
+}
+
+func TestPersistedComposeProvesLegacyProjectRoot(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	tests := []struct {
+		name        string
+		composeYAML string
+		want        bool
+	}{
+		{
+			name: "exact legacy root bind",
+			composeYAML: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/workspace
+`, safeBaseDir),
+			want: true,
+		},
+		{
+			name: "unrelated descendant bind",
+			composeYAML: fmt.Sprintf(`services:
+  app:
+    volumes:
+      - %s:/data
+`, filepath.Join(safeBaseDir, "web", "data")),
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := persistedComposeProvesLegacyProjectRoot(test.composeYAML, safeBaseDir)
+			if err != nil {
+				t.Fatalf("persistedComposeProvesLegacyProjectRoot returned error: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("persistedComposeProvesLegacyProjectRoot = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeComposeYAMLKeepsNamedAndRelativeSourcesDistinctAcrossRedeploys(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	composeYAML := `services:
+  database:
+    image: example/database:latest
+    volumes:
+      - data:/var/lib/database
+  importer:
+    image: example/importer:latest
+    volumes:
+      - ./data:/input
+volumes:
+  data: {}
+`
+	wantNamed := filepath.Join(safeBaseDir, "data")
+	wantRelative := filepath.Join(safeBaseDir, relativeComposeBindScope, relativeComposeProjectRoot, "data")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		sanitizer := &ComposeSanitizer{
+			deploymentID: "compose-distinct-source-test",
+			safeBaseDir:  safeBaseDir,
+		}
+		sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+		if err != nil {
+			t.Fatalf("sanitize named/relative sources on attempt %d: %v", attempt, err)
+		}
+		var compose map[string]interface{}
+		if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+			t.Fatalf("parse sanitized Compose on attempt %d: %v", attempt, err)
+		}
+		services := compose["services"].(map[string]interface{})
+		namedVolume := services["database"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		relativeVolume := services["importer"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+		if source := strings.SplitN(namedVolume, ":", 2)[0]; source != wantNamed {
+			t.Fatalf("attempt %d named source = %q, want %q", attempt, source, wantNamed)
+		}
+		if source := strings.SplitN(relativeVolume, ":", 2)[0]; source != wantRelative {
+			t.Fatalf("attempt %d relative source = %q, want %q", attempt, source, wantRelative)
+		}
+	}
+}
+
+func TestSanitizeComposeYAMLUsesSelectedRootForNamedVolumes(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-named-volume-root-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - cache:/var/lib/app
+  worker:
+    image: example.invalid/worker:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /var/lib/worker
+volumes:
+  cache: {}
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose named volumes: %v", err)
+	}
+
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	appVolume := services["app"].(map[string]interface{})["volumes"].([]interface{})[0].(string)
+	workerVolume := services["worker"].(map[string]interface{})["volumes"].([]interface{})[0].(map[string]interface{})
+	wantSource := filepath.Join(safeBaseDir, "cache")
+	if strings.SplitN(appVolume, ":", 2)[0] != wantSource || workerVolume["source"] != wantSource {
+		t.Fatalf("named volumes did not use selected root %q: app=%q worker=%#v", wantSource, appVolume, workerVolume)
+	}
+}
+
+func TestSanitizeComposeYAMLRestrictsReadOnlyNamedVolumeRoot(t *testing.T) {
+	safeBaseDir := t.TempDir()
+	volumeRoot := filepath.Join(safeBaseDir, "cache")
+	if err := os.MkdirAll(volumeRoot, 0o777); err != nil {
+		t.Fatalf("create writable named volume root: %v", err)
+	}
+	if err := os.Chmod(volumeRoot, 0o777); err != nil {
+		t.Fatalf("set writable named volume root mode: %v", err)
+	}
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-read-only-volume-test",
+		safeBaseDir:  safeBaseDir,
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - cache:/data:ro
+volumes:
+  cache: {}
+`
+
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err != nil {
+		t.Fatalf("sanitize read-only named volume: %v", err)
+	}
+	beforeApply, err := os.Stat(volumeRoot)
+	if err != nil {
+		t.Fatalf("stat deferred read-only named volume root: %v", err)
+	}
+	if got := beforeApply.Mode().Perm(); got != 0o777 {
+		t.Fatalf("read-only mode changed during preflight to %#o, want 0777", got)
+	}
+	if err := sanitizer.applyDeferredReadOnly(); err != nil {
+		t.Fatalf("apply deferred read-only named volume mode: %v", err)
+	}
+	info, err := os.Stat(volumeRoot)
+	if err != nil {
+		t.Fatalf("stat read-only named volume root: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("read-only named volume mode = %#o, want 0755", got)
+	}
+}
+
+func TestSanitizeComposeYAMLKeepsSharedVolumeWritableWhenAnyBindingWrites(t *testing.T) {
+	orders := []string{
+		`  reader:
+    image: example.invalid/reader:latest
+    volumes:
+      - cache:/data:ro
+  writer:
+    image: example.invalid/writer:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /data
+`,
+		`  writer:
+    image: example.invalid/writer:latest
+    volumes:
+      - type: volume
+        source: cache
+        target: /data
+  reader:
+    image: example.invalid/reader:latest
+    volumes:
+      - cache:/data:ro
+`,
+	}
+	for index, services := range orders {
+		t.Run(fmt.Sprintf("order-%d", index), func(t *testing.T) {
+			safeBaseDir := t.TempDir()
+			sanitizer := &ComposeSanitizer{
+				deploymentID: "compose-mixed-access-volume-test",
+				safeBaseDir:  safeBaseDir,
+			}
+			composeYAML := "services:\n" + services + "volumes:\n  cache: {}\n"
+			if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err != nil {
+				t.Fatalf("sanitize shared mixed-access volume: %v", err)
+			}
+			info, err := os.Stat(filepath.Join(safeBaseDir, "cache"))
+			if err != nil {
+				t.Fatalf("stat shared volume root: %v", err)
+			}
+			if got := info.Mode().Perm(); got != 0o777 {
+				t.Fatalf("shared mixed-access volume mode = %#o, want 0777", got)
+			}
+		})
+	}
+}
+
+func TestSanitizeComposeYAMLPinsLocalVolumesToSelectedSwarmNode(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-volume-placement-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.id == selected-node
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose Swarm placement: %v", err)
+	}
+	if !sanitizer.UsesLocalBindVolumes() {
+		t.Fatal("local bind volume was not recorded for durable node affinity")
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+	deploy := app["deploy"].(map[string]interface{})
+	if deploy["replicas"] != 2 {
+		t.Fatalf("deployment replicas changed: %#v", deploy["replicas"])
+	}
+	placement := deploy["placement"].(map[string]interface{})
+	constraints := placement["constraints"].([]interface{})
+	want := []interface{}{"node.id == selected-node"}
+	if !reflect.DeepEqual(constraints, want) {
+		t.Fatalf("placement constraints = %#v, want %#v", constraints, want)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsUnverifiableConstraintForLocalVolume(t *testing.T) {
+	for _, constraint := range []string{
+		"node.hostname == another-worker",
+		"node.role == worker",
+		"node.labels.pool == customer",
+		"engine.labels.storage == local",
+	} {
+		t.Run(constraint, func(t *testing.T) {
+			sanitizer := &ComposeSanitizer{
+				deploymentID:      "compose-volume-constraint-test",
+				safeBaseDir:       t.TempDir(),
+				swarmVolumeNodeID: "selected-node",
+			}
+			composeYAML := fmt.Sprintf(`services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      placement:
+        constraints:
+          - %s
+`, constraint)
+
+			if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "cannot validate placement constraint") {
+				t.Fatalf("unverifiable placement constraint error = %v", err)
+			}
+		})
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsSelectedNodeExclusionForLocalVolume(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-volume-exclusion-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - ./data:/data
+    deploy:
+      placement:
+        constraints:
+          - node.id != selected-node
+`
+
+	if _, err := sanitizer.SanitizeComposeYAML(composeYAML); err == nil || !strings.Contains(err.Error(), "excludes required local-volume node") {
+		t.Fatalf("selected-node exclusion error = %v", err)
+	}
+}
+
+func TestSanitizeComposeYAMLDoesNotPinPortableSwarmVolumes(t *testing.T) {
+	sanitizer := &ComposeSanitizer{
+		deploymentID:      "compose-portable-volume-placement-test",
+		safeBaseDir:       t.TempDir(),
+		swarmVolumeNodeID: "selected-node",
+	}
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+    volumes:
+      - /data
+      - type: tmpfs
+        target: /tmp
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+`
+
+	sanitized, err := sanitizer.SanitizeComposeYAML(composeYAML)
+	if err != nil {
+		t.Fatalf("sanitize Compose with portable volumes: %v", err)
+	}
+	if sanitizer.UsesLocalBindVolumes() {
+		t.Fatal("portable volumes were recorded as node-local binds")
+	}
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(sanitized), &compose); err != nil {
+		t.Fatalf("parse sanitized Compose: %v", err)
+	}
+	services := compose["services"].(map[string]interface{})
+	app := services["app"].(map[string]interface{})
+	deploy := app["deploy"].(map[string]interface{})
+	placement := deploy["placement"].(map[string]interface{})
+	want := []interface{}{"node.role == worker"}
+	if constraints := placement["constraints"].([]interface{}); !reflect.DeepEqual(constraints, want) {
+		t.Fatalf("portable-volume placement constraints = %#v, want %#v", constraints, want)
+	}
+}
+
+func TestSanitizeComposeYAMLRejectsUnsafePathIdentifiers(t *testing.T) {
+	composeYAML := `services:
+  app:
+    image: example.invalid/app:latest
+`
+	if _, err := NewComposeSanitizer("../escape").SanitizeComposeYAML(composeYAML); err == nil {
+		t.Fatal("expected unsafe deployment identifier to be rejected")
+	}
+
+	sanitizer := &ComposeSanitizer{
+		deploymentID: "compose-volume-name-test",
+		safeBaseDir:  t.TempDir(),
+	}
+	unsafeVolumeYAML := composeYAML + `volumes:
+  ../escape: {}
+`
+	if _, err := sanitizer.SanitizeComposeYAML(unsafeVolumeYAML); err == nil {
+		t.Fatal("expected unsafe top-level volume name to be rejected")
 	}
 }
