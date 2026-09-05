@@ -1224,15 +1224,9 @@
       const newUrl = `https://github.com/${repoFullName}`;
       config.repositoryUrl = newUrl;
       
-      // Check if the new URL matches the saved one
-      // If it matches, user is done changing (or selected the same repo)
-      // If it doesn't match, keep isChangingRepository true until save
-      const savedUrl = savedRepositoryUrl.value?.trim() || "";
-      if (newUrl.trim() === savedUrl) {
-        isChangingRepository.value = false;
-      } else {
-        isChangingRepository.value = true;
-      }
+      // The picker emits its saved value when it mounts. Only a successful
+      // save ends editing; selecting the same repository must keep it open.
+      isChangingRepository.value = true;
       
       // Ensure repository source is set to GitHub when a repo is selected
       if (repositorySource.value !== "github") {
@@ -1286,16 +1280,8 @@
       userClearedRepository.value = false;
     }
     
-    // Check if the URL matches the saved one
-    const savedUrl = savedRepositoryUrl.value?.trim() || "";
-    const currentUrl = config.repositoryUrl?.trim() || "";
-    if (currentUrl === savedUrl) {
-      // URL matches saved one, not changing anymore
-      isChangingRepository.value = false;
-    } else {
-      // URL is different, user is changing it
-      isChangingRepository.value = true;
-    }
+    // Returning to the saved URL is still an edit, not a request to close.
+    isChangingRepository.value = true;
     
     // Validate the URL
     repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
