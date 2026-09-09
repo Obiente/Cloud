@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mattn/go-shellwords"
+
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
@@ -918,8 +920,11 @@ func buildStartCommandParts(raw string) (entrypoint []string, args []string) {
 	}
 
 	if !hasShellMetacharacters(startCommand) {
-		fields := strings.Fields(startCommand)
-		if len(fields) > 0 {
+		// Parse quoting without evaluating environment variables or commands on
+		// the deployment host. Keep the image entrypoint for ordinary commands.
+		parser := &shellwords.Parser{ParseEnv: false, ParseBacktick: false}
+		fields, err := parser.Parse(startCommand)
+		if err == nil && len(fields) > 0 {
 			return nil, fields
 		}
 	}

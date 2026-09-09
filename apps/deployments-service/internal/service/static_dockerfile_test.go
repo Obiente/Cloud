@@ -9,7 +9,8 @@ import (
 
 func TestStaticDockerfilePreservesNginxConfiguration(t *testing.T) {
 	custom := "server {\n listen 80;\n location ~* \\.(css|js)$ {\n add_header X-Note \"it's $uri, 100% unchanged\";\n }\n}\n"
-	for _, config := range []string{"", custom} {
+	proxy := "server {\n listen 80;\n location /api { proxy_pass http://api:3000; }\n}\n"
+	for _, config := range []string{"", custom, proxy} {
 		dockerfile := (&StaticStrategy{}).generateStaticDockerfile("example/build:revision", "/app/dist", config)
 		match := regexp.MustCompile(`RUN printf '%s' '([A-Za-z0-9+/=]+)' \| base64 -d > /etc/nginx/conf.d/default.conf`).FindStringSubmatch(dockerfile)
 		if len(match) != 2 {
@@ -29,8 +30,8 @@ func TestStaticDockerfilePreservesNginxConfiguration(t *testing.T) {
 				}
 			}
 		}
-		if !strings.Contains(dockerfile, "RUN nginx -t\n") {
-			t.Fatal("invalid nginx configuration must fail the build before rollout")
+		if validatesAtBuild := strings.Contains(dockerfile, "RUN nginx -t\n"); validatesAtBuild != (config == "") {
+			t.Fatal("only the standalone default config can be validated without runtime DNS")
 		}
 	}
 }
