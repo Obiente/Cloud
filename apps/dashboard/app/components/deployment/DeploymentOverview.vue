@@ -587,7 +587,7 @@ const getContainerStatusLabel = () => {
   const running = props.deployment.containersRunning ?? 0;
   const total = props.deployment.containersTotal ?? 0;
   
-  if (running === 0) return "Stopped";
+  if (running === 0) return "No running containers";
   if (running === total) return "Running";
   return "Partial";
 };

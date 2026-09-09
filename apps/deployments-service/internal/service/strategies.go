@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -2483,11 +2484,9 @@ func (s *StaticStrategy) generateStaticDockerfile(sourceImage string, sourcePath
 }`
 	}
 
-	// Escape the nginx config for embedding in shell command
-	// Need to escape single quotes, backslashes, and newlines
-	escapedConfig := strings.ReplaceAll(nginxConfContent, "\\", "\\\\")
-	escapedConfig = strings.ReplaceAll(escapedConfig, "'", "'\\''")
-	escapedConfig = strings.ReplaceAll(escapedConfig, "\n", "\\n")
+	// Preserve config bytes without depending on shell echo escape handling.
+	// This also keeps quotes, nginx variables, and regexes out of shell syntax.
+	encodedConfig := base64.StdEncoding.EncodeToString([]byte(nginxConfContent))
 
 	// Multi-stage Dockerfile:
 	// Stage 1: Use the built Railpack image as source
@@ -2498,7 +2497,8 @@ FROM %s AS builder
 # Stage 2: Minimal Nginx image with only static files
 FROM nginx:alpine
 COPY --from=builder %s /usr/share/nginx/html
-RUN echo '%s' > /etc/nginx/conf.d/default.conf
+RUN printf '%%s' '%s' | base64 -d > /etc/nginx/conf.d/default.conf
+RUN nginx -t
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]`, sourceImage, sourcePath, escapedConfig)
+CMD ["nginx", "-g", "daemon off;"]`, sourceImage, sourcePath, encodedConfig)
 }
