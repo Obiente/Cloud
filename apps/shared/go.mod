@@ -5,6 +5,7 @@ go 1.25
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/google/uuid v1.6.0
+	github.com/mattn/go-shellwords v1.0.12
 	github.com/moby/moby/api v1.52.0
 	github.com/moby/moby/client v0.2.1
 	github.com/prometheus/client_golang v1.23.2

@@ -1274,10 +1274,14 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 	if dbDep.ComposeYaml != "" && s.manager != nil {
 		if err := s.manager.StopComposeDeployment(ctx, deploymentID); err != nil {
 			logger.Warn("[StopDeployment] Failed to stop compose deployment %s: %v", deploymentID, err)
-			// Continue to update status even if stop failed
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop deployment: %w", err))
 		}
 	} else if s.manager != nil {
-		_ = s.manager.StopDeployment(ctx, deploymentID)
+		if err := s.manager.StopDeployment(ctx, deploymentID); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop deployment: %w", err))
+		}
+	} else {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("deployment runtime is unavailable"))
 	}
 
 	dbDep.Status = int32(deploymentsv1.DeploymentStatus_STOPPED)

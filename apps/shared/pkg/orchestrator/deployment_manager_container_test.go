@@ -609,9 +609,49 @@ func TestSwarmStartCommandUpdateArgsSetsShellCommandAtomically(t *testing.T) {
 
 	start := "npm run start && echo ready"
 	got := swarmStartCommandUpdateArgs(&start)
-	want := []string{"--entrypoint", "sh", "--args", "-c npm run start && echo ready"}
+	want := []string{"--entrypoint", "sh", "--args", "'-c' 'npm run start && echo ready'"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("swarmStartCommandUpdateArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwarmStartCommandUpdateArgsPreservesCaddyRedirection(t *testing.T) {
+	start := "caddy run --config /Caddyfile --adapter caddyfile 2>&1"
+	got := swarmStartCommandUpdateArgs(&start)
+	want := []string{"--entrypoint", "sh", "--args", "'-c' '" + start + "'"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("Caddy must receive the full startup script: got %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildStartCommandPartsPreservesQuotedArguments(t *testing.T) {
+	for _, command := range []string{
+		`node server.js --greeting "hello world"`,
+		`node server.js --greeting 'hello world'`,
+		`node server.js --greeting hello\ world`,
+	} {
+		entrypoint, args := buildStartCommandParts(command)
+		want := []string{"node", "server.js", "--greeting", "hello world"}
+		if len(entrypoint) != 0 || !reflect.DeepEqual(args, want) {
+			t.Fatalf("%q parsed as %v %v, want image entrypoint and %v", command, entrypoint, args, want)
+		}
+		update := swarmStartCommandUpdateArgs(&command)
+		if update[3] != `'node' 'server.js' '--greeting' 'hello world'` {
+			t.Fatalf("quoted argument fragmented in Docker update: %v", update)
+		}
+	}
+	_, args := buildStartCommandParts(`node server.js --greeting ""`)
+	if !reflect.DeepEqual(args, []string{"node", "server.js", "--greeting", ""}) {
+		t.Fatalf("empty quoted argument was lost: %v", args)
+	}
+}
+
+func TestSwarmStartCommandUpdateArgsPreservesEmbeddedQuotes(t *testing.T) {
+	start := `printf '%s' "$PORT" && exec node server.js`
+	got := swarmStartCommandUpdateArgs(&start)
+	want := []string{"--entrypoint", "sh", "--args", `'-c' 'printf '"'"'%s'"'"' "$PORT" && exec node server.js'`}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("quoted command changed: got %#v, want %#v", got, want)
 	}
 }
 

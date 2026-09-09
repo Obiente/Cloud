@@ -742,30 +742,8 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	if isSwarmMode {
-		// In Swarm mode, we need to remove Swarm services
-		// Find all services for this deployment
-		// Service names follow pattern: deploy-{deploymentID}-{serviceName} or deploy-{deploymentID}-{serviceName}-replica-{i}
-		cmd := exec.CommandContext(ctx, "docker", "service", "ls", "--format", "{{.Name}}")
-		var stdout bytes.Buffer
-		cmd.Stdout = &stdout
-		if err := cmd.Run(); err == nil {
-			serviceNames := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-			prefix := fmt.Sprintf("deploy-%s-", deploymentID)
-			for _, serviceName := range serviceNames {
-				serviceName = strings.TrimSpace(serviceName)
-				if strings.HasPrefix(serviceName, prefix) {
-					// Remove the Swarm service
-					rmArgs := []string{"service", "rm", serviceName}
-					rmCmd := exec.CommandContext(ctx, "docker", rmArgs...)
-					var rmStderr bytes.Buffer
-					rmCmd.Stderr = &rmStderr
-					if err := rmCmd.Run(); err != nil {
-						logger.Warn("[DeploymentManager] Failed to remove Swarm service %s: %v (stderr: %s)", serviceName, err, rmStderr.String())
-					} else {
-						logger.Info("[DeploymentManager] Removed Swarm service %s", serviceName)
-					}
-				}
-			}
+		if err := removeSwarmDeploymentServices(ctx, deploymentID); err != nil {
+			return err
 		}
 
 		// Update all locations to stopped status
