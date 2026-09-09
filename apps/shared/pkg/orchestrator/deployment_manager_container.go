@@ -940,7 +940,13 @@ func swarmStartCommandUpdateArgs(startCommand *string) []string {
 		args = append(args, "--entrypoint", "")
 	}
 	if len(startArgs) > 0 {
-		args = append(args, "--args", strings.Join(startArgs, " "))
+		// Docker parses --args as a shell-style command string. Preserve each
+		// argument boundary, especially the complete script following sh -c.
+		quoted := make([]string, len(startArgs))
+		for i, arg := range startArgs {
+			quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
+		}
+		args = append(args, "--args", strings.Join(quoted, " "))
 	} else {
 		args = append(args, "--args", "")
 	}
