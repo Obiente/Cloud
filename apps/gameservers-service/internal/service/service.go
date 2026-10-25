@@ -3,6 +3,7 @@ package gameservers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -90,7 +91,20 @@ func (s *Service) createSystemContext() context.Context {
 // checkGameServerPermission verifies user permissions for a game server
 // Uses the reusable CheckResourcePermissionWithError helper
 func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID string, permission string) error {
-	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "gameserver", gameServerID, permission)
+	if err := auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "gameserver", gameServerID, permission); err != nil {
+		return err
+	}
+	if permission == "read" || permission == auth.PermissionGameServersRead ||
+		permission == "stop" || permission == auth.PermissionGameServersStop {
+		return nil
+	}
+	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
+		if errors.Is(err, database.ErrGameServerSuspended) {
+			return connect.NewError(connect.CodePermissionDenied, err)
+		}
+		return connect.NewError(connect.CodeUnavailable, err)
+	}
+	return nil
 }
 
 func (s *Service) shouldForwardToNode(location *database.GameServerLocation) (bool, string) {
