@@ -157,6 +157,10 @@ func (gsm *GameServerManager) getNodeIP(ctx context.Context) string {
 
 // CreateGameServer creates a new game server container
 func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *GameServerConfig) error {
+	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, config.GameServerID); err != nil {
+		return err
+	}
+
 	logger.Info("[GameServerManager] Creating game server container %s", config.GameServerID)
 
 	// Ensure network exists
@@ -237,6 +241,10 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 
 // StartGameServer starts a game server container
 func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID string) error {
+	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
+		return err
+	}
+
 	logger.Info("[GameServerManager] Starting game server %s", gameServerID)
 
 	// Get game server from database
@@ -619,6 +627,10 @@ func (gsm *GameServerManager) StopGameServer(ctx context.Context, gameServerID s
 
 // RestartGameServer restarts a game server container
 func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerID string) error {
+	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
+		return err
+	}
+
 	logger.Info("[GameServerManager] Restarting game server %s", gameServerID)
 
 	// Get game server from database
