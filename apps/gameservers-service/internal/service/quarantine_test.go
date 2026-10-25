@@ -19,7 +19,7 @@ func TestSuspendedGameServerOwnerCannotMutate(t *testing.T) {
 	if err := db.Create(&r).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, permission := range []string{"start", "restart", "update", "delete"} {
+	for _, permission := range []string{"start", "restart", "update", "delete", auth.PermissionGameServersStart, auth.PermissionGameServersRestart, auth.PermissionGameServersUpdate, auth.PermissionGameServersDelete} {
 		t.Run(permission, func(t *testing.T) {
 			err := svc.checkGameServerPermission(ctx, "gs-org-a-owner", permission)
 			if connect.CodeOf(err) != connect.CodePermissionDenied {
@@ -27,7 +27,7 @@ func TestSuspendedGameServerOwnerCannotMutate(t *testing.T) {
 			}
 		})
 	}
-	for _, permission := range []string{"read", "stop"} {
+	for _, permission := range []string{"read", "stop", auth.PermissionGameServersRead, auth.PermissionGameServersStop} {
 		if err := svc.checkGameServerPermission(ctx, "gs-org-a-owner", permission); err != nil {
 			t.Fatalf("safe access blocked: %s: %v", permission, err)
 		}

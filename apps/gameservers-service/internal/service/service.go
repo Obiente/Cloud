@@ -94,7 +94,8 @@ func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID st
 	if err := auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "gameserver", gameServerID, permission); err != nil {
 		return err
 	}
-	if permission == "read" || permission == "stop" {
+	if permission == "read" || permission == auth.PermissionGameServersRead ||
+		permission == "stop" || permission == auth.PermissionGameServersStop {
 		return nil
 	}
 	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
