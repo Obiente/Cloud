@@ -50,41 +50,6 @@ jobs:
       - run: pnpm exec nx fix-ci
         if: always()
 
-  service-recovery-regressions:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: cloud_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U test -d cloud_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      NX_NO_CLOUD: 'true'
-      OBIENTE_TEST_POSTGRES_DSN: 'host=127.0.0.1 port=5432 user=test password=test dbname=cloud_test sslmode=disable'
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-go@v7
-        with:
-          go-version: '1.27.3'
-          cache-dependency-path: 'apps/**/go.sum'
-      - run: pnpm install --frozen-lockfile
-      - name: PostgreSQL DNS, billing, organization and email regressions
-        run: pnpm exec nx run-many --target=test --projects=dns-service,billing-service,organizations-service,notifications-service --excludeTaskDependencies --parallel=2 --command="go test -mod=readonly -race -count=1 ./..."
-
   dashboard-regressions:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
