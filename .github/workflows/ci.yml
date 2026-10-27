@@ -70,7 +70,7 @@ jobs:
       - name: Dashboard recovery and admin regressions
         run: pnpm exec nx run-many --targets=e2e --projects=@obiente/dashboard -- --workers=1
         env:
-          PLAYWRIGHT_GREP: 'audit-remediation|admin-interactions|hydration-recovery|managed-backups|page-smoke.*admin'
+          PLAYWRIGHT_GREP: 'audit-remediation|admin-interactions|hydration-recovery|popup-hydration|managed-backups|page-smoke.*admin'
       - name: Session renewal with authentication enabled
         run: pnpm exec nx run-many --targets=e2e --projects=@obiente/dashboard -- --workers=1
         env:
