@@ -737,29 +737,11 @@ func (s *Service) SuperadminUnsuspendVPS(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	// Update status to STOPPED (was suspended)
-	vps.Status = int32(vpsv1.VPSStatus_STOPPED)
-	vps.UpdatedAt = time.Now()
-
-	// Remove suspension metadata
-	if vps.Metadata != "" {
-		var metadata map[string]string
-		if err := json.Unmarshal([]byte(vps.Metadata), &metadata); err == nil {
-			delete(metadata, "suspended_reason")
-			delete(metadata, "suspended_at")
-			metadataJSON, _ := json.Marshal(metadata)
-			vps.Metadata = string(metadataJSON)
-		}
-	}
-
-	if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("vps_id = ?", vpsID).Delete(&database.VPSSuspension{}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&vps).Updates(map[string]interface{}{"status": vps.Status, "metadata": vps.Metadata, "updated_at": time.Now()}).Error
-	}); err != nil {
+	updated, err := database.UnsuspendVPS(ctx, database.DB, vpsID)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to unsuspend VPS: %w", err))
 	}
+	vps = *updated
 
 	return connect.NewResponse(&superadminv1.SuperadminUnsuspendVPSResponse{
 		Vps:     convertVPSInstanceToProto(&vps),

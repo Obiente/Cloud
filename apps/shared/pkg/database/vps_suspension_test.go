@@ -70,3 +70,40 @@ func TestVPSSuspensionSurvivesStaleObservation(t *testing.T) {
 		t.Fatal("unavailable database allowed start")
 	}
 }
+
+func TestLegacySuspensionReconcileDoesNotUndoUnsuspend(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	defer pool.Close()
+	if err := db.AutoMigrate(&VPSInstance{}, &VPSSuspension{}, &Organization{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []interface{}{&Organization{ID: "review-org", Slug: "review-org", Status: "active"}, &VPSInstance{ID: "review-vps", OrganizationID: "review-org", Status: int32(vpsv1.VPSStatus_SUSPENDED), Metadata: `{"suspended_at":"previous","custom":7}`}} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Sync has already loaded the suspended snapshot and is awaiting Proxmox.
+	var stale VPSInstance
+	if err := db.First(&stale, "id = ?", "review-vps").Error; err != nil {
+		t.Fatal(err)
+	}
+	updated, err := UnsuspendVPS(t.Context(), db, stale.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Metadata != `{"custom":7}` {
+		t.Fatalf("metadata changed: %s", updated.Metadata)
+	}
+	stopped := false
+	suspended, err := ReconcileVPSSuspension(t.Context(), db, stale.ID, func() error { stopped = true; return nil })
+	if err != nil || suspended || stopped {
+		t.Fatalf("stale reconciliation restored suspension: %v %v %v", suspended, stopped, err)
+	}
+	if err := EnsureVPSCanStart(t.Context(), db, stale.ID); err != nil {
+		t.Fatal(err)
+	}
+}

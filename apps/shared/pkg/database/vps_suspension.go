@@ -58,6 +58,10 @@ func EnsureVPSCanStart(ctx context.Context, db *gorm.DB, id string) error {
 
 func SuspendVPS(ctx context.Context, db *gorm.DB, id, actor, reason string) error {
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var vps VPSInstance
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND deleted_at IS NULL", id).First(&vps).Error; err != nil {
+			return err
+		}
 		record := VPSSuspension{VPSID: id, Reason: reason, SuspendedBy: actor, SuspendedAt: time.Now()}
 		if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(&record).Error; err != nil {
 			return err
@@ -67,7 +71,8 @@ func SuspendVPS(ctx context.Context, db *gorm.DB, id, actor, reason string) erro
 }
 
 func PreserveLegacyVPSSuspension(ctx context.Context, db *gorm.DB, id string) error {
-	return db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&VPSSuspension{VPSID: id, SuspendedBy: "system", SuspendedAt: time.Now()}).Error
+	_, err := ReconcileVPSSuspension(ctx, db, id, nil)
+	return err
 }
 
 // UpdateVPSObservedStatus never lets a delayed hypervisor response remove a suspension.
@@ -76,4 +81,58 @@ func UpdateVPSObservedStatus(ctx context.Context, db *gorm.DB, id string, status
 		"status":     gorm.Expr("CASE WHEN status = ? OR EXISTS (SELECT 1 FROM vps_suspensions WHERE vps_id = ?) THEN ? ELSE ? END", int32(vpsv1.VPSStatus_SUSPENDED), id, int32(vpsv1.VPSStatus_SUSPENDED), status),
 		"updated_at": time.Now(),
 	}).Error
+}
+
+// ReconcileVPSSuspension rereads administrative state while holding the same row
+// lock as suspend/unsuspend. The optional stop operation is fenced by that lock.
+func ReconcileVPSSuspension(ctx context.Context, db *gorm.DB, id string, stop func() error) (bool, error) {
+	suspended := false
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var current VPSInstance
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND deleted_at IS NULL", id).First(&current).Error; err != nil {
+			return err
+		}
+		var err error
+		suspended, err = VPSSuspended(ctx, tx, &current)
+		if err != nil || !suspended {
+			return err
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&VPSSuspension{VPSID: id, SuspendedBy: "system", SuspendedAt: time.Now()}).Error; err != nil {
+			return err
+		}
+		if stop != nil {
+			return stop()
+		}
+		return nil
+	})
+	return suspended, err
+}
+
+func UnsuspendVPS(ctx context.Context, db *gorm.DB, id string) (*VPSInstance, error) {
+	var current VPSInstance
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND deleted_at IS NULL", id).First(&current).Error; err != nil {
+			return err
+		}
+		if current.Metadata != "" {
+			var metadata map[string]interface{}
+			if err := json.Unmarshal([]byte(current.Metadata), &metadata); err != nil {
+				return fmt.Errorf("read VPS metadata: %w", err)
+			}
+			delete(metadata, "suspended_at")
+			delete(metadata, "suspended_reason")
+			encoded, err := json.Marshal(metadata)
+			if err != nil {
+				return err
+			}
+			current.Metadata = string(encoded)
+		}
+		if err := tx.Where("vps_id = ?", id).Delete(&VPSSuspension{}).Error; err != nil {
+			return err
+		}
+		current.Status = int32(vpsv1.VPSStatus_STOPPED)
+		current.UpdatedAt = time.Now()
+		return tx.Model(&current).Updates(map[string]interface{}{"status": current.Status, "metadata": current.Metadata, "updated_at": current.UpdatedAt}).Error
+	})
+	return &current, err
 }

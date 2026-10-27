@@ -1717,20 +1717,18 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 		return fmt.Errorf("failed to get VM status: %w", err)
 	}
 
-	suspended, err := database.VPSSuspended(ctx, database.DB, &vps)
-	if err != nil {
-		return err
-	}
-	if suspended {
-		// Persist legacy suspensions before any observation can overwrite their status.
-		if err := database.PreserveLegacyVPSSuspension(ctx, database.DB, vps.ID); err != nil {
-			return err
-		}
+	suspended, err := database.ReconcileVPSSuspension(ctx, database.DB, vps.ID, func() error {
 		if proxmoxStatus != "stopped" {
 			if err := proxmoxClient.StopVM(ctx, nodeName, vmIDInt); err != nil {
 				return fmt.Errorf("stop suspended VPS: %w", err)
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if suspended {
 		return nil
 	}
 
