@@ -97,6 +97,25 @@ validate_swarm_config() {
     vps-service
   validate_compose_file docker-compose.dashboard.yml dashboard
   validate_compose_file docker-compose.vps-gateway.yml vps-gateway
+
+  # Pull/build registry overrides must select the same images at deployment.
+  local compose_file merged_file image images
+  for compose_file in docker-compose.swarm.yml docker-compose.swarm.dev.yml docker-compose.swarm.ha.yml; do
+    merged_file="$(mktemp)"
+    scripts/merge-compose-files.sh "$compose_file" "$merged_file" >/dev/null
+    if ! images="$(REGISTRY=registry.example.test/team docker compose --project-directory "$ROOT_DIR" -f "$merged_file" config --images)"; then
+      rm -f "$merged_file"
+      return 1
+    fi
+    rm -f "$merged_file"
+    while IFS= read -r image; do
+      if [[ "$image" == */cloud-* && "$image" != registry.example.test/team/cloud-* ]]; then
+        echo "$compose_file ignored the registry override for $image" >&2
+        return 1
+      fi
+    done <<< "$images"
+    echo "validated registry override for $compose_file"
+  done
 }
 
 port_in_use() {

@@ -52,7 +52,6 @@ STACK_NAME="${STACK_NAME:-obiente-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.swarm.dev.yml}"
 
 # Define all microservice images
-REGISTRY="${REGISTRY:-ghcr.io/obiente}"
 MICROSERVICES=(
   "api-gateway"
   "audit-service"
@@ -76,6 +75,41 @@ if [ -f "${REPO_ROOT}/.env" ]; then
 elif [ -f "${REPO_ROOT}/.env.example" ]; then
   echo "⚠️  Warning: .env file not found. Using .env.example as reference."
   echo "   Copy .env.example to .env and configure it: cp .env.example .env"
+fi
+
+REGISTRY="${REGISTRY:-ghcr.io/obiente}"
+export REGISTRY
+
+if [ "$BUILD_IMAGES" = "true" ]; then
+  echo "🔨 Building Obiente Cloud microservice images locally..."
+
+  # Enable BuildKit for faster builds
+  export DOCKER_BUILDKIT=1
+
+  # Build all microservice images
+  for service in "${MICROSERVICES[@]}"; do
+    echo "📦 Building ${REGISTRY}/cloud-${service}:latest..."
+    docker build -f "apps/${service}/Dockerfile" -t "${REGISTRY}/cloud-${service}:latest" . || {
+      echo "❌ Failed to build ${service}"
+      exit 1
+    }
+  done
+
+  echo "✅ Build complete!"
+elif [ "$PULL_IMAGES" = "true" ]; then
+  echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
+
+  PULL_TARGETS=()
+  for service in "${MICROSERVICES[@]}"; do
+    PULL_TARGETS+=("${service}=${REGISTRY}/cloud-${service}:latest")
+  done
+
+  require_pulled_images "${PULL_TARGETS[@]}"
+
+  echo "✅ Image pull step complete!"
+else
+  echo "ℹ️  Skipping image build/pull (use -b/--build to build locally or -p/--pull to pull from registry)"
+  echo "   Using existing images if available"
 fi
 
 # Check if required directories exist on this node
@@ -120,50 +154,6 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
     echo "Deployment cancelled. Please create directories on all nodes first."
     exit 1
   fi
-fi
-
-if [ "$BUILD_IMAGES" = "true" ]; then
-  echo "🔨 Building Obiente Cloud microservice images locally..."
-  
-  # Enable BuildKit for faster builds
-  export DOCKER_BUILDKIT=1
-  
-  # Build all microservice images
-  for service in "${MICROSERVICES[@]}"; do
-    echo "📦 Building ${REGISTRY}/cloud-${service}:latest..."
-    docker build -f apps/${service}/Dockerfile -t ${REGISTRY}/cloud-${service}:latest . || {
-      echo "❌ Failed to build ${service}"
-      exit 1
-    }
-  done
-  
-  echo "✅ Build complete!"
-elif [ "$PULL_IMAGES" = "true" ]; then
-  echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
-
-  PULL_TARGETS=()
-  for service in "${MICROSERVICES[@]}"; do
-    PULL_TARGETS+=("${service}=${REGISTRY}/cloud-${service}:latest")
-  done
-
-  if ! pull_images_in_parallel "${PULL_TARGETS[@]}"; then
-    echo ""
-    echo "⚠️  Failed to pull the following images:"
-    for service in "${PARALLEL_PULL_FAILURES[@]}"; do
-      echo "   - ${service}"
-    done
-    echo ""
-    echo "Continuing deployment with cached/local images."
-    echo "Services that use these images may keep their existing version or fail"
-    echo "to schedule if no local image is available."
-    echo ""
-    echo "Or use -b or --build to build locally"
-  fi
-  
-  echo "✅ Image pull step complete!"
-else
-  echo "ℹ️  Skipping image build/pull (use -b/--build to build locally or -p/--pull to pull from registry)"
-  echo "   Using existing images if available"
 fi
 
 echo ""
@@ -258,18 +248,18 @@ for config_name in "${NEW_CONFIG_NAMES[@]}"; do
       # Docker configs store data as base64-encoded JSON
       EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | sed 's/^"//;s/"$//' | base64 -d 2>/dev/null || echo "")
       NEW_CONTENT=$(cat "$SOURCE_FILE")
-      
+
       # Normalize content for comparison (remove trailing newlines)
       EXISTING_CONTENT=$(echo -n "$EXISTING_CONTENT")
       NEW_CONTENT=$(echo -n "$NEW_CONTENT")
-      
+
       # Compare content (using a simple hash comparison)
       EXISTING_HASH=$(echo -n "$EXISTING_CONTENT" | sha256sum | cut -d' ' -f1)
       NEW_HASH=$(echo -n "$NEW_CONTENT" | sha256sum | cut -d' ' -f1)
-      
+
       if [ "$EXISTING_HASH" != "$NEW_HASH" ]; then
         echo "   ⚠️  Config $config_name content has changed, will be recreated"
-        
+
         # Remove old config (services will need to be updated first)
         echo "   🗑️  Removing old config: $config_name"
         # Find services using this config
@@ -280,19 +270,19 @@ for config_name in "${NEW_CONFIG_NAMES[@]}"; do
             SERVICES_USING_CONFIG+=("$service")
           fi
         done
-        
+
         # Remove config from services first
         for service in "${SERVICES_USING_CONFIG[@]}"; do
           echo "      Removing config from $service..."
           docker service update --config-rm "$config_name" "$service" 2>/dev/null || true
         done
-        
+
         # Wait for services to update
         if [ ${#SERVICES_USING_CONFIG[@]} -gt 0 ]; then
           echo "   ⏳ Waiting for services to update..."
           sleep 3
         fi
-        
+
         # Remove the config
         docker config rm "$config_name" 2>/dev/null || echo "      ⚠️  Could not remove $config_name (may still be in use)"
       else

@@ -209,7 +209,7 @@ services:
 
   # API Gateway - Routes requests to all microservices
   api-gateway:
-    image: ghcr.io/obiente/cloud-api-gateway:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-api-gateway:latest
     environment:
       PORT: 3001
       <<: [*common-auth, *common-api-gateway]
@@ -276,7 +276,7 @@ services:
 
   # Auth Service - Microservice for authentication
   auth-service:
-    image: ghcr.io/obiente/cloud-auth-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-auth-service:latest
     environment:
       PORT: 3002
       <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
@@ -322,7 +322,7 @@ services:
 
   # Organizations Service - Microservice for organization management
   organizations-service:
-    image: ghcr.io/obiente/cloud-organizations-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-organizations-service:latest
     environment:
       PORT: 3003
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
@@ -368,7 +368,7 @@ services:
 
   # Billing Service - Microservice for billing and Stripe integration
   billing-service:
-    image: ghcr.io/obiente/cloud-billing-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-billing-service:latest
     environment:
       PORT: 3004
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard, *common-notifications]
@@ -414,7 +414,7 @@ services:
 
   # Deployments Service - Microservice for deployment management
   deployments-service:
-    image: ghcr.io/obiente/cloud-deployments-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-deployments-service:latest
     environment:
       PORT: 3005
       STACK_NAME: __STACK_NAME__
@@ -486,7 +486,7 @@ services:
 
   # Databases Service - Microservice for managed database management
   databases-service:
-    image: ghcr.io/obiente/cloud-databases-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-databases-service:latest
     environment:
       PORT: 3014
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
@@ -544,7 +544,7 @@ services:
   # Global data-plane proxy. Every possible database owner node exposes the
   # host-mode listeners used by owner-specific database DNS records.
   databases-proxy:
-    image: ghcr.io/obiente/cloud-databases-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-databases-service:latest
     environment:
       PORT: 3014
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
@@ -600,7 +600,7 @@ services:
 
   # Game Servers Service - Microservice for game server management
   gameservers-service:
-    image: ghcr.io/obiente/cloud-gameservers-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-gameservers-service:latest
     environment:
       PORT: 3006
       DOMAIN: ${DOMAIN:-localhost}
@@ -652,7 +652,7 @@ services:
       - obiente-network
 
   file-transfer-service:
-    image: ghcr.io/obiente/cloud-file-transfer-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-file-transfer-service:latest
     environment:
       PORT: 3022
       SFTP_PORT: 2222
@@ -707,7 +707,7 @@ services:
 
   # Orchestrator Service - Microservice for container orchestration and metrics
   orchestrator-service:
-    image: ghcr.io/obiente/cloud-orchestrator-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-orchestrator-service:latest
     environment:
       PORT: 3007
       <<: [*common-database, *common-metrics-db, *common-redis, *common-swarm-orchestrator, *common-vps, *common-dns-delegation, *common-notifications]
@@ -758,7 +758,7 @@ services:
 
   # VPS Service - Microservice for VPS management
   vps-service:
-    image: ghcr.io/obiente/cloud-vps-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-vps-service:latest
     environment:
       PORT: 3008
       <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps, *common-notifications, *common-redis]
@@ -811,7 +811,7 @@ services:
 
   # Support Service - Microservice for support ticket management
   support-service:
-    image: ghcr.io/obiente/cloud-support-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-support-service:latest
     environment:
       PORT: 3009
       <<: [*common-database, *common-metrics-db, *common-auth]
@@ -857,7 +857,7 @@ services:
 
   # Audit Service - Microservice for audit log management
   audit-service:
-    image: ghcr.io/obiente/cloud-audit-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-audit-service:latest
     environment:
       PORT: 3010
       <<: [*common-database, *common-metrics-db, *common-auth]
@@ -902,7 +902,7 @@ services:
       - obiente-network
 
   notifications-service:
-    image: ghcr.io/obiente/cloud-notifications-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-notifications-service:latest
     environment:
       PORT: 3012
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
@@ -948,7 +948,7 @@ services:
 
   # Superadmin Service - Microservice for superadmin operations
   superadmin-service:
-    image: ghcr.io/obiente/cloud-superadmin-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-superadmin-service:latest
     environment:
       PORT: 3011
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-swarm-orchestrator, *common-vps, *common-notifications]
@@ -995,7 +995,7 @@ services:
   # DNS Service - Microservice for DNS resolution
   # Set ENABLE_DNS=false to disable this service when using DNS delegation
   dns-service:
-    image: ghcr.io/obiente/cloud-dns-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-dns-service:latest
     environment:
       <<: [*common-database, *common-redis, *common-swarm-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
