@@ -32,6 +32,8 @@ const (
 	previewACMECNAMETTL       = 60
 	httpReadHeaderTimeout     = 10 * time.Second
 	serviceShutdownTimeout    = 30 * time.Second
+	maxDNSPushBodyBytes       = 1 << 20
+	maxDNSPushRecords         = 1000
 )
 
 type DNSServer struct {
@@ -884,7 +886,7 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 		TTL        int64    `json:"ttl"`         // TTL in seconds (default: 300)
 	}
 
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDNSPushBodyBytes)).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -900,7 +902,7 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Records) == 0 || len(req.Records) > 1000 {
+	if len(req.Records) == 0 || len(req.Records) > maxDNSPushRecords {
 		http.Error(w, "Between 1 and 1000 records are required", http.StatusBadRequest)
 		return
 	}
@@ -1014,12 +1016,12 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 		} `json:"records"`
 	}
 
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDNSPushBodyBytes)).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if len(req.Records) == 0 || len(req.Records) > 1000 {
+	if len(req.Records) == 0 || len(req.Records) > maxDNSPushRecords {
 		http.Error(w, "Between 1 and 1000 records are required", http.StatusBadRequest)
 		return
 	}
@@ -1318,6 +1320,54 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 		return
 	}
 
+	pushDNSRecordBatches(ctx, client, pushURL, apiKey, sourceAPI, ttl, records)
+}
+
+func pushDNSRecordBatches(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, records []map[string]interface{}) {
+	batches, err := splitDNSPushBatches(records)
+	if err != nil {
+		log.Printf("[DNS Pusher] Failed to prepare batches: %v", err)
+		return
+	}
+	for _, batch := range batches {
+		if ctx.Err() != nil {
+			return
+		}
+		pushDNSRecordBatch(ctx, client, pushURL, apiKey, sourceAPI, ttl, batch)
+	}
+}
+
+// Count the actual JSON bytes, including envelope and separators. A batch can
+// reach the byte limit before the record limit when records contain many IPs.
+func splitDNSPushBatches(records []map[string]interface{}) ([][]map[string]interface{}, error) {
+	const envelopeBytes = len(`{"records":[]}`)
+	var batches [][]map[string]interface{}
+	start, size := 0, envelopeBytes
+	for i, record := range records {
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			return nil, fmt.Errorf("encode record %d: %w", i, err)
+		}
+		if len(encoded)+envelopeBytes > maxDNSPushBodyBytes {
+			return nil, fmt.Errorf("DNS record %d exceeds the request size limit", i)
+		}
+		separator := 0
+		if i > start {
+			separator = 1
+		}
+		if i-start == maxDNSPushRecords || size+separator+len(encoded) > maxDNSPushBodyBytes {
+			batches = append(batches, records[start:i])
+			start, size, separator = i, envelopeBytes, 0
+		}
+		size += separator + len(encoded)
+	}
+	if start < len(records) {
+		batches = append(batches, records[start:])
+	}
+	return batches, nil
+}
+
+func pushDNSRecordBatch(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, records []map[string]interface{}) {
 	// Prepare request body
 	requestBody := map[string]interface{}{
 		"records": records,
