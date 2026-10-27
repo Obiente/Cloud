@@ -1,6 +1,9 @@
 name: Sync Base Images to Obiente Registry
 
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/sync-base-images.yml"]
   workflow_dispatch:
   schedule:
     - cron: "17 2 * * *"
@@ -27,7 +30,7 @@ jobs:
             primary: docker.io/moby/buildkit:buildx-stable-1
             fallback: ""
             target: dockerhub/moby/buildkit:buildx-stable-1
-          - name: Go 1.25 Alpine
+          - name: Go 1.27.3 Alpine
             runner: ubuntu-24.04
             runner-label: github-hosted
             primary: public.ecr.aws/docker/library/golang:1.27.3-alpine

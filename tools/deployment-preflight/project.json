@@ -25,7 +25,9 @@
         "{workspaceRoot}/scripts/tests/dashboard-readiness-test.sh",
         "{workspaceRoot}/scripts/redeploy-dashboard.sh",
         "{workspaceRoot}/scripts/rollback-swarm.sh",
-        "{workspaceRoot}/scripts/tests/rollback-swarm-test.sh"
+        "{workspaceRoot}/scripts/tests/rollback-swarm-test.sh",
+        "{workspaceRoot}/.github/workflows/reusable-container-build.yml",
+        "{workspaceRoot}/.github/workflows/sync-base-images.yml"
       ],
       "options": {
         "cwd": "{workspaceRoot}",
@@ -41,7 +43,8 @@
           "shellcheck scripts/lib/dashboard-readiness.sh scripts/tests/dashboard-readiness-test.sh",
           "bash scripts/tests/dashboard-readiness-test.sh",
           "shellcheck scripts/rollback-swarm.sh scripts/tests/rollback-swarm-test.sh",
-          "bash scripts/tests/rollback-swarm-test.sh"
+          "bash scripts/tests/rollback-swarm-test.sh",
+          "python3 -B -m unittest discover -s tools/deployment-preflight -p test_base_images.py"
         ],
         "parallel": false
       }
@@ -136,6 +139,20 @@
       "options": {
         "cwd": "{workspaceRoot}",
         "command": "bash scripts/tests/rollback-swarm-test.sh"
+      }
+    },
+    "test-base-images": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/base_images.py",
+        "{projectRoot}/test_base_images.py",
+        "{workspaceRoot}/apps/*/Dockerfile",
+        "{workspaceRoot}/.github/workflows/reusable-container-build.yml",
+        "{workspaceRoot}/.github/workflows/sync-base-images.yml"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "python3 -B -m unittest discover -s tools/deployment-preflight -p test_base_images.py"
       }
     }
   }

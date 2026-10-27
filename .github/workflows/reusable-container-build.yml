@@ -100,6 +100,14 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: printf 'subject=%s\n' "$(git show -s --format=%s "$COMMIT_SHA")" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve available base images
+        id: base-images
+        env:
+          DOCKERFILE: ./apps/${{ inputs.service-name }}/Dockerfile
+          PLATFORM: ${{ matrix.platform }}
+          MIRROR: ${{ inputs.publish && env.BASE_REGISTRY || 'docker.io' }}
+        run: python3 tools/deployment-preflight/base_images.py --dockerfile "$DOCKERFILE" --platform "$PLATFORM" --mirror "$MIRROR"
+
       - name: Validate image
         if: ${{ !inputs.publish }}
         uses: docker/build-push-action@v7
@@ -110,7 +118,7 @@ jobs:
           tags: ${{ env.IMAGE_NAME }}:validation-${{ matrix.architecture }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BASE_REGISTRY=docker.io
+            BASE_REGISTRY=${{ steps.base-images.outputs.registry }}
             TARGETOS=linux
             TARGETARCH=${{ matrix.architecture }}
             ${{ inputs.commit-arg-prefix }}COMMIT=${{ github.sha }}
@@ -128,7 +136,7 @@ jobs:
           file: ./apps/${{ inputs.service-name }}/Dockerfile
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BASE_REGISTRY=${{ env.BASE_REGISTRY }}
+            BASE_REGISTRY=${{ steps.base-images.outputs.registry }}
             TARGETOS=linux
             TARGETARCH=${{ matrix.architecture }}
             ${{ inputs.commit-arg-prefix }}COMMIT=${{ github.sha }}

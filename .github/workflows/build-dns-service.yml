@@ -15,6 +15,7 @@ on:
       - "apps/shared/go.sum"
       - ".github/workflows/build-dns-service.yml"
       - ".github/workflows/reusable-container-build.yml"
+      - "tools/deployment-preflight/base_images.py"
   pull_request:
     branches:
       - main
@@ -27,6 +28,7 @@ on:
       - "apps/shared/go.sum"
       - ".github/workflows/build-dns-service.yml"
       - ".github/workflows/reusable-container-build.yml"
+      - "tools/deployment-preflight/base_images.py"
   workflow_dispatch:
 
 permissions:
