@@ -1,6 +1,6 @@
 <template>
   <OuiStack gap="md">
-    <OuiText size="xl" weight="semibold">{{ title }}</OuiText>
+    <OuiText as="h1" size="xl" weight="semibold">{{ title }}</OuiText>
     
     <!-- Create/Edit Role Form -->
     <OuiCard>

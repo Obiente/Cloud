@@ -43,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import {
   ServerStackIcon,
   CpuChipIcon,
@@ -110,5 +110,5 @@ const statusMetaMap: Record<number, { label: string; variant: "success" | "dange
   [DatabaseStatus.SLEEPING]: { label: "Sleeping", variant: "secondary" as const, dotClass: "bg-secondary" },
 };
 
-const statusMeta = statusMetaMap[props.database?.status] || { label: "Unknown", variant: "secondary" as const, dotClass: "bg-secondary" };
+const statusMeta = computed(() => statusMetaMap[props.database?.status] || { label: "Unknown", variant: "secondary" as const, dotClass: "bg-secondary" });
 </script>

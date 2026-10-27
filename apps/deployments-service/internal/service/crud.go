@@ -354,6 +354,10 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	ctx = orchestrator.WithTargetNode(ctx, req.Header().Get(orchestrator.ForwardTargetNodeHeader))
 	// Check if user has edit permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "edit"); err != nil {
+		return nil, err
+	}
+
 	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
@@ -374,10 +378,6 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
 		}
 		return connect.NewResponse(&response), nil
-	}
-
-	if err := s.checkDeploymentPermission(ctx, deploymentID, "edit"); err != nil {
-		return nil, err
 	}
 
 	// Get deployment by ID
@@ -583,6 +583,9 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if req.Msg.CpuLimit != nil || req.Msg.MemoryLimit != nil {
 		// Get organization plan limits
 		maxMemoryBytes, maxCPUCores, planErr := quota.GetEffectiveLimits(dbDeployment.OrganizationID)
+		if planErr != nil {
+			return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("organization resource limits unavailable: %w", planErr))
+		}
 
 		if req.Msg.CpuLimit != nil {
 			cpuLimit := req.Msg.GetCpuLimit()
@@ -998,6 +1001,9 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	deploymentID := req.Msg.GetDeploymentId()
 	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
+	}
+	if err := s.repo.SetDesiredState(ctx, deploymentID, "stopped"); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
 	targetNodeID, err := s.deploymentDeletionForwardTarget(ctx, deploymentID)
 	if err != nil {

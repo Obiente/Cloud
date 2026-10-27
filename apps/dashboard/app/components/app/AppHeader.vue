@@ -1,24 +1,21 @@
 <template>
   <OuiContainer as="header" class="app-topbar px-4 py-2.5 min-w-0 overflow-hidden">
-    <OuiFlex align="center" justify="between" gap="sm" class="min-w-0">
+    <OuiFlex align="center" justify="between" gap="sm" wrap="wrap" class="min-w-0">
       <!-- Page title -->
-      <OuiFlex align="center" gap="sm" class="flex-1 min-w-0 overflow-hidden">
+      <OuiFlex align="center" gap="sm" class="flex-1 basis-48 min-w-0 overflow-hidden">
         <slot name="leading" />
 
         <OuiStack gap="none" class="min-w-0 flex-1">
-          <OuiText as="h1" size="sm" weight="semibold" color="primary" class="truncate">
+          <OuiText as="span" size="sm" weight="semibold" color="primary" class="truncate">
             <slot name="title">
               {{ title }}
             </slot>
-          </OuiText>
-          <OuiText v-if="subtitle" size="xs" color="tertiary" class="hidden sm:block">
-            {{ subtitle }}
           </OuiText>
         </OuiStack>
       </OuiFlex>
 
       <!-- Actions -->
-      <OuiFlex align="center" gap="xs" class="app-topbar-actions shrink-0">
+      <OuiFlex align="center" gap="xs" class="app-topbar-actions shrink-0 ml-auto">
         <OuiThemeSwitcher />
 
         <OuiButton
@@ -26,6 +23,7 @@
           variant="ghost"
           size="sm"
           title="Notifications"
+          aria-label="Notifications"
           class="p-2! relative"
           @click="handleNotificationsClick"
         >
@@ -45,6 +43,12 @@
         <slot name="actions" />
       </OuiFlex>
     </OuiFlex>
+    <nav v-if="subtitle" aria-label="Breadcrumb" class="mt-1 min-w-0 text-xs text-tertiary flex flex-wrap items-center gap-1">
+      <NuxtLink v-if="subtitleTo" :to="subtitleTo" class="hover:underline focus-visible:underline">{{ subtitle }}</NuxtLink>
+      <span v-else>{{ subtitle }}</span>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{{ title }}</span>
+    </nav>
   </OuiContainer>
 </template>
 
@@ -57,6 +61,7 @@ import OuiThemeSwitcher from "../oui/ThemeSwitcher.vue";
 interface Props {
   title?: string;
   subtitle?: string;
+  subtitleTo?: string;
   notificationCount?: number;
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/shared/pkg/health"
+	"github.com/obiente/cloud/apps/shared/pkg/lifecycle"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/redis"
@@ -24,8 +25,6 @@ import (
 	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -106,56 +105,8 @@ func main() {
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
 
-	// Initialize game server manager
-	manager, err := gameserverorchestrator.NewGameServerManager("least-loaded", 50)
-	if err != nil {
-		logger.Warn("⚠️  Failed to create game server manager: %v", err)
-		logger.Warn("⚠️  Game servers will not work until Docker is accessible")
-		logger.Warn("⚠️  Please check Docker connection and ensure Docker daemon is running")
-		manager = nil
-	} else {
-		logger.Info("✓ Created game server manager")
-	}
-
-	// Create repositories and services
-	gameServerRepo := database.NewGameServerRepository(database.DB, database.RedisClient)
-	gameServerService := gameserversvc.NewService(shutdownCtx, gameServerRepo, manager)
-
-	// Register game servers service
-	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(
-		gameServerService,
-		connect.WithInterceptors(auditInterceptor, authInterceptor),
-	)
-	mux.Handle(gameServersPath, gameServersHandler)
-
-	// HTTP endpoint for chunked file uploads (multipart streaming)
-	mux.HandleFunc("/internal/gameservers/upload-file", gameServerService.HandleUploadFile)
-
-	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
-	mux.HandleFunc("/terminal/ws", gameServerService.HandleTerminalWebSocket)
-
-	// Health check endpoint with replica ID
-	mux.HandleFunc("/health", health.HandleHealth("gameservers-service", func() (bool, string, map[string]interface{}) {
-		// Check database connection
-		sqlDB, err := database.DB.DB()
-		if err != nil || sqlDB.Ping() != nil {
-			return false, "database unavailable", nil
-		}
-		return true, "healthy", nil
-	}))
-
-	// Root endpoint
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("gameservers-service"))
-	})
-
-	// Wrap with h2c for HTTP/2
-	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
+	var readyManager atomic.Pointer[gameserverorchestrator.GameServerManager]
+	h2cHandler := newRuntimeHandler(shutdownCtx, mux, &readyManager)
 
 	// Apply middleware
 	var handler http.Handler = h2cHandler
@@ -171,6 +122,59 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		logger.Info("Game Servers Service listening on %s while dependencies initialize", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+			stop()
+		}
+	}()
+
+	defer httpServer.Close()
+
+	// Initialize game server manager
+	manager, err := lifecycle.UntilReady(shutdownCtx, 5*time.Second, 15*time.Second,
+		func(ctx context.Context) (*gameserverorchestrator.GameServerManager, error) {
+			return gameserverorchestrator.NewGameServerManagerContext(ctx, "least-loaded", 50)
+		}, func(err error) { logger.Warn("Docker initialization failed; retrying: %v", err) })
+	if err != nil {
+		return
+	} else {
+		logger.Info("✓ Created game server manager")
+	}
+
+	defer manager.Close()
+
+	// Create repositories and services
+	gameServerRepo := database.NewGameServerRepository(database.DB, database.RedisClient)
+	gameServerService := gameserversvc.NewService(shutdownCtx, gameServerRepo, manager)
+	go gameServerService.StartStorageMonitor(shutdownCtx)
+
+	// Register game servers service
+	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(
+		gameServerService,
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
+	)
+	mux.Handle(gameServersPath, gameServersHandler)
+
+	// HTTP endpoint for chunked file uploads (multipart streaming)
+	mux.HandleFunc("/internal/gameservers/upload-file", gameServerService.HandleUploadFile)
+
+	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
+	mux.HandleFunc("/terminal/ws", gameServerService.HandleTerminalWebSocket)
+
+	// Root endpoint
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("gameservers-service"))
+	})
+
 	// Start health monitor in a background goroutine
 	// Check every 30 seconds to sync game server status with Docker container status
 	healthMonitorCtx, healthMonitorCancel := context.WithCancel(shutdownCtx)
@@ -179,15 +183,8 @@ func main() {
 		gameServerService.StartHealthMonitor(healthMonitorCtx, 30*time.Second)
 	}()
 
-	// Start server in a goroutine
-	serverErr := make(chan error, 1)
-	go func() {
-		logger.Info("=== Game Servers Service Ready - Listening on %s ===", httpServer.Addr)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErr <- err
-		}
-	}()
-
+	readyManager.Store(manager)
+	logger.Info("Game Servers Service is ready")
 	// Wait for interrupt or server error
 	select {
 	case err := <-serverErr:

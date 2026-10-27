@@ -126,6 +126,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	}
 	// Mutate the visible status only after this request owns the build. A
 	// duplicate trigger must not replace the active build's status with FAILED.
+	// DEPLOYING also records running intent here; later build status updates
+	// preserve any stop requested after this redeploy was accepted.
 	if err := s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
 		buildCancel()
 		s.unregisterDeploymentBuild(deploymentID, buildToken)
@@ -556,7 +558,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					}
 					if registryPassword != "" {
 						streamer.Write([]byte("🔐 Authenticating with registry...\n"))
-						loginCmd := exec.CommandContext(buildCtx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
+						loginCmd := exec.CommandContext(buildCtx, "docker", "login", registryURL, "-u", registryUsername, "--password-stdin")
+						loginCmd.Stdin = strings.NewReader(registryPassword)
 						var loginStderr bytes.Buffer
 						loginCmd.Stderr = &loginStderr
 						if err := loginCmd.Run(); err != nil {
@@ -1018,6 +1021,10 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 
+	if err := s.repo.SetDesiredState(ctx, deploymentID, "running"); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("save deployment intent: %w", err))
+	}
+
 	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
@@ -1251,6 +1258,10 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
+	if err := s.repo.SetDesiredState(ctx, deploymentID, "stopped"); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("save deployment intent: %w", err))
+	}
+
 	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
@@ -1303,6 +1314,10 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	if err := s.repo.SetDesiredState(ctx, deploymentID, "running"); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("save deployment intent: %w", err))
 	}
 
 	shouldForward, targetNodeID, err := s.getDeploymentForwardTarget(ctx, deploymentID)
@@ -1448,46 +1463,9 @@ func (s *Service) ScaleDeployment(ctx context.Context, req *connect.Request[depl
 }
 
 // updateDeploymentStorage calculates and updates storage usage for a deployment
-func (s *Service) updateDeploymentStorage(ctx context.Context, deploymentID string, result *BuildResult) error {
-	// Get all container locations for this deployment
-	locations, err := database.GetAllDeploymentLocations(deploymentID)
-	if err != nil {
-		return fmt.Errorf("failed to get deployment locations: %w", err)
+func (s *Service) updateDeploymentStorage(ctx context.Context, deploymentID string, _ *BuildResult) error {
+	if s.manager == nil {
+		return fmt.Errorf("deployment manager unavailable")
 	}
-
-	// Collect container IDs
-	containerIDs := make([]string, 0, len(locations))
-	for _, loc := range locations {
-		if loc.ContainerID != "" {
-			containerIDs = append(containerIDs, loc.ContainerID)
-		}
-	}
-
-	// Determine image name
-	imageName := ""
-	if result != nil && result.ImageName != "" {
-		imageName = result.ImageName
-	} else {
-		// Try to get from deployment
-		deployment, err := s.repo.GetByID(ctx, deploymentID)
-		if err == nil && deployment.Image != nil {
-			imageName = *deployment.Image
-		}
-	}
-
-	// Calculate storage
-	storageInfo, err := CalculateStorage(ctx, imageName, containerIDs)
-	if err != nil {
-		return fmt.Errorf("failed to calculate storage: %w", err)
-	}
-
-	// Update deployment with storage information
-	if err := s.repo.UpdateStorage(ctx, deploymentID, storageInfo.TotalStorage); err != nil {
-		return fmt.Errorf("failed to update storage: %w", err)
-	}
-
-	logger.Debug("[updateDeploymentStorage] Updated storage for deployment %s: Image=%d bytes, Volumes=%d bytes, Container=%d bytes, Total=%d bytes",
-		deploymentID, storageInfo.ImageSize, storageInfo.VolumeSize, storageInfo.ContainerDisk, storageInfo.TotalStorage)
-
-	return nil
+	return orchestrator.MeasureDeploymentStorage(ctx, s.manager.GetNodeID(), deploymentID)
 }

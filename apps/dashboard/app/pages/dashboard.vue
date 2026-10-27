@@ -203,10 +203,10 @@
                     >Storage</OuiText
                   >
                   <OuiText size="xs" color="tertiary">
-                    {{ formatBytes(Number(usageData.current.storageBytes)) }}
+                    {{ usageData.current.storageMeasurementUnavailable ? "Unavailable" : formatBytes(Number(usageData.current.storageBytes)) }}
                   </OuiText>
                 </OuiFlex>
-                <OuiBox
+                <OuiBox v-if="!usageData.current.storageMeasurementUnavailable"
                   w="full"
                   class="h-0.5 bg-surface-muted overflow-hidden rounded-full"
                 >
@@ -215,7 +215,7 @@
                     :style="{ width: `${storageUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="tertiary">
+                <OuiText v-if="!usageData.current.storageMeasurementUnavailable" size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.storageBytes),
@@ -258,7 +258,7 @@
                   <OuiStack gap="xs">
                     <OuiText size="xs" color="tertiary">Total Estimated</OuiText>
                     <OuiText size="xl" weight="semibold" color="primary">
-                      {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
+                      {{ usageData.estimatedMonthly.costEstimateUnavailable ? "Unavailable" : formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
                     </OuiText>
                   </OuiStack>
                   <OuiBadge variant="secondary" size="sm">{{ usageData.month }}</OuiBadge>
@@ -485,6 +485,8 @@
     DeploymentType,
     OrganizationService,
     VPSService,
+    GameServerService,
+    DatabaseService,
   } from "@obiente/proto";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import { composeQueryUrl } from "~/utils/queryParams";
@@ -492,9 +494,9 @@
   type DashboardData = {
     stats: {
       deployments: number;
-      gameServers: number;
-      vpsInstances: number;
-      databases: number;
+      gameServers: number | null;
+      vpsInstances: number | null;
+      databases: number | null;
       monthlySpend: number;
       statuses: Array<{ status: string; count: number }>;
     };
@@ -513,6 +515,8 @@
   const deploymentClient = useConnectClient(DeploymentService);
   const orgClient = useConnectClient(OrganizationService);
   const vpsClient = useConnectClient(VPSService);
+  const gameServerClient = useConnectClient(GameServerService);
+  const databaseClient = useConnectClient(DatabaseService);
   const orgsStore = useOrganizationsStore();
   const auth = useAuth();
 
@@ -638,24 +642,20 @@
           };
         });
 
-      // Fetch VPS count
-      let vpsCount = 0;
-      try {
-        const vpsResponse = await vpsClient.listVPS({
-          organizationId: orgId || undefined,
-          page: 1,
-          perPage: 1,
-        });
-        vpsCount = vpsResponse.pagination?.total || 0;
-      } catch (error) {
-        console.error("Failed to fetch VPS count:", error);
-      }
-
+      // Optional service outages must not discard the deployment overview.
+      const [vpsResult, gameServerResult, databaseResult] = await Promise.allSettled([
+        vpsClient.listVPS({ organizationId: orgId || undefined, page: 1, perPage: 1 }),
+        gameServerClient.listGameServers({ organizationId: orgId }),
+        databaseClient.listDatabases({ organizationId: orgId, page: 1, perPage: 1 }),
+      ]);
       const stats = {
         deployments: deployments.length,
-        gameServers: 0, // TODO: Fetch from game server API
-        vpsInstances: vpsCount,
-        databases: 0,
+        gameServers: gameServerResult.status === "fulfilled"
+          ? gameServerResult.value.gameServers.length : null,
+        vpsInstances: vpsResult.status === "fulfilled"
+          ? Number(vpsResult.value.pagination?.total || 0) : null,
+        databases: databaseResult.status === "fulfilled"
+          ? Number(databaseResult.value.pagination?.total || 0) : null,
         monthlySpend: 0,
         statuses,
       };
@@ -712,9 +712,9 @@
     () =>
       data.value?.stats ?? {
         deployments: 0,
-        gameServers: 0,
-        vpsInstances: 0,
-        databases: 0,
+        gameServers: null,
+        vpsInstances: null,
+        databases: null,
         monthlySpend: 0,
       }
   );
@@ -796,7 +796,7 @@
 
   // Cost breakdown
   const costBreakdown = computed(() => {
-    if (!usageData.value?.estimatedMonthly) return [];
+    if (!usageData.value?.estimatedMonthly || usageData.value.estimatedMonthly.costEstimateUnavailable) return [];
     const estimated = usageData.value.estimatedMonthly;
     const breakdown = [];
 
@@ -864,7 +864,7 @@
       },
       {
         label: "VPS Instances",
-        value: formatNumber(stats.value.vpsInstances),
+        value: stats.value.vpsInstances === null ? "Unavailable" : formatNumber(stats.value.vpsInstances),
         icon: ServerIcon,
         iconBg: "bg-success/10",
         iconColor: "text-success",
@@ -872,7 +872,7 @@
       },
       {
         label: "Game Servers",
-        value: formatNumber(stats.value.gameServers),
+        value: stats.value.gameServers === null ? "Unavailable" : formatNumber(stats.value.gameServers),
         icon: CubeIcon,
         iconBg: "bg-accent-success/10",
         iconColor: "text-accent-success",
@@ -880,7 +880,7 @@
       },
       {
         label: "Databases",
-        value: formatNumber(stats.value.databases),
+        value: stats.value.databases === null ? "Unavailable" : formatNumber(stats.value.databases),
         icon: CircleStackIcon,
         iconBg: "bg-accent-secondary/10",
         iconColor: "text-accent-secondary",
@@ -962,17 +962,7 @@
     composeQueryUrl("/deployments", { status: String(DeploymentStatus.FAILED) })
   );
 
-  // Auto-refresh using useAsyncData refresh
-  const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
-  onMounted(() => {
-    refreshInterval.value = setInterval(() => {
-      refreshDashboard();
-      refreshUsage();
-    }, 30000);
-  });
-  onUnmounted(() => {
-    if (refreshInterval.value) clearInterval(refreshInterval.value);
-  });
+  useAutoRefresh(async () => { await Promise.all([refreshDashboard(), refreshUsage()]); }, 30_000);
 
   const statusVariant = (
     status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"

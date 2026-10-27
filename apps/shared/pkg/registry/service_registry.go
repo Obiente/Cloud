@@ -14,6 +14,8 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/containerd/errdefs"
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/swarm"
 	"github.com/moby/moby/client"
 	"gorm.io/gorm"
@@ -266,8 +268,11 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		if _, exists := actualIndex[location.ContainerID]; !exists {
 			// Verify container doesn't exist by attempting to inspect it
 			// This prevents race conditions where container is temporarily unavailable
-			_, inspectErr := sr.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
-			if inspectErr != nil {
+			inspected, inspectErr := sr.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
+			if inspectErr != nil && !errdefs.IsNotFound(inspectErr) {
+				return fmt.Errorf("verify deployment location: %w", inspectErr)
+			}
+			if errdefs.IsNotFound(inspectErr) {
 				// Container truly doesn't exist - safe to remove
 				logger.Info("[Registry] Container %s no longer exists on node %s, removing from registry", location.ContainerID[:12], sr.nodeID)
 				if err := database.RemoveDeploymentLocation(location.ContainerID); err != nil {
@@ -279,7 +284,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 				logger.Debug("[Registry] Container %s exists but wasn't in list, updating status", location.ContainerID[:12])
 				database.DB.Model(&database.DeploymentLocation{}).
 					Where("container_id = ?", location.ContainerID).
-					Update("status", "unknown")
+					Update("status", deploymentContainerStatus(inspected.Container.State))
 			}
 		}
 	}
@@ -322,9 +327,9 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 			}
 		} else {
 			// Update status for existing containers
-			status := "running"
-			if string(c.State) != "running" {
-				status = string(c.State)
+			status := string(c.State)
+			if status == "exited" || status == "created" {
+				status = "stopped"
 			}
 
 			database.DB.Model(&database.DeploymentLocation{}).
@@ -634,4 +639,14 @@ type NodeStats struct {
 	Availability    string    `json:"availability"`
 	Status          string    `json:"status"`
 	LastHeartbeat   time.Time `json:"last_heartbeat"`
+}
+
+func deploymentContainerStatus(state *container.State) string {
+	if state == nil {
+		return "unknown"
+	}
+	if state.Running {
+		return "running"
+	}
+	return "stopped"
 }

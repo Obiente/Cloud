@@ -110,7 +110,7 @@ func (s *Service) StopVPS(ctx context.Context, req *connect.Request[vpsv1.StopVP
 	}
 
 	vpsID := req.Msg.GetVpsId()
-	if err := s.checkVPSPermission(ctx, vpsID, auth.PermissionVPSManage); err != nil {
+	if err := auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "vps", vpsID, auth.PermissionVPSManage); err != nil {
 		return nil, err
 	}
 

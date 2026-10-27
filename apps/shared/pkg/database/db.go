@@ -541,7 +541,10 @@ func InitDatabase() error {
 
 	// Auto-migrate the schema (build_logs is stored in TimescaleDB, not here)
 	if err := db.AutoMigrate(
+		&UserBan{},
+		&VPSSuspension{},
 		&Deployment{},
+		&DeploymentStorageMeasurement{},
 		&PullRequestDeploymentConfig{},
 		&PullRequestDeployment{},
 		&DeploymentBuildControl{},

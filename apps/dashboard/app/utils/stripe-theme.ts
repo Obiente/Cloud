@@ -58,7 +58,6 @@ export function getStripeAppearance(): any {
   const accentPrimary = getCSSVariable('--oui-accent-primary') || '#8b5cf6';
   const accentDanger = getCSSVariable('--oui-accent-danger') || '#f43f5e';
   const interactiveHover = getCSSVariable('--oui-interactive-hover') || '#241d47';
-  const interactiveFocus = getCSSVariable('--oui-interactive-focus') || '#d946ef';
 
   return {
     theme: 'night' as const, // Use night theme as base for dark mode

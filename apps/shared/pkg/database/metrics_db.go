@@ -1,9 +1,14 @@
 package database
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -13,9 +18,15 @@ import (
 )
 
 var MetricsDB *gorm.DB
+var metricsInitMu sync.Mutex
 
 // InitMetricsDatabase initializes a separate TimescaleDB/PostgreSQL connection for metrics
 func InitMetricsDatabase() error {
+	metricsInitMu.Lock()
+	defer metricsInitMu.Unlock()
+	if MetricsDB != nil {
+		return nil
+	}
 	// Use separate environment variables for metrics database, with fallback to main DB
 	host := os.Getenv("METRICS_DB_HOST")
 	if host == "" {
@@ -114,35 +125,46 @@ func InitMetricsDatabase() error {
 		return fmt.Errorf("failed to connect to metrics database (TimescaleDB required) after %d attempts: %w", maxRetries, err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	if err := withMetricsSchemaLock(ctx, db, func(conn *gorm.DB) error {
+		var installed bool
+		if err := conn.Raw("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')").Scan(&installed).Error; err != nil {
+			return err
+		}
+		if !installed {
+			if err := conn.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
+				logger.Warn("TimescaleDB extension unavailable; using PostgreSQL: %v", err)
+			}
+		}
+		return initMetricsTables(conn)
+	}); err != nil {
+		if pool, poolErr := db.DB(); poolErr == nil {
+			_ = pool.Close()
+		}
+		return fmt.Errorf("initialize metrics schema: %w", err)
+	}
+	// Publish only a fully initialized connection; repeated service initialization is a no-op.
 	MetricsDB = db
-	logger.Info("Metrics database connection established")
-
-	// Create TimescaleDB extension if available (will fail gracefully if not installed)
-	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
-		logger.Warn("TimescaleDB extension not available: %v. Using standard PostgreSQL.", err)
-	} else {
-		logger.Info("TimescaleDB extension enabled")
-	}
-
-	// Initialize metrics tables
-	if err := InitMetricsTables(); err != nil {
-		return fmt.Errorf("failed to initialize metrics tables: %w", err)
-	}
 
 	logger.Info("Metrics database initialized")
 	return nil
 }
 
 // InitMetricsTables creates and configures metrics tables
-func InitMetricsTables() error {
+func initMetricsTables(db *gorm.DB) error {
 	// Check which tables are already hypertables before AutoMigrate
 	hypertableMap := make(map[string]bool)
 	var hypertableNames []string
-	MetricsDB.Raw(`
-		SELECT hypertable_name 
-		FROM timescaledb_information.hypertables 
-		WHERE hypertable_schema = 'public'
-	`).Scan(&hypertableNames)
+	var hasTimescale bool
+	if err := db.Raw("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')").Scan(&hasTimescale).Error; err != nil {
+		return err
+	}
+	if hasTimescale {
+		if err := db.Raw("SELECT hypertable_name FROM timescaledb_information.hypertables WHERE hypertable_schema = 'public'").Scan(&hypertableNames).Error; err != nil {
+			return fmt.Errorf("read Timescale schema: %w", err)
+		}
+	}
 
 	for _, name := range hypertableNames {
 		hypertableMap[name] = true
@@ -187,33 +209,32 @@ func InitMetricsTables() error {
 	}
 
 	if len(tablesToMigrate) > 0 {
-		if err := MetricsDB.AutoMigrate(tablesToMigrate...); err != nil {
-			logger.Warn("Failed to auto-migrate some metrics tables (may already be hypertables): %v", err)
-			// Continue anyway - hypertables don't need AutoMigrate
+		if err := db.AutoMigrate(tablesToMigrate...); err != nil {
+			return fmt.Errorf("migrate metrics tables: %w", err)
 		}
 	}
 
 	// Initialize TimescaleDB hypertable for build_logs
-	if err := InitBuildLogsTimescaleDB(MetricsDB); err != nil {
+	if err := InitBuildLogsTimescaleDB(db); err != nil {
 		logger.Warn("Failed to initialize TimescaleDB hypertable for build_logs: %v", err)
 		// Continue anyway - standard PostgreSQL will work fine
 	}
 
 	// Initialize TimescaleDB hypertable for audit_logs
-	if err := InitAuditLogsTimescaleDB(MetricsDB); err != nil {
+	if err := InitAuditLogsTimescaleDB(db); err != nil {
 		logger.Warn("Failed to initialize TimescaleDB hypertable for audit_logs: %v", err)
 		// Continue anyway - standard PostgreSQL will work fine
 	}
 
 	// Create composite indexes for better query performance
-	if err := createMetricsIndexes(); err != nil {
+	if err := createMetricsIndexes(db); err != nil {
 		return fmt.Errorf("failed to create metrics indexes: %w", err)
 	}
 
 	// Convert to hypertable if TimescaleDB is available
 	// Check if table is already a hypertable
 	var isHypertable bool
-	if err := MetricsDB.Raw(`
+	if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1 FROM timescaledb_information.hypertables 
 			WHERE hypertable_name = 'deployment_metrics'
@@ -221,7 +242,7 @@ func InitMetricsTables() error {
 	`).Scan(&isHypertable).Error; err == nil && !isHypertable {
 		// Check if primary key already includes timestamp
 		var pkIncludesTimestamp bool
-		MetricsDB.Raw(`
+		db.Raw(`
 			SELECT EXISTS (
 				SELECT 1 FROM pg_constraint c
 				JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
@@ -234,12 +255,12 @@ func InitMetricsTables() error {
 		if !pkIncludesTimestamp {
 			// Only try to modify primary key if table is empty, otherwise skip hypertable creation
 			var rowCount int64
-			MetricsDB.Raw(`SELECT COUNT(*) FROM deployment_metrics`).Scan(&rowCount)
+			db.Raw(`SELECT COUNT(*) FROM deployment_metrics`).Scan(&rowCount)
 
 			if rowCount > 0 {
 				// Table has data - check for duplicates before modifying primary key
 				var duplicateCount int64
-				MetricsDB.Raw(`
+				db.Raw(`
 					SELECT COUNT(*) FROM (
 						SELECT id, timestamp, COUNT(*) as cnt
 						FROM deployment_metrics
@@ -253,16 +274,16 @@ func InitMetricsTables() error {
 					isHypertable = true
 				} else {
 					// Safe to modify primary key
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err != nil {
 						logger.Warn("Failed to drop primary key for deployment_metrics: %v", err)
 						isHypertable = true
 					} else {
-						if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
+						if err := db.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
 							logger.Warn("Failed to create composite primary key for deployment_metrics: %v", err)
 							// CRITICAL: Restore original primary key - metrics won't work without it
-							if restoreErr := MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+							if restoreErr := db.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 								logger.Error("CRITICAL: Failed to restore primary key for deployment_metrics: %v", restoreErr)
-								_ = MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD CONSTRAINT deployment_metrics_pkey PRIMARY KEY (id)`).Error
+								_ = db.Exec(`ALTER TABLE deployment_metrics ADD CONSTRAINT deployment_metrics_pkey PRIMARY KEY (id)`).Error
 							}
 							isHypertable = true
 						}
@@ -270,15 +291,15 @@ func InitMetricsTables() error {
 				}
 			} else {
 				// Empty table - safe to modify primary key
-				if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err != nil {
+				if err := db.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err != nil {
 					logger.Warn("Failed to drop primary key for deployment_metrics: %v", err)
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
 						logger.Warn("Failed to create composite primary key for deployment_metrics: %v", err)
-						if restoreErr := MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+						if restoreErr := db.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 							logger.Error("CRITICAL: Failed to restore primary key for deployment_metrics: %v", restoreErr)
-							_ = MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD CONSTRAINT deployment_metrics_pkey PRIMARY KEY (id)`).Error
+							_ = db.Exec(`ALTER TABLE deployment_metrics ADD CONSTRAINT deployment_metrics_pkey PRIMARY KEY (id)`).Error
 						}
 						isHypertable = true
 					}
@@ -288,7 +309,7 @@ func InitMetricsTables() error {
 
 		if !isHypertable {
 			// Convert to hypertable with 1 hour chunk interval
-			if err := MetricsDB.Exec(`
+			if err := db.Exec(`
 			SELECT create_hypertable('deployment_metrics', 'timestamp', 
 				chunk_time_interval => INTERVAL '1 hour',
 					if_not_exists => TRUE,
@@ -297,8 +318,8 @@ func InitMetricsTables() error {
 				logger.Warn("Failed to create hypertable for deployment_metrics: %v", err)
 				// Restore original primary key if hypertable creation failed and we changed it
 				if !pkIncludesTimestamp {
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err == nil {
-						_ = MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error
+					if err := db.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err == nil {
+						_ = db.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error
 					}
 				}
 			} else {
@@ -308,7 +329,7 @@ func InitMetricsTables() error {
 	}
 
 	// Convert game_server_metrics to hypertable if available
-	if err := MetricsDB.Raw(`
+	if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1 FROM timescaledb_information.hypertables 
 			WHERE hypertable_name = 'game_server_metrics'
@@ -316,7 +337,7 @@ func InitMetricsTables() error {
 	`).Scan(&isHypertable).Error; err == nil && !isHypertable {
 		// Check if primary key already includes timestamp
 		var pkIncludesTimestamp bool
-		MetricsDB.Raw(`
+		db.Raw(`
 			SELECT EXISTS (
 				SELECT 1 FROM pg_constraint c
 				JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
@@ -328,11 +349,11 @@ func InitMetricsTables() error {
 
 		if !pkIncludesTimestamp {
 			var rowCount int64
-			MetricsDB.Raw(`SELECT COUNT(*) FROM game_server_metrics`).Scan(&rowCount)
+			db.Raw(`SELECT COUNT(*) FROM game_server_metrics`).Scan(&rowCount)
 
 			if rowCount > 0 {
 				var duplicateCount int64
-				MetricsDB.Raw(`
+				db.Raw(`
 					SELECT COUNT(*) FROM (
 						SELECT id, timestamp, COUNT(*) as cnt
 						FROM game_server_metrics
@@ -345,30 +366,30 @@ func InitMetricsTables() error {
 					logger.Warn("game_server_metrics has duplicate (id, timestamp) pairs - skipping hypertable creation")
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err != nil {
 						logger.Warn("Failed to drop primary key for game_server_metrics: %v", err)
 						isHypertable = true
 					} else {
-						if err := MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
+						if err := db.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
 							logger.Warn("Failed to create composite primary key for game_server_metrics: %v", err)
-							if restoreErr := MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+							if restoreErr := db.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 								logger.Error("CRITICAL: Failed to restore primary key for game_server_metrics: %v", restoreErr)
-								_ = MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD CONSTRAINT game_server_metrics_pkey PRIMARY KEY (id)`).Error
+								_ = db.Exec(`ALTER TABLE game_server_metrics ADD CONSTRAINT game_server_metrics_pkey PRIMARY KEY (id)`).Error
 							}
 							isHypertable = true
 						}
 					}
 				}
 			} else {
-				if err := MetricsDB.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err != nil {
+				if err := db.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err != nil {
 					logger.Warn("Failed to drop primary key for game_server_metrics: %v", err)
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id, timestamp)`).Error; err != nil {
 						logger.Warn("Failed to create composite primary key for game_server_metrics: %v", err)
-						if restoreErr := MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+						if restoreErr := db.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 							logger.Error("CRITICAL: Failed to restore primary key for game_server_metrics: %v", restoreErr)
-							_ = MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD CONSTRAINT game_server_metrics_pkey PRIMARY KEY (id)`).Error
+							_ = db.Exec(`ALTER TABLE game_server_metrics ADD CONSTRAINT game_server_metrics_pkey PRIMARY KEY (id)`).Error
 						}
 						isHypertable = true
 					}
@@ -377,7 +398,7 @@ func InitMetricsTables() error {
 		}
 
 		if !isHypertable {
-			if err := MetricsDB.Exec(`
+			if err := db.Exec(`
 				SELECT create_hypertable('game_server_metrics', 'timestamp', 
 					chunk_time_interval => INTERVAL '1 hour',
 					if_not_exists => TRUE,
@@ -386,8 +407,8 @@ func InitMetricsTables() error {
 				logger.Warn("Failed to create hypertable for game_server_metrics: %v", err)
 				// Restore original primary key if hypertable creation failed and we changed it
 				if !pkIncludesTimestamp {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err == nil {
-						_ = MetricsDB.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error
+					if err := db.Exec(`ALTER TABLE game_server_metrics DROP CONSTRAINT IF EXISTS game_server_metrics_pkey`).Error; err == nil {
+						_ = db.Exec(`ALTER TABLE game_server_metrics ADD PRIMARY KEY (id)`).Error
 					}
 				}
 			} else {
@@ -397,7 +418,7 @@ func InitMetricsTables() error {
 	}
 
 	// Convert hourly aggregates to hypertable if available
-	if err := MetricsDB.Raw(`
+	if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1 FROM timescaledb_information.hypertables 
 			WHERE hypertable_name = 'deployment_usage_hourly'
@@ -405,7 +426,7 @@ func InitMetricsTables() error {
 	`).Scan(&isHypertable).Error; err == nil && !isHypertable {
 		// Check if primary key already includes hour
 		var pkIncludesHour bool
-		MetricsDB.Raw(`
+		db.Raw(`
 			SELECT EXISTS (
 				SELECT 1 FROM pg_constraint c
 				JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
@@ -417,11 +438,11 @@ func InitMetricsTables() error {
 
 		if !pkIncludesHour {
 			var rowCount int64
-			MetricsDB.Raw(`SELECT COUNT(*) FROM deployment_usage_hourly`).Scan(&rowCount)
+			db.Raw(`SELECT COUNT(*) FROM deployment_usage_hourly`).Scan(&rowCount)
 
 			if rowCount > 0 {
 				var duplicateCount int64
-				MetricsDB.Raw(`
+				db.Raw(`
 					SELECT COUNT(*) FROM (
 						SELECT id, hour, COUNT(*) as cnt
 						FROM deployment_usage_hourly
@@ -434,30 +455,30 @@ func InitMetricsTables() error {
 					logger.Warn("deployment_usage_hourly has duplicate (id, hour) pairs - skipping hypertable creation to preserve functionality")
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err != nil {
 						logger.Warn("Failed to drop primary key for deployment_usage_hourly: %v", err)
 						isHypertable = true
 					} else {
-						if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
+						if err := db.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
 							logger.Warn("Failed to create composite primary key for deployment_usage_hourly: %v", err)
-							if restoreErr := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+							if restoreErr := db.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 								logger.Error("CRITICAL: Failed to restore primary key for deployment_usage_hourly: %v", restoreErr)
-								_ = MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD CONSTRAINT deployment_usage_hourly_pkey PRIMARY KEY (id)`).Error
+								_ = db.Exec(`ALTER TABLE deployment_usage_hourly ADD CONSTRAINT deployment_usage_hourly_pkey PRIMARY KEY (id)`).Error
 							}
 							isHypertable = true
 						}
 					}
 				}
 			} else {
-				if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err != nil {
+				if err := db.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err != nil {
 					logger.Warn("Failed to drop primary key for deployment_usage_hourly: %v", err)
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
 						logger.Warn("Failed to create composite primary key for deployment_usage_hourly: %v", err)
-						if restoreErr := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+						if restoreErr := db.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 							logger.Error("CRITICAL: Failed to restore primary key for deployment_usage_hourly: %v", restoreErr)
-							_ = MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD CONSTRAINT deployment_usage_hourly_pkey PRIMARY KEY (id)`).Error
+							_ = db.Exec(`ALTER TABLE deployment_usage_hourly ADD CONSTRAINT deployment_usage_hourly_pkey PRIMARY KEY (id)`).Error
 						}
 						isHypertable = true
 					}
@@ -466,7 +487,7 @@ func InitMetricsTables() error {
 		}
 
 		if !isHypertable {
-			if err := MetricsDB.Exec(`
+			if err := db.Exec(`
 			SELECT create_hypertable('deployment_usage_hourly', 'hour', 
 				chunk_time_interval => INTERVAL '7 days',
 					if_not_exists => TRUE,
@@ -475,8 +496,8 @@ func InitMetricsTables() error {
 				logger.Warn("Failed to create hypertable for deployment_usage_hourly: %v", err)
 				// Restore original primary key if hypertable creation failed and we changed it
 				if !pkIncludesHour {
-					if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err == nil {
-						_ = MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error
+					if err := db.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err == nil {
+						_ = db.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error
 					}
 				}
 			} else {
@@ -486,7 +507,7 @@ func InitMetricsTables() error {
 	}
 
 	// Convert game_server_usage_hourly to hypertable if available
-	if err := MetricsDB.Raw(`
+	if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1 FROM timescaledb_information.hypertables 
 			WHERE hypertable_name = 'game_server_usage_hourly'
@@ -494,7 +515,7 @@ func InitMetricsTables() error {
 	`).Scan(&isHypertable).Error; err == nil && !isHypertable {
 		// Check if primary key already includes hour
 		var pkIncludesHour bool
-		MetricsDB.Raw(`
+		db.Raw(`
 			SELECT EXISTS (
 				SELECT 1 FROM pg_constraint c
 				JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
@@ -506,11 +527,11 @@ func InitMetricsTables() error {
 
 		if !pkIncludesHour {
 			var rowCount int64
-			MetricsDB.Raw(`SELECT COUNT(*) FROM game_server_usage_hourly`).Scan(&rowCount)
+			db.Raw(`SELECT COUNT(*) FROM game_server_usage_hourly`).Scan(&rowCount)
 
 			if rowCount > 0 {
 				var duplicateCount int64
-				MetricsDB.Raw(`
+				db.Raw(`
 					SELECT COUNT(*) FROM (
 						SELECT id, hour, COUNT(*) as cnt
 						FROM game_server_usage_hourly
@@ -523,30 +544,30 @@ func InitMetricsTables() error {
 					logger.Warn("game_server_usage_hourly has duplicate (id, hour) pairs - skipping hypertable creation")
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err != nil {
 						logger.Warn("Failed to drop primary key for game_server_usage_hourly: %v", err)
 						isHypertable = true
 					} else {
-						if err := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
+						if err := db.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
 							logger.Warn("Failed to create composite primary key for game_server_usage_hourly: %v", err)
-							if restoreErr := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+							if restoreErr := db.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 								logger.Error("CRITICAL: Failed to restore primary key for game_server_usage_hourly: %v", restoreErr)
-								_ = MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
+								_ = db.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
 							}
 							isHypertable = true
 						}
 					}
 				}
 			} else {
-				if err := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err != nil {
+				if err := db.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err != nil {
 					logger.Warn("Failed to drop primary key for game_server_usage_hourly: %v", err)
 					isHypertable = true
 				} else {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
+					if err := db.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id, hour)`).Error; err != nil {
 						logger.Warn("Failed to create composite primary key for game_server_usage_hourly: %v", err)
-						if restoreErr := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+						if restoreErr := db.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 							logger.Error("CRITICAL: Failed to restore primary key for game_server_usage_hourly: %v", restoreErr)
-							_ = MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
+							_ = db.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
 						}
 						isHypertable = true
 					}
@@ -555,7 +576,7 @@ func InitMetricsTables() error {
 		}
 
 		if !isHypertable {
-			if err := MetricsDB.Exec(`
+			if err := db.Exec(`
 				SELECT create_hypertable('game_server_usage_hourly', 'hour', 
 					chunk_time_interval => INTERVAL '7 days',
 					if_not_exists => TRUE,
@@ -563,10 +584,10 @@ func InitMetricsTables() error {
 			`).Error; err != nil {
 				logger.Warn("Failed to create hypertable for game_server_usage_hourly: %v", err)
 				if !pkIncludesHour {
-					if err := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err == nil {
-						if restoreErr := MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
+					if err := db.Exec(`ALTER TABLE game_server_usage_hourly DROP CONSTRAINT IF EXISTS game_server_usage_hourly_pkey`).Error; err == nil {
+						if restoreErr := db.Exec(`ALTER TABLE game_server_usage_hourly ADD PRIMARY KEY (id)`).Error; restoreErr != nil {
 							logger.Error("CRITICAL: Failed to restore primary key after hypertable creation failure: %v", restoreErr)
-							_ = MetricsDB.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
+							_ = db.Exec(`ALTER TABLE game_server_usage_hourly ADD CONSTRAINT game_server_usage_hourly_pkey PRIMARY KEY (id)`).Error
 						}
 					}
 				}
@@ -577,4 +598,49 @@ func InitMetricsTables() error {
 	}
 
 	return nil
+}
+
+// InitMetricsTables is retained for callers that explicitly request schema reconciliation.
+func InitMetricsTables() error {
+	metricsInitMu.Lock()
+	defer metricsInitMu.Unlock()
+	if MetricsDB == nil {
+		return fmt.Errorf("metrics database is not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return withMetricsSchemaLock(ctx, MetricsDB, initMetricsTables)
+}
+
+// A session advisory lock must be held on the same physical connection as the DDL.
+// Separate transactions avoid holding every hypertable/chunk lock until the entire schema finishes.
+func withMetricsSchemaLock(ctx context.Context, db *gorm.DB, migrate func(*gorm.DB) error) error {
+	return db.WithContext(ctx).Connection(func(conn *gorm.DB) (retErr error) {
+		const lockID int64 = 734681092
+		for {
+			var acquired bool
+			if err := conn.Raw("SELECT pg_try_advisory_lock(?)", lockID).Scan(&acquired).Error; err != nil {
+				return err
+			}
+			if acquired {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+		defer func() {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := conn.WithContext(cleanup).Exec("SELECT pg_advisory_unlock(?)", lockID).Error; err != nil {
+				if pinned, ok := conn.Statement.ConnPool.(*sql.Conn); ok {
+					_ = pinned.Raw(func(any) error { return driver.ErrBadConn })
+				}
+				retErr = errors.Join(retErr, fmt.Errorf("release metrics schema lock: %w", err))
+			}
+		}()
+		return migrate(conn)
+	})
 }

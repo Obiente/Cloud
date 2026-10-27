@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -190,44 +191,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
 	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
-	// Get storage bytes (snapshot from deployments, game servers, and VPS tables)
-	var deploymentStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("deployments d").
-		Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
-		Where("d.organization_id = ?", orgID).
-		Scan(&deploymentStorage)
-
-	var gameServerStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("game_servers gs").
-		Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
-		Where("gs.organization_id = ?", orgID).
-		Scan(&gameServerStorage)
-
-	var vpsStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("vps_instances vps").
-		Select("COALESCE(SUM(vps.disk_bytes), 0) as storage_bytes").
-		Where("vps.organization_id = ? AND vps.deleted_at IS NULL", orgID).
-		Scan(&vpsStorage)
-
-	var databaseStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("database_instances db").
-		Select("COALESCE(SUM(db.disk_bytes), 0) as storage_bytes").
-		Where("db.organization_id = ? AND db.deleted_at IS NULL", orgID).
-		Scan(&databaseStorage)
-	databaseStorageVal := databaseStorage.StorageBytes
-
-	storageSum := struct {
-		StorageBytes int64
-	}{
-		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes + databaseStorageVal,
+	storageBytes, storageErr := database.BillableStorageBytes(context.Background(), database.DB, orgID, time.Now())
+	if storageErr != nil {
+		return fmt.Errorf("storage accounting unavailable: %w", storageErr)
 	}
 
 	// Calculate costs using pricing model
@@ -240,7 +206,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 	bandwidthBytes := hourlyUsage.BandwidthRxBytes + hourlyUsage.BandwidthTxBytes
 	bandwidthCost = pricingModel.CalculateBandwidthCost(bandwidthBytes)
 	// Storage is monthly cost, prorate based on billing period duration
-	storageCostFullMonth := pricingModel.CalculateStorageCost(storageSum.StorageBytes)
+	storageCostFullMonth := pricingModel.CalculateStorageCost(storageBytes)
 	periodDuration := billingPeriodEnd.Sub(billingPeriodStart)
 	daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
 	daysInPeriod := periodDuration.Hours() / 24.0
@@ -543,44 +509,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
 	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
-	// Get storage bytes (snapshot from deployments, game servers, and VPS tables)
-	var deploymentStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("deployments d").
-		Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
-		Where("d.organization_id = ?", orgID).
-		Scan(&deploymentStorage)
-
-	var gameServerStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("game_servers gs").
-		Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
-		Where("gs.organization_id = ?", orgID).
-		Scan(&gameServerStorage)
-
-	var vpsStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("vps_instances vps").
-		Select("COALESCE(SUM(vps.disk_bytes), 0) as storage_bytes").
-		Where("vps.organization_id = ? AND vps.deleted_at IS NULL", orgID).
-		Scan(&vpsStorage)
-
-	var databaseStorage struct {
-		StorageBytes int64
-	}
-	database.DB.Table("database_instances db").
-		Select("COALESCE(SUM(db.disk_bytes), 0) as storage_bytes").
-		Where("db.organization_id = ? AND db.deleted_at IS NULL", orgID).
-		Scan(&databaseStorage)
-	databaseStorageVal := databaseStorage.StorageBytes
-
-	storageSum := struct {
-		StorageBytes int64
-	}{
-		StorageBytes: deploymentStorage.StorageBytes + gameServerStorage.StorageBytes + vpsStorage.StorageBytes + databaseStorageVal,
+	storageBytes, storageErr := database.BillableStorageBytes(context.Background(), database.DB, orgID, time.Now())
+	if storageErr != nil {
+		return nil, false, fmt.Errorf("storage accounting unavailable: %w", storageErr)
 	}
 
 	// Calculate costs using pricing model
@@ -593,7 +524,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 	bandwidthBytes := hourlyUsage.BandwidthRxBytes + hourlyUsage.BandwidthTxBytes
 	bandwidthCost = pricingModel.CalculateBandwidthCost(bandwidthBytes)
 	// Storage is monthly cost, prorate based on billing period duration
-	storageCostFullMonth := pricingModel.CalculateStorageCost(storageSum.StorageBytes)
+	storageCostFullMonth := pricingModel.CalculateStorageCost(storageBytes)
 	periodDuration := billingPeriodEnd.Sub(billingPeriodStart)
 	daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
 	daysInPeriod := periodDuration.Hours() / 24.0

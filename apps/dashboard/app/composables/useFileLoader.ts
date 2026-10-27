@@ -1,4 +1,4 @@
-import { ref, computed, nextTick, type Ref } from "vue";
+import { ref, computed, type Ref } from "vue";
 import { detectFilePreviewType, type FilePreviewType } from "./useFilePreview";
 import { useZipFile, type FileMetadata } from "./useZipFile";
 import { useDialog } from "./useDialog";

@@ -178,7 +178,7 @@ const emit = defineEmits<{
   'tab-drop-external': [tabId: string, event: DragEvent]
 }>()
 
-const modelValue = defineModel<string>({ default: undefined })
+const modelValue = defineModel<string>()
 
 const variantClasses = computed(() => {
   const isWindow = props.variant === "window"

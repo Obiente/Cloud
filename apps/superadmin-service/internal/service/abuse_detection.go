@@ -24,25 +24,23 @@ import (
 
 // DetectAbuse performs comprehensive abuse detection and returns all suspicious organizations and activities
 func DetectAbuse(ctx context.Context) (*superadminv1.GetAbuseDetectionResponse, error) {
+	if database.DB == nil || database.MetricsDB == nil {
+		return nil, fmt.Errorf("abuse detection requires application and metrics databases")
+	}
 	twentyFourHoursAgo := time.Now().Add(-24 * time.Hour)
 
 	// Find suspicious organizations
 	suspiciousOrgs, err := detectSuspiciousOrganizations(twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect suspicious organizations: %v", err)
-		suspiciousOrgs = []*superadminv1.SuspiciousOrganization{}
+		return nil, fmt.Errorf("organization abuse detection unavailable: %w", err)
 	}
 
 	// Find suspicious activities
 	suspiciousActivities, err := detectSuspiciousActivities(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect suspicious activities: %v", err)
-		suspiciousActivities = []*superadminv1.SuspiciousActivity{}
-	}
-
-	// Send notifications to superadmins if abuse is detected
-	if len(suspiciousOrgs) > 0 || len(suspiciousActivities) > 0 {
-		go notifySuperadminsOfAbuse(ctx, suspiciousOrgs, suspiciousActivities)
+		return nil, fmt.Errorf("activity abuse detection unavailable: %w", err)
 	}
 
 	// Calculate metrics
@@ -194,7 +192,7 @@ func detectSuspiciousOrganizations(twentyFourHoursAgo time.Time) ([]*superadminv
 				})
 			}
 		} else if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query audit logs for suspicious organizations, falling back to direct queries: %v", err)
+			return nil, fmt.Errorf("organization audit coverage unavailable: %w", err)
 		}
 	}
 
@@ -266,6 +264,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	rapidCreations, err := detectRapidResourceCreation(twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect rapid resource creation: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, rapidCreations...)
 	}
@@ -274,6 +273,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	failedPayments, err := detectFailedPayments(twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect failed payments: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, failedPayments...)
 	}
@@ -282,6 +282,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	sshBruteForce, err := detectSSHBruteForce(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect SSH brute force: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, sshBruteForce...)
 	}
@@ -290,6 +291,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	apiAbuse, err := detectAPIAbuse(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect API abuse: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, apiAbuse...)
 	}
@@ -298,6 +300,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	failedAuth, err := detectFailedAuthentication(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect failed authentication: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, failedAuth...)
 	}
@@ -306,6 +309,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	multipleAccounts, err := detectMultipleAccountCreation(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect multiple account creation: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, multipleAccounts...)
 	}
@@ -314,6 +318,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	dnsAbuse, err := detectDNSDelegationAbuse(twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect DNS delegation abuse: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, dnsAbuse...)
 	}
@@ -322,6 +327,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	usageSpikes, err := detectUsageSpikes(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect usage spikes: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, usageSpikes...)
 	}
@@ -330,6 +336,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	gameServerAbuse, err := detectGameServerAbuse(twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect game server abuse: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, gameServerAbuse...)
 	}
@@ -338,6 +345,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	cryptominers, err := detectCryptominerGameServers()
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect cryptominer game servers: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, cryptominers...)
 	}
@@ -346,6 +354,7 @@ func detectSuspiciousActivities(ctx context.Context, twentyFourHoursAgo time.Tim
 	vpsInjection, err := detectVPSShellInjection(ctx, twentyFourHoursAgo)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to detect VPS shell injection: %v", err)
+		return nil, fmt.Errorf("abuse detector failed: %w", err)
 	} else {
 		allActivities = append(allActivities, vpsInjection...)
 	}
@@ -445,11 +454,7 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 				Scan(&combinedCreations).Error
 
 			if err != nil {
-				logger.Warn("[SuperAdmin] Failed to query audit logs for rapid creations, falling back to direct table queries: %v", err)
-				combinedCreations = []struct {
-					OrganizationID string
-					Count          int64
-				}{}
+				return nil, fmt.Errorf("query rapid creations: %w", err)
 			}
 		} else {
 			logger.Warn("[SuperAdmin] MetricsDB not available, cannot use audit logs for abuse detection")
@@ -587,8 +592,7 @@ func detectSSHBruteForce(ctx context.Context, twentyFourHoursAgo time.Time) ([]*
 			Having("COUNT(*) > ?", window.threshold).
 			Scan(&bruteForceAttempts).Error
 		if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query SSH brute force for window %s: %v", window.label, err)
-			continue
+			return nil, fmt.Errorf("SSH brute force detection unavailable for %s: %w", window.label, err)
 		}
 
 		for _, bf := range bruteForceAttempts {
@@ -659,8 +663,7 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 			Having("COUNT(*) > ?", window.threshold).
 			Scan(&userAbuse).Error
 		if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query API abuse by user for window %s: %v", window.label, err)
-			continue
+			return nil, fmt.Errorf("API abuse by user detection unavailable for %s: %w", window.label, err)
 		}
 
 		for _, abuse := range userAbuse {
@@ -696,8 +699,7 @@ func detectAPIAbuse(ctx context.Context, twentyFourHoursAgo time.Time) ([]*super
 			Having("COUNT(*) > ?", window.threshold*2). // IP threshold is 2x user threshold
 			Scan(&ipAbuse).Error
 		if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query API abuse by IP for window %s: %v", window.label, err)
-			continue
+			return nil, fmt.Errorf("API abuse by IP detection unavailable for %s: %w", window.label, err)
 		}
 
 		for _, abuse := range ipAbuse {
@@ -849,11 +851,7 @@ func detectDNSDelegationAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Sus
 			Scan(&dnsKeyAbuse).Error
 
 		if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query audit logs for DNS abuse, falling back to direct query: %v", err)
-			dnsKeyAbuse = []struct {
-				OrganizationID string
-				Count          int64
-			}{}
+			return nil, fmt.Errorf("DNS abuse audit coverage unavailable: %w", err)
 		}
 	}
 
@@ -896,7 +894,7 @@ func detectUsageSpikes(ctx context.Context, twentyFourHoursAgo time.Time) ([]*su
 
 	if database.MetricsDB == nil {
 		// MetricsDB not available, skip usage spike detection
-		return activities, nil
+		return nil, fmt.Errorf("usage metrics unavailable")
 	}
 
 	// Get average usage for each deployment over the last 7 days (excluding last 24h)
@@ -923,8 +921,7 @@ func detectUsageSpikes(ctx context.Context, twentyFourHoursAgo time.Time) ([]*su
 		Group("duh.deployment_id").
 		Scan(&baselines).Error
 	if err != nil {
-		// Table might not exist or have no data
-		return activities, nil
+		return nil, fmt.Errorf("query usage metrics: %w", err)
 	}
 
 	// Get recent usage (last 24h)
@@ -950,8 +947,7 @@ func detectUsageSpikes(ctx context.Context, twentyFourHoursAgo time.Time) ([]*su
 		Group("duh.deployment_id").
 		Scan(&recent).Error
 	if err != nil {
-		// Table might not exist or have no data
-		return activities, nil
+		return nil, fmt.Errorf("query usage metrics: %w", err)
 	}
 
 	// Create baseline map
@@ -1042,11 +1038,7 @@ func detectGameServerAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Suspic
 			Scan(&rapidGameServers).Error
 
 		if err != nil {
-			logger.Warn("[SuperAdmin] Failed to query audit logs for game server abuse, falling back to direct query: %v", err)
-			rapidGameServers = []struct {
-				OrganizationID string
-				Count          int64
-			}{}
+			return nil, fmt.Errorf("game server abuse audit coverage unavailable: %w", err)
 		}
 	}
 
@@ -1565,4 +1557,16 @@ func generateAbuseFingerprint(suspiciousOrgs []*superadminv1.SuspiciousOrganizat
 	// Generate SHA256 hash
 	hash := sha256.Sum256(jsonData)
 	return hex.EncodeToString(hash[:])
+}
+
+// DetectAbuseAndNotify is used only by the scheduled detector. Reading the admin page has no notification side effects.
+func DetectAbuseAndNotify(ctx context.Context) (*superadminv1.GetAbuseDetectionResponse, error) {
+	result, err := DetectAbuse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.SuspiciousOrganizations) > 0 || len(result.SuspiciousActivities) > 0 {
+		notifySuperadminsOfAbuse(ctx, result.SuspiciousOrganizations, result.SuspiciousActivities)
+	}
+	return result, nil
 }

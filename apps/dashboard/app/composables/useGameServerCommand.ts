@@ -13,196 +13,171 @@ export function useGameServerCommand(options: UseGameServerCommandOptions) {
   const orgsStore = useOrganizationsStore();
   const config = useRuntimeConfig();
   const appConfig = useConfig();
-  
-  const organizationId = options.organizationId || orgsStore.currentOrgId || "";
   const isConnected = ref(false);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
-  
   let websocket: WebSocket | null = null;
   let connectionPromise: Promise<void> | null = null;
-  let isConnecting = false;
+  let cancelConnection: (() => void) | null = null;
 
   const connect = async (): Promise<void> => {
-    // Return existing connection promise if already connecting
-    if (connectionPromise) {
-      return connectionPromise;
-    }
-
-    // If already connected, return immediately
-    if (isConnected.value && websocket && websocket.readyState === WebSocket.OPEN) {
-      return Promise.resolve();
-    }
-
-    connectionPromise = new Promise(async (resolve, reject) => {
+    if (connectionPromise) return connectionPromise;
+    if (isConnected.value && websocket?.readyState === WebSocket.OPEN) return;
+    isLoading.value = true;
+    error.value = null;
+    const pending = new Promise<void>((resolve, reject) => {
+      let settled = false;
+      let socket: WebSocket | null = null;
+      const fail = (reason: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(deadline);
+        const failure =
+          reason instanceof Error ? reason : new Error(String(reason));
+        if (websocket === socket) {
+          error.value = failure.message;
+          isLoading.value = false;
+          isConnected.value = false;
+          websocket = null;
+        }
+        socket?.close();
+        reject(failure);
+      };
+      const deadline = setTimeout(
+        () =>
+          fail(
+            new Error("Game server connection timed out. Please try again.")
+          ),
+        10000
+      );
+      cancelConnection = () =>
+        fail(new Error("Game server connection was closed."));
       try {
-        isConnecting = true;
-        isLoading.value = true;
-        error.value = null;
-
-        const apiBase = config.public.apiHost || config.public.requestHost;
-        const disableAuth = Boolean(appConfig.disableAuth.value);
-        const wsUrlObject = new URL("/gameservers/terminal/ws", apiBase);
-        wsUrlObject.protocol = wsUrlObject.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = wsUrlObject.toString();
-
-        websocket = new WebSocket(wsUrl);
-
-        websocket.onopen = async () => {
+        const url = new URL(
+          "/gameservers/terminal/ws",
+          config.public.apiHost || config.public.requestHost
+        );
+        url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+        socket = new WebSocket(url.toString());
+        websocket = socket;
+        const current = socket;
+        current.onopen = async () => {
           try {
-            if (!auth.ready) {
-              await new Promise((resolve) => {
-                const checkReady = () => {
-                  if (auth.ready) {
-                    resolve(undefined);
-                  } else {
-                    setTimeout(checkReady, 100);
-                  }
-                };
-                checkReady();
-              });
+            const started = Date.now();
+            while (
+              !auth.ready &&
+              !settled &&
+              websocket === current &&
+              Date.now() - started < 4000
+            ) {
+              await new Promise<void>((resolve) => setTimeout(resolve, 100));
             }
-
+            if (settled || websocket !== current) return;
+            if (!auth.ready)
+              throw new Error("Authentication is not ready. Please try again.");
             let token = await auth.getAccessToken();
-            if (!token && disableAuth) {
-              token = "dev-dummy-token";
-            }
-
-            if (!token) {
-              const err = "Authentication required. Please log in.";
-              error.value = err;
-              isLoading.value = false;
-              websocket?.close();
-              reject(new Error(err));
+            if (
+              settled ||
+              websocket !== current ||
+              current.readyState !== WebSocket.OPEN
+            )
               return;
-            }
-
-            const initMessage: any = {
-              type: "init",
-              gameServerId: options.gameServerId,
-              organizationId: organizationId,
-              token,
-              cols: 80,
-              rows: 24,
-            };
-
-            websocket!.send(JSON.stringify(initMessage));
-          } catch (err: unknown) {
-            error.value = (err as Error).message || "Failed to initialize connection";
-            isLoading.value = false;
-            websocket?.close();
-            reject(err);
+            if (!token && appConfig.disableAuth.value)
+              token = "dev-dummy-token";
+            if (!token)
+              throw new Error("Authentication required. Please log in.");
+            current.send(
+              JSON.stringify({
+                type: "init",
+                gameServerId: options.gameServerId,
+                organizationId:
+                  options.organizationId || orgsStore.currentOrgId || "",
+                token,
+                cols: 80,
+                rows: 24,
+              })
+            );
+          } catch (reason) {
+            fail(reason);
           }
         };
-
-        websocket.onmessage = (event: MessageEvent) => {
+        current.onmessage = (event) => {
+          if (websocket !== current) return;
           try {
             const message = JSON.parse(event.data);
-
-            if (message.type === "connected") {
+            if (message.type === "connected" && !settled) {
+              settled = true;
+              clearTimeout(deadline);
+              cancelConnection = null;
               isConnected.value = true;
               isLoading.value = false;
               error.value = null;
-              isConnecting = false;
-              connectionPromise = null;
               resolve();
             } else if (message.type === "error") {
-              const errMsg = message.message || "Connection error";
-              error.value = errMsg;
-              isConnected.value = false;
-              isLoading.value = false;
-              isConnecting = false;
-              connectionPromise = null;
-              reject(new Error(errMsg));
+              if (!settled)
+                fail(new Error(message.message || "Connection failed"));
+              else {
+                error.value = message.message || "Connection failed";
+                current.close();
+              }
             }
-          } catch (err: unknown) {
-            console.error("Error processing WebSocket message:", err);
+          } catch {
+            fail(new Error("Invalid game server connection response."));
           }
         };
-
-        websocket.onerror = (err) => {
-          console.error("WebSocket error:", err);
-          const errMsg = "Failed to connect to game server";
-          error.value = errMsg;
-          isLoading.value = false;
-          isConnecting = false;
-          connectionPromise = null;
-          reject(new Error(errMsg));
+        current.onerror = () => {
+          if (!settled) fail(new Error("Failed to connect to game server."));
+          else if (websocket === current) {
+            error.value = "Game server connection failed.";
+            current.close();
+          }
         };
-
-        websocket.onclose = () => {
-          isConnected.value = false;
-          websocket = null;
-          isLoading.value = false;
-          isConnecting = false;
-          connectionPromise = null;
+        current.onclose = () => {
+          if (!settled)
+            fail(
+              new Error("Game server connection closed before it was ready.")
+            );
+          if (websocket === current) {
+            websocket = null;
+            isConnected.value = false;
+            isLoading.value = false;
+          }
         };
-      } catch (err: unknown) {
-        error.value = (err as Error).message || "Failed to connect";
-        isLoading.value = false;
-        isConnecting = false;
-        connectionPromise = null;
-        reject(err);
+      } catch (reason) {
+        fail(reason);
       }
     });
-
-    return connectionPromise;
-  };
-
-  const sendCommand = async (command: string): Promise<void> => {
-    // Ensure we're connected
-    if (!isConnected.value || !websocket || websocket.readyState !== WebSocket.OPEN) {
-      await connect();
-    }
-
-    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-      throw new Error("Not connected to game server");
-    }
-
-    // Send command to game server stdin
-    const encoder = new TextEncoder();
-    const input = encoder.encode(command.trim() + "\n");
-    
+    connectionPromise = pending;
     try {
-      websocket.send(
-        JSON.stringify({
-          type: "input",
-          input: Array.from(input),
-        })
-      );
-    } catch (err: unknown) {
-      console.error("Failed to send command:", err);
-      throw new Error(`Failed to send command: ${(err as Error).message || "Unknown error"}`);
+      await pending;
+    } finally {
+      if (connectionPromise === pending) {
+        connectionPromise = null;
+        cancelConnection = null;
+      }
     }
   };
-
+  const sendCommand = async (command: string): Promise<void> => {
+    if (!isConnected.value || websocket?.readyState !== WebSocket.OPEN)
+      await connect();
+    if (!websocket || websocket.readyState !== WebSocket.OPEN)
+      throw new Error("Not connected to game server");
+    websocket.send(
+      JSON.stringify({
+        type: "input",
+        input: Array.from(new TextEncoder().encode(command.trim() + "\n")),
+      })
+    );
+  };
   const disconnect = () => {
-    if (websocket) {
-      try {
-        websocket.close();
-      } catch {
-        // ignore
-      }
-      websocket = null;
-    }
+    cancelConnection?.();
+    cancelConnection = null;
+    websocket?.close();
+    websocket = null;
+    connectionPromise = null;
     isConnected.value = false;
     isLoading.value = false;
-    connectionPromise = null;
-    isConnecting = false;
   };
-
-  // Cleanup on unmount
-  onUnmounted(() => {
-    disconnect();
-  });
-
-  return {
-    isConnected,
-    isLoading,
-    error,
-    connect,
-    sendCommand,
-    disconnect,
-  };
+  onUnmounted(disconnect);
+  return { isConnected, isLoading, error, connect, sendCommand, disconnect };
 }
-

@@ -56,6 +56,7 @@ type RouteRegistry struct {
 	// Wake/sleep callbacks (set by service layer)
 	OnWake  WakeFunc
 	OnSleep SleepFunc
+	OnStop  SleepFunc
 
 	// Redis port allocator
 	redisMu        sync.Mutex
@@ -219,7 +220,7 @@ func (r *RouteRegistry) ReleaseRedisPort(port int) {
 func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	var instances []database.DatabaseInstance
 	if err := database.DB.WithContext(ctx).
-		Where("status IN (?, ?, ?) AND deleted_at IS NULL", 3, 5, 12). // RUNNING, STOPPED, SLEEPING
+		Where("(status IN (?, ?, ?) OR (status IN (2,4,8) AND desired_state <> '')) AND deleted_at IS NULL", 3, 5, 12). // RUNNING, STOPPED, SLEEPING
 		Find(&instances).Error; err != nil {
 		return fmt.Errorf("failed to load database instances: %w", err)
 	}
@@ -320,6 +321,15 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 	}
 
 	for _, inst := range instances {
+		// Adopt existing running resources once; explicit stop/sleep wins.
+		if inst.DesiredState == "" && inst.Status == 3 {
+			if err := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).Where("id = ? AND desired_state = '' AND status = 3", inst.ID).Update("desired_state", "running").Error; err != nil {
+				return err
+			}
+			if err := database.DB.WithContext(ctx).First(&inst, "id = ?", inst.ID).Error; err != nil {
+				return err
+			}
+		}
 		dbType := databaseTypeIntToString(inst.Type)
 		internalPort := standardPort(dbType)
 		lastConnectionAt := time.Now()
@@ -335,6 +345,12 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			DBStatus:         inst.Status,
 			AutoSleepSeconds: inst.AutoSleepSeconds,
 			LastConnectionAt: lastConnectionAt,
+		}
+
+		// Load connection credentials
+		if conn, ok := connMap[inst.ID]; ok {
+			route.Username = conn.Username
+			route.Password = conn.Password
 		}
 
 		// Mark sleeping/stopped routes
@@ -378,6 +394,21 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			// local Docker daemon. Owner-specific DNS sends clients to that task.
 			continue
 		}
+		if containerOwnedLocally && containerIsLocal && (inst.DesiredState == "stopped" || inst.DesiredState == "sleeping") {
+			route.Stopped = true
+			route.DBStatus = 5
+			if inst.DesiredState == "sleeping" {
+				route.DBStatus = 12
+			}
+			if r.OnStop != nil && (databaseContainerIsRunning(containerState) || inst.Status != route.DBStatus) {
+				if err := r.OnStop(ctx, route); err != nil {
+					logger.Warn("Database stop recovery pending for %s: %v", inst.ID, err)
+				}
+			}
+			newRoutes[route.DatabaseID] = route
+			newRoutesByID[route.DatabaseID] = route
+			continue
+		}
 		locationReconciled := false
 		if route.ContainerID != "" && r.dockerClient != nil && localNodeErr == nil {
 			if containerIsLocal && databaseContainerIsRunning(containerState) && (inst.Status == 5 || inst.Status == 12) {
@@ -408,12 +439,26 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			}
 		}
 
-		// Load connection credentials
-		if conn, ok := connMap[inst.ID]; ok {
-			route.Username = conn.Username
-			route.Password = conn.Password
+		// Repair network membership even for stopped databases before a future wake.
+		if route.ContainerID != "" && r.dockerClient != nil && containerOwnedLocally && containerIsLocal {
+			if err := r.reconcileContainerNetwork(ctx, route.ContainerID); err != nil {
+				logger.Warn("Network recovery pending for database %s: %v", inst.ID, err)
+				route.ContainerIP = ""
+				newRoutes[route.DatabaseID] = route
+				newRoutesByID[route.DatabaseID] = route
+				continue
+			}
 		}
-
+		// Retry after network repair without recreating or moving database data.
+		if containerOwnedLocally && containerIsLocal && !databaseContainerIsRunning(containerState) && inst.DesiredState == "running" && r.OnWake != nil {
+			if _, err := r.OnWake(ctx, route); err != nil {
+				logger.Warn("Database recovery pending for %s: %v", inst.ID, err)
+				route.Stopped = true
+			} else {
+				route.Stopped = false
+				route.DBStatus = 3
+			}
+		}
 		// Only resolve IPs for running databases
 		if route.Stopped {
 			newRoutes[route.DatabaseID] = route
@@ -423,8 +468,6 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 
 		// Ensure container is on the correct network, then resolve IP
 		if route.ContainerID != "" && r.dockerClient != nil && containerOwnedLocally {
-			r.reconcileContainerNetwork(ctx, route.ContainerID)
-
 			if ip, err := r.resolveContainerIP(ctx, route.ContainerID); err == nil {
 				route.ContainerIP = ip
 			} else {
@@ -661,21 +704,9 @@ func (r *RouteRegistry) refreshIPs(ctx context.Context) {
 	}
 }
 
-// reconcileContainerNetwork ensures a container is attached to obiente-databases.
-func (r *RouteRegistry) reconcileContainerNetwork(ctx context.Context, containerID string) {
-	inspect, err := r.dockerClient.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return
-	}
-
-	if inspect.NetworkSettings != nil {
-		if _, ok := inspect.NetworkSettings.Networks["obiente-databases"]; !ok {
-			logger.Info("Reconcile: connecting container %s to obiente-databases network", containerID)
-			if err := r.dockerClient.NetworkConnect(ctx, "obiente-databases", containerID); err != nil {
-				logger.Warn("Reconcile: failed to connect container %s to obiente-databases: %v", containerID, err)
-			}
-		}
-	}
+// reconcileContainerNetwork validates the current network identity and endpoint.
+func (r *RouteRegistry) reconcileContainerNetwork(ctx context.Context, containerID string) error {
+	return r.dockerClient.EnsureContainerNetwork(ctx, containerID, "obiente-databases")
 }
 
 func (r *RouteRegistry) resolveContainerIP(ctx context.Context, containerID string) (string, error) {
@@ -693,12 +724,7 @@ func (r *RouteRegistry) resolveContainerIP(ctx context.Context, containerID stri
 		if nw, ok := netSettings.Networks["obiente-databases"]; ok && nw.IPAddress.IsValid() {
 			return nw.IPAddress.String(), nil
 		}
-		// Fallback to any network
-		for _, nw := range netSettings.Networks {
-			if nw.IPAddress.IsValid() {
-				return nw.IPAddress.String(), nil
-			}
-		}
+
 	}
 
 	return "", fmt.Errorf("no IP address found for container %s", containerID)

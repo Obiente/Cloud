@@ -1,7 +1,7 @@
 # Build stage for File Transfer Service
 ARG BASE_REGISTRY=docker.io
 
-FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
+FROM ${BASE_REGISTRY}/library/golang:1.27.3-alpine AS go-builder
 
 ARG TARGETARCH
 ARG TARGETOS

@@ -1905,7 +1905,7 @@ function validateSelectStatements(content: string, model: any, monacoInstance: a
 
         // Handle table.column or alias.column
         let colName = colPart.trim();
-        let targetTableName = tableName;
+        const targetTableName = tableName;
 
         if (colName.includes('.')) {
           const [prefix, col] = colName.split('.');

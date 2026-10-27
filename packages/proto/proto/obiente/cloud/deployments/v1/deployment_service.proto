@@ -1143,6 +1143,8 @@ message Deployment {
   google.protobuf.Timestamp last_deployed_at = 12;
   int64 bandwidth_usage = 13;
   int64 storage_usage = 14;
+  bool storage_available = 53;
+  optional google.protobuf.Timestamp storage_measured_at = 54;
   google.protobuf.Timestamp created_at = 15;
   // Build time in seconds
   int32 build_time = 16;

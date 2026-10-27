@@ -8,6 +8,7 @@
     :persist-rect="persistRect"
     :strategy="strategy"
   >
+    <ClientOnly>
     <Teleport to="body">
       <FloatingPanel.Positioner class="z-40">
         <FloatingPanel.Content
@@ -57,6 +58,7 @@
         </FloatingPanel.Content>
       </FloatingPanel.Positioner>
     </Teleport>
+    </ClientOnly>
   </FloatingPanel.Root>
 </template>
 

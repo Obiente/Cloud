@@ -15,7 +15,7 @@
       <div :class="filter.class || 'min-w-[160px]'">
         <OuiSelect
           v-model="filterValues[filter.key]"
-          :items="filter.items"
+          :items="filterItems(filter)"
           :placeholder="filter.placeholder"
           size="sm"
           @update:model-value="handleFilterChange(filter.key, $event)"
@@ -82,11 +82,13 @@ const emit = defineEmits<{
 const searchValue = ref(props.search);
 const filterValues = ref<Record<string, string>>({});
 
-// Initialize filter values
-props.filters.forEach((filter) => {
-  const defaultItem = filter.items.find((item) => item.value === "all" || item.value === "");
-  filterValues.value[filter.key] = defaultItem?.value || filter.items[0]?.value || "";
-});
+const filterItems = (filter: FilterConfig) => filter.items.some(item => item.value === "" || item.value === "all")
+  ? filter.items : [{ key: "all", label: "All", value: "" }, ...filter.items];
+watch(() => props.filters, filters => {
+  for (const filter of filters) {
+    if (!(filter.key in filterValues.value)) filterValues.value[filter.key] = "";
+  }
+}, { immediate: true });
 
 watch(() => props.search, (newValue) => {
   if (searchValue.value !== newValue) {

@@ -25,7 +25,7 @@
         v-if="listError"
         :error="listError"
         title="Failed to load game servers"
-        hint="Please try refreshing the page. If the problem persists, contact support."
+        hint="We will retry automatically."
       />
 
       <OuiCard variant="default">
@@ -67,7 +67,7 @@
 
       <!-- Empty State -->
       <SharedEmptyState
-        v-else-if="filteredGameServers.length === 0"
+        v-else-if="!listError && filteredGameServers.length === 0"
         :icon="CubeIcon"
         title="No game servers found"
         :description="searchQuery || statusFilter || gameTypeFilter
@@ -250,7 +250,6 @@ const orgsStore = useOrganizationsStore();
 const client = useConnectClient(GameServerService);
 
 // Error handling
-const listError = ref<Error | null>(null);
 
 // Compute hint for create error - only show "logged in" hint if user is not authenticated
 const createErrorHint = computed(() => {
@@ -279,21 +278,16 @@ if (route.query.organizationId && typeof route.query.organizationId === "string"
 const organizationId = useOrganizationId();
 
 // Fetch game servers via optimized client fetch
-const { data: gameServersData, pending, refresh: refreshGameServers } = await useClientFetch(
+const { data: gameServersData, pending, error: listError, refresh: refreshGameServers } = await useClientFetch(
   () => `game-servers-list-${organizationId.value}`,
   async () => {
-    try {
-      const response = await client.listGameServers({
-        organizationId: organizationId.value || undefined,
-      });
-      return response.gameServers || [];
-    } catch (error) {
-      console.error("Failed to list game servers:", error);
-      listError.value = error as Error;
-      return [];
-    }
+    const orgId = organizationId.value;
+    if (!orgId) return [];
+    const response = await client.listGameServers({ organizationId: orgId });
+    return response.gameServers || [];
   }
 );
+useAutoRefresh(refreshGameServers);
 
 // Convert game servers to local format
 const gameServers = computed(() => {
@@ -330,7 +324,7 @@ const gameServers = computed(() => {
     return {
       id: gs.id,
       name: gs.name,
-      gameType: gs.gameType?.toString(),
+      gameType: GameType[gs.gameType] || "OTHER",
       status: status,
       port: gs.port,
       extraPorts: gs.extraPorts || [],
@@ -386,7 +380,7 @@ const statusFilterOptions = [
   { label: "Stopped", value: "STOPPED" },
   { label: "Starting", value: "STARTING" },
   { label: "Stopping", value: "STOPPING" },
-  { label: "Error", value: "ERROR" },
+  { label: "Failed", value: "FAILED" },
 ];
 
 // Game type filter options

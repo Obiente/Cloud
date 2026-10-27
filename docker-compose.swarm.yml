@@ -209,7 +209,7 @@ services:
 
   # API Gateway - Routes requests to all microservices
   api-gateway:
-    image: ghcr.io/obiente/cloud-api-gateway:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-api-gateway:latest
     environment:
       PORT: 3001
       <<: [*common-auth, *common-api-gateway]
@@ -227,9 +227,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -276,7 +276,7 @@ services:
 
   # Auth Service - Microservice for authentication
   auth-service:
-    image: ghcr.io/obiente/cloud-auth-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-auth-service:latest
     environment:
       PORT: 3002
       <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard, *common-github]
@@ -290,7 +290,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -322,7 +322,7 @@ services:
 
   # Organizations Service - Microservice for organization management
   organizations-service:
-    image: ghcr.io/obiente/cloud-organizations-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-organizations-service:latest
     environment:
       PORT: 3003
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
@@ -336,7 +336,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -368,7 +368,7 @@ services:
 
   # Billing Service - Microservice for billing and Stripe integration
   billing-service:
-    image: ghcr.io/obiente/cloud-billing-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-billing-service:latest
     environment:
       PORT: 3004
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard, *common-notifications]
@@ -382,7 +382,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -414,7 +414,7 @@ services:
 
   # Deployments Service - Microservice for deployment management
   deployments-service:
-    image: ghcr.io/obiente/cloud-deployments-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-deployments-service:latest
     environment:
       PORT: 3005
       STACK_NAME: __STACK_NAME__
@@ -434,9 +434,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -486,7 +486,7 @@ services:
 
   # Databases Service - Microservice for managed database management
   databases-service:
-    image: ghcr.io/obiente/cloud-databases-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-databases-service:latest
     environment:
       PORT: 3014
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
@@ -500,9 +500,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -544,7 +544,7 @@ services:
   # Global data-plane proxy. Every possible database owner node exposes the
   # host-mode listeners used by owner-specific database DNS records.
   databases-proxy:
-    image: ghcr.io/obiente/cloud-databases-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-databases-service:latest
     environment:
       PORT: 3014
       ENABLE_SWARM: ${ENABLE_SWARM:-true}
@@ -557,9 +557,9 @@ services:
         delay: 10s
         order: stop-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -600,7 +600,7 @@ services:
 
   # Game Servers Service - Microservice for game server management
   gameservers-service:
-    image: ghcr.io/obiente/cloud-gameservers-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-gameservers-service:latest
     environment:
       PORT: 3006
       DOMAIN: ${DOMAIN:-localhost}
@@ -620,7 +620,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -636,12 +636,13 @@ services:
         - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service.entrypoints=web"
         - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+        - "traefik.http.services.gameservers-service.loadbalancer.healthcheck.path=/readyz"
         - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
         - "traefik.http.routers.gameservers-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3006/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3006/livez || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -651,7 +652,7 @@ services:
       - obiente-network
 
   file-transfer-service:
-    image: ghcr.io/obiente/cloud-file-transfer-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-file-transfer-service:latest
     environment:
       PORT: 3022
       SFTP_PORT: 2222
@@ -672,9 +673,9 @@ services:
         parallelism: 1
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -706,7 +707,7 @@ services:
 
   # Orchestrator Service - Microservice for container orchestration and metrics
   orchestrator-service:
-    image: ghcr.io/obiente/cloud-orchestrator-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-orchestrator-service:latest
     environment:
       PORT: 3007
       <<: [*common-database, *common-metrics-db, *common-redis, *common-swarm-orchestrator, *common-vps, *common-dns-delegation, *common-notifications]
@@ -723,7 +724,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -734,6 +735,8 @@ services:
           memory: 128M
       labels:
         - "cloud.obiente.service=orchestrator-service"
+        - "prometheus.scrape=true"
+        - "prometheus.port=9091"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.orchestrator-service.rule=Host(`orchestrator-service.${DOMAIN:-localhost}`)"
@@ -755,7 +758,7 @@ services:
 
   # VPS Service - Microservice for VPS management
   vps-service:
-    image: ghcr.io/obiente/cloud-vps-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-vps-service:latest
     environment:
       PORT: 3008
       <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps, *common-notifications, *common-redis]
@@ -771,7 +774,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -808,7 +811,7 @@ services:
 
   # Support Service - Microservice for support ticket management
   support-service:
-    image: ghcr.io/obiente/cloud-support-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-support-service:latest
     environment:
       PORT: 3009
       <<: [*common-database, *common-metrics-db, *common-auth]
@@ -822,7 +825,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -854,7 +857,7 @@ services:
 
   # Audit Service - Microservice for audit log management
   audit-service:
-    image: ghcr.io/obiente/cloud-audit-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-audit-service:latest
     environment:
       PORT: 3010
       <<: [*common-database, *common-metrics-db, *common-auth]
@@ -868,7 +871,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -899,7 +902,7 @@ services:
       - obiente-network
 
   notifications-service:
-    image: ghcr.io/obiente/cloud-notifications-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-notifications-service:latest
     environment:
       PORT: 3012
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
@@ -913,7 +916,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -945,7 +948,7 @@ services:
 
   # Superadmin Service - Microservice for superadmin operations
   superadmin-service:
-    image: ghcr.io/obiente/cloud-superadmin-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-superadmin-service:latest
     environment:
       PORT: 3011
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-swarm-orchestrator, *common-vps, *common-notifications]
@@ -959,7 +962,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -992,7 +995,7 @@ services:
   # DNS Service - Microservice for DNS resolution
   # Set ENABLE_DNS=false to disable this service when using DNS delegation
   dns-service:
-    image: ghcr.io/obiente/cloud-dns-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-dns-service:latest
     environment:
       <<: [*common-database, *common-redis, *common-swarm-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
@@ -1021,9 +1024,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -1153,6 +1156,8 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "prometheus.scrape=true"
+        - "prometheus.port=8080"
         - "cloud.obiente.ingress-proxy=true"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -1173,6 +1178,22 @@ services:
   # ============================================================================
 
   # Prometheus - Metrics collection
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - obiente-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+
   prometheus:
     image: prom/prometheus:latest
     user: "0:0"  # Run as root to access Docker socket for Swarm service discovery
@@ -1183,6 +1204,7 @@ services:
     volumes:
       - prometheus_data:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Required for Docker Swarm service discovery
     deploy:
       replicas: 1

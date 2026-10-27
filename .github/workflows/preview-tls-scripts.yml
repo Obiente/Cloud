@@ -1,4 +1,4 @@
-name: Validate Preview TLS Scripts
+name: Validate Deployment Scripts
 
 on:
   pull_request:
@@ -12,6 +12,15 @@ on:
       - "scripts/tests/install-preview-tls-renewal-test.sh"
       - "scripts/internal/systemd/obiente-preview-tls-renew.*"
       - "tools/preview-tls-scripts/project.json"
+      - "scripts/deploy-swarm*.sh"
+      - "scripts/force-deploy.sh"
+      - "scripts/rollback-swarm.sh"
+      - "scripts/redeploy-dashboard.sh"
+      - "scripts/build-swarm.sh"
+      - "scripts/lib/*.sh"
+      - "scripts/tests/*.sh"
+      - "tools/deployment-preflight/**"
+      - "docker-compose*.yml"
   push:
     branches:
       - main
@@ -25,6 +34,15 @@ on:
       - "scripts/tests/install-preview-tls-renewal-test.sh"
       - "scripts/internal/systemd/obiente-preview-tls-renew.*"
       - "tools/preview-tls-scripts/project.json"
+      - "scripts/deploy-swarm*.sh"
+      - "scripts/force-deploy.sh"
+      - "scripts/rollback-swarm.sh"
+      - "scripts/redeploy-dashboard.sh"
+      - "scripts/build-swarm.sh"
+      - "scripts/lib/*.sh"
+      - "scripts/tests/*.sh"
+      - "tools/deployment-preflight/**"
+      - "docker-compose*.yml"
 
 permissions:
   contents: read
@@ -56,3 +74,6 @@ jobs:
 
       - name: Run preview TLS validation target
         run: pnpm exec nx run preview-tls-scripts:validate
+
+      - name: Validate deployment configuration and recovery helpers
+        run: pnpm exec nx run deployment-preflight:test

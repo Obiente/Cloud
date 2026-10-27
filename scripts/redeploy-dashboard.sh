@@ -7,6 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=scripts/lib/dashboard-readiness.sh
+source "${SCRIPT_DIR}/lib/dashboard-readiness.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -51,15 +53,10 @@ sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
 # Deploy dashboard service in the same stack (not a separate stack)
 docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
 
-echo "✅ Dashboard redeployed!"
-
-# Force update Traefik to rediscover
-echo ""
-echo "🔄 Forcing Traefik to rediscover services..."
-docker service update --force "${STACK_NAME}_traefik" || echo "⚠️  Could not update Traefik (may not be running or may need to run on manager node)"
+wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
 
 echo ""
-echo "✅ Done! Wait ~10 seconds for Traefik to discover the dashboard."
+echo "✅ Dashboard deployment verified."
 echo "📋 Check dashboard labels:"
 echo "   # Find dashboard service name first:"
 echo "   DASHBOARD_SERVICE=\$(docker service ls --format '{{.Name}}' | grep -i dashboard | head -1)"

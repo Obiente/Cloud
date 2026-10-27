@@ -255,10 +255,6 @@ const handleScroll = (event?: Event) => {
 
   const scrollTop = scrollContainer.scrollTop;
 
-  // Debug logging (remove in production if needed)
-  if (scrollTop < 500) {
-  }
-
   // If user scrolls within 300px of the top, load older logs
   // Increased threshold for better UX - starts loading before reaching the very top
   if (scrollTop < 300 && logs.value.length > 0) {

@@ -1,4 +1,5 @@
 import { eventHandler } from "h3";
+import { remainingTokenLifetime } from "../../utils/token-lifetime";
 
 /**
  * API endpoint to get the current access token from session
@@ -14,7 +15,7 @@ export default eventHandler(async (event) => {
 
   const session = await getUserSession(event);
 
-  if (!session || !session.secure?.access_token) {
+  if (!session?.secure?.access_token) {
     return { accessToken: null };
   }
 
@@ -26,7 +27,8 @@ export default eventHandler(async (event) => {
   }
 
   // Get expiry information from session
-  const expiresIn = session.secure?.expires_in || 3600; // Default to 1 hour
+  const expiresIn = remainingTokenLifetime(session.secure);
+  if (expiresIn <= 0) return { accessToken: null, expiresIn: 0 };
 
   return {
     accessToken: token,

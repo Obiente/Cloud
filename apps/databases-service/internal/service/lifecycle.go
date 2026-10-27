@@ -41,6 +41,10 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
+	if err := database.SetDatabaseDesiredState(ctx, dbInstance.ID, "running"); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+
 	// Update status to STARTING
 	dbInstance.Status = 2 // STARTING
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
@@ -53,30 +57,33 @@ func (s *Service) StartDatabase(ctx context.Context, req *connect.Request[databa
 		startCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
-		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
-			if err := s.provisioner.StartDatabase(startCtx, *dbInstance.InstanceID); err != nil {
-				logger.Error("Failed to start database container: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(startCtx, dbInstance)
-				updateDatabaseLocationStatus(startCtx, dbInstance.ID, "failed")
+		s.runDatabaseOperation(startCtx, dbInstance.ID, "running", func() {
+
+			if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
+				if err := s.provisioner.StartDatabase(startCtx, *dbInstance.InstanceID); err != nil {
+					logger.Error("Failed to start database container: %v", err)
+					dbInstance.Status = 8 // FAILED
+					s.repo.Update(startCtx, dbInstance)
+					updateDatabaseLocationStatus(startCtx, dbInstance.ID, "failed")
+					return
+				}
+			}
+
+			// Update status to RUNNING
+			dbInstance.Status = 3 // RUNNING
+			dbInstance.LastStartedAt = timePtr(time.Now())
+			if err := s.persistDatabaseInstance(startCtx, dbInstance); err != nil {
+				logger.Error("Failed to persist running database status: %v", err)
 				return
 			}
-		}
+			updateDatabaseLocationStatus(startCtx, dbInstance.ID, "running")
 
-		// Update status to RUNNING
-		dbInstance.Status = 3 // RUNNING
-		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.persistDatabaseInstance(startCtx, dbInstance); err != nil {
-			logger.Error("Failed to persist running database status: %v", err)
-			return
-		}
-		updateDatabaseLocationStatus(startCtx, dbInstance.ID, "running")
-
-		// Update route registry
-		if s.routeRegistry != nil {
-			containerName := fmt.Sprintf("obiente-%s", dbInstance.ID)
-			s.routeRegistry.MarkRunning(dbInstance.ID, containerName)
-		}
+			// Update route registry
+			if s.routeRegistry != nil {
+				containerName := fmt.Sprintf("obiente-%s", dbInstance.ID)
+				s.routeRegistry.MarkRunning(dbInstance.ID, containerName)
+			}
+		})
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -112,6 +119,10 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
+	if err := database.SetDatabaseDesiredState(ctx, dbInstance.ID, "stopped"); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+
 	// Update status to STOPPING
 	dbInstance.Status = 4 // STOPPING
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
@@ -124,26 +135,29 @@ func (s *Service) StopDatabase(ctx context.Context, req *connect.Request[databas
 		stopCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
-		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
-			if err := s.provisioner.StopDatabase(stopCtx, *dbInstance.InstanceID); err != nil {
-				logger.Error("Failed to stop database container: %v", err)
-				s.restoreDatabaseAfterFailedStop(stopCtx, dbInstance)
+		s.runDatabaseOperation(stopCtx, dbInstance.ID, "stopped", func() {
+
+			if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
+				if err := s.provisioner.StopDatabase(stopCtx, *dbInstance.InstanceID); err != nil {
+					logger.Error("Failed to stop database container: %v", err)
+					s.restoreDatabaseAfterFailedStop(stopCtx, dbInstance)
+					return
+				}
+			}
+
+			// Update status to STOPPED
+			dbInstance.Status = 5 // STOPPED
+			if err := s.persistDatabaseInstance(stopCtx, dbInstance); err != nil {
+				logger.Error("Failed to persist stopped database status: %v", err)
 				return
 			}
-		}
+			updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "stopped")
 
-		// Update status to STOPPED
-		dbInstance.Status = 5 // STOPPED
-		if err := s.persistDatabaseInstance(stopCtx, dbInstance); err != nil {
-			logger.Error("Failed to persist stopped database status: %v", err)
-			return
-		}
-		updateDatabaseLocationStatus(stopCtx, dbInstance.ID, "stopped")
-
-		// Update route registry - STOPPED means no auto-wake
-		if s.routeRegistry != nil {
-			s.routeRegistry.MarkStopped(dbInstance.ID, 5)
-		}
+			// Update route registry - STOPPED means no auto-wake
+			if s.routeRegistry != nil {
+				s.routeRegistry.MarkStopped(dbInstance.ID, 5)
+			}
+		})
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -179,6 +193,10 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("database not found"))
 	}
 
+	if err := database.SetDatabaseDesiredState(ctx, dbInstance.ID, "running"); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+
 	// Update status (using STARTING as an interim state)
 	dbInstance.Status = 2 // STARTING
 	if err := s.repo.Update(ctx, dbInstance); err != nil {
@@ -191,24 +209,27 @@ func (s *Service) RestartDatabase(ctx context.Context, req *connect.Request[data
 		restartCtx, cancel := s.detachedContext(3 * time.Minute)
 		defer cancel()
 
-		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
-			if err := s.provisioner.RestartDatabase(restartCtx, *dbInstance.InstanceID); err != nil {
-				logger.Error("Failed to restart database container: %v", err)
-				dbInstance.Status = 8 // FAILED
-				s.repo.Update(restartCtx, dbInstance)
-				updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "failed")
+		s.runDatabaseOperation(restartCtx, dbInstance.ID, "running", func() {
+
+			if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
+				if err := s.provisioner.RestartDatabase(restartCtx, *dbInstance.InstanceID); err != nil {
+					logger.Error("Failed to restart database container: %v", err)
+					dbInstance.Status = 8 // FAILED
+					s.repo.Update(restartCtx, dbInstance)
+					updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "failed")
+					return
+				}
+			}
+
+			// Update status to RUNNING
+			dbInstance.Status = 3 // RUNNING
+			dbInstance.LastStartedAt = timePtr(time.Now())
+			if err := s.persistDatabaseInstance(restartCtx, dbInstance); err != nil {
+				logger.Error("Failed to persist running database status after restart: %v", err)
 				return
 			}
-		}
-
-		// Update status to RUNNING
-		dbInstance.Status = 3 // RUNNING
-		dbInstance.LastStartedAt = timePtr(time.Now())
-		if err := s.persistDatabaseInstance(restartCtx, dbInstance); err != nil {
-			logger.Error("Failed to persist running database status after restart: %v", err)
-			return
-		}
-		updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "running")
+			updateDatabaseLocationStatus(restartCtx, dbInstance.ID, "running")
+		})
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -250,33 +271,40 @@ func (s *Service) SleepDatabase(ctx context.Context, req *connect.Request[databa
 	updateDatabaseLocationStatus(ctx, dbInstance.ID, "stopping")
 
 	// Stop the database container asynchronously
+	if err := database.SetDatabaseDesiredState(ctx, dbInstance.ID, "sleeping"); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+
 	go func() {
 		sleepCtx, cancel := s.detachedContext(2 * time.Minute)
 		defer cancel()
 
-		if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
-			if err := s.provisioner.StopDatabase(sleepCtx, *dbInstance.InstanceID); err != nil {
-				logger.Error("Failed to stop database container for sleep: %v", err)
-				s.restoreDatabaseAfterFailedStop(sleepCtx, dbInstance)
+		s.runDatabaseOperation(sleepCtx, dbInstance.ID, "sleeping", func() {
+
+			if dbInstance.InstanceID != nil && *dbInstance.InstanceID != "" && s.provisioner != nil {
+				if err := s.provisioner.StopDatabase(sleepCtx, *dbInstance.InstanceID); err != nil {
+					logger.Error("Failed to stop database container for sleep: %v", err)
+					s.restoreDatabaseAfterFailedStop(sleepCtx, dbInstance)
+					return
+				}
+			}
+
+			// Update status to SLEEPING (not STOPPED)
+			dbInstance.Status = 12 // SLEEPING
+			if err := s.persistDatabaseInstance(sleepCtx, dbInstance); err != nil {
+				logger.Error("Failed to persist sleeping database status: %v", s.recoverAfterSleepingWriteFailure(dbInstance, &proxy.Route{
+					DatabaseID:  dbInstance.ID,
+					ContainerID: valueOrEmpty(dbInstance.InstanceID),
+				}, err))
 				return
 			}
-		}
+			updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
 
-		// Update status to SLEEPING (not STOPPED)
-		dbInstance.Status = 12 // SLEEPING
-		if err := s.persistDatabaseInstance(sleepCtx, dbInstance); err != nil {
-			logger.Error("Failed to persist sleeping database status: %v", s.recoverAfterSleepingWriteFailure(dbInstance, &proxy.Route{
-				DatabaseID:  dbInstance.ID,
-				ContainerID: valueOrEmpty(dbInstance.InstanceID),
-			}, err))
-			return
-		}
-		updateDatabaseLocationStatus(sleepCtx, dbInstance.ID, "sleeping")
-
-		// Update route registry - SLEEPING means auto-wake on connect
-		if s.routeRegistry != nil {
-			s.routeRegistry.MarkStopped(dbInstance.ID, 12)
-		}
+			// Update route registry - SLEEPING means auto-wake on connect
+			if s.routeRegistry != nil {
+				s.routeRegistry.MarkStopped(dbInstance.ID, 12)
+			}
+		})
 	}()
 
 	protoDB := dbDatabaseToProto(dbInstance)
@@ -357,5 +385,24 @@ func timePtr(t time.Time) *time.Time {
 func updateDatabaseLocationStatus(ctx context.Context, databaseID, status string) {
 	if err := database.UpdateDatabaseLocationStatus(ctx, databaseID, status); err != nil {
 		logger.Warn("Failed to update database %s location status to %s: %v", databaseID, status, err)
+	}
+}
+
+// A queued lifecycle request may be superseded while another replica is busy.
+// Always inspect durable intent after obtaining the distributed runtime lock.
+func (s *Service) runDatabaseOperation(ctx context.Context, id, desired string, operation func()) {
+	err := database.WithResourceRuntimeLock(ctx, "database:"+id, func(context.Context) error {
+		var current database.DatabaseInstance
+		if err := database.DB.WithContext(ctx).Select("desired_state").Where("id = ? AND deleted_at IS NULL", id).First(&current).Error; err != nil {
+			return err
+		}
+		if current.DesiredState != desired {
+			return nil
+		}
+		operation()
+		return nil
+	})
+	if err != nil {
+		logger.Warn("Database lifecycle operation pending for %s: %v", id, err)
 	}
 }

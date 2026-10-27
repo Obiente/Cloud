@@ -13,6 +13,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/metrics"
 	orchestrator "orchestrator-service/internal/orchestrator"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -124,6 +125,18 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
+	// Metrics use a separate internal port, outside the public Traefik router.
+	metricsPort := os.Getenv("METRICS_PORT")
+	if metricsPort == "" {
+		metricsPort = "9091"
+	}
+	metricsServer := &http.Server{Addr: ":" + metricsPort, Handler: metrics.Handler(), ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	go func() {
+		if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("Metrics listener failed: %v", err)
+		}
+	}()
+
 	// Set up graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -153,6 +166,8 @@ func main() {
 		shutdownTimeout := 30 * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
+
+		_ = metricsServer.Shutdown(ctx)
 
 		if err := httpServer.Shutdown(ctx); err != nil {
 			logger.Warn("Error during server shutdown: %v", err)

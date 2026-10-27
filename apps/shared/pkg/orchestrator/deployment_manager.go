@@ -39,6 +39,7 @@ type dockerHelper interface {
 }
 
 type DeploymentConfig struct {
+	RecoveryOnly bool // Preserve existing runtimes while restoring missing replicas.
 	DeploymentID string
 	Image        string
 	Domain       string

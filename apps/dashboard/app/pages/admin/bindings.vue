@@ -1,6 +1,6 @@
 <template>
   <OuiStack gap="md">
-    <OuiText size="xl" weight="semibold">Role Bindings</OuiText>
+    <OuiText as="h1" size="xl" weight="semibold">Role Bindings</OuiText>
     <OuiCard>
       <OuiCardBody>
         <form @submit.prevent="create">
@@ -150,7 +150,7 @@
             </OuiCard>
 
             <OuiFlex class="mt-6" gap="md" justify="start">
-              <OuiButton type="submit" :disabled="!canCreateBindings">Bind</OuiButton>
+              <OuiButton type="submit" :disabled="!canSubmitBinding">Bind</OuiButton>
             </OuiFlex>
           </OuiStack>
         </form>
@@ -402,9 +402,6 @@ const { data: roleOptionsData, refresh: refreshRoleOptions } = useClientFetch(
       organizationId: orgId,
     });
     const roles = res.roles || [];
-    if (!roleId.value && roles.length) {
-      roleId.value = roles[0]?.id ?? "";
-    }
     return roles.map((r) => ({ 
       id: r.id, 
       name: r.name,
@@ -434,9 +431,6 @@ const { data: memberOptionsData, refresh: refreshMemberOptions } = useClientFetc
       organizationId: orgId,
     });
     const members = res.members || [];
-    if (!userId.value && members.length) {
-      userId.value = members[0]?.user?.id || members[0]?.id || "";
-    }
     return members.map((m) => ({
       id: m.user?.id || m.id,
       label: m.user?.name || m.user?.email || m.id,
@@ -500,9 +494,17 @@ const getGameServerName = (id: string) => {
   return gameserver?.name || id;
 };
 
+const canSubmitBinding = computed(() => canCreateBindings.value && !!selectedOrg.value && !!userId.value && !!roleId.value && (
+  !resourceType.value ||
+  (resourceType.value === "deployment" && !!deploymentId.value) ||
+  (resourceType.value === "vps" && !!vpsId.value) ||
+  (resourceType.value === "gameserver" && !!gameserverId.value) ||
+  (resourceType.value === "environment" && Array.isArray(resourceIds.value) && resourceIds.value.length > 0)
+));
+
 // Binding preview text
 const bindingPreview = computed(() => {
-  if (!userId.value || !roleId.value) return null;
+  if (!canSubmitBinding.value) return null;
   
   const memberName = memberLabelMap.value.get(userId.value) || userId.value;
   const roleName = roleLabelMap.value.get(roleId.value) || roleId.value;
@@ -709,7 +711,7 @@ watch(
 );
 
 async function create() {
-  if (!selectedOrg.value || !userId.value || !roleId.value) return;
+  if (!canSubmitBinding.value) return;
   
   // Determine resource ID based on resource type
   let resourceIdToUse = "";

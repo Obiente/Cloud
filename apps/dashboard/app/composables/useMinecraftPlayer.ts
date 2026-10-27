@@ -1,4 +1,3 @@
-import { ref } from "vue";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService } from "@obiente/proto";
 

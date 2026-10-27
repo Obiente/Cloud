@@ -110,6 +110,7 @@ func main() {
 	databaseService.SetProxyEnabled(mode.proxy)
 
 	if mode.controlPlane {
+		databaseService.StartBackupWorker(shutdownCtx)
 		// Register the control-plane RPCs only on the node-local owner task.
 		databasesPath, databasesHandler := databasesv1connect.NewDatabaseServiceHandler(
 			databaseService,

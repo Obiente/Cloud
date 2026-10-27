@@ -2,6 +2,17 @@ const baseConfig = require("../../eslint.config.js");
 
 module.exports = [
   ...baseConfig,
+  { plugins: { "@nx": require("@nx/eslint-plugin") } },
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      globals: { ...require("globals").node },
+      parserOptions: {
+        project: [require("node:path").join(__dirname, "tsconfig.lib.json")],
+      },
+    },
+    rules: { "no-undef": "off" },
+  },
   {
     files: ["**/*.json"],
     rules: {

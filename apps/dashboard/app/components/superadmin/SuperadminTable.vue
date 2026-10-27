@@ -2,11 +2,12 @@
   <OuiCard class="border border-border-muted rounded-xl overflow-hidden">
     <OuiCardBody class="p-0">
       <OuiTable
+        wrapper-class="mx-0!"
         :columns="columns"
         :rows="rows"
         :empty-text="emptyText"
         :row-class="rowClass"
-        :clickable="clickable"
+        :clickable="isClickable"
         :loading="loading"
         @row-click="handleRowClick"
       >
@@ -30,10 +31,14 @@ const props = withDefaults(defineProps<{
   loading?: boolean;
 }>(), {
   emptyText: "No items found.",
-  rowClass: "hover:bg-surface-subtle/50 transition-colors cursor-pointer",
-  clickable: true,
+  rowClass: "transition-colors",
+
+  clickable: undefined,
   loading: false,
 });
+
+const instance = getCurrentInstance();
+const isClickable = computed(() => props.clickable ?? Boolean(instance?.vnode.props?.onRowClick));
 
 const emit = defineEmits<{
   "row-click": [row: any, index: number];

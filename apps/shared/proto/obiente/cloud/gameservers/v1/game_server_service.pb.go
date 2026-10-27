@@ -2829,7 +2829,9 @@ type GameServer struct {
 	ContainerId   *string `protobuf:"bytes,19,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
 	ContainerName *string `protobuf:"bytes,20,opt,name=container_name,json=containerName,proto3,oneof" json:"container_name,omitempty"`
 	// Storage
-	StorageBytes int64 `protobuf:"varint,21,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	StorageBytes      int64                  `protobuf:"varint,21,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	StorageAvailable  bool                   `protobuf:"varint,24,opt,name=storage_available,json=storageAvailable,proto3" json:"storage_available,omitempty"`
+	StorageMeasuredAt *timestamppb.Timestamp `protobuf:"bytes,25,opt,name=storage_measured_at,json=storageMeasuredAt,proto3,oneof" json:"storage_measured_at,omitempty"`
 	// Created by
 	CreatedBy     string `protobuf:"bytes,22,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -3018,6 +3020,20 @@ func (x *GameServer) GetStorageBytes() int64 {
 		return x.StorageBytes
 	}
 	return 0
+}
+
+func (x *GameServer) GetStorageAvailable() bool {
+	if x != nil {
+		return x.StorageAvailable
+	}
+	return false
+}
+
+func (x *GameServer) GetStorageMeasuredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StorageMeasuredAt
+	}
+	return nil
 }
 
 func (x *GameServer) GetCreatedBy() string {
@@ -7268,7 +7284,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\xbc\t\n" +
+	"\x13_storage_cost_cents\"\xd2\n" +
+	"\n" +
 	"\n" +
 	"GameServer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
@@ -7297,7 +7314,9 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x0flast_started_at\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampH\x05R\rlastStartedAt\x88\x01\x01\x12&\n" +
 	"\fcontainer_id\x18\x13 \x01(\tH\x06R\vcontainerId\x88\x01\x01\x12*\n" +
 	"\x0econtainer_name\x18\x14 \x01(\tH\aR\rcontainerName\x88\x01\x01\x12#\n" +
-	"\rstorage_bytes\x18\x15 \x01(\x03R\fstorageBytes\x12\x1d\n" +
+	"\rstorage_bytes\x18\x15 \x01(\x03R\fstorageBytes\x12+\n" +
+	"\x11storage_available\x18\x18 \x01(\bR\x10storageAvailable\x12O\n" +
+	"\x13storage_measured_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampH\bR\x11storageMeasuredAt\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"created_by\x18\x16 \x01(\tR\tcreatedBy\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
@@ -7310,7 +7329,8 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\f_max_playersB\x12\n" +
 	"\x10_last_started_atB\x0f\n" +
 	"\r_container_idB\x11\n" +
-	"\x0f_container_name\"\x93\x05\n" +
+	"\x0f_container_nameB\x16\n" +
+	"\x14_storage_measured_at\"\x93\x05\n" +
 	"\x0eGameServerFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
@@ -8004,134 +8024,135 @@ var file_obiente_cloud_gameservers_v1_game_server_service_proto_depIdxs = []int3
 	104, // 31: obiente.cloud.gameservers.v1.GameServer.created_at:type_name -> google.protobuf.Timestamp
 	104, // 32: obiente.cloud.gameservers.v1.GameServer.updated_at:type_name -> google.protobuf.Timestamp
 	104, // 33: obiente.cloud.gameservers.v1.GameServer.last_started_at:type_name -> google.protobuf.Timestamp
-	104, // 34: obiente.cloud.gameservers.v1.GameServerFile.modified_time:type_name -> google.protobuf.Timestamp
-	104, // 35: obiente.cloud.gameservers.v1.GameServerFile.created_time:type_name -> google.protobuf.Timestamp
-	45,  // 36: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.files:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	46,  // 37: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.volumes:type_name -> obiente.cloud.gameservers.v1.GameServerVolumeInfo
-	45,  // 38: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse.results:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	45,  // 39: obiente.cloud.gameservers.v1.GetGameServerFileResponse.metadata:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	54,  // 40: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest.metadata:type_name -> obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
-	55,  // 41: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata.files:type_name -> obiente.cloud.gameservers.v1.GameServerFileMetadata
-	106, // 42: obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesRequest.upload:type_name -> obiente.cloud.common.v1.ChunkedUploadPayload
-	107, // 43: obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesResponse.result:type_name -> obiente.cloud.common.v1.ChunkedUploadResponsePayload
-	60,  // 44: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse.errors:type_name -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
-	45,  // 45: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	2,   // 46: obiente.cloud.gameservers.v1.CreateGameServerEntryRequest.type:type_name -> obiente.cloud.gameservers.v1.GameServerEntryType
-	45,  // 47: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	45,  // 48: obiente.cloud.gameservers.v1.WriteGameServerFileResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	108, // 49: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
-	109, // 50: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
-	104, // 51: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.last_used_at:type_name -> google.protobuf.Timestamp
-	104, // 52: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.expires_at:type_name -> google.protobuf.Timestamp
-	104, // 53: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.created_at:type_name -> google.protobuf.Timestamp
-	72,  // 54: obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse.credentials:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferCredential
-	73,  // 55: obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse.connection:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferConnectionInfo
-	104, // 56: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialRequest.expires_at:type_name -> google.protobuf.Timestamp
-	72,  // 57: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse.credential:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferCredential
-	73,  // 58: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse.connection:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferConnectionInfo
-	3,   // 59: obiente.cloud.gameservers.v1.MinecraftProject.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	3,   // 60: obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	84,  // 61: obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse.projects:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
-	3,   // 62: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	104, // 63: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.modified_at:type_name -> google.protobuf.Timestamp
-	104, // 64: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.installed_at:type_name -> google.protobuf.Timestamp
-	3,   // 65: obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	87,  // 66: obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsResponse.files:type_name -> obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile
-	103, // 67: obiente.cloud.gameservers.v1.MinecraftProjectFile.hashes:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile.HashesEntry
-	104, // 68: obiente.cloud.gameservers.v1.MinecraftProjectVersion.published_at:type_name -> google.protobuf.Timestamp
-	90,  // 69: obiente.cloud.gameservers.v1.MinecraftProjectVersion.files:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile
-	3,   // 70: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	91,  // 71: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse.versions:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectVersion
-	84,  // 72: obiente.cloud.gameservers.v1.GetMinecraftProjectResponse.project:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
-	3,   // 73: obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	3,   // 74: obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
-	4,   // 75: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:input_type -> obiente.cloud.gameservers.v1.ListGameServersRequest
-	6,   // 76: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:input_type -> obiente.cloud.gameservers.v1.CreateGameServerRequest
-	8,   // 77: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:input_type -> obiente.cloud.gameservers.v1.GetGameServerRequest
-	10,  // 78: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:input_type -> obiente.cloud.gameservers.v1.UpdateGameServerRequest
-	12,  // 79: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerRequest
-	14,  // 80: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:input_type -> obiente.cloud.gameservers.v1.StartGameServerRequest
-	16,  // 81: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:input_type -> obiente.cloud.gameservers.v1.StopGameServerRequest
-	18,  // 82: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:input_type -> obiente.cloud.gameservers.v1.RestartGameServerRequest
-	21,  // 83: obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes:input_type -> obiente.cloud.gameservers.v1.GetGameServerHTTPRoutesRequest
-	23,  // 84: obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute:input_type -> obiente.cloud.gameservers.v1.UpsertGameServerHTTPRouteRequest
-	25,  // 85: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerHTTPRouteRequest
-	27,  // 86: obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken:input_type -> obiente.cloud.gameservers.v1.GetGameServerDomainVerificationTokenRequest
-	29,  // 87: obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain:input_type -> obiente.cloud.gameservers.v1.VerifyGameServerDomainRequest
-	31,  // 88: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:input_type -> obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
-	33,  // 89: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:input_type -> obiente.cloud.gameservers.v1.GetGameServerLogsRequest
-	35,  // 90: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:input_type -> obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
-	37,  // 91: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
-	39,  // 92: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
-	41,  // 93: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:input_type -> obiente.cloud.gameservers.v1.GetGameServerUsageRequest
-	47,  // 94: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ListGameServerFilesRequest
-	49,  // 95: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:input_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
-	51,  // 96: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:input_type -> obiente.cloud.gameservers.v1.GetGameServerFileRequest
-	53,  // 97: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
-	57,  // 98: obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesRequest
-	59,  // 99: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
-	64,  // 100: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:input_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
-	66,  // 101: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:input_type -> obiente.cloud.gameservers.v1.WriteGameServerFileRequest
-	62,  // 102: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:input_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
-	68,  // 103: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:input_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
-	70,  // 104: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
-	74,  // 105: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials:input_type -> obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsRequest
-	76,  // 106: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialRequest
-	78,  // 107: obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential:input_type -> obiente.cloud.gameservers.v1.RevokeGameServerFileTransferCredentialRequest
-	80,  // 108: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
-	82,  // 109: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
-	85,  // 110: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:input_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest
-	88,  // 111: obiente.cloud.gameservers.v1.GameServerService.ListInstalledMinecraftProjects:input_type -> obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsRequest
-	92,  // 112: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest
-	94,  // 113: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectRequest
-	96,  // 114: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:input_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest
-	98,  // 115: obiente.cloud.gameservers.v1.GameServerService.UpdateMinecraftProjectFile:input_type -> obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileRequest
-	5,   // 116: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:output_type -> obiente.cloud.gameservers.v1.ListGameServersResponse
-	7,   // 117: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:output_type -> obiente.cloud.gameservers.v1.CreateGameServerResponse
-	9,   // 118: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:output_type -> obiente.cloud.gameservers.v1.GetGameServerResponse
-	11,  // 119: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:output_type -> obiente.cloud.gameservers.v1.UpdateGameServerResponse
-	13,  // 120: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerResponse
-	15,  // 121: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:output_type -> obiente.cloud.gameservers.v1.StartGameServerResponse
-	17,  // 122: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:output_type -> obiente.cloud.gameservers.v1.StopGameServerResponse
-	19,  // 123: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:output_type -> obiente.cloud.gameservers.v1.RestartGameServerResponse
-	22,  // 124: obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes:output_type -> obiente.cloud.gameservers.v1.GetGameServerHTTPRoutesResponse
-	24,  // 125: obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute:output_type -> obiente.cloud.gameservers.v1.UpsertGameServerHTTPRouteResponse
-	26,  // 126: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerHTTPRouteResponse
-	28,  // 127: obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken:output_type -> obiente.cloud.gameservers.v1.GetGameServerDomainVerificationTokenResponse
-	30,  // 128: obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain:output_type -> obiente.cloud.gameservers.v1.VerifyGameServerDomainResponse
-	32,  // 129: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:output_type -> obiente.cloud.gameservers.v1.GameServerStatusUpdate
-	34,  // 130: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GetGameServerLogsResponse
-	36,  // 131: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GameServerLogLine
-	38,  // 132: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
-	40,  // 133: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GameServerMetric
-	42,  // 134: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:output_type -> obiente.cloud.gameservers.v1.GetGameServerUsageResponse
-	48,  // 135: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ListGameServerFilesResponse
-	50,  // 136: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:output_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
-	52,  // 137: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:output_type -> obiente.cloud.gameservers.v1.GetGameServerFileResponse
-	56,  // 138: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
-	58,  // 139: obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesResponse
-	61,  // 140: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
-	65,  // 141: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:output_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
-	67,  // 142: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:output_type -> obiente.cloud.gameservers.v1.WriteGameServerFileResponse
-	63,  // 143: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:output_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
-	69,  // 144: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:output_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
-	71,  // 145: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
-	75,  // 146: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials:output_type -> obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse
-	77,  // 147: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse
-	79,  // 148: obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential:output_type -> obiente.cloud.gameservers.v1.RevokeGameServerFileTransferCredentialResponse
-	81,  // 149: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
-	83,  // 150: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
-	86,  // 151: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:output_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse
-	89,  // 152: obiente.cloud.gameservers.v1.GameServerService.ListInstalledMinecraftProjects:output_type -> obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsResponse
-	93,  // 153: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse
-	95,  // 154: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectResponse
-	97,  // 155: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:output_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileResponse
-	99,  // 156: obiente.cloud.gameservers.v1.GameServerService.UpdateMinecraftProjectFile:output_type -> obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileResponse
-	116, // [116:157] is the sub-list for method output_type
-	75,  // [75:116] is the sub-list for method input_type
-	75,  // [75:75] is the sub-list for extension type_name
-	75,  // [75:75] is the sub-list for extension extendee
-	0,   // [0:75] is the sub-list for field type_name
+	104, // 34: obiente.cloud.gameservers.v1.GameServer.storage_measured_at:type_name -> google.protobuf.Timestamp
+	104, // 35: obiente.cloud.gameservers.v1.GameServerFile.modified_time:type_name -> google.protobuf.Timestamp
+	104, // 36: obiente.cloud.gameservers.v1.GameServerFile.created_time:type_name -> google.protobuf.Timestamp
+	45,  // 37: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.files:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	46,  // 38: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.volumes:type_name -> obiente.cloud.gameservers.v1.GameServerVolumeInfo
+	45,  // 39: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse.results:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	45,  // 40: obiente.cloud.gameservers.v1.GetGameServerFileResponse.metadata:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	54,  // 41: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest.metadata:type_name -> obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
+	55,  // 42: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata.files:type_name -> obiente.cloud.gameservers.v1.GameServerFileMetadata
+	106, // 43: obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesRequest.upload:type_name -> obiente.cloud.common.v1.ChunkedUploadPayload
+	107, // 44: obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesResponse.result:type_name -> obiente.cloud.common.v1.ChunkedUploadResponsePayload
+	60,  // 45: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse.errors:type_name -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
+	45,  // 46: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	2,   // 47: obiente.cloud.gameservers.v1.CreateGameServerEntryRequest.type:type_name -> obiente.cloud.gameservers.v1.GameServerEntryType
+	45,  // 48: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	45,  // 49: obiente.cloud.gameservers.v1.WriteGameServerFileResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	108, // 50: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	109, // 51: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	104, // 52: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.last_used_at:type_name -> google.protobuf.Timestamp
+	104, // 53: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.expires_at:type_name -> google.protobuf.Timestamp
+	104, // 54: obiente.cloud.gameservers.v1.GameServerFileTransferCredential.created_at:type_name -> google.protobuf.Timestamp
+	72,  // 55: obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse.credentials:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferCredential
+	73,  // 56: obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse.connection:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferConnectionInfo
+	104, // 57: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialRequest.expires_at:type_name -> google.protobuf.Timestamp
+	72,  // 58: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse.credential:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferCredential
+	73,  // 59: obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse.connection:type_name -> obiente.cloud.gameservers.v1.GameServerFileTransferConnectionInfo
+	3,   // 60: obiente.cloud.gameservers.v1.MinecraftProject.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	3,   // 61: obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	84,  // 62: obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse.projects:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
+	3,   // 63: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	104, // 64: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.modified_at:type_name -> google.protobuf.Timestamp
+	104, // 65: obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile.installed_at:type_name -> google.protobuf.Timestamp
+	3,   // 66: obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	87,  // 67: obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsResponse.files:type_name -> obiente.cloud.gameservers.v1.InstalledMinecraftProjectFile
+	103, // 68: obiente.cloud.gameservers.v1.MinecraftProjectFile.hashes:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile.HashesEntry
+	104, // 69: obiente.cloud.gameservers.v1.MinecraftProjectVersion.published_at:type_name -> google.protobuf.Timestamp
+	90,  // 70: obiente.cloud.gameservers.v1.MinecraftProjectVersion.files:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile
+	3,   // 71: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	91,  // 72: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse.versions:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectVersion
+	84,  // 73: obiente.cloud.gameservers.v1.GetMinecraftProjectResponse.project:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
+	3,   // 74: obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	3,   // 75: obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	4,   // 76: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:input_type -> obiente.cloud.gameservers.v1.ListGameServersRequest
+	6,   // 77: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:input_type -> obiente.cloud.gameservers.v1.CreateGameServerRequest
+	8,   // 78: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:input_type -> obiente.cloud.gameservers.v1.GetGameServerRequest
+	10,  // 79: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:input_type -> obiente.cloud.gameservers.v1.UpdateGameServerRequest
+	12,  // 80: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerRequest
+	14,  // 81: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:input_type -> obiente.cloud.gameservers.v1.StartGameServerRequest
+	16,  // 82: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:input_type -> obiente.cloud.gameservers.v1.StopGameServerRequest
+	18,  // 83: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:input_type -> obiente.cloud.gameservers.v1.RestartGameServerRequest
+	21,  // 84: obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes:input_type -> obiente.cloud.gameservers.v1.GetGameServerHTTPRoutesRequest
+	23,  // 85: obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute:input_type -> obiente.cloud.gameservers.v1.UpsertGameServerHTTPRouteRequest
+	25,  // 86: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerHTTPRouteRequest
+	27,  // 87: obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken:input_type -> obiente.cloud.gameservers.v1.GetGameServerDomainVerificationTokenRequest
+	29,  // 88: obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain:input_type -> obiente.cloud.gameservers.v1.VerifyGameServerDomainRequest
+	31,  // 89: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:input_type -> obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
+	33,  // 90: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:input_type -> obiente.cloud.gameservers.v1.GetGameServerLogsRequest
+	35,  // 91: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:input_type -> obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
+	37,  // 92: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
+	39,  // 93: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
+	41,  // 94: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:input_type -> obiente.cloud.gameservers.v1.GetGameServerUsageRequest
+	47,  // 95: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ListGameServerFilesRequest
+	49,  // 96: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:input_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
+	51,  // 97: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:input_type -> obiente.cloud.gameservers.v1.GetGameServerFileRequest
+	53,  // 98: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
+	57,  // 99: obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesRequest
+	59,  // 100: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
+	64,  // 101: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:input_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
+	66,  // 102: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:input_type -> obiente.cloud.gameservers.v1.WriteGameServerFileRequest
+	62,  // 103: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:input_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
+	68,  // 104: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:input_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
+	70,  // 105: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
+	74,  // 106: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials:input_type -> obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsRequest
+	76,  // 107: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialRequest
+	78,  // 108: obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential:input_type -> obiente.cloud.gameservers.v1.RevokeGameServerFileTransferCredentialRequest
+	80,  // 109: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
+	82,  // 110: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
+	85,  // 111: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:input_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest
+	88,  // 112: obiente.cloud.gameservers.v1.GameServerService.ListInstalledMinecraftProjects:input_type -> obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsRequest
+	92,  // 113: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest
+	94,  // 114: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectRequest
+	96,  // 115: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:input_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest
+	98,  // 116: obiente.cloud.gameservers.v1.GameServerService.UpdateMinecraftProjectFile:input_type -> obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileRequest
+	5,   // 117: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:output_type -> obiente.cloud.gameservers.v1.ListGameServersResponse
+	7,   // 118: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:output_type -> obiente.cloud.gameservers.v1.CreateGameServerResponse
+	9,   // 119: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:output_type -> obiente.cloud.gameservers.v1.GetGameServerResponse
+	11,  // 120: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:output_type -> obiente.cloud.gameservers.v1.UpdateGameServerResponse
+	13,  // 121: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerResponse
+	15,  // 122: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:output_type -> obiente.cloud.gameservers.v1.StartGameServerResponse
+	17,  // 123: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:output_type -> obiente.cloud.gameservers.v1.StopGameServerResponse
+	19,  // 124: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:output_type -> obiente.cloud.gameservers.v1.RestartGameServerResponse
+	22,  // 125: obiente.cloud.gameservers.v1.GameServerService.GetGameServerHTTPRoutes:output_type -> obiente.cloud.gameservers.v1.GetGameServerHTTPRoutesResponse
+	24,  // 126: obiente.cloud.gameservers.v1.GameServerService.UpsertGameServerHTTPRoute:output_type -> obiente.cloud.gameservers.v1.UpsertGameServerHTTPRouteResponse
+	26,  // 127: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerHTTPRoute:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerHTTPRouteResponse
+	28,  // 128: obiente.cloud.gameservers.v1.GameServerService.GetGameServerDomainVerificationToken:output_type -> obiente.cloud.gameservers.v1.GetGameServerDomainVerificationTokenResponse
+	30,  // 129: obiente.cloud.gameservers.v1.GameServerService.VerifyGameServerDomain:output_type -> obiente.cloud.gameservers.v1.VerifyGameServerDomainResponse
+	32,  // 130: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:output_type -> obiente.cloud.gameservers.v1.GameServerStatusUpdate
+	34,  // 131: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GetGameServerLogsResponse
+	36,  // 132: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GameServerLogLine
+	38,  // 133: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
+	40,  // 134: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GameServerMetric
+	42,  // 135: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:output_type -> obiente.cloud.gameservers.v1.GetGameServerUsageResponse
+	48,  // 136: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ListGameServerFilesResponse
+	50,  // 137: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:output_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
+	52,  // 138: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:output_type -> obiente.cloud.gameservers.v1.GetGameServerFileResponse
+	56,  // 139: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
+	58,  // 140: obiente.cloud.gameservers.v1.GameServerService.ChunkUploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ChunkUploadGameServerFilesResponse
+	61,  // 141: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
+	65,  // 142: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:output_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
+	67,  // 143: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:output_type -> obiente.cloud.gameservers.v1.WriteGameServerFileResponse
+	63,  // 144: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:output_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
+	69,  // 145: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:output_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
+	71,  // 146: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
+	75,  // 147: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFileTransferCredentials:output_type -> obiente.cloud.gameservers.v1.ListGameServerFileTransferCredentialsResponse
+	77,  // 148: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileTransferCredential:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileTransferCredentialResponse
+	79,  // 149: obiente.cloud.gameservers.v1.GameServerService.RevokeGameServerFileTransferCredential:output_type -> obiente.cloud.gameservers.v1.RevokeGameServerFileTransferCredentialResponse
+	81,  // 150: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
+	83,  // 151: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
+	86,  // 152: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:output_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse
+	89,  // 153: obiente.cloud.gameservers.v1.GameServerService.ListInstalledMinecraftProjects:output_type -> obiente.cloud.gameservers.v1.ListInstalledMinecraftProjectsResponse
+	93,  // 154: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse
+	95,  // 155: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectResponse
+	97,  // 156: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:output_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileResponse
+	99,  // 157: obiente.cloud.gameservers.v1.GameServerService.UpdateMinecraftProjectFile:output_type -> obiente.cloud.gameservers.v1.UpdateMinecraftProjectFileResponse
+	117, // [117:158] is the sub-list for method output_type
+	76,  // [76:117] is the sub-list for method input_type
+	76,  // [76:76] is the sub-list for extension type_name
+	76,  // [76:76] is the sub-list for extension extendee
+	0,   // [0:76] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_gameservers_v1_game_server_service_proto_init() }

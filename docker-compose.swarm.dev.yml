@@ -199,7 +199,7 @@ services:
 
   # API Gateway - Routes requests to all microservices
   api-gateway:
-    image: ghcr.io/obiente/cloud-api-gateway:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-api-gateway:latest
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
@@ -220,9 +220,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -266,7 +266,7 @@ services:
 
   # Auth Service - Microservice for authentication
   auth-service:
-    image: ghcr.io/obiente/cloud-auth-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-auth-service:latest
     build:
       context: .
       dockerfile: apps/auth-service/Dockerfile
@@ -281,9 +281,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -314,7 +314,7 @@ services:
 
   # Organizations Service - Microservice for organization management
   organizations-service:
-    image: ghcr.io/obiente/cloud-organizations-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-organizations-service:latest
     build:
       context: .
       dockerfile: apps/organizations-service/Dockerfile
@@ -329,9 +329,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -362,7 +362,7 @@ services:
 
   # Billing Service - Microservice for billing and Stripe integration
   billing-service:
-    image: ghcr.io/obiente/cloud-billing-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-billing-service:latest
     build:
       context: .
       dockerfile: apps/billing-service/Dockerfile
@@ -377,9 +377,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -410,7 +410,7 @@ services:
 
   # Deployments Service - Microservice for deployment management
   deployments-service:
-    image: ghcr.io/obiente/cloud-deployments-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-deployments-service:latest
     build:
       context: .
       dockerfile: apps/deployments-service/Dockerfile
@@ -434,9 +434,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -485,7 +485,7 @@ services:
 
   # Game Servers Service - Microservice for game server management
   gameservers-service:
-    image: ghcr.io/obiente/cloud-gameservers-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-gameservers-service:latest
     build:
       context: .
       dockerfile: apps/gameservers-service/Dockerfile
@@ -506,9 +506,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -523,12 +523,13 @@ services:
         - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service.entrypoints=web"
         - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+        - "traefik.http.services.gameservers-service.loadbalancer.healthcheck.path=/readyz"
         - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
         - "traefik.http.routers.gameservers-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3006/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3006/livez || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -538,7 +539,7 @@ services:
       - obiente-network
 
   file-transfer-service:
-    image: ghcr.io/obiente/cloud-file-transfer-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-file-transfer-service:latest
     build:
       context: .
       dockerfile: apps/file-transfer-service/Dockerfile
@@ -562,9 +563,9 @@ services:
         parallelism: 1
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -595,7 +596,7 @@ services:
 
   # Orchestrator Service - Microservice for container orchestration and metrics
   orchestrator-service:
-    image: ghcr.io/obiente/cloud-orchestrator-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-orchestrator-service:latest
     build:
       context: .
       dockerfile: apps/orchestrator-service/Dockerfile
@@ -613,9 +614,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -646,7 +647,7 @@ services:
 
   # VPS Service - Microservice for VPS management
   vps-service:
-    image: ghcr.io/obiente/cloud-vps-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-vps-service:latest
     build:
       context: .
       dockerfile: apps/vps-service/Dockerfile
@@ -661,9 +662,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -699,7 +700,7 @@ services:
 
   # Support Service - Microservice for support ticket management
   support-service:
-    image: ghcr.io/obiente/cloud-support-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-support-service:latest
     build:
       context: .
       dockerfile: apps/support-service/Dockerfile
@@ -714,9 +715,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -747,7 +748,7 @@ services:
 
   # Audit Service - Microservice for audit log management
   audit-service:
-    image: ghcr.io/obiente/cloud-audit-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-audit-service:latest
     build:
       context: .
       dockerfile: apps/audit-service/Dockerfile
@@ -762,9 +763,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -794,7 +795,7 @@ services:
       - obiente-network
 
   notifications-service:
-    image: ghcr.io/obiente/cloud-notifications-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-notifications-service:latest
     build:
       context: .
       dockerfile: apps/notifications-service/Dockerfile
@@ -809,9 +810,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -842,7 +843,7 @@ services:
 
   # Superadmin Service - Microservice for superadmin operations
   superadmin-service:
-    image: ghcr.io/obiente/cloud-superadmin-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-superadmin-service:latest
     build:
       context: .
       dockerfile: apps/superadmin-service/Dockerfile
@@ -857,9 +858,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -891,7 +892,7 @@ services:
   # DNS Service - Microservice for DNS resolution
   # Set ENABLE_DNS=false to disable this service when using DNS delegation
   dns-service:
-    image: ghcr.io/obiente/cloud-dns-service:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-dns-service:latest
     build:
       context: .
       dockerfile: apps/dns-service/Dockerfile
@@ -923,9 +924,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -958,7 +959,7 @@ services:
 
   # VPS Gateway - gRPC gateway for VPS operations (optional)
   vps-gateway:
-    image: ghcr.io/obiente/cloud-vps-gateway:latest
+    image: ${REGISTRY:-ghcr.io/obiente}/cloud-vps-gateway:latest
     build:
       context: .
       dockerfile: apps/vps-gateway/Dockerfile
@@ -982,9 +983,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:

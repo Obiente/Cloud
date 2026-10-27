@@ -9,6 +9,7 @@
     :strategy="strategy"
     :id="id"
   >
+    <ClientOnly>
     <Teleport to="body">
       <FloatingPanel.Positioner :class="['z-[9999]', positionerClass]">
         <FloatingPanel.Content
@@ -121,6 +122,7 @@
         </OuiFlex>
       </div>
     </Teleport>
+    </ClientOnly>
   </FloatingPanel.Root>
 </template>
 

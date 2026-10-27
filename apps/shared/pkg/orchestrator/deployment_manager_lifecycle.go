@@ -15,13 +15,20 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
 
 // Lifecycle operations for deployments
 
-func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) (retErr error) {
+func (dm *DeploymentManager) CreateDeploymentLocked(ctx context.Context, config *DeploymentConfig) (retErr error) {
+	if err := deploymentIntentAllows(ctx, config.DeploymentID, "running"); err != nil {
+		return err
+	}
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.Deployment{}, config.DeploymentID); err != nil {
+		return err
+	}
 	logger.Info("[DeploymentManager] Creating deployment %s", config.DeploymentID)
 
 	// Apply plan limits to cap memory and CPU
@@ -198,9 +205,19 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				checkCmd := exec.CommandContext(ctx, "docker", checkArgs...)
 				var checkStderr bytes.Buffer
 				checkCmd.Stderr = &checkStderr
-				serviceExists := checkCmd.Run() == nil
+				checkErr := checkCmd.Run()
+				serviceExists := checkErr == nil
+				if config.RecoveryOnly && checkErr != nil && !strings.Contains(strings.ToLower(checkStderr.String()), "no such service") && !strings.Contains(strings.ToLower(checkStderr.String()), "not found") {
+					return fmt.Errorf("inspect recovery service: %w", checkErr)
+				}
 
-				if serviceExists {
+				if serviceExists && config.RecoveryOnly {
+					task, waitErr := dm.waitForSwarmServiceConverged(ctx, config.DeploymentID, swarmServiceName)
+					if waitErr != nil {
+						return waitErr
+					}
+					serviceID, containerID = task.ServiceID, task.ContainerID
+				} else if serviceExists {
 					// Service exists - update it for zero-downtime deployment
 					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
 					serviceID, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName, swarmMountFlags, markSwarmOperationAttempted)
@@ -278,11 +295,14 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				}
 			} else {
 				// In non-Swarm mode, create plain containers
-				// Remove existing container with this name if it exists (for redeployments)
-				removed, removeErr := dm.removeContainerByName(ctx, containerName)
-				plainReplacementStarted = plainReplacementStarted || removed
-				if removeErr != nil {
-					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, removeErr)
+				if !config.RecoveryOnly {
+					// Remove existing container with this name if it exists (for redeployments)
+					removed, removeErr := dm.removeContainerByName(ctx, config.DeploymentID, containerName)
+					plainReplacementStarted = plainReplacementStarted || removed
+					if removeErr != nil {
+						logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, removeErr)
+					}
+
 				}
 
 				var createdOrRemoved bool
@@ -293,6 +313,11 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				}
 
 				// Start container
+				// Recovery can reuse a stopped container without creating one, but
+				// starting that existing writable layer also invalidates storage.
+				if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, config.DeploymentID); err != nil {
+					return err
+				}
 				if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
 					return fmt.Errorf("failed to start container: %w", err)
 				}
@@ -303,7 +328,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			if !strings.HasPrefix(containerID, "swarm-service-") {
 				infoResult, err := dm.dockerClient.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 				if err != nil {
-					continue
+					return fmt.Errorf("verify created runtime: %w", err)
 				}
 				info := infoResult.Container
 				// Determine the public port (find port for this service from routing)
@@ -314,7 +339,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 						break
 					}
 				}
-				if len(info.NetworkSettings.Ports) > 0 {
+				if info.NetworkSettings != nil && len(info.NetworkSettings.Ports) > 0 {
 					for _, bindings := range info.NetworkSettings.Ports {
 						if len(bindings) > 0 {
 							if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
@@ -363,7 +388,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			}
 
 			if err := dm.registry.RegisterDeployment(ctx, location); err != nil {
-				logger.Warn("[DeploymentManager] Failed to register deployment: %v", err)
+				return fmt.Errorf("register deployment runtime: %w", err)
 			}
 
 			if isSwarmMode {
@@ -403,10 +428,23 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	return nil
 }
 
-func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) StartDeploymentLocked(ctx context.Context, deploymentID string) error {
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
+		return err
+	}
 	logger.Info("[DeploymentManager] Starting deployment %s", deploymentID)
 
-	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
+	var persisted database.Deployment
+	if err := database.DB.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", deploymentID).First(&persisted).Error; err != nil {
+		return err
+	}
+	if persisted.DesiredState == "stopped" {
+		return fmt.Errorf("deployment has a pending stop request")
+	}
+	if persisted.ComposeYaml != "" {
+		return dm.RecoverComposeDeployment(ctx, deploymentID, persisted.ComposeYaml)
+	}
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
 	if err != nil {
 		return fmt.Errorf("failed to get deployment locations: %w", err)
 	}
@@ -432,8 +470,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			envVars := make(map[string]string)
 			if deployment.EnvVars != "" {
 				if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err != nil {
-					logger.Warn("[DeploymentManager] Failed to parse env vars for deployment %s: %v", deploymentID, err)
-					// Continue with empty env vars
+					return fmt.Errorf("invalid persisted environment: %w", err)
 				}
 			}
 
@@ -512,6 +549,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			}
 			config := &DeploymentConfig{
 				DeploymentID:              deploymentID,
+				RecoveryOnly:              true,
 				Image:                     image,
 				Domain:                    deployment.Domain,
 				Port:                      port,
@@ -552,6 +590,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		}
 	}
 
+	var failures []error
 	for _, location := range locations {
 		// Only start containers on this node
 		if location.NodeID != dm.nodeID {
@@ -562,13 +601,18 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		var containerInfo container.InspectResponse
 		containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
+			if !errdefs.IsNotFound(err) {
+				failures = append(failures, fmt.Errorf("inspect container %s: %w", location.ContainerID, err))
+				continue
+			}
 			// Container doesn't exist - try to recreate it
-			logger.Warn("[DeploymentManager] Container %s doesn't exist, attempting to recreate deployment", location.ContainerID[:12])
+			logger.Warn("[DeploymentManager] Container %s doesn't exist, attempting to recreate deployment", location.ContainerID)
 
 			// Get deployment from database to recreate containers
 			var deployment database.Deployment
 			if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
 				logger.Warn("[DeploymentManager] Failed to get deployment from database for recreation: %v", err)
+				failures = append(failures, err)
 				continue
 			}
 
@@ -582,8 +626,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				envVars := make(map[string]string)
 				if deployment.EnvVars != "" {
 					if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err != nil {
-						logger.Warn("[DeploymentManager] Failed to parse env vars for deployment %s: %v", deploymentID, err)
-						// Continue with empty env vars
+						return fmt.Errorf("invalid persisted environment: %w", err)
 					}
 				}
 
@@ -645,6 +688,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 				config := &DeploymentConfig{
 					DeploymentID:              deploymentID,
+					RecoveryOnly:              true,
 					Image:                     image,
 					Domain:                    deployment.Domain,
 					Port:                      port,
@@ -670,15 +714,20 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				// Recreate the containers
 				if err := dm.CreateDeployment(ctx, config); err != nil {
 					logger.Warn("[DeploymentManager] Failed to recreate deployment containers: %v", err)
+					failures = append(failures, err)
 					continue
 				}
 
+				if err := dm.registry.UnregisterDeployment(ctx, location.ContainerID); err != nil {
+					failures = append(failures, err)
+				}
 				logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s", deploymentID)
 
 				// Refresh locations after recreation
 				locations, err = dm.registry.GetDeploymentLocations(deploymentID)
 				if err != nil {
 					logger.Warn("[DeploymentManager] Failed to get deployment locations after recreation: %v", err)
+					failures = append(failures, err)
 					continue
 				}
 
@@ -692,7 +741,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					}
 				}
 				if !found {
-					logger.Warn("[DeploymentManager] Could not find recreated container location for deployment %s", deploymentID)
+					failures = append(failures, fmt.Errorf("no local recreated container for deployment %s", deploymentID))
 					continue
 				}
 
@@ -700,12 +749,13 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 				if err != nil {
 					logger.Warn("[DeploymentManager] Failed to inspect recreated container: %v", err)
+					failures = append(failures, err)
 					continue
 				}
 				containerInfo = containerInfoResult.Container
 			} else {
 				// Compose-based deployment - skip this container
-				logger.Warn("[DeploymentManager] Container %s doesn't exist for compose deployment %s, skipping", location.ContainerID[:12], deploymentID)
+				logger.Warn("[DeploymentManager] Container %s doesn't exist for compose deployment %s, skipping", location.ContainerID, deploymentID)
 				continue
 			}
 		} else {
@@ -713,29 +763,38 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		}
 
 		// Only start if not already running
+		if containerInfo.State == nil {
+			failures = append(failures, fmt.Errorf("container %s state unavailable", location.ContainerID))
+			continue
+		}
 		if !containerInfo.State.Running {
 			// Start container
 			if err := dm.dockerHelper.StartContainer(ctx, location.ContainerID); err != nil {
-				logger.Info("[DeploymentManager] Failed to start container %s: %v", location.ContainerID[:12], err)
+				logger.Info("[DeploymentManager] Failed to start container %s: %v", location.ContainerID, err)
+				failures = append(failures, err)
 				continue
 			}
 
 			// Update status
-			database.DB.Model(&database.DeploymentLocation{}).
-				Where("container_id = ?", location.ContainerID).
-				Update("status", "running")
+			if err := database.DB.WithContext(ctx).Model(&database.DeploymentLocation{}).Where("container_id = ?", location.ContainerID).Update("status", "running").Error; err != nil {
+				failures = append(failures, err)
+			}
 
-			logger.Info("[DeploymentManager] Started container %s", location.ContainerID[:12])
+			logger.Info("[DeploymentManager] Started container %s", location.ContainerID)
 		} else {
-			logger.Info("[DeploymentManager] Container %s is already running", location.ContainerID[:12])
+			logger.Info("[DeploymentManager] Container %s is already running", location.ContainerID)
 		}
 	}
 
-	return nil
+	return errors.Join(failures...)
 }
 
 // StopDeployment stops all containers for a deployment
-func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) StopDeploymentLocked(ctx context.Context, deploymentID string) error {
+	if err := deploymentIntentAllows(ctx, deploymentID, "stopped"); err != nil {
+		return err
+	}
+	dm.captureStorageBeforeStop(ctx, deploymentID)
 	logger.Info("[DeploymentManager] Stopping deployment %s", deploymentID)
 
 	// Check if we're in Swarm mode
@@ -747,19 +806,17 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 		}
 
 		// Update all locations to stopped status
-		database.DB.Model(&database.DeploymentLocation{}).
-			Where("deployment_id = ?", deploymentID).
-			Update("status", "stopped")
-
-		return nil
+		return database.DB.WithContext(ctx).Model(&database.DeploymentLocation{}).
+			Where("deployment_id = ?", deploymentID).Update("status", "stopped").Error
 	}
 
 	// Non-Swarm mode: stop containers
-	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
 	if err != nil {
 		return fmt.Errorf("failed to get deployment locations: %w", err)
 	}
 
+	var failures []error
 	for _, location := range locations {
 		// Only stop containers on this node
 		if location.NodeID != dm.nodeID {
@@ -769,23 +826,25 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 		// Stop container
 		timeout := int(30) // 30 seconds
 		if err := dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
-			logger.Info("[DeploymentManager] Failed to stop container %s: %v", location.ContainerID, err)
-			continue
+			if !errdefs.IsNotFound(err) {
+				failures = append(failures, err)
+				continue
+			}
 		}
 
 		// Update status
-		database.DB.Model(&database.DeploymentLocation{}).
-			Where("container_id = ?", location.ContainerID).
-			Update("status", "stopped")
+		if err := database.DB.WithContext(ctx).Model(&database.DeploymentLocation{}).Where("container_id = ?", location.ContainerID).Update("status", "stopped").Error; err != nil {
+			failures = append(failures, err)
+		}
 
-		logger.Info("[DeploymentManager] Stopped container %s", location.ContainerID[:12])
+		logger.Info("[DeploymentManager] Stopped container %s", location.ContainerID)
 	}
 
-	return nil
+	return errors.Join(failures...)
 }
 
 // DeleteDeployment removes all containers and data for a deployment
-func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) DeleteDeploymentLocked(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Deleting deployment %s", deploymentID)
 
 	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
@@ -879,7 +938,7 @@ func removeSwarmDeploymentServices(ctx context.Context, deploymentID string) err
 
 // RestartDeployment restarts all containers for a deployment by recreating them
 // This ensures that configs (labels, health checks, etc.) are updated
-func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) RestartDeploymentLocked(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Restarting deployment %s (will recreate containers to update configs)", deploymentID)
 
 	// Get deployment from database to check if it's compose-based
@@ -1157,3 +1216,23 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 // }
 
 // DeployComposeFile deploys a Docker Compose file for a deployment
+
+func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) error {
+	return withDeploymentRuntimeLock(ctx, config.DeploymentID, func(locked context.Context) error { return dm.CreateDeploymentLocked(locked, config) })
+}
+
+func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.StartDeploymentLocked(locked, deploymentID) })
+}
+
+func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.StopDeploymentLocked(locked, deploymentID) })
+}
+
+func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.DeleteDeploymentLocked(locked, deploymentID) })
+}
+
+func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.RestartDeploymentLocked(locked, deploymentID) })
+}

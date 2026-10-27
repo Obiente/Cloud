@@ -3881,11 +3881,14 @@ func (x *ListBackupsRequest) GetPerPage() int32 {
 }
 
 type ListBackupsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Backups       []*DatabaseBackup      `protobuf:"bytes,1,rep,name=backups,proto3" json:"backups,omitempty"`
-	Pagination    *v1.Pagination         `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Backups           []*DatabaseBackup      `protobuf:"bytes,1,rep,name=backups,proto3" json:"backups,omitempty"`
+	Pagination        *v1.Pagination         `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+	ManagedAvailable  bool                   `protobuf:"varint,3,opt,name=managed_available,json=managedAvailable,proto3" json:"managed_available,omitempty"`
+	UnavailableReason string                 `protobuf:"bytes,4,opt,name=unavailable_reason,json=unavailableReason,proto3" json:"unavailable_reason,omitempty"`
+	RetainedCount     int32                  `protobuf:"varint,5,opt,name=retained_count,json=retainedCount,proto3" json:"retained_count,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ListBackupsResponse) Reset() {
@@ -3930,6 +3933,27 @@ func (x *ListBackupsResponse) GetPagination() *v1.Pagination {
 		return x.Pagination
 	}
 	return nil
+}
+
+func (x *ListBackupsResponse) GetManagedAvailable() bool {
+	if x != nil {
+		return x.ManagedAvailable
+	}
+	return false
+}
+
+func (x *ListBackupsResponse) GetUnavailableReason() string {
+	if x != nil {
+		return x.UnavailableReason
+	}
+	return ""
+}
+
+func (x *ListBackupsResponse) GetRetainedCount() int32 {
+	if x != nil {
+		return x.RetainedCount
+	}
+	return 0
 }
 
 type CreateBackupRequest struct {
@@ -4257,7 +4281,7 @@ type RestoreBackupRequest struct {
 	OrganizationId     string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	DatabaseId         string                 `protobuf:"bytes,2,opt,name=database_id,json=databaseId,proto3" json:"database_id,omitempty"`
 	BackupId           string                 `protobuf:"bytes,3,opt,name=backup_id,json=backupId,proto3" json:"backup_id,omitempty"`
-	TargetDatabaseName *string                `protobuf:"bytes,4,opt,name=target_database_name,json=targetDatabaseName,proto3,oneof" json:"target_database_name,omitempty"` // Optional: restore to different database name
+	TargetDatabaseName *string                `protobuf:"bytes,4,opt,name=target_database_name,json=targetDatabaseName,proto3,oneof" json:"target_database_name,omitempty"` // Restore into a new database; never overwrite an existing one
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -4322,8 +4346,9 @@ func (x *RestoreBackupRequest) GetTargetDatabaseName() string {
 
 type RestoreBackupResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Database      *DatabaseInstance      `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"` // Restored database instance
+	Database      *DatabaseInstance      `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"` // Instance hosting the requested restore
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Backup        *DatabaseBackup        `protobuf:"bytes,3,opt,name=backup,proto3" json:"backup,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4372,6 +4397,13 @@ func (x *RestoreBackupResponse) GetMessage() string {
 	return ""
 }
 
+func (x *RestoreBackupResponse) GetBackup() *DatabaseBackup {
+	if x != nil {
+		return x.Backup
+	}
+	return nil
+}
+
 type DatabaseBackup struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -4383,6 +4415,11 @@ type DatabaseBackup struct {
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	CompletedAt   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=completed_at,json=completedAt,proto3,oneof" json:"completed_at,omitempty"`
 	ErrorMessage  *string                `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3,oneof" json:"error_message,omitempty"`
+	RestoreStatus string                 `protobuf:"bytes,10,opt,name=restore_status,json=restoreStatus,proto3" json:"restore_status,omitempty"`
+	RestoreTarget string                 `protobuf:"bytes,11,opt,name=restore_target,json=restoreTarget,proto3" json:"restore_target,omitempty"`
+	RestoreError  *string                `protobuf:"bytes,12,opt,name=restore_error,json=restoreError,proto3,oneof" json:"restore_error,omitempty"`
+	RestoredAt    *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=restored_at,json=restoredAt,proto3,oneof" json:"restored_at,omitempty"`
+	DatabaseName  string                 `protobuf:"bytes,14,opt,name=database_name,json=databaseName,proto3" json:"database_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4476,6 +4513,41 @@ func (x *DatabaseBackup) GetCompletedAt() *timestamppb.Timestamp {
 func (x *DatabaseBackup) GetErrorMessage() string {
 	if x != nil && x.ErrorMessage != nil {
 		return *x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *DatabaseBackup) GetRestoreStatus() string {
+	if x != nil {
+		return x.RestoreStatus
+	}
+	return ""
+}
+
+func (x *DatabaseBackup) GetRestoreTarget() string {
+	if x != nil {
+		return x.RestoreTarget
+	}
+	return ""
+}
+
+func (x *DatabaseBackup) GetRestoreError() string {
+	if x != nil && x.RestoreError != nil {
+		return *x.RestoreError
+	}
+	return ""
+}
+
+func (x *DatabaseBackup) GetRestoredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RestoredAt
+	}
+	return nil
+}
+
+func (x *DatabaseBackup) GetDatabaseName() string {
+	if x != nil {
+		return x.DatabaseName
 	}
 	return ""
 }
@@ -8089,12 +8161,15 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"\vdatabase_id\x18\x02 \x01(\tR\n" +
 	"databaseId\x12\x12\n" +
 	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x19\n" +
-	"\bper_page\x18\x04 \x01(\x05R\aperPage\"\xa0\x01\n" +
+	"\bper_page\x18\x04 \x01(\x05R\aperPage\"\xa3\x02\n" +
 	"\x13ListBackupsResponse\x12D\n" +
 	"\abackups\x18\x01 \x03(\v2*.obiente.cloud.databases.v1.DatabaseBackupR\abackups\x12C\n" +
 	"\n" +
 	"pagination\x18\x02 \x01(\v2#.obiente.cloud.common.v1.PaginationR\n" +
-	"pagination\"\xb8\x01\n" +
+	"pagination\x12+\n" +
+	"\x11managed_available\x18\x03 \x01(\bR\x10managedAvailable\x12-\n" +
+	"\x12unavailable_reason\x18\x04 \x01(\tR\x11unavailableReason\x12%\n" +
+	"\x0eretained_count\x18\x05 \x01(\x05R\rretainedCount\"\xb8\x01\n" +
 	"\x13CreateBackupRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1f\n" +
 	"\vdatabase_id\x18\x02 \x01(\tR\n" +
@@ -8125,10 +8200,11 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"databaseId\x12\x1b\n" +
 	"\tbackup_id\x18\x03 \x01(\tR\bbackupId\x125\n" +
 	"\x14target_database_name\x18\x04 \x01(\tH\x00R\x12targetDatabaseName\x88\x01\x01B\x17\n" +
-	"\x15_target_database_name\"{\n" +
+	"\x15_target_database_name\"\xbf\x01\n" +
 	"\x15RestoreBackupResponse\x12H\n" +
 	"\bdatabase\x18\x01 \x01(\v2,.obiente.cloud.databases.v1.DatabaseInstanceR\bdatabase\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xc1\x03\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12B\n" +
+	"\x06backup\x18\x03 \x01(\v2*.obiente.cloud.databases.v1.DatabaseBackupR\x06backup\"\xc2\x05\n" +
 	"\x0eDatabaseBackup\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vdatabase_id\x18\x02 \x01(\tR\n" +
@@ -8141,10 +8217,19 @@ const file_obiente_cloud_databases_v1_database_service_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12B\n" +
 	"\fcompleted_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x01R\vcompletedAt\x88\x01\x01\x12(\n" +
-	"\rerror_message\x18\t \x01(\tH\x02R\ferrorMessage\x88\x01\x01B\x0e\n" +
+	"\rerror_message\x18\t \x01(\tH\x02R\ferrorMessage\x88\x01\x01\x12%\n" +
+	"\x0erestore_status\x18\n" +
+	" \x01(\tR\rrestoreStatus\x12%\n" +
+	"\x0erestore_target\x18\v \x01(\tR\rrestoreTarget\x12(\n" +
+	"\rrestore_error\x18\f \x01(\tH\x03R\frestoreError\x88\x01\x01\x12@\n" +
+	"\vrestored_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampH\x04R\n" +
+	"restoredAt\x88\x01\x01\x12#\n" +
+	"\rdatabase_name\x18\x0e \x01(\tR\fdatabaseNameB\x0e\n" +
 	"\f_descriptionB\x0f\n" +
 	"\r_completed_atB\x10\n" +
-	"\x0e_error_message\"\xb3\x02\n" +
+	"\x0e_error_messageB\x10\n" +
+	"\x0e_restore_errorB\x0e\n" +
+	"\f_restored_at\"\xb3\x02\n" +
 	"\x19ExportDatabaseDumpRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1f\n" +
 	"\vdatabase_id\x18\x02 \x01(\tR\n" +
@@ -8738,131 +8823,133 @@ var file_obiente_cloud_databases_v1_database_service_proto_depIdxs = []int32{
 	68,  // 44: obiente.cloud.databases.v1.CreateBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
 	68,  // 45: obiente.cloud.databases.v1.GetBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
 	80,  // 46: obiente.cloud.databases.v1.RestoreBackupResponse.database:type_name -> obiente.cloud.databases.v1.DatabaseInstance
-	2,   // 47: obiente.cloud.databases.v1.DatabaseBackup.status:type_name -> obiente.cloud.databases.v1.DatabaseBackupStatus
-	117, // 48: obiente.cloud.databases.v1.DatabaseBackup.created_at:type_name -> google.protobuf.Timestamp
-	117, // 49: obiente.cloud.databases.v1.DatabaseBackup.completed_at:type_name -> google.protobuf.Timestamp
-	3,   // 50: obiente.cloud.databases.v1.ExportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
-	3,   // 51: obiente.cloud.databases.v1.ImportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
-	117, // 52: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	117, // 53: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
-	76,  // 54: obiente.cloud.databases.v1.GetDatabaseMetricsResponse.metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
-	117, // 55: obiente.cloud.databases.v1.DatabaseMetric.timestamp:type_name -> google.protobuf.Timestamp
-	0,   // 56: obiente.cloud.databases.v1.ListDatabaseSizesRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	79,  // 57: obiente.cloud.databases.v1.ListDatabaseSizesResponse.sizes:type_name -> obiente.cloud.databases.v1.DatabaseSize
-	0,   // 58: obiente.cloud.databases.v1.DatabaseSize.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	1,   // 59: obiente.cloud.databases.v1.DatabaseInstance.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
-	0,   // 60: obiente.cloud.databases.v1.DatabaseInstance.type:type_name -> obiente.cloud.databases.v1.DatabaseType
-	115, // 61: obiente.cloud.databases.v1.DatabaseInstance.metadata:type_name -> obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
-	117, // 62: obiente.cloud.databases.v1.DatabaseInstance.created_at:type_name -> google.protobuf.Timestamp
-	117, // 63: obiente.cloud.databases.v1.DatabaseInstance.updated_at:type_name -> google.protobuf.Timestamp
-	117, // 64: obiente.cloud.databases.v1.DatabaseInstance.last_started_at:type_name -> google.protobuf.Timestamp
-	117, // 65: obiente.cloud.databases.v1.DatabaseInstance.deleted_at:type_name -> google.protobuf.Timestamp
-	76,  // 66: obiente.cloud.databases.v1.DatabaseInstance.current_metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
-	83,  // 67: obiente.cloud.databases.v1.GetDatabaseUsageResponse.current:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
-	83,  // 68: obiente.cloud.databases.v1.GetDatabaseUsageResponse.estimated_monthly:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
-	85,  // 69: obiente.cloud.databases.v1.CreateTableRequest.columns:type_name -> obiente.cloud.databases.v1.ColumnDefinition
-	86,  // 70: obiente.cloud.databases.v1.CreateTableRequest.primary_key:type_name -> obiente.cloud.databases.v1.PrimaryKeyDefinition
-	88,  // 71: obiente.cloud.databases.v1.CreateTableRequest.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
-	87,  // 72: obiente.cloud.databases.v1.CreateTableRequest.indexes:type_name -> obiente.cloud.databases.v1.IndexDefinition
-	35,  // 73: obiente.cloud.databases.v1.CreateTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
-	91,  // 74: obiente.cloud.databases.v1.AlterTableRequest.operations:type_name -> obiente.cloud.databases.v1.AlterTableOperation
-	92,  // 75: obiente.cloud.databases.v1.AlterTableOperation.add_column:type_name -> obiente.cloud.databases.v1.AddColumnOperation
-	93,  // 76: obiente.cloud.databases.v1.AlterTableOperation.drop_column:type_name -> obiente.cloud.databases.v1.DropColumnOperation
-	94,  // 77: obiente.cloud.databases.v1.AlterTableOperation.modify_column:type_name -> obiente.cloud.databases.v1.ModifyColumnOperation
-	95,  // 78: obiente.cloud.databases.v1.AlterTableOperation.rename_column:type_name -> obiente.cloud.databases.v1.RenameColumnOperation
-	96,  // 79: obiente.cloud.databases.v1.AlterTableOperation.add_foreign_key:type_name -> obiente.cloud.databases.v1.AddForeignKeyOperation
-	97,  // 80: obiente.cloud.databases.v1.AlterTableOperation.drop_foreign_key:type_name -> obiente.cloud.databases.v1.DropForeignKeyOperation
-	98,  // 81: obiente.cloud.databases.v1.AlterTableOperation.add_unique:type_name -> obiente.cloud.databases.v1.AddUniqueConstraintOperation
-	99,  // 82: obiente.cloud.databases.v1.AlterTableOperation.drop_constraint:type_name -> obiente.cloud.databases.v1.DropConstraintOperation
-	85,  // 83: obiente.cloud.databases.v1.AddColumnOperation.column:type_name -> obiente.cloud.databases.v1.ColumnDefinition
-	88,  // 84: obiente.cloud.databases.v1.AddForeignKeyOperation.foreign_key:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
-	35,  // 85: obiente.cloud.databases.v1.AlterTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
-	87,  // 86: obiente.cloud.databases.v1.CreateIndexRequest.index:type_name -> obiente.cloud.databases.v1.IndexDefinition
-	4,   // 87: obiente.cloud.databases.v1.DatabaseService.ListDatabases:input_type -> obiente.cloud.databases.v1.ListDatabasesRequest
-	6,   // 88: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:input_type -> obiente.cloud.databases.v1.CreateDatabaseRequest
-	8,   // 89: obiente.cloud.databases.v1.DatabaseService.GetDatabase:input_type -> obiente.cloud.databases.v1.GetDatabaseRequest
-	10,  // 90: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:input_type -> obiente.cloud.databases.v1.UpdateDatabaseRequest
-	12,  // 91: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:input_type -> obiente.cloud.databases.v1.DeleteDatabaseRequest
-	14,  // 92: obiente.cloud.databases.v1.DatabaseService.StartDatabase:input_type -> obiente.cloud.databases.v1.StartDatabaseRequest
-	16,  // 93: obiente.cloud.databases.v1.DatabaseService.StopDatabase:input_type -> obiente.cloud.databases.v1.StopDatabaseRequest
-	18,  // 94: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:input_type -> obiente.cloud.databases.v1.SleepDatabaseRequest
-	20,  // 95: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:input_type -> obiente.cloud.databases.v1.RestartDatabaseRequest
-	22,  // 96: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:input_type -> obiente.cloud.databases.v1.StreamDatabaseStatusRequest
-	24,  // 97: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:input_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
-	27,  // 98: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:input_type -> obiente.cloud.databases.v1.ResetDatabasePasswordRequest
-	29,  // 99: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:input_type -> obiente.cloud.databases.v1.GetDatabaseSchemaRequest
-	31,  // 100: obiente.cloud.databases.v1.DatabaseService.ListTables:input_type -> obiente.cloud.databases.v1.ListTablesRequest
-	33,  // 101: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:input_type -> obiente.cloud.databases.v1.GetTableStructureRequest
-	43,  // 102: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:input_type -> obiente.cloud.databases.v1.ExecuteQueryRequest
-	48,  // 103: obiente.cloud.databases.v1.DatabaseService.StreamQuery:input_type -> obiente.cloud.databases.v1.StreamQueryRequest
-	49,  // 104: obiente.cloud.databases.v1.DatabaseService.GetTableData:input_type -> obiente.cloud.databases.v1.GetTableDataRequest
-	52,  // 105: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:input_type -> obiente.cloud.databases.v1.UpdateTableRowRequest
-	54,  // 106: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:input_type -> obiente.cloud.databases.v1.InsertTableRowRequest
-	56,  // 107: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:input_type -> obiente.cloud.databases.v1.DeleteTableRowsRequest
-	58,  // 108: obiente.cloud.databases.v1.DatabaseService.ListBackups:input_type -> obiente.cloud.databases.v1.ListBackupsRequest
-	60,  // 109: obiente.cloud.databases.v1.DatabaseService.CreateBackup:input_type -> obiente.cloud.databases.v1.CreateBackupRequest
-	62,  // 110: obiente.cloud.databases.v1.DatabaseService.GetBackup:input_type -> obiente.cloud.databases.v1.GetBackupRequest
-	64,  // 111: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:input_type -> obiente.cloud.databases.v1.DeleteBackupRequest
-	66,  // 112: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:input_type -> obiente.cloud.databases.v1.RestoreBackupRequest
-	73,  // 113: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:input_type -> obiente.cloud.databases.v1.GetDatabaseMetricsRequest
-	75,  // 114: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:input_type -> obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
-	77,  // 115: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:input_type -> obiente.cloud.databases.v1.ListDatabaseSizesRequest
-	81,  // 116: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:input_type -> obiente.cloud.databases.v1.GetDatabaseUsageRequest
-	84,  // 117: obiente.cloud.databases.v1.DatabaseService.CreateTable:input_type -> obiente.cloud.databases.v1.CreateTableRequest
-	90,  // 118: obiente.cloud.databases.v1.DatabaseService.AlterTable:input_type -> obiente.cloud.databases.v1.AlterTableRequest
-	101, // 119: obiente.cloud.databases.v1.DatabaseService.DropTable:input_type -> obiente.cloud.databases.v1.DropTableRequest
-	103, // 120: obiente.cloud.databases.v1.DatabaseService.RenameTable:input_type -> obiente.cloud.databases.v1.RenameTableRequest
-	105, // 121: obiente.cloud.databases.v1.DatabaseService.TruncateTable:input_type -> obiente.cloud.databases.v1.TruncateTableRequest
-	107, // 122: obiente.cloud.databases.v1.DatabaseService.CreateIndex:input_type -> obiente.cloud.databases.v1.CreateIndexRequest
-	109, // 123: obiente.cloud.databases.v1.DatabaseService.DropIndex:input_type -> obiente.cloud.databases.v1.DropIndexRequest
-	111, // 124: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:input_type -> obiente.cloud.databases.v1.GetTableDDLRequest
-	69,  // 125: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:input_type -> obiente.cloud.databases.v1.ExportDatabaseDumpRequest
-	71,  // 126: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:input_type -> obiente.cloud.databases.v1.ImportDatabaseDumpRequest
-	5,   // 127: obiente.cloud.databases.v1.DatabaseService.ListDatabases:output_type -> obiente.cloud.databases.v1.ListDatabasesResponse
-	7,   // 128: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:output_type -> obiente.cloud.databases.v1.CreateDatabaseResponse
-	9,   // 129: obiente.cloud.databases.v1.DatabaseService.GetDatabase:output_type -> obiente.cloud.databases.v1.GetDatabaseResponse
-	11,  // 130: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:output_type -> obiente.cloud.databases.v1.UpdateDatabaseResponse
-	13,  // 131: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:output_type -> obiente.cloud.databases.v1.DeleteDatabaseResponse
-	15,  // 132: obiente.cloud.databases.v1.DatabaseService.StartDatabase:output_type -> obiente.cloud.databases.v1.StartDatabaseResponse
-	17,  // 133: obiente.cloud.databases.v1.DatabaseService.StopDatabase:output_type -> obiente.cloud.databases.v1.StopDatabaseResponse
-	19,  // 134: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:output_type -> obiente.cloud.databases.v1.SleepDatabaseResponse
-	21,  // 135: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:output_type -> obiente.cloud.databases.v1.RestartDatabaseResponse
-	23,  // 136: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:output_type -> obiente.cloud.databases.v1.DatabaseStatusUpdate
-	25,  // 137: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:output_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
-	28,  // 138: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:output_type -> obiente.cloud.databases.v1.ResetDatabasePasswordResponse
-	30,  // 139: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:output_type -> obiente.cloud.databases.v1.GetDatabaseSchemaResponse
-	32,  // 140: obiente.cloud.databases.v1.DatabaseService.ListTables:output_type -> obiente.cloud.databases.v1.ListTablesResponse
-	34,  // 141: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:output_type -> obiente.cloud.databases.v1.GetTableStructureResponse
-	44,  // 142: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:output_type -> obiente.cloud.databases.v1.ExecuteQueryResponse
-	46,  // 143: obiente.cloud.databases.v1.DatabaseService.StreamQuery:output_type -> obiente.cloud.databases.v1.QueryResultRow
-	51,  // 144: obiente.cloud.databases.v1.DatabaseService.GetTableData:output_type -> obiente.cloud.databases.v1.GetTableDataResponse
-	53,  // 145: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:output_type -> obiente.cloud.databases.v1.UpdateTableRowResponse
-	55,  // 146: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:output_type -> obiente.cloud.databases.v1.InsertTableRowResponse
-	57,  // 147: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:output_type -> obiente.cloud.databases.v1.DeleteTableRowsResponse
-	59,  // 148: obiente.cloud.databases.v1.DatabaseService.ListBackups:output_type -> obiente.cloud.databases.v1.ListBackupsResponse
-	61,  // 149: obiente.cloud.databases.v1.DatabaseService.CreateBackup:output_type -> obiente.cloud.databases.v1.CreateBackupResponse
-	63,  // 150: obiente.cloud.databases.v1.DatabaseService.GetBackup:output_type -> obiente.cloud.databases.v1.GetBackupResponse
-	65,  // 151: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:output_type -> obiente.cloud.databases.v1.DeleteBackupResponse
-	67,  // 152: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:output_type -> obiente.cloud.databases.v1.RestoreBackupResponse
-	74,  // 153: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:output_type -> obiente.cloud.databases.v1.GetDatabaseMetricsResponse
-	76,  // 154: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:output_type -> obiente.cloud.databases.v1.DatabaseMetric
-	78,  // 155: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:output_type -> obiente.cloud.databases.v1.ListDatabaseSizesResponse
-	82,  // 156: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:output_type -> obiente.cloud.databases.v1.GetDatabaseUsageResponse
-	89,  // 157: obiente.cloud.databases.v1.DatabaseService.CreateTable:output_type -> obiente.cloud.databases.v1.CreateTableResponse
-	100, // 158: obiente.cloud.databases.v1.DatabaseService.AlterTable:output_type -> obiente.cloud.databases.v1.AlterTableResponse
-	102, // 159: obiente.cloud.databases.v1.DatabaseService.DropTable:output_type -> obiente.cloud.databases.v1.DropTableResponse
-	104, // 160: obiente.cloud.databases.v1.DatabaseService.RenameTable:output_type -> obiente.cloud.databases.v1.RenameTableResponse
-	106, // 161: obiente.cloud.databases.v1.DatabaseService.TruncateTable:output_type -> obiente.cloud.databases.v1.TruncateTableResponse
-	108, // 162: obiente.cloud.databases.v1.DatabaseService.CreateIndex:output_type -> obiente.cloud.databases.v1.CreateIndexResponse
-	110, // 163: obiente.cloud.databases.v1.DatabaseService.DropIndex:output_type -> obiente.cloud.databases.v1.DropIndexResponse
-	112, // 164: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:output_type -> obiente.cloud.databases.v1.GetTableDDLResponse
-	70,  // 165: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:output_type -> obiente.cloud.databases.v1.ExportDatabaseDumpResponse
-	72,  // 166: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:output_type -> obiente.cloud.databases.v1.ImportDatabaseDumpResponse
-	127, // [127:167] is the sub-list for method output_type
-	87,  // [87:127] is the sub-list for method input_type
-	87,  // [87:87] is the sub-list for extension type_name
-	87,  // [87:87] is the sub-list for extension extendee
-	0,   // [0:87] is the sub-list for field type_name
+	68,  // 47: obiente.cloud.databases.v1.RestoreBackupResponse.backup:type_name -> obiente.cloud.databases.v1.DatabaseBackup
+	2,   // 48: obiente.cloud.databases.v1.DatabaseBackup.status:type_name -> obiente.cloud.databases.v1.DatabaseBackupStatus
+	117, // 49: obiente.cloud.databases.v1.DatabaseBackup.created_at:type_name -> google.protobuf.Timestamp
+	117, // 50: obiente.cloud.databases.v1.DatabaseBackup.completed_at:type_name -> google.protobuf.Timestamp
+	117, // 51: obiente.cloud.databases.v1.DatabaseBackup.restored_at:type_name -> google.protobuf.Timestamp
+	3,   // 52: obiente.cloud.databases.v1.ExportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
+	3,   // 53: obiente.cloud.databases.v1.ImportDatabaseDumpRequest.format:type_name -> obiente.cloud.databases.v1.DatabaseDumpFormat
+	117, // 54: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	117, // 55: obiente.cloud.databases.v1.GetDatabaseMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	76,  // 56: obiente.cloud.databases.v1.GetDatabaseMetricsResponse.metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
+	117, // 57: obiente.cloud.databases.v1.DatabaseMetric.timestamp:type_name -> google.protobuf.Timestamp
+	0,   // 58: obiente.cloud.databases.v1.ListDatabaseSizesRequest.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	79,  // 59: obiente.cloud.databases.v1.ListDatabaseSizesResponse.sizes:type_name -> obiente.cloud.databases.v1.DatabaseSize
+	0,   // 60: obiente.cloud.databases.v1.DatabaseSize.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	1,   // 61: obiente.cloud.databases.v1.DatabaseInstance.status:type_name -> obiente.cloud.databases.v1.DatabaseStatus
+	0,   // 62: obiente.cloud.databases.v1.DatabaseInstance.type:type_name -> obiente.cloud.databases.v1.DatabaseType
+	115, // 63: obiente.cloud.databases.v1.DatabaseInstance.metadata:type_name -> obiente.cloud.databases.v1.DatabaseInstance.MetadataEntry
+	117, // 64: obiente.cloud.databases.v1.DatabaseInstance.created_at:type_name -> google.protobuf.Timestamp
+	117, // 65: obiente.cloud.databases.v1.DatabaseInstance.updated_at:type_name -> google.protobuf.Timestamp
+	117, // 66: obiente.cloud.databases.v1.DatabaseInstance.last_started_at:type_name -> google.protobuf.Timestamp
+	117, // 67: obiente.cloud.databases.v1.DatabaseInstance.deleted_at:type_name -> google.protobuf.Timestamp
+	76,  // 68: obiente.cloud.databases.v1.DatabaseInstance.current_metrics:type_name -> obiente.cloud.databases.v1.DatabaseMetric
+	83,  // 69: obiente.cloud.databases.v1.GetDatabaseUsageResponse.current:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
+	83,  // 70: obiente.cloud.databases.v1.GetDatabaseUsageResponse.estimated_monthly:type_name -> obiente.cloud.databases.v1.DatabaseUsageMetrics
+	85,  // 71: obiente.cloud.databases.v1.CreateTableRequest.columns:type_name -> obiente.cloud.databases.v1.ColumnDefinition
+	86,  // 72: obiente.cloud.databases.v1.CreateTableRequest.primary_key:type_name -> obiente.cloud.databases.v1.PrimaryKeyDefinition
+	88,  // 73: obiente.cloud.databases.v1.CreateTableRequest.foreign_keys:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
+	87,  // 74: obiente.cloud.databases.v1.CreateTableRequest.indexes:type_name -> obiente.cloud.databases.v1.IndexDefinition
+	35,  // 75: obiente.cloud.databases.v1.CreateTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
+	91,  // 76: obiente.cloud.databases.v1.AlterTableRequest.operations:type_name -> obiente.cloud.databases.v1.AlterTableOperation
+	92,  // 77: obiente.cloud.databases.v1.AlterTableOperation.add_column:type_name -> obiente.cloud.databases.v1.AddColumnOperation
+	93,  // 78: obiente.cloud.databases.v1.AlterTableOperation.drop_column:type_name -> obiente.cloud.databases.v1.DropColumnOperation
+	94,  // 79: obiente.cloud.databases.v1.AlterTableOperation.modify_column:type_name -> obiente.cloud.databases.v1.ModifyColumnOperation
+	95,  // 80: obiente.cloud.databases.v1.AlterTableOperation.rename_column:type_name -> obiente.cloud.databases.v1.RenameColumnOperation
+	96,  // 81: obiente.cloud.databases.v1.AlterTableOperation.add_foreign_key:type_name -> obiente.cloud.databases.v1.AddForeignKeyOperation
+	97,  // 82: obiente.cloud.databases.v1.AlterTableOperation.drop_foreign_key:type_name -> obiente.cloud.databases.v1.DropForeignKeyOperation
+	98,  // 83: obiente.cloud.databases.v1.AlterTableOperation.add_unique:type_name -> obiente.cloud.databases.v1.AddUniqueConstraintOperation
+	99,  // 84: obiente.cloud.databases.v1.AlterTableOperation.drop_constraint:type_name -> obiente.cloud.databases.v1.DropConstraintOperation
+	85,  // 85: obiente.cloud.databases.v1.AddColumnOperation.column:type_name -> obiente.cloud.databases.v1.ColumnDefinition
+	88,  // 86: obiente.cloud.databases.v1.AddForeignKeyOperation.foreign_key:type_name -> obiente.cloud.databases.v1.ForeignKeyDefinition
+	35,  // 87: obiente.cloud.databases.v1.AlterTableResponse.table:type_name -> obiente.cloud.databases.v1.TableInfo
+	87,  // 88: obiente.cloud.databases.v1.CreateIndexRequest.index:type_name -> obiente.cloud.databases.v1.IndexDefinition
+	4,   // 89: obiente.cloud.databases.v1.DatabaseService.ListDatabases:input_type -> obiente.cloud.databases.v1.ListDatabasesRequest
+	6,   // 90: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:input_type -> obiente.cloud.databases.v1.CreateDatabaseRequest
+	8,   // 91: obiente.cloud.databases.v1.DatabaseService.GetDatabase:input_type -> obiente.cloud.databases.v1.GetDatabaseRequest
+	10,  // 92: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:input_type -> obiente.cloud.databases.v1.UpdateDatabaseRequest
+	12,  // 93: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:input_type -> obiente.cloud.databases.v1.DeleteDatabaseRequest
+	14,  // 94: obiente.cloud.databases.v1.DatabaseService.StartDatabase:input_type -> obiente.cloud.databases.v1.StartDatabaseRequest
+	16,  // 95: obiente.cloud.databases.v1.DatabaseService.StopDatabase:input_type -> obiente.cloud.databases.v1.StopDatabaseRequest
+	18,  // 96: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:input_type -> obiente.cloud.databases.v1.SleepDatabaseRequest
+	20,  // 97: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:input_type -> obiente.cloud.databases.v1.RestartDatabaseRequest
+	22,  // 98: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:input_type -> obiente.cloud.databases.v1.StreamDatabaseStatusRequest
+	24,  // 99: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:input_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoRequest
+	27,  // 100: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:input_type -> obiente.cloud.databases.v1.ResetDatabasePasswordRequest
+	29,  // 101: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:input_type -> obiente.cloud.databases.v1.GetDatabaseSchemaRequest
+	31,  // 102: obiente.cloud.databases.v1.DatabaseService.ListTables:input_type -> obiente.cloud.databases.v1.ListTablesRequest
+	33,  // 103: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:input_type -> obiente.cloud.databases.v1.GetTableStructureRequest
+	43,  // 104: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:input_type -> obiente.cloud.databases.v1.ExecuteQueryRequest
+	48,  // 105: obiente.cloud.databases.v1.DatabaseService.StreamQuery:input_type -> obiente.cloud.databases.v1.StreamQueryRequest
+	49,  // 106: obiente.cloud.databases.v1.DatabaseService.GetTableData:input_type -> obiente.cloud.databases.v1.GetTableDataRequest
+	52,  // 107: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:input_type -> obiente.cloud.databases.v1.UpdateTableRowRequest
+	54,  // 108: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:input_type -> obiente.cloud.databases.v1.InsertTableRowRequest
+	56,  // 109: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:input_type -> obiente.cloud.databases.v1.DeleteTableRowsRequest
+	58,  // 110: obiente.cloud.databases.v1.DatabaseService.ListBackups:input_type -> obiente.cloud.databases.v1.ListBackupsRequest
+	60,  // 111: obiente.cloud.databases.v1.DatabaseService.CreateBackup:input_type -> obiente.cloud.databases.v1.CreateBackupRequest
+	62,  // 112: obiente.cloud.databases.v1.DatabaseService.GetBackup:input_type -> obiente.cloud.databases.v1.GetBackupRequest
+	64,  // 113: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:input_type -> obiente.cloud.databases.v1.DeleteBackupRequest
+	66,  // 114: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:input_type -> obiente.cloud.databases.v1.RestoreBackupRequest
+	73,  // 115: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:input_type -> obiente.cloud.databases.v1.GetDatabaseMetricsRequest
+	75,  // 116: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:input_type -> obiente.cloud.databases.v1.StreamDatabaseMetricsRequest
+	77,  // 117: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:input_type -> obiente.cloud.databases.v1.ListDatabaseSizesRequest
+	81,  // 118: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:input_type -> obiente.cloud.databases.v1.GetDatabaseUsageRequest
+	84,  // 119: obiente.cloud.databases.v1.DatabaseService.CreateTable:input_type -> obiente.cloud.databases.v1.CreateTableRequest
+	90,  // 120: obiente.cloud.databases.v1.DatabaseService.AlterTable:input_type -> obiente.cloud.databases.v1.AlterTableRequest
+	101, // 121: obiente.cloud.databases.v1.DatabaseService.DropTable:input_type -> obiente.cloud.databases.v1.DropTableRequest
+	103, // 122: obiente.cloud.databases.v1.DatabaseService.RenameTable:input_type -> obiente.cloud.databases.v1.RenameTableRequest
+	105, // 123: obiente.cloud.databases.v1.DatabaseService.TruncateTable:input_type -> obiente.cloud.databases.v1.TruncateTableRequest
+	107, // 124: obiente.cloud.databases.v1.DatabaseService.CreateIndex:input_type -> obiente.cloud.databases.v1.CreateIndexRequest
+	109, // 125: obiente.cloud.databases.v1.DatabaseService.DropIndex:input_type -> obiente.cloud.databases.v1.DropIndexRequest
+	111, // 126: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:input_type -> obiente.cloud.databases.v1.GetTableDDLRequest
+	69,  // 127: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:input_type -> obiente.cloud.databases.v1.ExportDatabaseDumpRequest
+	71,  // 128: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:input_type -> obiente.cloud.databases.v1.ImportDatabaseDumpRequest
+	5,   // 129: obiente.cloud.databases.v1.DatabaseService.ListDatabases:output_type -> obiente.cloud.databases.v1.ListDatabasesResponse
+	7,   // 130: obiente.cloud.databases.v1.DatabaseService.CreateDatabase:output_type -> obiente.cloud.databases.v1.CreateDatabaseResponse
+	9,   // 131: obiente.cloud.databases.v1.DatabaseService.GetDatabase:output_type -> obiente.cloud.databases.v1.GetDatabaseResponse
+	11,  // 132: obiente.cloud.databases.v1.DatabaseService.UpdateDatabase:output_type -> obiente.cloud.databases.v1.UpdateDatabaseResponse
+	13,  // 133: obiente.cloud.databases.v1.DatabaseService.DeleteDatabase:output_type -> obiente.cloud.databases.v1.DeleteDatabaseResponse
+	15,  // 134: obiente.cloud.databases.v1.DatabaseService.StartDatabase:output_type -> obiente.cloud.databases.v1.StartDatabaseResponse
+	17,  // 135: obiente.cloud.databases.v1.DatabaseService.StopDatabase:output_type -> obiente.cloud.databases.v1.StopDatabaseResponse
+	19,  // 136: obiente.cloud.databases.v1.DatabaseService.SleepDatabase:output_type -> obiente.cloud.databases.v1.SleepDatabaseResponse
+	21,  // 137: obiente.cloud.databases.v1.DatabaseService.RestartDatabase:output_type -> obiente.cloud.databases.v1.RestartDatabaseResponse
+	23,  // 138: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseStatus:output_type -> obiente.cloud.databases.v1.DatabaseStatusUpdate
+	25,  // 139: obiente.cloud.databases.v1.DatabaseService.GetDatabaseConnectionInfo:output_type -> obiente.cloud.databases.v1.GetDatabaseConnectionInfoResponse
+	28,  // 140: obiente.cloud.databases.v1.DatabaseService.ResetDatabasePassword:output_type -> obiente.cloud.databases.v1.ResetDatabasePasswordResponse
+	30,  // 141: obiente.cloud.databases.v1.DatabaseService.GetDatabaseSchema:output_type -> obiente.cloud.databases.v1.GetDatabaseSchemaResponse
+	32,  // 142: obiente.cloud.databases.v1.DatabaseService.ListTables:output_type -> obiente.cloud.databases.v1.ListTablesResponse
+	34,  // 143: obiente.cloud.databases.v1.DatabaseService.GetTableStructure:output_type -> obiente.cloud.databases.v1.GetTableStructureResponse
+	44,  // 144: obiente.cloud.databases.v1.DatabaseService.ExecuteQuery:output_type -> obiente.cloud.databases.v1.ExecuteQueryResponse
+	46,  // 145: obiente.cloud.databases.v1.DatabaseService.StreamQuery:output_type -> obiente.cloud.databases.v1.QueryResultRow
+	51,  // 146: obiente.cloud.databases.v1.DatabaseService.GetTableData:output_type -> obiente.cloud.databases.v1.GetTableDataResponse
+	53,  // 147: obiente.cloud.databases.v1.DatabaseService.UpdateTableRow:output_type -> obiente.cloud.databases.v1.UpdateTableRowResponse
+	55,  // 148: obiente.cloud.databases.v1.DatabaseService.InsertTableRow:output_type -> obiente.cloud.databases.v1.InsertTableRowResponse
+	57,  // 149: obiente.cloud.databases.v1.DatabaseService.DeleteTableRows:output_type -> obiente.cloud.databases.v1.DeleteTableRowsResponse
+	59,  // 150: obiente.cloud.databases.v1.DatabaseService.ListBackups:output_type -> obiente.cloud.databases.v1.ListBackupsResponse
+	61,  // 151: obiente.cloud.databases.v1.DatabaseService.CreateBackup:output_type -> obiente.cloud.databases.v1.CreateBackupResponse
+	63,  // 152: obiente.cloud.databases.v1.DatabaseService.GetBackup:output_type -> obiente.cloud.databases.v1.GetBackupResponse
+	65,  // 153: obiente.cloud.databases.v1.DatabaseService.DeleteBackup:output_type -> obiente.cloud.databases.v1.DeleteBackupResponse
+	67,  // 154: obiente.cloud.databases.v1.DatabaseService.RestoreBackup:output_type -> obiente.cloud.databases.v1.RestoreBackupResponse
+	74,  // 155: obiente.cloud.databases.v1.DatabaseService.GetDatabaseMetrics:output_type -> obiente.cloud.databases.v1.GetDatabaseMetricsResponse
+	76,  // 156: obiente.cloud.databases.v1.DatabaseService.StreamDatabaseMetrics:output_type -> obiente.cloud.databases.v1.DatabaseMetric
+	78,  // 157: obiente.cloud.databases.v1.DatabaseService.ListDatabaseSizes:output_type -> obiente.cloud.databases.v1.ListDatabaseSizesResponse
+	82,  // 158: obiente.cloud.databases.v1.DatabaseService.GetDatabaseUsage:output_type -> obiente.cloud.databases.v1.GetDatabaseUsageResponse
+	89,  // 159: obiente.cloud.databases.v1.DatabaseService.CreateTable:output_type -> obiente.cloud.databases.v1.CreateTableResponse
+	100, // 160: obiente.cloud.databases.v1.DatabaseService.AlterTable:output_type -> obiente.cloud.databases.v1.AlterTableResponse
+	102, // 161: obiente.cloud.databases.v1.DatabaseService.DropTable:output_type -> obiente.cloud.databases.v1.DropTableResponse
+	104, // 162: obiente.cloud.databases.v1.DatabaseService.RenameTable:output_type -> obiente.cloud.databases.v1.RenameTableResponse
+	106, // 163: obiente.cloud.databases.v1.DatabaseService.TruncateTable:output_type -> obiente.cloud.databases.v1.TruncateTableResponse
+	108, // 164: obiente.cloud.databases.v1.DatabaseService.CreateIndex:output_type -> obiente.cloud.databases.v1.CreateIndexResponse
+	110, // 165: obiente.cloud.databases.v1.DatabaseService.DropIndex:output_type -> obiente.cloud.databases.v1.DropIndexResponse
+	112, // 166: obiente.cloud.databases.v1.DatabaseService.GetTableDDL:output_type -> obiente.cloud.databases.v1.GetTableDDLResponse
+	70,  // 167: obiente.cloud.databases.v1.DatabaseService.ExportDatabaseDump:output_type -> obiente.cloud.databases.v1.ExportDatabaseDumpResponse
+	72,  // 168: obiente.cloud.databases.v1.DatabaseService.ImportDatabaseDump:output_type -> obiente.cloud.databases.v1.ImportDatabaseDumpResponse
+	129, // [129:169] is the sub-list for method output_type
+	89,  // [89:129] is the sub-list for method input_type
+	89,  // [89:89] is the sub-list for extension type_name
+	89,  // [89:89] is the sub-list for extension extendee
+	0,   // [0:89] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_databases_v1_database_service_proto_init() }

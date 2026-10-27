@@ -109,12 +109,14 @@ module.exports = [
   },
   {
     ignores: [
-      "dist/",
-      "node_modules/",
-      ".next/",
-      "coverage/",
-      "generated/",
-      "*.min.js",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.nuxt/**",
+      "**/.output/**",
+      "**/.next/**",
+      "**/coverage/**",
+      "**/generated/**",
+      "**/*.min.js",
     ],
   },
 ];

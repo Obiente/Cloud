@@ -64,6 +64,7 @@ validate_compose() {
 }
 
 validate_swarm_config() {
+  require_command python3
   local core_services=(
     postgres
     timescaledb
@@ -96,7 +97,36 @@ validate_swarm_config() {
     orchestrator-service \
     vps-service
   validate_compose_file docker-compose.dashboard.yml dashboard
+  local dashboard_config
+  dashboard_config="$(mktemp)"
+  scripts/merge-compose-files.sh docker-compose.dashboard.yml "$dashboard_config" >/dev/null
+  local policy
+  if ! policy="$(DASHBOARD_IMAGE='' REGISTRY=registry.example.test/team docker compose --project-directory "$ROOT_DIR" -f "$dashboard_config" config --format json)"; then
+    rm -f "$dashboard_config"
+    return 1
+  fi
+  rm -f "$dashboard_config"
+  python3 -c 'import json,sys; d=json.load(sys.stdin)["services"]["dashboard"]; p=d["deploy"]["restart_policy"]; assert p["condition"] == "any" and p["max_attempts"] == 0, "dashboard restart retries must not be exhausted"; assert d["image"] == "registry.example.test/team/cloud-dashboard:latest", "dashboard ignored the registry override"' <<< "$policy"
   validate_compose_file docker-compose.vps-gateway.yml vps-gateway
+
+  # Pull/build registry overrides must select the same images at deployment.
+  local compose_file merged_file image images
+  for compose_file in docker-compose.swarm.yml docker-compose.swarm.dev.yml docker-compose.swarm.ha.yml; do
+    merged_file="$(mktemp)"
+    scripts/merge-compose-files.sh "$compose_file" "$merged_file" >/dev/null
+    if ! images="$(REGISTRY=registry.example.test/team docker compose --project-directory "$ROOT_DIR" -f "$merged_file" config --images)"; then
+      rm -f "$merged_file"
+      return 1
+    fi
+    rm -f "$merged_file"
+    while IFS= read -r image; do
+      if [[ "$image" == */cloud-* && "$image" != registry.example.test/team/cloud-* ]]; then
+        echo "$compose_file ignored the registry override for $image" >&2
+        return 1
+      fi
+    done <<< "$images"
+    echo "validated registry override for $compose_file"
+  done
 }
 
 port_in_use() {

@@ -19,13 +19,13 @@
     "build": "buf generate"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.10.1",
-    "@connectrpc/connect": "^2.1.1",
-    "@connectrpc/connect-node": "^2.1.1"
+    "@bufbuild/protobuf": "^2.16.0",
+    "@connectrpc/connect": "^2.2.0",
+    "@connectrpc/connect-node": "^2.2.0"
   },
   "devDependencies": {
-    "@bufbuild/buf": "^1.60.0",
-    "@bufbuild/protoc-gen-es": "^2.10.1",
+    "@bufbuild/buf": "^1.75.0",
+    "@bufbuild/protoc-gen-es": "^2.16.0",
     "@obiente/config": "workspace:*",
     "@obiente/types": "workspace:*",
     "rolldown": "1.0.0-beta.42",

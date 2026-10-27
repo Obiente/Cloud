@@ -124,7 +124,7 @@ export function getOUIEChartsColors() {
     try {
       const style = getComputedStyle(document.documentElement);
       gridBorder = style.getPropertyValue("--oui-border-muted").trim() || gridBorder;
-    } catch (e) {
+    } catch {
       // Fallback to default
     }
   }
@@ -160,14 +160,6 @@ export async function createOUIEChartsTheme() {
   await getChroma();
   
   const colors = getOUIEChartsColors();
-  
-  // Helper to create gradient stops with chroma (using rgba format for proper alpha)
-  const createGradientStops = (baseColor: string) => {
-    return [
-      { offset: 0, color: manipulateColor(baseColor, { alpha: 0.25 }, "rgba") },
-      { offset: 1, color: manipulateColor(baseColor, { alpha: 0.02 }, "rgba") },
-    ];
-  };
   
   return {
     color: [

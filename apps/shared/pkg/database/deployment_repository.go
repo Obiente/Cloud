@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +24,9 @@ func NewDeploymentRepository(db *gorm.DB, cache *RedisCache) *DeploymentReposito
 }
 
 func (r *DeploymentRepository) Create(ctx context.Context, deployment *Deployment) error {
+	if deployment.StorageBytes == 0 && deployment.StorageMeasuredAt == nil {
+		deployment.StorageState = "empty"
+	}
 	if err := r.db.WithContext(ctx).Create(deployment).Error; err != nil {
 		return err
 	}
@@ -131,7 +135,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 			"status", "health_status", "environment", "groups",
 			"image", "port", "replicas", "memory_bytes", "cpu_shares",
 			"env_vars", "env_file_content", "compose_yaml", "build_args", "dockerfile_volumes", "dockerfile_build_options",
-			"build_time", "size", "storage_bytes", "bandwidth_usage",
+			"build_time", "size", "bandwidth_usage",
 			"last_deployed_at", "updated_at",
 		).
 		Updates(deployment).Error; err != nil {
@@ -194,9 +198,16 @@ func (r *DeploymentRepository) UpdateEnvVars(ctx context.Context, id string, env
 }
 
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status int32) error {
-	if err := r.db.WithContext(ctx).Model(&Deployment{}).
-		Where("id = ?", id).
-		Update("status", status).Error; err != nil {
+	updates := map[string]interface{}{"status": status}
+	if status == int32(deploymentsv1.DeploymentStatus_RUNNING) {
+		// Successful initial deployments acquire durable running intent. A late build
+		// completion must not overwrite a more recent explicit stop request.
+		updates["desired_state"] = gorm.Expr("CASE WHEN desired_state = '' THEN 'running' ELSE desired_state END")
+	}
+	if status == int32(deploymentsv1.DeploymentStatus_DEPLOYING) {
+		updates["desired_state"] = "running"
+	}
+	if err := r.db.WithContext(ctx).Model(&Deployment{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return err
 	}
 
@@ -224,14 +235,13 @@ func (r *DeploymentRepository) UpdateHealthStatus(ctx context.Context, id string
 }
 
 func (r *DeploymentRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
-	// Store bytes as string (client will format it)
-	sizeStr := fmt.Sprintf("%d", storageBytes)
 
 	if err := r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"storage_bytes": storageBytes,
-			"size":          sizeStr,
+			"storage_bytes":             storageBytes,
+			"storage_measured_at":       time.Now(),
+			"storage_measurement_error": "",
 		}).Error; err != nil {
 		return err
 	}
@@ -292,4 +302,21 @@ type DeploymentFilters struct {
 	Offset     int
 	UserID     string // Filter by creator user ID
 	IncludeAll bool   // Include all deployments regardless of creator (for admins)
+}
+
+func (r *DeploymentRepository) SetDesiredState(ctx context.Context, id, desired string) error {
+	if desired != "running" && desired != "stopped" {
+		return fmt.Errorf("invalid desired deployment state")
+	}
+	result := r.db.WithContext(ctx).Model(&Deployment{}).Where("id = ? AND deleted_at IS NULL", id).Update("desired_state", desired)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+	return nil
 }

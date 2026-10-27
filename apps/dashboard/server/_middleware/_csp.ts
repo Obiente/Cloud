@@ -15,7 +15,7 @@ export default defineEventHandler((event) => {
     try {
       const url = new URL(host);
       allowedHosts.add(`${url.protocol}//${url.host}`);
-    } catch (e) {
+    } catch {
       // If URL parsing fails, use as-is (might be a relative path)
       console.warn('[CSP] Failed to parse host URL:', host);
       allowedHosts.add(host);

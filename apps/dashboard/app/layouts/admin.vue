@@ -3,17 +3,11 @@
     <OuiContainer>
       <OuiStack gap="lg">
         <OuiText size="2xl" weight="bold">Admin</OuiText>
-        <OuiFlex gap="md">
-          <NuxtLink to="/admin/quotas">
-            <OuiButton variant="ghost" :color="activeTab === 'quotas' ? 'primary' : 'neutral'">Quotas</OuiButton>
-          </NuxtLink>
-          <NuxtLink to="/admin/roles">
-            <OuiButton variant="ghost" :color="activeTab === 'roles' ? 'primary' : 'neutral'">Roles</OuiButton>
-          </NuxtLink>
-          <NuxtLink to="/admin/bindings">
-            <OuiButton variant="ghost" :color="activeTab === 'bindings' ? 'primary' : 'neutral'">Bindings</OuiButton>
-          </NuxtLink>
-        </OuiFlex>
+        <nav aria-label="Organization administration" class="flex flex-wrap gap-4">
+          <OuiButton v-for="tab in tabs" :key="tab.id" :as="NuxtLink" :to="`/admin/${tab.id}`"
+            variant="ghost" :color="activeTab === tab.id ? 'primary' : 'neutral'"
+            :aria-current="activeTab === tab.id ? 'page' : undefined">{{ tab.label }}</OuiButton>
+        </nav>
         <slot />
       </OuiStack>
     </OuiContainer>
@@ -21,6 +15,8 @@
 </template>
 
 <script setup lang="ts">
+import { NuxtLink } from "#components";
+const tabs = [{id:"quotas",label:"Quotas"},{id:"roles",label:"Roles"},{id:"bindings",label:"Bindings"}];
 const route = useRoute();
 const activeTab = computed(() => {
   if (route.path.endsWith('/quotas')) return 'quotas';

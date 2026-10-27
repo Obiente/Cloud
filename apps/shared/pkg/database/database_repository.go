@@ -285,10 +285,28 @@ func (r *DatabaseBackupRepository) GetAll(ctx context.Context, databaseID string
 func (r *DatabaseBackupRepository) Update(ctx context.Context, backup *DatabaseBackup) error {
 	return r.db.WithContext(ctx).
 		Model(backup).
-		Select("name", "description", "size_bytes", "status", "completed_at", "error_message", "backup_path").
+		Select("name", "description", "size_bytes", "status", "completed_at", "error_message", "backup_path", "checksum", "source_database", "engine", "restore_status", "restore_target", "restore_user", "restore_error", "restored_at").
 		Updates(backup).Error
 }
 
 func (r *DatabaseBackupRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&DatabaseBackup{}, "id = ?", id).Error
+}
+
+// SetDatabaseDesiredState records operator intent separately from runtime observations.
+func SetDatabaseDesiredState(ctx context.Context, id, state string) error {
+	if state != "running" && state != "stopped" && state != "sleeping" {
+		return fmt.Errorf("invalid database intent")
+	}
+	result := DB.WithContext(ctx).Model(&DatabaseInstance{}).Where("id = ? AND deleted_at IS NULL", id).Update("desired_state", state)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	if RedisClient != nil {
+		RedisClient.Delete(ctx, fmt.Sprintf("database:%s", id))
+	}
+	return nil
 }

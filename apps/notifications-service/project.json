@@ -3,13 +3,18 @@
   "name": "notifications-service",
   "root": "apps/notifications-service",
   "projectType": "application",
-  "implicitDependencies": ["shared"],
+  "implicitDependencies": [
+    "shared"
+  ],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "/usr/local/go/bin/go test -count=1 ./..."
+        "command": "go test -mod=readonly -count=1 ./...",
+        "env": {
+          "GOWORK": "off"
+        }
       }
     }
   }

@@ -47,6 +47,11 @@ func (s *ConfigService) ensureAuthenticated(ctx context.Context, req connect.Any
 // checkVPSPermission verifies user permissions for a VPS
 // Uses the reusable CheckResourcePermissionWithError helper
 func (s *ConfigService) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
+	if permission != auth.PermissionVPSRead && permission != auth.PermissionVPSDelete {
+		if err := database.EnsureVPSCanStart(ctx, database.DB, vpsID); err != nil {
+			return connect.NewError(connect.CodePermissionDenied, err)
+		}
+	}
 	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "vps", vpsID, permission)
 }
 
@@ -836,7 +841,7 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 
 	// Generate cloud-init userData
 	userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
-	
+
 	// Log bastion key inclusion for debugging
 	bastionKey, err := database.GetVPSBastionKey(vps.ID)
 	if err == nil {
@@ -914,7 +919,7 @@ func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) 
 		// Also remove empty lines after header
 		content = strings.TrimLeft(content, "\n\r")
 	}
-	
+
 	// Clean up any potential encoding issues (BOM, carriage returns, etc.)
 	// Remove BOM if present
 	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
@@ -929,7 +934,7 @@ func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) 
 		// Try to extract line number from error message
 		errorMsg := err.Error()
 		logger.Warn("[VPSConfigService] YAML parse error: %s", errorMsg)
-		
+
 		// Extract line number from error message if present (format: "yaml: line X: ...")
 		lines := strings.Split(content, "\n")
 		errorLineNum := -1
@@ -941,7 +946,7 @@ func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) 
 				fmt.Sscanf(linePart, "%d", &errorLineNum)
 			}
 		}
-		
+
 		// Log the problematic area (use WARN level so it's always visible)
 		if errorLineNum > 0 && len(lines) >= errorLineNum {
 			logger.Warn("[VPSConfigService] YAML parse error at line %d. Content around error:", errorLineNum)
@@ -976,7 +981,7 @@ func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) 
 				logger.Warn("[VPSConfigService]   Line %d: %q", i+1, lineContent)
 			}
 		}
-		
+
 		// Return error with more context
 		return nil, fmt.Errorf("failed to parse YAML (this may indicate corrupted or malformed cloud-init snippet): %w", err)
 	}
@@ -1199,6 +1204,7 @@ func mergeCloudInitConfig(existing, new *orchestrator.CloudInitConfig) *orchestr
 	}
 	return merged
 }
+
 // Conversion helpers
 
 func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *orchestrator.CloudInitConfig {
@@ -1828,4 +1834,3 @@ func validateCloudInitConfig(cfg *orchestrator.CloudInitConfig) error {
 
 	return inputvalidation.CloudInitConfig(hostname, timezone, locale, cfg.Packages, users, cfg.Runcmd, writeFiles)
 }
-

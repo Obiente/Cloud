@@ -14,6 +14,7 @@ FROM base AS deps
 # Copy only files needed for dependency resolution (changes infrequently)
 # Copy workspace root files first - this layer is cached unless lockfile changes
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY patches ./patches
 # Copy package.json files from packages (for workspace dependency resolution)
 # Copy entire packages directory but .dockerignore excludes source files
 # This is still needed for workspace resolution, but .dockerignore minimizes what's copied
@@ -63,7 +64,7 @@ RUN --mount=type=cache,id=nuxt-build,target=/app/node_modules/.cache/nuxt \
     pnpm exec nuxt build
 
 # Production image - minimal runtime
-FROM ${BASE_REGISTRY}/library/node:20-alpine AS runner
+FROM ${BASE_REGISTRY}/library/node:22-alpine AS runner
 
 # Accept build arguments
 ARG DASHBOARD_COMMIT

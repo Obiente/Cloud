@@ -777,6 +777,7 @@
   const apiKeySourceAPI = ref("");
   const apiKeyError = ref("");
   const createdAPIKey = ref<string | null>(null);
+  watch(createAPIKeyDialogOpen, (open) => { if (!open) { createdAPIKey.value = null; apiKeyError.value = ""; } });
   const apiKeys = ref<any[]>([]);
   const apiKeysLoading = ref(false);
   const revokingAPIKey = ref<string | null>(null);
@@ -1232,18 +1233,9 @@
     
     revokingAPIKey.value = keyID;
     try {
-      // We need to revoke by key hash, but we only have the ID
-      // For now, we'll use the organization revoke endpoint if we have org ID
-      const key = apiKeys.value.find((k: DNSDelegationAPIKeyInfo) => k.id === keyID);
-      if (key?.organization_id) {
-        await client.revokeDNSDelegationAPIKeyForOrganization({
-          organizationId: key.organization_id,
-        });
-        toast.success("API key revoked successfully");
-        await loadAPIKeys();
-      } else {
-        toast.error("Cannot revoke: organization ID not found");
-      }
+      await client.revokeDNSDelegationAPIKey({ keyId: keyID });
+      toast.success("API key revoked successfully");
+      await loadAPIKeys();
     } catch (err: unknown) {
       toast.error((err as Error).message || "Failed to revoke API key");
     } finally {
@@ -1398,11 +1390,7 @@
         // Reload API keys list
         await loadAPIKeys();
 
-        // Close dialog after showing key
-        setTimeout(() => {
-          createAPIKeyDialogOpen.value = false;
-          createdAPIKey.value = null;
-        }, 5000);
+
       }
     } catch (err: unknown) {
       apiKeyError.value = (err as Error).message || "Failed to create API key";
@@ -1412,10 +1400,12 @@
     }
   }
 
-  function copyAPIKey() {
+  async function copyAPIKey() {
     if (!createdAPIKey.value) return;
-    navigator.clipboard.writeText(createdAPIKey.value);
-    toast.success("API key copied to clipboard");
+    try {
+      await navigator.clipboard.writeText(createdAPIKey.value);
+      toast.success("API key copied to clipboard");
+    } catch { toast.error("Could not copy the key. Select and copy it manually."); }
   }
 
   onMounted(async () => {

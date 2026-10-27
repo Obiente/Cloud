@@ -116,16 +116,16 @@
               <template #cell-plan="{ row }">
                 {{ prettyPlan(row.plan) }}
               </template>
-              <template #cell-members="{ value }">
+              <template #cell-memberCount="{ value }">
                 {{ formatNumber(value) }}
               </template>
-              <template #cell-invites="{ value }">
+              <template #cell-inviteCount="{ value }">
                 {{ formatNumber(value) }}
               </template>
-              <template #cell-deployments="{ value }">
+              <template #cell-deploymentCount="{ value }">
                 {{ formatNumber(value) }}
               </template>
-              <template #cell-created="{ value }">
+              <template #cell-createdAt="{ value }">
                 <OuiDate :value="value" />
               </template>
             </OuiTable>
@@ -182,7 +182,7 @@
                     {{ value }}
                   </span>
                 </template>
-                <template #cell-invited="{ value }">
+                <template #cell-invitedAt="{ value }">
                   <OuiDate :value="value" />
                 </template>
               </OuiTable>
@@ -299,19 +299,19 @@
                   {{ row.month }}
                 </div>
               </template>
-              <template #cell-cpu="{ value }">
-                {{ formatNumber(value) }}
+              <template #cell-cpuCoreSeconds="{ value }">
+                {{ formatUsageHours(value, "cpu") }}
               </template>
-              <template #cell-memory="{ value }">
-                {{ formatNumber(value) }}
+              <template #cell-memoryByteSeconds="{ value }">
+                {{ formatUsageHours(value, "memory") }}
               </template>
-              <template #cell-bandwidthRx="{ value }">
+              <template #cell-bandwidthRxBytes="{ value }">
                 {{ formatBytes(value) }}
               </template>
-              <template #cell-bandwidthTx="{ value }">
+              <template #cell-bandwidthTxBytes="{ value }">
                 {{ formatBytes(value) }}
               </template>
-              <template #cell-storage="{ value }">
+              <template #cell-storageBytes="{ value }">
                 {{ formatBytes(value) }}
               </template>
               <template #cell-peakDeployments="{ value }">
@@ -326,6 +326,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatUsageHours } from "~/utils/adminPresentation";
   definePageMeta({
     middleware: ["auth", "superadmin"],
   });
@@ -427,17 +428,17 @@
   const orgColumns = [
     { key: "name", label: "Name", defaultWidth: 250, minWidth: 200 },
     { key: "plan", label: "Plan", defaultWidth: 120, minWidth: 100 },
-    { key: "members", label: "Members", defaultWidth: 100, minWidth: 80 },
-    { key: "invites", label: "Invites", defaultWidth: 100, minWidth: 80 },
-    { key: "deployments", label: "Deployments", defaultWidth: 120, minWidth: 100 },
-    { key: "created", label: "Created", defaultWidth: 150, minWidth: 120 },
+    { key: "memberCount", label: "Members", defaultWidth: 100, minWidth: 80 },
+    { key: "inviteCount", label: "Invites", defaultWidth: 100, minWidth: 80 },
+    { key: "deploymentCount", label: "Deployments", defaultWidth: 120, minWidth: 100 },
+    { key: "createdAt", label: "Created", defaultWidth: 150, minWidth: 120 },
   ];
 
   const inviteColumns = [
     { key: "email", label: "Email", defaultWidth: 200, minWidth: 150 },
     { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
     { key: "role", label: "Role", defaultWidth: 120, minWidth: 100 },
-    { key: "invited", label: "Invited", defaultWidth: 150, minWidth: 120 },
+    { key: "invitedAt", label: "Invited", defaultWidth: 150, minWidth: 120 },
   ];
 
   const deploymentColumns = [
@@ -450,11 +451,11 @@
 
   const usageColumns = [
     { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
-    { key: "cpu", label: "CPU (core-s)", defaultWidth: 120, minWidth: 100 },
-    { key: "memory", label: "Memory (byte-s)", defaultWidth: 150, minWidth: 120 },
-    { key: "bandwidthRx", label: "Bandwidth RX", defaultWidth: 140, minWidth: 110 },
-    { key: "bandwidthTx", label: "Bandwidth TX", defaultWidth: 140, minWidth: 110 },
-    { key: "storage", label: "Storage", defaultWidth: 120, minWidth: 100 },
+    { key: "cpuCoreSeconds", label: "CPU usage", defaultWidth: 120, minWidth: 100 },
+    { key: "memoryByteSeconds", label: "Memory usage", defaultWidth: 150, minWidth: 120 },
+    { key: "bandwidthRxBytes", label: "Bandwidth RX", defaultWidth: 140, minWidth: 110 },
+    { key: "bandwidthTxBytes", label: "Bandwidth TX", defaultWidth: 140, minWidth: 110 },
+    { key: "storageBytes", label: "Storage", defaultWidth: 120, minWidth: 100 },
     { key: "peakDeployments", label: "Peak Deployments", defaultWidth: 140, minWidth: 120 },
   ];
 
@@ -490,7 +491,7 @@
   });
 
   function formatNumber(value?: number | bigint | null) {
-    if (value === undefined || value === null) return "0";
+    if (value === undefined || value === null) return "Unavailable";
     return numberFormatter.format(Number(value));
   }
 

@@ -1,0 +1,19 @@
+# Optional overlay for docker-compose.yml or docker-compose.swarm.yml.
+# The external volume must refer to the same shared storage on every eligible node.
+services:
+  databases-service:
+    environment:
+      DATABASE_BACKUP_DIRECTORY: /var/lib/obiente/database-backups
+      DATABASE_BACKUP_KEEP: ${DATABASE_BACKUP_KEEP:-10}
+      DATABASE_BACKUP_MAX_BYTES: ${DATABASE_BACKUP_MAX_BYTES:-1073741824}
+    volumes:
+      - type: volume
+        source: database-backups
+        target: /var/lib/obiente/database-backups
+        volume:
+          nocopy: true
+
+volumes:
+  database-backups:
+    external: true
+    name: ${DATABASE_BACKUP_VOLUME:?Set DATABASE_BACKUP_VOLUME to the existing shared backup volume}

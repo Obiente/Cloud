@@ -14,7 +14,6 @@
             type="date"
             size="sm"
             label="Start Date"
-            @change="fetchIncome"
           />
         </div>
         <div class="min-w-[140px]">
@@ -23,7 +22,6 @@
             type="date"
             size="sm"
             label="End Date"
-            @change="fetchIncome"
           />
         </div>
         <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
@@ -34,6 +32,10 @@
         </OuiButton>
       </OuiFlex>
     </OuiFlex>
+
+    <OuiAlert v-if="incomeError" variant="danger" title="Income data is unavailable">
+      Refresh to try again. Previously loaded figures may be out of date.
+    </OuiAlert>
 
     <!-- Summary Metrics -->
     <OuiGrid :cols="{ sm: 1, md: 2, xl: 4 }" gap="md">
@@ -186,6 +188,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from "~/utils/common";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { SuperadminService, type MonthlyIncome, type TopCustomer, type BillingTransaction } from "@obiente/proto";
@@ -224,7 +227,7 @@ async function fetchIncome() {
 }
 
 // Use client-side fetching for non-blocking navigation
-const { data: incomeData, pending: isLoading } = useClientFetch(
+const { data: incomeData, pending: isLoading, error: incomeError, refresh } = useClientFetch(
   () => `superadmin-income-${startDate.value}-${endDate.value}`,
   fetchIncome
 );
@@ -376,19 +379,8 @@ function getStatusVariant(status: string): "success" | "danger" | "warning" {
 }
 
 function viewOrganization(orgId: string) {
-  router.push(`/superadmin/organizations?org=${orgId}`);
+  router.push(`/superadmin/organizations/${encodeURIComponent(orgId)}`);
 }
 
-function refresh() {
-  fetchIncome();
-}
-
-function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | null) {
-  if (!timestamp || timestamp.seconds === undefined) return "—";
-  const seconds = typeof timestamp.seconds === "bigint" ? Number(timestamp.seconds) : timestamp.seconds;
-  const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
-  const date = new Date(millis);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
 </script>
 

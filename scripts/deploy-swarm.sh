@@ -13,6 +13,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=scripts/lib/database-owner.sh
 source "${SCRIPT_DIR}/lib/database-owner.sh"
+# shellcheck source=scripts/lib/swarm-updates.sh
+source "${SCRIPT_DIR}/lib/swarm-updates.sh"
+# shellcheck source=scripts/lib/dashboard-readiness.sh
+source "${SCRIPT_DIR}/lib/dashboard-readiness.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -58,12 +62,12 @@ FORCE_UPDATE="${FORCE_UPDATE:-false}"
 RESOLVE_IMAGE_MODE="always"
 
 # Define all microservice images
-REGISTRY="${REGISTRY:-ghcr.io/obiente}"
 MICROSERVICES=(
   "api-gateway"
   "audit-service"
   "auth-service"
   "billing-service"
+  "databases-service"
   "deployments-service"
   "dns-service"
   "file-transfer-service"
@@ -76,7 +80,6 @@ MICROSERVICES=(
   "vps-gateway"
   "vps-service"
 )
-DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-${REGISTRY}/cloud-dashboard:latest}"
 
 if [ -f "${REPO_ROOT}/.env" ]; then
   load_env_file "${REPO_ROOT}/.env"
@@ -96,6 +99,54 @@ fi
 if [ -z "${API_URL:-}" ]; then
   API_URL="$(derive_api_url "$DOMAIN")"
   export API_URL
+fi
+
+REGISTRY="${REGISTRY:-ghcr.io/obiente}"
+export REGISTRY
+DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-${REGISTRY}/cloud-dashboard:latest}"
+export DASHBOARD_IMAGE
+
+if [ "$BUILD_LOCAL" = "true" ]; then
+  # Do not replace a freshly built local tag with an older registry digest.
+  RESOLVE_IMAGE_MODE="never"
+  echo "🔨 Building Obiente Cloud microservice images locally..."
+
+  # Enable BuildKit for faster builds
+  export DOCKER_BUILDKIT=1
+
+  # Build all microservice images
+  for service in "${MICROSERVICES[@]}"; do
+    echo "📦 Building ${REGISTRY}/cloud-${service}:latest..."
+    docker build -f "apps/${service}/Dockerfile" -t "${REGISTRY}/cloud-${service}:latest" . || {
+      echo "❌ Failed to build ${service}"
+      exit 1
+    }
+  done
+
+  # Build the Dashboard image
+  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
+    echo "📦 Building ${DASHBOARD_IMAGE}..."
+    docker build -f apps/dashboard/Dockerfile -t "${DASHBOARD_IMAGE}" .
+  fi
+
+  echo "✅ Build complete!"
+elif [ "$PULL_IMAGES" = "true" ]; then
+  echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
+
+  PULL_TARGETS=()
+  for service in "${MICROSERVICES[@]}"; do
+    PULL_TARGETS+=("${service}=${REGISTRY}/cloud-${service}:latest")
+  done
+
+  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
+    PULL_TARGETS+=("dashboard=${DASHBOARD_IMAGE}")
+  fi
+
+  require_pulled_images "${PULL_TARGETS[@]}"
+
+  echo "✅ Image pull step complete!"
+else
+  echo "ℹ️  Skipping image pull (use -p/--pull to pull images, -f/--force to force-restart all containers)"
 fi
 
 # Check if required directories exist on this node
@@ -122,7 +173,7 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
   echo "📋 Creating directories on this node..."
   mkdir -p "${MISSING_DIRS[@]}"
   chmod 755 "${MISSING_DIRS[@]}"
-  
+
   # Special handling for registry-auth directory
   if [[ " ${MISSING_DIRS[@]} " =~ " /var/lib/obiente/registry-auth " ]]; then
     echo ""
@@ -149,63 +200,6 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
     echo "Deployment cancelled. Please create directories on all nodes first."
     exit 1
   fi
-fi
-
-if [ "$BUILD_LOCAL" = "true" ]; then
-  echo "🔨 Building Obiente Cloud microservice images locally..."
-  
-  # Enable BuildKit for faster builds
-  export DOCKER_BUILDKIT=1
-  
-  # Build all microservice images
-  for service in "${MICROSERVICES[@]}"; do
-    echo "📦 Building obiente/cloud-${service}:latest..."
-    docker build -f apps/${service}/Dockerfile -t obiente/cloud-${service}:latest . || {
-      echo "❌ Failed to build ${service}"
-      exit 1
-    }
-  done
-  
-  # Build the Dashboard image
-  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-    echo "📦 Building obiente/cloud-dashboard:latest..."
-    docker build -f apps/dashboard/Dockerfile -t obiente/cloud-dashboard:latest .
-  fi
-  
-  echo "✅ Build complete!"
-elif [ "$PULL_IMAGES" = "true" ]; then
-  echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
-
-  PULL_TARGETS=()
-  for service in "${MICROSERVICES[@]}"; do
-    PULL_TARGETS+=("${service}=${REGISTRY}/cloud-${service}:latest")
-  done
-
-  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-    PULL_TARGETS+=("dashboard=${DASHBOARD_IMAGE}")
-  fi
-
-  if ! pull_images_in_parallel "${PULL_TARGETS[@]}"; then
-    echo ""
-    echo "⚠️  Failed to pull the following images:"
-    for service in "${PARALLEL_PULL_FAILURES[@]}"; do
-      echo "   - ${service}"
-    done
-    echo ""
-    echo "Continuing deployment — successfully pulled images will be updated."
-    echo "Services with failed pulls will keep their existing cached version."
-    echo ""
-    echo "To fix missing images, either:"
-    echo "   1. Publish the missing image to ghcr.io"
-    echo "   2. Or set BUILD_LOCAL=true to build locally"
-    # Keep resolve-image=always so services that DID pull get their new digest.
-    # Services whose pull failed will fall back to whatever the node has cached.
-    RESOLVE_IMAGE_MODE="always"
-  fi
-
-  echo "✅ Image pull step complete!"
-else
-  echo "ℹ️  Skipping image pull (use -p/--pull to pull images, -f/--force to force-restart all containers)"
 fi
 
 echo ""
@@ -331,7 +325,7 @@ if [ "$NEEDS_MIGRATION" = true ] && [ ${#SERVICES_USING_OLD_CONFIGS[@]} -gt 0 ];
   echo "   ⚠️  Found old config names that need migration"
   echo "   📋 Services using old configs: ${SERVICES_USING_OLD_CONFIGS[*]}"
   echo "   💡 Removing old configs from services..."
-  
+
   for service in "${SERVICES_USING_OLD_CONFIGS[@]}"; do
     echo "      Updating $service..."
     # Remove only the old configs that this service is actually using
@@ -342,10 +336,10 @@ if [ "$NEEDS_MIGRATION" = true ] && [ ${#SERVICES_USING_OLD_CONFIGS[@]} -gt 0 ];
       fi
     done
   done
-  
+
   echo "   ⏳ Waiting for service updates to complete..."
   sleep 5
-  
+
   # Now try to remove old configs (only if not in use)
   echo "   🗑️  Removing old configs..."
   for old_config in "${OLD_CONFIG_NAMES[@]}"; do
@@ -390,19 +384,19 @@ for config_name in "${NEW_CONFIG_NAMES[@]}"; do
       # Docker configs store data as base64-encoded JSON
       EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | sed 's/^"//;s/"$//' | base64 -d 2>/dev/null || echo "")
       NEW_CONTENT=$(cat "$SOURCE_FILE")
-      
+
       # Normalize content for comparison (remove trailing newlines)
       EXISTING_CONTENT=$(echo -n "$EXISTING_CONTENT")
       NEW_CONTENT=$(echo -n "$NEW_CONTENT")
-      
+
       # Compare content (using a simple hash comparison)
       EXISTING_HASH=$(echo -n "$EXISTING_CONTENT" | sha256sum | cut -d' ' -f1)
       NEW_HASH=$(echo -n "$NEW_CONTENT" | sha256sum | cut -d' ' -f1)
-      
+
       if [ "$EXISTING_HASH" != "$NEW_HASH" ]; then
         echo "   ⚠️  Config $config_name content has changed, will be recreated"
         CONFIGS_NEED_UPDATE=true
-        
+
         # Remove old config (services will need to be updated first)
         echo "   🗑️  Removing old config: $config_name"
         # Find services using this config
@@ -413,19 +407,19 @@ for config_name in "${NEW_CONFIG_NAMES[@]}"; do
             SERVICES_USING_CONFIG+=("$service")
           fi
         done
-        
+
         # Remove config from services first
         for service in "${SERVICES_USING_CONFIG[@]}"; do
           echo "      Removing config from $service..."
           docker service update --config-rm "$config_name" "$service" 2>/dev/null || true
         done
-        
+
         # Wait for services to update
         if [ ${#SERVICES_USING_CONFIG[@]} -gt 0 ]; then
           echo "   ⏳ Waiting for services to update..."
           sleep 3
         fi
-        
+
         # Remove the config
         docker config rm "$config_name" 2>/dev/null || echo "      ⚠️  Could not remove $config_name (may still be in use)"
       else
@@ -457,66 +451,36 @@ echo ""
 # Deploy dashboard in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "🚀 Adding dashboard service to main stack '$STACK_NAME'..."
-  
+
   # Ensure DOMAIN is set for label substitution using env/.env first.
   export DOMAIN="${DOMAIN:-localhost}"
-  
+
   # Merge docker-compose.base.yml with docker-compose.dashboard.yml
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   TMP_FILES+=("$TEMP_DASHBOARD_COMPOSE")
   ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
-  
+
   # Substitute __STACK_NAME__ placeholder and DOMAIN variables
   sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$TEMP_DASHBOARD_COMPOSE"
   sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
-  
+
   # Process environment variables in the dashboard compose file
   # This is critical for Swarm deployments to properly substitute ${VAR} placeholders
   # We need to use envsubst to replace variables before docker stack deploy
   TEMP_DASHBOARD_COMPOSE_FINAL=$(mktemp)
   TMP_FILES+=("$TEMP_DASHBOARD_COMPOSE_FINAL")
   envsubst < "$TEMP_DASHBOARD_COMPOSE" > "$TEMP_DASHBOARD_COMPOSE_FINAL"
-  
+
   # Deploy dashboard service in the same stack (not a separate stack)
   docker stack deploy --resolve-image "$RESOLVE_IMAGE_MODE" -c "$TEMP_DASHBOARD_COMPOSE_FINAL" "$STACK_NAME"
   rm -f "$TEMP_DASHBOARD_COMPOSE" "$TEMP_DASHBOARD_COMPOSE_FINAL"
-  
+
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
   echo ""
-  
-  # Wait for dashboard to be ready (healthcheck passes and service is stable)
-  echo "⏳ Waiting for dashboard service to become healthy..."
-  MAX_WAIT=60
-  ELAPSED=0
-  DASHBOARD_READY=false
-  
-  while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if dashboard service has running and healthy tasks
-    # A task is considered ready when it's in "Running" state for at least a few seconds
-    RUNNING_TASKS="$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | awk '/Running [0-9]/{count++} END {print count+0}')"
-    
-    if [ "$RUNNING_TASKS" -gt 0 ]; then
-      # Give Traefik time to pick up the service (default 15s refresh interval)
-      if [ $ELAPSED -ge 20 ]; then
-        DASHBOARD_READY=true
-        echo "✅ Dashboard service is running and should be accessible via Traefik!"
-        break
-      fi
-      echo "   ✓ Dashboard tasks running, allowing Traefik to discover service..."
-    else
-      echo "   ⏳ Waiting for dashboard tasks to start (${ELAPSED}s)..."
-    fi
-    
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-  done
-  
-  if [ "$DASHBOARD_READY" = false ]; then
-    echo "⚠️  Warning: Dashboard tasks are taking longer than expected to start"
-    echo "   Check service status: docker service ps ${STACK_NAME}_dashboard"
-    echo "   Monitor logs: docker service logs -f ${STACK_NAME}_dashboard"
-  fi
+
+  wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
+
 else
   echo "✅ Main stack deployment started!"
   echo ""
@@ -529,19 +493,15 @@ echo ""
 # Runs after both main stack and dashboard are deployed so all services exist
 if [ "$FORCE_UPDATE" = "true" ]; then
   echo "🔄 Force-updating all containers..."
-  FORCE_UPDATE_SERVICES=("${MICROSERVICES[@]}")
+  FORCE_UPDATE_SERVICES=("${MICROSERVICES[@]}" "databases-proxy")
   if [ "$DEPLOY_DASHBOARD" = "true" ]; then
     FORCE_UPDATE_SERVICES+=("dashboard")
   fi
-  for service in "${FORCE_UPDATE_SERVICES[@]}"; do
-    FULL_NAME="${STACK_NAME}_${service}"
-    if docker service inspect "$FULL_NAME" &>/dev/null; then
-      echo "   Updating ${FULL_NAME}..."
-      docker service update --force "$FULL_NAME" &
-    fi
-  done
-  wait
-  echo "✅ Force update triggered for all services!"
+  restart_stack_services "$STACK_NAME" "${FORCE_UPDATE_SERVICES[@]}"
+  if [ "$DEPLOY_DASHBOARD" = true ]; then
+    wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
+  fi
+  echo "✅ Requested service restarts completed."
   echo ""
 fi
 echo "📋 Useful commands:"

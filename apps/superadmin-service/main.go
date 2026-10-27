@@ -249,7 +249,7 @@ func runAbuseDetection(ctx context.Context) {
 
 	// Call DetectAbuse directly from the superadmin package
 	// It will automatically send notifications to superadmins if abuse is detected
-	result, err := superadminsvc.DetectAbuse(bgCtx)
+	result, err := superadminsvc.DetectAbuseAndNotify(bgCtx)
 	if err != nil {
 		logger.Warn("[AbuseDetection] Failed to run abuse detection: %v", err)
 	} else {

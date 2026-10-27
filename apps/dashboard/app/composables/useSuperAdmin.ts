@@ -13,6 +13,8 @@ interface SuperAdminState {
   error: string | null;
 }
 
+const overviewRequests = new WeakMap<object, Promise<GetOverviewResponse | null>>();
+
 export const useSuperAdmin = () => {
   const state = useState<SuperAdminState>("superadmin-state", () => ({
     overview: null,
@@ -26,129 +28,48 @@ export const useSuperAdmin = () => {
 
   const client = useConnectClient(SuperadminService);
 
-  const fetchOverview = async (force = false) => {
-    if (state.value.loading && !force) return state.value.overview;
-    // If forcing, always fetch even if initialized
-    if (state.value.initialized && !force) return state.value.overview;
-
-    state.value.loading = true;
-    state.value.error = null;
-
-    try {
-      // Fetch permissions first to determine access
-      const permsResponse = await client.getMySuperadminPermissions({});
-      state.value.permissions = permsResponse.permissions || [];
-      state.value.isFullSuperadmin = permsResponse.isFullSuperadmin || false;
-      
-      // Helper function to check permission (defined inline to avoid hoisting issues)
-      const checkPerm = (permission: string): boolean => {
-        if (state.value.isFullSuperadmin) {
-          return true;
-        }
-        const perms = state.value.permissions;
-        for (const perm of perms) {
-          if (perm === permission) {
-            return true;
-          }
-          if (perm.endsWith(".*")) {
-            const prefix = perm.slice(0, -2);
-            if (permission.startsWith(prefix + ".")) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-      
-      // If user has any superadmin permissions, they're allowed
-      // Full superadmins are always allowed
-      if (state.value.isFullSuperadmin || state.value.permissions.length > 0) {
-        state.value.allowed = true;
-        
-        // Fetch overview if user has permission
-        if (state.value.isFullSuperadmin || checkPerm("superadmin.overview.read")) {
-      const response = await client.getOverview({});
-      state.value.overview = response;
+  const app = useNuxtApp();
+  const fetchOverview = (force = false): Promise<GetOverviewResponse | null> => {
+    const pending = overviewRequests.get(app);
+    if (pending) return pending;
+    if (state.value.initialized && !force) return Promise.resolve(state.value.overview);
+    const target = state.value;
+    const request = (async () => {
+      target.loading = true;
+      target.error = null;
+      try {
+        const permissions = await client.getMySuperadminPermissions({});
+        target.permissions = permissions.permissions || [];
+        target.isFullSuperadmin = permissions.isFullSuperadmin || false;
+        target.allowed = target.isFullSuperadmin || target.permissions.length > 0;
+        const canReadOverview = target.isFullSuperadmin || target.permissions.some(permission =>
+          permission === "superadmin.overview.read" || permission === "superadmin.overview.*" || permission === "superadmin.*");
+        target.overview = canReadOverview ? await client.getOverview({}) : null;
+        target.initialized = true;
+        return target.overview;
+      } catch (err) {
+        target.initialized = false;
+        if (err instanceof ConnectError && err.code === Code.PermissionDenied) {
+          target.allowed = false;
+          target.permissions = [];
+          target.isFullSuperadmin = false;
+          target.overview = null;
+          target.initialized = true;
         } else {
-          state.value.overview = null;
+          target.error = "Administrator data is temporarily unavailable. Please try again.";
         }
-      } else {
-        state.value.allowed = false;
-        state.value.overview = null;
+        return null;
+      } finally {
+        target.loading = false;
       }
-      
-      state.value.error = null;
-      return state.value.overview;
-    } catch (err) {
-      console.error("[SuperAdmin] Failed to fetch overview:", err);
-      
-      if (err instanceof ConnectError) {
-        // Handle unauthenticated errors (no token on server side)
-        if (err.code === Code.Unauthenticated) {
-          // On server side, we can't check auth, so don't set allowed to false
-          // This will be checked again on client side
-          if (import.meta.server) {
-            state.value.allowed = null; // Keep as null, will be checked on client
-            state.value.error = null;
-            return null;
-          } else {
-            // On client side, unauthenticated means not allowed
-            state.value.allowed = false;
-            state.value.overview = null;
-            state.value.error = null;
-            return null;
-          }
-        }
-        
-        if (err.code === Code.PermissionDenied) {
-          // User is not a superadmin
-          state.value.allowed = false;
-          state.value.overview = null;
-          state.value.error = null;
-        } else if (err.code === Code.Internal) {
-          // Internal server error - log it but don't set allowed to false if already initialized
-          console.error("[SuperAdmin] Internal server error:", (err as Error).message);
-          if (!state.value.initialized) {
-            // First time fetch failed with 500 - set allowed to false
-            state.value.allowed = false;
-            state.value.permissions = [];
-            state.value.isFullSuperadmin = false;
-          }
-          // Otherwise, keep the existing allowed state (don't change it)
-          state.value.error = (err as Error).message || "Internal server error";
-        } else {
-          // Other ConnectError codes - preserve previous allowed state if initialized
-          console.error("[SuperAdmin] Unexpected ConnectError:", err);
-          if (!state.value.initialized) {
-            // First time fetch failed - set allowed to false to prevent showing sidebar until verified
-            state.value.allowed = false;
-            state.value.permissions = [];
-            state.value.isFullSuperadmin = false;
-          }
-          // Otherwise, keep the existing allowed state (don't change it)
-          state.value.error = (err as Error).message || String(err);
-        }
-      } else {
-        // Network errors or other errors - preserve previous allowed state if initialized
-        // This prevents network errors from hiding the sidebar for superadmins
-        console.error("[SuperAdmin] Unexpected error:", err);
-        if (!state.value.initialized) {
-          // First time fetch failed - set allowed to false to prevent showing sidebar until verified
-          state.value.allowed = false;
-          state.value.permissions = [];
-          state.value.isFullSuperadmin = false;
-        }
-        // Otherwise, keep the existing allowed state (don't change it)
-        state.value.error = err instanceof Error ? (err as Error).message : String(err);
-      }
-      return null;
-    } finally {
-      state.value.initialized = true;
-      state.value.loading = false;
-    }
+    })();
+    overviewRequests.set(app, request);
+    void request.finally(() => { if (overviewRequests.get(app) === request) overviewRequests.delete(app); });
+    return request;
   };
 
   const reset = () => {
+    overviewRequests.delete(app);
     state.value = {
       overview: null,
       loading: false,

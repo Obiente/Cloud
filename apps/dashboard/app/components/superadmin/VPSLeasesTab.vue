@@ -1,4 +1,6 @@
 <template>
+ <OuiStack gap="md">
+  <OuiText v-if="loadError" role="alert" color="danger">{{ loadError }}</OuiText>
   <SuperadminPageLayout
     title="All DHCP Leases"
     description="View DHCP leases across all VPS instances."
@@ -6,7 +8,7 @@
     :rows="filteredTableRows"
     :filters="filterConfigs"
     :search="search"
-    :empty-text="isLoading ? 'Loading leases…' : 'No DHCP leases found. This feature requires VPSGatewayService integration.'"
+    :empty-text="isLoading ? 'Loading leases…' : loadError ? 'Leases are unavailable.' : 'No DHCP leases found.'"
     :loading="isLoading"
     search-placeholder="Search by IP, MAC, VPS name, organization…"
     @update:search="search = $event"
@@ -22,7 +24,8 @@
           size="sm"
           variant="ghost"
           @click.stop="copyToClipboard(row.ip)"
-          class="p-1 h-auto opacity-0 group-hover:opacity-100 transition-opacity"
+          :aria-label="`Copy IP address ${row.ip}`"
+          class="p-1 h-auto opacity-70 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
         >
           <DocumentDuplicateIcon class="w-4 h-4" />
         </OuiButton>
@@ -68,10 +71,13 @@
       </OuiBadge>
     </template>
   </SuperadminPageLayout>
+ </OuiStack>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { leaseStatus } from "~/utils/leaseStatus";
+import { date } from "@obiente/proto/utils";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { DocumentDuplicateIcon } from "@heroicons/vue/24/outline";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
 import OuiText from "~/components/oui/Text.vue";
@@ -98,6 +104,9 @@ const superadminClient = useConnectClient(SuperadminService);
 const orgClient = useConnectClient(OrganizationService);
 
 const isLoading = ref(false);
+const loadError = ref("");
+let disposed = false;
+onBeforeUnmount(() => { disposed = true; });
 const search = ref("");
 const leases = ref<Lease[]>([]);
 const appliedFilters = ref<Record<string, string>>({});
@@ -116,6 +125,7 @@ const filterConfigs = computed(() => [
     key: "type",
     placeholder: "Lease Type",
     items: [
+      { key: "all", label: "All types", value: "" },
       { key: "public", label: "Public IP", value: "public" },
       { key: "pool", label: "Pool", value: "pool" },
     ],
@@ -124,8 +134,11 @@ const filterConfigs = computed(() => [
     key: "expiry",
     placeholder: "Expiry Status",
     items: [
+      { key: "all", label: "All expiry states", value: "" },
       { key: "expiring", label: "Expiring Soon (< 24h)", value: "expiring" },
-      { key: "active", label: "Active", value: "active" },
+      { key: "active", label: "Active (24h or more)", value: "active" },
+      { key: "expired", label: "Expired", value: "expired" },
+      { key: "unknown", label: "Unknown expiry", value: "unknown" },
     ],
   },
 ]);
@@ -146,15 +159,16 @@ const filteredTableRows = computed(() => {
     if (typeFilter === "pool" && lease.isPublic) return false;
 
     const expiryFilter = appliedFilters.value.expiry;
-    if (expiryFilter === "expiring" && !isExpiring(lease.expiresAt)) return false;
-    if (expiryFilter === "active" && isExpiring(lease.expiresAt)) return false;
+    if (expiryFilter && leaseStatus(lease.expiresAt) !== expiryFilter) return false;
 
     return true;
   });
 });
 
 const fetchLeases = async () => {
+  if (isLoading.value || disposed) return;
   isLoading.value = true;
+  loadError.value = "";
   try {
     // Get all organizations first
     const orgsResponse = await orgClient.listOrganizations({
@@ -168,6 +182,7 @@ const fetchLeases = async () => {
     );
 
     const allLeases: Lease[] = [];
+    let failedOrganizations = 0;
 
     // Fetch leases for each organization
     for (const org of organizations) {
@@ -185,40 +200,33 @@ const fetchLeases = async () => {
             vpsId: lease.vpsId,
             organizationId: lease.organizationId,
             organizationName: orgMap.get(lease.organizationId) || lease.organizationId,
-            expiresAt: lease.expiresAt?.toDate?.(),
+            expiresAt: lease.expiresAt ? date(lease.expiresAt) : undefined,
             isPublic: lease.isPublic,
           }))
         );
       } catch (error) {
-        console.error(`Failed to fetch leases for organization ${(org as any).id}:`, error);
+        failedOrganizations++;
       }
     }
 
+    if (disposed) return;
     leases.value = allLeases;
+    if (failedOrganizations) loadError.value = `Lease data is incomplete: ${failedOrganizations} organization(s) could not be loaded. Use Refresh to retry.`;
   } catch (error: unknown) {
-    toast.error(`Failed to load leases: ${(error as any)?.message || "Unknown error"}`);
+    if (!disposed) loadError.value = "Lease data is unavailable. Use Refresh to retry.";
   } finally {
     isLoading.value = false;
   }
 };
 
 const handleFilterChange = (key: string, value: string) => {
-  if (appliedFilters.value[key] === value) {
-    delete appliedFilters.value[key];
-  } else {
-    appliedFilters.value[key] = value;
-  }
+  appliedFilters.value[key] = value;
 };
 
-const isExpiring = (expiresAt?: Date): boolean => {
-  if (!expiresAt) return false;
-  const now = new Date();
-  const hoursUntilExpiry = (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60);
-  return hoursUntilExpiry < 24;
-};
+const isExpiring = (expiresAt?: Date): boolean => leaseStatus(expiresAt) === "expiring";
 
 const formatExpiry = (expiresAt?: Date): string => {
-  if (!expiresAt) return "Unknown";
+  if (leaseStatus(expiresAt) === "unknown" || !expiresAt) return "Unknown";
 
   const now = new Date().getTime();
   const expireTime = expiresAt.getTime();
@@ -241,6 +249,8 @@ const copyToClipboard = async (text: string) => {
     toast.error("Failed to copy to clipboard");
   }
 };
+
+useAutoRefresh(fetchLeases, 30_000);
 
 onMounted(() => {
   fetchLeases();

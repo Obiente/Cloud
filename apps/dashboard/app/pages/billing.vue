@@ -1292,9 +1292,7 @@
                   <OuiStack gap="xs">
                     <OuiText size="xs" color="tertiary">Monthly Estimate</OuiText>
                     <OuiText size="xl" weight="semibold">
-                      {{ safeUsage?.estimatedMonthly?.estimatedCostCents 
-                        ? formatCurrency(safeUsage.estimatedMonthly.estimatedCostCents)
-                        : '$0.00' }}
+                      {{ !safeUsage?.estimatedMonthly || safeUsage.estimatedMonthly.costEstimateUnavailable ? "Unavailable" : formatCurrency(safeUsage.estimatedMonthly.estimatedCostCents) }}
                     </OuiText>
                   </OuiStack>
                 </OuiCardBody>
@@ -1611,12 +1609,12 @@
                       <OuiStack gap="md">
                         <OuiFlex justify="between" align="start">
                           <OuiStack gap="xs">
-                            <OuiText size="sm" color="tertiary">Storage (GB)</OuiText>
+                            <OuiText v-if="!safeUsageCurrent?.storageMeasurementUnavailable" size="sm" color="tertiary">Storage (GB)</OuiText>
                             <OuiText size="xl" weight="semibold">
-                              {{ formatBytesToGB(safeUsageCurrent?.storageBytes ?? 0) }}
+                              {{ safeUsageCurrent?.storageMeasurementUnavailable ? "Unavailable" : formatBytesToGB(safeUsageCurrent?.storageBytes ?? 0) }}
                             </OuiText>
                           </OuiStack>
-                          <OuiBadge 
+                          <OuiBadge v-if="!safeUsageCurrent?.storageMeasurementUnavailable"
                             :variant="getUsageBadgeVariant(
                               getUsagePercentage(
                                 safeUsageCurrent?.storageBytes ?? 0,
@@ -1635,14 +1633,14 @@
                             <template v-else>Normal</template>
                           </OuiBadge>
                         </OuiFlex>
-                        <OuiProgress 
+                        <OuiProgress v-if="!safeUsageCurrent?.storageMeasurementUnavailable"
                           :value="getUsagePercentage(
                             safeUsageCurrent?.storageBytes ?? 0,
                             safeUsage?.quota?.storageBytes || 0
                           )" 
                           :max="100" 
                         />
-                        <OuiText size="sm" color="tertiary">
+                        <OuiText v-if="!safeUsageCurrent?.storageMeasurementUnavailable" size="sm" color="tertiary">
                           <template v-if="Number(safeUsage?.quota?.storageBytes || 0) === 0">
                             Unlimited allocation
                           </template>

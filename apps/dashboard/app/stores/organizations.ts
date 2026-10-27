@@ -14,6 +14,7 @@ const SELECTED_ORG_KEY = "selectedOrgId";
 const SELECTED_ORG_COOKIE = "obiente_selected_org_id";
 
 export const useOrganizationsStore = defineStore("organizations", () => {
+  const nuxtApp = useNuxtApp();
   const orgs = ref<OrgSummary[]>([]);
   // Use cookie for SSR compatibility - available on both server and client
   const orgIdCookie = useCookie<string>(SELECTED_ORG_COOKIE, {
@@ -26,6 +27,7 @@ export const useOrganizationsStore = defineStore("organizations", () => {
   const currentOrgId = ref<string>(orgIdCookie.value || "");
   const hydrated = ref(false);
   const storageListenerRegistered = ref(false);
+  let hydrationScheduled = false;
 
   const currentOrg = computed<OrgSummary | null>(() => {
     if (!currentOrgId.value) return null;
@@ -66,10 +68,17 @@ export const useOrganizationsStore = defineStore("organizations", () => {
 
   function hydrate() {
     if (hydrated.value || !import.meta.client) return;
+    if (nuxtApp.isHydrating) {
+      if (!hydrationScheduled) {
+        hydrationScheduled = true;
+        onNuxtReady(hydrate);
+      }
+      return;
+    }
     try {
       const raw = localStorage.getItem(ORGS_CACHE_KEY);
       const sel = localStorage.getItem(SELECTED_ORG_KEY);
-      if (raw) {
+      if (raw && orgs.value.length === 0) {
         const parsed = JSON.parse(raw) as OrgSummary[];
         if (Array.isArray(parsed)) {
           orgs.value = parsed;
@@ -117,7 +126,7 @@ export const useOrganizationsStore = defineStore("organizations", () => {
 
   function notifyOrganizationsUpdated() {
     if (!import.meta.client) return;
-    localStorage.setItem("orgsUpdated", String(Date.now()));
+    try { localStorage.setItem("orgsUpdated", String(Date.now())); } catch { /* Storage may be disabled. */ }
   }
 
   function reset() {
@@ -126,8 +135,10 @@ export const useOrganizationsStore = defineStore("organizations", () => {
     orgIdCookie.value = "";
     hydrated.value = false;
     if (import.meta.client) {
-      localStorage.removeItem(ORGS_CACHE_KEY);
-      localStorage.removeItem(SELECTED_ORG_KEY);
+      try {
+        localStorage.removeItem(ORGS_CACHE_KEY);
+        localStorage.removeItem(SELECTED_ORG_KEY);
+      } catch { /* The in-memory session still resets when storage is disabled. */ }
     }
   }
 

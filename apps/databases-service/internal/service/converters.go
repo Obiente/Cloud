@@ -128,16 +128,23 @@ func buildDatabaseConnectionInfo(
 
 func dbBackupToProto(backup *database.DatabaseBackup) *databasesv1.DatabaseBackup {
 	proto := &databasesv1.DatabaseBackup{
-		Id:           backup.ID,
-		DatabaseId:   backup.DatabaseID,
-		Name:         backup.Name,
-		Description:  backup.Description,
-		SizeBytes:    backup.SizeBytes,
-		Status:       databasesv1.DatabaseBackupStatus(backup.Status),
-		CreatedAt:    timestamppb.New(backup.CreatedAt),
-		ErrorMessage: backup.ErrorMessage,
+		Id:            backup.ID,
+		RestoreStatus: backup.RestoreStatus,
+		RestoreTarget: backup.RestoreTarget,
+		RestoreError:  backup.RestoreError,
+		DatabaseName:  backup.SourceDatabase,
+		DatabaseId:    backup.DatabaseID,
+		Name:          backup.Name,
+		Description:   backup.Description,
+		SizeBytes:     backup.SizeBytes,
+		Status:        databasesv1.DatabaseBackupStatus(backup.Status),
+		CreatedAt:     timestamppb.New(backup.CreatedAt),
+		ErrorMessage:  backup.ErrorMessage,
 	}
 
+	if backup.RestoredAt != nil {
+		proto.RestoredAt = timestamppb.New(*backup.RestoredAt)
+	}
 	if backup.CompletedAt != nil {
 		proto.CompletedAt = timestamppb.New(*backup.CompletedAt)
 	}

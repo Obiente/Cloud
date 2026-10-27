@@ -40,7 +40,6 @@ interface SourceState {
   };
 }
 
-type ResourceType = "deployment" | "gameserver";
 
 interface DeploymentExplorerOptions {
   type: "deployment";
@@ -74,7 +73,6 @@ export function useFileExplorer(options: ExplorerOptions) {
   const isDeployment = options.type === "deployment";
   const deploymentClient = isDeployment ? useConnectClient(DeploymentService) : null;
   const gameServerClient = !isDeployment ? useConnectClient(GameServerService) : null;
-  const client = isDeployment ? deploymentClient : gameServerClient;
   
   const currentOrgId = ref(isDeployment ? (options as DeploymentExplorerOptions).organizationId ?? "" : "");
   

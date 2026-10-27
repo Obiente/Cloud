@@ -11,7 +11,9 @@ import (
 // CanAllocateVPS validates if the organization can allocate a new VPS instance
 func (c *Checker) CanAllocateVPS(ctx context.Context, organizationID string) error {
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = organizations.EnsurePlanAssigned(organizationID)
+	if err := organizations.EnsurePlanAssigned(organizationID); err != nil {
+		return fmt.Errorf("quota: assign plan: %w", err)
+	}
 
 	quota, err := c.getQuota(organizationID)
 	if err != nil {
@@ -19,7 +21,10 @@ func (c *Checker) CanAllocateVPS(ctx context.Context, organizationID string) err
 	}
 
 	// Get plan limits first (these are the maximum boundary)
-	planVPSMax := c.getPlanVPSMax(organizationID)
+	planVPSMax, err := c.getPlanVPSMax(organizationID)
+	if err != nil {
+		return err
+	}
 
 	// Get effective limits: use overrides if set, but cap them to plan limits
 	effVPSMax := planVPSMax
@@ -50,22 +55,22 @@ func (c *Checker) CanAllocateVPS(ctx context.Context, organizationID string) err
 }
 
 // getPlanVPSMax gets the maximum VPS instances limit for an organization's plan
-func (c *Checker) getPlanVPSMax(orgID string) int {
+func (c *Checker) getPlanVPSMax(orgID string) (int, error) {
 	var quota database.OrgQuota
 	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err != nil {
-		return 0 // No plan
+		return 0, fmt.Errorf("quota unavailable: %w", err) // No plan
 	}
 
 	if quota.PlanID == "" {
-		return 0 // No plan assigned
+		return 0, fmt.Errorf("quota plan is not assigned")
 	}
 
 	var plan database.OrganizationPlan
 	if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err != nil {
-		return 0 // Plan not found
+		return 0, fmt.Errorf("quota plan unavailable: %w", err)
 	}
 
-	return plan.MaxVpsInstances
+	return plan.MaxVpsInstances, nil
 }
 
 // currentVPSCount counts the number of active VPS instances for an organization
@@ -81,14 +86,19 @@ func (c *Checker) currentVPSCount(orgID string) (int, error) {
 
 // GetVPSQuota returns the current VPS count and the maximum allowed for an organization
 func (c *Checker) GetVPSQuota(ctx context.Context, organizationID string) (current int, max int, err error) {
-	_ = organizations.EnsurePlanAssigned(organizationID)
+	if err := organizations.EnsurePlanAssigned(organizationID); err != nil {
+		return 0, 0, fmt.Errorf("quota: assign plan: %w", err)
+	}
 
 	quota, err := c.getQuota(organizationID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("quota: load: %w", err)
 	}
 
-	planVPSMax := c.getPlanVPSMax(organizationID)
+	planVPSMax, err := c.getPlanVPSMax(organizationID)
+	if err != nil {
+		return 0, 0, err
+	}
 	effVPSMax := planVPSMax
 	if quota.MaxVpsInstancesOverride != nil {
 		overrideVPSMax := *quota.MaxVpsInstancesOverride

@@ -18,16 +18,9 @@ export function useClientFetch<T>(
     preserveDataOnKeyChange?: boolean;
   } = {}
 ) {
-  // Check if we're in a client-side navigation context
-  // On initial SSR, use server-side for fast first paint
-  // On client navigation, use client-side for instant navigation
-  const isInitialSSR = import.meta.server;
-  const isClientNav = import.meta.client && !isInitialSSR;
-
-  // Determine if we should use server-side fetching
-  // - Use server on initial SSR (unless explicitly disabled)
-  // - Use client on navigation (faster, no server round-trip)
-  const shouldUseServer = options.server !== false && isInitialSSR;
+  // Nuxt uses this option on the client too when restoring the SSR payload.
+  // Keep it consistent across hydration and let Nuxt schedule later navigation.
+  const shouldUseServer = options.server !== false;
 
   // Always use lazy mode for non-blocking navigation
   // Pages render immediately, data loads in background

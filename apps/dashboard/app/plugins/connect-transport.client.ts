@@ -1,85 +1,64 @@
 import { createAuthInterceptor, createWebTransport } from "~/lib/transport";
 import { watch } from "vue";
+import { useAuth } from "~/composables/useAuth";
 
 // Client-side plugin
 export default defineNuxtPlugin({
   name: "connect-transport-client",
-  async setup(nuxtApp) {
+  dependsOn: ["pinia"],
+  setup() {
     const config = useRuntimeConfig();
 
-    // Import and cache the auth composable once
-    const { useAuth } = await import("~/composables/useAuth");
+    // Initialize inside the app context after the store plugin is ready.
     const auth = useAuth();
 
-    // Cache token and expiry to avoid repeated fetches
-    let cachedToken: string | null = null;
-    let tokenExpiry: number | null = null;
-    let tokenFetchPromise: Promise<string | null> | null = null;
+    // useAuth owns token lifetime. Share pending reads without extending expiry.
+    let tokenFetchPromise: Promise<string | undefined> | null = null;
+    let generation = 0;
 
-    // Invalidate transport-layer cache whenever the session changes so we never
-    // serve a stale token after logout or a token rotation.
+    // Reject pending reads only when the identity changes. A normal session
+    // refresh returns a new object for the same account and must not strip the
+    // token from requests already waiting for it.
     watch(
-      () => auth.session,
+      () =>
+        JSON.stringify([
+          auth.session?.id,
+          auth.session?.user?.sub ||
+            (auth.session?.user as { id?: string } | undefined)?.id,
+        ]),
       () => {
-        cachedToken = null;
-        tokenExpiry = null;
+        generation++;
         tokenFetchPromise = null;
-      }
+      },
+      { flush: "sync" }
     );
 
-    // Function to get the authentication token from the session
-    // With caching to prevent repeated fetches
     const getToken = async (): Promise<string | undefined> => {
-      try {
-        // Wait for auth to be ready if it's still loading
-        if (!auth.ready) {
-          // Give it a moment to initialize (but with a timeout)
-          await Promise.race([
-            new Promise<void>((resolve) => {
-              const checkReady = () => {
-                if (auth.ready) {
-                  resolve();
-                } else {
-                  setTimeout(checkReady, 50);
-                }
-              };
-              checkReady();
-            }),
-            new Promise<void>((resolve) => setTimeout(resolve, 500)), // Max 500ms wait
-          ]);
-        }
-
-        // Check if we have a valid cached token
-        if (cachedToken && tokenExpiry && Date.now() < tokenExpiry) {
-          return cachedToken;
-        }
-
-        // If there's already a token fetch in progress, wait for it
-        if (tokenFetchPromise) {
-          const token = await tokenFetchPromise;
+      // A bounded loop leaves no background timer behind when auth is unavailable.
+      for (let attempt = 0; !auth.ready && attempt < 10; attempt++) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      }
+      if (tokenFetchPromise) return tokenFetchPromise;
+      const startedGeneration = generation;
+      const request = (async () => {
+        try {
+          const token = await auth.getAccessToken();
+          if (generation !== startedGeneration) return undefined;
           return token || undefined;
+        } catch (error) {
+          if (generation === startedGeneration)
+            console.error(
+              "[Connect Transport] Error getting access token:",
+              error
+            );
+          return undefined;
         }
-
-        // Fetch token (this handles refresh if needed)
-        tokenFetchPromise = auth.getAccessToken();
-        const token = await tokenFetchPromise;
-        tokenFetchPromise = null;
-
-        if (token) {
-          // Cache for 30 seconds — conservative enough to batch rapid requests
-          // while ensuring a rotation or logout invalidates quickly.
-          cachedToken = token;
-          tokenExpiry = Date.now() + 30000;
-        }
-
-        if (!token) {
-          console.warn("[Connect Transport] No access token available - user may need to log in");
-        }
-        return token || undefined;
-      } catch (error) {
-        tokenFetchPromise = null;
-        console.error("[Connect Transport] Error getting access token:", error);
-        return undefined;
+      })();
+      tokenFetchPromise = request;
+      try {
+        return await request;
+      } finally {
+        if (tokenFetchPromise === request) tokenFetchPromise = null;
       }
     };
 

@@ -1199,15 +1199,23 @@ func (s *Service) RevokeDNSDelegationAPIKey(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
+	keyID := strings.TrimSpace(req.Msg.GetKeyId())
 	apiKey := strings.TrimSpace(req.Msg.GetApiKey())
-	if apiKey == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("api_key is required"))
+	if (keyID == "") == (apiKey == "") {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("provide exactly one of key_id or api_key"))
 	}
-
-	keyHash := database.HashAPIKeyForDelegation(apiKey)
-	if err := database.RevokeDNSDelegationAPIKey(keyHash); err != nil {
-		logger.Error("[SuperAdmin] Failed to revoke DNS delegation API key: %v", err)
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to revoke API key: %w", err))
+	query := database.DB.WithContext(ctx).Model(&database.DNSDelegationAPIKey{})
+	if keyID != "" {
+		query = query.Where("id = ?", keyID)
+	} else {
+		query = query.Where("key_hash = ?", database.HashAPIKeyForDelegation(apiKey))
+	}
+	result := query.Updates(map[string]interface{}{"is_active": false, "revoked_at": time.Now(), "updated_at": time.Now()})
+	if result.Error != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to revoke API key: %w", result.Error))
+	}
+	if result.RowsAffected == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("API key not found"))
 	}
 
 	logger.Info("[SuperAdmin] Revoked DNS delegation API key")
@@ -1334,7 +1342,7 @@ func aggregateCounts() (*superadminv1.OverviewCounts, error) {
 	}
 
 	var totalDeployments int64
-	if err := database.DB.Model(&database.Deployment{}).Count(&totalDeployments).Error; err != nil {
+	if err := database.DB.Model(&database.Deployment{}).Where("deleted_at IS NULL").Count(&totalDeployments).Error; err != nil {
 		return nil, fmt.Errorf("count deployments: %w", err)
 	}
 
@@ -1365,15 +1373,11 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 	var rows []organizationOverviewRow
 	if err := database.DB.Table("organizations o").
 		Select(`o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at,
-			SUM(CASE WHEN m.status = 'active' THEN 1 ELSE 0 END) AS member_count,
-			SUM(CASE WHEN m.status = 'invited' THEN 1 ELSE 0 END) AS invite_count,
-			COUNT(d.id) AS deployment_count,
-			owner_m.user_id AS owner_id,
-			NULL AS owner_name`).
-		Joins("LEFT JOIN organization_members m ON m.organization_id = o.id").
-		Joins("LEFT JOIN deployments d ON d.organization_id = o.id").
-		Joins("LEFT JOIN organization_members owner_m ON owner_m.organization_id = o.id AND owner_m.role = 'system:owner' AND owner_m.status = 'active'").
-		Group("o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at, owner_m.user_id").
+            (SELECT COUNT(*) FROM organization_members m WHERE m.organization_id = o.id AND m.status = 'active') AS member_count,
+            (SELECT COUNT(*) FROM organization_members m WHERE m.organization_id = o.id AND m.status = 'invited') AS invite_count,
+            (SELECT COUNT(*) FROM deployments d WHERE d.organization_id = o.id AND d.deleted_at IS NULL) AS deployment_count,
+            (SELECT user_id FROM organization_members m WHERE m.organization_id = o.id AND m.role = 'system:owner' AND m.status = 'active' ORDER BY m.id LIMIT 1) AS owner_id,
+            NULL AS owner_name`).
 		Order("o.created_at DESC").
 		Limit(overviewLimit).
 		Scan(&rows).Error; err != nil {
@@ -1476,9 +1480,9 @@ type deploymentOverviewRow struct {
 func loadDeploymentOverviews() ([]*superadminv1.DeploymentOverview, error) {
 	var rows []deploymentOverviewRow
 	if err := database.DB.Table("deployments d").
-		Select("d.*, o.name AS organization_name, owner_m.user_id AS owner_id").
+		Select("d.*, o.name AS organization_name, (SELECT user_id FROM organization_members WHERE organization_id = d.organization_id AND role = 'system:owner' AND status = 'active' ORDER BY id LIMIT 1) AS owner_id").
 		Joins("LEFT JOIN organizations o ON o.id = d.organization_id").
-		Joins("LEFT JOIN LATERAL (SELECT user_id FROM organization_members WHERE organization_id = d.organization_id AND role = 'system:owner' AND status = 'active' LIMIT 1) owner_m ON true").
+		Where("d.deleted_at IS NULL").
 		Order("d.created_at DESC").
 		Limit(overviewLimit).
 		Scan(&rows).Error; err != nil {
@@ -1973,7 +1977,7 @@ func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[su
 	var billingTransactions []*superadminv1.BillingTransaction
 	for _, t := range transactions {
 		status := "succeeded"
-		if t.AmountCents < 0 {
+		if t.Type == "refund" {
 			status = "refunded"
 		}
 

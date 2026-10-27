@@ -889,6 +889,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	var currentBandwidthRxBytes int64
 	var currentBandwidthTxBytes int64
 	var currentStorageBytes int64
+	storageAvailable := false
 	var deploymentsActivePeak int
 
 	if month == now.Format("2006-01") {
@@ -1142,24 +1143,10 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			currentMemoryByteSeconds, hourlyUsage.MemoryByteSeconds, recentMemory,
 			currentBandwidthRxBytes+currentBandwidthTxBytes, hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, recentBandwidth.BandwidthRxBytes+recentBandwidth.BandwidthTxBytes)
 
-		// Get storage from both deployments and game servers
-		var deploymentStorage struct {
-			StorageBytes int64
-		}
-		database.DB.Table("deployments d").
-			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
-			Where("d.organization_id = ?", orgID).
-			Scan(&deploymentStorage)
-
-		var gameServerStorage struct {
-			StorageBytes int64
-		}
-		database.DB.Table("game_servers gs").
-			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
-			Where("gs.organization_id = ?", orgID).
-			Scan(&gameServerStorage)
-
-		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
+		// Use the same validated, non-deleted inventory as the invoicing path.
+		var storageErr error
+		currentStorageBytes, storageErr = database.BillableStorageBytes(ctx, database.DB, orgID, now)
+		storageAvailable = storageErr == nil
 
 		// Get peak deployments count for current month
 		var peakCount int
@@ -1217,24 +1204,8 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + gameServerHourlyUsage.BandwidthRxBytes
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + gameServerHourlyUsage.BandwidthTxBytes
 
-		// Storage: get snapshot from deployments and game servers tables for the month (use current, as historical storage is not tracked)
-		var deploymentStorage struct {
-			StorageBytes int64
-		}
-		database.DB.Table("deployments d").
-			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
-			Where("d.organization_id = ?", orgID).
-			Scan(&deploymentStorage)
-
-		var gameServerStorage struct {
-			StorageBytes int64
-		}
-		database.DB.Table("game_servers gs").
-			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
-			Where("gs.organization_id = ?", orgID).
-			Scan(&gameServerStorage)
-
-		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
+		// No historical storage snapshots exist. Current storage must not be
+		// presented as the historical month's usage or cost.
 
 		// Peak deployments: not tracked historically, use 0 or current
 		deploymentsActivePeak = 0
@@ -1359,6 +1330,9 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		BandwidthCostCents:    &currBandwidthCostPtr,
 		StorageCostCents:      &currStorageCostPtr,
 	}
+
+	setStorageEstimateAvailability(currentMetrics, storageAvailable)
+	setStorageEstimateAvailability(estimatedMonthly, storageAvailable)
 
 	// Get quota information
 	var quota *organizationsv1.UsageQuota
@@ -2190,4 +2164,16 @@ func (s *Service) AdminSetPlan(ctx context.Context, req *connect.Request[organiz
 		Organization: organizationToProto(org),
 		PlanId:       planID,
 	}), nil
+}
+
+// Incomplete totals are not prices. CPU/memory/bandwidth remain available, but
+// storage and the combined estimate explicitly require a valid storage snapshot.
+func setStorageEstimateAvailability(metrics *organizationsv1.UsageMetrics, available bool) {
+	metrics.StorageMeasurementUnavailable = !available
+	metrics.CostEstimateUnavailable = !available
+	if !available {
+		metrics.StorageBytes = 0
+		metrics.StorageCostCents = nil
+		metrics.EstimatedCostCents = 0
+	}
 }

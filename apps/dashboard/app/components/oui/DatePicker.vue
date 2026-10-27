@@ -43,6 +43,7 @@
       </DatePicker.ClearTrigger>
     </DatePicker.Control>
 
+    <ClientOnly>
     <Teleport to="body">
       <DatePicker.Positioner>
         <DatePicker.Content
@@ -195,6 +196,7 @@
         </DatePicker.Content>
       </DatePicker.Positioner>
     </Teleport>
+    </ClientOnly>
   </DatePicker.Root>
 </template>
 
@@ -246,7 +248,7 @@
     const input = event.target as HTMLInputElement;
     if (!input) return;
 
-    let value = input.value;
+    const value = input.value;
     
     // Remove all non-digits
     const digits = value.replace(/\D/g, "");

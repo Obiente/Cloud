@@ -1,7 +1,11 @@
 import { ref } from "vue";
 import { create } from "@bufbuild/protobuf";
 import { useConnectClient } from "~/lib/connect-client";
-import { DeploymentService, UploadContainerFilesMetadataSchema, UploadContainerFilesRequestSchema } from "@obiente/proto";
+import {
+  DeploymentService,
+  UploadContainerFilesMetadataSchema,
+  UploadContainerFilesRequestSchema,
+} from "@obiente/proto";
 
 export interface DeploymentUploadOptions {
   deploymentId: string;
@@ -18,66 +22,64 @@ export interface DeploymentUploadOptions {
   }) => void;
 }
 
-function createTarForSingleFile(file: File): Promise<Uint8Array> {
-  return new Promise(async (resolve) => {
-    const tarParts: Uint8Array[] = [];
-    const encoder = new TextEncoder();
+async function createTarForSingleFile(file: File): Promise<Uint8Array> {
+  const tarParts: Uint8Array[] = [];
+  const encoder = new TextEncoder();
 
-    const fileBytes = new Uint8Array(await file.arrayBuffer());
-    const header = new Uint8Array(512);
+  const fileBytes = new Uint8Array(await file.arrayBuffer());
+  const header = new Uint8Array(512);
 
-    const writeOctal = (value: number, fieldSize: number) => {
-      const str = value.toString(8).padStart(fieldSize - 1, "0") + " ";
-      return encoder.encode(str);
-    };
+  const writeOctal = (value: number, fieldSize: number) => {
+    const str = value.toString(8).padStart(fieldSize - 1, "0") + " ";
+    return encoder.encode(str);
+  };
 
-    // name (100)
-    header.set(encoder.encode(file.name).slice(0, 100), 0);
-    // mode (8)
-    header.set(encoder.encode("0000644"), 100);
-    // uid (8)
-    header.set(encoder.encode("0000000"), 108);
-    // gid (8)
-    header.set(encoder.encode("0000000"), 116);
-    // size (12)
-    header.set(writeOctal(fileBytes.length, 12), 124);
-    // mtime (12)
-    header.set(writeOctal(Math.floor(Date.now() / 1000), 12), 136);
-    // typeflag (1) regular file '0'
-    header[156] = 48;
-    // magic (6)
-    header.set(encoder.encode("ustar "), 257);
-    // version (2)
-    header.set(encoder.encode(" "), 263);
+  // name (100)
+  header.set(encoder.encode(file.name).slice(0, 100), 0);
+  // mode (8)
+  header.set(encoder.encode("0000644"), 100);
+  // uid (8)
+  header.set(encoder.encode("0000000"), 108);
+  // gid (8)
+  header.set(encoder.encode("0000000"), 116);
+  // size (12)
+  header.set(writeOctal(fileBytes.length, 12), 124);
+  // mtime (12)
+  header.set(writeOctal(Math.floor(Date.now() / 1000), 12), 136);
+  // typeflag (1) regular file '0'
+  header[156] = 48;
+  // magic (6)
+  header.set(encoder.encode("ustar "), 257);
+  // version (2)
+  header.set(encoder.encode(" "), 263);
 
-    // checksum
-    let checksum = 256;
-    for (let i = 0; i < 512; i++) {
-      if (i >= 148 && i < 156) continue;
-      checksum += header[i] ?? 0;
-    }
-    header.set(writeOctal(checksum, 8), 148);
+  // checksum
+  let checksum = 256;
+  for (let i = 0; i < 512; i++) {
+    if (i >= 148 && i < 156) continue;
+    checksum += header[i] ?? 0;
+  }
+  header.set(writeOctal(checksum, 8), 148);
 
-    tarParts.push(header);
-    tarParts.push(fileBytes);
+  tarParts.push(header);
+  tarParts.push(fileBytes);
 
-    const padding = 512 - (fileBytes.length % 512);
-    if (padding < 512) {
-      tarParts.push(new Uint8Array(padding));
-    }
+  const padding = 512 - (fileBytes.length % 512);
+  if (padding < 512) {
+    tarParts.push(new Uint8Array(padding));
+  }
 
-    tarParts.push(new Uint8Array(512));
-    tarParts.push(new Uint8Array(512));
+  tarParts.push(new Uint8Array(512));
+  tarParts.push(new Uint8Array(512));
 
-    const totalLength = tarParts.reduce((sum, arr) => sum + arr.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const part of tarParts) {
-      result.set(part, offset);
-      offset += part.length;
-    }
-    resolve(result);
-  });
+  const totalLength = tarParts.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of tarParts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
 }
 
 export function useDeploymentUpload() {

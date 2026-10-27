@@ -28,27 +28,27 @@
             <OuiStack gap="xs">
               <div class="text-sm">
                 <span class="text-text-secondary">CPU:</span>
-                <span class="font-mono ml-1">{{ row.cpuCores || 0 }} cores</span>
+                <span class="font-mono ml-1">{{ Number(row.cpuCores) > 0 ? `${row.cpuCores} cores` : formatResourceLimit(row.cpuCores) }}</span>
               </div>
               <div class="text-sm">
                 <span class="text-text-secondary">Memory:</span>
-                <span class="font-mono ml-1">{{ formatBytes(Number(row.memoryBytes || 0)) }}</span>
+                <span class="font-mono ml-1">{{ Number(row.memoryBytes) > 0 ? formatBytes(Number(row.memoryBytes)) : formatResourceLimit(row.memoryBytes) }}</span>
               </div>
               <div class="text-sm">
                 <span class="text-text-secondary">Deployments:</span>
-                <span class="font-mono ml-1">{{ row.deploymentsMax || 0 }} max</span>
+                <span class="font-mono ml-1">{{ formatResourceLimit(row.deploymentsMax) }}</span>
               </div>
               <div class="text-sm">
                 <span class="text-text-secondary">VPS Instances:</span>
-                <span class="font-mono ml-1">{{ row.maxVpsInstances || 0 }} max</span>
+                <span class="font-mono ml-1">{{ formatResourceLimit(row.maxVpsInstances) }}</span>
               </div>
               <div class="text-sm">
                 <span class="text-text-secondary">Bandwidth:</span>
-                <span class="font-mono ml-1">{{ formatBytes(Number(row.bandwidthBytesMonth || 0)) }}/mo</span>
+                <span class="font-mono ml-1">{{ Number(row.bandwidthBytesMonth) > 0 ? `${formatBytes(Number(row.bandwidthBytesMonth))}/mo` : formatResourceLimit(row.bandwidthBytesMonth) }}</span>
               </div>
               <div class="text-sm">
                 <span class="text-text-secondary">Storage:</span>
-                <span class="font-mono ml-1">{{ formatBytes(Number(row.storageBytes || 0)) }}</span>
+                <span class="font-mono ml-1">{{ Number(row.storageBytes) > 0 ? formatBytes(Number(row.storageBytes)) : formatResourceLimit(row.storageBytes) }}</span>
               </div>
             </OuiStack>
           </template>
@@ -102,7 +102,7 @@
               placeholder="0.00"
             />
             <OuiText size="xs" color="tertiary" class="mt-1">
-              Organizations automatically upgrade to this plan when they pay this amount or more (in cents).
+              Organizations automatically upgrade to this plan when they pay this amount or more.
             </OuiText>
           </OuiField>
 
@@ -115,7 +115,7 @@
               placeholder="0.00"
             />
             <OuiText size="xs" color="tertiary" class="mt-1">
-              Monthly free credits (in cents) automatically granted to organizations on this plan. Set to 0 for no free credits.
+              Monthly free credits automatically granted to organizations on this plan. Set to 0 for no free credits.
             </OuiText>
           </OuiField>
 
@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatResourceLimit } from "~/utils/adminPresentation";
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import { computed, ref, onMounted } from "vue";
 import { useConnectClient } from "~/lib/connect-client";

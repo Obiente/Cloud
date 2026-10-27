@@ -23,7 +23,9 @@ func NewChecker() *Checker { return &Checker{} }
 func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req RequestedResources) error {
 	// Ensure organization has a plan assigned (defaults to Starter plan)
 	// This is called when resources are requested, so it's a good place to ensure plan assignment
-	_ = organizations.EnsurePlanAssigned(organizationID)
+	if err := organizations.EnsurePlanAssigned(organizationID); err != nil {
+		return fmt.Errorf("quota: assign plan: %w", err)
+	}
 
 	quota, err := c.getQuota(organizationID)
 	if err != nil {
@@ -31,7 +33,10 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 	}
 
 	// Get plan limits first (these are the maximum boundary)
-	planDeployMax, planMem, planCPU := c.getPlanLimitsFromQuota(quota)
+	planDeployMax, planMem, planCPU, err := c.getPlanLimitsFromQuota(quota)
+	if err != nil {
+		return err
+	}
 
 	// Get effective limits: use overrides if set, but cap them to plan limits
 	// Plan limits are the final boundary - org overrides cannot exceed them
@@ -104,22 +109,21 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 func (c *Checker) getQuota(orgID string) (*database.OrgQuota, error) {
 	var quota database.OrgQuota
 	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err != nil {
-		// No quota exists, create empty one
-		quota = database.OrgQuota{OrganizationID: orgID}
+		return nil, err
 	}
 	return &quota, nil
 }
 
 // getPlanLimitsFromQuota gets plan limits using an already-loaded OrgQuota
-func (c *Checker) getPlanLimitsFromQuota(q *database.OrgQuota) (deploymentsMax int, memoryBytes int64, cpuCores int) {
+func (c *Checker) getPlanLimitsFromQuota(q *database.OrgQuota) (deploymentsMax int, memoryBytes int64, cpuCores int, err error) {
 	if q.PlanID == "" {
-		return 0, 0, 0
+		return 0, 0, 0, fmt.Errorf("quota plan is not assigned")
 	}
 	var plan database.OrganizationPlan
 	if err := database.DB.First(&plan, "id = ?", q.PlanID).Error; err != nil {
-		return 0, 0, 0
+		return 0, 0, 0, fmt.Errorf("quota plan unavailable: %w", err)
 	}
-	return plan.DeploymentsMax, plan.MemoryBytes, plan.CPUCores
+	return plan.DeploymentsMax, plan.MemoryBytes, plan.CPUCores, nil
 }
 
 func (c *Checker) currentAllocations(orgID string, excludeDeploymentID string) (replicas int, memBytes int64, cpuCores int, err error) {
@@ -197,8 +201,7 @@ func GetEffectiveLimits(organizationID string) (memoryBytes int64, cpuCores int,
 	// Get organization quota
 	var quota database.OrgQuota
 	if err := database.DB.Where("organization_id = ?", organizationID).First(&quota).Error; err != nil {
-		// No quota exists - no limits (unlimited)
-		return 0, 0, nil
+		return 0, 0, fmt.Errorf("quota unavailable: %w", err)
 	}
 
 	// Get plan limits first (these are the maximum boundary)
@@ -206,10 +209,14 @@ func GetEffectiveLimits(organizationID string) (memoryBytes int64, cpuCores int,
 	planMem := int64(0)
 	planCPU := 0
 	if quota.PlanID != "" {
-		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err == nil {
+		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err != nil {
+			return 0, 0, fmt.Errorf("quota plan unavailable: %w", err)
+		} else {
 			planMem = plan.MemoryBytes
 			planCPU = plan.CPUCores
 		}
+	} else {
+		return 0, 0, fmt.Errorf("quota plan is not assigned")
 	}
 
 	// Get effective limits: use overrides if set, but cap them to plan limits

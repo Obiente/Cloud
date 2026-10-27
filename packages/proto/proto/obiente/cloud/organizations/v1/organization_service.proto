@@ -101,6 +101,9 @@ message UsageMetrics {
   optional int64 storage_cost_cents = 11;
   // VPS public IP cost (monthly rate prorated)
   optional int64 public_ip_cost_cents = 12;
+  // When true, storage and the combined cost must be shown as unavailable.
+  bool storage_measurement_unavailable = 13;
+  bool cost_estimate_unavailable = 14;
 }
 
 message UsageQuota {

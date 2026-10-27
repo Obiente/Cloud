@@ -808,6 +808,9 @@ type CloudInitWriteFile struct {
 
 // StartVPS starts a VPS instance
 func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
+	if err := database.EnsureVPSCanStart(ctx, database.DB, vpsID); err != nil {
+		return err
+	}
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return fmt.Errorf("VPS not found: %w", err)
@@ -850,7 +853,7 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -866,7 +869,7 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 			logger.Info("[VPSManager] VM %d does not exist in Proxmox after start - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -877,7 +880,7 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 		vps.Status = mapProxmoxStatusToVPSStatus(proxmoxStatus)
 	}
 	vps.UpdatedAt = time.Now()
-	if err := database.DB.Save(&vps).Error; err != nil {
+	if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 		logger.Warn("[VPSManager] Failed to update VPS status: %v", err)
 	}
 
@@ -927,7 +930,7 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -943,7 +946,7 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 			logger.Info("[VPSManager] VM %d does not exist in Proxmox after stop - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -954,7 +957,7 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 		vps.Status = mapProxmoxStatusToVPSStatus(proxmoxStatus)
 	}
 	vps.UpdatedAt = time.Now()
-	if err := database.DB.Save(&vps).Error; err != nil {
+	if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 		logger.Warn("[VPSManager] Failed to update VPS status: %v", err)
 	}
 
@@ -963,6 +966,9 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 
 // RebootVPS reboots a VPS instance
 func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
+	if err := database.EnsureVPSCanStart(ctx, database.DB, vpsID); err != nil {
+		return err
+	}
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return fmt.Errorf("VPS not found: %w", err)
@@ -1004,7 +1010,7 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -1021,7 +1027,7 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 			logger.Info("[VPSManager] VM %d does not exist in Proxmox after reboot - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
 			}
 			return fmt.Errorf("VM has been deleted from Proxmox")
@@ -1037,7 +1043,7 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 		}
 	}
 	vps.UpdatedAt = time.Now()
-	if err := database.DB.Save(&vps).Error; err != nil {
+	if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 		logger.Warn("[VPSManager] Failed to update VPS status: %v", err)
 	}
 
@@ -1379,6 +1385,9 @@ deletionSuccess:
 // The VPS will be reconfigured with the same cloud-init settings
 // Returns: VPS instance, root password (one-time only, not stored), error
 func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*database.VPSInstance, string, error) {
+	if err := database.EnsureVPSCanStart(ctx, database.DB, vpsID); err != nil {
+		return nil, "", err
+	}
 	logger.Info("[VPSManager] Reinitializing VPS instance %s", vpsID)
 
 	// Get VPS instance from database
@@ -1663,7 +1672,7 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 				logger.Info("[VPSManager] VM %d not found in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
 				vps.Status = 9 // DELETED
 				vps.UpdatedAt = time.Now()
-				if err := database.DB.Save(&vps).Error; err != nil {
+				if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 					return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
 				}
 				return nil
@@ -1700,12 +1709,27 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 			logger.Info("[VPSManager] VM %d does not exist in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
 			vps.Status = 9 // DELETED
 			vps.UpdatedAt = time.Now()
-			if err := database.DB.Save(&vps).Error; err != nil {
+			if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 				return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
 			}
 			return nil
 		}
 		return fmt.Errorf("failed to get VM status: %w", err)
+	}
+
+	suspended, err := database.ReconcileVPSSuspension(ctx, database.DB, vps.ID, func() error {
+		if proxmoxStatus != "stopped" {
+			if err := proxmoxClient.StopVM(ctx, nodeName, vmIDInt); err != nil {
+				return fmt.Errorf("stop suspended VPS: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if suspended {
+		return nil
 	}
 
 	// Get VM config to extract MAC address (if not already set)
@@ -1719,6 +1743,9 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 				mac := extractMACFromNetConfig(net0)
 				if mac != "" {
 					vps.MACAddress = &mac
+					if err := database.DB.Model(&vps).Update("mac_address", mac).Error; err != nil {
+						return err
+					}
 					logger.Info("[VPSManager] Extracted MAC address for VPS %s: %s", vpsID, mac)
 				}
 			}
@@ -1728,7 +1755,7 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 	// Map and update status
 	vps.Status = mapProxmoxStatusToVPSStatus(proxmoxStatus)
 	vps.UpdatedAt = time.Now()
-	if err := database.DB.Save(&vps).Error; err != nil {
+	if err := database.UpdateVPSObservedStatus(ctx, database.DB, vps.ID, vps.Status); err != nil {
 		return fmt.Errorf("failed to update VPS status: %w", err)
 	}
 

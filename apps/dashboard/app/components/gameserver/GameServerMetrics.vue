@@ -67,10 +67,10 @@
           <OuiStack gap="xs">
             <OuiText size="xs" color="tertiary">Storage Usage</OuiText>
             <OuiText size="xl" weight="semibold">
-              <OuiByte :value="getStorageBytesValue(usageData?.current?.storageBytes)" unit-display="short" />
+              <OuiByte v-if="storageAvailable" :value="getStorageBytesValue(usageData?.current?.storageBytes)" unit-display="short" /><span v-else>Unavailable</span>
             </OuiText>
             <OuiText size="xs" color="tertiary">
-              Image + Volumes + Disk
+              Volumes and writable files
             </OuiText>
           </OuiStack>
         </OuiCardBody>
@@ -303,6 +303,7 @@ import type { ECharts } from "echarts/core";
 interface Props {
   gameServerId: string;
   organizationId: string;
+  storageAvailable?: boolean;
   gameServerStatus?: number; // GameServerStatus enum value
 }
 

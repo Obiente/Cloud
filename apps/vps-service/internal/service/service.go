@@ -71,6 +71,11 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 // checkVPSPermission verifies user permissions for a VPS
 // Uses the reusable CheckResourcePermissionWithError helper
 func (s *Service) checkVPSPermission(ctx context.Context, vpsID string, permission string) error {
+	if permission != auth.PermissionVPSRead && permission != auth.PermissionVPSDelete {
+		if err := database.EnsureVPSCanStart(ctx, database.DB, vpsID); err != nil {
+			return connect.NewError(connect.CodePermissionDenied, err)
+		}
+	}
 	return auth.CheckResourcePermissionWithError(ctx, s.permissionChecker, "vps", vpsID, permission)
 }
 

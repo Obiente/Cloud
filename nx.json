@@ -1,7 +1,10 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "default": [
+      "{projectRoot}/**/*",
+      "sharedGlobals"
+    ],
     "production": [
       "default",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
@@ -64,17 +67,26 @@
   "targetDefaults": {
     "@nx/js:tsc": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ]
     },
     "nuxt:build": {
       "cache": true,
-      "dependsOn": ["^nuxt:build"],
+      "dependsOn": [
+        "^nuxt:build"
+      ],
       "inputs": [
         "production",
         "^production",
         {
-          "externalDependencies": ["nuxt"]
+          "externalDependencies": [
+            "nuxt"
+          ]
         }
       ],
       "outputs": [
@@ -84,18 +96,33 @@
     },
     "build": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ]
     },
     "test": {
       "cache": true,
-      "dependsOn": ["^test"],
-      "inputs": ["default", "^production"]
+      "dependsOn": [
+        "^test"
+      ],
+      "inputs": [
+        "default",
+        "^production"
+      ]
     },
     "build-deps": {
       "cache": true,
-      "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "production",
+        "^production"
+      ]
     }
   }
 }

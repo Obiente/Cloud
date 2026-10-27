@@ -473,6 +473,8 @@ message GameServer {
   
   // Storage
   int64 storage_bytes = 21;
+  bool storage_available = 24;
+  optional google.protobuf.Timestamp storage_measured_at = 25;
   
   // Created by
   string created_by = 22;

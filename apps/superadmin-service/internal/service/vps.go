@@ -689,27 +689,17 @@ func (s *Service) SuperadminSuspendVPS(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
 	}
 
-	// Update status to SUSPENDED
-	vps.Status = int32(vpsv1.VPSStatus_SUSPENDED)
-	vps.UpdatedAt = time.Now()
-
-	// Store suspension reason in metadata if provided
-	if reason := req.Msg.GetReason(); reason != "" {
-		var metadata map[string]string
-		if vps.Metadata != "" {
-			json.Unmarshal([]byte(vps.Metadata), &metadata)
-		}
-		if metadata == nil {
-			metadata = make(map[string]string)
-		}
-		metadata["suspended_reason"] = reason
-		metadata["suspended_at"] = time.Now().Format(time.RFC3339)
-		metadataJSON, _ := json.Marshal(metadata)
-		vps.Metadata = string(metadataJSON)
+	if err := database.SuspendVPS(ctx, database.DB, vpsID, user.Id, req.Msg.GetReason()); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to persist VPS suspension: %w", err))
 	}
-
-	if err := database.DB.Save(&vps).Error; err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to suspend VPS: %w", err))
+	vps.Status = int32(vpsv1.VPSStatus_SUSPENDED)
+	manager, err := vpsorch.NewVPSManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("VPS is restricted but stopping is pending: %w", err))
+	}
+	defer manager.Close()
+	if err := manager.StopVPS(ctx, vpsID, true); err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("VPS is restricted but stopping is pending; retry suspension: %w", err))
 	}
 
 	message := "VPS suspended successfully"
@@ -747,24 +737,11 @@ func (s *Service) SuperadminUnsuspendVPS(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	// Update status to STOPPED (was suspended)
-	vps.Status = int32(vpsv1.VPSStatus_STOPPED)
-	vps.UpdatedAt = time.Now()
-
-	// Remove suspension metadata
-	if vps.Metadata != "" {
-		var metadata map[string]string
-		if err := json.Unmarshal([]byte(vps.Metadata), &metadata); err == nil {
-			delete(metadata, "suspended_reason")
-			delete(metadata, "suspended_at")
-			metadataJSON, _ := json.Marshal(metadata)
-			vps.Metadata = string(metadataJSON)
-		}
-	}
-
-	if err := database.DB.Save(&vps).Error; err != nil {
+	updated, err := database.UnsuspendVPS(ctx, database.DB, vpsID)
+	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to unsuspend VPS: %w", err))
 	}
+	vps = *updated
 
 	return connect.NewResponse(&superadminv1.SuperadminUnsuspendVPSResponse{
 		Vps:     convertVPSInstanceToProto(&vps),
@@ -869,9 +846,8 @@ func (s *Service) SuperadminForceStopVPS(ctx context.Context, req *connect.Reque
 
 	// Refresh VPS status
 	if err := database.DB.Where("id = ?", vpsID).First(&vps).Error; err == nil {
-		vps.Status = int32(vpsv1.VPSStatus_STOPPED)
-		vps.UpdatedAt = time.Now()
-		database.DB.Save(&vps)
+		_ = database.UpdateVPSObservedStatus(ctx, database.DB, vpsID, int32(vpsv1.VPSStatus_STOPPED))
+		_ = database.DB.First(&vps, "id = ?", vpsID).Error
 	}
 
 	return connect.NewResponse(&superadminv1.SuperadminForceStopVPSResponse{

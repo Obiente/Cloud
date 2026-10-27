@@ -19,11 +19,14 @@
               'px-3 md:px-6 py-2 md:py-3 font-medium relative text-xs md:text-sm',
               headerClass,
               column.headerClass,
-              { 'cursor-pointer select-none': sortable && column.sortable !== false }
+              { 'cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary': sortable && column.sortable !== false }
             ]"
             :style="getColumnStyle(column, index)"
             :scope="'col'"
             :aria-sort="getAriaSort(column)"
+            :tabindex="sortable && column.sortable !== false ? 0 : undefined"
+            @keydown.enter.self.prevent="sortable && column.sortable !== false ? handleSort(column) : undefined"
+            @keydown.space.self.prevent="sortable && column.sortable !== false ? handleSort(column) : undefined"
             @click="sortable && column.sortable !== false ? handleSort(column) : undefined"
           >
             <div class="flex items-center gap-2">
@@ -81,9 +84,12 @@
             'border-t border-border-muted/60 transition-colors',
             rowClass,
             typeof rowClassFn === 'function' ? rowClassFn(row, rowIndex) : '',
-            { 'cursor-pointer hover:bg-surface-subtle/50': clickable }
+            { 'cursor-pointer hover:bg-surface-subtle/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary': clickable }
           ]"
           :aria-rowindex="rowIndex + 2"
+          :tabindex="clickable && !loading ? 0 : undefined"
+          @keydown.enter.self.prevent="clickable ? handleRowClick(row, rowIndex) : undefined"
+          @keydown.space.self.prevent="clickable ? handleRowClick(row, rowIndex) : undefined"
           @click="clickable ? handleRowClick(row, rowIndex) : undefined"
         >
           <td

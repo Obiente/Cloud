@@ -111,7 +111,7 @@ const formatContainerLabel = (container: { containerId: string; serviceName?: st
   } else if (statusText === "running") {
     statusText = "running";
   } else if (statusText === "starting" || statusText === "restarting") {
-    statusText = statusText;
+    // Preserve the lower-case transitional state.
   } else {
     // Capitalize first letter
     statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);

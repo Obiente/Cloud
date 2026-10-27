@@ -13,7 +13,19 @@
         "{workspaceRoot}/scripts/deploy-swarm.sh",
         "{workspaceRoot}/scripts/force-deploy.sh",
         "{workspaceRoot}/scripts/lib/database-owner.sh",
-        "{workspaceRoot}/scripts/tests/database-owner-test.sh"
+        "{workspaceRoot}/scripts/tests/database-owner-test.sh",
+        "{workspaceRoot}/scripts/lib/common.sh",
+        "{workspaceRoot}/scripts/build-swarm.sh",
+        "{workspaceRoot}/scripts/deploy-swarm-dev.sh",
+        "{workspaceRoot}/scripts/tests/deployment-images-test.sh",
+        "{workspaceRoot}/scripts/lib/swarm-updates.sh",
+        "{workspaceRoot}/scripts/tests/swarm-updates-test.sh",
+        "{workspaceRoot}/apps/*/Dockerfile",
+        "{workspaceRoot}/scripts/lib/dashboard-readiness.sh",
+        "{workspaceRoot}/scripts/tests/dashboard-readiness-test.sh",
+        "{workspaceRoot}/scripts/redeploy-dashboard.sh",
+        "{workspaceRoot}/scripts/rollback-swarm.sh",
+        "{workspaceRoot}/scripts/tests/rollback-swarm-test.sh"
       ],
       "options": {
         "cwd": "{workspaceRoot}",
@@ -21,9 +33,29 @@
           "bash tools/deployment-preflight/validate-compose.sh all",
           "bash -n scripts/deploy-swarm.sh scripts/force-deploy.sh",
           "shellcheck scripts/lib/database-owner.sh scripts/tests/database-owner-test.sh",
-          "bash scripts/tests/database-owner-test.sh"
+          "bash scripts/tests/database-owner-test.sh",
+          "shellcheck scripts/lib/common.sh scripts/tests/deployment-images-test.sh",
+          "bash scripts/tests/deployment-images-test.sh",
+          "shellcheck scripts/lib/swarm-updates.sh scripts/tests/swarm-updates-test.sh",
+          "bash scripts/tests/swarm-updates-test.sh",
+          "shellcheck scripts/lib/dashboard-readiness.sh scripts/tests/dashboard-readiness-test.sh",
+          "bash scripts/tests/dashboard-readiness-test.sh",
+          "shellcheck scripts/rollback-swarm.sh scripts/tests/rollback-swarm-test.sh",
+          "bash scripts/tests/rollback-swarm-test.sh"
         ],
         "parallel": false
+      }
+    },
+    "test-images": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/scripts/**/*.sh",
+        "{workspaceRoot}/apps/*/Dockerfile"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "bash scripts/tests/deployment-images-test.sh"
       }
     },
     "test-compose": {
@@ -69,6 +101,41 @@
       "options": {
         "cwd": "{workspaceRoot}",
         "command": "tools/deployment-preflight/validate-compose.sh swarm-config"
+      }
+    },
+    "test-restarts": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/scripts/**/*.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "bash scripts/tests/swarm-updates-test.sh"
+      }
+    },
+    "test-dashboard-readiness": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/scripts/**/*.sh",
+        "{workspaceRoot}/docker-compose.dashboard.yml"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "bash scripts/tests/dashboard-readiness-test.sh"
+      }
+    },
+    "test-rollback": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/scripts/rollback-swarm.sh",
+        "{workspaceRoot}/scripts/tests/rollback-swarm-test.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "bash scripts/tests/rollback-swarm-test.sh"
       }
     }
   }

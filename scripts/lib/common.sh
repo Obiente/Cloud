@@ -213,6 +213,17 @@ pull_images_in_parallel() {
   fi
 }
 
+require_pulled_images() {
+  if pull_images_in_parallel "$@"; then
+    return 0
+  fi
+
+  echo "Image preparation failed for:" >&2
+  printf '  - %s\n' "${PARALLEL_PULL_FAILURES[@]}" >&2
+  echo "Deployment stopped before changing the stack. Fix the registry access or image publication and retry." >&2
+  return 1
+}
+
 infer_public_scheme() {
   local domain="${1:-localhost}"
 

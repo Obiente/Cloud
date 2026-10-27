@@ -117,6 +117,7 @@ func newGameServerServiceTestDB(t *testing.T) *gorm.DB {
 		&database.GameServerLocation{},
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
 	); err != nil {

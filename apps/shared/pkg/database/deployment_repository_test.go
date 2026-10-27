@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -115,11 +116,17 @@ func TestNormalizeDeploymentJSONFieldsPreservesExistingValues(t *testing.T) {
 func newDeploymentRepositoryTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("failed to open in-memory database: %v", err)
 	}
 
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = pool.Close() })
 	if err := db.AutoMigrate(&Deployment{}); err != nil {
 		t.Fatalf("failed to migrate deployment schema: %v", err)
 	}
@@ -154,5 +161,49 @@ func assertDeploymentIDs(t *testing.T, deployments []*Deployment, want []string)
 		if got[i] != want[i] {
 			t.Fatalf("deployment IDs = %v, want %v", got, want)
 		}
+	}
+}
+
+func TestDeploymentIntentSurvivesObservationAndLateBuild(t *testing.T) {
+	db := newDeploymentRepositoryTestDB(t)
+	repo := NewDeploymentRepository(db, nil)
+	dep := &Deployment{ID: "recovery-test", OrganizationID: "test-org"}
+	if err := repo.Create(t.Context(), dep); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateStatus(t.Context(), dep.ID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
+		t.Fatal(err)
+	}
+	var current Deployment
+	db.First(&current, "id = ?", dep.ID)
+	if current.DesiredState != "running" {
+		t.Fatal("successful deployment did not acquire intent")
+	}
+	if err := repo.SetDesiredState(t.Context(), dep.ID, "stopped"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateStatus(t.Context(), dep.ID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
+		t.Fatal(err)
+	}
+	db.First(&current, "id = ?", dep.ID)
+	if current.DesiredState != "stopped" {
+		t.Fatal("late completion overrode stop")
+	}
+	if err := repo.Update(t.Context(), dep); err != nil {
+		t.Fatal(err)
+	}
+	db.First(&current, "id = ?", dep.ID)
+	if current.DesiredState != "stopped" {
+		t.Fatal("stale configuration overwrote stop")
+	}
+	if err := repo.SetDesiredState(t.Context(), dep.ID, "running"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateStatus(t.Context(), dep.ID, int32(deploymentsv1.DeploymentStatus_FAILED)); err != nil {
+		t.Fatal(err)
+	}
+	db.First(&current, "id = ?", dep.ID)
+	if current.DesiredState != "running" {
+		t.Fatal("runtime failure erased retry intent")
 	}
 }

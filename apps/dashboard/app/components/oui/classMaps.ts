@@ -4,7 +4,6 @@ import type {
   AxisAlignContentWithStretch,
   AxisAlignWithBaseline,
   AxisJustify,
-  Breakpoint,
   DimensionVariant,
   MarginVariant,
   OUIBorderColor,

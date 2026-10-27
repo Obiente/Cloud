@@ -1893,105 +1893,38 @@ func (pc *ProxmoxClient) StopVM(ctx context.Context, nodeName string, vmID int) 
 }
 
 func (pc *ProxmoxClient) DeleteVM(ctx context.Context, nodeName string, vmID int, vpsID string) error {
-	// SECURITY: Verify VM was created by our API before deletion
-	// Get VM config to check VM name matches VPS ID
+	// Destructive actions require a successful ownership read on this node.
+	if strings.TrimSpace(vpsID) == "" {
+		return fmt.Errorf("VPS identity is required")
+	}
 	configEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	resp, err := pc.apiRequest(ctx, "GET", configEndpoint, nil)
 	if err != nil {
-		// Network/connection error - try to proceed with deletion anyway if we can find the VM
-		logger.Warn("[ProxmoxClient] Failed to get VM config for validation (network error): %v. Will attempt deletion anyway.", err)
-		// Try to find VM on other nodes or proceed with deletion
-	} else {
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			errorMsg := string(body)
-
-			// If VM config doesn't exist, the VM is already deleted
-			if resp.StatusCode == 500 && strings.Contains(errorMsg, "does not exist") {
-				logger.Info("[ProxmoxClient] VM %d config does not exist - VM is already deleted", vmID)
-				return nil // VM already deleted, nothing to do
-			}
-
-			// Handle unusual status codes (like 596) - might be Proxmox-specific errors
-			// If it's a 4xx or 5xx that's not a standard error, try to proceed with deletion
-			if resp.StatusCode >= 400 && resp.StatusCode < 600 {
-				// Check if VM exists by trying to find it on other nodes
-				logger.Warn("[ProxmoxClient] Got unusual status %d when getting VM config: %s. Will attempt to find VM on other nodes or proceed with deletion.", resp.StatusCode, errorMsg)
-
-				// Try to find VM on other nodes
-				allNodes, listErr := pc.ListNodes(ctx)
-				if listErr == nil {
-					for _, otherNode := range allNodes {
-						if otherNode == nodeName {
-							continue // Skip the node we already tried
-						}
-						otherConfigEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", otherNode, vmID)
-						otherResp, otherErr := pc.apiRequest(ctx, "GET", otherConfigEndpoint, nil)
-						if otherErr == nil && otherResp.StatusCode == http.StatusOK {
-							otherResp.Body.Close()
-							logger.Info("[ProxmoxClient] Found VM %d on node %s instead of %s", vmID, otherNode, nodeName)
-							nodeName = otherNode // Update node name for deletion
-							goto skipValidation  // Skip validation since we found it on another node
-						}
-						if otherResp != nil {
-							otherResp.Body.Close()
-						}
-					}
-				}
-
-				// If we can't validate, log warning but proceed with deletion attempt
-				// This handles cases where Proxmox API is having issues but VM still exists
-				logger.Warn("[ProxmoxClient] Cannot validate VM %d ownership due to API error (status %d), but will attempt deletion. This may be unsafe if VM name doesn't match VPS ID.", vmID, resp.StatusCode)
-				goto skipValidation
-			}
-
-			return fmt.Errorf("failed to get VM config: %s (status: %d)", errorMsg, resp.StatusCode)
+		return fmt.Errorf("cannot verify VM ownership: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusNotFound || (resp.StatusCode == 500 && strings.Contains(string(body), "does not exist")) {
+			return nil
 		}
+		return fmt.Errorf("cannot verify VM ownership (status %d)", resp.StatusCode)
+	}
+	var configResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return fmt.Errorf("cannot decode VM ownership: %w", err)
+	}
+	if name, ok := configResp.Data["name"].(string); !ok || name != vpsID {
+		return fmt.Errorf("refusing to delete VM %d: ownership does not match VPS", vmID)
 	}
 
-	// Validate VM ownership by checking name matches VPS ID (only if we got a valid response)
-	if resp != nil {
-		var configResp struct {
-			Data map[string]interface{} `json:"data"`
-		}
-
-		if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
-			logger.Warn("[ProxmoxClient] Failed to decode VM config: %v. Will attempt deletion anyway.", err)
-			goto skipValidation
-		}
-
-		// Check if VM name matches VPS ID (this is how we identify our VMs)
-		vmName, ok := configResp.Data["name"].(string)
-		if !ok || vmName == "" {
-			return fmt.Errorf("refusing to delete VM %d: VM name is missing or empty", vmID)
-		}
-
-		if vmName != vpsID {
-			return fmt.Errorf("refusing to delete VM %d: VM name '%s' does not match VPS ID '%s'", vmID, vmName, vpsID)
-		}
-
-		logger.Info("[ProxmoxClient] VM %d verified as Obiente Cloud managed (name matches VPS ID: %s)", vmID, vpsID)
-	}
-
-skipValidation:
-	// Proceed with VM deletion (validation may have been skipped due to API errors)
 	// Check VM status and force stop it if running (Proxmox requires VM to be stopped before deletion)
 	// We use force stop (/status/stop) not graceful shutdown to ensure immediate stop
 	status, err := pc.GetVMStatus(ctx, nodeName, vmID)
 	if err != nil {
-		logger.Warn("[ProxmoxClient] Failed to get VM status before deletion, attempting to force stop VM anyway: %v", err)
-		// Try to force stop anyway - better to try and fail than to fail deletion
-		logger.Info("[ProxmoxClient] Attempting to force stop VM %d before deletion", vmID)
-		if err := pc.StopVM(ctx, nodeName, vmID); err != nil {
-			logger.Warn("[ProxmoxClient] Failed to force stop VM %d (may already be stopped): %v", vmID, err)
-		} else {
-			// Wait for VM to stop
-			if err := pc.waitForVMStatus(ctx, nodeName, vmID, "stopped", 30*time.Second); err != nil {
-				logger.Warn("[ProxmoxClient] VM %d may not have stopped in time: %v", vmID, err)
-			}
-		}
+		return fmt.Errorf("cannot confirm VM state before deletion: %w", err)
 	} else if status != "stopped" {
 		logger.Info("[ProxmoxClient] VM %d is in status '%s', force stopping before deletion", vmID, status)
 		if err := pc.StopVM(ctx, nodeName, vmID); err != nil {

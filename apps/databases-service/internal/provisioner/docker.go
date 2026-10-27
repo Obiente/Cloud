@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -209,6 +210,9 @@ func (p *DockerProvisioner) DeprovisionDatabase(ctx context.Context, containerID
 // StartDatabase starts a stopped database container
 func (p *DockerProvisioner) StartDatabase(ctx context.Context, containerID string) error {
 	logger.Info("Starting database container: %s", containerID)
+	if err := p.client.EnsureContainerNetwork(ctx, containerID, "obiente-databases"); err != nil {
+		return err
+	}
 	return p.client.StartContainer(ctx, containerID)
 }
 
@@ -221,6 +225,9 @@ func (p *DockerProvisioner) StopDatabase(ctx context.Context, containerID string
 // RestartDatabase restarts a database container
 func (p *DockerProvisioner) RestartDatabase(ctx context.Context, containerID string) error {
 	logger.Info("Restarting database container: %s", containerID)
+	if err := p.client.EnsureContainerNetwork(ctx, containerID, "obiente-databases"); err != nil {
+		return err
+	}
 	return p.client.RestartContainer(ctx, containerID, 30*time.Second)
 }
 
@@ -277,14 +284,8 @@ func (p *DockerProvisioner) ReconcileContainer(ctx context.Context, containerID 
 		"cloud.obiente.database_id": cfg.DatabaseID,
 	}
 
-	// Check network: ensure container is on obiente-databases
-	if inspect.NetworkSettings != nil {
-		if _, onNetwork := inspect.NetworkSettings.Networks[desiredNetwork]; !onNetwork {
-			logger.Info("Reconcile: connecting container %s to network %s", containerID, desiredNetwork)
-			if err := p.client.NetworkConnect(ctx, desiredNetwork, containerID); err != nil {
-				logger.Warn("Reconcile: failed to connect %s to %s: %v", containerID, desiredNetwork, err)
-			}
-		}
+	if err := p.client.EnsureContainerNetwork(ctx, containerID, desiredNetwork); err != nil {
+		return err
 	}
 
 	// Check labels: log mismatches (labels can't be updated without recreating)
@@ -313,4 +314,9 @@ func (p *DockerProvisioner) Close() error {
 		return p.client.Close()
 	}
 	return nil
+}
+
+// ExecStream transfers backup data without buffering the dump in service memory.
+func (p *DockerProvisioner) ExecStream(ctx context.Context, id string, cmd []string, input io.Reader, output io.Writer, env []string) error {
+	return p.client.ContainerExecStream(ctx, id, cmd, input, output, env)
 }

@@ -6,6 +6,7 @@
           variant="ghost" 
           size="sm"
           @click.stop
+          aria-label="More actions"
         >
           <EllipsisVerticalIcon class="h-4 w-4" />
         </OuiButton>

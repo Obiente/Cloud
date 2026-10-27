@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
@@ -40,7 +40,7 @@ function pageFileToRoute(filePath: string) {
 
 function trackedDashboardRoutes() {
   const repoRoot = path.resolve(__dirname, "../../../..");
-  const output = execSync("git ls-files 'apps/dashboard/app/pages/**/*.vue' 'apps/dashboard/app/pages/*.vue'", {
+  const output = execFileSync("git", ["ls-files", "apps/dashboard/app/pages/**/*.vue", "apps/dashboard/app/pages/*.vue"], {
     cwd: repoRoot,
     encoding: "utf8",
   });
@@ -69,44 +69,7 @@ async function installApiMocks(page: Page) {
     },
   ]);
 
-  await page.route("**/auth/session", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        user: {
-          sub: "dev-user",
-          email: "dev@example.com",
-          name: "Development User",
-          preferred_username: "dev",
-        },
-      }),
-    });
-  });
 
-  await page.route("**/auth/token", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ accessToken: "e2e-token", expiresIn: 3600 }),
-    });
-  });
-
-  await page.route("**/auth/refresh", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ accessToken: "e2e-token", expiresIn: 3600 }),
-    });
-  });
-
-  await page.route("http://api.localhost/**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
 }
 
 for (const { filePath, route } of trackedDashboardRoutes()) {
@@ -148,6 +111,7 @@ for (const { filePath, route } of trackedDashboardRoutes()) {
     });
     expect(hasHorizontalOverflow, `${route} should not create viewport-level horizontal overflow`).toBe(false);
 
+    if (route.startsWith("/superadmin") || route.startsWith("/admin")) await expect(page).toHaveURL(new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"$"));
     expect(severeConsole, `${route} should not emit severe console errors`).toEqual([]);
   });
 }

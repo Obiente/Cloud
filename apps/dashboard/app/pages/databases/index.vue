@@ -5,7 +5,7 @@
         <OuiStack gap="xs">
           <OuiText as="h1" size="xl" weight="semibold">Databases</OuiText>
           <OuiText color="tertiary" size="sm">
-            Deploy and manage your databases with automated backups and monitoring.
+            Deploy, manage and monitor your databases.
           </OuiText>
         </OuiStack>
 
@@ -33,7 +33,7 @@
         v-if="listError"
         :error="listError"
         title="Failed to load databases"
-        hint="Please try refreshing the page. If the problem persists, contact support."
+        hint="We will retry automatically."
       />
 
       <OuiCard variant="default">
@@ -75,7 +75,7 @@
 
       <!-- Empty State -->
       <SharedEmptyState
-        v-else-if="filteredDatabases.length === 0"
+        v-else-if="!listError && filteredDatabases.length === 0"
         :icon="CircleStackIcon"
         title="No databases found"
         :description="searchQuery || statusFilter || typeFilter
@@ -175,6 +175,8 @@ const {
   },
   { watch: [statusFilter, typeFilter] }
 );
+
+useAutoRefresh(refresh);
 
 const databases = computed(() => (databasesData.value as any)?.databases || []);
 

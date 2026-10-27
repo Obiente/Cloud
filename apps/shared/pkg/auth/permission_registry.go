@@ -72,6 +72,10 @@ func (r *PermissionRegistry) RegisterProcedureWithFlags(procedure, permission, r
 func (r *PermissionRegistry) IsSuperadminOnly(permission string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.isSuperadminOnlyLocked(permission)
+}
+
+func (r *PermissionRegistry) isSuperadminOnlyLocked(permission string) bool {
 
 	// Check all procedures that map to this permission
 	if procedures, ok := r.byPerm[permission]; ok {
@@ -148,7 +152,7 @@ func (r *PermissionRegistry) GetAllPermissions(excludeSuperadmin ...bool) []*Per
 			continue
 		}
 		// Skip superadmin-only permissions if requested
-		if shouldExcludeSuperadmin && (mapping.SuperadminOnly || r.IsSuperadminOnly(mapping.Permission)) {
+		if shouldExcludeSuperadmin && (mapping.SuperadminOnly || r.isSuperadminOnlyLocked(mapping.Permission)) {
 			continue
 		}
 		if mapping.Permission != "" {

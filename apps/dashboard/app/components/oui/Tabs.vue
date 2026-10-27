@@ -134,7 +134,7 @@ const props = withDefaults(defineProps<Props>(), {
   contentOnly: false,
 })
 
-const modelValue = defineModel<string>({ default: undefined })
+const modelValue = defineModel<string>()
 
 // Track which tabs have been loaded or prefetched
 const loadedTabs = ref(new Set<string>())

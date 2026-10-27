@@ -28,9 +28,19 @@ func HasOrgRole(ctx context.Context, orgID, role string) bool {
 	if err != nil {
 		return false
 	}
+	if ctx.Value(systemUserKey) != true && database.EnsureUserActive(ctx, database.DB, user.Id) != nil {
+		return false
+	}
+	if database.EnsureOrganizationActive(ctx, database.DB, orgID) != nil {
+		return false
+	}
 	// Global admin via token roles still wins
 	if HasRole(user, RoleAdmin) {
 		return true
+	}
+	var activeMembers int64
+	if err := database.DB.WithContext(ctx).Model(&database.OrganizationMember{}).Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").Count(&activeMembers).Error; err != nil || activeMembers == 0 {
+		return false
 	}
 	// Check role bindings
 	var bindings []database.OrgRoleBinding
@@ -59,16 +69,16 @@ func HasOrgRole(ctx context.Context, orgID, role string) bool {
 // isOrgOwner checks organization_members table for an 'owner' member
 // The role field should contain a role ID (e.g., "system:owner" for system roles)
 func isOrgOwner(ctx context.Context, orgID string) bool {
-    user, err := GetUserFromContext(ctx)
-    if err != nil || user == nil {
-        return false
-    }
-    var cnt int64
-    // Check for system role ID
-    _ = database.DB.Model(&database.OrganizationMember{}).
-        Where("organization_id = ? AND user_id = ? AND role = ?", orgID, user.Id, SystemRoleIDOwner).
-        Count(&cnt).Error
-    return cnt > 0
+	user, err := GetUserFromContext(ctx)
+	if err != nil || user == nil {
+		return false
+	}
+	var cnt int64
+	// Check for system role ID
+	_ = database.DB.Model(&database.OrganizationMember{}).
+		Where("organization_id = ? AND user_id = ? AND role = ? AND status = ?", orgID, user.Id, SystemRoleIDOwner, "active").
+		Count(&cnt).Error
+	return cnt > 0
 }
 
 // CheckScopedPermission verifies user has permission in org, optionally scoped to resource
@@ -80,8 +90,43 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 	if err != nil {
 		return fmt.Errorf("unauthenticated")
 	}
-    // Global admin or org-level owners/managers/admins permitted
-    if HasRole(user, RoleAdmin) || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
+	if ctx.Value(systemUserKey) != true {
+		if err := database.EnsureUserActive(ctx, database.DB, user.Id); err != nil {
+			return err
+		}
+	}
+	if err := database.EnsureOrganizationActive(ctx, database.DB, orgID); err != nil {
+		return err
+	}
+	// A caller-supplied organization must own the resource before owner/admin shortcuts.
+	if sp.ResourceID != "" {
+		var model interface{}
+		switch sp.ResourceType {
+		case "deployment", "deployments":
+			model = &database.Deployment{}
+		case "gameserver", "gameservers":
+			model = &database.GameServer{}
+		case "database", "databases":
+			model = &database.DatabaseInstance{}
+		case "vps":
+			model = &database.VPSInstance{}
+		}
+		if model != nil {
+			var count int64
+			if err := database.DB.WithContext(ctx).Model(model).Where("id = ? AND organization_id = ? AND deleted_at IS NULL", sp.ResourceID, orgID).Count(&count).Error; err != nil || count != 1 {
+				return fmt.Errorf("resource does not belong to organization")
+			}
+		}
+	}
+	// Role bindings never reactivate a removed or inactive membership.
+	if !HasRole(user, RoleAdmin) && !HasRole(user, RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member).Error; err != nil {
+			return fmt.Errorf("active organization membership required")
+		}
+	}
+	// Global admin or org-level owners/managers/admins permitted
+	if HasRole(user, RoleAdmin) || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
 		return nil
 	}
 
@@ -90,7 +135,7 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 	var member database.OrganizationMember
 	if err := database.DB.Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member).Error; err == nil {
 		roleID := member.Role
-		
+
 		// Check if it's a system role ID
 		if IsSystemRoleID(roleID) {
 			if CheckSystemRolePermissionByID(roleID, sp.Permission) {
@@ -166,19 +211,19 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 						// Specific resource check: must match resource type and ID
 						if b.ResourceType == sp.ResourceType {
 							if b.ResourceID == "*" || b.ResourceID == sp.ResourceID {
-							return nil
-						}
-						// Selector-based match (e.g., environment)
-						if b.ResourceSelector != "" {
-							if matchesSelector(sp.ResourceType, sp.ResourceID, b.ResourceSelector) {
 								return nil
 							}
+							// Selector-based match (e.g., environment)
+							if b.ResourceSelector != "" {
+								if matchesSelector(sp.ResourceType, sp.ResourceID, b.ResourceSelector) {
+									return nil
+								}
+							}
 						}
-					}
-					// Environment-to-deployment fallback: if binding is for environment and permission targets a deployment, resolve deployment's environment
-					if b.ResourceType == "environment" && sp.ResourceType == "deployment" {
-						if matchesEnvironmentForDeployment(sp.ResourceID, b) {
-							return nil
+						// Environment-to-deployment fallback: if binding is for environment and permission targets a deployment, resolve deployment's environment
+						if b.ResourceType == "environment" && sp.ResourceType == "deployment" {
+							if matchesEnvironmentForDeployment(sp.ResourceID, b) {
+								return nil
 							}
 						}
 					}
@@ -200,13 +245,13 @@ func matchesPermission(pattern, permission string) bool {
 	if pattern == permission {
 		return true
 	}
-	
+
 	// Wildcard match: pattern ends with ".*"
 	if strings.HasSuffix(pattern, ".*") {
 		prefix := strings.TrimSuffix(pattern, ".*")
 		return strings.HasPrefix(permission, prefix+".")
 	}
-	
+
 	return false
 }
 
@@ -258,7 +303,7 @@ func matchesEnvironmentForDeployment(deploymentID string, b database.OrgRoleBind
 // resourceTypeToPermissionPrefix maps resource types to their canonical permission prefixes
 // This ensures consistency: deployment -> "deployment", gameserver -> "gameservers", etc.
 var resourceTypeToPermissionPrefix = map[string]string{
-	"deployment":  ResourcePrefixDeployment,  // singular, matches system roles
+	"deployment": ResourcePrefixDeployment,  // singular, matches system roles
 	"gameserver": ResourcePrefixGameServers, // plural, matches system roles
 	"vps":        ResourcePrefixVPS,         // singular, matches system roles
 	"database":   ResourcePrefixDatabase,    // singular
@@ -273,6 +318,7 @@ var resourceTypeToPermissionPrefix = map[string]string{
 //   - Legacy actions: "view" -> "read", "edit" -> "update", etc.
 //   - Resource type normalization: "gameserver" -> "gameservers", "deployments" -> "deployment"
 //   - Already normalized permissions: passes through unchanged
+//
 // Examples:
 //   - normalizePermission("gameserver", "read") -> "gameservers.read"
 //   - normalizePermission("gameserver", "view") -> "gameservers.read"

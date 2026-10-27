@@ -3,6 +3,8 @@
 </template>
 
 <script setup lang="ts">
+/* eslint-disable no-control-regex -- Intentionally match terminal control codes or reject null bytes. */
+
 import { computed } from "vue";
 
 interface Props {

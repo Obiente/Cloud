@@ -1047,6 +1047,9 @@ func slugifyPRLabel(value string) string {
 func (s *Service) deployPullRequestEnvironment(recordID string) {
 	ctx, cancel := s.detachedContext(10 * time.Minute)
 	defer cancel()
+	if ctx.Err() != nil {
+		return
+	}
 	var record database.PullRequestDeployment
 	if err := database.DB.WithContext(ctx).Where("id = ?", recordID).First(&record).Error; err != nil {
 		return
@@ -2439,6 +2442,9 @@ func stringValue(value *string) string {
 func (s *Service) reportPullRequestDeployment(recordID string) {
 	ctx, cancel := s.detachedContext(2 * time.Minute)
 	defer cancel()
+	if ctx.Err() != nil {
+		return
+	}
 	now := time.Now()
 	if err := database.DB.WithContext(ctx).Model(&database.PullRequestDeployment{}).Where("id = ?", recordID).
 		Updates(map[string]interface{}{"report_pending": true, "next_report_at": now}).Error; err != nil {

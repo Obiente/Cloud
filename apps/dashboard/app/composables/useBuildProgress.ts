@@ -22,7 +22,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
   let incrementalProgressIntervalId: ReturnType<typeof setInterval> | null = null;
   let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let stopRequested = false;
-  let lastLogUpdateTime = ref(Date.now());
+  const lastLogUpdateTime = ref(Date.now());
 
   // Build phase patterns and their progress percentages
   // Order matters: more specific patterns should come first
@@ -432,9 +432,8 @@ export function useBuildProgress(options: BuildProgressOptions) {
     
     // Track package installation progress (pnpm/npm/yarn) - works for both Railpack and Nixpacks
     const packageProgressMatch = logLine.match(/Progress:.*resolved (\d+),.*(?:reused|downloaded) (\d+),.*added (\d+)/i);
-    if (packageProgressMatch && packageProgressMatch[1] && packageProgressMatch[3]) {
+    if (packageProgressMatch?.[1] && packageProgressMatch[3]) {
       const resolved = parseInt(packageProgressMatch[1], 10);
-      const downloaded = packageProgressMatch[2] ? parseInt(packageProgressMatch[2], 10) : 0;
       const added = parseInt(packageProgressMatch[3], 10);
       // Estimate progress based on added packages
       if (resolved > 0 && added > 0) {
@@ -454,7 +453,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
     
     // Track Nix package downloading progress
     const nixDownloadMatch = logLine.match(/these (\d+) paths will be fetched.*\(([\d.]+)\s*(MB|GB|KB|MiB|GiB|KiB)\s*download/i);
-    if (nixDownloadMatch && nixDownloadMatch[1]) {
+    if (nixDownloadMatch?.[1]) {
       const totalPaths = parseInt(nixDownloadMatch[1], 10);
       // Nix downloading typically happens at stages 3-4 (18-28% range for Nixpacks)
       if (totalPaths > 0 && targetProgress.value < 28) {
@@ -481,7 +480,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
     // Track Docker build steps (#1, #2, #3, etc.) - works for both Railpack and Nixpacks
     // Match #NUM at start of line or after whitespace, followed by any content
     const buildStepMatch = logLine.match(/(?:^|\s)#(\d+)(?:\s+|$)/);
-    if (buildStepMatch && buildStepMatch[1]) {
+    if (buildStepMatch?.[1]) {
       const stepNum = parseInt(buildStepMatch[1], 10);
       // Detect Railpack: check phase name, log content, or step patterns
       const isRailpack = 
@@ -492,8 +491,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
       
       // Check if it's a Nixpacks stage step
       const nixpacksStageMatch = logLine.match(/#(\d+)\s+\[stage-0\s+(\d+)\/(\d+)\]/i);
-      if (nixpacksStageMatch && nixpacksStageMatch[1] && nixpacksStageMatch[2] && nixpacksStageMatch[3]) {
-        const stepNum = parseInt(nixpacksStageMatch[1], 10);
+      if (nixpacksStageMatch?.[1] && nixpacksStageMatch[2] && nixpacksStageMatch[3]) {
         const stageNum = parseInt(nixpacksStageMatch[2], 10);
         const totalStages = parseInt(nixpacksStageMatch[3], 10);
         
@@ -627,7 +625,7 @@ export function useBuildProgress(options: BuildProgressOptions) {
 
     // Track Docker image download progress
     const imageDownloadMatch = logLine.match(/sha256:.*?(\d+(?:\.\d+)?)\s*(MB|GB|KB|B|MiB|GiB|KiB)\s*\/\s*(\d+(?:\.\d+)?)\s*(MB|GB|KB|B|MiB|GiB|KiB)/i);
-    if (imageDownloadMatch && imageDownloadMatch[1] && imageDownloadMatch[2] && imageDownloadMatch[3] && imageDownloadMatch[4]) {
+    if (imageDownloadMatch?.[1] && imageDownloadMatch[2] && imageDownloadMatch[3] && imageDownloadMatch[4]) {
       const downloaded = parseFloat(imageDownloadMatch[1]);
       const downloadedUnit = imageDownloadMatch[2];
       const total = parseFloat(imageDownloadMatch[3]);

@@ -14,6 +14,8 @@ export interface SecureSessionData {
   scope: string;
   token_type: string;
   expires_in: number;
+  /** Absolute access-token expiry in milliseconds since the Unix epoch. */
+  expires_at?: number;
   refresh_token?: string;
   access_token: string;
   id_token?: string; // ID token for logout (OIDC)

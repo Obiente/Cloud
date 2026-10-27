@@ -10,6 +10,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=scripts/lib/database-owner.sh
 source "${SCRIPT_DIR}/lib/database-owner.sh"
+# shellcheck source=scripts/lib/swarm-updates.sh
+source "${SCRIPT_DIR}/lib/swarm-updates.sh"
+# shellcheck source=scripts/lib/dashboard-readiness.sh
+source "${SCRIPT_DIR}/lib/dashboard-readiness.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -34,29 +38,13 @@ if [ -f "${REPO_ROOT}/.env" ]; then
   load_env_file "${REPO_ROOT}/.env"
 fi
 
+DOMAIN="${DOMAIN:-localhost}"
+DASHBOARD_URL="${DASHBOARD_URL:-$(derive_dashboard_url "$DOMAIN")}"
+API_URL="${API_URL:-$(derive_api_url "$DOMAIN")}"
+export DOMAIN DASHBOARD_URL API_URL
+
 echo -e "${BLUE}🔄 Force deploying Obiente Cloud stack: ${STACK_NAME}${NC}"
 echo ""
-
-# Function to force update a service
-force_update_service() {
-  local service_name=$1
-  if docker service ls --format "{{.Name}}" | grep -q "^${service_name}$"; then
-    echo -e "${YELLOW}  ⚡ Force updating service: ${service_name}${NC}"
-    docker service update --force "${service_name}" || {
-      echo -e "${RED}  ❌ Failed to update ${service_name}${NC}"
-      return 1
-    }
-    echo -e "${GREEN}  ✅ ${service_name} update initiated${NC}"
-  else
-    echo -e "${YELLOW}  ⚠️  Service ${service_name} not found, skipping...${NC}"
-  fi
-}
-
-# Function to get all services in a stack
-get_stack_services() {
-  local stack=$1
-  docker stack services --format "{{.Name}}" "$stack" 2>/dev/null || echo ""
-}
 
 # First, redeploy the stacks to ensure config is up to date
 echo -e "${BLUE}📦 Step 1: Redeploying stacks with latest configuration...${NC}"
@@ -125,34 +113,9 @@ echo ""
 echo -e "${BLUE}📦 Step 2: Force updating all services in main stack...${NC}"
 echo ""
 
-MAIN_SERVICES=$(get_stack_services "$STACK_NAME")
-if [ -z "$MAIN_SERVICES" ]; then
-  echo -e "${YELLOW}⚠️  No services found in stack ${STACK_NAME}${NC}"
-else
-  while IFS= read -r service; do
-    if [ -n "$service" ]; then
-      force_update_service "$service"
-    fi
-  done <<< "$MAIN_SERVICES"
-fi
-
-# Force update dashboard services if enabled
-if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo ""
-  echo -e "${BLUE}📦 Step 3: Force updating dashboard services...${NC}"
-  echo ""
-  
-  # Dashboard is now in the same stack, so check for dashboard service in main stack
-  DASHBOARD_SERVICES=$(docker stack services "$STACK_NAME" --format "{{.Name}}" 2>/dev/null | grep -i dashboard || echo "")
-  if [ -z "$DASHBOARD_SERVICES" ]; then
-    echo -e "${YELLOW}⚠️  No dashboard service found in stack${NC}"
-  else
-    while IFS= read -r service; do
-      if [ -n "$service" ]; then
-        force_update_service "$service"
-      fi
-    done <<< "$DASHBOARD_SERVICES"
-  fi
+SWARM_UPDATE_SERIAL=true restart_stack_services "$STACK_NAME"
+if [ "$DEPLOY_DASHBOARD" = true ]; then
+  wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
 fi
 
 echo ""

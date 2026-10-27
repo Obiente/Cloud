@@ -1,16 +1,18 @@
 <template>
   <OuiStack gap="lg">
+    <OuiAlert v-if="loadError" variant="danger" title="Audit logs are unavailable">Refresh to try again.</OuiAlert>
     <!-- Header -->
     <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
       <OuiText as="h3" size="lg" weight="bold">Audit Logs</OuiText>
       <OuiFlex gap="sm" align="center" wrap="wrap">
-        <OuiText v-if="!isLoading" size="sm" color="tertiary">
+        <OuiText v-if="!isLoading && !loadError" size="sm" color="tertiary">
           {{ totalCount }} log{{ totalCount !== 1 ? "s" : "" }}
         </OuiText>
         <OuiButton
           variant="ghost"
           size="sm"
           @click="refresh"
+          aria-label="Refresh audit logs"
           :loading="isLoading"
         >
           <ArrowPathIcon
@@ -168,7 +170,7 @@
             <OuiSkeleton width="6rem" height="1rem" variant="text" />
           </template>
           <template #skeleton-details>
-            <OuiButton variant="ghost" size="xs" disabled>
+            <OuiButton variant="ghost" size="xs" disabled aria-label="View audit event details">
               <EyeIcon class="h-4 w-4" />
             </OuiButton>
           </template>
@@ -178,7 +180,7 @@
 
     <!-- Empty State -->
     <div
-      v-else-if="auditLogs.length === 0"
+      v-else-if="auditLogs.length === 0 && !loadError"
       class="flex flex-col items-center justify-center py-12"
     >
       <DocumentTextIcon class="h-12 w-12 text-secondary mb-4" />
@@ -262,6 +264,7 @@
               variant="ghost"
               size="xs"
               @click="() => showDetails(row)"
+              aria-label="View audit event details"
             >
               <EyeIcon class="h-4 w-4" />
             </OuiButton>
@@ -461,7 +464,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import {
   ArrowPathIcon,
   DocumentTextIcon,
@@ -497,6 +500,11 @@ const orgClient = useConnectClient(OrganizationService);
 
 const auditLogs = ref<AuditLogEntry[]>([]);
 const isLoading = ref(false);
+const loadError = ref(false);
+let logRequest: AbortController | undefined;
+let filterRequest: AbortController | undefined;
+const lifetime = new AbortController();
+onBeforeUnmount(() => { lifetime.abort(); logRequest?.abort(); filterRequest?.abort(); });
 const currentPage = ref(1);
 const pageSize = ref(50);
 const nextPageToken = ref<string | undefined>(undefined);
@@ -525,7 +533,9 @@ const filters = ref({
 });
 
 const loadFilterOptions = async () => {
-  if (isLoadingFilterOptions.value) return;
+  filterRequest?.abort();
+  const requestController = new AbortController();
+  filterRequest = requestController;
   isLoadingFilterOptions.value = true;
 
   try {
@@ -569,7 +579,8 @@ const loadFilterOptions = async () => {
       }
     }
 
-    const response = await client.getAuditLogFilterOptions(request);
+    const response = await client.getAuditLogFilterOptions(request, {signal: requestController.signal});
+    if (requestController.signal.aborted) return;
     filterOptionsData.value = {
       services: response.services || [],
       actions: response.actions || [],
@@ -579,9 +590,9 @@ const loadFilterOptions = async () => {
       ),
     };
   } catch (error) {
-    console.error("Failed to load filter options:", error);
+    if (!requestController.signal.aborted) console.error("Failed to load filter options:", error);
   } finally {
-    isLoadingFilterOptions.value = false;
+    if (filterRequest === requestController) isLoadingFilterOptions.value = false;
   }
 };
 
@@ -644,13 +655,14 @@ const loadOrganizations = async () => {
   try {
     const response = await orgClient.listOrganizations({
       onlyMine: false, // Get all organizations for superadmins
-    });
+    }, {signal: lifetime.signal});
+    if (lifetime.signal.aborted) return;
     organizations.value = (response.organizations || []).map((org) => ({
       id: org.id,
       name: org.name || org.slug || org.id,
     }));
   } catch (error) {
-    console.error("Failed to load organizations:", error);
+    if (!lifetime.signal.aborted) console.error("Failed to load organizations:", error);
   } finally {
     isLoadingOrganizations.value = false;
   }
@@ -688,8 +700,11 @@ const detailsDialogOpen = ref(false);
 const selectedLog = ref<AuditLogEntry | null>(null);
 
 const loadAuditLogs = async (page: number = currentPage.value) => {
-  if (isLoading.value) return;
+  logRequest?.abort();
+  const requestController = new AbortController();
+  logRequest = requestController;
   isLoading.value = true;
+  loadError.value = false;
 
   try {
     const request: Partial<ListAuditLogsRequest> = {
@@ -750,9 +765,10 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
       request.pageToken = `offset:${offset}`;
     }
 
-    const response = await client.listAuditLogs(request);
+    const response = await client.listAuditLogs(request, {signal: requestController.signal});
+    if (requestController.signal.aborted) return;
 
-    let logs = response.auditLogs || [];
+    const logs = response.auditLogs || [];
 
     // Store the actual total count from the API (convert bigint to number)
     totalCount.value = response.totalCount ? Number(response.totalCount) : 0;
@@ -760,16 +776,17 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
     auditLogs.value = logs;
     nextPageToken.value = response.nextPageToken || undefined;
   } catch (error) {
-    console.error("Failed to load audit logs:", error);
+    if (!requestController.signal.aborted) { loadError.value = true; console.error("Failed to load audit logs:", error); }
   } finally {
-    isLoading.value = false;
+    if (logRequest === requestController) isLoading.value = false;
   }
 };
 
 const refresh = () => {
   currentPage.value = 1;
   nextPageToken.value = undefined;
-  loadAuditLogs(1);
+  void loadFilterOptions();
+  void loadAuditLogs(1);
 };
 
 const handlePageChange = (page: number) => {

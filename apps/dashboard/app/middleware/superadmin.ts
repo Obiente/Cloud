@@ -45,6 +45,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const superAdmin = useSuperAdmin();
   await superAdmin.fetchOverview();
 
+  if (superAdmin.allowed.value === null) {
+    throw createError({ statusCode: 503, statusMessage: "Administrator access is temporarily unavailable. Please try again." });
+  }
+
   // Check if user has any superadmin access
   if (superAdmin.allowed.value === false) {
     return navigateTo("/dashboard");

@@ -14,6 +14,7 @@
         </Select.Trigger>
       </Select.Control>
 
+      <ClientOnly>
       <Teleport to="body">
         <Select.Positioner>
           <Select.Content
@@ -54,6 +55,7 @@
           </Select.Content>
         </Select.Positioner>
       </Teleport>
+      </ClientOnly>
 
       <Select.HiddenSelect />
     </Select.RootProvider>

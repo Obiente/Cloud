@@ -40,43 +40,28 @@ export function getInitials(name: string): string {
  * @param timestamp - Timestamp object with seconds/nanos properties or Date object
  * @returns Formatted date string
  */
-export function formatDate(timestamp: any): string {
-  if (!timestamp) return "—";
-  
-  let date: Date;
-  if (timestamp.seconds !== undefined) {
-    // Proto timestamp format
-    const seconds = typeof timestamp.seconds === "bigint" ? Number(timestamp.seconds) : timestamp.seconds;
-    const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
-    date = new Date(millis);
-  } else if (timestamp instanceof Date) {
-    date = timestamp;
-  } else {
-    date = new Date(timestamp);
-  }
-  
-  if (isNaN(date.getTime())) return "—";
-  
-  return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+function timestampDate(timestamp: any): Date | null {
+  if (timestamp === null || timestamp === undefined || timestamp === "") return null;
+  const date = timestamp.seconds !== undefined
+    ? new Date(Number(timestamp.seconds) * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000))
+    : timestamp instanceof Date ? timestamp : new Date(timestamp);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
-/**
- * Formats a timestamp to a date-only string
- * @param timestamp - Timestamp object with seconds property or Date object
- * @returns Formatted date string (date only)
- */
+// Use an explicit timezone and locale on both server and browser. Host defaults
+// differ between deployments and users and must not change hydrated content.
+export function formatDate(timestamp: any): string {
+  const date = timestampDate(timestamp);
+  if (!date) return "Unavailable";
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium", timeStyle: "medium", timeZone: "UTC",
+  }).format(date) + " UTC";
+}
+
 export function formatDateOnly(timestamp: any): string {
-  if (!timestamp) return "—";
-  
-  const date = timestamp.seconds
-    ? new Date(Number(timestamp.seconds) * 1000)
-    : timestamp instanceof Date
-    ? timestamp
-    : new Date(timestamp);
-  
-  if (isNaN(date.getTime())) return "—";
-  
-  return date.toLocaleDateString();
+  const date = timestampDate(timestamp);
+  if (!date) return "Unavailable";
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(date);
 }
 
 /**

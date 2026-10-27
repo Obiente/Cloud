@@ -583,6 +583,8 @@
 </template>
 
 <script setup lang="ts">
+/* eslint-disable no-control-regex -- Intentionally match terminal control codes or reject null bytes. */
+
   import { ref, reactive, watchEffect, computed, watch, onMounted } from "vue";
   import { LinkIcon, TrashIcon, PencilIcon } from "@heroicons/vue/24/outline";
   import { type Deployment, type DockerfileBuildOptions, type DockerfileVolume, type UpdateDeploymentRequest } from "@obiente/proto";
@@ -767,7 +769,7 @@
       }
       const key = line.slice(0, separatorIndex).trim();
       const value = line.slice(separatorIndex + 1);
-      if (!/^[A-Za-z0-9][A-Za-z0-9_.\/-]{0,127}$/.test(key) || key.endsWith(".")) {
+      if (!/^[A-Za-z0-9][A-Za-z0-9_./-]{0,127}$/.test(key) || key.endsWith(".")) {
         throw new Error(`Invalid image label "${key}".`);
       }
       if (/[\u0000\r\n]/.test(value)) {
@@ -782,7 +784,7 @@
     !target || (/^[A-Za-z0-9_.-]{1,128}$/.test(target) && !target.startsWith("-") && !target.startsWith("."));
 
   const isSafeDockerPlatform = (platform: string): boolean =>
-    !platform || (platform.length <= 64 && !platform.startsWith("/") && !platform.includes("//") && /^[A-Za-z0-9_.\/-]+$/.test(platform));
+    !platform || (platform.length <= 64 && !platform.startsWith("/") && !platform.includes("//") && /^[A-Za-z0-9_./-]+$/.test(platform));
 
   const buildDockerfileBuildOptions = (): DockerfileBuildOptions => {
     const target = config.dockerfileTarget.trim();
@@ -1198,7 +1200,7 @@
           // Extract repo name from URL if available
           if (config.repositoryUrl) {
             const githubRepoMatch = config.repositoryUrl.match(
-              /github\.com\/([^\/]+\/[^\/]+)/
+              /github\.com\/([^/]+\/[^/]+)/
             );
             if (githubRepoMatch && githubRepoMatch[1]) {
               selectedGitHubRepo.value = githubRepoMatch[1].replace(/\.git$/, "");
@@ -1270,7 +1272,6 @@
     if (githubIntegrationId.value !== id) {
       githubIntegrationId.value = id;
       markConfigDirty();
-    } else {
     }
   };
 
@@ -1302,7 +1303,7 @@
       // Extract repo name from URL if available
       if (config.repositoryUrl) {
         const githubRepoMatch = config.repositoryUrl.match(
-          /github\.com\/([^\/]+\/[^\/]+)/
+          /github\.com\/([^/]+\/[^/]+)/
         );
         if (githubRepoMatch && githubRepoMatch[1]) {
           selectedGitHubRepo.value = githubRepoMatch[1].replace(/\.git$/, "");
