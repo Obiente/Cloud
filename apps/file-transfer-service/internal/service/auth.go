@@ -49,6 +49,12 @@ func (a *Authenticator) Authenticate(ctx context.Context, secret string) (*Sessi
 	if err != nil {
 		return nil, fmt.Errorf("invalid credentials")
 	}
+	if err := database.EnsureUserActive(ctx, database.DB, credential.UserID); err != nil {
+		return nil, err
+	}
+	if err := database.EnsureOrganizationActive(ctx, database.DB, credential.OrganizationID); err != nil {
+		return nil, err
+	}
 
 	resourceType := database.NormalizeFileTransferResourceType(credential.ResourceType)
 	var root string
@@ -117,4 +123,28 @@ func hasPermission(permissions []Permission, required Permission) bool {
 		}
 	}
 	return false
+}
+
+// ValidateAccess revalidates established sessions and open file handles. The
+// serialized SSH session is an identity snapshot, never an authorization cache.
+func (s *Session) ValidateAccess(required Permission) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := database.EnsureUserActive(ctx, database.DB, s.UserID); err != nil {
+		return err
+	}
+	if err := database.EnsureOrganizationActive(ctx, database.DB, s.OrganizationID); err != nil {
+		return err
+	}
+	var credential database.FileTransferCredential
+	if err := database.DB.WithContext(ctx).Where(
+		"id = ? AND user_id = ? AND organization_id = ? AND resource_type = ? AND resource_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
+		s.CredentialID, s.UserID, s.OrganizationID, s.ResourceType, s.ResourceID, time.Now(),
+	).First(&credential).Error; err != nil {
+		return fmt.Errorf("credential is no longer active")
+	}
+	if !database.FileTransferCredentialHasScope(credential.Scopes, string(required)) {
+		return fmt.Errorf("file transfer permission denied")
+	}
+	return nil
 }
