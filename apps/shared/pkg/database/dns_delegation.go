@@ -218,6 +218,11 @@ func HashAPIKeyForDelegation(key string) string {
 // If organizationID is provided, the key is linked to that organization
 // If stripeSubscriptionID is provided, the key is linked to that subscription
 func CreateDNSDelegationAPIKey(description, sourceAPI, organizationID string, stripeSubscriptionID *string) (string, error) {
+	return CreateDNSDelegationAPIKeyTx(DB, description, sourceAPI, organizationID, stripeSubscriptionID)
+}
+
+// CreateDNSDelegationAPIKeyTx participates in the caller's transaction.
+func CreateDNSDelegationAPIKeyTx(tx *gorm.DB, description, sourceAPI, organizationID string, stripeSubscriptionID *string) (string, error) {
 	// Generate a random API key
 	keyBytes := make([]byte, 32)
 	if _, err := rand.Read(keyBytes); err != nil {
@@ -240,7 +245,7 @@ func CreateDNSDelegationAPIKey(description, sourceAPI, organizationID string, st
 
 	logger.Debug("[Database] Creating DNS delegation API key: org=%s, subscription=%v", organizationID, stripeSubscriptionID != nil && *stripeSubscriptionID != "")
 
-	if err := DB.Create(&key).Error; err != nil {
+	if err := tx.Create(&key).Error; err != nil {
 		logger.Error("[Database] Failed to create DNS delegation API key: %v", err)
 		return "", err
 	}
@@ -252,8 +257,12 @@ func CreateDNSDelegationAPIKey(description, sourceAPI, organizationID string, st
 
 // GetActiveDNSDelegationAPIKeyForOrganization gets an active API key for an organization
 func GetActiveDNSDelegationAPIKeyForOrganization(organizationID string) (*DNSDelegationAPIKey, error) {
+	return GetActiveDNSDelegationAPIKeyForOrganizationTx(DB, organizationID)
+}
+
+func GetActiveDNSDelegationAPIKeyForOrganizationTx(tx *gorm.DB, organizationID string) (*DNSDelegationAPIKey, error) {
 	var key DNSDelegationAPIKey
-	result := DB.Where("organization_id = ? AND is_active = ? AND revoked_at IS NULL", organizationID, true).
+	result := tx.Where("organization_id = ? AND is_active = ? AND revoked_at IS NULL", organizationID, true).
 		First(&key)
 	if result.Error != nil {
 		return nil, result.Error
@@ -281,16 +290,20 @@ func HasActiveDNSDelegationSubscription(organizationID string) (bool, string, er
 
 // RevokeDNSDelegationAPIKeysForSubscription revokes all API keys for a subscription
 func RevokeDNSDelegationAPIKeysForSubscription(stripeSubscriptionID string) error {
-	return revokeDelegationKeys("stripe_subscription_id = ?", stripeSubscriptionID)
+	return RevokeDNSDelegationAPIKeysForSubscriptionTx(DB, stripeSubscriptionID)
+}
+
+func RevokeDNSDelegationAPIKeysForSubscriptionTx(tx *gorm.DB, stripeSubscriptionID string) error {
+	return revokeDelegationKeys(tx, "stripe_subscription_id = ?", stripeSubscriptionID)
 }
 
 // RevokeDNSDelegationAPIKey revokes an API key by hash.
 func RevokeDNSDelegationAPIKey(keyHash string) error {
-	return revokeDelegationKeys("key_hash = ?", keyHash)
+	return revokeDelegationKeys(DB, "key_hash = ?", keyHash)
 }
 
-func revokeDelegationKeys(condition string, value string) error {
-	return DB.Transaction(func(tx *gorm.DB) error {
+func revokeDelegationKeys(db *gorm.DB, condition string, value string) error {
+	return db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
 		if err := tx.Model(&DNSDelegationAPIKey{}).Where(condition, value).
 			Updates(map[string]any{"is_active": false, "revoked_at": now}).Error; err != nil {

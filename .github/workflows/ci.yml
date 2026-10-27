@@ -82,8 +82,8 @@ jobs:
           go-version: '1.27.3'
           cache-dependency-path: 'apps/**/go.sum'
       - run: pnpm install --frozen-lockfile
-      - name: PostgreSQL DNS and payment regressions
-        run: pnpm exec nx run-many --target=test --projects=dns-service,billing-service --excludeTaskDependencies --parallel=2 --command="go test -mod=readonly -race -count=1 ./..."
+      - name: PostgreSQL DNS, payment and credit regressions
+        run: pnpm exec nx run-many --target=test --projects=dns-service,billing-service,organizations-service --excludeTaskDependencies --parallel=2 --command="go test -mod=readonly -race -count=1 ./..."
 
   dashboard-regressions:
     runs-on: ubuntu-24.04

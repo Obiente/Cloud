@@ -11,6 +11,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // UsageBreakdown represents the cost breakdown for a monthly bill
@@ -292,7 +293,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		// Try to pay from credits
 		if totalCostCents > 0 {
 			var org database.Organization
-			if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 				return fmt.Errorf("organization not found: %w", err)
 			}
 
@@ -300,7 +301,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 				// Deduct from credits
 				oldBalance := org.Credits
 				org.Credits -= totalCostCents
-				if err := tx.Save(&org).Error; err != nil {
+				if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 					return fmt.Errorf("update credits: %w", err)
 				}
 
@@ -616,7 +617,7 @@ func PayBillPrematurely(billID string, orgID string) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
 		// Get the bill
 		var bill database.MonthlyBill
-		if err := tx.Where("id = ? AND organization_id = ?", billID, orgID).First(&bill).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND organization_id = ?", billID, orgID).First(&bill).Error; err != nil {
 			return fmt.Errorf("bill not found: %w", err)
 		}
 
@@ -626,7 +627,7 @@ func PayBillPrematurely(billID string, orgID string) error {
 
 		// Get organization
 		var org database.Organization
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 			return fmt.Errorf("organization not found: %w", err)
 		}
 
@@ -637,7 +638,7 @@ func PayBillPrematurely(billID string, orgID string) error {
 		// Deduct from credits
 		oldBalance := org.Credits
 		org.Credits -= bill.AmountCents
-		if err := tx.Save(&org).Error; err != nil {
+		if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 			return fmt.Errorf("update credits: %w", err)
 		}
 

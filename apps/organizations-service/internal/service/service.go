@@ -30,6 +30,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultOwnerFallbackRole = auth.SystemRoleIDAdmin
@@ -217,7 +218,7 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[o
 			org.Domain = &d
 		}
 	}
-	if err := database.DB.Save(&org).Error; err != nil {
+	if err := database.DB.Model(&org).Select("name", "domain").Updates(&org).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update org: %w", err))
 	}
 	return connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: organizationToProto(&org)}), nil
@@ -1790,14 +1791,14 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 	userID := user.Id
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 			return err
 		}
 		org.Credits += amountCents
 		if org.Credits < 0 {
 			org.Credits = 0 // Prevent negative balances
 		}
-		if err := tx.Save(&org).Error; err != nil {
+		if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 			return err
 		}
 		// Record transaction in credit log
@@ -1863,7 +1864,7 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 	var actualRemoved int64
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 			return err
 		}
 		oldBalance = org.Credits
@@ -1872,7 +1873,7 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 			org.Credits = 0 // Prevent negative balances
 		}
 		actualRemoved = oldBalance - org.Credits
-		if err := tx.Save(&org).Error; err != nil {
+		if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 			return err
 		}
 		// Record transaction in credit log (negative amount for removal)
