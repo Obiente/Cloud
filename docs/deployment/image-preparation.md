@@ -51,3 +51,14 @@ Dashboard redeployment allows Traefik to discover the service through its normal
 Swarm provider updates; it does not restart the shared proxy. The dashboard itself
 restarts on any exit without a finite retry limit so a prolonged dependency outage
 does not permanently exhaust its recovery attempts.
+
+## Rollback results
+
+`rollback-swarm.sh` waits for each requested service rollback and returns a failed
+exit status if any service fails. A missing previous specification is also a
+failure. Single-service selection uses an exact name within the selected stack.
+Whole-stack rollback still requires an explicit confirmation in the script.
+
+`SWARM_ROLLBACK_TIMEOUT_SECONDS` defaults to 300 seconds per service. After a
+timeout, inspect Docker's task state before retrying because the daemon may still
+be applying the requested rollback.
