@@ -3,6 +3,7 @@ package deployments
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
@@ -19,19 +20,24 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	}
 
 	deployment := &deploymentsv1.Deployment{
-		Id:             db.ID,
-		Name:           db.Name,
-		Domain:         db.Domain,
-		Type:           deploymentsv1.DeploymentType(db.Type),
-		BuildStrategy:  deploymentsv1.BuildStrategy(db.BuildStrategy),
-		Branch:         db.Branch,
-		Status:         deploymentsv1.DeploymentStatus(db.Status),
-		HealthStatus:   db.HealthStatus,
-		Environment:    deploymentsv1.Environment(db.Environment),
-		BandwidthUsage: db.BandwidthUsage,
-		StorageUsage:   db.StorageBytes,
-		BuildTime:      db.BuildTime,
-		Size:           db.Size,
+		Id:               db.ID,
+		Name:             db.Name,
+		Domain:           db.Domain,
+		Type:             deploymentsv1.DeploymentType(db.Type),
+		BuildStrategy:    deploymentsv1.BuildStrategy(db.BuildStrategy),
+		Branch:           db.Branch,
+		Status:           deploymentsv1.DeploymentStatus(db.Status),
+		HealthStatus:     db.HealthStatus,
+		Environment:      deploymentsv1.Environment(db.Environment),
+		BandwidthUsage:   db.BandwidthUsage,
+		StorageUsage:     db.StorageBytes,
+		StorageAvailable: database.ResourceStorageAvailable(db.StorageState, db.StorageBytes, db.StorageMeasuredAt, db.StorageMeasurementError, time.Now()),
+		BuildTime:        db.BuildTime,
+		Size:             db.Size,
+	}
+
+	if db.StorageMeasuredAt != nil {
+		deployment.StorageMeasuredAt = timestamppb.New(*db.StorageMeasuredAt)
 	}
 
 	// Parse custom domains from JSON
