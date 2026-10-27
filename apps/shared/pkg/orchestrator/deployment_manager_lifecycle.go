@@ -29,9 +29,6 @@ func (dm *DeploymentManager) CreateDeploymentLocked(ctx context.Context, config 
 	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.Deployment{}, config.DeploymentID); err != nil {
 		return err
 	}
-	if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, config.DeploymentID); err != nil {
-		return err
-	}
 	logger.Info("[DeploymentManager] Creating deployment %s", config.DeploymentID)
 
 	// Apply plan limits to cap memory and CPU
@@ -300,7 +297,7 @@ func (dm *DeploymentManager) CreateDeploymentLocked(ctx context.Context, config 
 				// In non-Swarm mode, create plain containers
 				if !config.RecoveryOnly {
 					// Remove existing container with this name if it exists (for redeployments)
-					removed, removeErr := dm.removeContainerByName(ctx, containerName)
+					removed, removeErr := dm.removeContainerByName(ctx, config.DeploymentID, containerName)
 					plainReplacementStarted = plainReplacementStarted || removed
 					if removeErr != nil {
 						logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, removeErr)
@@ -316,6 +313,11 @@ func (dm *DeploymentManager) CreateDeploymentLocked(ctx context.Context, config 
 				}
 
 				// Start container
+				// Recovery can reuse a stopped container without creating one, but
+				// starting that existing writable layer also invalidates storage.
+				if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, config.DeploymentID); err != nil {
+					return err
+				}
 				if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
 					return fmt.Errorf("failed to start container: %w", err)
 				}

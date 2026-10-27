@@ -217,9 +217,6 @@ func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploy
 			return err
 		}
 	}
-	if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
-		return err
-	}
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	var sanitizer *ComposeSanitizer
@@ -605,6 +602,11 @@ func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploy
 		if err != nil {
 			return fmt.Errorf("inspect stack rollout status before deployment: %w", err)
 		}
+		// Preflight does not materialize workload data. Invalidate just before
+		// Docker can change services, and retain uncertainty on partial failures.
+		if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
+			return err
+		}
 		if err := cmd.Run(); err != nil {
 			// A failed stack deploy can still update a subset of services. Retain
 			// broadened writable roots only when the daemon accepted observable
@@ -650,6 +652,9 @@ func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploy
 		beforeRuntime, err := composeProjectRuntimeFingerprint(ctx, projectName)
 		if err != nil {
 			return fmt.Errorf("inspect Compose project before deployment: %w", err)
+		}
+		if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
+			return err
 		}
 		if err := cmd.Run(); err != nil {
 			// Compose can recreate an early service before a later service fails.
