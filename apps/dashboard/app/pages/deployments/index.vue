@@ -25,8 +25,9 @@
         v-if="listError"
         :error="listError"
         title="Failed to load deployments"
-        hint="Please try refreshing the page. If the problem persists, contact support."
+        hint="We will retry automatically. You can also try again now."
       />
+      <OuiButton v-if="listError" variant="ghost" size="sm" @click="refreshDeployments">Try again</OuiButton>
 
       <OuiCard variant="default">
         <OuiCardBody>
@@ -75,7 +76,7 @@
 
       <!-- Empty State -->
       <SharedEmptyState
-        v-else-if="filteredDeployments.length === 0"
+        v-else-if="!listError && filteredDeployments.length === 0"
         :icon="RocketLaunchIcon"
         title="No deployments found"
         :description="searchQuery || statusFilter || environmentFilter || groupFilter
@@ -260,7 +261,6 @@
   
   // Error handling
   const createError = ref<Error | null>(null);
-  const listError = ref<Error | null>(null);
   
   // Auth for checking authentication status
   const auth = useAuth();
@@ -566,38 +566,17 @@
   // Get organizationId using SSR-compatible composable
   const organizationId = useOrganizationId();
 
-  const { data: deployments, pending, refresh: refreshDeployments } = await useClientFetch(
+  const { data: deployments, pending, error: listError, refresh: refreshDeployments } = await useClientFetch(
     () => `deployments-list-${organizationId.value}`,
     async () => {
-      try {
-        // Use organizationId from composable (SSR-compatible)
-        const response = await client.listDeployments({
-          organizationId: organizationId.value || undefined,
-        });
-        return response.deployments;
-      } catch (error) {
-        console.error("Failed to list deployments:", error);
-        listError.value = error as Error;
-        return [];
-      }
+      const orgId = organizationId.value;
+      if (!orgId) return [];
+      const response = await client.listDeployments({ organizationId: orgId });
+      return response.deployments;
     }
   );
-
-  // Custom refresh function that preserves existing data during fetch
-  const refreshDeploymentsWithoutClearing = async () => {
-    try {
-      const response = await client.listDeployments({
-        organizationId: organizationId.value || undefined,
-      });
-      // Only update if we got a successful response
-      deployments.value = response.deployments;
-      listError.value = null;
-    } catch (error) {
-      console.error("Failed to refresh deployments:", error);
-      // Don't clear the data on error, just log it
-      // Don't set listError here to avoid breaking the UI
-    }
-  };
+  // All refreshes use Nuxt's keyed request lifecycle, including stale-response cancellation.
+  const refreshDeploymentsWithoutClearing = () => refreshDeployments();
 
   // Periodic refresh - faster when deployments are building/deploying
   const hasActiveDeployments = computed(() => {
@@ -611,48 +590,7 @@
   // Use faster refresh (3 seconds) when there are active deployments, slower (30 seconds) otherwise
   const refreshIntervalMs = computed(() => (hasActiveDeployments.value ? 3000 : 30000));
 
-  // Track page visibility using VueUse
-  const visibility = useDocumentVisibility();
-  const isVisible = computed(() => visibility.value === "visible");
-
-  // Periodic refresh - use ref to store interval ID so we can restart when interval changes
-  const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null);
-
-  // Function to setup/restart the interval
-  const setupRefreshInterval = () => {
-    // Clear existing interval if any
-    if (refreshIntervalId.value) {
-      clearInterval(refreshIntervalId.value);
-      refreshIntervalId.value = null;
-    }
-
-    // Only setup if page is visible
-    if (isVisible.value && !listError.value) {
-      refreshIntervalId.value = setInterval(async () => {
-        if (isVisible.value && !listError.value) {
-          await refreshDeploymentsWithoutClearing();
-        }
-      }, refreshIntervalMs.value);
-    }
-  };
-
-  // Watch for interval changes (e.g., when active deployments change)
-  watch([refreshIntervalMs, isVisible], () => {
-    setupRefreshInterval();
-  });
-
-  // Start refreshing when component is mounted
-  onMounted(() => {
-    setupRefreshInterval();
-  });
-
-  // Cleanup on unmount
-  onUnmounted(() => {
-    if (refreshIntervalId.value) {
-      clearInterval(refreshIntervalId.value);
-      refreshIntervalId.value = null;
-    }
-  });
+  useAutoRefresh(refreshDeployments, () => refreshIntervalMs.value);
 
   // Track build progress for each deployment
   const buildProgressMap = new Map<string, ReturnType<typeof useBuildProgress>>();

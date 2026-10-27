@@ -157,6 +157,7 @@
             </template>
               <template #metrics>
                 <GameServerMetrics
+                  :storage-available="gameServerData?.storageAvailable"
                   :game-server-id="gameServerId"
                   :organization-id="gameServer?.organizationId || ''"
                   :game-server-status="(() => {
@@ -557,6 +558,7 @@
 </template>
 
 <script setup lang="ts">
+import { runReconnectingStream } from "~/utils/reconnectingStream";
 import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -651,18 +653,19 @@ const errorHint = computed(() => {
 const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchError } = useClientFetch(
   () => `game-server-${gameServerId.value}`,
   async () => {
+    const selectedId = gameServerId.value;
     try {
       const res = await client.getGameServer({
-        gameServerId: gameServerId.value,
+        gameServerId: selectedId,
       });
       // Clear any previous errors on success
-      accessError.value = null;
+      if (selectedId === gameServerId.value) accessError.value = null;
       
       // If response is successful but gameServer is null/undefined, treat as not found
       if (!res.gameServer) {
         const notFoundError = new Error("Game server not found") as any;
         notFoundError.code = "not_found";
-        accessError.value = notFoundError;
+        if (selectedId === gameServerId.value) accessError.value = notFoundError;
         return null;
       }
       
@@ -670,7 +673,7 @@ const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchE
     } catch (err: unknown) {
       // Check if it's a permission denied or not found error
       if (err && ((err as any).code === "permission_denied" || (err as any).code === "not_found")) {
-        accessError.value = err as Error;
+        if (selectedId === gameServerId.value) accessError.value = err as Error;
         return null;
       }
       // Re-throw other errors
@@ -1054,41 +1057,28 @@ const hasReachedOperationTarget = () => {
   return false;
 };
 
-const startOperationPolling = () => {
-  stopOperationPolling();
-  operationPollingInterval = setInterval(async () => {
-    if (!activeOperation.value) {
-      stopOperationPolling();
-      return;
-    }
-    await loadGameServer();
-    if (gameServer.value?.status === "FAILED") {
-      failOperation(`${activeOperation.value.label} failed. Check the logs tab for backend details.`);
-      stopOperationPolling();
-      return;
-    }
-    if (hasReachedOperationTarget()) {
-      finishOperation();
-      stopOperationPolling();
-    }
-  }, 3_000);
-};
+const startOperationPolling = () => { void refreshGameServer(); };
+watch(gameServerData, () => {
+ if (!activeOperation.value) return;
+ if (gameServer.value?.status === "FAILED") { failOperation(`${activeOperation.value.label} failed. Check the logs tab for details.`); }
+ else if (hasReachedOperationTarget()) { finishOperation(); }
+});
 
 // Load usage data
+let usageGeneration = 0;
 const loadUsage = async () => {
-  if (!gameServer.value) return;
-  
+  const generation = ++usageGeneration;
+  const selectedId = gameServerId.value;
+  if (!gameServer.value) { usageData.value = null; return; }
   try {
-    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
     const res = await client.getGameServerUsage({
-      gameServerId: gameServerId.value,
+      gameServerId: selectedId,
       organizationId: gameServer.value.organizationId || effectiveOrgId.value,
-      month,
+      month: new Date().toISOString().slice(0, 7),
     });
-    usageData.value = res;
+    if (generation === usageGeneration && selectedId === gameServerId.value) usageData.value = res;
   } catch (error) {
-    console.error("Failed to load usage:", error);
-    // Don't show error toast for usage - it's optional
+    if (generation === usageGeneration && selectedId === gameServerId.value) usageData.value = null;
   }
 };
 
@@ -1099,63 +1089,27 @@ watch(() => gameServer.value, (newValue) => {
   }
 }, { immediate: true });
 
-// Start streaming metrics
+// Keep one cancellable stream per selected server, reconnecting after transport failures.
 const startStreaming = async () => {
-  // Don't start if already streaming, no game server ID, or no game server data
-  if (isStreaming.value || streamController.value || !gameServerId.value || !gameServer.value?.id) {
-    return;
-  }
-
-  isStreaming.value = true;
-  streamController.value = new AbortController();
-
+  if (streamController.value || !gameServerId.value || gameServer.value?.status !== "RUNNING") return;
+  const controller = new AbortController();
+  const id = gameServerId.value;
+  streamController.value = controller;
   try {
-    const stream = await client.streamGameServerMetrics({
-      gameServerId: gameServerId.value,
-    });
-
-    for await (const metric of stream) {
-      if (streamController.value?.signal.aborted) {
-        break;
-      }
-      latestMetric.value = metric;
-    }
-  } catch (err: unknown) {
-    // Handle abort errors silently
-    if ((err as any)?.name === "AbortError" || (err as any)?.code === "aborted") {
-      return;
-    }
-    
-    // Suppress common stream errors that are expected/non-critical
-    const errorMessage = (err as Error | undefined)?.message?.toLowerCase() || "";
-    const errorCode = (err as any)?.code || "";
-    const isExpectedError =
-      errorMessage.includes("missing trailer") ||
-      errorMessage.includes("trailer") ||
-      errorMessage.includes("error in input stream") ||
-      errorMessage.includes("input stream") ||
-      errorCode === "unknown" ||
-      errorCode === "cancelled" ||
-      errorCode === "aborted";
-
-    // Only log unexpected errors
-    if (!isExpectedError && err) {
-      console.error("Failed to stream metrics:", err);
-    }
+    await runReconnectingStream(controller.signal,
+      signal => client.streamGameServerMetrics({ gameServerId: id }, { signal }),
+      metric => { if (id === gameServerId.value) latestMetric.value = metric; },
+      active => { if (streamController.value === controller) isStreaming.value = active; });
   } finally {
-    isStreaming.value = false;
-    streamController.value = null;
+    if (streamController.value === controller) { streamController.value = null; isStreaming.value = false; }
   }
 };
-
-// Stop streaming
 const stopStreaming = () => {
-  if (streamController.value) {
-    streamController.value.abort();
-    streamController.value = null;
-  }
+  streamController.value?.abort();
+  streamController.value = null;
   isStreaming.value = false;
 };
+watch(gameServerId, () => { stopStreaming(); latestMetric.value = null; void startStreaming(); });
 
 // Start streaming when component mounts if server is running
 onMounted(() => {
@@ -1176,7 +1130,7 @@ watch(
         // Silently handle streaming errors - they're non-critical
         // The error is already handled in startStreaming
       });
-    } else if (status !== "RUNNING" && isStreaming.value) {
+    } else if (status !== "RUNNING" && streamController.value) {
       stopStreaming();
     }
   }
@@ -1189,6 +1143,8 @@ onUnmounted(() => {
 });
 
 // Actions
+useAutoRefresh(refreshGameServer, () => activeOperation.value ? 3_000 : 10_000);
+
 const refreshAll = async () => {
   isRefreshing.value = true;
   try {

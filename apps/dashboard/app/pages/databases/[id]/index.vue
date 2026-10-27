@@ -280,7 +280,7 @@
                 <DatabaseQuery :database-id="database.id" :database-type="String(database.type)" />
               </template>
               <template #backups>
-                <DatabaseBackups :database-id="database.id" />
+                <DatabaseBackups :database-id="database.id" :database-type="database.type" />
               </template>
               <template #settings>
                 <DatabaseSettings :database="database" @save="handleSettingsSave" />
@@ -398,20 +398,23 @@ const {
   refresh: refreshDatabaseBase,
   error: fetchError,
 } = useClientFetch(
-  `database-${id.value}`,
+  () => `database-${orgId.value}-${id.value}`,
   async () => {
     if (!orgId.value) return null;
+    const selectedOrg = orgId.value;
+    const selectedId = id.value;
+    const isCurrent = () => selectedOrg === orgId.value && selectedId === id.value;
     try {
       const response = await dbClient.getDatabase({
-        organizationId: orgId.value,
-        databaseId: id.value,
+        organizationId: selectedOrg,
+        databaseId: selectedId,
       });
-      accessError.value = null;
+      if (isCurrent()) accessError.value = null;
       return response.database ?? null;
     } catch (err) {
       if (err instanceof ConnectError) {
         if (err.code === Code.PermissionDenied || err.code === Code.NotFound) {
-          accessError.value = err;
+          if (isCurrent()) accessError.value = err;
           return null;
         }
       }
@@ -420,6 +423,8 @@ const {
   },
   { watch: [orgId, id] }
 );
+
+useAutoRefresh(refreshDatabaseBase, () => activeOperation.value ? 3_000 : 10_000);
 
 // Custom refresh function
 const refreshDatabase = async () => {
@@ -448,25 +453,13 @@ const hasReachedOperationTarget = () => {
   return false;
 };
 
-const startOperationPolling = () => {
-  stopOperationPolling();
-  operationPollingInterval = setInterval(async () => {
-    if (!activeOperation.value) {
-      stopOperationPolling();
-      return;
-    }
-    await refreshDatabase();
-    if (database.value?.status === DatabaseStatus.FAILED) {
-      failOperation(`${activeOperation.value.label} failed. Check database logs or events for backend details.`);
-      stopOperationPolling();
-      return;
-    }
-    if (hasReachedOperationTarget()) {
-      finishOperation();
-      stopOperationPolling();
-    }
-  }, 3_000);
-};
+const startOperationPolling = () => { void refreshDatabaseBase(); };
+watch(databaseData, () => {
+ if (!activeOperation.value) return;
+ if (database.value?.status === DatabaseStatus.FAILED) {
+  failOperation(`${activeOperation.value.label} failed. Check database logs or events for details.`);
+ } else if (hasReachedOperationTarget()) { finishOperation(); }
+});
 
 onUnmounted(stopOperationPolling);
 
