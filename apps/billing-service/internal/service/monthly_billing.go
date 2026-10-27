@@ -65,10 +65,10 @@ func latestBillingBoundary(now time.Time, day int) (time.Time, error) {
 func processOrganizationBilling(orgID string, billingDate time.Time) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	return database.WithResourceRuntimeLock(ctx, "monthly-billing:"+orgID, func(context.Context) error { return processOrganizationBillingLocked(orgID, billingDate) })
+	return withBillingLock(ctx, orgID, func(tx *gorm.DB) error { return processOrganizationBillingLocked(tx, orgID, billingDate) })
 }
 
-func processOrganizationBillingLocked(orgID string, billingDate time.Time) error {
+func processOrganizationBillingLocked(db *gorm.DB, orgID string, billingDate time.Time) error {
 	// Check if we've already created a bill for this billing period
 	// Calculate the billing period: from last billing date to today
 	var lastBill database.MonthlyBill
@@ -77,7 +77,7 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 
 	// Get the billing account to find the billing date
 	var billingAccount database.BillingAccount
-	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+	if err := db.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
 		return fmt.Errorf("billing account not found: %w", err)
 	}
 
@@ -90,12 +90,12 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 	// Calculate billing period
 	// If this is the first bill, start from org creation or last month's billing date
 	var org database.Organization
-	if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+	if err := db.First(&org, "id = ?", orgID).Error; err != nil {
 		return fmt.Errorf("organization not found: %w", err)
 	}
 
 	// Find the last bill to determine the start of this billing period
-	if err := database.DB.Where("organization_id = ? AND status IN ?", orgID, []string{"PAID", "PENDING"}).
+	if err := db.Where("organization_id = ? AND status IN ?", orgID, []string{"PAID", "PENDING"}).
 		Order("billing_period_end DESC").First(&lastBill).Error; err == nil {
 		// Use the end of the last billing period as the start of this one
 		billingPeriodStart = lastBill.BillingPeriodEnd
@@ -117,7 +117,7 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 
 	// Check if a bill already exists for this period
 	var existingBill database.MonthlyBill
-	if err := database.DB.Where("organization_id = ? AND billing_period_start = ? AND billing_period_end = ?",
+	if err := db.Where("organization_id = ? AND billing_period_start = ? AND billing_period_end = ?",
 		orgID, billingPeriodStart, billingPeriodEnd).First(&existingBill).Error; err == nil {
 		log.Printf("[Monthly Billing] Bill already exists for org %s for period %s to %s", orgID,
 			billingPeriodStart.Format("2006-01-02"), billingPeriodEnd.Format("2006-01-02"))
@@ -125,9 +125,9 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 	}
 
 	// Calculate usage for the billing period directly from metrics
-	metricsDB := database.GetMetricsDB()
-	if metricsDB == nil {
-		return fmt.Errorf("metrics database not available")
+	metricsDB, err := billingMetricsDB(db)
+	if err != nil {
+		return err
 	}
 
 	// Get usage from hourly aggregates for the billing period
@@ -212,7 +212,7 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
 	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
-	storageBytes, storageErr := database.BillableStorageBytes(context.Background(), database.DB, orgID, time.Now())
+	storageBytes, storageErr := database.BillableStorageBytes(db.Statement.Context, db, orgID, time.Now())
 	if storageErr != nil {
 		return fmt.Errorf("storage accounting unavailable: %w", storageErr)
 	}
@@ -243,7 +243,7 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 		MonthlyCostCents int64
 		AssignedAt       time.Time
 	}
-	if err := database.DB.Table("vps_public_ips ip").
+	if err := db.Table("vps_public_ips ip").
 		Select("ip.monthly_cost_cents, ip.assigned_at").
 		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
@@ -306,7 +306,7 @@ func processOrganizationBillingLocked(orgID string, billingDate time.Time) error
 	}
 
 	// Process payment in a transaction
-	err = database.DB.Transaction(func(tx *gorm.DB) error {
+	err = db.Transaction(func(tx *gorm.DB) error {
 		// Create the bill
 		if err := tx.Create(bill).Error; err != nil {
 			return fmt.Errorf("create bill: %w", err)
@@ -390,20 +390,20 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 	defer cancel()
 	var bill *database.MonthlyBill
 	var existing bool
-	err := database.WithResourceRuntimeLock(ctx, "monthly-billing:"+orgID, func(context.Context) error {
+	err := withBillingLock(ctx, orgID, func(tx *gorm.DB) error {
 		var err error
-		bill, existing, err = generateCurrentBillEarlyLocked(orgID)
+		bill, existing, err = generateCurrentBillEarlyLocked(tx, orgID)
 		return err
 	})
 	return bill, existing, err
 }
 
-func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, error) {
+func generateCurrentBillEarlyLocked(db *gorm.DB, orgID string) (*database.MonthlyBill, bool, error) {
 	now := time.Now()
 
 	// Get the billing account to find the billing date
 	var billingAccount database.BillingAccount
-	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+	if err := db.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
 		return nil, false, fmt.Errorf("billing account not found: %w", err)
 	}
 
@@ -415,7 +415,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 
 	// Calculate billing period
 	var org database.Organization
-	if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+	if err := db.First(&org, "id = ?", orgID).Error; err != nil {
 		return nil, false, fmt.Errorf("organization not found: %w", err)
 	}
 
@@ -424,7 +424,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 	var billingPeriodStart time.Time
 	var billingPeriodEnd time.Time
 
-	if err := database.DB.Where("organization_id = ? AND status IN ?", orgID, []string{"PAID", "PENDING"}).
+	if err := db.Where("organization_id = ? AND status IN ?", orgID, []string{"PAID", "PENDING"}).
 		Order("billing_period_end DESC").First(&lastBill).Error; err == nil {
 		// Use the end of the last billing period as the start of this one
 		billingPeriodStart = lastBill.BillingPeriodEnd
@@ -452,7 +452,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 
 	// Check if a bill already exists for this period (or overlapping period)
 	var existingBill database.MonthlyBill
-	if err := database.DB.Where("organization_id = ? AND billing_period_start = ? AND billing_period_end = ?",
+	if err := db.Where("organization_id = ? AND billing_period_start = ? AND billing_period_end = ?",
 		orgID, billingPeriodStart, billingPeriodEnd).First(&existingBill).Error; err == nil {
 		log.Printf("[Generate Current Bill] Bill already exists for org %s for period %s to %s", orgID,
 			billingPeriodStart.Format("2006-01-02"), billingPeriodEnd.Format("2006-01-02"))
@@ -461,16 +461,16 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 
 	// Also check if there's a bill that covers this period (e.g., if billing date already passed)
 	var overlappingBill database.MonthlyBill
-	if err := database.DB.Where("organization_id = ? AND billing_period_start <= ? AND billing_period_end >= ?",
+	if err := db.Where("organization_id = ? AND billing_period_start <= ? AND billing_period_end >= ?",
 		orgID, billingPeriodStart, billingPeriodEnd).First(&overlappingBill).Error; err == nil {
 		log.Printf("[Generate Current Bill] Overlapping bill exists for org %s", orgID)
 		return &overlappingBill, true, nil
 	}
 
 	// Calculate usage for the billing period
-	metricsDB := database.GetMetricsDB()
-	if metricsDB == nil {
-		return nil, false, fmt.Errorf("metrics database not available")
+	metricsDB, err := billingMetricsDB(db)
+	if err != nil {
+		return nil, false, err
 	}
 
 	// Get usage from hourly aggregates for the billing period
@@ -555,7 +555,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 	hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes + vpsHourlyUsage.BandwidthRxBytes + databaseHourlyUsage.BandwidthRxBytes
 	hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes + vpsHourlyUsage.BandwidthTxBytes + databaseHourlyUsage.BandwidthTxBytes
 
-	storageBytes, storageErr := database.BillableStorageBytes(context.Background(), database.DB, orgID, time.Now())
+	storageBytes, storageErr := database.BillableStorageBytes(db.Statement.Context, db, orgID, time.Now())
 	if storageErr != nil {
 		return nil, false, fmt.Errorf("storage accounting unavailable: %w", storageErr)
 	}
@@ -586,7 +586,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 		MonthlyCostCents int64
 		AssignedAt       time.Time
 	}
-	if err := database.DB.Table("vps_public_ips ip").
+	if err := db.Table("vps_public_ips ip").
 		Select("ip.monthly_cost_cents, ip.assigned_at").
 		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
@@ -649,7 +649,7 @@ func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, 
 	}
 
 	// Create the bill (but don't auto-pay - let user pay it manually)
-	if err := database.DB.Create(bill).Error; err != nil {
+	if err := db.Create(bill).Error; err != nil {
 		return nil, false, fmt.Errorf("create bill: %w", err)
 	}
 
