@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/preview-tls-scripts.yml"
+      - ".github/workflows/reusable-container-build.yml"
+      - ".github/workflows/sync-base-images.yml"
       - "scripts/manage-preview-tls.sh"
       - "scripts/install-preview-tls-renewal.sh"
       - "scripts/lib/common.sh"
@@ -26,6 +28,8 @@ on:
       - main
     paths:
       - ".github/workflows/preview-tls-scripts.yml"
+      - ".github/workflows/reusable-container-build.yml"
+      - ".github/workflows/sync-base-images.yml"
       - "scripts/manage-preview-tls.sh"
       - "scripts/install-preview-tls-renewal.sh"
       - "scripts/lib/common.sh"
