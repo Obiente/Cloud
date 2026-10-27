@@ -89,6 +89,7 @@ type zitadelUserInfo struct {
 type contextKey int
 
 const userInfoKey contextKey = 0
+const systemUserKey contextKey = 1
 
 // UserInfoCache manages caching of validated tokens using Redis
 type UserInfoCache struct {
@@ -238,7 +239,7 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 			// If auth config is nil but DISABLE_AUTH is not set, this is an error state
 			if config.UserInfoCache == nil {
 				logger.Warn("⚠️  WARNING: Auth config is nil but DISABLE_AUTH is not set. This should not happen.")
-				return next(ctx, req)
+				return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("authentication is unavailable"))
 			}
 
 			// Check if this is an internal service call (by checking for internal service secret header)
@@ -272,6 +273,9 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 			userInfo, err := config.validateToken(ctx, token)
 			if err != nil {
 				logger.Debug("[Auth] Token validation failed for %s: %v", procedure, err)
+				if connect.CodeOf(err) == connect.CodePermissionDenied || connect.CodeOf(err) == connect.CodeUnavailable {
+					return nil, err
+				}
 				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("error validating token: %w", err))
 			}
 
@@ -296,6 +300,20 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 
 // validateToken validates a token against Zitadel's userinfo endpoint
 func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.User, error) {
+	user, err := c.resolveToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if err := database.EnsureUserActive(ctx, database.DB, user.Id); err != nil {
+		if errors.Is(err, database.ErrUserRestricted) {
+			return nil, connect.NewError(connect.CodePermissionDenied, err)
+		}
+		return nil, connect.NewError(connect.CodeUnavailable, err)
+	}
+	return user, nil
+}
+
+func (c *AuthConfig) resolveToken(ctx context.Context, token string) (*authv1.User, error) {
 	// Check cache first
 	if cachedUser, found := c.UserInfoCache.Get(ctx, token); found {
 		logger.Debug("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
@@ -566,7 +584,7 @@ func WithSystemUser(ctx context.Context) context.Context {
 		Roles:             []string{RoleAdmin, RoleSuperAdmin},
 		UpdatedAt:         timestamppb.Now(),
 	}
-	return context.WithValue(ctx, userInfoKey, systemUser)
+	return context.WithValue(context.WithValue(ctx, systemUserKey, true), userInfoKey, systemUser)
 }
 
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC

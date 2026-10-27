@@ -12,6 +12,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
+	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	adminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1"
 	adminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1/adminv1connect"
 
@@ -523,55 +524,102 @@ func (s *AdminService) UpsertOrgQuota(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
-	var quota database.OrgQuota
-	if err := database.DB.First(&quota, "organization_id = ?", orgID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Create new quota - need to get plan ID from existing quota or organization
-			var org database.Organization
-			if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
-			}
-			// Try to get existing quota to find plan ID
-			var existingQuota database.OrgQuota
-			if err := database.DB.First(&existingQuota, "organization_id = ?", orgID).Error; err != nil {
-				// No quota exists - this is fine, we'll create one but need a plan ID
-				// For now, return error - quota should be created via organizations service first
-				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization quota must be initialized first via organizations service"))
-			}
-			quota = database.OrgQuota{
-				OrganizationID: orgID,
-				PlanID:         existingQuota.PlanID,
-			}
-		} else {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get quota: %w", err))
-		}
+	if req.Msg.DeploymentsMaxOverride < 0 || req.Msg.CpuCoresOverride < 0 || req.Msg.MemoryBytesOverride < 0 || req.Msg.BandwidthBytesMonthOverride < 0 || req.Msg.StorageBytesOverride < 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("quota overrides must be nonnegative"))
 	}
-
-	// Update overrides (0 means unlimited, so we check if the value is set)
-	if req.Msg.DeploymentsMaxOverride != 0 {
-		val := int(req.Msg.DeploymentsMaxOverride)
-		quota.DeploymentsMaxOverride = &val
+	if err := organizations.EnsurePlanAssigned(orgID); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
-	if req.Msg.CpuCoresOverride != 0 {
-		val := int(req.Msg.CpuCoresOverride)
-		quota.CPUCoresOverride = &val
+	// Update only overrides, preserving a concurrently changed plan assignment.
+	updates := map[string]interface{}{
+		"deployments_max_override":       positiveQuotaInt(int(req.Msg.DeploymentsMaxOverride)),
+		"cpu_cores_override":             positiveQuotaInt(int(req.Msg.CpuCoresOverride)),
+		"memory_bytes_override":          positiveQuotaInt(req.Msg.MemoryBytesOverride),
+		"bandwidth_bytes_month_override": positiveQuotaInt(req.Msg.BandwidthBytesMonthOverride),
+		"storage_bytes_override":         positiveQuotaInt(req.Msg.StorageBytesOverride),
 	}
-	if req.Msg.MemoryBytesOverride != 0 {
-		val := req.Msg.MemoryBytesOverride
-		quota.MemoryBytesOverride = &val
-	}
-	if req.Msg.BandwidthBytesMonthOverride != 0 {
-		val := req.Msg.BandwidthBytesMonthOverride
-		quota.BandwidthBytesMonthOverride = &val
-	}
-	if req.Msg.StorageBytesOverride != 0 {
-		val := req.Msg.StorageBytesOverride
-		quota.StorageBytesOverride = &val
-	}
-
-	if err := database.DB.Save(&quota).Error; err != nil {
+	if err := database.DB.WithContext(ctx).Model(&database.OrgQuota{}).Where("organization_id = ?", orgID).Updates(updates).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("upsert quota: %w", err))
 	}
 
 	return connect.NewResponse(&adminv1.UpsertOrgQuotaResponse{Success: true}), nil
+}
+
+func positiveQuotaInt[T ~int | ~int64](value T) *T {
+	if value == 0 {
+		return nil
+	}
+	return &value
+}
+
+func (s *AdminService) GetOrgQuota(ctx context.Context, req *connect.Request[adminv1.GetOrgQuotaRequest]) (*connect.Response[adminv1.GetOrgQuotaResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, err)
+	}
+	if !auth.HasSuperadminPermission(ctx, user, "admin.quotas.read") && !auth.HasSuperadminPermission(ctx, user, "admin.quotas.update") {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("quota access required"))
+	}
+	orgID := strings.TrimSpace(req.Msg.OrganizationId)
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+	var org database.Organization
+	if err := database.DB.WithContext(ctx).First(&org, "id = ?", orgID).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	var quota database.OrgQuota
+	if err := database.DB.WithContext(ctx).First(&quota, "organization_id = ?", orgID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	result := &adminv1.UpsertOrgQuotaRequest{OrganizationId: orgID}
+	if quota.DeploymentsMaxOverride != nil {
+		result.DeploymentsMaxOverride = int32(*quota.DeploymentsMaxOverride)
+	}
+	if quota.CPUCoresOverride != nil {
+		result.CpuCoresOverride = int32(*quota.CPUCoresOverride)
+	}
+	if quota.MemoryBytesOverride != nil {
+		result.MemoryBytesOverride = *quota.MemoryBytesOverride
+	}
+	if quota.BandwidthBytesMonthOverride != nil {
+		result.BandwidthBytesMonthOverride = *quota.BandwidthBytesMonthOverride
+	}
+	if quota.StorageBytesOverride != nil {
+		result.StorageBytesOverride = *quota.StorageBytesOverride
+	}
+	var plan database.OrganizationPlan
+	planQuery := database.DB.WithContext(ctx)
+	if quota.PlanID != "" {
+		planQuery = planQuery.Where("id = ?", quota.PlanID)
+	} else {
+		// Match the default selected by EnsurePlanAssigned without changing state on GET.
+		planQuery = planQuery.Where("id = ?", "plan-starter")
+	}
+	planErr := planQuery.First(&plan).Error
+	if errors.Is(planErr, gorm.ErrRecordNotFound) && quota.PlanID == "" {
+		planErr = database.DB.WithContext(ctx).Where("minimum_payment_cents = ?", 0).Order("id ASC").First(&plan).Error
+	}
+	if planErr != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("plan limits unavailable: %w", planErr))
+	}
+	defaults := &adminv1.QuotaLimits{DeploymentsMax: int32(plan.DeploymentsMax), CpuCores: int32(plan.CPUCores), MemoryBytes: plan.MemoryBytes, BandwidthBytesMonth: plan.BandwidthBytesMonth, StorageBytes: plan.StorageBytes}
+	effective := &adminv1.QuotaLimits{
+		DeploymentsMax:      effectiveQuotaLimit(defaults.DeploymentsMax, result.DeploymentsMaxOverride),
+		CpuCores:            effectiveQuotaLimit(defaults.CpuCores, result.CpuCoresOverride),
+		MemoryBytes:         effectiveQuotaLimit(defaults.MemoryBytes, result.MemoryBytesOverride),
+		BandwidthBytesMonth: effectiveQuotaLimit(defaults.BandwidthBytesMonth, result.BandwidthBytesMonthOverride),
+		StorageBytes:        effectiveQuotaLimit(defaults.StorageBytes, result.StorageBytesOverride),
+	}
+	return connect.NewResponse(&adminv1.GetOrgQuotaResponse{Quota: result, PlanDefaults: defaults, Effective: effective, PlanName: plan.Name}), nil
+}
+
+func effectiveQuotaLimit[T ~int32 | ~int64](plan, override T) T {
+	if override <= 0 {
+		return plan
+	}
+	if plan > 0 && override > plan {
+		return plan
+	}
+	return override
 }

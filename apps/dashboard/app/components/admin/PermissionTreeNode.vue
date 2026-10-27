@@ -159,7 +159,7 @@ const isWildcardNode = computed(() => {
 
 const totalCount = computed(() => {
   // Count direct permissions (excluding wildcards)
-  let count = props.node.permissions.filter((p) => !p.id.endsWith(".*")).length;
+  const count = props.node.permissions.filter((p) => !p.id.endsWith(".*")).length;
   
   function countChildren(nodes: PermissionNode[]): number {
     let total = 0;
@@ -181,7 +181,7 @@ const selectionCount = computed(() => {
   }
   
   // Count selected direct permissions (excluding wildcards)
-  let count = props.node.permissions
+  const count = props.node.permissions
     .filter((p) => !p.id.endsWith(".*") && props.selectedPermissions.includes(p.id))
     .length;
   

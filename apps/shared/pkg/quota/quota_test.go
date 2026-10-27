@@ -79,3 +79,41 @@ func TestCurrentAllocationsReservesInFlightReplicaWithoutLocation(t *testing.T) 
 		t.Fatalf("allocations = (%d, %d, %d), want (3, 768, 1)", gotReplicas, gotMemory, gotCPU)
 	}
 }
+
+func TestQuotaReadFailuresDoNotGrantUnlimitedResources(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := db.DB()
+	prior := database.DB
+	database.DB = db
+	t.Cleanup(func() { database.DB = prior; raw.Close() })
+	if err := db.AutoMigrate(&database.OrgQuota{}, &database.OrganizationPlan{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := GetEffectiveLimits("missing"); err == nil {
+		t.Fatal("missing quota granted unlimited resources")
+	}
+	if err := db.Create(&database.OrgQuota{OrganizationID: "example", PlanID: "missing-plan"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := GetEffectiveLimits("example"); err == nil {
+		t.Fatal("missing plan granted unlimited resources")
+	}
+	if err := db.Create(&database.OrganizationPlan{ID: "missing-plan", Name: "Example", MemoryBytes: 4096, CPUCores: 2}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if mem, cpu, err := GetEffectiveLimits("example"); err != nil || mem != 4096 || cpu != 2 {
+		t.Fatalf("valid plan: %d %d %v", mem, cpu, err)
+	}
+	if err := db.Migrator().DropTable(&database.OrgQuota{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewChecker().getPlanVPSMax("example"); err == nil {
+		t.Fatal("failed VPS quota query ignored")
+	}
+	if _, err := NewChecker().getQuota("example"); err == nil {
+		t.Fatal("failed quota query ignored")
+	}
+}

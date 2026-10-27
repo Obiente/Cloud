@@ -33,6 +33,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import PermissionTreeNode from "./PermissionTreeNode.vue";
+import { updatePermissionSelection } from "~/utils/permissionSelection";
 
 interface Permission {
   id: string;
@@ -191,59 +192,16 @@ watch(
   { immediate: true }
 );
 
-const allSelected = computed(() => {
-  return props.permissions && props.permissions.length > 0 && 
-    props.permissions.every((p) => selectedPermissions.value.includes(p.id));
-});
+const concretePermissions = computed(() => props.permissions.filter(p => !p.id.endsWith(".*") && p.id !== "*"));
+const allSelected = computed(() => concretePermissions.value.length > 0 &&
+  concretePermissions.value.every(p => selectedPermissions.value.includes(p.id)));
 
 function toggleSelectAll() {
-  if (allSelected.value) {
-    selectedPermissions.value = [];
-  } else {
-    // Select all non-wildcard permissions
-    selectedPermissions.value = props.permissions
-      .filter((p) => !p.id.endsWith(".*"))
-      .map((p) => p.id);
-  }
+  selectedPermissions.value = allSelected.value ? [] : concretePermissions.value.map(p => p.id);
 }
 
 function togglePermission(permissionId: string, checked: boolean) {
-  const newSelection = new Set(selectedPermissions.value);
-  if (checked) {
-    newSelection.add(permissionId);
-    
-    // Check if all siblings are now selected - if so, add wildcard
-    const parts = permissionId.split(".");
-    if (parts.length > 1) {
-      const parentPath = parts.slice(0, -1).join(".");
-      const wildcardPath = parentPath + ".*";
-      
-      // Find all permissions under this parent
-      function findSiblingPermissions(parent: string): string[] {
-        return props.permissions
-          .filter((p) => {
-            const permParts = p.id.split(".");
-            const permParent = permParts.slice(0, -1).join(".");
-            return permParent === parent && !p.id.endsWith(".*");
-          })
-          .map((p) => p.id);
-      }
-      
-      const siblings = findSiblingPermissions(parentPath);
-      const allSiblingsSelected = siblings.every((sib) => newSelection.has(sib));
-      
-      if (allSiblingsSelected && siblings.length > 0) {
-        // Auto-add wildcard when all children are selected
-        newSelection.add(wildcardPath);
-      }
-    }
-  } else {
-    newSelection.delete(permissionId);
-    // Also remove any wildcard permissions that would grant this
-    const wildcardPattern = permissionId.split(".").slice(0, -1).join(".") + ".*";
-    newSelection.delete(wildcardPattern);
-  }
-  selectedPermissions.value = Array.from(newSelection);
+  selectedPermissions.value = updatePermissionSelection(selectedPermissions.value, [permissionId], checked);
 }
 
 function toggleNode(nodePath: string, checked: boolean) {
@@ -279,37 +237,8 @@ function toggleNode(nodePath: string, checked: boolean) {
   if (!node) return;
 
   const perms = collectPermissions(node, "");
-  const newSelection = new Set(selectedPermissions.value);
-
-  const wildcardPath = nodePath + ".*";
-  
-  if (checked) {
-    // Add all child permissions (excluding wildcards)
-    perms.forEach((p) => {
-      if (!p.endsWith(".*")) {
-        newSelection.add(p);
-      }
-    });
-    
-    // If all permissions are selected, also add wildcard
-    const nonWildcardPerms = perms.filter((p) => !p.endsWith(".*"));
-    const allSelected = nonWildcardPerms.length > 0 && 
-      nonWildcardPerms.every((p) => newSelection.has(p));
-    if (allSelected) {
-      newSelection.add(wildcardPath);
-    }
-  } else {
-    // Remove all child permissions (excluding wildcards)
-    perms.forEach((p) => {
-      if (!p.endsWith(".*")) {
-        newSelection.delete(p);
-      }
-    });
-    // Also remove wildcard
-    newSelection.delete(wildcardPath);
-  }
-
-  selectedPermissions.value = Array.from(newSelection);
+  const requested = checked ? perms : [...perms, ...selectedPermissions.value.filter(p => p.startsWith(nodePath + "."))];
+  selectedPermissions.value = updatePermissionSelection(selectedPermissions.value, requested, checked);
 }
 
 function expandNode(path: string, expanded: boolean) {

@@ -8,6 +8,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // EnsurePlanAssigned ensures an organization has a plan assigned.
@@ -48,11 +49,10 @@ func EnsurePlanAssigned(orgID string) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("[EnsurePlanAssigned] plan-starter not found, searching for free tier plan")
 			// If plan-starter doesn't exist, try to find any plan with minimum_payment_cents = 0 (free tier)
-			if err := database.DB.Where("minimum_payment_cents = ?", 0).Order("created_at ASC").First(&defaultPlan).Error; err != nil {
+			if err := database.DB.Where("minimum_payment_cents = ?", 0).Order("id ASC").First(&defaultPlan).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					// No plans exist at all, this shouldn't happen if seeding works
-					log.Printf("[EnsurePlanAssigned] Warning: No default plan found for organization %s, skipping plan assignment", orgID)
-					return nil
+					return fmt.Errorf("no default organization plan is available")
 				}
 				return fmt.Errorf("find default plan: %w", err)
 			}
@@ -71,14 +71,14 @@ func EnsurePlanAssigned(orgID string) error {
 			OrganizationID: orgID,
 			PlanID:         defaultPlan.ID,
 		}
-		if err := database.DB.Create(&quota).Error; err != nil {
+		if err := database.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&quota).Error; err != nil {
 			return fmt.Errorf("create quota: %w", err)
 		}
 		log.Printf("[EnsurePlanAssigned] Assigned plan %s (%s) to organization %s", defaultPlan.Name, defaultPlan.ID, orgID)
 	} else {
 		// Update existing quota
 		quota.PlanID = defaultPlan.ID
-		if err := database.DB.Save(&quota).Error; err != nil {
+		if err := database.DB.Model(&database.OrgQuota{}).Where("organization_id = ? AND plan_id = ?", orgID, "").Update("plan_id", defaultPlan.ID).Error; err != nil {
 			return fmt.Errorf("update quota: %w", err)
 		}
 		log.Printf("[EnsurePlanAssigned] Assigned plan %s (%s) to organization %s", defaultPlan.Name, defaultPlan.ID, orgID)
@@ -86,4 +86,3 @@ func EnsurePlanAssigned(orgID string) error {
 
 	return nil
 }
-

@@ -389,6 +389,7 @@ func RegisterAdminServiceProcedures() {
 		{"/obiente.cloud.admin.v1.AdminService/DeleteRoleBinding", "admin.bindings.delete", "admin", "bindings.delete", "Delete role binding"},
 
 		// Quota management
+		{"/obiente.cloud.admin.v1.AdminService/GetOrgQuota", "admin.quotas.read", "admin", "quotas.read", "View organization quota"},
 		{"/obiente.cloud.admin.v1.AdminService/UpsertOrgQuota", "admin.quotas.update", "admin", "quotas.update", "Update organization quota"},
 	}
 
@@ -563,10 +564,32 @@ func RegisterAllServices() {
 	RegisterDeploymentServiceProcedures()
 	RegisterVPSServiceProcedures()
 	RegisterGameServerServiceProcedures()
+	RegisterDatabaseServiceProcedures()
 	RegisterBillingServiceProcedures()
 	RegisterOrganizationServiceProcedures()
 	RegisterSupportServiceProcedures()
 	RegisterNotificationServiceProcedures()
 	RegisterAdminServiceProcedures()
 	RegisterSuperadminServiceProcedures()
+}
+
+// RegisterDatabaseServiceProcedures exposes the database permissions used by handlers.
+// Query execution requires read here; handlers additionally require manage for writes.
+func RegisterDatabaseServiceProcedures() {
+	registry := GetPermissionRegistry()
+	methods := map[string][]string{
+		"read":    {"ListDatabases", "GetDatabase", "StreamDatabaseStatus", "GetDatabaseConnectionInfo", "GetDatabaseSchema", "ListTables", "GetTableStructure", "ExecuteQuery", "StreamQuery", "GetTableData", "ListBackups", "GetBackup", "GetDatabaseMetrics", "StreamDatabaseMetrics", "ListDatabaseSizes", "GetDatabaseUsage", "GetTableDDL", "ExportDatabaseDump"},
+		"create":  {"CreateDatabase"},
+		"update":  {"UpdateDatabase", "ResetDatabasePassword", "CreateBackup", "RestoreBackup"},
+		"delete":  {"DeleteDatabase", "DeleteBackup"},
+		"start":   {"StartDatabase"},
+		"stop":    {"StopDatabase", "SleepDatabase"},
+		"restart": {"RestartDatabase"},
+		"manage":  {"UpdateTableRow", "InsertTableRow", "DeleteTableRows", "CreateTable", "AlterTable", "DropTable", "RenameTable", "TruncateTable", "CreateIndex", "DropIndex", "ImportDatabaseDump"},
+	}
+	for action, names := range methods {
+		for _, name := range names {
+			registry.RegisterProcedure("/obiente.cloud.databases.v1.DatabaseService/"+name, "database."+action, "database", action, generatePermissionDescription(name, "database", action), false)
+		}
+	}
 }

@@ -117,6 +117,9 @@ func TestVPSServiceTenantIsolation(t *testing.T) {
 
 func TestCreateVPSUsesCatalogMinimumPayment(t *testing.T) {
 	db := newVPSServiceTestDB(t)
+	if err := db.Create(&database.OrganizationPlan{ID: "plan-starter", Name: "Starter"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	service := &Service{
 		permissionChecker: auth.NewPermissionChecker(),
 		quotaChecker:      quota.NewChecker(),
@@ -169,9 +172,11 @@ func newVPSServiceTestDB(t *testing.T) *gorm.DB {
 	}
 	if err := db.AutoMigrate(
 		&database.VPSInstance{},
+		&database.VPSSuspension{},
 		&database.Notification{},
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
 		&database.OrgQuota{},
