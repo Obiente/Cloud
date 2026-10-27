@@ -79,7 +79,7 @@ func authorizeAuditLogRead(ctx context.Context, reqOrgID *string) error {
 	}
 
 	if reqOrgID != nil && *reqOrgID != "" {
-		if err := common.AuthorizeOrgAdmin(ctx, *reqOrgID, userInfo); err != nil {
+		if err := common.AuthorizeOrgReadRoles(ctx, *reqOrgID, userInfo, "owner", "admin"); err != nil {
 			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
 		}
 		return nil
@@ -442,7 +442,7 @@ func (s *Service) GetAuditLog(ctx context.Context, req *connect.Request[auditv1.
 			// Audit log has no organization (global log), only superadmins/admins can view
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only admins and superadmins can view global audit logs"))
 		}
-		if err := common.AuthorizeOrgAdmin(ctx, *auditLog.OrganizationID, userInfo); err != nil {
+		if err := common.AuthorizeOrgReadRoles(ctx, *auditLog.OrganizationID, userInfo, "owner", "admin"); err != nil {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
 		}
 	}

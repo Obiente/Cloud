@@ -103,7 +103,7 @@ func (s *AdminService) ListRoles(ctx context.Context, req *connect.Request[admin
 	// Check authorization - user must be owner/admin of the organization or superadmin
 	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
-		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
+		if err := common.AuthorizeOrgReadRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
 		}
 	}
@@ -343,7 +343,7 @@ func (s *AdminService) ListRoleBindings(ctx context.Context, req *connect.Reques
 	// Check authorization - user must be owner/admin of the organization or superadmin
 	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
-		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
+		if err := common.AuthorizeOrgReadRoles(ctx, orgID, user, "owner", "admin"); err != nil {
 			return nil, err
 		}
 	}

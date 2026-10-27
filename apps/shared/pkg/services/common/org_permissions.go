@@ -16,13 +16,27 @@ import (
 )
 
 // AuthorizeOrgRoles checks if a user has the required role(s) in an organization.
-// Superadmins bypass all checks. If no allowedRoles are specified, any active member is allowed.
+// Platform administrators bypass tenant roles after moderation is checked.
+// If no allowedRoles are specified, any active member is allowed.
 func AuthorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, allowedRoles ...string) error {
+	return authorizeOrgRoles(ctx, orgID, user, auth.PermissionOrganizationUpdate, allowedRoles...)
+}
+
+// AuthorizeOrgReadRoles preserves inspection by active platform administrators
+// without allowing tenant administrators to bypass an organization restriction.
+func AuthorizeOrgReadRoles(ctx context.Context, orgID string, user *authv1.User, allowedRoles ...string) error {
+	return authorizeOrgRoles(ctx, orgID, user, auth.PermissionOrganizationRead, allowedRoles...)
+}
+
+func authorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, permission string, allowedRoles ...string) error {
 	if user == nil {
 		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
+	if err := auth.CheckOrganizationAccess(ctx, orgID, permission); err != nil {
+		return err
+	}
 
-	if auth.IsSuperadmin(ctx, user) {
+	if auth.HasRole(user, auth.RoleAdmin) || auth.IsSuperadmin(ctx, user) {
 		return nil
 	}
 
@@ -44,19 +58,19 @@ func AuthorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, all
 
 	// member.Role should always contain a role ID (e.g., "system:owner" for system roles, or custom role ID)
 	roleID := member.Role
-	
+
 	// Check if member's role ID matches any of the allowed roles
 	// allowedRoles can be either system role names (e.g., "owner", "admin") or role IDs
 	for _, allowed := range allowedRoles {
 		allowedLower := strings.ToLower(allowed)
-		
+
 		// Check if allowed is a system role name - convert to ID
 		if systemRoleID := auth.GetSystemRoleID(allowedLower); systemRoleID != "" {
 			if roleID == systemRoleID {
 				return nil
 			}
 		}
-		
+
 		// Check if allowed is already a role ID (matches exactly)
 		if roleID == allowed {
 			return nil
@@ -100,8 +114,11 @@ func VerifyOrgAccess(ctx context.Context, orgID string, user *authv1.User) error
 	if user == nil {
 		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
+	if err := auth.CheckOrganizationAccess(ctx, orgID, auth.PermissionOrganizationRead); err != nil {
+		return err
+	}
 
-	if auth.IsSuperadmin(ctx, user) {
+	if auth.CanInspectOrganization(ctx, user, auth.PermissionOrganizationRead) {
 		return nil
 	}
 
@@ -110,10 +127,9 @@ func VerifyOrgAccess(ctx context.Context, orgID string, user *authv1.User) error
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
 	}
 
-	if member == nil {
+	if member == nil || !strings.EqualFold(member.Status, "active") {
 		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
 	}
 
 	return nil
 }
-

@@ -182,7 +182,7 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 				serviceName := input.GetServiceName()
 
 				// Check permissions
-				if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+				if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: auth.PermissionDeploymentManage, ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 					errorChan <- connect.NewError(connect.CodePermissionDenied, err)
 					return
 				}

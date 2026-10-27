@@ -16,6 +16,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
@@ -43,6 +44,9 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	}
 
 	// Check if user has organization-wide read permission for deployments
+	if err := auth.CheckOrganizationAccess(ctx, orgID, auth.PermissionDeploymentRead); err != nil {
+		return nil, err
+	}
 	// This allows users with custom roles (like "system admin") to see all deployments
 	hasOrgWideRead := false
 	permErr := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
@@ -53,6 +57,9 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	if permErr == nil {
 		hasOrgWideRead = true
 	} else {
+		if err := common.VerifyOrgAccess(ctx, orgID, userInfo); err != nil {
+			return nil, err
+		}
 		// Log permission check failure for debugging (but don't fail the request yet)
 		// User might still have permission to see their own deployments
 		log.Printf("[ListDeployments] User %s does not have org-wide deployment.read permission in org %s: %v", userInfo.Id, orgID, permErr)
@@ -62,7 +69,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	filters := &database.DeploymentFilters{
 		UserID: userInfo.Id,
 		// Admin users or users with org-wide read permission can see all deployments
-		IncludeAll: auth.IsSuperadmin(ctx, userInfo) || hasOrgWideRead,
+		IncludeAll: hasOrgWideRead,
 	}
 
 	log.Printf("[ListDeployments] User %s, Org %s, IncludeAll: %v, hasOrgWideRead: %v", userInfo.Id, orgID, filters.IncludeAll, hasOrgWideRead)

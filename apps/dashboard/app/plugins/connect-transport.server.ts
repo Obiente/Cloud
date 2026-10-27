@@ -2,6 +2,7 @@ import { createConnectTransport } from "@connectrpc/connect-node";
 import type { Transport } from "@connectrpc/connect";
 import { getCookie } from "@nuxt/nitro-server/h3";
 import { createAuthInterceptor } from "~/lib/transport";
+import { createAccessRestrictionInterceptor } from "~/lib/access-restriction";
 import { captureAuthRuntimeConfig } from "../../server/utils/auth-runtime-config";
 
 // Server-side plugin for SSR
@@ -11,6 +12,8 @@ export default defineNuxtPlugin({
   setup() {
     const config = useRuntimeConfig();
     const event = useRequestEvent();
+    const restriction = useAccessRestriction();
+    const selectedOrgId = useCookie<string>("obiente_selected_org_id");
     if (event) captureAuthRuntimeConfig(event, config);
 
     // Cache for disableAuth to avoid fetching on every request
@@ -145,13 +148,20 @@ export default defineNuxtPlugin({
     };
 
     const authInterceptor = createAuthInterceptor(getToken);
+    const restrictionInterceptor = createAccessRestrictionInterceptor(() => {
+      const organizationId = selectedOrgId.value;
+      return (denied) => {
+        if (denied.scope === "account" || denied.organizationId === organizationId)
+          restriction.value = denied;
+      };
+    });
     // Use internal API host for server-side (Docker internal networking)
     const apiHost = config.apiHostInternal || config.public.apiHost;
     const transport: Transport = createConnectTransport({
       baseUrl: apiHost,
       httpVersion: "1.1", // Use HTTP/1.1 (h2c not supported by connect-node)
       useBinaryFormat: false, // Use Connect Protocol (JSON) instead of gRPC
-      interceptors: [authInterceptor],
+      interceptors: [authInterceptor, restrictionInterceptor],
       defaultTimeoutMs: 3000, // 3 seconds timeout for API calls
     });
 

@@ -78,10 +78,13 @@ func TestOrganizationServiceTenantIsolation(t *testing.T) {
 func newOrganizationServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
+	raw, _ := db.DB()
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { raw.Close() })
 	if err := db.AutoMigrate(
 		&database.Organization{},
 		&database.OrganizationMember{},

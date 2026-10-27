@@ -178,13 +178,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionDeploymentRead, ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionDeploymentManage, ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return
 	}
 
 	// Track container info for "start" command
+	stopAccessWatch := auth.WatchAccess(ctx, func(checkCtx context.Context) error {
+		return s.permissionChecker.CheckResourcePermission(checkCtx, "deployment", initMsg.DeploymentID, auth.PermissionDeploymentManage)
+	}, func() { _ = conn.CloseNow() })
+	defer stopAccessWatch()
+
 	var currentContainerID string
 
 	// Check if we need to forward to another node before creating session

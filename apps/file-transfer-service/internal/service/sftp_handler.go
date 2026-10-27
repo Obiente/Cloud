@@ -11,18 +11,23 @@ import (
 )
 
 type sftpHandler struct {
-	session *Session
-	root    string
+	session        *Session
+	root           string
+	validateAccess func(Permission) error
 }
 
 func newSFTPHandler(session *Session) *sftpHandler {
 	return &sftpHandler{
-		session: session,
-		root:    filepath.Clean(session.RootPath),
+		session:        session,
+		root:           filepath.Clean(session.RootPath),
+		validateAccess: session.ValidateAccess,
 	}
 }
 
 func (h *sftpHandler) Fileread(r *pkgsftp.Request) (io.ReaderAt, error) {
+	if err := h.validateAccess(PermissionRead); err != nil {
+		return nil, err
+	}
 	if !hasPermission(h.session.Permissions, PermissionRead) {
 		return nil, fmt.Errorf("read permission denied")
 	}
@@ -30,10 +35,17 @@ func (h *sftpHandler) Fileread(r *pkgsftp.Request) (io.ReaderAt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return os.Open(resolved)
+	file, err := os.Open(resolved)
+	if err != nil {
+		return nil, err
+	}
+	return &guardedFile{file: file, check: func() error { return h.validateAccess(PermissionRead) }}, nil
 }
 
 func (h *sftpHandler) Filewrite(r *pkgsftp.Request) (io.WriterAt, error) {
+	if err := h.validateAccess(PermissionWrite); err != nil {
+		return nil, err
+	}
 	if !hasPermission(h.session.Permissions, PermissionWrite) {
 		return nil, fmt.Errorf("write permission denied")
 	}
@@ -47,10 +59,17 @@ func (h *sftpHandler) Filewrite(r *pkgsftp.Request) (io.WriterAt, error) {
 	if err := os.MkdirAll(filepath.Dir(resolved), 0750); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
+	file, err := os.OpenFile(resolved, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
+	if err != nil {
+		return nil, err
+	}
+	return &guardedFile{file: file, check: func() error { return h.validateAccess(PermissionWrite) }}, nil
 }
 
 func (h *sftpHandler) Filecmd(r *pkgsftp.Request) error {
+	if err := h.validateAccess(PermissionWrite); err != nil {
+		return err
+	}
 	switch r.Method {
 	case "Setstat":
 		if !hasPermission(h.session.Permissions, PermissionWrite) {
@@ -114,6 +133,9 @@ func (h *sftpHandler) Filecmd(r *pkgsftp.Request) error {
 }
 
 func (h *sftpHandler) Filelist(r *pkgsftp.Request) (pkgsftp.ListerAt, error) {
+	if err := h.validateAccess(PermissionRead); err != nil {
+		return nil, err
+	}
 	if !hasPermission(h.session.Permissions, PermissionRead) {
 		return nil, fmt.Errorf("read permission denied")
 	}
@@ -135,13 +157,13 @@ func (h *sftpHandler) Filelist(r *pkgsftp.Request) (pkgsftp.ListerAt, error) {
 				infos = append(infos, info)
 			}
 		}
-		return listerAt(infos), nil
+		return &guardedList{ListerAt: listerAt(infos), check: func() error { return h.validateAccess(PermissionRead) }}, nil
 	case "Stat":
 		info, err := os.Stat(resolved)
 		if err != nil {
 			return nil, err
 		}
-		return listerAt([]os.FileInfo{info}), nil
+		return &guardedList{ListerAt: listerAt([]os.FileInfo{info}), check: func() error { return h.validateAccess(PermissionRead) }}, nil
 	case "Readlink":
 		return nil, fmt.Errorf("symlinks are not supported")
 	default:

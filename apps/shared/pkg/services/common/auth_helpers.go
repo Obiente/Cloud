@@ -18,6 +18,9 @@ import (
 func EnsureAuthenticated(ctx context.Context, req connect.AnyRequest) (context.Context, error) {
 	// Check if user is already in context (interceptor ran)
 	if userInfo, err := auth.GetUserFromContext(ctx); err == nil && userInfo != nil {
+		if err := auth.EnsureActiveUser(ctx); err != nil {
+			return nil, err
+		}
 		return ctx, nil
 	}
 
@@ -30,6 +33,9 @@ func EnsureAuthenticated(ctx context.Context, req connect.AnyRequest) (context.C
 	// Use AuthenticateAndSetContext helper which handles token validation and context setup
 	ctx, userInfo, err := auth.AuthenticateAndSetContext(ctx, authHeader)
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodePermissionDenied || connect.CodeOf(err) == connect.CodeUnavailable {
+			return nil, err
+		}
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
 	}
 
@@ -48,4 +54,3 @@ func GetUserFromContextOrError(ctx context.Context) (*authv1.User, error) {
 	}
 	return user, nil
 }
-

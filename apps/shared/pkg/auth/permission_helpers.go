@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -12,11 +13,16 @@ import (
 // This eliminates the need for service-specific permission helpers.
 //
 // Usage:
-//   if err := auth.CheckResourcePermissionWithError(ctx, pc, "deployment", deploymentID, "read"); err != nil {
-//       return nil, err
-//   }
+//
+//	if err := auth.CheckResourcePermissionWithError(ctx, pc, "deployment", deploymentID, "read"); err != nil {
+//	    return nil, err
+//	}
 func CheckResourcePermissionWithError(ctx context.Context, pc *PermissionChecker, resourceType, resourceID, permission string) error {
 	if err := pc.CheckResourcePermission(ctx, resourceType, resourceID, permission); err != nil {
+		var rpcErr *connect.Error
+		if errors.As(err, &rpcErr) {
+			return err
+		}
 		// Convert to Connect error with appropriate code
 		errStr := err.Error()
 		if strings.Contains(errStr, "not found") {
@@ -34,15 +40,20 @@ func CheckResourcePermissionWithError(ctx context.Context, pc *PermissionChecker
 // and converts errors to Connect errors with appropriate codes.
 //
 // Usage:
-//   if err := auth.CheckScopedPermissionWithError(ctx, pc, orgID, auth.ScopedPermission{
-//       Permission: auth.PermissionDeploymentRead,
-//       ResourceType: "deployment",
-//       ResourceID: deploymentID,
-//   }); err != nil {
-//       return nil, err
-//   }
+//
+//	if err := auth.CheckScopedPermissionWithError(ctx, pc, orgID, auth.ScopedPermission{
+//	    Permission: auth.PermissionDeploymentRead,
+//	    ResourceType: "deployment",
+//	    ResourceID: deploymentID,
+//	}); err != nil {
+//	    return nil, err
+//	}
 func CheckScopedPermissionWithError(ctx context.Context, pc *PermissionChecker, orgID string, sp ScopedPermission) error {
 	if err := pc.CheckScopedPermission(ctx, orgID, sp); err != nil {
+		var rpcErr *connect.Error
+		if errors.As(err, &rpcErr) {
+			return err
+		}
 		// Convert to Connect error with appropriate code
 		errStr := err.Error()
 		if strings.Contains(errStr, "unauthenticated") {
@@ -52,4 +63,3 @@ func CheckScopedPermissionWithError(ctx context.Context, pc *PermissionChecker, 
 	}
 	return nil
 }
-
