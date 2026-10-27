@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -24,48 +25,50 @@ type UsageBreakdown struct {
 	TotalCostCents     int64 `json:"total_cost_cents"`
 }
 
-// ProcessMonthlyBilling processes monthly billing for all organizations that should be billed today
-// This should be called daily to check if any organizations need to be billed
-func ProcessMonthlyBilling() error {
-	log.Printf("[Monthly Billing] Starting monthly billing process")
+// ProcessMonthlyBilling catches up all completed billing periods, including
+// periods missed while the service was unavailable.
+func ProcessMonthlyBilling() error { return processMonthlyBillingAt(time.Now()) }
 
-	now := time.Now()
-	today := now.Day()
-
-	// Get all billing accounts that should be billed today
-	var billingAccounts []database.BillingAccount
-	if err := database.DB.Where("billing_date = ? AND status = ?", today, "ACTIVE").Find(&billingAccounts).Error; err != nil {
+func processMonthlyBillingAt(now time.Time) error {
+	var accounts []database.BillingAccount
+	if err := database.DB.Where("status = ? AND billing_date IS NOT NULL", "ACTIVE").Find(&accounts).Error; err != nil {
 		return fmt.Errorf("get billing accounts: %w", err)
 	}
-
-	if len(billingAccounts) == 0 {
-		log.Printf("[Monthly Billing] No organizations to bill today (billing date: %d)", today)
-		return nil
-	}
-
-	log.Printf("[Monthly Billing] Found %d organizations to bill today", len(billingAccounts))
-
-	var orgsProcessed int
-	var orgsSkipped int
-
-	for _, billingAccount := range billingAccounts {
-		err := processOrganizationBilling(billingAccount.OrganizationID, now)
-		if err != nil {
-			log.Printf("[Monthly Billing] Error billing org %s: %v", billingAccount.OrganizationID, err)
-			orgsSkipped++
-			continue
+	var failures []error
+	for _, account := range accounts {
+		if err := processOrganizationBilling(account.OrganizationID, now); err != nil {
+			failures = append(failures, fmt.Errorf("bill organization %s: %w", account.OrganizationID, err))
 		}
-		orgsProcessed++
 	}
+	return errors.Join(failures...)
+}
 
-	log.Printf("[Monthly Billing] Completed: %d orgs processed, %d orgs skipped",
-		orgsProcessed, orgsSkipped)
-
-	return nil
+// Billing days beyond the end of a month fall on that month's last day.
+func latestBillingBoundary(now time.Time, day int) (time.Time, error) {
+	if day < 1 || day > 31 {
+		return time.Time{}, fmt.Errorf("invalid billing day: %d", day)
+	}
+	now = now.UTC()
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	boundary := func(month time.Time) time.Time {
+		last := month.AddDate(0, 1, -1).Day()
+		return time.Date(month.Year(), month.Month(), min(day, last), 0, 0, 0, 0, time.UTC)
+	}
+	due := boundary(month)
+	if due.After(now) {
+		due = boundary(month.AddDate(0, -1, 0))
+	}
+	return due, nil
 }
 
 // processOrganizationBilling processes billing for a single organization
 func processOrganizationBilling(orgID string, billingDate time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	return database.WithResourceRuntimeLock(ctx, "monthly-billing:"+orgID, func(context.Context) error { return processOrganizationBillingLocked(orgID, billingDate) })
+}
+
+func processOrganizationBillingLocked(orgID string, billingDate time.Time) error {
 	// Check if we've already created a bill for this billing period
 	// Calculate the billing period: from last billing date to today
 	var lastBill database.MonthlyBill
@@ -96,12 +99,21 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		Order("billing_period_end DESC").First(&lastBill).Error; err == nil {
 		// Use the end of the last billing period as the start of this one
 		billingPeriodStart = lastBill.BillingPeriodEnd
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("load billing history: %w", err)
 	} else {
 		// First bill: start from org creation date
 		billingPeriodStart = org.CreatedAt.UTC().Truncate(24 * time.Hour)
 	}
 
-	billingPeriodEnd = time.Date(billingDate.Year(), billingDate.Month(), billingDay, 0, 0, 0, 0, time.UTC)
+	var boundaryErr error
+	billingPeriodEnd, boundaryErr = latestBillingBoundary(billingDate, billingDay)
+	if boundaryErr != nil {
+		return boundaryErr
+	}
+	if !billingPeriodEnd.After(billingPeriodStart) {
+		return nil
+	}
 
 	// Check if a bill already exists for this period
 	var existingBill database.MonthlyBill
@@ -125,7 +137,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("deployment_usage_hourly duh").
+	if err := metricsDB.Table("deployment_usage_hourly duh").
 		Select(`
 			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -133,7 +145,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&hourlyUsage)
+		Scan(&hourlyUsage).Error; err != nil {
+		return fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get game server usage from hourly aggregates and add to deployment usage
 	var gameServerHourlyUsage struct {
@@ -142,7 +156,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("game_server_usage_hourly gsuh").
+	if err := metricsDB.Table("game_server_usage_hourly gsuh").
 		Select(`
 			COALESCE(CAST(SUM((gsuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(gsuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -150,7 +164,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 			COALESCE(SUM(gsuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&gameServerHourlyUsage)
+		Scan(&gameServerHourlyUsage).Error; err != nil {
+		return fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get VPS usage from hourly aggregates and add to deployment/game server usage
 	var vpsHourlyUsage struct {
@@ -159,7 +175,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("vps_usage_hourly vuh").
+	if err := metricsDB.Table("vps_usage_hourly vuh").
 		Select(`
 			COALESCE(CAST(SUM((vuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(vuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -167,7 +183,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 			COALESCE(SUM(vuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("vuh.organization_id = ? AND vuh.hour >= ? AND vuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&vpsHourlyUsage)
+		Scan(&vpsHourlyUsage).Error; err != nil {
+		return fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get database hourly usage
 	var databaseHourlyUsage struct {
@@ -176,7 +194,7 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("database_usage_hourly duh").
+	if err := metricsDB.Table("database_usage_hourly duh").
 		Select(`
 			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -184,7 +202,9 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&databaseHourlyUsage)
+		Scan(&databaseHourlyUsage).Error; err != nil {
+		return fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Combine deployment, game server, VPS, and database hourly usage
 	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds + databaseHourlyUsage.CPUCoreSeconds
@@ -223,12 +243,14 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 		MonthlyCostCents int64
 		AssignedAt       time.Time
 	}
-	database.DB.Table("vps_public_ips ip").
+	if err := database.DB.Table("vps_public_ips ip").
 		Select("ip.monthly_cost_cents, ip.assigned_at").
 		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
 		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
-		Scan(&publicIPAssignments)
+		Scan(&publicIPAssignments).Error; err != nil {
+		return fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	for _, assignment := range publicIPAssignments {
 		// Calculate prorated cost based on when IP was assigned
@@ -364,6 +386,19 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 // GenerateCurrentBillEarly generates a bill for the current billing period ending at the current date/time
 // This allows users to create and pay bills before their scheduled billing date
 func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	var bill *database.MonthlyBill
+	var existing bool
+	err := database.WithResourceRuntimeLock(ctx, "monthly-billing:"+orgID, func(context.Context) error {
+		var err error
+		bill, existing, err = generateCurrentBillEarlyLocked(orgID)
+		return err
+	})
+	return bill, existing, err
+}
+
+func generateCurrentBillEarlyLocked(orgID string) (*database.MonthlyBill, bool, error) {
 	now := time.Now()
 
 	// Get the billing account to find the billing date
@@ -393,6 +428,8 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		Order("billing_period_end DESC").First(&lastBill).Error; err == nil {
 		// Use the end of the last billing period as the start of this one
 		billingPeriodStart = lastBill.BillingPeriodEnd
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, fmt.Errorf("load billing history: %w", err)
 	} else {
 		// First bill: start from org creation date
 		billingPeriodStart = org.CreatedAt.UTC().Truncate(24 * time.Hour)
@@ -443,7 +480,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("deployment_usage_hourly duh").
+	if err := metricsDB.Table("deployment_usage_hourly duh").
 		Select(`
 			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -451,7 +488,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&hourlyUsage)
+		Scan(&hourlyUsage).Error; err != nil {
+		return nil, false, fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get game server usage from hourly aggregates and add to deployment usage
 	var gameServerHourlyUsage struct {
@@ -460,7 +499,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("game_server_usage_hourly gsuh").
+	if err := metricsDB.Table("game_server_usage_hourly gsuh").
 		Select(`
 			COALESCE(CAST(SUM((gsuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(gsuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -468,7 +507,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 			COALESCE(SUM(gsuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&gameServerHourlyUsage)
+		Scan(&gameServerHourlyUsage).Error; err != nil {
+		return nil, false, fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get VPS usage from hourly aggregates and add to deployment/game server usage
 	var vpsHourlyUsage struct {
@@ -477,7 +518,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("vps_usage_hourly vuh").
+	if err := metricsDB.Table("vps_usage_hourly vuh").
 		Select(`
 			COALESCE(CAST(SUM((vuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(vuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -485,7 +526,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 			COALESCE(SUM(vuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("vuh.organization_id = ? AND vuh.hour >= ? AND vuh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&vpsHourlyUsage)
+		Scan(&vpsHourlyUsage).Error; err != nil {
+		return nil, false, fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Get database hourly usage
 	var databaseHourlyUsage struct {
@@ -494,7 +537,7 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		BandwidthRxBytes  int64
 		BandwidthTxBytes  int64
 	}
-	metricsDB.Table("database_usage_hourly duh").
+	if err := metricsDB.Table("database_usage_hourly duh").
 		Select(`
 			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
@@ -502,7 +545,9 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
 		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
-		Scan(&databaseHourlyUsage)
+		Scan(&databaseHourlyUsage).Error; err != nil {
+		return nil, false, fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	// Combine deployment, game server, VPS, and database hourly usage
 	hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds + vpsHourlyUsage.CPUCoreSeconds + databaseHourlyUsage.CPUCoreSeconds
@@ -541,12 +586,14 @@ func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error)
 		MonthlyCostCents int64
 		AssignedAt       time.Time
 	}
-	database.DB.Table("vps_public_ips ip").
+	if err := database.DB.Table("vps_public_ips ip").
 		Select("ip.monthly_cost_cents, ip.assigned_at").
 		Joins("INNER JOIN vps_instances vps ON vps.id = ip.vps_id").
 		Where("ip.organization_id = ? AND ip.vps_id IS NOT NULL AND vps.deleted_at IS NULL", orgID).
 		Where("ip.assigned_at IS NOT NULL AND ip.assigned_at <= ?", billingPeriodEnd).
-		Scan(&publicIPAssignments)
+		Scan(&publicIPAssignments).Error; err != nil {
+		return nil, false, fmt.Errorf("billing usage unavailable: %w", err)
+	}
 
 	for _, assignment := range publicIPAssignments {
 		// Calculate prorated cost based on when IP was assigned
