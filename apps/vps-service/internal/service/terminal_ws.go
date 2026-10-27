@@ -236,6 +236,11 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get VPS instance
+	stopAccessWatch := auth.WatchAccess(ctx, func(checkCtx context.Context) error {
+		return s.permissionChecker.CheckResourcePermission(checkCtx, "vps", initMsg.VPSID, auth.PermissionVPSManage)
+	}, func() { _ = conn.CloseNow() })
+	defer stopAccessWatch()
+
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", initMsg.VPSID).First(&vps).Error; err != nil {
 		sendError(fmt.Sprintf("VPS instance %s not found", initMsg.VPSID))

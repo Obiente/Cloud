@@ -72,6 +72,7 @@ func main() {
 
 	// Create auth configuration and interceptor
 	authConfig := auth.NewAuthConfig()
+	authConfig.AllowInternalServiceAuth = true
 	authInterceptor := auth.MiddlewareInterceptor(authConfig)
 
 	// Create internal service auth interceptor

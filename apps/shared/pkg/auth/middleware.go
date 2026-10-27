@@ -137,13 +137,15 @@ func (c *UserInfoCache) Set(ctx context.Context, token string, user *authv1.User
 
 // AuthConfig holds configuration for authentication
 type AuthConfig struct {
-	UserInfoCache  *UserInfoCache
-	UserInfoURL    string
-	HTTPClient     *http.Client
-	SkipPaths      []string
-	ExposeUserInfo bool // Whether to expose user info in response headers
-	SuperAdmins    map[string]struct{}
-	redisCache     *database.RedisCache
+	// Enable only when a subsequent interceptor validates internal credentials.
+	AllowInternalServiceAuth bool
+	UserInfoCache            *UserInfoCache
+	UserInfoURL              string
+	HTTPClient               *http.Client
+	SkipPaths                []string
+	ExposeUserInfo           bool // Whether to expose user info in response headers
+	SuperAdmins              map[string]struct{}
+	redisCache               *database.RedisCache
 }
 
 // NewAuthConfig creates a new auth config with default values
@@ -205,7 +207,11 @@ func NewAuthConfig() *AuthConfig {
 
 // MiddlewareInterceptor creates a Connect interceptor for token authentication
 // This interceptor works for both unary and streaming RPCs
-func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
+func MiddlewareInterceptor(config *AuthConfig) connect.Interceptor {
+	return &moderationInterceptor{UnaryInterceptorFunc: unaryAuthInterceptor(config), config: config}
+}
+
+func unaryAuthInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			procedure := req.Spec().Procedure
@@ -246,7 +252,7 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 			// Internal service calls should be authenticated by the internal service auth interceptor
 			// which runs after this one, so we check the header directly here
 			internalServiceSecret := req.Header().Get("x-internal-service-secret")
-			if internalServiceSecret != "" {
+			if internalServiceSecret != "" && config.AllowInternalServiceAuth {
 				// This is an internal service call - skip user authentication
 				// The internal service auth interceptor will validate the secret
 				logger.Debug("[Auth] Skipping user authentication for internal service call: %s", procedure)
@@ -283,6 +289,9 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 
 			// Add user info to context
 			ctx = context.WithValue(ctx, userInfoKey, userInfo)
+			if err := checkRequestOrganizationAccess(ctx, req); err != nil {
+				return nil, err
+			}
 
 			// Call next handler
 			resp, err := next(ctx, req)
@@ -305,10 +314,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 		return nil, err
 	}
 	if err := database.EnsureUserActive(ctx, database.DB, user.Id); err != nil {
-		if errors.Is(err, database.ErrUserRestricted) {
-			return nil, connect.NewError(connect.CodePermissionDenied, err)
-		}
-		return nil, connect.NewError(connect.CodeUnavailable, err)
+		return nil, ModerationError(err, "")
 	}
 	return user, nil
 }

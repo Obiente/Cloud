@@ -59,6 +59,9 @@ func NewService(cfg Config) organizationsv1connect.OrganizationServiceHandler {
 }
 
 func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[organizationsv1.ListOrganizationsRequest]) (*connect.Response[organizationsv1.ListOrganizationsResponse], error) {
+	if err := auth.EnsureActiveUser(ctx); err != nil {
+		return nil, err
+	}
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -74,7 +77,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 
 	var rows []row
 	onlyMine := req.Msg.GetOnlyMine()
-	isSuperAdmin := auth.IsSuperadmin(ctx, user)
+	isSuperAdmin := auth.CanInspectOrganization(ctx, user, auth.PermissionOrganizationRead)
 
 	// If onlyMine is true, or user is not a superadmin, filter to user's memberships
 	if onlyMine || !isSuperAdmin {
@@ -83,9 +86,10 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.total_paid_cents, o.created_at
 			FROM organizations o
 			JOIN organization_members m ON m.organization_id = o.id
-			WHERE m.user_id = ?
+			WHERE m.user_id = ? AND m.status = 'active'
+			AND (? OR (o.status != 'banned' AND (o.status != 'suspended' OR o.suspension_expires <= ?)))
 			ORDER BY o.created_at DESC
-		`, user.Id).Scan(&rows).Error; err != nil {
+		`, user.Id, isSuperAdmin, time.Now()).Scan(&rows).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list organizations: %w", err))
 		}
 	} else {
@@ -224,7 +228,7 @@ func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organiza
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if err := common.AuthorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user); err != nil {
+	if err := common.AuthorizeOrgReadRoles(ctx, req.Msg.GetOrganizationId(), user); err != nil {
 		return nil, err
 	}
 
@@ -461,6 +465,12 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 	// Get organization details for each invite and create notifications
 	invites := make([]*organizationsv1.PendingInvite, 0, len(members))
 	for _, member := range members {
+		if err := auth.CheckOrganizationAccess(ctx, member.OrganizationID, auth.PermissionOrganizationRead); err != nil {
+			if connect.CodeOf(err) == connect.CodePermissionDenied {
+				continue
+			}
+			return nil, err
+		}
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", member.OrganizationID).Error; err != nil {
 			log.Printf("[Organizations] failed to load organization %s for invite: %v", member.OrganizationID, err)
@@ -844,7 +854,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 
 	isSuperAdmin := auth.IsSuperadmin(ctx, user)
 	if !isSuperAdmin {
-		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
+		if err := common.AuthorizeOrgReadRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
 			return nil, err
 		}
 	}

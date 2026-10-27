@@ -92,6 +92,8 @@ func DefaultCORSConfig() *CORSConfig {
 			"X-User-Agent",
 		},
 		ExposedHeaders: []string{
+			"X-Obiente-Restriction",
+			"X-Obiente-Organization-ID",
 			"Content-Length",
 			"Content-Type",
 			// Connect-RPC specific headers

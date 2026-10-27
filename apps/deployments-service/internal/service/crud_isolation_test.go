@@ -42,14 +42,11 @@ func TestDeploymentServiceTenantIsolation(t *testing.T) {
 		t.Fatalf("org-a total = %d, want 2", got)
 	}
 
-	listOrgB, err := service.ListDeployments(ctx, connect.NewRequest(&deploymentsv1.ListDeploymentsRequest{
+	_, err = service.ListDeployments(ctx, connect.NewRequest(&deploymentsv1.ListDeploymentsRequest{
 		OrganizationId: "org-b",
 	}))
-	if err != nil {
-		t.Fatalf("list org-b deployments: %v", err)
-	}
-	if got := deploymentIDs(listOrgB.Msg.Deployments); len(got) != 0 {
-		t.Fatalf("org-b list returned %v for org-a user, want none", got)
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("cross-organization list should be denied: %v", err)
 	}
 
 	_, err = service.UpdateDeployment(ctx, connect.NewRequest(&deploymentsv1.UpdateDeploymentRequest{
@@ -169,6 +166,8 @@ func newDeploymentServiceTestDB(t *testing.T) *gorm.DB {
 		&database.Organization{},
 		&database.OrganizationMember{},
 		&database.UserBan{},
+		&database.SuperadminRole{},
+		&database.SuperadminRoleBinding{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
 	); err != nil {

@@ -178,13 +178,18 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Verify permissions
-	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionGameServersRead, ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
+	if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: auth.PermissionGameServersManage, ResourceType: "gameserver", ResourceID: initMsg.GameServerID}); err != nil {
 		sendError("Permission denied")
 		conn.Close(websocket.StatusPolicyViolation, "permission denied")
 		return
 	}
 
 	// Get game server to find container ID
+	stopAccessWatch := auth.WatchAccess(ctx, func(checkCtx context.Context) error {
+		return s.permissionChecker.CheckResourcePermission(checkCtx, "gameserver", initMsg.GameServerID, auth.PermissionGameServersManage)
+	}, func() { _ = conn.CloseNow() })
+	defer stopAccessWatch()
+
 	gameServer, err := s.repo.GetByID(ctx, initMsg.GameServerID)
 	if err != nil {
 		sendError("Game server not found")

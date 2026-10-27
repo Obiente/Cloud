@@ -16,6 +16,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/inputvalidation"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -67,6 +68,9 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 	}
 
 	// Check if user has organization-wide read permission for game servers
+	if err := auth.CheckOrganizationAccess(ctx, orgID, auth.PermissionGameServersRead); err != nil {
+		return nil, err
+	}
 	// This allows users with custom roles (like "system admin") to see all game servers
 	hasOrgWideRead := false
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{
@@ -75,12 +79,14 @@ func (s *Service) ListGameServers(ctx context.Context, req *connect.Request[game
 		ResourceID:   "", // Empty resource ID means org-wide permission
 	}); err == nil {
 		hasOrgWideRead = true
+	} else if err := common.VerifyOrgAccess(ctx, orgID, userInfo); err != nil {
+		return nil, err
 	}
 
 	// Create filters with user ID
 	filters := &database.GameServerFilters{
 		UserID:     userInfo.Id,
-		IncludeAll: auth.IsSuperadmin(ctx, userInfo) || hasOrgWideRead,
+		IncludeAll: hasOrgWideRead,
 	}
 
 	// Add status filter if provided

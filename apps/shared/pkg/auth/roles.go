@@ -90,12 +90,7 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 	if err != nil {
 		return fmt.Errorf("unauthenticated")
 	}
-	if ctx.Value(systemUserKey) != true {
-		if err := database.EnsureUserActive(ctx, database.DB, user.Id); err != nil {
-			return err
-		}
-	}
-	if err := database.EnsureOrganizationActive(ctx, database.DB, orgID); err != nil {
+	if err := CheckOrganizationAccess(ctx, orgID, sp.Permission); err != nil {
 		return err
 	}
 	// A caller-supplied organization must own the resource before owner/admin shortcuts.
@@ -119,14 +114,15 @@ func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID str
 		}
 	}
 	// Role bindings never reactivate a removed or inactive membership.
-	if !HasRole(user, RoleAdmin) && !HasRole(user, RoleSuperAdmin) {
+	platformReader := CanInspectOrganization(ctx, user, sp.Permission)
+	if !HasRole(user, RoleAdmin) && !HasRole(user, RoleSuperAdmin) && !platformReader {
 		var member database.OrganizationMember
 		if err := database.DB.WithContext(ctx).Where("organization_id = ? AND user_id = ? AND status = ?", orgID, user.Id, "active").First(&member).Error; err != nil {
 			return fmt.Errorf("active organization membership required")
 		}
 	}
 	// Global admin or org-level owners/managers/admins permitted
-	if HasRole(user, RoleAdmin) || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
+	if HasRole(user, RoleAdmin) || HasRole(user, RoleSuperAdmin) || platformReader || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
 		return nil
 	}
 

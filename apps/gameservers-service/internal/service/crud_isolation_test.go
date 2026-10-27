@@ -38,14 +38,11 @@ func TestGameServerServiceTenantIsolation(t *testing.T) {
 		t.Fatalf("org-a list returned %v, want only org-a game servers", orgAIDs)
 	}
 
-	listOrgB, err := service.ListGameServers(ctx, connect.NewRequest(&gameserversv1.ListGameServersRequest{
+	_, err = service.ListGameServers(ctx, connect.NewRequest(&gameserversv1.ListGameServersRequest{
 		OrganizationId: "org-b",
 	}))
-	if err != nil {
-		t.Fatalf("list org-b game servers: %v", err)
-	}
-	if got := gameServerIDs(listOrgB.Msg.GameServers); len(got) != 0 {
-		t.Fatalf("org-b list returned %v for org-a user, want none", got)
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("cross-organization list should be denied: %v", err)
 	}
 
 	_, err = service.UpdateGameServer(ctx, connect.NewRequest(&gameserversv1.UpdateGameServerRequest{
@@ -118,6 +115,8 @@ func newGameServerServiceTestDB(t *testing.T) *gorm.DB {
 		&database.Organization{},
 		&database.OrganizationMember{},
 		&database.UserBan{},
+		&database.SuperadminRole{},
+		&database.SuperadminRoleBinding{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
 	); err != nil {
