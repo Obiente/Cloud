@@ -494,9 +494,9 @@
   type DashboardData = {
     stats: {
       deployments: number;
-      gameServers: number;
-      vpsInstances: number;
-      databases: number;
+      gameServers: number | null;
+      vpsInstances: number | null;
+      databases: number | null;
       monthlySpend: number;
       statuses: Array<{ status: string; count: number }>;
     };
@@ -642,28 +642,20 @@
           };
         });
 
-      // Fetch VPS count
-      let vpsCount = 0;
-      try {
-        const vpsResponse = await vpsClient.listVPS({
-          organizationId: orgId || undefined,
-          page: 1,
-          perPage: 1,
-        });
-        vpsCount = vpsResponse.pagination?.total || 0;
-      } catch (error) {
-        console.error("Failed to fetch VPS count:", error);
-      }
-
-      const [gameServerResult, databaseResult] = await Promise.all([
+      // Optional service outages must not discard the deployment overview.
+      const [vpsResult, gameServerResult, databaseResult] = await Promise.allSettled([
+        vpsClient.listVPS({ organizationId: orgId || undefined, page: 1, perPage: 1 }),
         gameServerClient.listGameServers({ organizationId: orgId }),
         databaseClient.listDatabases({ organizationId: orgId, page: 1, perPage: 1 }),
       ]);
       const stats = {
         deployments: deployments.length,
-        gameServers: gameServerResult.gameServers.length,
-        vpsInstances: vpsCount,
-        databases: Number(databaseResult.pagination?.total || 0),
+        gameServers: gameServerResult.status === "fulfilled"
+          ? gameServerResult.value.gameServers.length : null,
+        vpsInstances: vpsResult.status === "fulfilled"
+          ? Number(vpsResult.value.pagination?.total || 0) : null,
+        databases: databaseResult.status === "fulfilled"
+          ? Number(databaseResult.value.pagination?.total || 0) : null,
         monthlySpend: 0,
         statuses,
       };
@@ -720,9 +712,9 @@
     () =>
       data.value?.stats ?? {
         deployments: 0,
-        gameServers: 0,
-        vpsInstances: 0,
-        databases: 0,
+        gameServers: null,
+        vpsInstances: null,
+        databases: null,
         monthlySpend: 0,
       }
   );
@@ -872,7 +864,7 @@
       },
       {
         label: "VPS Instances",
-        value: formatNumber(stats.value.vpsInstances),
+        value: stats.value.vpsInstances === null ? "Unavailable" : formatNumber(stats.value.vpsInstances),
         icon: ServerIcon,
         iconBg: "bg-success/10",
         iconColor: "text-success",
@@ -880,7 +872,7 @@
       },
       {
         label: "Game Servers",
-        value: formatNumber(stats.value.gameServers),
+        value: stats.value.gameServers === null ? "Unavailable" : formatNumber(stats.value.gameServers),
         icon: CubeIcon,
         iconBg: "bg-accent-success/10",
         iconColor: "text-accent-success",
@@ -888,7 +880,7 @@
       },
       {
         label: "Databases",
-        value: formatNumber(stats.value.databases),
+        value: stats.value.databases === null ? "Unavailable" : formatNumber(stats.value.databases),
         icon: CircleStackIcon,
         iconBg: "bg-accent-secondary/10",
         iconColor: "text-accent-secondary",
