@@ -37,11 +37,12 @@ export function createAuthInterceptor(
 // Export client-side transport factory
 export function createWebTransport(
   baseUrl: string,
-  interceptor: Interceptor
+  interceptor: Interceptor,
+  ...additionalInterceptors: Interceptor[]
 ): Transport {
   return createConnectTransport({
     baseUrl,
-    interceptors: [interceptor],
+    interceptors: [interceptor, ...additionalInterceptors],
     // Use JSON for better browser compatibility
     useBinaryFormat: false,
   });

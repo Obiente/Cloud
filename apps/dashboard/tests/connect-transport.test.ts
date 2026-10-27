@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, reactive, type EffectScope } from "vue";
-const mocks = vi.hoisted(() => ({ auth: null as any, getToken: null as any }));
+import { effectScope, reactive, ref, nextTick, type EffectScope } from "vue";
+import { Code, ConnectError } from "@connectrpc/connect";
+const mocks = vi.hoisted(() => ({ auth: null as any, getToken: null as any, organizations: null as any, restriction: null as any, interceptor: null as any }));
 vi.mock("~/composables/useAuth", () => ({ useAuth: () => mocks.auth }));
+vi.mock("~/stores/organizations", () => ({ useOrganizationsStore: () => mocks.organizations }));
 vi.mock("~/lib/transport", () => ({
   createAuthInterceptor: (get: any) => {
     mocks.getToken = get;
     return {};
   },
-  createWebTransport: () => ({}),
+  createWebTransport: (_url: string, _auth: any, interceptor: any) => { mocks.interceptor = interceptor; return {}; },
 }));
 const deferred = () => {
   let resolve!: (token: string | null) => void;
@@ -25,6 +27,10 @@ beforeEach(async () => {
     ready: true,
     getAccessToken: vi.fn(),
   });
+  mocks.organizations = reactive({ currentOrgId: "org-a", reset: vi.fn() });
+  mocks.restriction = ref(null);
+  vi.stubGlobal("useAccessRestriction", () => mocks.restriction);
+  vi.stubGlobal("clearNuxtData", vi.fn());
   vi.stubGlobal("defineNuxtPlugin", (plugin: any) => plugin);
   vi.stubGlobal("useRuntimeConfig", () => ({
     public: { apiHost: "https://api.example.test" },
@@ -32,6 +38,66 @@ beforeEach(async () => {
   const plugin = (await import("../app/plugins/connect-transport.client"))
     .default;
   scope.run(() => (plugin as any).setup({}));
+});
+
+function restricted(scope: string, organizationId = "org-a") {
+  return new ConnectError("Restricted", Code.PermissionDenied, {
+    "X-Obiente-Restriction": scope,
+    "X-Obiente-Organization-ID": organizationId,
+  });
+}
+
+describe("current moderation state", () => {
+  it("clears cached organization data when the account is restricted", async () => {
+    const error = restricted("account");
+    await expect(mocks.interceptor(async () => { throw error; })({})).rejects.toBe(error);
+    expect(mocks.restriction.value).toEqual({ scope: "account" });
+    expect(mocks.organizations.reset).toHaveBeenCalled();
+    expect(clearNuxtData).toHaveBeenCalled();
+  });
+
+  it("does not treat ordinary admin permission errors as an organization ban", async () => {
+    const error = new ConnectError("Action denied", Code.PermissionDenied);
+    await expect(mocks.interceptor(async () => { throw error; })({})).rejects.toBe(error);
+    expect(mocks.restriction.value).toBeNull();
+  });
+
+  it("ignores a late account denial after switching identities", async () => {
+    let reject!: (error: unknown) => void;
+    const pending = mocks.interceptor(() => new Promise((_resolve, fail) => { reject = fail; }))({});
+    mocks.auth.session = { id: "b" };
+    reject(restricted("account"));
+    await expect(pending).rejects.toThrow();
+    expect(mocks.restriction.value).toBeNull();
+  });
+
+  it("ignores a late denial from the previous organization", async () => {
+    let reject!: (error: unknown) => void;
+    const pending = mocks.interceptor(() => new Promise((_resolve, fail) => { reject = fail; }))({});
+    mocks.organizations.currentOrgId = "org-b";
+    reject(restricted("organization"));
+    await expect(pending).rejects.toThrow();
+    expect(mocks.restriction.value).toBeNull();
+  });
+
+  it("clears an organization restriction after selecting another organization", async () => {
+    await expect(mocks.interceptor(async () => { throw restricted("organization"); })({})).rejects.toThrow();
+    expect(mocks.restriction.value).toEqual({ scope: "organization", organizationId: "org-a" });
+    mocks.organizations.currentOrgId = "org-b";
+    await nextTick();
+    expect(mocks.restriction.value).toBeNull();
+  });
+
+  it("handles a ban received after a stream has started", async () => {
+    const response = await mocks.interceptor(async () => ({
+      stream: true,
+      message: (async function* () { yield "first"; throw restricted("account"); })(),
+    }))({});
+    const iterator = response.message[Symbol.asyncIterator]();
+    expect((await iterator.next()).value).toBe("first");
+    await expect(iterator.next()).rejects.toThrow();
+    expect(mocks.restriction.value).toEqual({ scope: "account" });
+  });
 });
 afterEach(() => {
   scope.stop();

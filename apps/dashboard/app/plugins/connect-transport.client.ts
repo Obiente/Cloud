@@ -1,6 +1,8 @@
 import { createAuthInterceptor, createWebTransport } from "~/lib/transport";
 import { watch } from "vue";
 import { useAuth } from "~/composables/useAuth";
+import { createAccessRestrictionInterceptor } from "~/lib/access-restriction";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 // Client-side plugin
 export default defineNuxtPlugin({
@@ -11,6 +13,8 @@ export default defineNuxtPlugin({
 
     // Initialize inside the app context after the store plugin is ready.
     const auth = useAuth();
+    const organizations = useOrganizationsStore();
+    const restriction = useAccessRestriction();
 
     // useAuth owns token lifetime. Share pending reads without extending expiry.
     let tokenFetchPromise: Promise<string | undefined> | null = null;
@@ -29,9 +33,28 @@ export default defineNuxtPlugin({
       () => {
         generation++;
         tokenFetchPromise = null;
+        restriction.value = null;
       },
       { flush: "sync" }
     );
+
+    watch(() => organizations.currentOrgId, (orgId) => {
+      if (restriction.value?.scope === "organization" && orgId && orgId !== restriction.value.organizationId)
+        restriction.value = null;
+    });
+    const restrictionInterceptor = createAccessRestrictionInterceptor(() => {
+      const requestGeneration = generation;
+      const organizationId = organizations.currentOrgId;
+      return (denied) => {
+        if (generation !== requestGeneration) return;
+        if (denied.scope === "organization" && (
+          denied.organizationId !== organizationId || organizations.currentOrgId !== organizationId
+        )) return;
+        restriction.value = denied;
+        clearNuxtData();
+        if (denied.scope === "account") organizations.reset();
+      };
+    });
 
     const getToken = async (): Promise<string | undefined> => {
       // A bounded loop leaves no background timer behind when auth is unavailable.
@@ -65,7 +88,8 @@ export default defineNuxtPlugin({
     const authInterceptor = createAuthInterceptor(getToken);
     const transport = createWebTransport(
       config.public.apiHost,
-      authInterceptor
+      authInterceptor,
+      restrictionInterceptor
     );
 
     return {
