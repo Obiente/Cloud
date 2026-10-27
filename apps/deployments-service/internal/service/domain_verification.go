@@ -252,7 +252,7 @@ func (s *Service) getOrCreateVerification(ctx context.Context, deploymentID stri
 					return nil, fmt.Errorf("failed to marshal custom domains: %w", err)
 				}
 				deployment.CustomDomains = string(customDomainsJSON)
-				if err := database.DB.Save(&deployment).Error; err != nil {
+				if err := database.DB.Omit("desired_state", "storage_state", "storage_bytes", "storage_measured_at", "storage_measurement_error").Save(&deployment).Error; err != nil {
 					return nil, fmt.Errorf("failed to normalize verification token: %w", err)
 				}
 			}
@@ -306,7 +306,7 @@ func (s *Service) getOrCreateVerification(ctx context.Context, deploymentID stri
 	}
 
 	deployment.CustomDomains = string(customDomainsJSON)
-	if err := database.DB.Save(&deployment).Error; err != nil {
+	if err := database.DB.Omit("desired_state", "storage_state", "storage_bytes", "storage_measured_at", "storage_measurement_error").Save(&deployment).Error; err != nil {
 		return nil, fmt.Errorf("failed to save verification token: %w", err)
 	}
 
@@ -394,7 +394,7 @@ func (s *Service) updateVerificationStatus(ctx context.Context, deploymentID str
 	}
 
 	deployment.CustomDomains = string(customDomainsJSON)
-	if err := database.DB.Save(&deployment).Error; err != nil {
+	if err := database.DB.Omit("desired_state", "storage_state", "storage_bytes", "storage_measured_at", "storage_measurement_error").Save(&deployment).Error; err != nil {
 		log.Printf("[updateVerificationStatus] Failed to save status: %v", err)
 		return
 	}
@@ -462,7 +462,7 @@ func (s *Service) storeVerifiedDomain(ctx context.Context, deploymentID string, 
 	}
 
 	deployment.CustomDomains = string(customDomainsJSON)
-	if err := database.DB.Save(&deployment).Error; err != nil {
+	if err := database.DB.Omit("desired_state", "storage_state", "storage_bytes", "storage_measured_at", "storage_measurement_error").Save(&deployment).Error; err != nil {
 		return fmt.Errorf("failed to save custom domains: %w", err)
 	}
 

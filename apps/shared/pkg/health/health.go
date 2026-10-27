@@ -83,6 +83,7 @@ func HandleHealth(serviceName string, healthCheck func() (bool, string, map[stri
 			Extra:     extra,
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		if !isHealthy {
 			response.Status = "unhealthy"
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -90,7 +91,6 @@ func HandleHealth(serviceName string, healthCheck func() (bool, string, map[stri
 			w.WriteHeader(http.StatusOK)
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
 	}
 }

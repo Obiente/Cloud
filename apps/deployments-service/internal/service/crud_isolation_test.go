@@ -148,12 +148,19 @@ func TestDeploymentServiceTenantIsolation(t *testing.T) {
 func newDeploymentServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
+	raw, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = raw.Close() })
 	if err := db.AutoMigrate(
 		&database.Deployment{},
+		&database.DeploymentLocation{},
 		&database.BuildHistory{},
 		&database.DeploymentBuildControl{},
 		&database.PullRequestDeploymentConfig{},
@@ -161,12 +168,16 @@ func newDeploymentServiceTestDB(t *testing.T) *gorm.DB {
 		&database.GitHubIntegration{},
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 		&database.OrgRole{},
 		&database.OrgRoleBinding{},
 	); err != nil {
 		t.Fatalf("migrate sqlite db: %v", err)
 	}
 
+	if err := db.Create(&database.Organization{ID: "org", Slug: "test-org", Status: "active"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	previousDB := database.DB
 	previousMetricsDB := database.MetricsDB
 	database.DB = db

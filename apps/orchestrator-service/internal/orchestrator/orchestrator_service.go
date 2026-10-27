@@ -89,6 +89,8 @@ func (os *OrchestratorService) Start() {
 	os.serviceRegistry.StartPeriodicSync(os.ctx, os.syncInterval)
 	logger.Debug("[Orchestrator] Started periodic sync (interval: %v)", os.syncInterval)
 
+	go os.monitorSwarmHealth()
+
 	// Start health checking
 	os.healthChecker.Start(os.ctx)
 	logger.Debug("[Orchestrator] Started health checker")
@@ -234,76 +236,60 @@ func (orch *OrchestratorService) getEnvFromOS(key string) string {
 	return os.Getenv(key)
 }
 
-// restoreRunningDeployments queries the database for all deployments marked as RUNNING
-// and attempts to start them. This ensures deployments are restored after orchestrator restarts.
-// This function runs in a goroutine and processes deployments concurrently to avoid blocking.
+// restoreRunningDeployments continuously reconciles durable intent. Failed attempts
+// remain eligible; Docker outages and delayed dependency readiness are retried.
 func (os *OrchestratorService) restoreRunningDeployments() {
-	// Give the system a moment to fully initialize before restoring deployments
-	time.Sleep(5 * time.Second)
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case <-os.ctx.Done():
+			return
+		case <-timer.C:
+		}
+		os.reconcileDeploymentIntents()
+		timer.Reset(30 * time.Second)
+	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+func (os *OrchestratorService) reconcileDeploymentIntents() {
+	ctx, cancel := context.WithTimeout(os.ctx, 10*time.Minute)
 	defer cancel()
-
-	logger.Info("[Orchestrator] Restoring running deployments from database...")
-
-	// Query database for all deployments with status = RUNNING
+	// Adopt legacy running workloads, never infer running intent from STOPPED or FAILED.
+	if err := database.DB.WithContext(ctx).Model(&database.Deployment{}).
+		Where("desired_state = '' AND status = ? AND deleted_at IS NULL", int32(deploymentsv1.DeploymentStatus_RUNNING)).
+		Update("desired_state", "running").Error; err != nil {
+		logger.Warn("Adopt deployment intent: %v", err)
+		return
+	}
 	var deployments []database.Deployment
-	runningStatus := int32(deploymentsv1.DeploymentStatus_RUNNING)
 	if err := database.DB.WithContext(ctx).
-		Where("status = ? AND deleted_at IS NULL", runningStatus).
+		Where("desired_state IN ? AND deleted_at IS NULL AND status NOT IN ?", []string{"running", "stopped"}, []int32{int32(deploymentsv1.DeploymentStatus_BUILDING), int32(deploymentsv1.DeploymentStatus_DEPLOYING)}).
 		Find(&deployments).Error; err != nil {
-		logger.Error("[Orchestrator] Failed to query running deployments from database: %v", err)
+		logger.Warn("Load deployment intents: %v", err)
 		return
 	}
-
-	if len(deployments) == 0 {
-		logger.Info("[Orchestrator] No running deployments found in database to restore")
-		return
-	}
-
-	logger.Info("[Orchestrator] Found %d running deployment(s) to restore", len(deployments))
-
-	// Process deployments concurrently with a limit to avoid overwhelming the system
-	const maxConcurrency = 5
-	semaphore := make(chan struct{}, maxConcurrency)
+	semaphore := make(chan struct{}, 5)
 	var wg sync.WaitGroup
-	var mu sync.Mutex
-	successCount := 0
-	failureCount := 0
-
-	for _, deployment := range deployments {
+	for _, dep := range deployments {
+		select {
+		case <-ctx.Done():
+			break
+		case semaphore <- struct{}{}:
+		}
+		if ctx.Err() != nil {
+			break
+		}
 		wg.Add(1)
 		go func(dep database.Deployment) {
 			defer wg.Done()
-
-			// Acquire semaphore to limit concurrency
-			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-
-			logger.Info("[Orchestrator] Restoring deployment %s (name: %s, domain: %s)",
-				dep.ID, dep.Name, dep.Domain)
-
-			// Use a shorter timeout per deployment to avoid blocking too long
-			deployCtx, deployCancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer deployCancel()
-
-			if err := os.deploymentManager.StartDeployment(deployCtx, dep.ID); err != nil {
-				logger.Warn("[Orchestrator] Failed to restore deployment %s: %v", dep.ID, err)
-				mu.Lock()
-				failureCount++
-				mu.Unlock()
-			} else {
-				logger.Info("[Orchestrator] Successfully restored deployment %s", dep.ID)
-				mu.Lock()
-				successCount++
-				mu.Unlock()
+			attempt, stop := context.WithTimeout(ctx, 2*time.Minute)
+			defer stop()
+			if err := os.deploymentManager.ReconcileDeploymentIntent(attempt, dep.ID); err != nil {
+				logger.Warn("Deployment %s recovery pending: %v", dep.ID, err)
 			}
-		}(deployment)
+		}(dep)
 	}
-
-	// Wait for all deployments to be processed
 	wg.Wait()
-
-	logger.Info("[Orchestrator] Deployment restoration completed: %d succeeded, %d failed out of %d total",
-		successCount, failureCount, len(deployments))
 }

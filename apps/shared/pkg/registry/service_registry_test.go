@@ -2,6 +2,8 @@ package registry
 
 import (
 	"context"
+	"errors"
+	"github.com/moby/moby/client"
 	"testing"
 
 	"github.com/moby/moby/api/types/swarm"
@@ -103,5 +105,44 @@ func TestUnregisterDeploymentIsIdempotent(t *testing.T) {
 	registry := &ServiceRegistry{}
 	if err := registry.UnregisterDeployment(context.Background(), "already-removed-container"); err != nil {
 		t.Fatalf("unregister already-removed deployment location: %v", err)
+	}
+}
+
+type unavailableRegistryDocker struct{ client.APIClient }
+
+func (*unavailableRegistryDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
+	return client.ContainerListResult{}, nil
+}
+func (*unavailableRegistryDocker) ContainerInspect(context.Context, string, client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
+	return client.ContainerInspectResult{}, errors.New("daemon restarting")
+}
+func TestRegistryKeepsLocationsWhenInspectionFails(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool, _ := db.DB()
+	pool.SetMaxOpenConns(1)
+	defer pool.Close()
+	if err := db.AutoMigrate(&database.DeploymentLocation{}); err != nil {
+		t.Fatal(err)
+	}
+	previous := database.DB
+	database.DB = db
+	defer func() { database.DB = previous }()
+	row := database.DeploymentLocation{ID: "fixture", DeploymentID: "example", NodeID: "test-node", ContainerID: "container-test-identity", Status: "running"}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry := &ServiceRegistry{dockerClient: &unavailableRegistryDocker{}, nodeID: "test-node"}
+	if err := registry.SyncWithDocker(context.Background()); err == nil {
+		t.Fatal("transient inspection failure hidden")
+	}
+	var count int64
+	if err := db.Model(&database.DeploymentLocation{}).Where("id = ?", row.ID).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatal("daemon outage erased recovery location")
 	}
 }

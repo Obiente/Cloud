@@ -911,30 +911,34 @@ func dbGameServerToProto(dbGS *database.GameServer) *gameserversv1.GameServer {
 	}
 
 	gameServer := &gameserversv1.GameServer{
-		Id:             dbGS.ID,
-		OrganizationId: dbGS.OrganizationID,
-		Name:           dbGS.Name,
-		Description:    dbGS.Description,
-		GameType:       gameserversv1.GameType(dbGS.GameType),
-		Status:         gameserversv1.GameServerStatus(dbGS.Status),
-		MemoryBytes:    dbGS.MemoryBytes,
-		CpuCores:       dbGS.CPUCores,
-		Port:           dbGS.Port,
-		ExtraPorts:     database.ParseGameServerExtraPorts(dbGS.ExtraPorts),
-		DockerImage:    dbGS.DockerImage,
-		StartCommand:   dbGS.StartCommand,
-		EnvVars:        envVars,
-		ServerVersion:  dbGS.ServerVersion,
-		PlayerCount:    dbGS.PlayerCount,
-		MaxPlayers:     dbGS.MaxPlayers,
-		ContainerId:    dbGS.ContainerID,
-		ContainerName:  dbGS.ContainerName,
-		StorageBytes:   dbGS.StorageBytes,
-		CreatedAt:      timestamppb.New(dbGS.CreatedAt),
-		UpdatedAt:      timestamppb.New(dbGS.UpdatedAt),
-		CreatedBy:      dbGS.CreatedBy,
+		Id:               dbGS.ID,
+		OrganizationId:   dbGS.OrganizationID,
+		Name:             dbGS.Name,
+		Description:      dbGS.Description,
+		GameType:         gameserversv1.GameType(dbGS.GameType),
+		Status:           gameserversv1.GameServerStatus(dbGS.Status),
+		MemoryBytes:      dbGS.MemoryBytes,
+		CpuCores:         dbGS.CPUCores,
+		Port:             dbGS.Port,
+		ExtraPorts:       database.ParseGameServerExtraPorts(dbGS.ExtraPorts),
+		DockerImage:      dbGS.DockerImage,
+		StartCommand:     dbGS.StartCommand,
+		EnvVars:          envVars,
+		ServerVersion:    dbGS.ServerVersion,
+		PlayerCount:      dbGS.PlayerCount,
+		MaxPlayers:       dbGS.MaxPlayers,
+		ContainerId:      dbGS.ContainerID,
+		ContainerName:    dbGS.ContainerName,
+		StorageBytes:     dbGS.StorageBytes,
+		StorageAvailable: database.ResourceStorageAvailable(dbGS.StorageState, dbGS.StorageBytes, dbGS.StorageMeasuredAt, dbGS.StorageMeasurementError, time.Now()),
+		CreatedAt:        timestamppb.New(dbGS.CreatedAt),
+		UpdatedAt:        timestamppb.New(dbGS.UpdatedAt),
+		CreatedBy:        dbGS.CreatedBy,
 	}
 
+	if dbGS.StorageMeasuredAt != nil {
+		gameServer.StorageMeasuredAt = timestamppb.New(*dbGS.StorageMeasuredAt)
+	}
 	if dbGS.LastStartedAt != nil {
 		gameServer.LastStartedAt = timestamppb.New(*dbGS.LastStartedAt)
 	}

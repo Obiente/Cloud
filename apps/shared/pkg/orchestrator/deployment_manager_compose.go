@@ -93,7 +93,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, "")
 }
 
-func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) (retErr error) {
+func (dm *DeploymentManager) RestartComposeFileLocked(ctx context.Context, deploymentID string, composeYaml string) (retErr error) {
 	if !utils.IsSwarmModeEnabled() {
 		// composeUpArgs already includes --force-recreate.
 		return dm.DeployComposeFile(ctx, deploymentID, composeYaml)
@@ -200,7 +200,16 @@ func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, depl
 	return dm.deployComposeFile(ctx, deploymentID, composeYaml, ingressNetworkName)
 }
 
-func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) (retErr error) {
+func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) (retErr error) {
+	if err := deploymentIntentAllows(ctx, deploymentID, "running"); err != nil {
+		return err
+	}
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
+		return err
+	}
+	if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
+		return err
+	}
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
 	isSwarmMode := utils.IsSwarmModeEnabled()
 	var sanitizer *ComposeSanitizer
@@ -526,7 +535,8 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 
 		if registryPassword != "" {
 			logger.Info("[DeploymentManager] Authenticating with registry %s to enable multi-node image pulls...", registryHost)
-			loginCmd := exec.CommandContext(ctx, "docker", "login", registryHost, "-u", registryUsername, "-p", registryPassword)
+			loginCmd := exec.CommandContext(ctx, "docker", "login", registryHost, "-u", registryUsername, "--password-stdin")
+			loginCmd.Stdin = strings.NewReader(registryPassword)
 			var loginStderr bytes.Buffer
 			loginCmd.Stderr = &loginStderr
 			if loginErr := loginCmd.Run(); loginErr != nil {
@@ -543,6 +553,33 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 		// ones according to each service's update_config.
 		// Use --with-registry-auth=true to pass registry credentials to Swarm
 		args := stackDeployArgs(projectName, composeFile)
+		if recovering, _ := ctx.Value(composeRecoveryKey{}).(bool); recovering {
+			recoveryFile := composeFile
+			if missing, ok := ctx.Value(composeRecoveryServicesKey{}).([]string); ok && len(missing) > 0 {
+				content, err := os.ReadFile(composeFile)
+				if err != nil {
+					return err
+				}
+				content, err = missingComposeServices(content, missing)
+				if err != nil {
+					return err
+				}
+				file, err := os.CreateTemp(filepath.Dir(composeFile), ".obiente-recovery-*.yml")
+				if err != nil {
+					return err
+				}
+				defer os.Remove(file.Name())
+				if _, err = file.Write(content); err != nil {
+					_ = file.Close()
+					return err
+				}
+				if err = file.Close(); err != nil {
+					return err
+				}
+				recoveryFile = file.Name()
+			}
+			args = stackRecoveryArgs(projectName, recoveryFile)
+		}
 		logger.Info("[DeploymentManager] Deploying stack %s with docker stack deploy (creates Swarm services)", projectName)
 
 		cmd := exec.CommandContext(ctx, "docker", args...)
@@ -586,6 +623,13 @@ func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID
 	} else {
 		// In non-Swarm mode, use docker compose (creates containers)
 		args := composeUpArgs(projectName, composeFile)
+		if recovering, _ := ctx.Value(composeRecoveryKey{}).(bool); recovering {
+			args = composeRecoveryArgs(projectName, composeFile)
+			if missing, ok := ctx.Value(composeRecoveryServicesKey{}).([]string); ok && len(missing) > 0 {
+				args = append(args, "--no-deps")
+				args = append(args, missing...)
+			}
+		}
 		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will rebuild buildable services, pull tagged images, and force recreate containers with updated labels")
 
 		cmd := exec.CommandContext(ctx, "docker", args...)
@@ -1407,7 +1451,11 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 }
 
 // StopComposeDeployment stops containers created by a compose file using docker compose down
-func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) StopComposeDeploymentLocked(ctx context.Context, deploymentID string) error {
+	if err := deploymentIntentAllows(ctx, deploymentID, "stopped"); err != nil {
+		return err
+	}
+	dm.captureStorageBeforeStop(ctx, deploymentID)
 	logger.Info("[DeploymentManager] Stopping compose deployment %s", deploymentID)
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
@@ -1512,20 +1560,21 @@ func (dm *DeploymentManager) stopComposeContainersByLabel(ctx context.Context, p
 		return nil
 	}
 
+	var failures []error
 	for _, cnt := range containers {
 		timeout := 30 * time.Second
 		if err := dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout); err != nil {
-			logger.Info("[DeploymentManager] Failed to stop compose container %s: %v", cnt.ID[:12], err)
+			failures = append(failures, fmt.Errorf("stop Compose container %s: %w", cnt.ID, err))
 		} else {
-			logger.Info("[DeploymentManager] Stopped compose container %s", cnt.ID[:12])
+			logger.Info("[DeploymentManager] Stopped compose container %s", cnt.ID)
 		}
 	}
 
-	return nil
+	return errors.Join(failures...)
 }
 
 // RemoveComposeDeployment removes containers created by a compose file
-func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploymentID string) error {
+func (dm *DeploymentManager) removeComposeDeploymentLocked(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Removing compose deployment %s", deploymentID)
 	// Stop the Compose project through the mode-aware path first. In Swarm this
 	// runs `docker stack rm`; container-label cleanup alone cannot remove Swarm
@@ -1586,3 +1635,137 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 }
 
 // cleanupDeploymentData removes all volumes and data directories for a deployment
+
+type composeRecoveryKey struct{}
+
+func composeRecoveryArgs(projectName, composeFile string) []string {
+	return []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--no-build", "--pull", "missing", "--no-recreate"}
+}
+func stackRecoveryArgs(projectName, composeFile string) []string {
+	return []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", "--resolve-image", "never", projectName}
+}
+
+// RecoverComposeDeployment leaves healthy services untouched and reconstructs
+// missing workloads from persisted configuration without rebuilding source.
+func (dm *DeploymentManager) RecoverComposeDeployment(ctx context.Context, deploymentID, composeYaml string) error {
+	projectName := "deploy-" + deploymentID
+	var spec struct {
+		Services map[string]struct {
+			Restart string `yaml:"restart"`
+			Deploy  struct {
+				Replicas *uint64 `yaml:"replicas"`
+			} `yaml:"deploy"`
+			Profiles []string `yaml:"profiles"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(composeYaml), &spec); err != nil {
+		return fmt.Errorf("parse recovery Compose file: %w", err)
+	}
+	if len(spec.Services) == 0 {
+		return fmt.Errorf("recovery Compose file has no services")
+	}
+	filters := make(client.Filters)
+	present := make(map[string]uint64)
+	if utils.IsSwarmModeEnabled() {
+		filters.Add("label", "com.docker.stack.namespace="+projectName)
+		result, err := dm.dockerClient.ServiceList(ctx, client.ServiceListOptions{Filters: filters})
+		if err != nil {
+			return fmt.Errorf("inspect recovery stack: %w", err)
+		}
+		for _, service := range result.Items {
+			present[strings.TrimPrefix(service.Spec.Name, projectName+"_")] = 1
+		}
+	} else {
+		filters.Add("label", "com.docker.compose.project="+projectName)
+		result, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
+		if err != nil {
+			return fmt.Errorf("inspect recovery containers: %w", err)
+		}
+		for _, c := range result.Items {
+			name := c.Labels["com.docker.compose.service"]
+			if string(c.State) == "running" {
+				present[name]++
+				continue
+			}
+			service := spec.Services[name]
+			if string(c.State) == "exited" && (service.Restart == "" || service.Restart == "no" || service.Restart == "none") {
+				info, err := dm.dockerClient.ContainerInspect(ctx, c.ID, client.ContainerInspectOptions{})
+				if err != nil {
+					return fmt.Errorf("inspect completed Compose service: %w", err)
+				}
+				if info.Container.State != nil && info.Container.State.ExitCode == 0 {
+					present[name]++
+				}
+			}
+		}
+	}
+	complete := true
+	var missing []string
+	for name, service := range spec.Services {
+		if len(service.Profiles) > 0 {
+			continue
+		}
+		expected := uint64(1)
+		if !utils.IsSwarmModeEnabled() && service.Deploy.Replicas != nil {
+			expected = *service.Deploy.Replicas
+		}
+		if present[name] < expected {
+			missing = append(missing, name)
+			complete = false
+		}
+	}
+	if complete {
+		if utils.IsSwarmModeEnabled() {
+			_, err := dm.waitForSwarmStackConverged(ctx, deploymentID, projectName, nil)
+			return err
+		}
+		return nil
+	}
+	ctx = context.WithValue(ctx, composeRecoveryServicesKey{}, missing)
+	return dm.DeployComposeFile(context.WithValue(ctx, composeRecoveryKey{}, true), deploymentID, composeYaml)
+}
+
+func (dm *DeploymentManager) deployComposeFile(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error {
+		return dm.deployComposeFileLocked(locked, deploymentID, composeYaml, ingressNetworkName)
+	})
+}
+
+func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.StopComposeDeploymentLocked(locked, deploymentID) })
+}
+
+func (dm *DeploymentManager) RestartComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error {
+		return dm.RestartComposeFileLocked(locked, deploymentID, composeYaml)
+	})
+}
+
+func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploymentID string) error {
+	return withDeploymentRuntimeLock(ctx, deploymentID, func(locked context.Context) error { return dm.removeComposeDeploymentLocked(locked, deploymentID) })
+}
+
+type composeRecoveryServicesKey struct{}
+
+// Deploy only absent Swarm services during recovery. Reapplying a healthy
+// service's mutable image tag can otherwise replace its pinned running image.
+func missingComposeServices(content []byte, missing []string) ([]byte, error) {
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(content, &document); err != nil {
+		return nil, err
+	}
+	services, ok := document["services"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid recovery services")
+	}
+	selected := make(map[string]interface{}, len(missing))
+	for _, name := range missing {
+		service, ok := services[name]
+		if !ok {
+			return nil, fmt.Errorf("recovery service %s missing from configuration", name)
+		}
+		selected[name] = service
+	}
+	document["services"] = selected
+	return yaml.Marshal(document)
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 	"gorm.io/gorm"
 )
 
@@ -57,25 +58,38 @@ type GameServerConfig struct {
 
 // NewGameServerManager creates a new game server manager
 func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServerManager, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return NewGameServerManagerContext(ctx, strategy, maxGameServersPerNode)
+}
+
+func NewGameServerManagerContext(ctx context.Context, strategy string, maxGameServersPerNode int) (*GameServerManager, error) {
 	cli, err := client.New(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
+	ready := false
+	defer func() {
+		if !ready {
+			_ = cli.Close()
+		}
+	}()
+
+	// Get node info
+	infoResult, err := cli.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Docker info: %w", err)
+	}
+	info := infoResult.Info
 
 	nodeSelector, err := sharedorchestrator.NewNodeSelector(strategy, maxGameServersPerNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node selector: %w", err)
 	}
 
-	// Get node info
-	infoResult, err := cli.Info(context.Background(), client.InfoOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Docker info: %w", err)
-	}
-	info := infoResult.Info
-
 	helper, err := docker.New()
 	if err != nil {
+		_ = nodeSelector.Close()
 		return nil, fmt.Errorf("failed to init docker helper: %w", err)
 	}
 
@@ -104,7 +118,13 @@ func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServ
 		forwarder:    sharedorchestrator.NewNodeForwarder(),
 	}
 
+	ready = true
 	return gsm, nil
+}
+
+func (gsm *GameServerManager) CheckReady(ctx context.Context) error {
+	_, err := gsm.dockerClient.Info(ctx, client.InfoOptions{})
+	return err
 }
 
 // GetNodeID returns the node ID for this game server manager
@@ -160,7 +180,13 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, config.GameServerID); err != nil {
 		return err
 	}
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.GameServer{}, config.GameServerID); err != nil {
+		return err
+	}
 
+	if err := database.MarkStorageMaterializing(ctx, database.DB, &database.GameServer{}, config.GameServerID); err != nil {
+		return err
+	}
 	logger.Info("[GameServerManager] Creating game server container %s", config.GameServerID)
 
 	// Ensure network exists
@@ -229,7 +255,7 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 
 	// Ensure status is CREATED (not STARTING) - containers are created but not started
 	// User must explicitly start the container via StartGameServer
-	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, config.GameServerID, 0); err != nil { // CREATED = 0
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, config.GameServerID, int32(gameserversv1.GameServerStatus_CREATED)); err != nil { // Created and awaiting an explicit start
 		logger.Warn("[GameServerManager] Failed to ensure status is CREATED: %v", err)
 	}
 
@@ -242,6 +268,9 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 // StartGameServer starts a game server container
 func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID string) error {
 	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
+		return err
+	}
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.GameServer{}, gameServerID); err != nil {
 		return err
 	}
 
@@ -307,7 +336,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 		// Restore STARTING status since we're in the middle of starting the server
 		// CreateGameServer sets it to CREATED, but we want to keep it as STARTING
-		if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 2); err != nil { // STARTING = 2
+		if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil { // STARTING = 2
 			logger.Warn("[GameServerManager] Failed to restore STARTING status after container creation: %v", err)
 		}
 
@@ -364,7 +393,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 		// Restore STARTING status since we're in the middle of starting the server
 		// CreateGameServer sets it to CREATED, but we want to keep it as STARTING
-		if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 2); err != nil { // STARTING = 2
+		if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil { // STARTING = 2
 			logger.Warn("[GameServerManager] Failed to restore STARTING status after container recreation: %v", err)
 		}
 
@@ -440,7 +469,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			}
 
 			// Restore STARTING status since we're in the middle of starting the server
-			if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 2); err != nil { // STARTING = 2
+			if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil { // STARTING = 2
 				logger.Warn("[GameServerManager] Failed to restore STARTING status after container recreation: %v", err)
 			}
 
@@ -501,7 +530,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 				// Recreate the container with current network
 				if err := gsm.CreateGameServer(ctx, config); err != nil {
-					_ = repo.UpdateStatus(ctx, gameServerID, 7) // FAILED = 7
+					_ = repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED)) // FAILED = 7
 					return fmt.Errorf("failed to recreate container after network error: %w", err)
 				}
 
@@ -517,7 +546,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 				// Restore STARTING status since we're in the middle of starting the server
 				// CreateGameServer sets it to CREATED, but we want to keep it as STARTING
-				if err := repo.UpdateStatus(ctx, gameServerID, 2); err != nil { // STARTING = 2
+				if err := repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil { // STARTING = 2
 					logger.Warn("[GameServerManager] Failed to restore STARTING status after network error recreation: %v", err)
 				}
 
@@ -526,7 +555,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 				// Now try to start the recreated container
 				if err := gsm.dockerHelper.StartContainer(ctx, *gameServer.ContainerID); err != nil {
 					logger.Error("[GameServerManager] Failed to start recreated container %s: %v", (*gameServer.ContainerID)[:12], err)
-					_ = repo.UpdateStatus(ctx, gameServerID, 7) // FAILED = 7
+					_ = repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED)) // FAILED = 7
 					return fmt.Errorf("failed to start recreated container: %w", err)
 				}
 
@@ -534,7 +563,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			} else {
 				logger.Error("[GameServerManager] Failed to start container %s: %v", (*gameServer.ContainerID)[:12], err)
 				// Update status to FAILED if start fails
-				_ = database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 7) // FAILED = 7
+				_ = database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED)) // FAILED = 7
 				return fmt.Errorf("failed to start container: %w", err)
 			}
 		}
@@ -563,7 +592,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 	}
 
 	// Update status
-	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 3); err != nil { // RUNNING = 3
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_RUNNING)); err != nil { // RUNNING = 3
 		logger.Warn("[GameServerManager] Failed to update game server status: %v", err)
 	}
 
@@ -618,7 +647,7 @@ func (gsm *GameServerManager) StopGameServer(ctx context.Context, gameServerID s
 	}
 
 	// Update status
-	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 5); err != nil { // STOPPED = 5
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STOPPED)); err != nil { // STOPPED = 5
 		logger.Warn("[GameServerManager] Failed to update game server status: %v", err)
 	}
 
@@ -628,6 +657,9 @@ func (gsm *GameServerManager) StopGameServer(ctx context.Context, gameServerID s
 // RestartGameServer restarts a game server container
 func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerID string) error {
 	if err := database.EnsureGameServerNotSuspended(ctx, database.DB, gameServerID); err != nil {
+		return err
+	}
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.GameServer{}, gameServerID); err != nil {
 		return err
 	}
 
@@ -712,7 +744,7 @@ func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerI
 	}
 
 	// Update status
-	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 3); err != nil { // RUNNING = 3
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_RUNNING)); err != nil { // RUNNING = 3
 		logger.Warn("[GameServerManager] Failed to update game server status: %v", err)
 	}
 
@@ -1508,4 +1540,10 @@ func (gsm *GameServerManager) shouldRecreateContainer(gameServer *database.GameS
 		return true, diffs
 	}
 	return false, nil
+}
+
+func (gsm *GameServerManager) Close() {
+	_ = gsm.dockerClient.Close()
+	_ = gsm.dockerHelper.Close()
+	_ = gsm.nodeSelector.Close()
 }

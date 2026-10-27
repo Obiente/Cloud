@@ -69,8 +69,7 @@ func (dm *DeploymentManager) applyPlanLimits(config *DeploymentConfig) error {
 	maxMemoryBytes, maxCPUCores, err := dm.getPlanLimitsForDeployment(config.DeploymentID)
 	if err != nil {
 		logger.Warn("[DeploymentManager] Failed to get plan limits for deployment %s: %v", config.DeploymentID, err)
-		// Continue without limits if we can't get them
-		return nil
+		return fmt.Errorf("organization resource limits unavailable: %w", err)
 	}
 
 	// Cap memory if limit is set (non-zero)

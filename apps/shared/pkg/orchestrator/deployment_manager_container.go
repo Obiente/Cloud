@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/containerd/errdefs"
 	"github.com/mattn/go-shellwords"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -959,6 +960,20 @@ func swarmStartCommandUpdateArgs(startCommand *string) []string {
 }
 
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string, binds []string) (containerID string, runtimeChanged bool, retErr error) {
+	if config.RecoveryOnly {
+		existing, err := dm.dockerClient.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
+		if err == nil {
+			c := existing.Container
+			if c.Config == nil || c.Config.Labels["cloud.obiente.managed"] != "true" || c.Config.Labels["cloud.obiente.deployment_id"] != config.DeploymentID {
+				return "", false, fmt.Errorf("recovery name belongs to an unmanaged or different deployment")
+			}
+			return c.ID, false, nil
+		}
+		if !errdefs.IsNotFound(err) {
+			return "", false, fmt.Errorf("inspect existing recovery container: %w", err)
+		}
+	}
+
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
 
@@ -1263,6 +1278,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	if err != nil {
 		// Check for name conflict error - if container was created by another process
 		if strings.Contains(err.Error(), "is already in use") || strings.Contains(err.Error(), "already exists") {
+			if config.RecoveryOnly {
+				return "", false, fmt.Errorf("recovery container appeared concurrently; retry: %w", err)
+			}
 			logger.Info("[DeploymentManager] Container name conflict for %s: %v. Attempting to remove and retry...", name, err)
 
 			// Try to remove the conflicting container
@@ -1629,7 +1647,8 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 		if registryPassword != "" {
 			logger.Info("[DeploymentManager] Authenticating with registry %s to enable multi-node image pulls...", imageRegistryHost)
-			loginCmd := exec.CommandContext(ctx, "docker", "login", imageRegistryHost, "-u", registryUsername, "-p", registryPassword)
+			loginCmd := exec.CommandContext(ctx, "docker", "login", imageRegistryHost, "-u", registryUsername, "--password-stdin")
+			loginCmd.Stdin = strings.NewReader(registryPassword)
 			var loginStderr bytes.Buffer
 			loginCmd.Stderr = &loginStderr
 			if loginErr := loginCmd.Run(); loginErr != nil {

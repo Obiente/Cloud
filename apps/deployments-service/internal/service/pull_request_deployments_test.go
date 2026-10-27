@@ -321,7 +321,7 @@ func TestActivePreviewCountExcludesFailedBuildWithoutRuntime(t *testing.T) {
 func TestDisablingPullRequestConfigDetachesExistingRuntime(t *testing.T) {
 	db := newDeploymentServiceTestDB(t)
 	background, cancel := context.WithCancel(context.Background())
-	cancel()
+	defer cancel()
 	service := NewService(background, database.NewDeploymentRepository(db, nil), nil, nil)
 	now := time.Now()
 	autoDeploy := false
