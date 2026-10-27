@@ -1,6 +1,6 @@
 ARG BASE_REGISTRY=docker.io
 
-FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS builder
+FROM ${BASE_REGISTRY}/library/golang:1.27.3-alpine AS builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH

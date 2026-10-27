@@ -1,7 +1,7 @@
 # Build stage for Organizations Service
 ARG BASE_REGISTRY=docker.io
 
-FROM ${BASE_REGISTRY}/library/golang:1.25-alpine AS go-builder
+FROM ${BASE_REGISTRY}/library/golang:1.27.3-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
 ARG TARGETARCH
