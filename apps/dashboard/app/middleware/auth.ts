@@ -1,4 +1,7 @@
-export default defineNuxtRouteMiddleware(async (to, from) => {
+export default defineNuxtRouteMiddleware(async () => {
+  // The SSR payload owns initial authentication. Refresh it after hydration,
+  // when changing the authenticated navigation cannot invalidate the DOM.
+  if (import.meta.client && useNuxtApp().isHydrating) return;
   // Check if auth is disabled via public config
   const appConfig = useConfig();
   // Fetch config if not already loaded (with timeout to avoid blocking)
@@ -14,15 +17,11 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   const user = useAuth();
-  // Don't block navigation - fetch auth in background
-  // On SSR: use timeout to prevent blocking page render, but ensure token refresh completes
-  // On client: no timeout - let slow connections complete
+  // SSR must settle the session before rendering. Later client navigation can
+  // refresh in the background. The request itself has a bounded timeout.
   if (import.meta.server) {
-    // On SSR, we need to ensure auth is fetched (including token refresh if needed)
-    // before API calls are made. Use a longer timeout to allow token refresh to complete.
-    const fetchPromise = user.fetch();
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 2000)); // Increased to 2s to allow token refresh
-    await Promise.race([fetchPromise, timeoutPromise]);
+    // Resolve token refresh before the page makes authenticated API calls.
+    await user.fetch();
     // Don't return early - continue to check if user is authenticated
   } else {
     // Client-side: fetch without timeout, don't block navigation

@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import tailwindcss from "@tailwindcss/vite";
+import { defineNuxtConfig } from "nuxt/config";
 
 const SESSION_PASSWORD_PLACEHOLDER =
   "changeme_dashboard_session_password_please_override";
@@ -31,7 +32,7 @@ export default defineNuxtConfig({
       process.env.NODE_ENV !== "production",
   },
   vite: {
-    // @ts-ignore - Type conflict between Vite versions (@types/node@20 vs @types/node@24) in dependency tree
+    define: { __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: process.env.NUXT_HYDRATION_DIAGNOSTICS === "true" },
     plugins: [tailwindcss()],
     server: {
       hmr: {
@@ -69,6 +70,11 @@ export default defineNuxtConfig({
         output: {
           // Improved code splitting strategy for better performance
           manualChunks: (id) => {
+            // Keep descriptor initialization independent of Vue component chunks.
+            // Mixing generated descriptors into UI chunks can create execution
+            // cycles where a dependent file runs before its imports initialize.
+            const normalized = id.replaceAll("\\", "/");
+            if (normalized.includes("/packages/proto/") || normalized.includes("@bufbuild/protobuf")) return "protocol";
             // Split large, independent dependencies into separate chunks
             if (id.includes("node_modules")) {
               // Monaco Editor - very large editor dependency (~2MB)
@@ -275,7 +281,7 @@ export default defineNuxtConfig({
     esbuild: {
       options: {
         // Limit concurrency to prevent memory issues
-        target: "node20",
+        target: "node22",
       },
     },
     // Disable features that might cause hangs in Docker builds

@@ -1,5 +1,5 @@
 import type { H3Event } from "h3";
-import type { ZitadelErrorResponse, ZitadelTokenClaims } from "@obiente/types";
+import type { ZitadelErrorResponse } from "@obiente/types";
 
 // Import directly from the relative path to avoid module resolution issues
 import { AUTH_COOKIE_NAME } from "./auth";

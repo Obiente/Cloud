@@ -1,7 +1,8 @@
-import type { H3Event, SessionConfig } from "h3";
-import { useSession, createError, isEvent } from "h3";
+import type { H3Event, SessionConfig } from "@nuxt/nitro-server/h3";
+import { useSession, createError, isEvent } from "@nuxt/nitro-server/h3";
 import { defu } from "defu";
 import type { UserSession } from "@obiente/types";
+import { getAuthRuntimeConfig } from "./auth-runtime-config";
 
 type UseSessionEvent = Parameters<typeof useSession>[0];
 const SESSION_PASSWORD_PLACEHOLDER =
@@ -33,6 +34,21 @@ export async function setUserSession(
   config?: Partial<SessionConfig>
 ): Promise<UserSession> {
   const session = await _useSession(event, config);
+  // Stamp new tokens once. Reading the same session must never extend a token's lifetime.
+  if (
+    data.secure?.access_token &&
+    data.secure.access_token !== session.data.secure?.access_token
+  ) {
+    data = {
+      ...data,
+      secure: {
+        ...data.secure,
+        expires_at:
+          data.secure.expires_at ??
+          Date.now() + Math.max(0, data.secure.expires_in || 0) * 1000,
+      },
+    };
+  }
   await session.update(defu(data, session.data as Omit<UserSession, "id">));
 
   return session.data;
@@ -109,7 +125,7 @@ export function _useSession<T extends Record<string, any> = UserSession>(
   config: Partial<SessionConfig> = {}
 ) {
   if (!sessionConfig) {
-    const runtimeConfig = useRuntimeConfig(isEvent(event) ? event : undefined);
+    const runtimeConfig = getAuthRuntimeConfig(isEvent(event) ? event : undefined);
     sessionConfig = defu(
       { password: runtimeConfig.session.password },
       runtimeConfig.session

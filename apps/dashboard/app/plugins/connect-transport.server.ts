@@ -1,15 +1,18 @@
 import { createConnectTransport } from "@connectrpc/connect-node";
 import type { Transport } from "@connectrpc/connect";
-import { getCookie } from "h3";
+import { getCookie } from "@nuxt/nitro-server/h3";
 import { createAuthInterceptor } from "~/lib/transport";
+import { captureAuthRuntimeConfig } from "../../server/utils/auth-runtime-config";
 
 // Server-side plugin for SSR
 export default defineNuxtPlugin({
   name: "connect-transport-server",
   enforce: "pre", // Run early
-  setup(nuxtApp) {
+  setup() {
     const config = useRuntimeConfig();
-    
+    const event = useRequestEvent();
+    if (event) captureAuthRuntimeConfig(event, config);
+
     // Cache for disableAuth to avoid fetching on every request
     let cachedDisableAuth: boolean | null = null;
     let disableAuthFetchPromise: Promise<boolean> | null = null;
@@ -19,35 +22,43 @@ export default defineNuxtPlugin({
       if (cachedDisableAuth !== null) {
         return cachedDisableAuth;
       }
-      
+
       if (disableAuthFetchPromise) {
         const result = await disableAuthFetchPromise;
         return result ?? false;
       }
-      
+
       disableAuthFetchPromise = (async (): Promise<boolean> => {
         try {
           // Create a transport without auth for the public config endpoint
           // Use internal API host for server-side (Docker internal networking)
-          let apiHost = (config.apiHostInternal as string) || config.public.apiHost;
+          let apiHost =
+            (config.apiHostInternal as string) || config.public.apiHost;
           let publicTransport = createConnectTransport({
             baseUrl: apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
             defaultTimeoutMs: 2000, // 2 seconds timeout for faster failure detection
           });
-          
+
           const { AuthService } = await import("@obiente/proto");
           const { createClient } = await import("@connectrpc/connect");
           let client = createClient(AuthService, publicTransport);
-          
+
           let publicConfig;
           try {
             publicConfig = await client.getPublicConfig({});
           } catch (err: unknown) {
             // If internal API fails and we have a fallback, try public API
-            if (config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
-              console.warn(`[Server Transport] Internal API (${apiHost}) failed (${(err as any)?.code || (err as any)?.message}), trying public API as fallback`);
+            if (
+              config.apiHostInternal &&
+              apiHost === (config.apiHostInternal as string)
+            ) {
+              console.warn(
+                `[Server Transport] Internal API (${apiHost}) failed (${
+                  (err as any)?.code || (err as any)?.message
+                }), trying public API as fallback`
+              );
               apiHost = config.public.apiHost;
               publicTransport = createConnectTransport({
                 baseUrl: apiHost,
@@ -61,19 +72,22 @@ export default defineNuxtPlugin({
               throw err;
             }
           }
-          
+
           const result = publicConfig.disableAuth ?? false;
           cachedDisableAuth = result;
           return result;
         } catch (err) {
-          console.warn("[Server Transport] Failed to fetch public config, defaulting to auth required:", err);
+          console.warn(
+            "[Server Transport] Failed to fetch public config, defaulting to auth required:",
+            err
+          );
           cachedDisableAuth = false;
           return false;
         } finally {
           disableAuthFetchPromise = null;
         }
       })();
-      
+
       return await disableAuthFetchPromise;
     };
 
@@ -90,7 +104,6 @@ export default defineNuxtPlugin({
       }
 
       // On server-side, get the token from the event
-      const event = useRequestEvent();
       if (!event) return undefined;
 
       // Always check session first (it's the source of truth and gets updated on refresh)
@@ -108,7 +121,10 @@ export default defineNuxtPlugin({
           return sessionToken;
         }
       } catch (e) {
-        console.error("[Server Transport] Failed to get token from session:", e);
+        console.error(
+          "[Server Transport] Failed to get token from session:",
+          e
+        );
       }
 
       // Fallback to cookie if session doesn't have token

@@ -39,12 +39,11 @@ export default defineEventHandler(async (event) => {
     // For this implementation, we'll attempt to create via OAuth2 registration endpoint
     // or use Zitadel's User API if available
     
-    let userId: string;
     
     try {
       // Try to create user via Zitadel's User API
       // This requires a service account with proper permissions
-      const createUserResponse = await $fetch<{ userId: string }>(
+      await $fetch<{ userId: string }>(
         `${config.public.oidcBase}/management/v1/users/human/_import`,
         {
           method: "POST",
@@ -75,7 +74,6 @@ export default defineEventHandler(async (event) => {
         throw new Error("User creation via Management API not available");
       });
       
-      userId = createUserResponse.userId;
     } catch (err: any) {
       // Fallback: Use OAuth2 registration endpoint if available
       // This is a simplified approach - in production, use Management API
@@ -106,7 +104,7 @@ export default defineEventHandler(async (event) => {
           }),
         }
       );
-    } catch (err: any) {
+    } catch {
       throw createError({
         statusCode: 500,
         message: "Account created but authentication failed. Please try logging in.",

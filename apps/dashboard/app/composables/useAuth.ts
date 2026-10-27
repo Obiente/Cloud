@@ -1,4 +1,4 @@
-import { appendResponseHeader } from "h3";
+import { appendResponseHeader } from "@nuxt/nitro-server/h3";
 import type { User, UserSession } from "@obiente/types";
 import { useOrganizationsStore } from "~/stores/organizations";
 
@@ -6,10 +6,13 @@ let clientAuthInitialized = false;
 let clientAuthInitScheduled = false;
 let clientTokenCheckInterval: ReturnType<typeof setInterval> | null = null;
 let sessionWatcherStarted = false;
-let tokenFetchInProgress = false;
+const clientAuthRequests = new Set<AbortController>();
+let tokenRefreshRequest: { generation: number; promise: Promise<void> } | null =
+  null;
 
 export const useAuth = () => {
   const serverEvent = import.meta.server ? useRequestEvent() : null;
+  const serverConfig = import.meta.server ? useRuntimeConfig() : undefined;
 
   // Reactive state
   const sessionState = useState<UserSession | null>(
@@ -24,60 +27,117 @@ export const useAuth = () => {
   const isAuthenticated = computed(() =>
     Boolean(sessionState.value && user.value)
   );
-  const isLoading = ref(false);
+  const isLoading = useState("auth-loading", () => false);
+  const generation = useState("auth-generation", () => 0);
+  const sessionRequest = useState("auth-session-request", () => 0);
+  const loggingOut = useState("auth-logging-out", () => false);
+  const invalidateToken = () => {
+    generation.value++;
+    for (const controller of clientAuthRequests) controller.abort();
+    clientAuthRequests.clear();
+    accessToken.value = null;
+    tokenExpiry.value = null;
+    isRefreshing.value = false;
+  };
+  const statusCode = (error: unknown) => {
+    const value = error as { statusCode?: number; status?: number } | null;
+    return value?.statusCode ?? value?.status;
+  };
 
   const orgStore = useOrganizationsStore();
   // Don't call hydrate() here - the store auto-hydrates after hydration completes
   // Calling it here would access localStorage during plugin initialization, causing Chrome freeze
 
-  // Get current user session
+  // Only the newest request for the current identity may change session state.
   const fetch = async () => {
+    if (loggingOut.value) return;
+    const request = ++sessionRequest.value;
+    const startedGeneration = generation.value;
+    const current = () =>
+      request === sessionRequest.value &&
+      startedGeneration === generation.value;
+    isLoading.value = true;
+    const controller = new AbortController();
+    if (import.meta.client) clientAuthRequests.add(controller);
     try {
-      isLoading.value = true;
-      sessionState.value = await useRequestFetch()<UserSession>(
-        "/auth/session",
-        {
-          headers: {
-            accept: "application/json",
-          },
-          retry: false,
+      let session: UserSession | null;
+      if (import.meta.server && serverEvent) {
+        const { readCurrentSession } = await import(
+          "../../server/utils/current-session"
+        );
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          session = await readCurrentSession(
+            serverEvent,
+            controller.signal,
+            serverConfig
+          );
+        } finally {
+          clearTimeout(timeout);
         }
-      ).catch(() => null);
-
-      if (!authReadyState.value) {
-        authReadyState.value = true;
+      } else {
+        session = await useRequestFetch()<UserSession>("/auth/session", {
+          headers: { accept: "application/json" },
+          retry: false,
+          timeout: 5000,
+          signal: controller.signal,
+        });
       }
+      if (!current()) return;
+      authReadyState.value = true;
+      sessionState.value = session?.user ? session : null;
     } catch (error) {
-      console.error("[useAuth] Failed to get current user:", error);
-      sessionState.value = null;
+      if (!current()) return;
+      // An unavailable identity provider is not evidence that the user logged out.
+      if (statusCode(error) === 401 || statusCode(error) === 403)
+        sessionState.value = null;
+      else console.error("[useAuth] Failed to get current user:", error);
     } finally {
-      isLoading.value = false;
+      clientAuthRequests.delete(controller);
+      if (request === sessionRequest.value) {
+        authReadyState.value = true;
+        isLoading.value = false;
+      }
     }
   };
 
   // Logout function
   const logout = async () => {
-    // Set flag to prevent silent auth immediately after logout
+    // Invalidate pending reads before awaiting the session deletion.
+    const idToken = sessionState.value?.secure?.id_token;
+    loggingOut.value = true;
+    invalidateToken();
+    sessionRequest.value++;
+    sessionState.value = null;
+    authReadyState.value = true;
+    isLoading.value = false;
+    orgStore.reset();
+    const logoutGeneration = generation.value;
     if (import.meta.client) {
-      sessionStorage.setItem("obiente_logout_time", Date.now().toString());
+      try {
+        sessionStorage.setItem("obiente_logout_time", Date.now().toString());
+      } catch {
+        /* Storage may be disabled. */
+      }
     }
 
-    // Get id_token from session BEFORE clearing it (needed for logout)
-    const idToken = sessionState.value?.secure?.id_token;
-
-    await useRequestFetch()("/auth/session", {
-      method: "DELETE",
-      onResponse({ response: { headers } }) {
-        if (import.meta.server && serverEvent) {
-          for (const setCookie of headers.getSetCookie()) {
-            appendResponseHeader(serverEvent, "Set-Cookie", setCookie);
+    try {
+      await useRequestFetch()("/auth/session", {
+        method: "DELETE",
+        retry: false,
+        timeout: 5000,
+        onResponse({ response: { headers } }) {
+          if (import.meta.server && serverEvent) {
+            for (const setCookie of headers.getSetCookie()) {
+              appendResponseHeader(serverEvent, "Set-Cookie", setCookie);
+            }
           }
-        }
-      },
-    });
-    sessionState.value = null;
-    authReadyState.value = false;
-    orgStore.reset();
+        },
+      });
+    } finally {
+      if (generation.value === logoutGeneration) loggingOut.value = false;
+    }
+    if (generation.value !== logoutGeneration) return;
 
     // Redirect to Zitadel logout endpoint to clear Zitadel session
     if (import.meta.client) {
@@ -117,7 +177,11 @@ export const useAuth = () => {
       const state = crypto.randomUUID();
       params.set("state", state);
       // Store state to verify on redirect (optional, for security)
-      sessionStorage.setItem("logout_state", state);
+      try {
+        sessionStorage.setItem("logout_state", state);
+      } catch {
+        /* Storage may be disabled. */
+      }
 
       const logoutUrl = `${endSessionEndpoint}?${params.toString()}`;
 
@@ -181,7 +245,7 @@ export const useAuth = () => {
           if (iframe.parentNode) {
             document.body.removeChild(iframe);
           }
-        } catch (e) {
+        } catch {
           // Iframe might already be removed
         }
         window.removeEventListener("message", messageHandler);
@@ -358,98 +422,97 @@ export const useAuth = () => {
     }
   };
 
-  // Get the current access token with caching to prevent excessive fetches
-  let getAccessTokenPromise: Promise<string | null> | null = null;
+  const validToken = () =>
+    accessToken.value && tokenExpiry.value && Date.now() < tokenExpiry.value;
+
   const getAccessToken = async (
     forceRefresh = false
   ): Promise<string | null> => {
-    if (import.meta.server) {
+    if (import.meta.server)
       return sessionState.value?.secure?.access_token || null;
-    }
-
-    // If we have a valid cached token and not forcing refresh, return it immediately
-    if (
-      !forceRefresh &&
-      accessToken.value &&
-      tokenExpiry.value &&
-      Date.now() < tokenExpiry.value
-    ) {
-      return accessToken.value;
-    }
-
-    // If there's already a refresh in progress, wait for it instead of starting a new one
-    if (!forceRefresh && getAccessTokenPromise) {
-      return await getAccessTokenPromise;
-    }
-
-    // Only refresh if needed
-    if (
-      !accessToken.value ||
-      forceRefresh ||
-      (tokenExpiry.value && Date.now() >= tokenExpiry.value)
-    ) {
-      getAccessTokenPromise = refreshAccessToken(forceRefresh).then(() => {
-        getAccessTokenPromise = null;
-        return accessToken.value;
-      });
-      return await getAccessTokenPromise;
-    }
-
-    return accessToken.value;
+    if (loggingOut.value || !sessionState.value?.user) return null;
+    if (!forceRefresh && validToken()) return accessToken.value;
+    const startedGeneration = generation.value;
+    await refreshAccessToken(forceRefresh);
+    return startedGeneration === generation.value && validToken()
+      ? accessToken.value
+      : null;
   };
 
-  // Refresh the access token
+  // Share a refresh across all composable instances. Rotating refresh tokens
+  // must not be exchanged concurrently by the layout, page and RPC transport.
   const refreshAccessToken = async (force = false): Promise<void> => {
-    try {
-      if (isRefreshing.value && !force) {
-        return;
-      }
-
-      isRefreshing.value = true;
-
-      if (!force && tokenExpiry.value && Date.now() < tokenExpiry.value) {
-        return;
-      }
-
+    if (loggingOut.value || !sessionState.value?.user) return;
+    const startedGeneration = generation.value;
+    if (tokenRefreshRequest?.generation === startedGeneration)
+      return tokenRefreshRequest.promise;
+    if (!force && validToken()) return;
+    const current = () =>
+      generation.value === startedGeneration && !loggingOut.value;
+    const save = (response: {
+      accessToken?: string | null;
+      expiresIn?: number;
+    }) => {
+      if (!current() || !response?.accessToken) return false;
+      const expiresIn = response.expiresIn ?? 60;
+      if (expiresIn <= 0) return false;
+      accessToken.value = response.accessToken;
+      tokenExpiry.value =
+        Date.now() +
+        Math.max(1, expiresIn - Math.min(30, expiresIn / 2)) * 1000;
+      return true;
+    };
+    isRefreshing.value = true;
+    const controller = new AbortController();
+    clientAuthRequests.add(controller);
+    const promise = (async () => {
       try {
-        const response = await $fetch<{
-          accessToken: string;
-          expiresIn?: number;
-        }>("/auth/token");
-        if (response?.accessToken) {
-          accessToken.value = response.accessToken;
-          if (response.expiresIn) {
-            tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
+        if (!force) {
+          try {
+            const response = await $fetch<{
+              accessToken: string | null;
+              expiresIn?: number;
+            }>("/auth/token", {
+              retry: false,
+              timeout: 5000,
+              signal: controller.signal,
+            });
+            if (save(response)) return;
+          } catch {
+            /* The refresh endpoint can recover an expired session token. */
           }
-          return;
         }
-      } catch {}
-
-      const response = await $fetch<{
-        accessToken: string;
-        expiresIn?: number;
-      }>("/auth/refresh", { method: "POST" });
-      if (response.accessToken) {
-        accessToken.value = response.accessToken;
-        if (response.expiresIn) {
-          tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
+        if (!current()) return;
+        save(
+          await $fetch<{ accessToken: string; expiresIn?: number }>(
+            "/auth/refresh",
+            {
+              method: "POST",
+              retry: false,
+              timeout: 5000,
+              signal: controller.signal,
+            }
+          )
+        );
+      } catch (error) {
+        if (!current()) return;
+        console.error("Failed to refresh access token:", error);
+        if (statusCode(error) === 401) {
+          await logout().catch((logoutError) =>
+            console.error("Failed to end expired session:", logoutError)
+          );
         }
+      } finally {
+        clientAuthRequests.delete(controller);
+        if (current()) isRefreshing.value = false;
       }
-    } catch (error) {
-      console.error("Failed to refresh access token:", error);
-      accessToken.value = null;
-      tokenExpiry.value = null;
-
-      if (
-        error &&
-        typeof error === "object" &&
-        "statusCode" in error &&
-        (error as { statusCode: unknown }).statusCode === 401
-      ) {
-        logout();
-      }
+    })();
+    const request = { generation: startedGeneration, promise };
+    tokenRefreshRequest = request;
+    try {
+      await promise;
     } finally {
-      isRefreshing.value = false;
+      if (tokenRefreshRequest === request) tokenRefreshRequest = null;
     }
   };
 
@@ -498,68 +561,28 @@ export const useAuth = () => {
     sessionWatcherStarted = true;
     watch(
       () => sessionState.value,
-      async (newSession, oldSession) => {
-        if (tokenFetchInProgress) {
-          return;
+      (newSession, oldSession) => {
+        const identity = (session: UserSession | null) =>
+          session?.user
+            ? `${session.id || ""}:${
+                session.user.sub ||
+                (session.user as User & { id?: string }).id ||
+                ""
+              }`
+            : "";
+        if (identity(newSession) !== identity(oldSession)) {
+          invalidateToken();
+          if (oldSession?.user) orgStore.reset();
         }
-
-        if (newSession && newSession !== oldSession) {
-          const newUserSub = newSession?.user?.sub;
-          const oldUserSub = oldSession?.user?.sub;
-
-          if (
-            newUserSub &&
-            oldUserSub &&
-            newUserSub === oldUserSub &&
-            accessToken.value
-          ) {
-            return;
-          }
-
-          try {
-            if (
-              import.meta.client &&
-              (!accessToken.value ||
-                (tokenExpiry.value && Date.now() >= tokenExpiry.value))
-            ) {
-              tokenFetchInProgress = true;
-
-              requestAnimationFrame(async () => {
-                try {
-                  const response = await $fetch<{
-                    accessToken: string;
-                    expiresIn?: number;
-                  }>("/auth/token");
-                  if (response.accessToken) {
-                    accessToken.value = response.accessToken;
-                    if (response.expiresIn) {
-                      tokenExpiry.value =
-                        Date.now() + response.expiresIn * 1000 - 30000;
-                    }
-                  }
-                } catch (e) {
-                  console.error(
-                    "[useAuth] Failed to fetch token after session update:",
-                    e
-                  );
-                } finally {
-                  tokenFetchInProgress = false;
-                }
-              });
-            }
-          } catch (e) {
-            console.error(
-              "[useAuth] Failed to fetch token after session update:",
-              e
-            );
-            tokenFetchInProgress = false;
-          }
-        } else if (!newSession && oldSession) {
-          accessToken.value = null;
-          tokenExpiry.value = null;
+        if (newSession?.user && !loggingOut.value && !validToken()) {
+          const scheduledGeneration = generation.value;
+          requestAnimationFrame(() => {
+            if (generation.value === scheduledGeneration)
+              void refreshAccessToken();
+          });
         }
       },
-      { immediate: false }
+      { flush: "sync" }
     );
   }
 
@@ -598,18 +621,16 @@ export const useAuth = () => {
           }, 60 * 1000);
         }
       });
-    } else {
-      fetch();
     }
   };
 
   if (import.meta.client) {
     if (!clientAuthInitScheduled && !clientAuthInitialized) {
       clientAuthInitScheduled = true;
-      setTimeout(initializeAuth, 0);
+      // Preserve the server session throughout hydration. A timer can run while
+      // an async layout is still hydrating and change its entire navigation.
+      onNuxtReady(initializeAuth);
     }
-  } else {
-    initializeAuth();
   }
 
   // Create computed properties lazily to avoid triggering during initialization

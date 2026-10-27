@@ -1112,6 +1112,7 @@ const exampleWebDeployment: Deployment = {
   healthStatus: "Healthy",
   bandwidthUsage: BigInt(0),
   storageUsage: BigInt(1024 * 1024 * 50),
+  storageAvailable: true,
   buildTime: 45,
   size: "50 MB",
   environment: Environment.PRODUCTION,
@@ -1137,6 +1138,7 @@ const exampleGameServer: GameServer = {
   memoryBytes: BigInt(4 * 1024 * 1024 * 1024), // 4 GB
   dockerImage: "itzg/minecraft-server:latest",
   envVars: {},
+  storageAvailable: true,
   storageBytes: BigInt(20 * 1024 * 1024 * 1024), // 20 GB
   createdBy: "mock-user",
   $typeName: "obiente.cloud.gameservers.v1.GameServer" as const,
