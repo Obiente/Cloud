@@ -10,6 +10,26 @@ Transactional emails in Obiente Cloud share a single responsive template and are
 
 When `SMTP_HOST` or `SMTP_FROM_ADDRESS` are missing, the API falls back to a no-op sender and logs a single reminder that email delivery is disabled.
 
+The notifications service treats missing SMTP configuration as a retryable delivery failure. Notifications whose preferences permit email remain queued until configuration is restored.
+
+## Notification delivery recovery
+
+The notifications service commits each new notification and its email delivery job in one database transaction. Workers claim jobs from `notification_email_deliveries`, so bursts, service restarts and SMTP outages do not discard accepted work. Existing notifications are not retroactively queued during upgrade.
+
+Four workers poll every five seconds and retry failures with backoff from 30 seconds to 15 minutes. Each send has a 30-second timeout; abandoned claims become eligible again after a two-minute lease. SMTP connections also respect cancellation and a deadline for the entire exchange, including the server greeting. Multiple service replicas can safely share the outbox.
+
+Delivery is at least once. If SMTP accepts a message but the database acknowledgement fails, recovery may send a duplicate. Current email preferences are checked before each attempt; disabled email or a severity below the user's threshold completes the job without sending.
+
+Operators can inspect aggregate queue state without exposing notification content:
+
+```sql
+SELECT status, count(*), min(created_at) AS oldest
+FROM notification_email_deliveries
+GROUP BY status;
+```
+
+`pending` includes retries, `processing` has an active or recoverable lease, `completed` includes preference-based skips, and `failed` retains an invalid payload for investigation. Review `available_at`, `lease_until`, `attempts` and `last_error` when delivery stalls. Payloads and errors can contain private data; restrict access. Completed rows remain available for retention policies, and pending or processing rows must not be removed by cleanup jobs.
+
 ## Rendering Email Content
 
 All transactional messages share the template defined in `internal/email/templates/base.html`. Populate it by constructing a `TemplateData` payload:

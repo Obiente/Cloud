@@ -338,13 +338,11 @@ func (s *Service) CreateNotification(ctx context.Context, req *connect.Request[n
 		notification.Metadata = string(metadataJSON)
 	}
 
-	if err := database.DB.Create(notification).Error; err != nil {
+	if err := persistNotification(ctx, notification); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create notification: %w", err))
 	}
 
 	logger.Info("[Notifications] Created notification via RPC for user %s, type %s, severity %s: %s", req.Msg.GetUserId(), notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
-
-	enqueueNotificationEmail(req.Msg.GetUserId(), req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
 
 	return connect.NewResponse(&notificationsv1.CreateNotificationResponse{
 		Notification: notificationToProto(notification),
@@ -438,14 +436,12 @@ func (s *Service) CreateOrganizationNotification(ctx context.Context, req *conne
 			}
 		}
 
-		if err := database.DB.Create(notification).Error; err != nil {
+		if err := persistNotification(ctx, notification); err != nil {
 			logger.Warn("[Notifications] Failed to create notification for user %s: %v", member.UserID, err)
 			continue
 		}
 
 		logger.Info("[Notifications] Created notification for org member %s, type %s, severity %s: %s", member.UserID, notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
-
-		enqueueNotificationEmail(member.UserID, req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
 
 		notifications = append(notifications, notificationToProto(notification))
 	}
@@ -612,13 +608,11 @@ func CreateNotificationForUser(ctx context.Context, userID string, orgID *string
 		notification.Metadata = string(metadataJSON)
 	}
 
-	if err := database.DB.Create(notification).Error; err != nil {
+	if err := persistNotification(ctx, notification); err != nil {
 		return fmt.Errorf("create notification: %w", err)
 	}
 
 	logger.Info("[Notifications] Created notification for user %s, type %s, severity %s: %s", userID, notificationTypeToString(notificationType), notificationSeverityToString(severity), title)
-
-	enqueueNotificationEmail(userID, notificationType, severity, title, message, actionURL, actionLabel)
 
 	return nil
 }
@@ -631,7 +625,7 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 
 	// Get user preference for this notification type
 	var preference database.NotificationPreference
-	err := database.DB.Where("user_id = ? AND notification_type = ?", userID, notificationTypeStr).First(&preference).Error
+	err := database.DB.WithContext(ctx).Where("user_id = ? AND notification_type = ?", userID, notificationTypeStr).First(&preference).Error
 
 	// If no preference found, use defaults based on notification type
 	emailEnabled := false
@@ -712,7 +706,7 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 	mailer := email.NewSenderFromEnv()
 	if !mailer.Enabled() {
 		logger.Debug("[Notifications] Email sender not enabled (SMTP not configured)")
-		return nil // Email not configured, not an error
+		return fmt.Errorf("email transport is not configured")
 	}
 
 	// Get console URL for action links
