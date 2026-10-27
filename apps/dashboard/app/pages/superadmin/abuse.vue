@@ -1,5 +1,6 @@
 <template>
   <OuiStack gap="xl">
+    <ErrorAlert v-if="loadError" :error="loadError" title="Abuse detection is unavailable" hint="Results could not be verified. Try refreshing again." />
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Abuse Detection</OuiText>
@@ -16,7 +17,7 @@
     </OuiFlex>
 
     <!-- Metrics Overview -->
-    <OuiGrid :cols="{ sm: 1, md: 2, xl: 5, '2xl': 6 }" gap="md">
+    <OuiGrid v-if="!loadError" :cols="{ sm: 1, md: 2, xl: 5, '2xl': 6 }" gap="md">
       <OuiCard
         v-for="metric in metrics"
         :key="metric.label"
@@ -48,7 +49,7 @@
           <OuiText color="tertiary">Loading...</OuiText>
         </div>
         <OuiTable
-          v-else
+          v-else-if="!loadError && abuseData"
           :columns="orgColumns"
           :rows="suspiciousOrgs"
           :empty-text="'No suspicious organizations found.'"
@@ -87,7 +88,7 @@
           <OuiText color="tertiary">Loading...</OuiText>
         </div>
         <OuiTable
-          v-else
+          v-else-if="!loadError && abuseData"
           :columns="activityColumns"
           :rows="suspiciousActivities"
           :empty-text="'No suspicious activities found.'"
@@ -142,7 +143,7 @@ async function fetchAbuseDetection() {
 }
 
 // Use client-side fetching for non-blocking navigation
-const { data: abuseData, pending: isLoading } = useClientFetch("superadmin-abuse", fetchAbuseDetection);
+const { data: abuseData, pending: isLoading, error: loadError, refresh: refreshAbuse } = useClientFetch("superadmin-abuse", fetchAbuseDetection);
 
 const metrics = computed(() => {
   const m = abuseData.value?.metrics;
@@ -280,11 +281,11 @@ function getSeverityVariant(severity: number): "danger" | "warning" {
 }
 
 function viewOrganization(orgId: string) {
-  router.push(`/superadmin/organizations?org=${orgId}`);
+  router.push(`/superadmin/organizations/${encodeURIComponent(orgId)}`);
 }
 
 function refresh() {
-  fetchAbuseDetection();
+  return refreshAbuse();
 }
 
 function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | null) {

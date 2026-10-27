@@ -111,8 +111,8 @@
                   class="inline-flex items-center rounded px-1 py-0.5 text-[10px] font-medium bg-primary/10 text-primary leading-none"
                 >Personal</span>
               </div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                {{ value }}
+              <div v-if="row.organizationId && row.organizationId !== row.organizationName" class="text-xs font-mono text-text-tertiary mt-0.5 break-all">
+                {{ row.organizationId }}
               </div>
               <div v-if="orgOwnerMap.get(row.organizationId)" class="text-xs text-text-muted mt-0.5 flex items-center gap-1">
                 <span class="text-text-tertiary">Owner:</span>
@@ -121,9 +121,6 @@
                   class="text-primary hover:underline truncate max-w-[160px]"
                 >{{ orgOwnerMap.get(row.organizationId)?.ownerName }}</NuxtLink>
               </div>
-              <div v-else-if="row.customerEmail" class="text-xs text-text-muted mt-0.5">
-                {{ row.customerEmail }}
-              </div>
             </div>
           </template>
           <template #cell-invoiceLabel="{ value, row }">
@@ -131,8 +128,8 @@
               <div class="font-medium text-text-primary">
                 {{ row.invoice?.number || value }}
               </div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                {{ value }}
+              <div v-if="row.invoice?.id && row.invoice.id !== value" class="text-xs font-mono text-text-tertiary mt-0.5 break-all">
+                {{ row.invoice.id }}
               </div>
             </div>
           </template>
@@ -340,7 +337,7 @@ const invoices = computed(() => {
           inv.organizationName || inv.organizationId || "Unknown organization",
         invoiceLabel: invoice?.number || invoice?.id || "Unknown invoice",
         organizationId: inv.organizationId || "",
-        organizationName: inv.organizationName || "Unknown",
+        organizationName: inv.organizationName || (inv.organizationId ? inv.organizationId : "Unlinked customer"),
         customerEmail: inv.customerEmail || "",
         amountDue: Number(inv.invoice?.amountDue || 0),
         amountPaid: Number(inv.invoice?.amountPaid || 0),

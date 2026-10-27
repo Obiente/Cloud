@@ -72,6 +72,9 @@
         <OuiBox position="sticky" class="top-0 z-30 min-w-0 px-2 pt-2 pb-2 xl:px-0 xl:pt-0 xl:pb-2">
           <AppHeader
             class="w-full min-w-0"
+            :title="pageContext.title"
+            :subtitle="pageContext.section"
+            :subtitle-to="currentPageRoute.path.startsWith('/superadmin') ? '/superadmin' : '/admin/quotas'"
             :notification-count="unreadCount"
             @notifications-click="isNotificationsOpen = !isNotificationsOpen"
           >
@@ -89,7 +92,7 @@
               </OuiButton>
             </template>
             <template #title>
-              <slot name="title">Dashboard</slot>
+              <slot name="title">{{ pageContext.title }}</slot>
             </template>
           </AppHeader>
         </OuiBox>
@@ -191,47 +194,34 @@
   }
 </style>
 <script setup lang="ts">
+import { adminPageContext } from "~/utils/adminPresentation";
   import { onBeforeUnmount, onMounted, computed, ref, watch, type ComponentPublicInstance } from "vue";
   import { Bars3Icon, XMarkIcon, LockClosedIcon, ArrowPathIcon, HomeIcon } from "@heroicons/vue/24/outline";
   import AppHeader from "~/components/app/AppHeader.vue";
 
   // Pinia user store
   const user = useAuth();
+  // Resolve one stable session before rendering. Starting unawaited session
+  // requests from every useAuth caller could change the SSR tree mid-render.
+  await (user.ready ? Promise.resolve() : user.fetch());
   const superAdmin = useSuperAdmin();
   const config = useConfig();
   
-  // Fetch config on mount (non-blocking)
-  // On server, await briefly then continue
-  // On client, fetch in background
-  if (import.meta.server) {
-    const configPromise = config.fetchConfig();
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 300));
-    await Promise.race([configPromise, timeoutPromise]);
-  } else {
-    // Client-side: fetch in background, don't block
-    config.fetchConfig().catch(() => null);
-  }
+  // Keep the same async setup boundary on server and client so Vue generates
+  // matching control IDs during hydration. Existing payload state stays intact.
+  await Promise.race([
+    config.fetchConfig(),
+    new Promise(resolve => setTimeout(resolve, 300)),
+  ]);
 
-  // Reset superadmin state when user logs in or changes
-  watch(() => user.isAuthenticated, (isAuthenticated) => {
-    if (isAuthenticated) {
-      // Reset superadmin state when user logs in to force fresh check
-      superAdmin.reset();
-    }
-  }, { immediate: true });
+  // A layout mount is not a login. Reset only when the signed-in identity changes.
+  watch(() => user.isAuthenticated ? user.user?.sub : null, () => {
+    superAdmin.reset();
+    if (user.isAuthenticated) void superAdmin.fetchOverview();
+  });
 
-  // Fetch superadmin overview (non-blocking)
-  // On server, await briefly then continue
-  // On client, fetch in background
-  if (import.meta.server) {
-    const overviewPromise = superAdmin.fetchOverview();
-    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 300));
-    await Promise.race([overviewPromise, timeoutPromise]);
-  } else {
-    // Client-side: fetch in background, don't block
-    superAdmin.fetchOverview().catch(() => null);
-  }
-  
+  await superAdmin.fetchOverview();
+
   // Show superadmin sidebar if allowed is explicitly true (not null or false)
   const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
@@ -318,4 +308,6 @@
     if (!id) return;
     await user.switchOrganization(id);
   };
+const currentPageRoute = useRoute();
+const pageContext = computed(() => adminPageContext(currentPageRoute.path));
 </script>

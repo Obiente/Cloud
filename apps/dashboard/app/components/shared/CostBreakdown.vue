@@ -5,13 +5,13 @@
         <OuiFlex justify="between" align="center">
           <UiSectionHeader :icon="BanknotesIcon" color="success">Cost Estimate</UiSectionHeader>
           <OuiText size="xs" color="tertiary">
-            Current: {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
+            Current: {{ usageData.current.costEstimateUnavailable ? "Unavailable" : formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
           </OuiText>
         </OuiFlex>
 
         <!-- Total -->
         <OuiText size="2xl" weight="semibold">
-          {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
+          {{ usageData.estimatedMonthly.costEstimateUnavailable ? "Unavailable" : formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
           <OuiText as="span" size="xs" color="tertiary"> /mo projected</OuiText>
         </OuiText>
 
@@ -66,16 +66,17 @@ const formatCurrency = (amount: number) =>
 
 // Cost breakdown
 const costBreakdown = computed(() => {
-  if (!props.usageData?.estimatedMonthly) return [];
+  if (!props.usageData?.estimatedMonthly || props.usageData.estimatedMonthly.costEstimateUnavailable) return [];
   const estimated = props.usageData.estimatedMonthly;
   const totalCents = Number(estimated.estimatedCostCents);
   if (totalCents <= 0) return [];
 
-  const cpu = estimated.cpuCostCents ? Number(estimated.cpuCostCents) : totalCents * 0.4;
-  const mem = estimated.memoryCostCents ? Number(estimated.memoryCostCents) : totalCents * 0.3;
-  const bw = estimated.bandwidthCostCents ? Number(estimated.bandwidthCostCents) : totalCents * 0.2;
-  const stor = estimated.storageCostCents ? Number(estimated.storageCostCents) : totalCents * 0.1;
+  const cpu = Number(estimated.cpuCostCents ?? 0);
+  const mem = Number(estimated.memoryCostCents ?? 0);
+  const bw = Number(estimated.bandwidthCostCents ?? 0);
+  const stor = Number(estimated.storageCostCents ?? 0);
   const sum = cpu + mem + bw + stor;
+  if (sum <= 0) return [];
 
   return [
     { label: "CPU", value: formatCurrency(cpu / 100), color: "bg-accent-primary", pct: Math.round((cpu / sum) * 100) },

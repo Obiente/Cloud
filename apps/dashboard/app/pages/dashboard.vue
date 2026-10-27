@@ -203,10 +203,10 @@
                     >Storage</OuiText
                   >
                   <OuiText size="xs" color="tertiary">
-                    {{ formatBytes(Number(usageData.current.storageBytes)) }}
+                    {{ usageData.current.storageMeasurementUnavailable ? "Unavailable" : formatBytes(Number(usageData.current.storageBytes)) }}
                   </OuiText>
                 </OuiFlex>
-                <OuiBox
+                <OuiBox v-if="!usageData.current.storageMeasurementUnavailable"
                   w="full"
                   class="h-0.5 bg-surface-muted overflow-hidden rounded-full"
                 >
@@ -215,7 +215,7 @@
                     :style="{ width: `${storageUsagePercent}%` }"
                   />
                 </OuiBox>
-                <OuiText size="xs" color="tertiary">
+                <OuiText v-if="!usageData.current.storageMeasurementUnavailable" size="xs" color="tertiary">
                   {{
                     formatQuota(
                       Number(usageData.current.storageBytes),
@@ -258,7 +258,7 @@
                   <OuiStack gap="xs">
                     <OuiText size="xs" color="tertiary">Total Estimated</OuiText>
                     <OuiText size="xl" weight="semibold" color="primary">
-                      {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
+                      {{ usageData.estimatedMonthly.costEstimateUnavailable ? "Unavailable" : formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
                     </OuiText>
                   </OuiStack>
                   <OuiBadge variant="secondary" size="sm">{{ usageData.month }}</OuiBadge>
@@ -485,6 +485,8 @@
     DeploymentType,
     OrganizationService,
     VPSService,
+    GameServerService,
+    DatabaseService,
   } from "@obiente/proto";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import { composeQueryUrl } from "~/utils/queryParams";
@@ -513,6 +515,8 @@
   const deploymentClient = useConnectClient(DeploymentService);
   const orgClient = useConnectClient(OrganizationService);
   const vpsClient = useConnectClient(VPSService);
+  const gameServerClient = useConnectClient(GameServerService);
+  const databaseClient = useConnectClient(DatabaseService);
   const orgsStore = useOrganizationsStore();
   const auth = useAuth();
 
@@ -651,11 +655,15 @@
         console.error("Failed to fetch VPS count:", error);
       }
 
+      const [gameServerResult, databaseResult] = await Promise.all([
+        gameServerClient.listGameServers({ organizationId: orgId }),
+        databaseClient.listDatabases({ organizationId: orgId, page: 1, perPage: 1 }),
+      ]);
       const stats = {
         deployments: deployments.length,
-        gameServers: 0, // TODO: Fetch from game server API
+        gameServers: gameServerResult.gameServers.length,
         vpsInstances: vpsCount,
-        databases: 0,
+        databases: Number(databaseResult.pagination?.total || 0),
         monthlySpend: 0,
         statuses,
       };
@@ -796,7 +804,7 @@
 
   // Cost breakdown
   const costBreakdown = computed(() => {
-    if (!usageData.value?.estimatedMonthly) return [];
+    if (!usageData.value?.estimatedMonthly || usageData.value.estimatedMonthly.costEstimateUnavailable) return [];
     const estimated = usageData.value.estimatedMonthly;
     const breakdown = [];
 
@@ -962,17 +970,7 @@
     composeQueryUrl("/deployments", { status: String(DeploymentStatus.FAILED) })
   );
 
-  // Auto-refresh using useAsyncData refresh
-  const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
-  onMounted(() => {
-    refreshInterval.value = setInterval(() => {
-      refreshDashboard();
-      refreshUsage();
-    }, 30000);
-  });
-  onUnmounted(() => {
-    if (refreshInterval.value) clearInterval(refreshInterval.value);
-  });
+  useAutoRefresh(async () => { await Promise.all([refreshDashboard(), refreshUsage()]); }, 30_000);
 
   const statusVariant = (
     status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"

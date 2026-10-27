@@ -17,7 +17,7 @@
     search-placeholder="Search by name, email, username, ID…"
     @update:search="handleSearchUpdate"
     @filter-change="handleFilterChange"
-    @refresh="loadUsers"
+    @refresh="refreshUsers"
     @row-click="(row) => viewUser(row.id)"
     @page-change="goToPage"
   >
@@ -107,6 +107,7 @@ const pagination = ref({
   totalPages: 0,
 });
 const search = ref("");
+const requestedSearch = ref("");
 const roleFilter = ref<string>("all");
 let searchTimeout: NodeJS.Timeout | null = null;
 
@@ -197,7 +198,7 @@ async function loadUsers() {
     const response = await client.listUsers({
       page: pagination.value.page,
       perPage: pagination.value.perPage,
-      search: search.value || undefined,
+      search: requestedSearch.value || undefined,
     });
     const userList = response.users || [];
     
@@ -246,10 +247,9 @@ async function loadUsers() {
 }
 
 // Use client-side fetching for non-blocking navigation
-const { data: usersData, pending: loading } = useClientFetch(
-  () => `superadmin-users-${pagination.value.page}-${search.value}`,
-  loadUsers,
-  { server: false }
+const { data: usersData, pending: loading, refresh: refreshUsers } = useClientFetch(
+  () => `superadmin-users-${pagination.value.page}-${requestedSearch.value}`,
+  loadUsers
 );
 
 // Update refs when data is loaded
@@ -266,14 +266,15 @@ function handleSearch() {
   }
   searchTimeout = setTimeout(() => {
     pagination.value.page = 1;
-    loadUsers();
+    requestedSearch.value = search.value;
   }, 300);
 }
 
 function goToPage(page: number) {
   pagination.value.page = page;
-  loadUsers();
 }
+
+onBeforeUnmount(() => { if (searchTimeout) clearTimeout(searchTimeout); });
 
 function viewUser(userId: string) {
   router.push(`/superadmin/users/${userId}`);

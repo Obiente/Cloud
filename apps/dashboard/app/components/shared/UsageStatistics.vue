@@ -57,7 +57,8 @@
             :subtitle="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0 ? formatNumber(Number(usageData.current.errorCount)) + ' errors' : 'Disk usage'"
             value-size="lg"
           >
-            <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
+            <span v-if="usageData.current.storageMeasurementUnavailable">Unavailable</span>
+            <OuiByte v-else :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
           </UiStatCard>
         </OuiGrid>
       </OuiStack>

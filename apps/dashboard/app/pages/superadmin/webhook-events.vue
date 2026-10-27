@@ -1,5 +1,6 @@
 <template>
   <OuiStack gap="xl">
+    <ErrorAlert v-if="loadError" :error="loadError" title="Could not load webhook events" />
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h1" size="3xl" weight="extrabold">Stripe Webhook Events</OuiText>
@@ -14,7 +15,6 @@
             placeholder="Event Type"
             size="sm"
             clearable
-            @change="fetchEvents"
           />
         </div>
         <div class="min-w-[200px]">
@@ -23,7 +23,6 @@
             placeholder="Customer ID"
             size="sm"
             clearable
-            @change="fetchEvents"
           />
         </div>
         <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
@@ -155,12 +154,23 @@
         </OuiFlex>
       </OuiCardFooter>
     </OuiCard>
+    <OuiDialog v-model:open="detailOpen" title="Webhook event details">
+      <dl v-if="selectedEvent" class="grid gap-3 break-words">
+        <div><dt class="text-secondary">Event ID</dt><dd>{{ selectedEvent.id }}</dd></div>
+        <div><dt class="text-secondary">Type</dt><dd>{{ selectedEvent.eventType }}</dd></div>
+        <div><dt class="text-secondary">Organization</dt><dd>{{ selectedEvent.organizationName || selectedEvent.organizationId || 'Unassigned' }}</dd></div>
+        <div><dt class="text-secondary">Customer</dt><dd>{{ selectedEvent.customerId || 'None' }}</dd></div>
+        <div><dt class="text-secondary">Invoice</dt><dd>{{ selectedEvent.invoiceId || 'None' }}</dd></div>
+        <div><dt class="text-secondary">Subscription</dt><dd>{{ selectedEvent.subscriptionId || 'None' }}</dd></div>
+        <div><dt class="text-secondary">Processed</dt><dd>{{ formatDate(selectedEvent.processedAt) }}</dd></div>
+      </dl>
+    </OuiDialog>
   </OuiStack>
 </template>
 
 <script setup lang="ts">
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
-import { computed, ref } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { SuperadminService, type StripeWebhookEvent } from "@obiente/proto";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { useConnectClient } from "~/lib/connect-client";
@@ -173,10 +183,7 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const events = ref<any[]>([]);
-const totalCount = ref(0);
 const limit = ref(50);
-const offset = ref(0);
 
 const eventTypeFilter = ref("");
 const customerIdFilter = ref("");
@@ -194,59 +201,20 @@ const columns = [
   { key: "actions", label: "Actions", sortable: false },
 ];
 
-async function fetchEvents() {
-  try {
-    const response = await client.listStripeWebhookEvents({
-      eventType: eventTypeFilter.value || undefined,
-      customerId: customerIdFilter.value || undefined,
-      limit: limit.value,
-      offset: offset.value,
-    });
-    return {
-      events: response.events || [],
-      totalCount: Number(response.totalCount || 0),
-    };
-  } catch (err) {
-    console.error("Failed to fetch webhook events:", err);
-    throw err;
-  }
-}
-
-async function loadMore() {
-  offset.value += limit.value;
-  const result = await fetchEvents();
-  if (result) {
-    events.value = [...events.value, ...result.events];
-    totalCount.value = result.totalCount;
-  }
-}
-
-async function refresh() {
-  offset.value = 0;
-  const result = await fetchEvents();
-  if (result) {
-    events.value = result.events;
-    totalCount.value = result.totalCount;
-  }
-}
-
-// Use client-side fetching for non-blocking navigation
-const { data: eventsData, pending: isLoading } = useClientFetch(
-  () => `superadmin-webhook-events-${eventTypeFilter.value}-${customerIdFilter.value}-${offset.value}`,
-  fetchEvents
-);
-
-// Update refs when data is loaded
-watch(eventsData, (newData) => {
-  if (newData) {
-    if (offset.value === 0) {
-      events.value = newData.events;
-    } else {
-      events.value = [...events.value, ...newData.events];
-    }
-    totalCount.value = newData.totalCount;
-  }
-}, { immediate: true });
+const { items: events, total: totalCount, loading: isLoading, error: loadError, loadMore, refresh, dispose } = usePagedResource<StripeWebhookEvent>(async (offset, signal) => {
+  const response = await client.listStripeWebhookEvents({
+    eventType: eventTypeFilter.value || undefined,
+    customerId: customerIdFilter.value || undefined,
+    limit: limit.value,
+    offset,
+  }, { signal });
+  return { items: response.events || [], total: Number(response.totalCount || 0) };
+});
+watch([eventTypeFilter, customerIdFilter], () => { void refresh(); });
+onMounted(() => { void refresh(); });
+onUnmounted(dispose);
+const selectedEvent = ref<StripeWebhookEvent | null>(null);
+const detailOpen = ref(false);
 
 const metrics = computed(() => {
   const total = totalCount.value;
@@ -302,11 +270,12 @@ function formatDate(timestamp: Timestamp | null | undefined): string {
 }
 
 function viewEvent(event: StripeWebhookEvent) {
-  // Could open a dialog with full event details
+  selectedEvent.value = event;
+  detailOpen.value = true;
 }
 
 function viewOrganization(orgId: string) {
-  router.push(`/superadmin/organizations?org=${orgId}`);
+  router.push(`/superadmin/organizations/${encodeURIComponent(orgId)}`);
 }
 </script>
 
