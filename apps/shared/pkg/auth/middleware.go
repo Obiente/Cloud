@@ -91,13 +91,21 @@ type contextKey int
 const userInfoKey contextKey = 0
 const systemUserKey contextKey = 1
 
-// UserInfoCache manages caching of validated tokens using Redis
+type userInfoStore interface {
+	Get(context.Context, string) (string, error)
+	Set(context.Context, string, interface{}, time.Duration) error
+}
+
+// UserInfoCache manages caching of validated tokens using Redis.
 type UserInfoCache struct {
-	redisCache *database.RedisCache
+	redisCache userInfoStore
 }
 
 // NewUserInfoCache creates a new user info cache backed by Redis
 func NewUserInfoCache() *UserInfoCache {
+	if database.RedisClient == nil {
+		return &UserInfoCache{}
+	}
 	return &UserInfoCache{
 		redisCache: database.RedisClient,
 	}
@@ -324,51 +332,10 @@ func (c *AuthConfig) resolveToken(ctx context.Context, token string) (*authv1.Us
 	if cachedUser, found := c.UserInfoCache.Get(ctx, token); found {
 		logger.Debug("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
 
-		// Always check superadmin emails for cached users, as SUPERADMIN_EMAILS might have changed
-		// This ensures superadmin status is applied even when using cached user data
-		if cachedUser.Email != "" && c.SuperAdmins != nil {
-			lowerEmail := strings.ToLower(cachedUser.Email)
-			logger.Debug("[SuperAdmin] Checking cached user email: %s (lowercase: %s)", cachedUser.Email, lowerEmail)
-			logger.Debug("[SuperAdmin] SuperAdmins map has %d entries", len(c.SuperAdmins))
-			rolesChanged := false
-			if _, ok := c.SuperAdmins[lowerEmail]; ok {
-				// User is in superadmin list - ensure they have the role
-				hadRole := false
-				for _, role := range cachedUser.Roles {
-					if role == RoleSuperAdmin {
-						hadRole = true
-						break
-					}
-				}
-				if !hadRole {
-					logger.Info("[SuperAdmin] ✓ Granting superadmin role to cached user: %s", cachedUser.Email)
-					ensureRole(cachedUser, RoleSuperAdmin)
-					ensureRole(cachedUser, RoleAdmin)
-					rolesChanged = true
-				}
-			} else {
-				// User is NOT in superadmin list - remove the role if they had it
-				// (in case SUPERADMIN_EMAILS was updated to remove them)
-				newRoles := removeRole(cachedUser.Roles, RoleSuperAdmin)
-				if len(newRoles) != len(cachedUser.Roles) {
-					logger.Info("[SuperAdmin] Removing superadmin role from cached user: %s", cachedUser.Email)
-					cachedUser.Roles = newRoles
-					rolesChanged = true
-				}
-			}
-
-			// Update cache if roles changed to ensure persistence
-			if rolesChanged {
-				c.UserInfoCache.Set(ctx, token, cachedUser)
-				logger.Debug("[SuperAdmin] Updated cache with new roles for user: %s", cachedUser.Email)
-			}
-		} else {
-			if cachedUser.Email == "" {
-				logger.Debug("[SuperAdmin] Cached user has no email, skipping superadmin check")
-			}
-			if c.SuperAdmins == nil {
-				logger.Debug("[SuperAdmin] SuperAdmins map is nil, skipping superadmin check")
-			}
+		// Redis may contain roles granted by another replica or an older config.
+		// Recompute configured authority on every request, including demotion.
+		if c.applyConfiguredAdminRoles(cachedUser) {
+			c.UserInfoCache.Set(ctx, token, cachedUser)
 		}
 
 		return cachedUser, nil
@@ -423,28 +390,8 @@ func (c *AuthConfig) resolveToken(ctx context.Context, token string) (*authv1.Us
 		user.UpdatedAt = timestamppb.New(time.Unix(zui.UpdatedAt, 0))
 	}
 
-	// Apply superadmin roles if configured via email match
-	if user.Email != "" && c.SuperAdmins != nil {
-		lowerEmail := strings.ToLower(user.Email)
-		logger.Debug("[SuperAdmin] Checking new user email: %s (lowercase: %s)", user.Email, lowerEmail)
-		logger.Debug("[SuperAdmin] SuperAdmins map has %d entries", len(c.SuperAdmins))
-		if _, ok := c.SuperAdmins[lowerEmail]; ok {
-			logger.Info("[SuperAdmin] ✓ Granting superadmin role to user: %s", user.Email)
-			ensureRole(user, RoleSuperAdmin)
-			ensureRole(user, RoleAdmin)
-		} else {
-			logger.Debug("[SuperAdmin] User %s is NOT in superadmin list", user.Email)
-		}
-	} else {
-		if user.Email == "" {
-			logger.Debug("[SuperAdmin] User has no email, skipping superadmin check")
-		}
-		if c.SuperAdmins == nil {
-			logger.Debug("[SuperAdmin] SuperAdmins map is nil, skipping superadmin check")
-		}
-	}
+	c.applyConfiguredAdminRoles(user)
 
-	// Cache the result
 	c.UserInfoCache.Set(ctx, token, user)
 
 	logger.Debug("✓ Token validated for user: %s (%s)", user.Id, user.Email)
@@ -620,4 +567,16 @@ func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*authv1.User,
 
 	// Validate token
 	return config.validateToken(r.Context(), token)
+}
+
+func (c *AuthConfig) applyConfiguredAdminRoles(user *authv1.User) bool {
+	previousAdmin := HasRole(user, RoleAdmin)
+	previousSuperadmin := HasRole(user, RoleSuperAdmin)
+	user.Roles = removeRole(removeRole(user.Roles, RoleAdmin), RoleSuperAdmin)
+	_, configured := c.SuperAdmins[strings.ToLower(user.Email)]
+	if user.Email != "" && configured {
+		ensureRole(user, RoleSuperAdmin)
+		ensureRole(user, RoleAdmin)
+	}
+	return previousAdmin != HasRole(user, RoleAdmin) || previousSuperadmin != HasRole(user, RoleSuperAdmin)
 }
