@@ -80,7 +80,7 @@ export function getOUIColors(): Record<string, string> {
     // Cache the colors
     colorsCache = result;
     return result;
-  } catch (err) {
+  } catch {
     // If anything fails, return empty object
     return {};
   }

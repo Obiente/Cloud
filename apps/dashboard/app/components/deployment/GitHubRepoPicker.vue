@@ -324,7 +324,7 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
         branches.value.find((branch) => branch.name === repositoryDefaultBranch) ||
         branches.value.find((branch) => branch.isDefault) ||
         branches.value[0];
-      selectedBranch.value = selectedDefault.name;
+      selectedBranch.value = selectedDefault?.name || "";
       emit("update:branch", selectedBranch.value);
     } else {
       error.value = "No branches found for this repository.";

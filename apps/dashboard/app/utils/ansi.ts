@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Intentionally match terminal control codes or reject null bytes. */
 /**
  * Utility functions for handling ANSI escape codes and terminal control sequences
  */
@@ -75,7 +76,7 @@ export function stripAnsiCodes(text: string): string {
  * @returns The cleaned text
  */
 export function stripAnsiAndTimestamps(text: string): string {
-  let cleaned = stripAnsiCodes(text);
+  const cleaned = stripAnsiCodes(text);
 
   // Split into lines, process each line, then rejoin
   const lines = cleaned.split(/\r?\n/);

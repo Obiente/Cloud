@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted, type ComputedRef } from "vue";
+import { ref, computed, onUnmounted } from "vue";
 import { VPSService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 
@@ -19,7 +19,7 @@ export function useVPSProgress(options: VPSProgressOptions) {
   let streamController: AbortController | null = null;
   let animationFrameId: number | null = null;
   let incrementalProgressIntervalId: ReturnType<typeof setInterval> | null = null;
-  let lastLogUpdateTime = ref(Date.now());
+  const lastLogUpdateTime = ref(Date.now());
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 5;

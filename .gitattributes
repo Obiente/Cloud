@@ -1,0 +1,2 @@
+# Shell scripts must run unchanged in Linux containers and WSL.
+*.sh text eol=lf

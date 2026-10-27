@@ -42,6 +42,8 @@
 </template>
 
 <script setup lang="ts">
+/* eslint-disable no-control-regex -- Intentionally match terminal control codes or reject null bytes. */
+
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuth } from "~/composables/useAuth";
 import { useOrganizationsStore } from "~/stores/organizations";

@@ -1,5 +1,14 @@
 {
   "jsc": {
-    "baseUrl": "tools/nxsh"
-  }
+    "baseUrl": ".",
+    "parser": {
+      "syntax": "typescript"
+    },
+    "target": "es2022"
+  },
+  "module": {
+    "type": "commonjs"
+  },
+  "sourceMaps": true,
+  "exclude": [".*\\.d\\.ts$"]
 }

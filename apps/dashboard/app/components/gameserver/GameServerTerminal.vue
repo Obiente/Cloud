@@ -211,7 +211,7 @@ const handleTabCompletionOutput = (outputData: number[]) => {
     const text = new TextDecoder().decode(output);
     
     // Strip ANSI escape codes, terminal control sequences, and timestamps
-    let cleanText = stripAnsiAndTimestamps(text);
+    const cleanText = stripAnsiAndTimestamps(text);
     
     // Get the prefix we had before Tab
     const prefix = commandBeforeTab.value.trim();

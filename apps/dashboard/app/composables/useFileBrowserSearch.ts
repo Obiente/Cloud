@@ -105,7 +105,7 @@ export function useFileBrowserSearch(
   // Don't trigger on initial mount - only watch for actual changes
   watch(
     searchQuery,
-    (newQuery, oldQuery) => {
+    (newQuery, _oldQuery) => {
       // Clear any pending search timeout
       if (searchTimeout) {
         clearTimeout(searchTimeout);

@@ -490,9 +490,9 @@
     let currentMemory = toNumber(current.memoryByteSeconds);
     let currentRx = toNumber(current.bandwidthRxBytes);
     let currentTx = toNumber(current.bandwidthTxBytes);
-    let currentDiskRead = toNumber(current.diskReadBytes);
-    let currentDiskWrite = toNumber(current.diskWriteBytes);
-    let currentStorage = toNumber(current.storageBytes);
+    const currentDiskRead = toNumber(current.diskReadBytes);
+    const currentDiskWrite = toNumber(current.diskWriteBytes);
+    const currentStorage = toNumber(current.storageBytes);
 
     const estCpu = toNumber(estimated.cpuCoreSeconds);
     const estMemory = toNumber(estimated.memoryByteSeconds);
@@ -1333,7 +1333,8 @@
   };
 
   // Handle tab change
-  const onTabChange = (tab: string) => {
+  const onTabChange = (tab: string | undefined) => {
+    if (!tab) return;
     // Stop current stream
     stopStreaming();
 

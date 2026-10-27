@@ -203,7 +203,6 @@ watchEffect(() => {
 const orgStore = useOrganizationsStore();
 if (!orgStore.currentOrgId) {
   orgStore.currentOrgId = "mock-org";
-} else {
 }
 
 // Provide a mocked Connect transport so pages resolve data without network calls.
@@ -1461,12 +1460,6 @@ const mockTransport: any = {
 
       const filteredLogs = auditLogs.filter(matchesFilter);
       
-      // Log details about filtering
-      if (filteredLogs.length === 0 && auditLogs.length > 0) {
-        const firstLog = auditLogs[0];
-        if (firstLog) {
-        }
-      }
 
       return mockResponse({
         auditLogs: filteredLogs,
@@ -1542,8 +1535,6 @@ const mockTransport: any = {
             const metric = factory();
             yield metric;
             count += 1;
-            if (count % 10 === 0) {
-            }
             await sleep(5000);
           }
         } catch (error) {

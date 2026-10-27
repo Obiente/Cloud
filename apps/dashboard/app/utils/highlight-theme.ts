@@ -50,7 +50,7 @@ export function getOUIHighlightColors(): Record<string, string> {
     // Cache the colors
     colorsCache = result;
     return result;
-  } catch (err) {
+  } catch {
     return {};
   }
 }

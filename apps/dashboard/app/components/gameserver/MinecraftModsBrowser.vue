@@ -1205,8 +1205,7 @@ async function loadProjects(opts: { reset?: boolean } = {}) {
     errorMessage.value = (err as Error | undefined)?.message ?? "Failed to load catalog";
     toast.error("Failed to load Minecraft catalog", errorMessage.value || undefined);
   } finally {
-    if (requestId !== loadProjectsRequestId) return;
-    if (isReset) {
+    if (requestId === loadProjectsRequestId && isReset) {
       isLoading.value = false;
       isRefreshing.value = false;
     }
@@ -1232,8 +1231,7 @@ async function loadInstalledFiles() {
     installedErrorMessage.value = (err as Error | undefined)?.message ?? "Failed to load installed content";
     toast.error("Failed to load installed content", installedErrorMessage.value || undefined);
   } finally {
-    if (requestId !== loadInstalledRequestId) return;
-    isInstalledLoading.value = false;
+    if (requestId === loadInstalledRequestId) isInstalledLoading.value = false;
   }
 }
 

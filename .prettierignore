@@ -4,3 +4,4 @@ node_modules/
 dist/
 *.min.js
 pnpm-lock.yaml
+.nx/self-healing

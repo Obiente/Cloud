@@ -1,4 +1,4 @@
-import { ref, type Ref } from "vue";
+import { type Ref } from "vue";
 import type { ExplorerNode } from "~/components/shared/fileExplorerTypes";
 
 export interface MultiSelectOptions {

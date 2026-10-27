@@ -1154,7 +1154,7 @@
     const target = prompt("New name", node.name);
     if (!target || target === node.name) return;
     const targetPath =
-      `${node.parentPath === "/" ? "" : node.parentPath}/${target}` || target;
+      `${node.parentPath === "/" ? "" : node.parentPath}/${target}`;
     await renameEntry({
       sourcePath: node.path,
       targetPath,
@@ -2085,7 +2085,7 @@
         const pathParts = paths.map((p) => p.split("/").filter(Boolean));
         if (pathParts.length > 0 && pathParts[0]) {
           const minLength = Math.min(...pathParts.map((p) => p.length));
-          let commonParts: string[] = [];
+          const commonParts: string[] = [];
           for (let i = 0; i < minLength - 1; i++) {
             const part: string | undefined = pathParts[0][i];
             if (part && pathParts.every((p) => p[i] === part)) {
@@ -2115,7 +2115,7 @@
       if (paths.length > 0) {
         const pathParts = paths.map((p) => p.split("/").filter(Boolean));
         const minLength = Math.min(...pathParts.map((p) => p.length));
-        let commonParts: string[] = [];
+        const commonParts: string[] = [];
         for (let i = 0; i < minLength - 1; i++) {
           const part = pathParts[0]?.[i];
           if (part && pathParts.every((p) => p[i] === part)) {
@@ -2329,7 +2329,7 @@
     const uploadDir = currentDirectory.value || "/";
     
     // For root directory, always use explorer.root
-    let dirNode = uploadDir === "/" ? explorer.root : findNode(uploadDir);
+    const dirNode = uploadDir === "/" ? explorer.root : findNode(uploadDir);
     
     if (dirNode) {
       dirNode.uploadProgress = {

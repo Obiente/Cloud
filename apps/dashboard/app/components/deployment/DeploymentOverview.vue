@@ -102,9 +102,9 @@
                 </OuiFlex>
 
                 <!-- Storage -->
-                <OuiFlex v-if="deployment.storageUsage !== undefined && deployment.storageUsage !== null && Number(deployment.storageUsage) > 0" align="center" justify="between" gap="sm" class="py-2.5">
+                <OuiFlex align="center" justify="between" gap="sm" class="py-2.5">
                   <OuiText size="xs" color="tertiary">Storage</OuiText>
-                  <OuiText size="sm" weight="medium"><OuiByte :value="deployment.storageUsage" /></OuiText>
+                  <OuiText size="sm" weight="medium"><OuiByte v-if="deployment.storageAvailable" :value="deployment.storageUsage" /><span v-else>Unavailable</span></OuiText>
                 </OuiFlex>
 
                 <!-- Groups -->

@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{projectRoot}",
-        "command": "/usr/local/go/bin/go test -count=1 ./..."
+        "command": "go test -count=1 ./..."
       }
     }
   }

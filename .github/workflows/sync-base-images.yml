@@ -30,9 +30,9 @@ jobs:
           - name: Go 1.25 Alpine
             runner: ubuntu-24.04
             runner-label: github-hosted
-            primary: public.ecr.aws/docker/library/golang:1.25-alpine
-            fallback: docker.io/library/golang:1.25-alpine
-            target: dockerhub/library/golang:1.25-alpine
+            primary: public.ecr.aws/docker/library/golang:1.27.3-alpine
+            fallback: docker.io/library/golang:1.27.3-alpine
+            target: dockerhub/library/golang:1.27.3-alpine
           - name: Alpine
             runner: ubuntu-24.04
             runner-label: github-hosted

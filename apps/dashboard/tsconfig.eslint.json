@@ -1,0 +1,6 @@
+{
+  "extends": "./.nuxt/tsconfig.app.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["app/**/*", "server/**/*", "tests/**/*", "*.ts", ".nuxt/types/imports.d.ts", ".nuxt/types/nitro-imports.d.ts"],
+  "exclude": ["node_modules", ".output"]
+}

@@ -29,8 +29,10 @@ jobs:
         with:
           run_install: false
 
-      - name: Start distributed Nx Cloud run
-        run: pnpm dlx nx@21.6.10 start-ci-run --auto-apply-fixes="*format*,*lint*" --distribute-on="3 linux-medium-js" --stop-agents-after="lint,test,build,typecheck"
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: 'apps/**/go.sum'
 
       - uses: actions/setup-node@v7
         with:
@@ -43,7 +45,34 @@ jobs:
         uses: nrwl/nx-set-shas@v5
 
       - name: Run affected checks
-        run: pnpm exec nx affected -t lint test build typecheck
+        run: pnpm exec nx affected -t lint test test:ssr build typecheck
 
       - run: pnpm exec nx fix-ci
         if: always()
+
+  dashboard-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NX_NO_CLOUD: 'true'
+      PLAYWRIGHT_USE_BUILD: 'true'
+      NUXT_HYDRATION_DIAGNOSTICS: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec nx run-many --targets=nuxt:build --projects=@obiente/dashboard
+      - name: Dashboard recovery and admin regressions
+        run: pnpm exec nx run-many --targets=e2e --projects=@obiente/dashboard -- --workers=1
+        env:
+          PLAYWRIGHT_GREP: 'audit-remediation|admin-interactions|hydration-recovery|managed-backups|page-smoke.*admin'
+      - name: Session renewal with authentication enabled
+        run: pnpm exec nx run-many --targets=e2e --projects=@obiente/dashboard -- --workers=1
+        env:
+          PLAYWRIGHT_AUTH_TESTS: 'true'
+          PLAYWRIGHT_GREP: 'auth-session'

@@ -12,7 +12,7 @@
 export function randomTextWidth(baseWidth: string, variance: number = 0.3): string {
   // Extract numeric value and unit
   const match = baseWidth.match(/^([\d.]+)(\w+)$/);
-  if (!match || !match[1] || !match[2]) return baseWidth;
+  if (!match?.[1] || !match[2]) return baseWidth;
   
   const numStr = match[1];
   const unit = match[2];
