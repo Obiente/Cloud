@@ -126,6 +126,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 	}
 	// Mutate the visible status only after this request owns the build. A
 	// duplicate trigger must not replace the active build's status with FAILED.
+	// DEPLOYING also records running intent here; later build status updates
+	// preserve any stop requested after this redeploy was accepted.
 	if err := s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
 		buildCancel()
 		s.unregisterDeploymentBuild(deploymentID, buildToken)
