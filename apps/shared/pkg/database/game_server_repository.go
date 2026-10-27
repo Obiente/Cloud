@@ -43,6 +43,9 @@ func (r *GameServerRepository) WithPortAllocationLock(ctx context.Context, fn fu
 }
 
 func (r *GameServerRepository) Create(ctx context.Context, gameServer *GameServer) error {
+	if gameServer.StorageBytes == 0 && gameServer.StorageMeasuredAt == nil && (gameServer.ContainerID == nil || *gameServer.ContainerID == "") {
+		gameServer.StorageState = "empty"
+	}
 	if err := r.db.WithContext(ctx).Create(gameServer).Error; err != nil {
 		return err
 	}
@@ -158,7 +161,7 @@ func (r *GameServerRepository) Update(ctx context.Context, gameServer *GameServe
 			"memory_bytes", "cpu_cores", "port", "extra_ports",
 			"docker_image", "start_command", "env_vars",
 			"server_version", "container_id", "container_name",
-			"storage_bytes", "bandwidth_usage",
+			"bandwidth_usage",
 			"player_count", "max_players",
 			"last_started_at", "updated_at",
 		).
@@ -222,18 +225,24 @@ func (r *GameServerRepository) UpdateContainerInfo(ctx context.Context, id strin
 	return nil
 }
 
-func (r *GameServerRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
-	if err := r.db.WithContext(ctx).Model(&GameServer{}).
-		Where("id = ?", id).
-		Update("storage_bytes", storageBytes).Error; err != nil {
-		return err
+// RecordStorage fences a probe against container replacement and preserves the
+// last known bytes on failure without presenting them as a fresh measurement.
+func (r *GameServerRepository) RecordStorage(ctx context.Context, id, containerID string, storageBytes int64, measurementErr error) error {
+	updates := map[string]interface{}{"storage_measurement_error": "Storage measurement unavailable"}
+	if measurementErr == nil && containerID != "" && storageBytes >= 0 {
+		updates = map[string]interface{}{"storage_state": "measured", "storage_bytes": storageBytes, "storage_measured_at": time.Now(), "storage_measurement_error": ""}
 	}
-
-	// Clear cache AFTER successful update
+	result := r.db.WithContext(ctx).Model(&GameServer{}).
+		Where("id = ? AND container_id = ? AND deleted_at IS NULL", id, containerID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("storage inventory changed during measurement")
+	}
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
 	}
-
 	return nil
 }
 

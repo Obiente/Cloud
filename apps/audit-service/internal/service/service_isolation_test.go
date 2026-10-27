@@ -72,6 +72,7 @@ func newAuditServiceTestDB(t *testing.T) *gorm.DB {
 		&database.AuditLog{},
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 	); err != nil {
 		t.Fatalf("migrate sqlite db: %v", err)
 	}

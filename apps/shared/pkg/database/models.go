@@ -11,25 +11,29 @@ import (
 
 // Deployment represents a deployment in the database
 type Deployment struct {
-	ID                  string  `gorm:"primaryKey;column:id" json:"id"`
-	Name                string  `gorm:"column:name" json:"name"`
-	Domain              string  `gorm:"column:domain" json:"domain"`
-	CustomDomains       string  `gorm:"column:custom_domains;type:jsonb" json:"custom_domains"` // Stored as JSON array
-	Type                int32   `gorm:"column:type" json:"type"`                                // DeploymentType enum
-	BuildStrategy       int32   `gorm:"column:build_strategy;default:0" json:"build_strategy"`  // BuildStrategy enum
-	RepositoryURL       *string `gorm:"column:repository_url" json:"repository_url"`
-	Branch              string  `gorm:"column:branch" json:"branch"`
-	BuildCommand        *string `gorm:"column:build_command" json:"build_command"`
-	InstallCommand      *string `gorm:"column:install_command" json:"install_command"`
-	StartCommand        *string `gorm:"column:start_command" json:"start_command"`                       // Start command for running the application
-	DockerfilePath      *string `gorm:"column:dockerfile_path" json:"dockerfile_path"`                   // Path to Dockerfile (relative to repo root)
-	ComposeFilePath     *string `gorm:"column:compose_file_path" json:"compose_file_path"`               // Path to compose file (relative to repo root)
-	BuildPath           *string `gorm:"column:build_path" json:"build_path"`                             // Working directory for build (relative to repo root, defaults to ".")
-	BuildOutputPath     *string `gorm:"column:build_output_path" json:"build_output_path"`               // Path to built output files (relative to repo root, auto-detected if empty)
-	UseNginx            *bool   `gorm:"column:use_nginx;default:false" json:"use_nginx"`                 // Use nginx for static deployments
-	NginxConfig         *string `gorm:"column:nginx_config;type:text" json:"nginx_config"`               // Custom nginx configuration (optional, uses default if empty)
-	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
-	AutoDeploy          *bool   `gorm:"column:auto_deploy;default:true" json:"auto_deploy"`              // Automatically deploy on GitHub push webhooks
+	StorageState            string     `gorm:"not null;default:''" json:"storage_state"`
+	StorageMeasuredAt       *time.Time `json:"storage_measured_at"`
+	StorageMeasurementError string     `gorm:"not null;default:''" json:"storage_measurement_error"`
+	DesiredState            string     `gorm:"column:desired_state;not null;default:''" json:"-"`
+	ID                      string     `gorm:"primaryKey;column:id" json:"id"`
+	Name                    string     `gorm:"column:name" json:"name"`
+	Domain                  string     `gorm:"column:domain" json:"domain"`
+	CustomDomains           string     `gorm:"column:custom_domains;type:jsonb" json:"custom_domains"` // Stored as JSON array
+	Type                    int32      `gorm:"column:type" json:"type"`                                // DeploymentType enum
+	BuildStrategy           int32      `gorm:"column:build_strategy;default:0" json:"build_strategy"`  // BuildStrategy enum
+	RepositoryURL           *string    `gorm:"column:repository_url" json:"repository_url"`
+	Branch                  string     `gorm:"column:branch" json:"branch"`
+	BuildCommand            *string    `gorm:"column:build_command" json:"build_command"`
+	InstallCommand          *string    `gorm:"column:install_command" json:"install_command"`
+	StartCommand            *string    `gorm:"column:start_command" json:"start_command"`                       // Start command for running the application
+	DockerfilePath          *string    `gorm:"column:dockerfile_path" json:"dockerfile_path"`                   // Path to Dockerfile (relative to repo root)
+	ComposeFilePath         *string    `gorm:"column:compose_file_path" json:"compose_file_path"`               // Path to compose file (relative to repo root)
+	BuildPath               *string    `gorm:"column:build_path" json:"build_path"`                             // Working directory for build (relative to repo root, defaults to ".")
+	BuildOutputPath         *string    `gorm:"column:build_output_path" json:"build_output_path"`               // Path to built output files (relative to repo root, auto-detected if empty)
+	UseNginx                *bool      `gorm:"column:use_nginx;default:false" json:"use_nginx"`                 // Use nginx for static deployments
+	NginxConfig             *string    `gorm:"column:nginx_config;type:text" json:"nginx_config"`               // Custom nginx configuration (optional, uses default if empty)
+	GitHubIntegrationID     *string    `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
+	AutoDeploy              *bool      `gorm:"column:auto_deploy;default:true" json:"auto_deploy"`              // Automatically deploy on GitHub push webhooks
 
 	// Health check configuration
 	HealthcheckType           *int32     `gorm:"column:healthcheck_type" json:"healthcheck_type"`                               // Type of health check (HealthCheckType enum)
@@ -533,11 +537,14 @@ func (StrayContainer) TableName() string { return "stray_containers" }
 
 // GameServer represents a game server instance in the database
 type GameServer struct {
-	ID          string  `gorm:"primaryKey;column:id" json:"id"`
-	Name        string  `gorm:"column:name" json:"name"`
-	Description *string `gorm:"column:description" json:"description"`
-	GameType    int32   `gorm:"column:game_type" json:"game_type"`     // GameType enum
-	Status      int32   `gorm:"column:status;default:0" json:"status"` // GameServerStatus enum
+	StorageState            string     `gorm:"not null;default:''" json:"storage_state"`
+	StorageMeasuredAt       *time.Time `json:"storage_measured_at"`
+	StorageMeasurementError string     `gorm:"not null;default:''" json:"storage_measurement_error"`
+	ID                      string     `gorm:"primaryKey;column:id" json:"id"`
+	Name                    string     `gorm:"column:name" json:"name"`
+	Description             *string    `gorm:"column:description" json:"description"`
+	GameType                int32      `gorm:"column:game_type" json:"game_type"`     // GameType enum
+	Status                  int32      `gorm:"column:status;default:0" json:"status"` // GameServerStatus enum
 
 	// Resource configuration
 	MemoryBytes int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
@@ -1086,6 +1093,7 @@ func (np *NotificationPreference) BeforeUpdate(tx *gorm.DB) error {
 
 // DatabaseInstance represents a managed database instance
 type DatabaseInstance struct {
+	DesiredState     string     `gorm:"not null;default:''" json:"-"`
 	ID               string     `gorm:"primaryKey;column:id" json:"id"`
 	Name             string     `gorm:"column:name" json:"name"`
 	Description      *string    `gorm:"column:description" json:"description"`
@@ -1145,6 +1153,14 @@ type DatabaseBackup struct {
 	CreatedAt      time.Time  `gorm:"column:created_at" json:"created_at"`
 	CompletedAt    *time.Time `gorm:"column:completed_at" json:"completed_at"`
 	ErrorMessage   *string    `gorm:"column:error_message;type:text" json:"error_message"`
+	Checksum       string     `gorm:"column:checksum" json:"-"`
+	SourceDatabase string     `gorm:"column:source_database" json:"source_database"`
+	Engine         int32      `gorm:"column:engine" json:"engine"`
+	RestoreStatus  string     `gorm:"column:restore_status;index" json:"restore_status"`
+	RestoreTarget  string     `gorm:"column:restore_target" json:"restore_target"`
+	RestoreUser    string     `gorm:"column:restore_user" json:"-"`
+	RestoreError   *string    `gorm:"column:restore_error" json:"restore_error"`
+	RestoredAt     *time.Time `gorm:"column:restored_at" json:"restored_at"`
 	BackupPath     *string    `gorm:"column:backup_path" json:"backup_path"` // Path to backup file
 	OrganizationID string     `gorm:"column:organization_id;index" json:"organization_id"`
 	CreatedBy      string     `gorm:"column:created_by;index" json:"created_by"`

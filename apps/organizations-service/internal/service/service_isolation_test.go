@@ -85,6 +85,7 @@ func newOrganizationServiceTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 		&database.OrganizationPlan{},
 		&database.OrgQuota{},
 	); err != nil {

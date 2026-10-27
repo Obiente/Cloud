@@ -128,6 +128,7 @@ func InitDeploymentTracking() error {
 	}
 	if err := DB.AutoMigrate(
 		&DeploymentLocation{},
+		&DeploymentStorageMeasurement{},
 		&NodeMetadata{},
 		&DeploymentRouting{},
 		&GameServerHTTPRoute{},
@@ -209,87 +210,32 @@ func EnforceUniqueDeploymentLocationSlots(db *gorm.DB) error {
 
 // createMetricsIndexes creates composite indexes for metrics queries
 // Requires MetricsDB (TimescaleDB) - will fail if not available
-func createMetricsIndexes() error {
-	if MetricsDB == nil {
-		return fmt.Errorf("metrics database (TimescaleDB) not initialized - cannot create metrics indexes")
+func createMetricsIndexes(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("metrics database is not initialized")
 	}
-	db := MetricsDB
-
-	// Composite index for deployment_id + timestamp (most common query pattern)
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_deployment_timestamp 
-		ON deployment_metrics(deployment_id, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create deployment_timestamp index: %w", err)
+	indexes := []struct{ name, table, columns string }{
+		{"idx_deployment_metrics_deployment_timestamp", "deployment_metrics", "deployment_id, timestamp DESC"},
+		{"idx_deployment_metrics_timestamp_deployment", "deployment_metrics", "timestamp DESC, deployment_id"},
+		{"idx_deployment_metrics_container_timestamp", "deployment_metrics", "container_id, timestamp DESC"},
+		{"idx_deployment_usage_hourly_deployment_hour", "deployment_usage_hourly", "deployment_id, hour DESC"},
+		{"idx_deployment_runtime_logs_deployment_timestamp", "deployment_runtime_logs", "deployment_id, timestamp DESC"},
+		{"idx_deployment_runtime_logs_service_timestamp", "deployment_runtime_logs", "service_name, timestamp DESC"},
+		{"idx_game_server_metrics_gameserver_timestamp", "game_server_metrics", "game_server_id, timestamp DESC"},
+		{"idx_game_server_metrics_timestamp_gameserver", "game_server_metrics", "timestamp DESC, game_server_id"},
+		{"idx_game_server_metrics_container_timestamp", "game_server_metrics", "container_id, timestamp DESC"},
+		{"idx_game_server_usage_hourly_gameserver_hour", "game_server_usage_hourly", "game_server_id, hour DESC"},
 	}
-
-	// Composite index for timestamp + deployment_id (for time-range queries)
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_timestamp_deployment 
-		ON deployment_metrics(timestamp DESC, deployment_id)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create timestamp_deployment index: %w", err)
+	for _, index := range indexes {
+		// IF NOT EXISTS still takes expensive hypertable locks on TimescaleDB.
+		// Skip DDL entirely for existing indexes while holding the schema lock.
+		if db.Migrator().HasIndex(index.table, index.name) {
+			continue
+		}
+		if err := db.Exec("CREATE INDEX IF NOT EXISTS " + index.name + " ON " + index.table + "(" + index.columns + ")").Error; err != nil {
+			return fmt.Errorf("create metrics index %s: %w", index.name, err)
+		}
 	}
-
-	// Composite index for container_id + timestamp (container-specific queries)
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_container_timestamp 
-		ON deployment_metrics(container_id, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create container_timestamp index: %w", err)
-	}
-
-	// Index for hourly aggregates (deployment_id + hour)
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_usage_hourly_deployment_hour 
-		ON deployment_usage_hourly(deployment_id, hour DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create usage_hourly index: %w", err)
-	}
-
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_runtime_logs_deployment_timestamp
-		ON deployment_runtime_logs(deployment_id, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create deployment_runtime_logs index: %w", err)
-	}
-
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_deployment_runtime_logs_service_timestamp
-		ON deployment_runtime_logs(service_name, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create deployment_runtime_logs service index: %w", err)
-	}
-
-	// Game server metrics indexes
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_gameserver_timestamp 
-		ON game_server_metrics(game_server_id, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create game_server_timestamp index: %w", err)
-	}
-
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_timestamp_gameserver 
-		ON game_server_metrics(timestamp DESC, game_server_id)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create game_server_timestamp_deployment index: %w", err)
-	}
-
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_container_timestamp 
-		ON game_server_metrics(container_id, timestamp DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create game_server_container_timestamp index: %w", err)
-	}
-
-	if err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_game_server_usage_hourly_gameserver_hour 
-		ON game_server_usage_hourly(game_server_id, hour DESC)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create game_server_usage_hourly index: %w", err)
-	}
-
 	return nil
 }
 

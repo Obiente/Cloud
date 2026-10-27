@@ -108,6 +108,7 @@ func newBillingServiceTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.UserBan{},
 		&database.BillingAccount{},
 		&database.MonthlyBill{},
 	); err != nil {
