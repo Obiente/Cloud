@@ -1,0 +1,472 @@
+# Health probes and explicitly labeled metrics endpoints. Grafana routes firing rules to its configured contact point.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: obiente-cloud
+rule_files:
+- /etc/prometheus/alert_rules.yml
+scrape_configs:
+- job_name: prometheus
+  static_configs:
+  - targets:
+    - localhost:9090
+- job_name: blackbox
+  static_configs:
+  - targets:
+    - blackbox-exporter:9115
+- job_name: swarm-metrics
+  dockerswarm_sd_configs:
+  - host: unix:///var/run/docker.sock
+    role: tasks
+  relabel_configs:
+  - source_labels:
+    - __meta_dockerswarm_service_label_prometheus_scrape
+    regex: 'true'
+    action: keep
+  - source_labels:
+    - __meta_dockerswarm_task_desired_state
+    regex: running
+    action: keep
+  - source_labels:
+    - __meta_dockerswarm_network_name
+    regex: (.*_)?obiente-network
+    action: keep
+  - source_labels:
+    - __address__
+    - __meta_dockerswarm_service_label_prometheus_port
+    regex: (.+):[0-9]+;([0-9]+)
+    replacement: ${1}:${2}
+    target_label: __address__
+  - source_labels:
+    - __meta_dockerswarm_service_name
+    target_label: service
+  - source_labels:
+    - __meta_dockerswarm_node_hostname
+    target_label: node
+- job_name: health-api-gateway
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - api-gateway:3001
+  dns_sd_configs:
+  - names:
+    - tasks.api-gateway
+    type: A
+    port: 3001
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: api-gateway
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-auth-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - auth-service:3002
+  dns_sd_configs:
+  - names:
+    - tasks.auth-service
+    type: A
+    port: 3002
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: auth-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-organizations-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - organizations-service:3003
+  dns_sd_configs:
+  - names:
+    - tasks.organizations-service
+    type: A
+    port: 3003
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: organizations-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-billing-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - billing-service:3004
+  dns_sd_configs:
+  - names:
+    - tasks.billing-service
+    type: A
+    port: 3004
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: billing-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-deployments-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - deployments-service:3005
+  dns_sd_configs:
+  - names:
+    - tasks.deployments-service
+    type: A
+    port: 3005
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: deployments-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-gameservers-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - gameservers-service:3006
+  dns_sd_configs:
+  - names:
+    - tasks.gameservers-service
+    type: A
+    port: 3006
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: gameservers-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-file-transfer-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - file-transfer-service:3022
+  dns_sd_configs:
+  - names:
+    - tasks.file-transfer-service
+    type: A
+    port: 3022
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: file-transfer-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-orchestrator-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - orchestrator-service:3007
+  dns_sd_configs:
+  - names:
+    - tasks.orchestrator-service
+    type: A
+    port: 3007
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: orchestrator-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-vps-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - vps-service:3008
+  dns_sd_configs:
+  - names:
+    - tasks.vps-service
+    type: A
+    port: 3008
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: vps-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-support-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - support-service:3009
+  dns_sd_configs:
+  - names:
+    - tasks.support-service
+    type: A
+    port: 3009
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: support-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-audit-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - audit-service:3010
+  dns_sd_configs:
+  - names:
+    - tasks.audit-service
+    type: A
+    port: 3010
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: audit-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-notifications-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - notifications-service:3012
+  dns_sd_configs:
+  - names:
+    - tasks.notifications-service
+    type: A
+    port: 3012
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: notifications-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-superadmin-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - superadmin-service:3011
+  dns_sd_configs:
+  - names:
+    - tasks.superadmin-service
+    type: A
+    port: 3011
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: superadmin-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+
+- job_name: health-dns-service
+  metrics_path: /probe
+  params:
+    module:
+    - http_2xx
+  static_configs:
+  - targets:
+    - dns-service:8053
+  dns_sd_configs:
+  - names:
+    - tasks.dns-service
+    type: A
+    port: 8053
+  relabel_configs:
+  - source_labels:
+    - __address__
+    replacement: http://${1}/health
+    target_label: __param_target
+  - source_labels:
+    - __param_target
+    target_label: instance
+  - replacement: dns-service
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-pgpool
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  static_configs:
+  - targets: [pgpool:5432]
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - replacement: pgpool
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-metrics-pgpool
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  static_configs:
+  - targets: [metrics-pgpool:5432]
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - replacement: metrics-pgpool
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-redis-1
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  static_configs:
+  - targets: [redis-1:6379]
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - replacement: redis-1
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-redis-2
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  static_configs:
+  - targets: [redis-2:6379]
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - replacement: redis-2
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__
+- job_name: health-redis-3
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  static_configs:
+  - targets: [redis-3:6379]
+  relabel_configs:
+  - source_labels: [__address__]
+    target_label: __param_target
+  - source_labels: [__param_target]
+    target_label: instance
+  - replacement: redis-3
+    target_label: service
+  - replacement: blackbox-exporter:9115
+    target_label: __address__

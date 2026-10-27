@@ -35,8 +35,8 @@ groups:
   folder: Obiente Cloud
   interval: 1m
   rules:
-  - uid: api-health-check
-    title: API Health Check Failed
+  - uid: obiente-critical
+    title: Obiente critical alerts
     condition: B
     data:
     - refId: A
@@ -46,7 +46,7 @@ groups:
         from: 300
         to: 0
       model:
-        expr: up{job="api"} == 0
+        expr: sum(ALERTS{alertstate="firing",severity="critical"}) or vector(0)
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
@@ -77,64 +77,14 @@ groups:
         type: classic_conditions
     noDataState: Alerting
     execErrState: Alerting
-    for: 2m
+    for: 1m
     annotations:
-      summary: API health check is failing
-      description: The API service has been down for more than 2 minutes
+      summary: Obiente Cloud has firing critical alerts
+      description: Open Prometheus Alerts for affected services and details.
     labels:
       severity: critical
-      service: api
-  - uid: metrics-collection-failure
-    title: Metrics Collection Failure
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: obiente_metrics_collection_failures_total > 0
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 5m
-    annotations:
-      summary: Metrics collection is failing
-      description: Metrics collection has failed {{ $value }} times
-    labels:
-      severity: warning
-      service: metrics-collector
-  - uid: circuit-breaker-open
-    title: Circuit Breaker is Open
+  - uid: obiente-warning
+    title: Obiente warning alerts
     condition: B
     data:
     - refId: A
@@ -144,7 +94,7 @@ groups:
         from: 300
         to: 0
       model:
-        expr: obiente_circuit_breaker_state == 1
+        expr: sum(ALERTS{alertstate="firing",severity="warning"}) or vector(0)
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
@@ -173,318 +123,14 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-    noDataState: NoData
+    noDataState: Alerting
     execErrState: Alerting
     for: 1m
     annotations:
-      summary: Circuit breaker is open
-      description: The circuit breaker has been opened, indicating repeated failures
-    labels:
-      severity: critical
-      service: api
-  - uid: db-connection-pool-exhausted
-    title: Database Connection Pool Exhausted
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: obiente_db_pool_active_connections / obiente_db_pool_max_connections
-          > 0.9
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 5m
-    annotations:
-      summary: Database connection pool is nearly exhausted
-      description: Database connection pool usage is above 90%
+      summary: Obiente Cloud has firing warning alerts
+      description: Open Prometheus Alerts for affected services and details.
     labels:
       severity: warning
-      service: database
-  - uid: high-api-error-rate
-    title: High API Error Rate
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: rate(obiente_http_requests_total{status=~"5.."}[5m]) / rate(obiente_http_requests_total[5m])
-          > 0.05
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 5m
-    annotations:
-      summary: API error rate is high
-      description: More than 5% of API requests are returning 5xx errors
-    labels:
-      severity: warning
-      service: api
-  - uid: retry-queue-size
-    title: Retry Queue Size is High
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: obiente_retry_queue_size > 100
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 10m
-    annotations:
-      summary: Retry queue size is high
-      description: The retry queue has {{ $value }} items, indicating database write
-        issues
-    labels:
-      severity: warning
-      service: metrics-collector
-- orgId: 1
-  name: obiente-infrastructure
-  folder: Obiente Cloud
-  interval: 1m
-  rules:
-  - uid: prometheus-target-down
-    title: Prometheus Target is Down
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 300
-        to: 0
-      model:
-        expr: up == 0
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 5m
-    annotations:
-      summary: Prometheus target is down
-      description: 'Target {{ $labels.instance }} (job: {{ $labels.job }}) is down'
-    labels:
-      severity: warning
-      service: monitoring
-  - uid: high-memory-usage
-    title: High Memory Usage
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 5m
-    annotations:
-      summary: Container memory usage is high
-      description: Container {{ $labels.name }} is using more than 90% of its memory
-        limit
-    labels:
-      severity: warning
-      service: infrastructure
-  - uid: high-cpu-usage
-    title: High CPU Usage
-    condition: B
-    data:
-    - refId: A
-      queryType: ''
-      datasourceUid: prometheus
-      relativeTimeRange:
-        from: 600
-        to: 0
-      model:
-        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.9
-        intervalMs: 15000
-        maxDataPoints: 43200
-        format: time_series
-    - refId: B
-      queryType: ''
-      datasourceUid: '-100'
-      model:
-        conditions:
-        - evaluator:
-            params:
-            - 0
-            type: gt
-          operator:
-            type: and
-          query:
-            params:
-            - A
-          reducer:
-            type: last
-          type: query
-        datasource:
-          type: __expr__
-          uid: '-100'
-        expression: A
-        intervalMs: 1000
-        maxDataPoints: 43200
-        refId: B
-        type: classic_conditions
-    noDataState: NoData
-    execErrState: Alerting
-    for: 10m
-    annotations:
-      summary: Container CPU usage is high
-      description: Container {{ $labels.name }} is using more than 90% CPU
-    labels:
-      severity: warning
-      service: infrastructure
 muteTimings:
 - orgId: 1
   name: maintenance-window

@@ -227,9 +227,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -290,7 +290,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -336,7 +336,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -382,7 +382,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -434,9 +434,9 @@ services:
         order: start-first
         failure_action: rollback
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -500,9 +500,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -557,9 +557,9 @@ services:
         delay: 10s
         order: stop-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -620,7 +620,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -636,12 +636,13 @@ services:
         - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service.entrypoints=web"
         - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+        - "traefik.http.services.gameservers-service.loadbalancer.healthcheck.path=/readyz"
         - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
         - "traefik.http.routers.gameservers-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3006/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:3006/livez || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -672,9 +673,9 @@ services:
         parallelism: 1
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -723,7 +724,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -734,6 +735,8 @@ services:
           memory: 128M
       labels:
         - "cloud.obiente.service=orchestrator-service"
+        - "prometheus.scrape=true"
+        - "prometheus.port=9091"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.orchestrator-service.rule=Host(`orchestrator-service.${DOMAIN:-localhost}`)"
@@ -771,7 +774,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -822,7 +825,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -868,7 +871,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -913,7 +916,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -959,7 +962,7 @@ services:
       restart_policy:
         condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -1021,9 +1024,9 @@ services:
         delay: 10s
         order: start-first
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 10s
-        max_attempts: 10
+        max_attempts: 0
         window: 60s
       resources:
         limits:
@@ -1153,6 +1156,8 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "prometheus.scrape=true"
+        - "prometheus.port=8080"
         - "cloud.obiente.ingress-proxy=true"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -1173,6 +1178,22 @@ services:
   # ============================================================================
 
   # Prometheus - Metrics collection
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.29.1
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - obiente-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+
   prometheus:
     image: prom/prometheus:latest
     user: "0:0"  # Run as root to access Docker socket for Swarm service discovery
@@ -1183,6 +1204,7 @@ services:
     volumes:
       - prometheus_data:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Required for Docker Swarm service discovery
     deploy:
       replicas: 1

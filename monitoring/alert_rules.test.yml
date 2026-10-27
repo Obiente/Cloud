@@ -1,0 +1,55 @@
+rule_files:
+- alert_rules.yml
+evaluation_interval: 1m
+tests:
+- interval: 1m
+  input_series:
+  - series: probe_success{job="health-api-gateway",service="api-gateway",instance="test"}
+    values: 1 0 0 0 1
+  - series: up{job="swarm-metrics"}
+    values: 1+0x4
+  - series: up{job="blackbox"}
+    values: 1+0x4
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: ServiceHealthFailed
+    exp_alerts:
+    - exp_labels:
+        job: health-api-gateway
+        service: api-gateway
+        instance: test
+        severity: critical
+      exp_annotations:
+        summary: A service health check is failing.
+  - eval_time: 4m
+    alertname: ServiceHealthFailed
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: ProbeTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+      exp_annotations:
+        summary: Service health telemetry is missing.
+- interval: 1m
+  input_series:
+  - series: obiente_swarm_service_update_paused{swarm_service="example",instance="manager"}
+    values: 0 1 1 1 0
+  - series: obiente_swarm_service_missing_replicas{swarm_service="example",instance="manager"}
+    values: 0+0x4
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: SwarmUpdatePaused
+    exp_alerts:
+    - exp_labels:
+        swarm_service: example
+        instance: manager
+        severity: critical
+      exp_annotations:
+        summary: A Swarm service update or rollback is paused.
+  - eval_time: 4m
+    alertname: SwarmUpdatePaused
+    exp_alerts: []

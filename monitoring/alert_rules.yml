@@ -1,0 +1,52 @@
+groups:
+- name: obiente-health
+  rules:
+  - alert: ServiceHealthFailed
+    expr: probe_success{job=~"health-.+"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: A service health check is failing.
+  - alert: TelemetryScrapeFailed
+    expr: up == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: A configured telemetry endpoint cannot be scraped.
+  - alert: TelemetryMissing
+    expr: absent(up{job="swarm-metrics"}) or absent(up{job="blackbox"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: Required monitoring targets have disappeared.
+  - alert: ProbeTelemetryMissing
+    expr: absent(probe_success{job=~"health-.+"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: Service health telemetry is missing.
+  - alert: SwarmUpdatePaused
+    expr: obiente_swarm_service_update_paused == 1
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: A Swarm service update or rollback is paused.
+  - alert: SwarmReplicasMissing
+    expr: obiente_swarm_service_missing_replicas > 0
+    for: 3m
+    labels:
+      severity: critical
+    annotations:
+      summary: A Swarm service has fewer running tasks than requested.
+  - alert: SwarmInventoryUnavailable
+    expr: (obiente_swarm_collection_success == 0 and on(instance) obiente_swarm_manager == 1) or absent(obiente_swarm_manager) or (sum(obiente_swarm_manager) < 1)
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Swarm rollout monitoring is unavailable.

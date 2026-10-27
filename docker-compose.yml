@@ -342,12 +342,13 @@ services:
       - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`) || Host(`gameservers-service.localhost`)"
       - "traefik.http.routers.gameservers-service.entrypoints=web"
       - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+      - "traefik.http.services.gameservers-service.loadbalancer.healthcheck.path=/readyz"
       - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN:-localhost}`) || Host(`gameservers-service.localhost`)"
       - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
       - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
       - "traefik.http.routers.gameservers-service-secure.tls=true"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3006/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3006/livez || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
