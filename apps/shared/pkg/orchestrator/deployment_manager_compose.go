@@ -18,6 +18,8 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/platform"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	"gorm.io/gorm"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -193,11 +195,7 @@ func isMissingSwarmStackOutput(output string) bool {
 // DeployIsolatedComposeFile routes an untrusted preview through a dedicated
 // ingress network that contains Traefik but no Obiente control-plane service.
 func (dm *DeploymentManager) DeployIsolatedComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
-	ingressNetworkName := PreviewIngressNetworkNameForDeployment(deploymentID)
-	if err := dm.ensurePreviewIngressNetwork(ctx, ingressNetworkName); err != nil {
-		return fmt.Errorf("preview ingress network is required: %w", err)
-	}
-	return dm.deployComposeFile(ctx, deploymentID, composeYaml, ingressNetworkName)
+	return dm.deployComposeFile(ctx, deploymentID, composeYaml, PreviewIngressNetworkNameForDeployment(deploymentID))
 }
 
 func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploymentID string, composeYaml string, ingressNetworkName string) (retErr error) {
@@ -206,6 +204,18 @@ func (dm *DeploymentManager) deployComposeFileLocked(ctx context.Context, deploy
 	}
 	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
 		return err
+	}
+	// Use persisted trust classification for every entry point, including recovery
+	// and restart, so callers cannot accidentally reconnect a preview to the platform.
+	var err error
+	ingressNetworkName, err = resolveComposeIngress(ctx, database.DB, deploymentID, ingressNetworkName)
+	if err != nil {
+		return err
+	}
+	if ingressNetworkName != "" {
+		if err := dm.ensurePreviewIngressNetwork(ctx, ingressNetworkName); err != nil {
+			return err
+		}
 	}
 	if err := database.MarkStorageMaterializing(ctx, database.DB, &database.Deployment{}, deploymentID); err != nil {
 		return err
@@ -1651,8 +1661,8 @@ func (dm *DeploymentManager) RecoverComposeDeployment(ctx context.Context, deplo
 	projectName := "deploy-" + deploymentID
 	var spec struct {
 		Services map[string]struct {
-			Restart string `yaml:"restart"`
-			Deploy  struct {
+			DependsOn interface{} `yaml:"depends_on"`
+			Deploy    struct {
 				Replicas *uint64 `yaml:"replicas"`
 			} `yaml:"deploy"`
 			Profiles []string `yaml:"profiles"`
@@ -1663,6 +1673,18 @@ func (dm *DeploymentManager) RecoverComposeDeployment(ctx context.Context, deplo
 	}
 	if len(spec.Services) == 0 {
 		return fmt.Errorf("recovery Compose file has no services")
+	}
+	// A successful exit is completion only when another service explicitly waits
+	// for it as a job. Omitted restart policies also apply to long-running services.
+	completedJobs := map[string]bool{}
+	for _, service := range spec.Services {
+		if dependencies, ok := service.DependsOn.(map[string]interface{}); ok {
+			for name, dependency := range dependencies {
+				if options, ok := dependency.(map[string]interface{}); ok && options["condition"] == "service_completed_successfully" {
+					completedJobs[name] = true
+				}
+			}
+		}
 	}
 	filters := make(client.Filters)
 	present := make(map[string]uint64)
@@ -1687,8 +1709,7 @@ func (dm *DeploymentManager) RecoverComposeDeployment(ctx context.Context, deplo
 				present[name]++
 				continue
 			}
-			service := spec.Services[name]
-			if string(c.State) == "exited" && (service.Restart == "" || service.Restart == "no" || service.Restart == "none") {
+			if string(c.State) == "exited" && completedJobs[name] {
 				info, err := dm.dockerClient.ContainerInspect(ctx, c.ID, client.ContainerInspectOptions{})
 				if err != nil {
 					return fmt.Errorf("inspect completed Compose service: %w", err)
@@ -1768,4 +1789,16 @@ func missingComposeServices(content []byte, missing []string) ([]byte, error) {
 	}
 	document["services"] = selected
 	return yaml.Marshal(document)
+}
+
+// resolveComposeIngress fails closed if the persisted environment cannot be read.
+func resolveComposeIngress(ctx context.Context, db *gorm.DB, id, requested string) (string, error) {
+	var deployment database.Deployment
+	if err := db.WithContext(ctx).Select("environment").Where("id = ? AND deleted_at IS NULL", id).First(&deployment).Error; err != nil {
+		return "", err
+	}
+	if deployment.Environment == int32(deploymentsv1.Environment_PULL_REQUEST) {
+		return PreviewIngressNetworkNameForDeployment(id), nil
+	}
+	return requested, nil
 }
