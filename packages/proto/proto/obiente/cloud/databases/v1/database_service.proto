@@ -510,6 +510,9 @@ message ListBackupsRequest {
 message ListBackupsResponse {
   repeated DatabaseBackup backups = 1;
   obiente.cloud.common.v1.Pagination pagination = 2;
+  bool managed_available = 3;
+  string unavailable_reason = 4;
+  int32 retained_count = 5;
 }
 
 message CreateBackupRequest {
@@ -547,12 +550,13 @@ message RestoreBackupRequest {
   string organization_id = 1;
   string database_id = 2;
   string backup_id = 3;
-  optional string target_database_name = 4; // Optional: restore to different database name
+  optional string target_database_name = 4; // Restore into a new database; never overwrite an existing one
 }
 
 message RestoreBackupResponse {
-  DatabaseInstance database = 1; // Restored database instance
+  DatabaseInstance database = 1; // Instance hosting the requested restore
   string message = 2;
+  DatabaseBackup backup = 3;
 }
 
 message DatabaseBackup {
@@ -565,6 +569,11 @@ message DatabaseBackup {
   google.protobuf.Timestamp created_at = 7;
   optional google.protobuf.Timestamp completed_at = 8;
   optional string error_message = 9;
+  string restore_status = 10;
+  string restore_target = 11;
+  optional string restore_error = 12;
+  optional google.protobuf.Timestamp restored_at = 13;
+  string database_name = 14;
 }
 
 enum DatabaseBackupStatus {

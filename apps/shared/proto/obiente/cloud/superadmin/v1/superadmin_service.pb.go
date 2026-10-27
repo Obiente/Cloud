@@ -1836,6 +1836,7 @@ func (x *CreateDNSDelegationAPIKeyResponse) GetDescription() string {
 // Revoke DNS Delegation API Key Request
 type RevokeDNSDelegationAPIKeyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`    // Revoke a listed key without retrieving its secret.
 	ApiKey        string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"` // The API key to revoke
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1869,6 +1870,13 @@ func (x *RevokeDNSDelegationAPIKeyRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use RevokeDNSDelegationAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*RevokeDNSDelegationAPIKeyRequest) Descriptor() ([]byte, []int) {
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RevokeDNSDelegationAPIKeyRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
 }
 
 func (x *RevokeDNSDelegationAPIKeyRequest) GetApiKey() string {
@@ -10344,8 +10352,9 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"!CreateDNSDelegationAPIKeyResponse\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\";\n" +
-	" RevokeDNSDelegationAPIKeyRequest\x12\x17\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"R\n" +
+	" RevokeDNSDelegationAPIKeyRequest\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\"W\n" +
 	"!RevokeDNSDelegationAPIKeyResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +

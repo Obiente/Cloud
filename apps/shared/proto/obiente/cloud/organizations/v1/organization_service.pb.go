@@ -171,8 +171,11 @@ type UsageMetrics struct {
 	StorageCostCents   *int64 `protobuf:"varint,11,opt,name=storage_cost_cents,json=storageCostCents,proto3,oneof" json:"storage_cost_cents,omitempty"`
 	// VPS public IP cost (monthly rate prorated)
 	PublicIpCostCents *int64 `protobuf:"varint,12,opt,name=public_ip_cost_cents,json=publicIpCostCents,proto3,oneof" json:"public_ip_cost_cents,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// When true, storage and the combined cost must be shown as unavailable.
+	StorageMeasurementUnavailable bool `protobuf:"varint,13,opt,name=storage_measurement_unavailable,json=storageMeasurementUnavailable,proto3" json:"storage_measurement_unavailable,omitempty"`
+	CostEstimateUnavailable       bool `protobuf:"varint,14,opt,name=cost_estimate_unavailable,json=costEstimateUnavailable,proto3" json:"cost_estimate_unavailable,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *UsageMetrics) Reset() {
@@ -287,6 +290,20 @@ func (x *UsageMetrics) GetPublicIpCostCents() int64 {
 		return *x.PublicIpCostCents
 	}
 	return 0
+}
+
+func (x *UsageMetrics) GetStorageMeasurementUnavailable() bool {
+	if x != nil {
+		return x.StorageMeasurementUnavailable
+	}
+	return false
+}
+
+func (x *UsageMetrics) GetCostEstimateUnavailable() bool {
+	if x != nil {
+		return x.CostEstimateUnavailable
+	}
+	return false
 }
 
 type UsageQuota struct {
@@ -2967,7 +2984,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x05month\x18\x02 \x01(\tR\x05month\x12F\n" +
 	"\acurrent\x18\x03 \x01(\v2,.obiente.cloud.organizations.v1.UsageMetricsR\acurrent\x12Y\n" +
 	"\x11estimated_monthly\x18\x04 \x01(\v2,.obiente.cloud.organizations.v1.UsageMetricsR\x10estimatedMonthly\x12@\n" +
-	"\x05quota\x18\x05 \x01(\v2*.obiente.cloud.organizations.v1.UsageQuotaR\x05quota\"\xc1\x05\n" +
+	"\x05quota\x18\x05 \x01(\v2*.obiente.cloud.organizations.v1.UsageQuotaR\x05quota\"\xc5\x06\n" +
 	"\fUsageMetrics\x12(\n" +
 	"\x10cpu_core_seconds\x18\x01 \x01(\x03R\x0ecpuCoreSeconds\x12.\n" +
 	"\x13memory_byte_seconds\x18\x02 \x01(\x03R\x11memoryByteSeconds\x12,\n" +
@@ -2981,7 +2998,9 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x14bandwidth_cost_cents\x18\n" +
 	" \x01(\x03H\x02R\x12bandwidthCostCents\x88\x01\x01\x121\n" +
 	"\x12storage_cost_cents\x18\v \x01(\x03H\x03R\x10storageCostCents\x88\x01\x01\x124\n" +
-	"\x14public_ip_cost_cents\x18\f \x01(\x03H\x04R\x11publicIpCostCents\x88\x01\x01B\x11\n" +
+	"\x14public_ip_cost_cents\x18\f \x01(\x03H\x04R\x11publicIpCostCents\x88\x01\x01\x12F\n" +
+	"\x1fstorage_measurement_unavailable\x18\r \x01(\bR\x1dstorageMeasurementUnavailable\x12:\n" +
+	"\x19cost_estimate_unavailable\x18\x0e \x01(\bR\x17costEstimateUnavailableB\x11\n" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +

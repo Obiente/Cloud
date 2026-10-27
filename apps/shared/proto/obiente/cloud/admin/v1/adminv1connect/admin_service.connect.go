@@ -33,6 +33,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// AdminServiceGetOrgQuotaProcedure is the fully-qualified name of the AdminService's GetOrgQuota
+	// RPC.
+	AdminServiceGetOrgQuotaProcedure = "/obiente.cloud.admin.v1.AdminService/GetOrgQuota"
 	// AdminServiceUpsertOrgQuotaProcedure is the fully-qualified name of the AdminService's
 	// UpsertOrgQuota RPC.
 	AdminServiceUpsertOrgQuotaProcedure = "/obiente.cloud.admin.v1.AdminService/UpsertOrgQuota"
@@ -60,6 +63,7 @@ const (
 
 // AdminServiceClient is a client for the obiente.cloud.admin.v1.AdminService service.
 type AdminServiceClient interface {
+	GetOrgQuota(context.Context, *connect.Request[v1.GetOrgQuotaRequest]) (*connect.Response[v1.GetOrgQuotaResponse], error)
 	UpsertOrgQuota(context.Context, *connect.Request[v1.UpsertOrgQuotaRequest]) (*connect.Response[v1.UpsertOrgQuotaResponse], error)
 	// Permissions catalog for UI (comes from server definitions)
 	ListPermissions(context.Context, *connect.Request[v1.ListPermissionsRequest]) (*connect.Response[v1.ListPermissionsResponse], error)
@@ -85,6 +89,12 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 	baseURL = strings.TrimRight(baseURL, "/")
 	adminServiceMethods := v1.File_obiente_cloud_admin_v1_admin_service_proto.Services().ByName("AdminService").Methods()
 	return &adminServiceClient{
+		getOrgQuota: connect.NewClient[v1.GetOrgQuotaRequest, v1.GetOrgQuotaResponse](
+			httpClient,
+			baseURL+AdminServiceGetOrgQuotaProcedure,
+			connect.WithSchema(adminServiceMethods.ByName("GetOrgQuota")),
+			connect.WithClientOptions(opts...),
+		),
 		upsertOrgQuota: connect.NewClient[v1.UpsertOrgQuotaRequest, v1.UpsertOrgQuotaResponse](
 			httpClient,
 			baseURL+AdminServiceUpsertOrgQuotaProcedure,
@@ -144,6 +154,7 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // adminServiceClient implements AdminServiceClient.
 type adminServiceClient struct {
+	getOrgQuota       *connect.Client[v1.GetOrgQuotaRequest, v1.GetOrgQuotaResponse]
 	upsertOrgQuota    *connect.Client[v1.UpsertOrgQuotaRequest, v1.UpsertOrgQuotaResponse]
 	listPermissions   *connect.Client[v1.ListPermissionsRequest, v1.ListPermissionsResponse]
 	listRoles         *connect.Client[v1.ListRolesRequest, v1.ListRolesResponse]
@@ -153,6 +164,11 @@ type adminServiceClient struct {
 	listRoleBindings  *connect.Client[v1.ListRoleBindingsRequest, v1.ListRoleBindingsResponse]
 	createRoleBinding *connect.Client[v1.CreateRoleBindingRequest, v1.CreateRoleBindingResponse]
 	deleteRoleBinding *connect.Client[v1.DeleteRoleBindingRequest, v1.DeleteRoleBindingResponse]
+}
+
+// GetOrgQuota calls obiente.cloud.admin.v1.AdminService.GetOrgQuota.
+func (c *adminServiceClient) GetOrgQuota(ctx context.Context, req *connect.Request[v1.GetOrgQuotaRequest]) (*connect.Response[v1.GetOrgQuotaResponse], error) {
+	return c.getOrgQuota.CallUnary(ctx, req)
 }
 
 // UpsertOrgQuota calls obiente.cloud.admin.v1.AdminService.UpsertOrgQuota.
@@ -202,6 +218,7 @@ func (c *adminServiceClient) DeleteRoleBinding(ctx context.Context, req *connect
 
 // AdminServiceHandler is an implementation of the obiente.cloud.admin.v1.AdminService service.
 type AdminServiceHandler interface {
+	GetOrgQuota(context.Context, *connect.Request[v1.GetOrgQuotaRequest]) (*connect.Response[v1.GetOrgQuotaResponse], error)
 	UpsertOrgQuota(context.Context, *connect.Request[v1.UpsertOrgQuotaRequest]) (*connect.Response[v1.UpsertOrgQuotaResponse], error)
 	// Permissions catalog for UI (comes from server definitions)
 	ListPermissions(context.Context, *connect.Request[v1.ListPermissionsRequest]) (*connect.Response[v1.ListPermissionsResponse], error)
@@ -223,6 +240,12 @@ type AdminServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	adminServiceMethods := v1.File_obiente_cloud_admin_v1_admin_service_proto.Services().ByName("AdminService").Methods()
+	adminServiceGetOrgQuotaHandler := connect.NewUnaryHandler(
+		AdminServiceGetOrgQuotaProcedure,
+		svc.GetOrgQuota,
+		connect.WithSchema(adminServiceMethods.ByName("GetOrgQuota")),
+		connect.WithHandlerOptions(opts...),
+	)
 	adminServiceUpsertOrgQuotaHandler := connect.NewUnaryHandler(
 		AdminServiceUpsertOrgQuotaProcedure,
 		svc.UpsertOrgQuota,
@@ -279,6 +302,8 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 	)
 	return "/obiente.cloud.admin.v1.AdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case AdminServiceGetOrgQuotaProcedure:
+			adminServiceGetOrgQuotaHandler.ServeHTTP(w, r)
 		case AdminServiceUpsertOrgQuotaProcedure:
 			adminServiceUpsertOrgQuotaHandler.ServeHTTP(w, r)
 		case AdminServiceListPermissionsProcedure:
@@ -305,6 +330,10 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 
 // UnimplementedAdminServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAdminServiceHandler struct{}
+
+func (UnimplementedAdminServiceHandler) GetOrgQuota(context.Context, *connect.Request[v1.GetOrgQuotaRequest]) (*connect.Response[v1.GetOrgQuotaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.admin.v1.AdminService.GetOrgQuota is not implemented"))
+}
 
 func (UnimplementedAdminServiceHandler) UpsertOrgQuota(context.Context, *connect.Request[v1.UpsertOrgQuotaRequest]) (*connect.Response[v1.UpsertOrgQuotaResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.admin.v1.AdminService.UpsertOrgQuota is not implemented"))

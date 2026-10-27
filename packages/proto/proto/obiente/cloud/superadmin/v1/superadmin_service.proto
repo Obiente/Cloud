@@ -330,6 +330,7 @@ message CreateDNSDelegationAPIKeyResponse {
 
 // Revoke DNS Delegation API Key Request
 message RevokeDNSDelegationAPIKeyRequest {
+	string key_id = 2; // Revoke a listed key without retrieving its secret.
   string api_key = 1; // The API key to revoke
 }
 

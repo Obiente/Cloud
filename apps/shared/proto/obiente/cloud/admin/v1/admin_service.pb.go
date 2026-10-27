@@ -24,11 +24,11 @@ const (
 type UpsertOrgQuotaRequest struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId              string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
-	DeploymentsMaxOverride      int32                  `protobuf:"varint,2,opt,name=deployments_max_override,json=deploymentsMaxOverride,proto3" json:"deployments_max_override,omitempty"`                  // 0 = unlimited
-	CpuCoresOverride            int32                  `protobuf:"varint,3,opt,name=cpu_cores_override,json=cpuCoresOverride,proto3" json:"cpu_cores_override,omitempty"`                                    // 0 = unlimited
-	MemoryBytesOverride         int64                  `protobuf:"varint,4,opt,name=memory_bytes_override,json=memoryBytesOverride,proto3" json:"memory_bytes_override,omitempty"`                           // 0 = unlimited
-	BandwidthBytesMonthOverride int64                  `protobuf:"varint,5,opt,name=bandwidth_bytes_month_override,json=bandwidthBytesMonthOverride,proto3" json:"bandwidth_bytes_month_override,omitempty"` // 0 = unlimited
-	StorageBytesOverride        int64                  `protobuf:"varint,6,opt,name=storage_bytes_override,json=storageBytesOverride,proto3" json:"storage_bytes_override,omitempty"`                        // 0 = unlimited
+	DeploymentsMaxOverride      int32                  `protobuf:"varint,2,opt,name=deployments_max_override,json=deploymentsMaxOverride,proto3" json:"deployments_max_override,omitempty"`                  // 0 = use plan default
+	CpuCoresOverride            int32                  `protobuf:"varint,3,opt,name=cpu_cores_override,json=cpuCoresOverride,proto3" json:"cpu_cores_override,omitempty"`                                    // 0 = use plan default
+	MemoryBytesOverride         int64                  `protobuf:"varint,4,opt,name=memory_bytes_override,json=memoryBytesOverride,proto3" json:"memory_bytes_override,omitempty"`                           // 0 = use plan default
+	BandwidthBytesMonthOverride int64                  `protobuf:"varint,5,opt,name=bandwidth_bytes_month_override,json=bandwidthBytesMonthOverride,proto3" json:"bandwidth_bytes_month_override,omitempty"` // 0 = use plan default
+	StorageBytesOverride        int64                  `protobuf:"varint,6,opt,name=storage_bytes_override,json=storageBytesOverride,proto3" json:"storage_bytes_override,omitempty"`                        // 0 = use plan default
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -149,6 +149,194 @@ func (x *UpsertOrgQuotaResponse) GetSuccess() bool {
 	return false
 }
 
+type GetOrgQuotaRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetOrgQuotaRequest) Reset() {
+	*x = GetOrgQuotaRequest{}
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrgQuotaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrgQuotaRequest) ProtoMessage() {}
+
+func (x *GetOrgQuotaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrgQuotaRequest.ProtoReflect.Descriptor instead.
+func (*GetOrgQuotaRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *GetOrgQuotaRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type QuotaLimits struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentsMax      int32                  `protobuf:"varint,1,opt,name=deployments_max,json=deploymentsMax,proto3" json:"deployments_max,omitempty"`
+	CpuCores            int32                  `protobuf:"varint,2,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryBytes         int64                  `protobuf:"varint,3,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	BandwidthBytesMonth int64                  `protobuf:"varint,4,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"`
+	StorageBytes        int64                  `protobuf:"varint,5,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *QuotaLimits) Reset() {
+	*x = QuotaLimits{}
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuotaLimits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuotaLimits) ProtoMessage() {}
+
+func (x *QuotaLimits) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuotaLimits.ProtoReflect.Descriptor instead.
+func (*QuotaLimits) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *QuotaLimits) GetDeploymentsMax() int32 {
+	if x != nil {
+		return x.DeploymentsMax
+	}
+	return 0
+}
+
+func (x *QuotaLimits) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *QuotaLimits) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *QuotaLimits) GetBandwidthBytesMonth() int64 {
+	if x != nil {
+		return x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *QuotaLimits) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+type GetOrgQuotaResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Quota         *UpsertOrgQuotaRequest `protobuf:"bytes,1,opt,name=quota,proto3" json:"quota,omitempty"`
+	PlanDefaults  *QuotaLimits           `protobuf:"bytes,2,opt,name=plan_defaults,json=planDefaults,proto3" json:"plan_defaults,omitempty"`
+	Effective     *QuotaLimits           `protobuf:"bytes,3,opt,name=effective,proto3" json:"effective,omitempty"`
+	PlanName      string                 `protobuf:"bytes,4,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrgQuotaResponse) Reset() {
+	*x = GetOrgQuotaResponse{}
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrgQuotaResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrgQuotaResponse) ProtoMessage() {}
+
+func (x *GetOrgQuotaResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrgQuotaResponse.ProtoReflect.Descriptor instead.
+func (*GetOrgQuotaResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetOrgQuotaResponse) GetQuota() *UpsertOrgQuotaRequest {
+	if x != nil {
+		return x.Quota
+	}
+	return nil
+}
+
+func (x *GetOrgQuotaResponse) GetPlanDefaults() *QuotaLimits {
+	if x != nil {
+		return x.PlanDefaults
+	}
+	return nil
+}
+
+func (x *GetOrgQuotaResponse) GetEffective() *QuotaLimits {
+	if x != nil {
+		return x.Effective
+	}
+	return nil
+}
+
+func (x *GetOrgQuotaResponse) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
 type ListPermissionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -157,7 +345,7 @@ type ListPermissionsRequest struct {
 
 func (x *ListPermissionsRequest) Reset() {
 	*x = ListPermissionsRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -169,7 +357,7 @@ func (x *ListPermissionsRequest) String() string {
 func (*ListPermissionsRequest) ProtoMessage() {}
 
 func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[2]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -182,7 +370,7 @@ func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{2}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{5}
 }
 
 type PermissionDefinition struct {
@@ -196,7 +384,7 @@ type PermissionDefinition struct {
 
 func (x *PermissionDefinition) Reset() {
 	*x = PermissionDefinition{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -208,7 +396,7 @@ func (x *PermissionDefinition) String() string {
 func (*PermissionDefinition) ProtoMessage() {}
 
 func (x *PermissionDefinition) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[3]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -221,7 +409,7 @@ func (x *PermissionDefinition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PermissionDefinition.ProtoReflect.Descriptor instead.
 func (*PermissionDefinition) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{3}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PermissionDefinition) GetId() string {
@@ -254,7 +442,7 @@ type ListPermissionsResponse struct {
 
 func (x *ListPermissionsResponse) Reset() {
 	*x = ListPermissionsResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -266,7 +454,7 @@ func (x *ListPermissionsResponse) String() string {
 func (*ListPermissionsResponse) ProtoMessage() {}
 
 func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[4]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -279,7 +467,7 @@ func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{4}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListPermissionsResponse) GetPermissions() []*PermissionDefinition {
@@ -298,7 +486,7 @@ type ListRolesRequest struct {
 
 func (x *ListRolesRequest) Reset() {
 	*x = ListRolesRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[5]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -310,7 +498,7 @@ func (x *ListRolesRequest) String() string {
 func (*ListRolesRequest) ProtoMessage() {}
 
 func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[5]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -323,7 +511,7 @@ func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListRolesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{5}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListRolesRequest) GetOrganizationId() string {
@@ -344,7 +532,7 @@ type Role struct {
 
 func (x *Role) Reset() {
 	*x = Role{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[6]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -356,7 +544,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[6]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -369,7 +557,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{6}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Role) GetId() string {
@@ -402,7 +590,7 @@ type ListRolesResponse struct {
 
 func (x *ListRolesResponse) Reset() {
 	*x = ListRolesResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[7]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +602,7 @@ func (x *ListRolesResponse) String() string {
 func (*ListRolesResponse) ProtoMessage() {}
 
 func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[7]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +615,7 @@ func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesResponse.ProtoReflect.Descriptor instead.
 func (*ListRolesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{7}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListRolesResponse) GetRoles() []*Role {
@@ -448,7 +636,7 @@ type CreateRoleRequest struct {
 
 func (x *CreateRoleRequest) Reset() {
 	*x = CreateRoleRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[8]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +648,7 @@ func (x *CreateRoleRequest) String() string {
 func (*CreateRoleRequest) ProtoMessage() {}
 
 func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[8]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +661,7 @@ func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{8}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CreateRoleRequest) GetOrganizationId() string {
@@ -506,7 +694,7 @@ type CreateRoleResponse struct {
 
 func (x *CreateRoleResponse) Reset() {
 	*x = CreateRoleResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[9]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +706,7 @@ func (x *CreateRoleResponse) String() string {
 func (*CreateRoleResponse) ProtoMessage() {}
 
 func (x *CreateRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[9]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +719,7 @@ func (x *CreateRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{9}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreateRoleResponse) GetRole() *Role {
@@ -553,7 +741,7 @@ type UpdateRoleRequest struct {
 
 func (x *UpdateRoleRequest) Reset() {
 	*x = UpdateRoleRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -565,7 +753,7 @@ func (x *UpdateRoleRequest) String() string {
 func (*UpdateRoleRequest) ProtoMessage() {}
 
 func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -578,7 +766,7 @@ func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{10}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpdateRoleRequest) GetId() string {
@@ -618,7 +806,7 @@ type UpdateRoleResponse struct {
 
 func (x *UpdateRoleResponse) Reset() {
 	*x = UpdateRoleResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[11]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -630,7 +818,7 @@ func (x *UpdateRoleResponse) String() string {
 func (*UpdateRoleResponse) ProtoMessage() {}
 
 func (x *UpdateRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[11]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -643,7 +831,7 @@ func (x *UpdateRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleResponse.ProtoReflect.Descriptor instead.
 func (*UpdateRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{11}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UpdateRoleResponse) GetRole() *Role {
@@ -662,7 +850,7 @@ type DeleteRoleRequest struct {
 
 func (x *DeleteRoleRequest) Reset() {
 	*x = DeleteRoleRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[12]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -674,7 +862,7 @@ func (x *DeleteRoleRequest) String() string {
 func (*DeleteRoleRequest) ProtoMessage() {}
 
 func (x *DeleteRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[12]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -687,7 +875,7 @@ func (x *DeleteRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRoleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRoleRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{12}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *DeleteRoleRequest) GetId() string {
@@ -706,7 +894,7 @@ type DeleteRoleResponse struct {
 
 func (x *DeleteRoleResponse) Reset() {
 	*x = DeleteRoleResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -718,7 +906,7 @@ func (x *DeleteRoleResponse) String() string {
 func (*DeleteRoleResponse) ProtoMessage() {}
 
 func (x *DeleteRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[13]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -731,7 +919,7 @@ func (x *DeleteRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRoleResponse.ProtoReflect.Descriptor instead.
 func (*DeleteRoleResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{13}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *DeleteRoleResponse) GetSuccess() bool {
@@ -750,7 +938,7 @@ type ListRoleBindingsRequest struct {
 
 func (x *ListRoleBindingsRequest) Reset() {
 	*x = ListRoleBindingsRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -762,7 +950,7 @@ func (x *ListRoleBindingsRequest) String() string {
 func (*ListRoleBindingsRequest) ProtoMessage() {}
 
 func (x *ListRoleBindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[14]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -775,7 +963,7 @@ func (x *ListRoleBindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleBindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListRoleBindingsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{14}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListRoleBindingsRequest) GetOrganizationId() string {
@@ -800,7 +988,7 @@ type RoleBinding struct {
 
 func (x *RoleBinding) Reset() {
 	*x = RoleBinding{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -812,7 +1000,7 @@ func (x *RoleBinding) String() string {
 func (*RoleBinding) ProtoMessage() {}
 
 func (x *RoleBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[15]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -825,7 +1013,7 @@ func (x *RoleBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleBinding.ProtoReflect.Descriptor instead.
 func (*RoleBinding) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{15}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RoleBinding) GetId() string {
@@ -886,7 +1074,7 @@ type ListRoleBindingsResponse struct {
 
 func (x *ListRoleBindingsResponse) Reset() {
 	*x = ListRoleBindingsResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -898,7 +1086,7 @@ func (x *ListRoleBindingsResponse) String() string {
 func (*ListRoleBindingsResponse) ProtoMessage() {}
 
 func (x *ListRoleBindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -911,7 +1099,7 @@ func (x *ListRoleBindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoleBindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListRoleBindingsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListRoleBindingsResponse) GetBindings() []*RoleBinding {
@@ -935,7 +1123,7 @@ type CreateRoleBindingRequest struct {
 
 func (x *CreateRoleBindingRequest) Reset() {
 	*x = CreateRoleBindingRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -947,7 +1135,7 @@ func (x *CreateRoleBindingRequest) String() string {
 func (*CreateRoleBindingRequest) ProtoMessage() {}
 
 func (x *CreateRoleBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -960,7 +1148,7 @@ func (x *CreateRoleBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleBindingRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleBindingRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CreateRoleBindingRequest) GetOrganizationId() string {
@@ -1014,7 +1202,7 @@ type CreateRoleBindingResponse struct {
 
 func (x *CreateRoleBindingResponse) Reset() {
 	*x = CreateRoleBindingResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1026,7 +1214,7 @@ func (x *CreateRoleBindingResponse) String() string {
 func (*CreateRoleBindingResponse) ProtoMessage() {}
 
 func (x *CreateRoleBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1039,7 +1227,7 @@ func (x *CreateRoleBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleBindingResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoleBindingResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CreateRoleBindingResponse) GetBinding() *RoleBinding {
@@ -1058,7 +1246,7 @@ type DeleteRoleBindingRequest struct {
 
 func (x *DeleteRoleBindingRequest) Reset() {
 	*x = DeleteRoleBindingRequest{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1070,7 +1258,7 @@ func (x *DeleteRoleBindingRequest) String() string {
 func (*DeleteRoleBindingRequest) ProtoMessage() {}
 
 func (x *DeleteRoleBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1083,7 +1271,7 @@ func (x *DeleteRoleBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRoleBindingRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRoleBindingRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{19}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DeleteRoleBindingRequest) GetId() string {
@@ -1102,7 +1290,7 @@ type DeleteRoleBindingResponse struct {
 
 func (x *DeleteRoleBindingResponse) Reset() {
 	*x = DeleteRoleBindingResponse{}
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1114,7 +1302,7 @@ func (x *DeleteRoleBindingResponse) String() string {
 func (*DeleteRoleBindingResponse) ProtoMessage() {}
 
 func (x *DeleteRoleBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_admin_v1_admin_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1127,7 +1315,7 @@ func (x *DeleteRoleBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRoleBindingResponse.ProtoReflect.Descriptor instead.
 func (*DeleteRoleBindingResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{20}
+	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeleteRoleBindingResponse) GetSuccess() bool {
@@ -1150,7 +1338,20 @@ const file_obiente_cloud_admin_v1_admin_service_proto_rawDesc = "" +
 	"\x1ebandwidth_bytes_month_override\x18\x05 \x01(\x03R\x1bbandwidthBytesMonthOverride\x124\n" +
 	"\x16storage_bytes_override\x18\x06 \x01(\x03R\x14storageBytesOverride\"2\n" +
 	"\x16UpsertOrgQuotaResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"=\n" +
+	"\x12GetOrgQuotaRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\xcf\x01\n" +
+	"\vQuotaLimits\x12'\n" +
+	"\x0fdeployments_max\x18\x01 \x01(\x05R\x0edeploymentsMax\x12\x1b\n" +
+	"\tcpu_cores\x18\x02 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_bytes\x18\x03 \x01(\x03R\vmemoryBytes\x122\n" +
+	"\x15bandwidth_bytes_month\x18\x04 \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
+	"\rstorage_bytes\x18\x05 \x01(\x03R\fstorageBytes\"\x84\x02\n" +
+	"\x13GetOrgQuotaResponse\x12C\n" +
+	"\x05quota\x18\x01 \x01(\v2-.obiente.cloud.admin.v1.UpsertOrgQuotaRequestR\x05quota\x12H\n" +
+	"\rplan_defaults\x18\x02 \x01(\v2#.obiente.cloud.admin.v1.QuotaLimitsR\fplanDefaults\x12A\n" +
+	"\teffective\x18\x03 \x01(\v2#.obiente.cloud.admin.v1.QuotaLimitsR\teffective\x12\x1b\n" +
+	"\tplan_name\x18\x04 \x01(\tR\bplanName\"\x18\n" +
 	"\x16ListPermissionsRequest\"m\n" +
 	"\x14PermissionDefinition\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12 \n" +
@@ -1209,8 +1410,9 @@ const file_obiente_cloud_admin_v1_admin_service_proto_rawDesc = "" +
 	"\x18DeleteRoleBindingRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"5\n" +
 	"\x19DeleteRoleBindingResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xef\a\n" +
-	"\fAdminService\x12o\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\xd7\b\n" +
+	"\fAdminService\x12f\n" +
+	"\vGetOrgQuota\x12*.obiente.cloud.admin.v1.GetOrgQuotaRequest\x1a+.obiente.cloud.admin.v1.GetOrgQuotaResponse\x12o\n" +
 	"\x0eUpsertOrgQuota\x12-.obiente.cloud.admin.v1.UpsertOrgQuotaRequest\x1a..obiente.cloud.admin.v1.UpsertOrgQuotaResponse\x12r\n" +
 	"\x0fListPermissions\x12..obiente.cloud.admin.v1.ListPermissionsRequest\x1a/.obiente.cloud.admin.v1.ListPermissionsResponse\x12`\n" +
 	"\tListRoles\x12(.obiente.cloud.admin.v1.ListRolesRequest\x1a).obiente.cloud.admin.v1.ListRolesResponse\x12c\n" +
@@ -1236,60 +1438,68 @@ func file_obiente_cloud_admin_v1_admin_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_admin_v1_admin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_admin_v1_admin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_obiente_cloud_admin_v1_admin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_obiente_cloud_admin_v1_admin_service_proto_goTypes = []any{
 	(*UpsertOrgQuotaRequest)(nil),     // 0: obiente.cloud.admin.v1.UpsertOrgQuotaRequest
 	(*UpsertOrgQuotaResponse)(nil),    // 1: obiente.cloud.admin.v1.UpsertOrgQuotaResponse
-	(*ListPermissionsRequest)(nil),    // 2: obiente.cloud.admin.v1.ListPermissionsRequest
-	(*PermissionDefinition)(nil),      // 3: obiente.cloud.admin.v1.PermissionDefinition
-	(*ListPermissionsResponse)(nil),   // 4: obiente.cloud.admin.v1.ListPermissionsResponse
-	(*ListRolesRequest)(nil),          // 5: obiente.cloud.admin.v1.ListRolesRequest
-	(*Role)(nil),                      // 6: obiente.cloud.admin.v1.Role
-	(*ListRolesResponse)(nil),         // 7: obiente.cloud.admin.v1.ListRolesResponse
-	(*CreateRoleRequest)(nil),         // 8: obiente.cloud.admin.v1.CreateRoleRequest
-	(*CreateRoleResponse)(nil),        // 9: obiente.cloud.admin.v1.CreateRoleResponse
-	(*UpdateRoleRequest)(nil),         // 10: obiente.cloud.admin.v1.UpdateRoleRequest
-	(*UpdateRoleResponse)(nil),        // 11: obiente.cloud.admin.v1.UpdateRoleResponse
-	(*DeleteRoleRequest)(nil),         // 12: obiente.cloud.admin.v1.DeleteRoleRequest
-	(*DeleteRoleResponse)(nil),        // 13: obiente.cloud.admin.v1.DeleteRoleResponse
-	(*ListRoleBindingsRequest)(nil),   // 14: obiente.cloud.admin.v1.ListRoleBindingsRequest
-	(*RoleBinding)(nil),               // 15: obiente.cloud.admin.v1.RoleBinding
-	(*ListRoleBindingsResponse)(nil),  // 16: obiente.cloud.admin.v1.ListRoleBindingsResponse
-	(*CreateRoleBindingRequest)(nil),  // 17: obiente.cloud.admin.v1.CreateRoleBindingRequest
-	(*CreateRoleBindingResponse)(nil), // 18: obiente.cloud.admin.v1.CreateRoleBindingResponse
-	(*DeleteRoleBindingRequest)(nil),  // 19: obiente.cloud.admin.v1.DeleteRoleBindingRequest
-	(*DeleteRoleBindingResponse)(nil), // 20: obiente.cloud.admin.v1.DeleteRoleBindingResponse
+	(*GetOrgQuotaRequest)(nil),        // 2: obiente.cloud.admin.v1.GetOrgQuotaRequest
+	(*QuotaLimits)(nil),               // 3: obiente.cloud.admin.v1.QuotaLimits
+	(*GetOrgQuotaResponse)(nil),       // 4: obiente.cloud.admin.v1.GetOrgQuotaResponse
+	(*ListPermissionsRequest)(nil),    // 5: obiente.cloud.admin.v1.ListPermissionsRequest
+	(*PermissionDefinition)(nil),      // 6: obiente.cloud.admin.v1.PermissionDefinition
+	(*ListPermissionsResponse)(nil),   // 7: obiente.cloud.admin.v1.ListPermissionsResponse
+	(*ListRolesRequest)(nil),          // 8: obiente.cloud.admin.v1.ListRolesRequest
+	(*Role)(nil),                      // 9: obiente.cloud.admin.v1.Role
+	(*ListRolesResponse)(nil),         // 10: obiente.cloud.admin.v1.ListRolesResponse
+	(*CreateRoleRequest)(nil),         // 11: obiente.cloud.admin.v1.CreateRoleRequest
+	(*CreateRoleResponse)(nil),        // 12: obiente.cloud.admin.v1.CreateRoleResponse
+	(*UpdateRoleRequest)(nil),         // 13: obiente.cloud.admin.v1.UpdateRoleRequest
+	(*UpdateRoleResponse)(nil),        // 14: obiente.cloud.admin.v1.UpdateRoleResponse
+	(*DeleteRoleRequest)(nil),         // 15: obiente.cloud.admin.v1.DeleteRoleRequest
+	(*DeleteRoleResponse)(nil),        // 16: obiente.cloud.admin.v1.DeleteRoleResponse
+	(*ListRoleBindingsRequest)(nil),   // 17: obiente.cloud.admin.v1.ListRoleBindingsRequest
+	(*RoleBinding)(nil),               // 18: obiente.cloud.admin.v1.RoleBinding
+	(*ListRoleBindingsResponse)(nil),  // 19: obiente.cloud.admin.v1.ListRoleBindingsResponse
+	(*CreateRoleBindingRequest)(nil),  // 20: obiente.cloud.admin.v1.CreateRoleBindingRequest
+	(*CreateRoleBindingResponse)(nil), // 21: obiente.cloud.admin.v1.CreateRoleBindingResponse
+	(*DeleteRoleBindingRequest)(nil),  // 22: obiente.cloud.admin.v1.DeleteRoleBindingRequest
+	(*DeleteRoleBindingResponse)(nil), // 23: obiente.cloud.admin.v1.DeleteRoleBindingResponse
 }
 var file_obiente_cloud_admin_v1_admin_service_proto_depIdxs = []int32{
-	3,  // 0: obiente.cloud.admin.v1.ListPermissionsResponse.permissions:type_name -> obiente.cloud.admin.v1.PermissionDefinition
-	6,  // 1: obiente.cloud.admin.v1.ListRolesResponse.roles:type_name -> obiente.cloud.admin.v1.Role
-	6,  // 2: obiente.cloud.admin.v1.CreateRoleResponse.role:type_name -> obiente.cloud.admin.v1.Role
-	6,  // 3: obiente.cloud.admin.v1.UpdateRoleResponse.role:type_name -> obiente.cloud.admin.v1.Role
-	15, // 4: obiente.cloud.admin.v1.ListRoleBindingsResponse.bindings:type_name -> obiente.cloud.admin.v1.RoleBinding
-	15, // 5: obiente.cloud.admin.v1.CreateRoleBindingResponse.binding:type_name -> obiente.cloud.admin.v1.RoleBinding
-	0,  // 6: obiente.cloud.admin.v1.AdminService.UpsertOrgQuota:input_type -> obiente.cloud.admin.v1.UpsertOrgQuotaRequest
-	2,  // 7: obiente.cloud.admin.v1.AdminService.ListPermissions:input_type -> obiente.cloud.admin.v1.ListPermissionsRequest
-	5,  // 8: obiente.cloud.admin.v1.AdminService.ListRoles:input_type -> obiente.cloud.admin.v1.ListRolesRequest
-	8,  // 9: obiente.cloud.admin.v1.AdminService.CreateRole:input_type -> obiente.cloud.admin.v1.CreateRoleRequest
-	10, // 10: obiente.cloud.admin.v1.AdminService.UpdateRole:input_type -> obiente.cloud.admin.v1.UpdateRoleRequest
-	12, // 11: obiente.cloud.admin.v1.AdminService.DeleteRole:input_type -> obiente.cloud.admin.v1.DeleteRoleRequest
-	14, // 12: obiente.cloud.admin.v1.AdminService.ListRoleBindings:input_type -> obiente.cloud.admin.v1.ListRoleBindingsRequest
-	17, // 13: obiente.cloud.admin.v1.AdminService.CreateRoleBinding:input_type -> obiente.cloud.admin.v1.CreateRoleBindingRequest
-	19, // 14: obiente.cloud.admin.v1.AdminService.DeleteRoleBinding:input_type -> obiente.cloud.admin.v1.DeleteRoleBindingRequest
-	1,  // 15: obiente.cloud.admin.v1.AdminService.UpsertOrgQuota:output_type -> obiente.cloud.admin.v1.UpsertOrgQuotaResponse
-	4,  // 16: obiente.cloud.admin.v1.AdminService.ListPermissions:output_type -> obiente.cloud.admin.v1.ListPermissionsResponse
-	7,  // 17: obiente.cloud.admin.v1.AdminService.ListRoles:output_type -> obiente.cloud.admin.v1.ListRolesResponse
-	9,  // 18: obiente.cloud.admin.v1.AdminService.CreateRole:output_type -> obiente.cloud.admin.v1.CreateRoleResponse
-	11, // 19: obiente.cloud.admin.v1.AdminService.UpdateRole:output_type -> obiente.cloud.admin.v1.UpdateRoleResponse
-	13, // 20: obiente.cloud.admin.v1.AdminService.DeleteRole:output_type -> obiente.cloud.admin.v1.DeleteRoleResponse
-	16, // 21: obiente.cloud.admin.v1.AdminService.ListRoleBindings:output_type -> obiente.cloud.admin.v1.ListRoleBindingsResponse
-	18, // 22: obiente.cloud.admin.v1.AdminService.CreateRoleBinding:output_type -> obiente.cloud.admin.v1.CreateRoleBindingResponse
-	20, // 23: obiente.cloud.admin.v1.AdminService.DeleteRoleBinding:output_type -> obiente.cloud.admin.v1.DeleteRoleBindingResponse
-	15, // [15:24] is the sub-list for method output_type
-	6,  // [6:15] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	0,  // 0: obiente.cloud.admin.v1.GetOrgQuotaResponse.quota:type_name -> obiente.cloud.admin.v1.UpsertOrgQuotaRequest
+	3,  // 1: obiente.cloud.admin.v1.GetOrgQuotaResponse.plan_defaults:type_name -> obiente.cloud.admin.v1.QuotaLimits
+	3,  // 2: obiente.cloud.admin.v1.GetOrgQuotaResponse.effective:type_name -> obiente.cloud.admin.v1.QuotaLimits
+	6,  // 3: obiente.cloud.admin.v1.ListPermissionsResponse.permissions:type_name -> obiente.cloud.admin.v1.PermissionDefinition
+	9,  // 4: obiente.cloud.admin.v1.ListRolesResponse.roles:type_name -> obiente.cloud.admin.v1.Role
+	9,  // 5: obiente.cloud.admin.v1.CreateRoleResponse.role:type_name -> obiente.cloud.admin.v1.Role
+	9,  // 6: obiente.cloud.admin.v1.UpdateRoleResponse.role:type_name -> obiente.cloud.admin.v1.Role
+	18, // 7: obiente.cloud.admin.v1.ListRoleBindingsResponse.bindings:type_name -> obiente.cloud.admin.v1.RoleBinding
+	18, // 8: obiente.cloud.admin.v1.CreateRoleBindingResponse.binding:type_name -> obiente.cloud.admin.v1.RoleBinding
+	2,  // 9: obiente.cloud.admin.v1.AdminService.GetOrgQuota:input_type -> obiente.cloud.admin.v1.GetOrgQuotaRequest
+	0,  // 10: obiente.cloud.admin.v1.AdminService.UpsertOrgQuota:input_type -> obiente.cloud.admin.v1.UpsertOrgQuotaRequest
+	5,  // 11: obiente.cloud.admin.v1.AdminService.ListPermissions:input_type -> obiente.cloud.admin.v1.ListPermissionsRequest
+	8,  // 12: obiente.cloud.admin.v1.AdminService.ListRoles:input_type -> obiente.cloud.admin.v1.ListRolesRequest
+	11, // 13: obiente.cloud.admin.v1.AdminService.CreateRole:input_type -> obiente.cloud.admin.v1.CreateRoleRequest
+	13, // 14: obiente.cloud.admin.v1.AdminService.UpdateRole:input_type -> obiente.cloud.admin.v1.UpdateRoleRequest
+	15, // 15: obiente.cloud.admin.v1.AdminService.DeleteRole:input_type -> obiente.cloud.admin.v1.DeleteRoleRequest
+	17, // 16: obiente.cloud.admin.v1.AdminService.ListRoleBindings:input_type -> obiente.cloud.admin.v1.ListRoleBindingsRequest
+	20, // 17: obiente.cloud.admin.v1.AdminService.CreateRoleBinding:input_type -> obiente.cloud.admin.v1.CreateRoleBindingRequest
+	22, // 18: obiente.cloud.admin.v1.AdminService.DeleteRoleBinding:input_type -> obiente.cloud.admin.v1.DeleteRoleBindingRequest
+	4,  // 19: obiente.cloud.admin.v1.AdminService.GetOrgQuota:output_type -> obiente.cloud.admin.v1.GetOrgQuotaResponse
+	1,  // 20: obiente.cloud.admin.v1.AdminService.UpsertOrgQuota:output_type -> obiente.cloud.admin.v1.UpsertOrgQuotaResponse
+	7,  // 21: obiente.cloud.admin.v1.AdminService.ListPermissions:output_type -> obiente.cloud.admin.v1.ListPermissionsResponse
+	10, // 22: obiente.cloud.admin.v1.AdminService.ListRoles:output_type -> obiente.cloud.admin.v1.ListRolesResponse
+	12, // 23: obiente.cloud.admin.v1.AdminService.CreateRole:output_type -> obiente.cloud.admin.v1.CreateRoleResponse
+	14, // 24: obiente.cloud.admin.v1.AdminService.UpdateRole:output_type -> obiente.cloud.admin.v1.UpdateRoleResponse
+	16, // 25: obiente.cloud.admin.v1.AdminService.DeleteRole:output_type -> obiente.cloud.admin.v1.DeleteRoleResponse
+	19, // 26: obiente.cloud.admin.v1.AdminService.ListRoleBindings:output_type -> obiente.cloud.admin.v1.ListRoleBindingsResponse
+	21, // 27: obiente.cloud.admin.v1.AdminService.CreateRoleBinding:output_type -> obiente.cloud.admin.v1.CreateRoleBindingResponse
+	23, // 28: obiente.cloud.admin.v1.AdminService.DeleteRoleBinding:output_type -> obiente.cloud.admin.v1.DeleteRoleBindingResponse
+	19, // [19:29] is the sub-list for method output_type
+	9,  // [9:19] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_admin_v1_admin_service_proto_init() }
@@ -1303,7 +1513,7 @@ func file_obiente_cloud_admin_v1_admin_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_admin_v1_admin_service_proto_rawDesc), len(file_obiente_cloud_admin_v1_admin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

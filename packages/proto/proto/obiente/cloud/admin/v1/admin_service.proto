@@ -6,16 +6,32 @@ option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/ad
 
 message UpsertOrgQuotaRequest {
   string organization_id = 1;
-  int32 deployments_max_override = 2; // 0 = unlimited
-  int32 cpu_cores_override = 3;       // 0 = unlimited
-  int64 memory_bytes_override = 4;    // 0 = unlimited
-  int64 bandwidth_bytes_month_override = 5; // 0 = unlimited
-  int64 storage_bytes_override = 6;   // 0 = unlimited
+  int32 deployments_max_override = 2; // 0 = use plan default
+  int32 cpu_cores_override = 3;       // 0 = use plan default
+  int64 memory_bytes_override = 4;    // 0 = use plan default
+  int64 bandwidth_bytes_month_override = 5; // 0 = use plan default
+  int64 storage_bytes_override = 6;   // 0 = use plan default
 }
 
 message UpsertOrgQuotaResponse { bool success = 1; }
 
+message GetOrgQuotaRequest { string organization_id = 1; }
+message QuotaLimits {
+  int32 deployments_max = 1;
+  int32 cpu_cores = 2;
+  int64 memory_bytes = 3;
+  int64 bandwidth_bytes_month = 4;
+  int64 storage_bytes = 5;
+}
+message GetOrgQuotaResponse {
+  UpsertOrgQuotaRequest quota = 1;
+  QuotaLimits plan_defaults = 2;
+  QuotaLimits effective = 3;
+  string plan_name = 4;
+}
+
 service AdminService {
+	 rpc GetOrgQuota(GetOrgQuotaRequest) returns (GetOrgQuotaResponse);
   rpc UpsertOrgQuota(UpsertOrgQuotaRequest) returns (UpsertOrgQuotaResponse);
 
   // Permissions catalog for UI (comes from server definitions)
