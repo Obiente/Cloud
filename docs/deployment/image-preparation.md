@@ -37,3 +37,17 @@ deadline.
 for services that legitimately need longer to converge. A timeout stops waiting;
 Docker may continue the update. Inspect the named services with `docker service ps`
 and check their logs before retrying.
+
+## Dashboard readiness
+
+The main deployment and dashboard redeployment commands wait for all dashboard
+replicas to run the requested image, for any rolling update to finish, and for
+`DASHBOARD_URL` to return HTTP 200. A paused or rolled-back update fails immediately.
+Missing replicas, Docker outages and unreachable HTTP routes fail after
+`DASHBOARD_READY_TIMEOUT_SECONDS` (300 seconds by default). The route must be
+reachable from the machine running the deployment command.
+
+Dashboard redeployment allows Traefik to discover the service through its normal
+Swarm provider updates; it does not restart the shared proxy. The dashboard itself
+restarts on any exit without a finite retry limit so a prolonged dependency outage
+does not permanently exhaust its recovery attempts.

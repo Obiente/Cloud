@@ -12,6 +12,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/database-owner.sh"
 # shellcheck source=scripts/lib/swarm-updates.sh
 source "${SCRIPT_DIR}/lib/swarm-updates.sh"
+# shellcheck source=scripts/lib/dashboard-readiness.sh
+source "${SCRIPT_DIR}/lib/dashboard-readiness.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -35,6 +37,11 @@ NC='\033[0m' # No Color
 if [ -f "${REPO_ROOT}/.env" ]; then
   load_env_file "${REPO_ROOT}/.env"
 fi
+
+DOMAIN="${DOMAIN:-localhost}"
+DASHBOARD_URL="${DASHBOARD_URL:-$(derive_dashboard_url "$DOMAIN")}"
+API_URL="${API_URL:-$(derive_api_url "$DOMAIN")}"
+export DOMAIN DASHBOARD_URL API_URL
 
 echo -e "${BLUE}🔄 Force deploying Obiente Cloud stack: ${STACK_NAME}${NC}"
 echo ""
@@ -107,6 +114,9 @@ echo -e "${BLUE}📦 Step 2: Force updating all services in main stack...${NC}"
 echo ""
 
 SWARM_UPDATE_SERIAL=true restart_stack_services "$STACK_NAME"
+if [ "$DEPLOY_DASHBOARD" = true ]; then
+  wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
+fi
 
 echo ""
 echo -e "${GREEN}✅ Force deployment complete!${NC}"

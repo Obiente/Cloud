@@ -15,6 +15,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 source "${SCRIPT_DIR}/lib/database-owner.sh"
 # shellcheck source=scripts/lib/swarm-updates.sh
 source "${SCRIPT_DIR}/lib/swarm-updates.sh"
+# shellcheck source=scripts/lib/dashboard-readiness.sh
+source "${SCRIPT_DIR}/lib/dashboard-readiness.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -477,38 +479,8 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
   echo ""
 
-  # Wait for dashboard to be ready (healthcheck passes and service is stable)
-  echo "⏳ Waiting for dashboard service to become healthy..."
-  MAX_WAIT=60
-  ELAPSED=0
-  DASHBOARD_READY=false
+  wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
 
-  while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if dashboard service has running and healthy tasks
-    # A task is considered ready when it's in "Running" state for at least a few seconds
-    RUNNING_TASKS="$(docker service ps "${STACK_NAME}_dashboard" --filter "desired-state=running" --format "{{.CurrentState}}" 2>/dev/null | awk '/Running [0-9]/{count++} END {print count+0}')"
-
-    if [ "$RUNNING_TASKS" -gt 0 ]; then
-      # Give Traefik time to pick up the service (default 15s refresh interval)
-      if [ $ELAPSED -ge 20 ]; then
-        DASHBOARD_READY=true
-        echo "✅ Dashboard service is running and should be accessible via Traefik!"
-        break
-      fi
-      echo "   ✓ Dashboard tasks running, allowing Traefik to discover service..."
-    else
-      echo "   ⏳ Waiting for dashboard tasks to start (${ELAPSED}s)..."
-    fi
-
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-  done
-
-  if [ "$DASHBOARD_READY" = false ]; then
-    echo "⚠️  Warning: Dashboard tasks are taking longer than expected to start"
-    echo "   Check service status: docker service ps ${STACK_NAME}_dashboard"
-    echo "   Monitor logs: docker service logs -f ${STACK_NAME}_dashboard"
-  fi
 else
   echo "✅ Main stack deployment started!"
   echo ""
@@ -526,6 +498,9 @@ if [ "$FORCE_UPDATE" = "true" ]; then
     FORCE_UPDATE_SERVICES+=("dashboard")
   fi
   restart_stack_services "$STACK_NAME" "${FORCE_UPDATE_SERVICES[@]}"
+  if [ "$DEPLOY_DASHBOARD" = true ]; then
+    wait_for_dashboard_ready "${STACK_NAME}_dashboard" "$DASHBOARD_URL"
+  fi
   echo "✅ Requested service restarts completed."
   echo ""
 fi

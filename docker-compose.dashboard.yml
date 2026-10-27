@@ -1,6 +1,6 @@
 services:
   dashboard:
-    image: ${DASHBOARD_IMAGE:-ghcr.io/obiente/cloud-dashboard:latest}
+    image: ${DASHBOARD_IMAGE:-${REGISTRY:-ghcr.io/obiente}/cloud-dashboard:latest}
     # Build section removed - using image from GitHub Container Registry
     # To build locally, set DASHBOARD_IMAGE=obiente/cloud-dashboard:latest and uncomment build section below
     # build:
@@ -67,9 +67,9 @@ services:
         delay: 10s
         order: ${DASHBOARD_ROLLBACK_ORDER:-start-first}
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 3
+        max_attempts: 0
         window: 120s
       resources:
         limits:
