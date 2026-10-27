@@ -13,6 +13,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck source=scripts/lib/database-owner.sh
 source "${SCRIPT_DIR}/lib/database-owner.sh"
+# shellcheck source=scripts/lib/swarm-updates.sh
+source "${SCRIPT_DIR}/lib/swarm-updates.sh"
 
 TMP_FILES=()
 cleanup() {
@@ -519,19 +521,12 @@ echo ""
 # Runs after both main stack and dashboard are deployed so all services exist
 if [ "$FORCE_UPDATE" = "true" ]; then
   echo "🔄 Force-updating all containers..."
-  FORCE_UPDATE_SERVICES=("${MICROSERVICES[@]}")
+  FORCE_UPDATE_SERVICES=("${MICROSERVICES[@]}" "databases-proxy")
   if [ "$DEPLOY_DASHBOARD" = "true" ]; then
     FORCE_UPDATE_SERVICES+=("dashboard")
   fi
-  for service in "${FORCE_UPDATE_SERVICES[@]}"; do
-    FULL_NAME="${STACK_NAME}_${service}"
-    if docker service inspect "$FULL_NAME" &>/dev/null; then
-      echo "   Updating ${FULL_NAME}..."
-      docker service update --force "$FULL_NAME" &
-    fi
-  done
-  wait
-  echo "✅ Force update triggered for all services!"
+  restart_stack_services "$STACK_NAME" "${FORCE_UPDATE_SERVICES[@]}"
+  echo "✅ Requested service restarts completed."
   echo ""
 fi
 echo "📋 Useful commands:"

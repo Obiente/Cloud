@@ -24,3 +24,16 @@ them onto every eligible node before deployment.
 These checks validate image availability. Mutable `latest` tags do not establish
 that every image belongs to one source revision. For a release, verify the image
 revisions and use reviewed digests in the deployment manifest.
+
+## Forced restarts
+
+`deploy-swarm.sh --force` waits for each selected application service, including
+the database control plane and proxy, to converge. `force-deploy.sh` restarts every
+service in the stack once, sequentially. Both commands exit unsuccessfully if
+Docker cannot list the services or if any requested update fails or exceeds its
+deadline.
+
+`SWARM_UPDATE_TIMEOUT_SECONDS` defaults to 300 seconds per service. Increase it
+for services that legitimately need longer to converge. A timeout stops waiting;
+Docker may continue the update. Inspect the named services with `docker service ps`
+and check their logs before retrying.

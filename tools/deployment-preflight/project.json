@@ -17,7 +17,10 @@
         "{workspaceRoot}/scripts/lib/common.sh",
         "{workspaceRoot}/scripts/build-swarm.sh",
         "{workspaceRoot}/scripts/deploy-swarm-dev.sh",
-        "{workspaceRoot}/scripts/tests/deployment-images-test.sh"
+        "{workspaceRoot}/scripts/tests/deployment-images-test.sh",
+        "{workspaceRoot}/scripts/lib/swarm-updates.sh",
+        "{workspaceRoot}/scripts/tests/swarm-updates-test.sh",
+        "{workspaceRoot}/apps/*/Dockerfile"
       ],
       "options": {
         "cwd": "{workspaceRoot}",
@@ -27,7 +30,9 @@
           "shellcheck scripts/lib/database-owner.sh scripts/tests/database-owner-test.sh",
           "bash scripts/tests/database-owner-test.sh",
           "shellcheck scripts/lib/common.sh scripts/tests/deployment-images-test.sh",
-          "bash scripts/tests/deployment-images-test.sh"
+          "bash scripts/tests/deployment-images-test.sh",
+          "shellcheck scripts/lib/swarm-updates.sh scripts/tests/swarm-updates-test.sh",
+          "bash scripts/tests/swarm-updates-test.sh"
         ],
         "parallel": false
       }
@@ -87,6 +92,17 @@
       "options": {
         "cwd": "{workspaceRoot}",
         "command": "tools/deployment-preflight/validate-compose.sh swarm-config"
+      }
+    },
+    "test-restarts": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/scripts/**/*.sh"
+      ],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "bash scripts/tests/swarm-updates-test.sh"
       }
     }
   }

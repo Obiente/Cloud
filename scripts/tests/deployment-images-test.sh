@@ -6,7 +6,7 @@ TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 mkdir -p "$TEST_DIR/bin" "$TEST_DIR/repo/scripts/lib"
 cp "$SCRIPT_DIR"/{deploy-swarm.sh,deploy-swarm-dev.sh,build-swarm.sh} "$TEST_DIR/repo/scripts/"
-cp "$SCRIPT_DIR"/lib/{common.sh,database-owner.sh} "$TEST_DIR/repo/scripts/lib/"
+cp "$SCRIPT_DIR"/lib/{common.sh,database-owner.sh,swarm-updates.sh} "$TEST_DIR/repo/scripts/lib/"
 
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 
