@@ -1,5 +1,22 @@
 # DNS Delegation for Self-Hosters
 
+Delegation keys must belong to an active organization. Banned organizations and
+organizations with an unexpired suspension cannot publish or resolve delegated
+records. Revoking a key or its subscription stops serving its records; answers
+already cached by external resolvers can remain until their TTL expires.
+
+Remote installations can claim unused `deploy-*`, `db-*`, and `gs-*` hostnames
+under `my.obiente.cloud`. They cannot replace locally hosted resources or another
+organization's delegation. A and SRV records share hostname ownership. Ownership
+is retained when records expire, so an installation can recover after an outage
+without another organization taking its hostname. Custom domains must be verified
+in a deployment belonging to the organization that owns the key.
+
+Record TTLs must be between 1 and 3600 seconds; omitting the TTL uses 300 seconds.
+The push API accepts IPv4 A records and TCP/UDP SRV records targeting the same
+resource hostname. Existing keys without an organization must be replaced with
+organization-linked keys before publishing records.
+
 ## Overview
 
 DNS delegation allows self-hosted Obiente Cloud instances to use the main `my.obiente.cloud` DNS service while keeping their deployments in their own database. This enables:

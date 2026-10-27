@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -67,14 +68,29 @@ func (d *DelegatedDNSRecord) IsExpired() bool {
 
 // GetDelegatedDNSRecord retrieves a delegated DNS record if it exists and is not expired
 func GetDelegatedDNSRecord(domain, recordType string) (*DelegatedDNSRecord, error) {
-	// Normalize domain by removing trailing dot - DNS queries often include trailing dots
-	// but database stores domains without them
-	domainNormalized := strings.TrimSuffix(domain, ".")
+	now := time.Now()
 	var record DelegatedDNSRecord
-	result := DB.Where("domain = ? AND record_type = ? AND expires_at > ?", domainNormalized, recordType, time.Now()).
-		First(&record)
-	if result.Error != nil {
-		return nil, result.Error
+	// Check the current key and organization on every answer. Existing records
+	// with excessive TTLs also stop resolving one hour after their last refresh.
+	query := DB.Model(&DelegatedDNSRecord{}).
+		Joins("LEFT JOIN dns_delegation_api_keys k ON k.id = delegated_dns_records.api_key_id AND k.organization_id = delegated_dns_records.organization_id").
+		Joins("LEFT JOIN organizations o ON o.id = k.organization_id").
+		Where("delegated_dns_records.domain = ? AND delegated_dns_records.record_type = ? AND expires_at > ? AND last_updated > ?", normalizeDelegatedDomain(domain), strings.ToUpper(recordType), now, now.Add(-time.Duration(MaxDelegatedDNSTTL)*time.Second)).
+		Where("(delegated_dns_records.api_key_id = '' AND delegated_dns_records.organization_id = '') OR (k.is_active = ? AND k.revoked_at IS NULL AND (LOWER(o.status) = 'active' OR (LOWER(o.status) = 'suspended' AND o.suspension_expires <= ?)))", true, now)
+	if err := query.Select("delegated_dns_records.*").First(&record).Error; err != nil {
+		return nil, err
+	}
+	// Never let a resolver cache an answer beyond the remaining authorization lease.
+	remaining := int64(time.Until(record.ExpiresAt).Seconds())
+	maxRemaining := int64(time.Until(record.LastUpdated.Add(time.Duration(MaxDelegatedDNSTTL) * time.Second)).Seconds())
+	if remaining > maxRemaining {
+		remaining = maxRemaining
+	}
+	if record.TTL > remaining {
+		record.TTL = remaining
+	}
+	if record.TTL < 1 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &record, nil
 }
@@ -87,88 +103,60 @@ func UpsertDelegatedDNSRecord(domain, recordType, recordsJSON, sourceAPI string,
 // UpsertDelegatedDNSRecordWithAPIKey creates or updates a delegated DNS record with API key tracking
 // Uses a transaction to prevent race conditions and handle expired records correctly
 func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceAPI, apiKeyID, organizationID string, ttl int64) error {
-	// Normalize domain by removing trailing dot - ensure consistent storage format
-	domainNormalized := strings.TrimSuffix(domain, ".")
-	now := time.Now()
-	expiresAt := now.Add(time.Duration(ttl) * time.Second)
-
+	domain = normalizeDelegatedDomain(domain)
+	recordType = strings.ToUpper(strings.TrimSpace(recordType))
+	if ttl == 0 {
+		ttl = 300
+	}
+	if err := validateDelegatedRecord(domain, recordType, recordsJSON, ttl); err != nil {
+		return err
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		// First, try to find existing record (even if expired)
-		var existing DelegatedDNSRecord
-		result := tx.Where("domain = ? AND record_type = ?", domainNormalized, recordType).First(&existing)
-		
-		if result.Error == nil {
-			// Record exists - update it (this refreshes expiration even if it was expired)
-			updateData := map[string]interface{}{
-				"records":         recordsJSON,
-				"source_api":      sourceAPI,
-				"api_key_id":      apiKeyID,
-				"organization_id": organizationID,
-				"ttl":             ttl,
-				"expires_at":      expiresAt,
-				"last_updated":    now,
-				"updated_at":      now,
-			}
-			err := tx.Model(&existing).Updates(updateData).Error
-			if err != nil {
-				logger.Error("[Database] Failed to update delegated DNS record %s: %v", domainNormalized, err)
+		base := delegatedResourceDomain(domain)
+		// Serialize all A/SRV claims for a resource across replicas, including the
+		// first insert, which a SELECT FOR UPDATE cannot lock yet.
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "dns-delegation:"+base).Error; err != nil {
 				return err
 			}
-			return nil
-		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			// Record doesn't exist - create new one
-			record := DelegatedDNSRecord{
-				ID:             uuid.New().String(),
-				Domain:         domainNormalized,
-				RecordType:     recordType,
-				Records:        recordsJSON,
-				SourceAPI:      sourceAPI,
-				APIKeyID:       apiKeyID,
-				OrganizationID: organizationID,
-				TTL:            ttl,
-				ExpiresAt:      expiresAt,
-				LastUpdated:    now,
+		}
+		if err := authorizeDelegationWrite(tx, domain, apiKeyID, organizationID); err != nil {
+			return err
+		}
+		// Compare normalized legacy names as well. Expiry stops DNS answers but
+		// does not release a remote installation's hostname to another tenant.
+		var existing []DelegatedDNSRecord
+		if err := tx.Where("LOWER(RTRIM(domain, '.')) = ? OR LOWER(RTRIM(domain, '.')) LIKE ?", base, "%._tcp."+base).
+			Or("LOWER(RTRIM(domain, '.')) LIKE ?", "%._udp."+base).Find(&existing).Error; err != nil {
+			return err
+		}
+		for _, record := range existing {
+			if delegatedResourceDomain(normalizeDelegatedDomain(record.Domain)) == base && (record.OrganizationID != organizationID || (record.APIKeyID == "") != (apiKeyID == "")) {
+				return ErrDNSDelegationForbidden
 			}
-			// If create fails due to unique constraint (race condition), try update instead
-			if err := tx.Create(&record).Error; err != nil {
-				// Check if it's a unique constraint violation
-				if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
-					// Race condition: record was created between our check and create
-					// Try to update it instead
-					var raceRecord DelegatedDNSRecord
-					if tx.Where("domain = ? AND record_type = ?", domainNormalized, recordType).First(&raceRecord).Error == nil {
-						updateData := map[string]interface{}{
-							"records":         recordsJSON,
-							"source_api":      sourceAPI,
-							"api_key_id":      apiKeyID,
-							"organization_id": organizationID,
-							"ttl":             ttl,
-							"expires_at":      expiresAt,
-							"last_updated":    now,
-							"updated_at":      now,
-						}
-						updateErr := tx.Model(&raceRecord).Updates(updateData).Error
-						if updateErr != nil {
-							logger.Error("[Database] Failed to update race condition record %s: %v", domainNormalized, updateErr)
-							return updateErr
-						}
-						return nil
-					}
-				}
-				logger.Error("[Database] Failed to create delegated DNS record %s: %v", domainNormalized, err)
-				return err
-			}
-			return nil
-		} else {
-			// Database error
+		}
+		now := time.Now()
+		record := DelegatedDNSRecord{ID: uuid.NewString(), Domain: domain, RecordType: recordType, Records: recordsJSON, SourceAPI: sourceAPI, APIKeyID: apiKeyID, OrganizationID: organizationID, TTL: ttl, ExpiresAt: now.Add(time.Duration(ttl) * time.Second), LastUpdated: now}
+		result := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "domain"}, {Name: "record_type"}},
+			DoUpdates: clause.AssignmentColumns([]string{"records", "source_api", "api_key_id", "ttl", "expires_at", "last_updated", "updated_at"}),
+			Where:     clause.Where{Exprs: []clause.Expression{clause.Eq{Column: clause.Column{Table: "delegated_dns_records", Name: "organization_id"}, Value: organizationID}}},
+		}).Create(&record)
+		if result.Error != nil {
 			return result.Error
 		}
+		if result.RowsAffected != 1 {
+			return ErrDNSDelegationForbidden
+		}
+		return nil
 	})
 }
 
-// CleanupExpiredDelegatedRecords removes expired delegated DNS records
+// CleanupExpiredDelegatedRecords removes expired local mirrors. Authenticated
+// records retain their ownership after expiry/revocation, so an outage cannot
+// let another organization claim a hostname before its owner reconnects.
 func CleanupExpiredDelegatedRecords() error {
-	return DB.Where("expires_at < ?", time.Now()).Delete(&DelegatedDNSRecord{}).Error
+	return DB.Where("expires_at < ? AND api_key_id = '' AND organization_id = ''", time.Now()).Delete(&DelegatedDNSRecord{}).Error
 }
 
 // DNSDelegationAPIKey stores API keys for DNS delegation
@@ -208,6 +196,9 @@ func GetDNSDelegationAPIKeyByHash(apiKey string) (*DNSDelegationAPIKey, error) {
 
 	if result.Error != nil {
 		return nil, result.Error
+	}
+	if err := activeDelegationOrganization(DB, key.OrganizationID, false); err != nil {
+		return nil, err
 	}
 	return &key, nil
 }
@@ -290,24 +281,25 @@ func HasActiveDNSDelegationSubscription(organizationID string) (bool, string, er
 
 // RevokeDNSDelegationAPIKeysForSubscription revokes all API keys for a subscription
 func RevokeDNSDelegationAPIKeysForSubscription(stripeSubscriptionID string) error {
-	now := time.Now()
-	return DB.Model(&DNSDelegationAPIKey{}).
-		Where("stripe_subscription_id = ?", stripeSubscriptionID).
-		Updates(map[string]interface{}{
-			"is_active":  false,
-			"revoked_at": now,
-		}).Error
+	return revokeDelegationKeys("stripe_subscription_id = ?", stripeSubscriptionID)
 }
 
-// RevokeDNSDelegationAPIKey revokes an API key by hash
+// RevokeDNSDelegationAPIKey revokes an API key by hash.
 func RevokeDNSDelegationAPIKey(keyHash string) error {
-	now := time.Now()
-	return DB.Model(&DNSDelegationAPIKey{}).
-		Where("key_hash = ?", keyHash).
-		Updates(map[string]interface{}{
-			"is_active":  false,
-			"revoked_at": now,
-		}).Error
+	return revokeDelegationKeys("key_hash = ?", keyHash)
+}
+
+func revokeDelegationKeys(condition string, value string) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		if err := tx.Model(&DNSDelegationAPIKey{}).Where(condition, value).
+			Updates(map[string]any{"is_active": false, "revoked_at": now}).Error; err != nil {
+			return err
+		}
+		keys := tx.Model(&DNSDelegationAPIKey{}).Select("id").Where(condition, value)
+		// UpdateColumn avoids the record hook that normally renews its expiry.
+		return tx.Model(&DelegatedDNSRecord{}).Where("api_key_id IN (?)", keys).UpdateColumn("expires_at", now).Error
+	})
 }
 
 // ListDNSDelegationAPIKeys lists DNS delegation API keys, optionally filtered by organization ID
