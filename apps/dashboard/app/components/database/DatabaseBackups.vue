@@ -1,13 +1,14 @@
 <template>
   <OuiStack gap="lg">
-    <OuiCard variant="outline">
+    <OuiCard v-if="supportsSqlDump" variant="outline">
       <OuiCardBody>
         <OuiStack gap="md">
           <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
             <OuiStack gap="xs">
               <OuiText size="sm" weight="semibold">SQL Dumps</OuiText>
               <OuiText size="xs" color="tertiary">
-                Export or import portable .sql dumps for PostgreSQL, MySQL, and MariaDB.
+                Export or import portable .sql dumps for PostgreSQL, MySQL, and
+                MariaDB.
               </OuiText>
             </OuiStack>
             <OuiFlex gap="sm" wrap="wrap">
@@ -45,174 +46,384 @@
     <OuiCard variant="outline">
       <OuiCardBody>
         <OuiStack gap="md">
-          <OuiFlex justify="between" align="center">
-            <OuiText size="sm" weight="semibold">Backups</OuiText>
-            <OuiButton size="xs" @click="showCreateDialog = true">
-              <PlusIcon class="h-3.5 w-3.5" />
-              Create Backup
-            </OuiButton>
+          <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+            <OuiStack gap="xs">
+              <OuiText as="h2" size="lg" weight="semibold"
+                >Managed backups</OuiText
+              >
+              <OuiText v-if="available" size="sm" color="secondary"
+                >Create an on-demand backup of the primary database. The latest
+                {{ retainedCount }} completed backups are kept.</OuiText
+              >
+            </OuiStack>
+            <OuiFlex gap="sm" wrap="wrap">
+              <OuiButton
+                variant="outline"
+                size="sm"
+                :loading="loading"
+                @click="loadBackups"
+                >Refresh backups</OuiButton
+              >
+              <OuiButton
+                v-if="available"
+                size="sm"
+                :disabled="operationPending || !!action"
+                :loading="action === 'create'"
+                @click="createBackup"
+                >Create backup</OuiButton
+              >
+            </OuiFlex>
           </OuiFlex>
-          <!-- Loading State -->
-          <OuiStack v-if="loading" align="center" gap="md" class="py-10">
-            <OuiSpinner size="lg" />
-            <OuiText color="tertiary">Loading backups...</OuiText>
-          </OuiStack>
-
-          <!-- Backups List -->
-          <OuiTable 
-            v-else-if="backups.length > 0"
-            :columns="[
-              { key: 'name', label: 'Name' },
-              { key: 'size', label: 'Size' },
-              { key: 'status', label: 'Status' },
-              { key: 'created', label: 'Created' },
-              { key: 'actions', label: 'Actions' },
-            ]"
-            :rows="backups.map((b: DatabaseBackup) => ({
-              name: b.name,
-              size: formatBytes(b.sizeBytes),
-              status: b.status,
-              created: formatDate(b.createdAt),
-              actions: b,
-            }))"
+          <OuiAlert
+            v-if="loadError"
+            variant="danger"
+            title="Could not refresh backups"
+            >{{ loadError }}</OuiAlert
           >
-            <template #cell-status="{ row }">
-              <OuiBadge :color="getStatusColor(row.status)">
-                {{ getStatusLabel(row.status) }}
-              </OuiBadge>
-            </template>
-            <template #cell-actions="{ row }">
-              <OuiFlex gap="sm">
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  @click="handleRestore(row.actions)"
+          <OuiAlert
+            v-else-if="loaded && !available"
+            variant="warning"
+            title="Managed backups are unavailable"
+            >{{
+              unavailableReason ||
+              "Contact your administrator to enable the shared backup volume."
+            }}</OuiAlert
+          >
+          <OuiText v-if="!loaded" color="secondary">Loading backups…</OuiText>
+          <OuiText
+            v-else-if="!backups.length && available && !loadError"
+            color="secondary"
+            >No backups yet.</OuiText
+          >
+          <OuiCard v-for="backup in backups" :key="backup.id" variant="outline">
+            <OuiCardBody>
+              <OuiStack gap="sm">
+                <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+                  <OuiStack gap="xs" class="min-w-0">
+                    <OuiText weight="semibold" class="break-words">{{
+                      backup.name
+                    }}</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >{{ formatDate(backup.createdAt) }} ·
+                      {{ backupStatus(backup)
+                      }}<template
+                        v-if="
+                          backup.status ===
+                          DatabaseBackupStatus.BACKUP_COMPLETED
+                        "
+                      >
+                        · {{ formatBytes(backup.sizeBytes) }}</template
+                      ></OuiText
+                    >
+                    <OuiText
+                      v-if="backup.databaseName"
+                      size="sm"
+                      color="secondary"
+                      >Database: {{ backup.databaseName }}</OuiText
+                    >
+                  </OuiStack>
+                  <OuiFlex gap="sm" wrap="wrap">
+                    <OuiButton
+                      v-if="
+                        backup.status === DatabaseBackupStatus.BACKUP_COMPLETED
+                      "
+                      variant="outline"
+                      size="sm"
+                      :disabled="!available || operationPending || !!action"
+                      :aria-label="`Restore backup ${backup.name}`"
+                      @click="selectRestore(backup)"
+                      >Restore</OuiButton
+                    >
+                    <OuiButton
+                      variant="ghost"
+                      color="danger"
+                      size="sm"
+                      :disabled="!available || operationPending || !!action"
+                      :aria-label="`Delete backup ${backup.name}`"
+                      @click="deleteBackup(backup)"
+                      >Delete</OuiButton
+                    >
+                  </OuiFlex>
+                </OuiFlex>
+                <OuiAlert v-if="backup.errorMessage" variant="danger">{{
+                  backup.errorMessage
+                }}</OuiAlert>
+                <OuiAlert
+                  v-if="backup.restoreStatus"
+                  :variant="
+                    backup.restoreStatus === 'failed'
+                      ? 'danger'
+                      : backup.restoreStatus === 'completed'
+                      ? 'success'
+                      : 'info'
+                  "
                 >
-                  Restore
-                </OuiButton>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  color="danger"
-                  @click="handleDelete(row.actions)"
-                >
-                  Delete
-                </OuiButton>
-              </OuiFlex>
-            </template>
-          </OuiTable>
-
-          <!-- Empty State -->
-          <OuiStack v-else align="center" gap="md" class="py-10">
-            <OuiText color="tertiary">No backups found</OuiText>
-          </OuiStack>
+                  <template v-if="backup.restoreStatus === 'completed'"
+                    >Restored to {{ backup.restoreTarget }}. Use this database
+                    name with your existing connection credentials.</template
+                  >
+                  <template v-else-if="backup.restoreStatus === 'failed'">{{
+                    backup.restoreError ||
+                    "Restore failed. Inspect the target database before retrying."
+                  }}</template>
+                  <template v-else
+                    >Restore
+                    {{
+                      backup.restoreStatus === "queued"
+                        ? "queued"
+                        : "in progress"
+                    }}: {{ backup.restoreTarget }}</template
+                  >
+                </OuiAlert>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+          <OuiFlex v-if="total > 50" align="center" justify="between" gap="sm">
+            <OuiButton
+              variant="outline"
+              size="sm"
+              :disabled="page <= 1 || loading"
+              @click="page--"
+              >Previous backups</OuiButton
+            >
+            <OuiText size="sm"
+              >Page {{ page }} of {{ Math.ceil(total / 50) }}</OuiText
+            >
+            <OuiButton
+              variant="outline"
+              size="sm"
+              :disabled="page * 50 >= total || loading"
+              @click="page++"
+              >Next backups</OuiButton
+            >
+          </OuiFlex>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>
-
-    <!-- Create Backup Dialog -->
-    <OuiDialog v-model:open="showCreateDialog" title="Create Backup">
-      <OuiDialogContent>
-        <OuiDialogHeader>
-          <OuiDialogTitle>Create Backup</OuiDialogTitle>
-          <OuiDialogDescription>
-            Create a new backup of your database
-          </OuiDialogDescription>
-        </OuiDialogHeader>
-
-        <OuiStack gap="md" class="py-4">
-          <OuiInput
-            v-model="backupName"
-            label="Backup Name"
-            placeholder="backup-2024-01-01"
-          />
-          <OuiTextarea
-            v-model="backupDescription"
-            label="Description"
-            placeholder="Optional description"
-            :rows="3"
-          />
-        </OuiStack>
-
-        <OuiDialogFooter>
-          <OuiButton variant="ghost" @click="showCreateDialog = false">
-            Cancel
-          </OuiButton>
-          <OuiButton color="primary" :loading="creating" @click="handleCreate">
-            Create Backup
-          </OuiButton>
-        </OuiDialogFooter>
-      </OuiDialogContent>
+    <OuiDialog
+      v-model:open="restoreOpen"
+      title="Restore backup"
+      description="Create a new database from this backup. Existing databases are kept intact."
+    >
+      <form id="restore-backup-form" @submit.prevent="restoreBackup">
+        <OuiInput
+          v-model="restoreTarget"
+          label="New database name"
+          helper-text="Start with a letter. Use letters, digits and underscores, up to 63 characters."
+          required
+          pattern="[A-Za-z][A-Za-z0-9_]{0,62}"
+        />
+      </form>
+      <template #footer>
+        <OuiButton variant="outline" @click="restoreOpen = false"
+          >Cancel</OuiButton
+        >
+        <OuiButton
+          type="submit"
+          form="restore-backup-form"
+          :loading="action === 'restore'"
+          :disabled="!validRestoreTarget || !!action"
+          >Restore to new database</OuiButton
+        >
+      </template>
     </OuiDialog>
   </OuiStack>
 </template>
 
 <script setup lang="ts">
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, PlusIcon } from "@heroicons/vue/24/outline";
-import { ref, onMounted } from "vue";
-import { DatabaseService, DatabaseBackupStatus, DatabaseDumpFormat, type DatabaseBackup } from "@obiente/proto";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import {
+  DatabaseService,
+  DatabaseDumpFormat,
+  DatabaseType,
+  DatabaseBackupStatus,
+  type DatabaseBackup,
+} from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { useToast } from "~/composables/useToast";
-import { formatBytes, formatDate } from "~/utils/common";
+import { useAutoRefresh } from "~/composables/useAutoRefresh";
+import { formatDate, formatBytes } from "~/utils/common";
 
 const props = defineProps<{
   databaseId: string;
+  databaseType: DatabaseType;
 }>();
 
+const supportsSqlDump = computed(() =>
+  [DatabaseType.POSTGRESQL, DatabaseType.MYSQL, DatabaseType.MARIADB].includes(
+    props.databaseType
+  )
+);
 const organizationId = useOrganizationId();
 const { toast } = useToast();
 const dbClient = useConnectClient(DatabaseService);
 
-const loading = ref(false);
-const backups = ref<any[]>([]);
-const showCreateDialog = ref(false);
-const backupName = ref("");
-const backupDescription = ref("");
-const creating = ref(false);
 const exportingDump = ref(false);
 const importingDump = ref(false);
 const dumpFileInput = ref<HTMLInputElement | null>(null);
 
+const backups = ref<DatabaseBackup[]>([]);
+const available = ref(false);
+const loaded = ref(false);
+const loading = ref(false);
+const loadError = ref("");
+const unavailableReason = ref("");
+const retainedCount = ref(10);
+const page = ref(1);
+const total = ref(0);
+const action = ref("");
+const restoreOpen = ref(false);
+const restoreTarget = ref("");
+const restoreSelection = ref<DatabaseBackup | null>(null);
+const resourceKey = computed(
+  () => `${organizationId.value}:${props.databaseId}`
+);
+const validRestoreTarget = computed(
+  () =>
+    /^[A-Za-z][A-Za-z0-9_]{0,62}$/.test(restoreTarget.value) &&
+    restoreTarget.value !== restoreSelection.value?.databaseName
+);
+const operationPending = computed(() =>
+  backups.value.some(
+    (item) =>
+      [
+        DatabaseBackupStatus.BACKUP_CREATING,
+        DatabaseBackupStatus.BACKUP_DELETING,
+      ].includes(item.status) ||
+      ["queued", "restoring"].includes(item.restoreStatus)
+  )
+);
+let generation = 0;
+let alive = true;
+let controller: AbortController | undefined;
+const backupStatus = (backup: DatabaseBackup) =>
+  ({
+    [DatabaseBackupStatus.DATABASE_BACKUP_STATUS_UNSPECIFIED]: "Unknown",
+    [DatabaseBackupStatus.BACKUP_CREATING]: "Creating",
+    [DatabaseBackupStatus.BACKUP_COMPLETED]: "Ready",
+    [DatabaseBackupStatus.BACKUP_FAILED]: "Failed",
+    [DatabaseBackupStatus.BACKUP_DELETING]: "Deleting",
+    [DatabaseBackupStatus.BACKUP_DELETED]: "Deleted",
+  }[backup.status] || "Unknown");
 async function loadBackups() {
+  if (!organizationId.value) return;
+  const current = ++generation;
+  controller?.abort();
+  controller = new AbortController();
   loading.value = true;
   try {
-    if (!organizationId.value) return;
-    const res = await dbClient.listBackups({
-      organizationId: organizationId.value,
-      databaseId: props.databaseId,
-      page: 1,
-      perPage: 100,
-    });
-    backups.value = res.backups || [];
-  } catch (err: unknown) {
-    toast.error("Failed to load backups", (err as Error).message);
+    const result = await dbClient.listBackups(
+      {
+        organizationId: organizationId.value,
+        databaseId: props.databaseId,
+        page: page.value,
+        perPage: 50,
+      },
+      { signal: controller.signal }
+    );
+    if (current !== generation) return;
+    backups.value = result.backups;
+    total.value = result.pagination?.total || 0;
+    available.value = result.managedAvailable;
+    unavailableReason.value = result.unavailableReason;
+    retainedCount.value = result.retainedCount || 10;
+    loaded.value = true;
+    loadError.value = "";
+    if (page.value > 1 && !result.backups.length)
+      page.value = Math.max(1, Math.ceil(total.value / 50));
+  } catch (error) {
+    if (current !== generation) return;
+    loadError.value = (error as Error).message;
+    available.value = false;
+    loaded.value = true;
   } finally {
-    loading.value = false;
+    if (current === generation) loading.value = false;
   }
 }
-
-async function handleCreate() {
-  creating.value = true;
+async function managedAction(
+  name: string,
+  perform: (ids: {
+    organizationId: string;
+    databaseId: string;
+  }) => Promise<unknown>,
+  message: string
+) {
+  if (!organizationId.value || action.value) return;
+  const key = resourceKey.value;
+  action.value = name;
   try {
-    if (!organizationId.value) return;
-    await dbClient.createBackup({
+    await perform({
       organizationId: organizationId.value,
       databaseId: props.databaseId,
-      name: backupName.value || undefined,
-      description: backupDescription.value || undefined,
     });
-    toast.success("Backup created");
-    showCreateDialog.value = false;
-    backupName.value = "";
-    backupDescription.value = "";
-    loadBackups();
-  } catch (err: unknown) {
-    toast.error("Failed to create backup", (err as Error).message);
+    if (!alive || key !== resourceKey.value) return;
+    toast.success(message);
+    restoreOpen.value = false;
+    await loadBackups();
+  } catch (error) {
+    if (alive && key === resourceKey.value)
+      toast.error("Backup operation failed", (error as Error).message);
   } finally {
-    creating.value = false;
+    if (key === resourceKey.value) action.value = "";
   }
 }
+const createBackup = () =>
+  managedAction("create", (ids) => dbClient.createBackup(ids), "Backup queued");
+function selectRestore(backup: DatabaseBackup) {
+  restoreSelection.value = backup;
+  restoreTarget.value = `restored_${Date.now()}`;
+  restoreOpen.value = true;
+}
+function restoreBackup() {
+  if (!validRestoreTarget.value || !restoreSelection.value) return;
+  const backupId = restoreSelection.value.id,
+    targetDatabaseName = restoreTarget.value;
+  return managedAction(
+    "restore",
+    (ids) => dbClient.restoreBackup({ ...ids, backupId, targetDatabaseName }),
+    "Restore queued"
+  );
+}
+function deleteBackup(backup: DatabaseBackup) {
+  if (
+    !confirm(
+      `Delete backup "${backup.name}"? This permanently removes its backup file.`
+    )
+  )
+    return;
+  return managedAction(
+    "delete",
+    (ids) => dbClient.deleteBackup({ ...ids, backupId: backup.id }),
+    "Backup deletion queued"
+  );
+}
+watch(resourceKey, () => {
+  generation++;
+  controller?.abort();
+  backups.value = [];
+  available.value = false;
+  loaded.value = false;
+  page.value = 1;
+  total.value = 0;
+  action.value = "";
+  restoreOpen.value = false;
+  restoreSelection.value = null;
+  void loadBackups();
+});
+watch(page, () => {
+  void loadBackups();
+});
+onMounted(() => {
+  void loadBackups();
+});
+onUnmounted(() => {
+  alive = false;
+  generation++;
+  controller?.abort();
+});
+useAutoRefresh(loadBackups, 5000);
 
 async function handleExportDump() {
   exportingDump.value = true;
@@ -251,7 +462,11 @@ async function handleImportDump(event: Event) {
   input.value = "";
   if (!file) return;
 
-  if (!confirm(`Import "${file.name}" into this database? Existing objects may be modified by the SQL in the dump.`)) {
+  if (
+    !confirm(
+      `Import "${file.name}" into this database? Existing objects may be modified by the SQL in the dump.`
+    )
+  ) {
     return;
   }
 
@@ -273,69 +488,4 @@ async function handleImportDump(event: Event) {
     importingDump.value = false;
   }
 }
-
-async function handleRestore(backup: DatabaseBackup) {
-  if (!confirm(`Are you sure you want to restore from backup "${backup.name}"?`)) {
-    return;
-  }
-
-  try {
-    if (!organizationId.value) return;
-    await dbClient.restoreBackup({
-      organizationId: organizationId.value,
-      databaseId: props.databaseId,
-      backupId: backup.id,
-    });
-    toast.success("Backup restoration started");
-  } catch (err: unknown) {
-    toast.error("Failed to restore backup", (err as Error).message);
-  }
-}
-
-async function handleDelete(backup: DatabaseBackup) {
-  if (!confirm(`Are you sure you want to delete backup "${backup.name}"?`)) {
-    return;
-  }
-
-  try {
-    if (!organizationId.value) return;
-    await dbClient.deleteBackup({
-      organizationId: organizationId.value,
-      databaseId: props.databaseId,
-      backupId: backup.id,
-    });
-    toast.success("Backup deleted");
-    loadBackups();
-  } catch (err: unknown) {
-    toast.error("Failed to delete backup", (err as Error).message);
-  }
-}
-
-function getStatusLabel(status: number | string): string {
-  const statusValue = typeof status === "string" ? parseInt(status) : status;
-  const statuses: Record<number, string> = {
-    [DatabaseBackupStatus.BACKUP_CREATING]: "Creating",
-    [DatabaseBackupStatus.BACKUP_COMPLETED]: "Completed",
-    [DatabaseBackupStatus.BACKUP_FAILED]: "Failed",
-    [DatabaseBackupStatus.BACKUP_DELETING]: "Deleting",
-    [DatabaseBackupStatus.BACKUP_DELETED]: "Deleted",
-  };
-  return statuses[statusValue] || `Status ${statusValue}`;
-}
-
-function getStatusColor(status: number | string): string {
-  const statusValue = typeof status === "string" ? parseInt(status) : status;
-  const colors: Record<number, string> = {
-    [DatabaseBackupStatus.BACKUP_CREATING]: "warning",
-    [DatabaseBackupStatus.BACKUP_COMPLETED]: "success",
-    [DatabaseBackupStatus.BACKUP_FAILED]: "danger",
-    [DatabaseBackupStatus.BACKUP_DELETING]: "warning",
-    [DatabaseBackupStatus.BACKUP_DELETED]: "secondary",
-  };
-  return colors[statusValue] || "secondary";
-}
-
-onMounted(() => {
-  loadBackups();
-});
 </script>

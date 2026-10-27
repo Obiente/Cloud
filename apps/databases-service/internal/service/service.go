@@ -3,6 +3,7 @@ package databases
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"databases-service/internal/provisioner"
@@ -35,6 +36,8 @@ type Service struct {
 	backgroundCtx     context.Context
 	proxyEnabled      bool
 	startStoppedDB    func(context.Context, string) error
+	backupExec        func(context.Context, string, []string, io.Reader, io.Writer, []string) error
+	backupWake        chan struct{}
 }
 
 func NewService(
@@ -76,14 +79,17 @@ func NewService(
 		routeRegistry:     registry,
 		backgroundCtx:     backgroundCtx,
 		proxyEnabled:      true,
+		backupWake:        make(chan struct{}, 1),
 	}
 	if prov != nil {
 		svc.startStoppedDB = prov.StartDatabase
+		svc.backupExec = prov.ExecStream
 	}
 
 	// Wire wake/sleep callbacks
 	registry.OnWake = svc.wakeDatabase
 	registry.OnSleep = svc.sleepDatabaseAuto
+	registry.OnStop = svc.reconcileDatabaseStop
 
 	return svc
 }
@@ -104,9 +110,26 @@ func (s *Service) detachedContext(timeout time.Duration) (context.Context, conte
 }
 
 // wakeDatabase starts a sleeping database container and returns its IP
-func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string, error) {
+func (s *Service) wakeDatabaseLocked(ctx context.Context, route *proxy.Route) (string, error) {
+	if err := database.EnsureResourceOrganizationActive(ctx, database.DB, &database.DatabaseInstance{}, route.DatabaseID); err != nil {
+		return "", err
+	}
 	if s.provisioner == nil || route.ContainerID == "" {
 		return "", fmt.Errorf("cannot wake database: provisioner or container ID not available")
+	}
+	var intent database.DatabaseInstance
+	if err := database.DB.WithContext(ctx).Select("desired_state").Where("id = ? AND deleted_at IS NULL", route.DatabaseID).First(&intent).Error; err != nil {
+		return "", err
+	}
+	if intent.DesiredState == "stopped" {
+		return "", fmt.Errorf("database was stopped by an operator")
+	}
+	result := database.DB.WithContext(ctx).Model(&database.DatabaseInstance{}).Where("id = ? AND deleted_at IS NULL AND desired_state = ?", route.DatabaseID, intent.DesiredState).Update("desired_state", "running")
+	if result.Error != nil {
+		return "", result.Error
+	}
+	if result.RowsAffected != 1 {
+		return "", fmt.Errorf("database intent changed while waking")
 	}
 
 	logger.Info("Waking database %s", route.DatabaseID)
@@ -122,7 +145,11 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 	ip := fmt.Sprintf("obiente-%s", route.DatabaseID)
 
 	// Wait briefly for container to be ready
-	time.Sleep(2 * time.Second)
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-time.After(2 * time.Second):
+	}
 
 	// Update DB status to RUNNING
 	dbInstance, err := s.repo.GetByID(ctx, route.DatabaseID)
@@ -162,9 +189,12 @@ func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (string,
 }
 
 // sleepDatabaseAuto puts a database to sleep due to inactivity
-func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) error {
+func (s *Service) sleepDatabaseAutoLocked(ctx context.Context, route *proxy.Route) error {
 	if s.provisioner == nil || route.ContainerID == "" {
 		return fmt.Errorf("cannot sleep database: provisioner or container ID not available")
+	}
+	if err := database.SetDatabaseDesiredState(ctx, route.DatabaseID, "sleeping"); err != nil {
+		return err
 	}
 
 	logger.Info("Auto-sleeping database %s due to inactivity", route.DatabaseID)
@@ -305,5 +335,51 @@ func (s *Service) checkDatabasePermission(ctx context.Context, databaseID string
 func (s *Service) checkOrganizationPermission(ctx context.Context, organizationID string) error {
 	return auth.CheckScopedPermissionWithError(ctx, s.permissionChecker, organizationID, auth.ScopedPermission{
 		Permission: auth.PermissionOrganizationRead,
+	})
+}
+
+func (s *Service) wakeDatabase(ctx context.Context, route *proxy.Route) (ip string, err error) {
+	err = database.WithResourceRuntimeLock(ctx, "database:"+route.DatabaseID, func(locked context.Context) error {
+		ip, err = s.wakeDatabaseLocked(locked, route)
+		return err
+	})
+	return ip, err
+}
+
+func (s *Service) sleepDatabaseAuto(ctx context.Context, route *proxy.Route) error {
+	return database.WithResourceRuntimeLock(ctx, "database:"+route.DatabaseID, func(locked context.Context) error {
+		var current database.DatabaseInstance
+		if err := database.DB.WithContext(locked).Where("id = ? AND deleted_at IS NULL", route.DatabaseID).First(&current).Error; err != nil {
+			return err
+		}
+		if current.DesiredState == "stopped" {
+			return nil
+		}
+		return s.sleepDatabaseAutoLocked(locked, route)
+	})
+}
+
+// Reconcile a stop already requested by an operator or the idle timer without
+// changing that intent or sending another automatic-sleep notification.
+func (s *Service) reconcileDatabaseStop(ctx context.Context, route *proxy.Route) error {
+	return database.WithResourceRuntimeLock(ctx, "database:"+route.DatabaseID, func(locked context.Context) error {
+		var current database.DatabaseInstance
+		if err := database.DB.WithContext(locked).Where("id = ? AND deleted_at IS NULL", route.DatabaseID).First(&current).Error; err != nil {
+			return err
+		}
+		if current.DesiredState != "stopped" && current.DesiredState != "sleeping" {
+			return fmt.Errorf("database intent changed before stopping")
+		}
+		if s.provisioner == nil || route.ContainerID == "" {
+			return fmt.Errorf("database runtime unavailable")
+		}
+		if err := s.provisioner.StopDatabase(locked, route.ContainerID); err != nil {
+			return err
+		}
+		status := int32(5)
+		if current.DesiredState == "sleeping" {
+			status = 12
+		}
+		return database.UpdateDatabaseRuntimeStatus(locked, current.ID, status, current.DesiredState)
 	})
 }

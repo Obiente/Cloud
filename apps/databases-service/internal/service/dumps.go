@@ -171,14 +171,23 @@ func exportDumpCommand(dbType databasesv1.DatabaseType, username, password, dbNa
 		}
 		return args, []string{"PGPASSWORD=" + password}, nil
 	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
-		args := []string{"mysqldump", "--single-transaction", "--skip-lock-tables", "-u", username}
+		binary := "mysqldump"
+		if dbType == databasesv1.DatabaseType_MARIADB {
+			binary = "mariadb-dump"
+		}
+		args := []string{binary, "--single-transaction", "--skip-lock-tables", "--default-character-set=utf8mb4", "-u", username}
+		if includeSchema {
+			args = append(args, "--routines", "--events")
+		} else {
+			args = append(args, "--skip-triggers")
+		}
 		if includeSchema && !includeData {
 			args = append(args, "--no-data")
 		}
 		if includeData && !includeSchema {
 			args = append(args, "--no-create-info")
 		}
-		args = append(args, dbName)
+		args = append(args, "--", dbName)
 		return args, []string{"MYSQL_PWD=" + password}, nil
 	default:
 		return nil, nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("SQL dump export is not supported for %s", dbType.String()))
@@ -190,7 +199,11 @@ func importDumpCommand(dbType databasesv1.DatabaseType, username, password, dbNa
 	case databasesv1.DatabaseType_POSTGRESQL:
 		return []string{"psql", "-v", "ON_ERROR_STOP=1", "-U", username, "-d", dbName}, []string{"PGPASSWORD=" + password}, nil
 	case databasesv1.DatabaseType_MYSQL, databasesv1.DatabaseType_MARIADB:
-		return []string{"mysql", "-u", username, dbName}, []string{"MYSQL_PWD=" + password}, nil
+		binary := "mysql"
+		if dbType == databasesv1.DatabaseType_MARIADB {
+			binary = "mariadb"
+		}
+		return []string{binary, "--default-character-set=utf8mb4", "-u", username, "--", dbName}, []string{"MYSQL_PWD=" + password}, nil
 	default:
 		return nil, nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("SQL dump import is not supported for %s", dbType.String()))
 	}
