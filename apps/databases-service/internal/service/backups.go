@@ -338,7 +338,15 @@ func (s *Service) processBackup(ctx context.Context, id string) error {
 				err = s.restoreManagedBackup(locked, item, instance, conn, password, store)
 			} else {
 				var command, env []string
-				command, env, err = exportDumpCommand(databasesv1.DatabaseType(instance.Type), conn.Username, password, conn.DatabaseName, true, true)
+				kind := databasesv1.DatabaseType(instance.Type)
+				user := conn.Username
+				if mysqlBackupEngine(kind) {
+					user = "root"
+				}
+				command, env, err = exportDumpCommand(kind, user, password, conn.DatabaseName, true, true)
+				if mysqlBackupEngine(kind) {
+					command, env = mysqlAdministrationCommand(command), nil
+				}
 				if err == nil {
 					item.SizeBytes, item.Checksum, err = store.Write(locked, item.ID, func(output io.Writer) error {
 						return s.backupExec(locked, *instance.InstanceID, command, nil, output, env)
@@ -409,7 +417,15 @@ func (s *Service) restoreManagedBackup(ctx context.Context, item *database.Datab
 	if err = s.backupExec(ctx, *instance.InstanceID, command, nil, io.Discard, env); err != nil {
 		return err
 	}
-	command, env, err = importDumpCommand(databasesv1.DatabaseType(instance.Type), conn.Username, password, item.RestoreTarget)
+	kind := databasesv1.DatabaseType(instance.Type)
+	user := conn.Username
+	if mysqlBackupEngine(kind) {
+		user = "root"
+	}
+	command, env, err = importDumpCommand(kind, user, password, item.RestoreTarget)
+	if mysqlBackupEngine(kind) {
+		command, env = mysqlAdministrationCommand(command), nil
+	}
 	if err != nil {
 		return err
 	}
@@ -434,7 +450,22 @@ func createRestoreDatabaseCommand(kind databasesv1.DatabaseType, user, password,
 		if kind == databasesv1.DatabaseType_MARIADB {
 			binary = "mariadb"
 		}
-		return []string{binary, "-u", user, "--database=" + source, "--execute=CREATE DATABASE `" + target + "` CHARACTER SET utf8mb4"}, []string{"MYSQL_PWD=" + password}, nil
+		// The provisioned application account only owns its initial schema.
+		// Use the container's separate root credential, including after an app
+		// password rotation, and grant access only to the new target.
+		statement := "SET SESSION sql_mode='NO_BACKSLASH_ESCAPES'; CREATE DATABASE `" + target + "` CHARACTER SET utf8mb4;"
+		if user != "root" {
+			quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
+			grantTarget := strings.ReplaceAll(target, "_", `\_`)
+			grantPrefix := "GRANT ALL PRIVILEGES ON `"
+			grantSuffix := "`.* TO `" + strings.ReplaceAll(user, "`", "``") + "`@`%`"
+			if kind == databasesv1.DatabaseType_MYSQL {
+				statement += " SET @restore_grant=CONCAT(" + quote(grantPrefix) + ",IF(@@GLOBAL.partial_revokes," + quote(target) + "," + quote(grantTarget) + ")," + quote(grantSuffix) + "); PREPARE restore_grant FROM @restore_grant; EXECUTE restore_grant; DEALLOCATE PREPARE restore_grant;"
+			} else {
+				statement += " " + grantPrefix + grantTarget + grantSuffix + ";"
+			}
+		}
+		return mysqlAdministrationCommand([]string{binary, "--protocol=socket", "-u", "root", "--execute=" + statement}), nil, nil
 	}
 	return nil, nil, fmt.Errorf("unsupported backup engine")
 }
@@ -460,4 +491,15 @@ func (s *Service) applyBackupRetention(ctx context.Context, id string) error {
 		}
 	}
 	return nil
+}
+
+func mysqlBackupEngine(kind databasesv1.DatabaseType) bool {
+	return kind == databasesv1.DatabaseType_MYSQL || kind == databasesv1.DatabaseType_MARIADB
+}
+
+// Root credentials stay inside the container and out of command arguments and
+// service memory. Provisioning installs this credential independently of the
+// application's current password. Positional arguments are never shell code.
+func mysqlAdministrationCommand(command []string) []string {
+	return append([]string{"sh", "-eu", "-c", `MYSQL_PWD="${MARIADB_ROOT_PASSWORD:-${MYSQL_ROOT_PASSWORD:-}}"; : "${MYSQL_PWD:?missing database administration credential}"; export MYSQL_PWD; exec "$@"`, "managed-backup"}, command...)
 }

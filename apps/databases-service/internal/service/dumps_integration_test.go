@@ -112,7 +112,7 @@ func TestMySQLFamilyDumpRestoresSchemaAndData(t *testing.T) {
 				_ = exec.CommandContext(cleanup, "docker", "rm", "-fv", name).Run()
 			})
 			const password = "synthetic-dump-fixture-password"
-			out, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", name, "--network", "none", "-e", "MYSQL_ROOT_PASSWORD="+password, "-e", "MYSQL_DATABASE=audit_dump", tc.image).CombinedOutput()
+			out, err := exec.CommandContext(ctx, "docker", "run", "-d", "--name", name, "--network", "none", "-e", "MYSQL_ROOT_PASSWORD="+password, "-e", "MYSQL_DATABASE=audit_dump", "-e", "MYSQL_USER=admin", "-e", "MYSQL_PASSWORD="+password, tc.image).CombinedOutput()
 			if err != nil {
 				t.Fatalf("create fixture: %v: %s", err, out)
 			}
@@ -170,7 +170,11 @@ func TestMySQLFamilyDumpRestoresSchemaAndData(t *testing.T) {
 			if _, err = p.ExecInDatabaseWithInputEnv(ctx, name, command, []byte("THIS IS NOT SQL;"), dumpEnv); err == nil {
 				t.Fatal("invalid restore reported success")
 			}
-			verifyManagedBackupRoundTrip(t, p, name, tc.kind, "audit_dump", "root", password)
+			// Rotate only the application password, as the product does. Backups must
+			// continue to use the independent root credential for administration.
+			const rotatedPassword = "synthetic-rotated-application-password"
+			run("ALTER USER 'admin'@'%' IDENTIFIED BY '" + rotatedPassword + "'")
+			verifyManagedBackupRoundTrip(t, p, name, tc.kind, "audit_dump", "admin", rotatedPassword)
 			t.Log("native export/import preserved rows, Unicode, view, procedure and event; invalid SQL failed")
 		})
 	}
@@ -224,6 +228,22 @@ func verifyManagedBackupRoundTrip(t *testing.T, p *provisioner.DockerProvisioner
 	}
 	verify(target)
 	verify(source)
+	if mysqlBackupEngine(kind) && user != "root" {
+		binary := "mysql"
+		if kind == databasesv1.DatabaseType_MARIADB {
+			binary = "mariadb"
+		}
+		// An underscore in the target is literal, not a privilege wildcard.
+		neighbor := strings.ReplaceAll(target, "_", "X")
+		create := mysqlAdministrationCommand([]string{binary, "-u", "root", "--execute=CREATE DATABASE `" + neighbor + "`"})
+		if _, err := p.ExecInDatabaseWithInputEnv(ctx, container, create, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		probe := []string{binary, "-u", user, "--database=" + neighbor, "--execute=SELECT 1"}
+		if _, err := p.ExecInDatabaseWithInputEnv(ctx, container, probe, nil, []string{"MYSQL_PWD=" + password}); err == nil {
+			t.Fatal("restore granted access to a similarly named database")
+		}
+	}
 	restore()
 	if err := s.processBackup(ctx, id); err == nil {
 		t.Fatal("existing restore target was overwritten")
