@@ -21,6 +21,7 @@
     </div>
 
     <!-- Search Results Modal/Overlay -->
+    <ClientOnly>
     <Teleport to="body">
       <Transition
         name="fade"
@@ -161,6 +162,7 @@
       </div>
       </Transition>
     </Teleport>
+    </ClientOnly>
   </div>
 </template>
 

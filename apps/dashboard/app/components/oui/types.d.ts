@@ -71,7 +71,7 @@ export type OUIColor =
   | "info";
 
 export type OUIBorderRadius = "none" | "sm" | "md" | "lg" | "xl" | "full";
-export type OUIOverflow = "visible" | "hidden" | "auto" | "scroll";
+
 export type OUISize = SizeRange<"3xs", "7xl">;
 
     

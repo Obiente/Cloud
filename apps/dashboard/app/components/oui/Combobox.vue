@@ -38,6 +38,7 @@
         </Combobox.ClearTrigger>
       </Combobox.Control>
 
+      <ClientOnly>
       <Teleport to="body">
         <Combobox.Positioner class="w-[--reference-width]">
           <Combobox.Content
@@ -68,6 +69,7 @@
           </Combobox.Content>
         </Combobox.Positioner>
       </Teleport>
+      </ClientOnly>
     </Combobox.Root>
 
     <Field.ErrorText v-if="error" class="text-sm text-danger">

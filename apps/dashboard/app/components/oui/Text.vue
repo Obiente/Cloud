@@ -1,5 +1,5 @@
 <template>
-  <component :is="as" :class="textClasses" :style="textStyles" v-bind="$attrs">
+  <component :is="tag || as" :class="textClasses" :style="textStyles" v-bind="$attrs">
     <OuiSkeleton
       v-if="skeleton"
       :width="skeletonWidth"
@@ -21,6 +21,8 @@
      * @default 'p'
      */
     as?: string;
+    /** Legacy alias used by existing page headings. */
+    tag?: string;
 
     /**
      * Text size variant

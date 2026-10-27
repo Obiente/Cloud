@@ -15,7 +15,7 @@
 
     <div class="relative w-full">
       <Field.Input
-        :type="props.type"
+        :type="props.type ?? 'text'"
         :placeholder="props.placeholder"
         :class="[
           inputClasses,
@@ -45,6 +45,7 @@
           v-if="props.clearable && modelValue"
           type="button"
           @click="handleClear"
+          :aria-label="props.label ? `Clear ${props.label}` : 'Clear input'"
           class="text-text-secondary hover:text-primary transition-colors"
         >
           <XMarkIcon class="h-4 w-4" />
@@ -71,7 +72,8 @@ import { XMarkIcon } from "@heroicons/vue/24/outline";
 import { Field } from "@ark-ui/vue/field";
 import type { InputHTMLAttributes } from "vue";
 
-interface Props extends /* @vue-ignore */ InputHTMLAttributes {
+interface Props {
+  type?: InputHTMLAttributes["type"];
   modelValue?: string;
   label?: string;
   placeholder?: string;
@@ -84,11 +86,7 @@ interface Props extends /* @vue-ignore */ InputHTMLAttributes {
   size?: "sm" | "md" | "lg";
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  type: "text",
-  clearable: false,
-  size: "md",
-});
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -106,7 +104,7 @@ const modelValue = computed({
 
 const inputClasses = computed(() => [
   "oui-input",
-  `oui-input-${props.size}`,
+  `oui-input-${props.size ?? "md"}`,
   props.error ? "oui-input-error" : "oui-input-base",
 ]);
 
