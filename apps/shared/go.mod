@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/moby/moby/api v1.54.1
 	github.com/moby/moby/client v0.4.0
@@ -36,7 +37,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.9.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
