@@ -347,6 +347,12 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			LastConnectionAt: lastConnectionAt,
 		}
 
+		// Load connection credentials
+		if conn, ok := connMap[inst.ID]; ok {
+			route.Username = conn.Username
+			route.Password = conn.Password
+		}
+
 		// Mark sleeping/stopped routes
 		if inst.Status == 5 || inst.Status == 12 { // STOPPED or SLEEPING
 			route.Stopped = true
@@ -431,12 +437,6 @@ func (r *RouteRegistry) LoadFromDatabase(ctx context.Context) error {
 			if err := database.EnsureDatabaseUptimeInterval(ctx, inst.ID); err != nil {
 				logger.Warn("Failed to reconcile uptime interval for database %s: %v", inst.ID, err)
 			}
-		}
-
-		// Load connection credentials
-		if conn, ok := connMap[inst.ID]; ok {
-			route.Username = conn.Username
-			route.Password = conn.Password
 		}
 
 		// Repair network membership even for stopped databases before a future wake.
