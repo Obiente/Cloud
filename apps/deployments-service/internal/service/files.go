@@ -94,14 +94,12 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 					continue
 				}
 			}
-			if !foundVolumes {
-				isRunning = containerInfo.State != nil && containerInfo.State.Running
-			}
 			testVolumes, volErr := dcli.GetContainerVolumes(ctx, testLoc.ContainerID)
-			if volErr == nil {
+			running := containerInfo.State != nil && containerInfo.State.Running
+			if volErr == nil && (!foundVolumes || running) {
 				volumes = testVolumes
 				foundVolumes = true
-				isRunning = containerInfo.State != nil && containerInfo.State.Running
+				isRunning = running
 				if isRunning {
 					break
 				}
@@ -374,7 +372,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		}
 	}
 
-	content, err := dcli.ContainerReadFile(ctx, loc.ContainerID, path)
+	content, err := dcli.ContainerReadFilePreview(ctx, loc.ContainerID, path)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
 	}
@@ -1175,9 +1173,8 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 	defer dcli.Close()
 
 	// Find container by container_id or service_name, or use first if neither specified
-	// Note: WriteContainerFileRequest doesn't have container_id/service_name yet, so we use "" for now
-	containerID := "" // TODO: Add container_id and service_name to WriteContainerFileRequest
-	serviceName := ""
+	containerID := req.Msg.GetContainerId()
+	serviceName := req.Msg.GetServiceName()
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -1255,15 +1252,9 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		// Try to find the same container again, or use first available
-		for _, refLoc := range refreshedLocations {
-			if refLoc.ContainerID == loc.ContainerID {
-				*loc = refLoc
-				break
-			}
-		}
-		if loc.ContainerID != refreshedLocations[0].ContainerID {
-			*loc = refreshedLocations[0]
+		loc, err = s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
@@ -1852,7 +1843,12 @@ func collectFilesFromContainer(dcli *docker.Client, ctx context.Context, contain
 }
 
 // collectFilesFromContainerDir recursively collects files from a directory in a container
-func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, containerID, rootPath, currentPath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
+type containerArchiveReader interface {
+	ContainerListFiles(context.Context, string, string) ([]docker.FileInfo, error)
+	ContainerReadFile(context.Context, string, string) ([]byte, error)
+}
+
+func collectFilesFromContainerDir(dcli containerArchiveReader, ctx context.Context, containerID, rootPath, currentPath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
 	fileList, err := dcli.ContainerListFiles(ctx, containerID, currentPath)
 	if err != nil {
 		return err
@@ -1868,13 +1864,13 @@ func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, cont
 			// Recursively process subdirectory
 			err = collectFilesFromContainerDir(dcli, ctx, containerID, rootPath, file.Path, files, count, includeParentFolder, baseName)
 			if err != nil {
-				continue
+				return fmt.Errorf("collect directory %q: %w", file.Path, err)
 			}
 		} else {
 			// Read file content
 			content, err := dcli.ContainerReadFile(ctx, containerID, file.Path)
 			if err != nil {
-				continue
+				return fmt.Errorf("read archive file %q: %w", file.Path, err)
 			}
 
 			// Determine archive path

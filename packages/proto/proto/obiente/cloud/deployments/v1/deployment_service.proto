@@ -921,6 +921,8 @@ message WriteContainerFileRequest {
   string encoding = 6; // "text" or "base64"
   bool create_if_missing = 7;
   optional uint32 mode_octal = 8;
+  optional string container_id = 9;
+  optional string service_name = 10;
 }
 
 message WriteContainerFileResponse {

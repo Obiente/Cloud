@@ -469,7 +469,7 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 	}
 
 	// Read file using Docker exec (container must be running)
-	content, err := dcli.ContainerReadFile(ctx, containerID, path)
+	content, err := dcli.ContainerReadFilePreview(ctx, containerID, path)
 	if err != nil {
 		if restartErr := handleContainerError(err, true); restartErr != nil && restartErr != err {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, restartErr)
@@ -1230,7 +1230,12 @@ func collectFilesFromContainer(dcli *docker.Client, ctx context.Context, contain
 }
 
 // collectFilesFromContainerDir recursively collects files from a directory in a container
-func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, containerID, rootPath, currentPath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
+type containerArchiveReader interface {
+	ContainerListFiles(context.Context, string, string) ([]docker.FileInfo, error)
+	ContainerReadFile(context.Context, string, string) ([]byte, error)
+}
+
+func collectFilesFromContainerDir(dcli containerArchiveReader, ctx context.Context, containerID, rootPath, currentPath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
 	fileList, err := dcli.ContainerListFiles(ctx, containerID, currentPath)
 	if err != nil {
 		return err
@@ -1246,13 +1251,13 @@ func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, cont
 			// Recursively process subdirectory
 			err = collectFilesFromContainerDir(dcli, ctx, containerID, rootPath, file.Path, files, count, includeParentFolder, baseName)
 			if err != nil {
-				continue
+				return fmt.Errorf("collect directory %q: %w", file.Path, err)
 			}
 		} else {
 			// Read file content
 			content, err := dcli.ContainerReadFile(ctx, containerID, file.Path)
 			if err != nil {
-				continue
+				return fmt.Errorf("read archive file %q: %w", file.Path, err)
 			}
 
 			// Determine archive path

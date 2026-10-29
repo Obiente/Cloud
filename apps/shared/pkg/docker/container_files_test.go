@@ -2,10 +2,12 @@ package docker
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"context"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -32,6 +34,84 @@ func fileArchive(t *testing.T, headers ...tar.Header) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
+}
+
+type largeArchiveAPI struct {
+	client.APIClient
+	file     string
+	size     int64
+	statSize int64
+}
+
+type archiveReadCloser struct {
+	io.Reader
+	io.Closer
+}
+
+func (f *largeArchiveAPI) CopyFromContainer(_ context.Context, _ string, _ client.CopyFromContainerOptions) (client.CopyFromContainerResult, error) {
+	file, err := os.Open(f.file)
+	if err != nil {
+		return client.CopyFromContainerResult{}, err
+	}
+	var prefix bytes.Buffer
+	w := tar.NewWriter(&prefix)
+	if err := w.WriteHeader(&tar.Header{Name: "large.zip", Mode: 0644, Size: f.size}); err != nil {
+		file.Close()
+		return client.CopyFromContainerResult{}, err
+	}
+	body := &archiveReadCloser{Reader: io.MultiReader(&prefix, file, bytes.NewReader(make([]byte, 1024+512-f.size%512))), Closer: file}
+	return client.CopyFromContainerResult{Content: body, Stat: container.PathStat{Mode: 0644, Size: f.statSize}}, nil
+}
+
+func TestArchiveReadExceedsPreviewLimit(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "large.zip")
+	fixture, err := os.Create(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fixture.Close()
+	zw := zip.NewWriter(fixture)
+	member, err := zw.CreateHeader(&zip.FileHeader{Name: "large-record", Method: zip.Store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const size = maxFilePreviewBytes + 1
+	if _, err := io.CopyN(member, zeroFileReader{}, size); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stat, err := fixture.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &largeArchiveAPI{file: filePath, size: stat.Size(), statSize: stat.Size()}
+	c := &Client{api: f}
+	// Preview limits apply both to Docker's metadata and to the tar header,
+	// including an inaccurate zero size from Docker's initial stat.
+	for _, reported := range []int64{stat.Size(), 0} {
+		f.statSize = reported
+		if data, err := c.ContainerReadFilePreview(context.Background(), "fixture", "/large.zip"); err == nil || data != nil {
+			t.Fatal("oversized preview succeeded")
+		}
+	}
+	data, err := c.ContainerReadFile(context.Background(), "fixture", "/large.zip")
+	if err != nil || int64(len(data)) != stat.Size() {
+		t.Fatalf("archive read truncated: %d %v", len(data), err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil || len(zr.File) != 1 {
+		t.Fatalf("archive cannot be extracted: %v", err)
+	}
+	r, err := zr.File[0].Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if count, err := io.Copy(io.Discard, r); err != nil || count != size {
+		t.Fatalf("archive contents lost: %d %v", count, err)
+	}
 }
 
 func TestDirectoryArchive(t *testing.T) {
@@ -154,7 +234,7 @@ func TestStoppedContainerAndRemoteVolumeReads(t *testing.T) {
 		}
 	}
 	f.stat.Size = maxFilePreviewBytes + 1
-	if _, err := c.ContainerReadFile(context.Background(), "test", "/huge"); err == nil {
+	if _, err := c.ContainerReadFilePreview(context.Background(), "test", "/huge"); err == nil {
 		t.Fatal("oversized file accepted")
 	}
 }

@@ -6665,6 +6665,8 @@ type WriteContainerFileRequest struct {
 	Encoding        string                 `protobuf:"bytes,6,opt,name=encoding,proto3" json:"encoding,omitempty"` // "text" or "base64"
 	CreateIfMissing bool                   `protobuf:"varint,7,opt,name=create_if_missing,json=createIfMissing,proto3" json:"create_if_missing,omitempty"`
 	ModeOctal       *uint32                `protobuf:"varint,8,opt,name=mode_octal,json=modeOctal,proto3,oneof" json:"mode_octal,omitempty"`
+	ContainerId     *string                `protobuf:"bytes,9,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
+	ServiceName     *string                `protobuf:"bytes,10,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -6753,6 +6755,20 @@ func (x *WriteContainerFileRequest) GetModeOctal() uint32 {
 		return *x.ModeOctal
 	}
 	return 0
+}
+
+func (x *WriteContainerFileRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *WriteContainerFileRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
 }
 
 type WriteContainerFileResponse struct {
@@ -11045,7 +11061,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\r_container_idB\x0f\n" +
 	"\r_service_name\"a\n" +
 	"\x1cCreateContainerEntryResponse\x12A\n" +
-	"\x05entry\x18\x01 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileR\x05entry\"\xc8\x02\n" +
+	"\x05entry\x18\x01 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileR\x05entry\"\xba\x03\n" +
 	"\x19WriteContainerFileRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x12\n" +
@@ -11056,9 +11072,14 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\bencoding\x18\x06 \x01(\tR\bencoding\x12*\n" +
 	"\x11create_if_missing\x18\a \x01(\bR\x0fcreateIfMissing\x12\"\n" +
 	"\n" +
-	"mode_octal\x18\b \x01(\rH\x01R\tmodeOctal\x88\x01\x01B\x0e\n" +
+	"mode_octal\x18\b \x01(\rH\x01R\tmodeOctal\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\t \x01(\tH\x02R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\n" +
+	" \x01(\tH\x03R\vserviceName\x88\x01\x01B\x0e\n" +
 	"\f_volume_nameB\r\n" +
-	"\v_mode_octal\"\xad\x01\n" +
+	"\v_mode_octalB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"\xad\x01\n" +
 	"\x1aWriteContainerFileResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12F\n" +
 	"\x05entry\x18\x02 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileH\x00R\x05entry\x88\x01\x01\x12\x19\n" +

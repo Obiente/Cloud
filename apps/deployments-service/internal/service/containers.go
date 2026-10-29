@@ -287,7 +287,7 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 					anyContainer = &loc
 				}
 				// Prefer running containers
-				if containerInfo.State.Running && runningContainer == nil {
+				if containerInfo.State != nil && containerInfo.State.Running && runningContainer == nil {
 					runningContainer = &loc
 				}
 			}
@@ -310,10 +310,6 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 	for _, loc := range locations {
 		containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
-			// Container might not exist, but keep it as fallback
-			if anyContainer == nil {
-				anyContainer = &loc
-			}
 			continue
 		}
 
@@ -323,7 +319,7 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 		}
 
 		// Prefer running containers - check actual Docker status
-		if containerInfo.State.Running && runningContainer == nil {
+		if containerInfo.State != nil && containerInfo.State.Running && runningContainer == nil {
 			runningContainer = &loc
 		}
 	}
@@ -336,8 +332,7 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 		return anyContainer, nil
 	}
 
-	// Return first container (may not be running, but user can still access volumes)
-	return &locations[0], nil
+	return nil, fmt.Errorf("no accessible container found for deployment")
 }
 
 // ListDeploymentContainers lists all containers for a deployment

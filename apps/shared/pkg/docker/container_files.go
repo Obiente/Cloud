@@ -91,11 +91,21 @@ func readDirectoryArchive(content io.Reader, directory string) ([]FileInfo, erro
 }
 
 func (c *Client) ContainerReadFile(ctx context.Context, id, filePath string) ([]byte, error) {
+	// Archive export and extraction need the entire file. Their caller owns the
+	// lifetime; preview-specific limits must not truncate these operations.
+	return c.readContainerFile(ctx, id, filePath, 0)
+}
+
+func (c *Client) ContainerReadFilePreview(ctx context.Context, id, filePath string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return c.readContainerFile(ctx, id, filePath, maxFilePreviewBytes)
+}
+
+func (c *Client) readContainerFile(ctx context.Context, id, filePath string, maxBytes int64) ([]byte, error) {
 	if c == nil || c.api == nil {
 		return nil, ErrUninitialized
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
 	filePath = path.Clean("/" + filePath)
 	for range 16 {
 		result, err := c.api.CopyFromContainer(ctx, id, client.CopyFromContainerOptions{SourcePath: filePath})
@@ -111,9 +121,9 @@ func (c *Client) ContainerReadFile(ctx context.Context, id, filePath string) ([]
 			filePath = path.Clean(target)
 			continue
 		}
-		if !result.Stat.Mode.IsRegular() || result.Stat.Size > maxFilePreviewBytes {
+		if !result.Stat.Mode.IsRegular() || (maxBytes > 0 && result.Stat.Size > maxBytes) {
 			result.Content.Close()
-			return nil, fmt.Errorf("file must be regular and no larger than 64 MiB")
+			return nil, fmt.Errorf("file must be regular and within the preview size limit")
 		}
 		reader := tar.NewReader(result.Content)
 		header, err := reader.Next()
@@ -121,16 +131,20 @@ func (c *Client) ContainerReadFile(ctx context.Context, id, filePath string) ([]
 			result.Content.Close()
 			return nil, fmt.Errorf("read file metadata: %w", err)
 		}
-		if !header.FileInfo().Mode().IsRegular() || header.Size > maxFilePreviewBytes {
+		if !header.FileInfo().Mode().IsRegular() || (maxBytes > 0 && header.Size > maxBytes) {
 			result.Content.Close()
 			return nil, fmt.Errorf("invalid file archive")
 		}
-		data, err := io.ReadAll(io.LimitReader(reader, maxFilePreviewBytes+1))
+		var body io.Reader = reader
+		if maxBytes > 0 {
+			body = io.LimitReader(reader, maxBytes+1)
+		}
+		data, err := io.ReadAll(body)
 		result.Content.Close()
 		if err != nil {
 			return nil, err
 		}
-		if len(data) > maxFilePreviewBytes {
+		if maxBytes > 0 && int64(len(data)) > maxBytes {
 			return nil, fmt.Errorf("file is too large")
 		}
 		return data, nil
@@ -184,7 +198,7 @@ func (c *Client) ReadMountedVolumeFile(ctx context.Context, id string, volume Vo
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := c.ContainerReadFile(ctx, id, target)
+	data, err := c.ContainerReadFilePreview(ctx, id, target)
 	if err != nil {
 		return nil, nil, err
 	}
