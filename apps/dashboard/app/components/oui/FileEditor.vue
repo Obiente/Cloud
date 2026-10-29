@@ -73,6 +73,8 @@ const editorContainer = ref<HTMLElement | null>(null);
 let editor: any = null;
 let monaco: any = null;
 let resizeObserver: ResizeObserver | null = null;
+let initializing = false;
+let disposed = false;
 
 // Register Prettier formatters for languages that don't have built-in formatting
 const registerPrettierFormatters = async (monacoInstance: any) => {
@@ -274,10 +276,12 @@ const initEditor = async () => {
   await nextTick();
   
   // Double-check container is available and is an actual DOM element
-  if (!editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
+  if (disposed || initializing || editor || !editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
     return;
   }
 
+  initializing = true;
+  const container = editorContainer.value;
   try {
     // Lazy load Monaco Editor
     if (!monaco) {
@@ -340,15 +344,8 @@ const initEditor = async () => {
       await registerPrettierFormatters(monaco);
     }
 
-    // Dispose existing editor if any
-    if (editor) {
-      editor.dispose();
-      editor = null;
-    }
-
-    // Double-check container again before creating editor
-    if (!editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
-      console.warn("Editor container not available for Monaco initialization");
+    // Imports may complete after this component was replaced or unmounted.
+    if (disposed || editorContainer.value !== container || !container.isConnected) {
       return;
     }
 
@@ -437,6 +434,8 @@ const initEditor = async () => {
     }
   } catch (err) {
     console.error("Failed to initialize Monaco Editor:", err);
+  } finally {
+    initializing = false;
   }
 };
 
@@ -591,6 +590,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  disposed = true;
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
