@@ -4,6 +4,7 @@ export interface FileBrowserClientAdapter {
   // Get file content
   getFile(params: {
     path: string;
+    download?: boolean;
     volumeName?: string;
     containerId?: string;
     serviceName?: string;

@@ -3601,6 +3601,7 @@ type GetGameServerFileRequest struct {
 	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
 	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`                                     // File path
 	VolumeName    *string                `protobuf:"bytes,3,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"` // If specified, read file from this volume instead of container filesystem
+	Download      bool                   `protobuf:"varint,4,opt,name=download,proto3" json:"download,omitempty"`                            // Return the complete file instead of applying the preview size limit.
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3654,6 +3655,13 @@ func (x *GetGameServerFileRequest) GetVolumeName() string {
 		return *x.VolumeName
 	}
 	return ""
+}
+
+func (x *GetGameServerFileRequest) GetDownload() bool {
+	if x != nil {
+		return x.Download
+	}
+	return false
 }
 
 type GetGameServerFileResponse struct {
@@ -7411,12 +7419,13 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\vtotal_found\x18\x02 \x01(\x05R\n" +
 	"totalFound\x12\x19\n" +
 	"\bhas_more\x18\x03 \x01(\bR\ahasMore\x12+\n" +
-	"\x11container_running\x18\x04 \x01(\bR\x10containerRunning\"\x8a\x01\n" +
+	"\x11container_running\x18\x04 \x01(\bR\x10containerRunning\"\xa6\x01\n" +
 	"\x18GetGameServerFileRequest\x12$\n" +
 	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12$\n" +
 	"\vvolume_name\x18\x03 \x01(\tH\x00R\n" +
-	"volumeName\x88\x01\x01B\x0e\n" +
+	"volumeName\x88\x01\x01\x12\x1a\n" +
+	"\bdownload\x18\x04 \x01(\bR\bdownloadB\x0e\n" +
 	"\f_volume_name\"\xf2\x01\n" +
 	"\x19GetGameServerFileResponse\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x1a\n" +

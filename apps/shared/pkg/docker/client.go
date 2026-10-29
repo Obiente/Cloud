@@ -595,162 +595,30 @@ func (c *Client) ContainerExecRunInputEnv(ctx context.Context, containerID strin
 	return stdout.String(), nil
 }
 
-// ContainerListFiles lists files in a directory using ls command
-// If container is stopped, it temporarily starts it, performs the operation, then stops it again
-func (c *Client) ContainerListFiles(ctx context.Context, containerID, path string) ([]FileInfo, error) {
-	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+// ContainerListFiles never starts a stopped workload merely to browse it.
+func (c *Client) ContainerListFiles(ctx context.Context, containerID, directory string) ([]FileInfo, error) {
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+	directory = path.Clean("/" + directory)
+	inspect, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
-
-	wasRunning := containerInfo.Container.State.Running
-	wasStarted := false
-
-	// If stopped, temporarily start it
-	if !wasRunning {
-		if err := c.StartContainer(ctx, containerID); err != nil {
-			// If we can't start the container, return a clear error
-			return nil, fmt.Errorf("container is stopped and cannot be started automatically for file listing. The container may be in an error state or require manual intervention. Error: %w", err)
+	if inspect.Container.State != nil && inspect.Container.State.Running {
+		output, execErr := c.ContainerExecRun(ctx, containerID, []string{"ls", "-la", "--time-style=long-iso", "--", directory})
+		if execErr != nil && (strings.Contains(execErr.Error(), "unrecognized option") || strings.Contains(execErr.Error(), "time-style")) {
+			output, execErr = c.ContainerExecRun(ctx, containerID, []string{"ls", "-la", "--full-time", "--", directory})
 		}
-		wasStarted = true
-
-		// Wait a moment for container to be ready
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	// Ensure we stop the container if we started it
-	defer func() {
-		if wasStarted && !wasRunning {
-			// Give it a moment before stopping
-			time.Sleep(100 * time.Millisecond)
-			_ = c.StopContainer(ctx, containerID, 5*time.Second)
-		}
-	}()
-
-	// Use ls -la to get detailed file info
-	// Try GNU ls format first (--time-style=long-iso), fall back to BusyBox format (--full-time)
-	cmd := []string{"ls", "-la", "--time-style=long-iso", path}
-	log.Printf("[ContainerListFiles] Running command in container %s: %v", containerID, cmd)
-	output, err := c.ContainerExecRun(ctx, containerID, cmd)
-	if err != nil {
-		log.Printf("[ContainerListFiles] Command failed: %v, output (if any): %q", err, output)
-
-		// Check if error is due to unsupported option (BusyBox)
-		errStr := err.Error()
-		if strings.Contains(errStr, "unrecognized option") || strings.Contains(errStr, "time-style") {
-			log.Printf("[ContainerListFiles] GNU ls format failed, trying BusyBox format (--full-time)")
-			// Fall back to BusyBox-compatible format
-			cmd = []string{"ls", "-la", "--full-time", path}
-			output, err = c.ContainerExecRun(ctx, containerID, cmd)
-			if err != nil {
-				log.Printf("[ContainerListFiles] BusyBox format also failed: %v", err)
-				// If we got some output despite the error, try to parse it (might be partial success)
-				if output != "" {
-					log.Printf("[ContainerListFiles] Attempting to parse partial output despite error")
-					return parseLsOutput(output, path), nil
-				}
-				return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
+		// Failed command output is diagnostic text, never a directory listing.
+		if execErr == nil {
+			files := parseLsOutput(output, directory)
+			if len(files) > 0 || strings.TrimSpace(output) == "total 0" {
+				return files, nil
 			}
-		} else {
-			// If we got some output despite the error, try to parse it (might be partial success)
-			if output != "" {
-				log.Printf("[ContainerListFiles] Attempting to parse partial output despite error")
-				return parseLsOutput(output, path), nil
-			}
-			// Provide more context about the failure
-			return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
 		}
 	}
-
-	log.Printf("[ContainerListFiles] Command succeeded, output length: %d chars", len(output))
-	files := parseLsOutput(output, path)
-
-	// Memory safety: Very high limit to allow normal operations while catching memory leaks
-	// With 2G memory limit, we can handle large directories, but still need a hard cap
-	// This limit is high enough that normal operations won't hit it, but a memory leak will
-	const maxFilesLimit = 100000 // Very high limit - only catches genuine memory leaks
-	if len(files) > maxFilesLimit {
-		log.Printf("[ContainerListFiles] WARNING: Directory contains %d files (exceeds safety limit of %d). This may indicate a memory leak or misconfiguration. Limiting to %d files.", len(files), maxFilesLimit, maxFilesLimit)
-		files = files[:maxFilesLimit]
-	}
-
-	return files, nil
-}
-
-// ContainerReadFile reads a file using cat command
-// If container is stopped, it temporarily starts it, performs the operation, then stops it again
-func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath string) ([]byte, error) {
-	// Sanitize filePath to ensure it's valid
-	filePath = strings.TrimSpace(filePath)
-	filePath = filepath.ToSlash(filepath.Clean(filePath))
-	if !strings.HasPrefix(filePath, "/") {
-		filePath = "/" + filePath
-	}
-	// Final validation
-	if strings.Contains(filePath, "\x00") || strings.Contains(filePath, "..") {
-		log.Printf("[ContainerReadFile] Invalid filePath detected: %q", filePath)
-		return nil, fmt.Errorf("invalid file path: %q", filePath)
-	}
-
-	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("inspect container: %w", err)
-	}
-
-	wasRunning := containerInfo.Container.State.Running
-	wasStarted := false
-
-	// If stopped, temporarily start it
-	if !wasRunning {
-		if err := c.StartContainer(ctx, containerID); err != nil {
-			return nil, fmt.Errorf("failed to start stopped container for file read: %w", err)
-		}
-		wasStarted = true
-
-		// Wait a moment for container to be ready
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	// Ensure we stop the container if we started it
-	defer func() {
-		if wasStarted && !wasRunning {
-			// Give it a moment before stopping
-			time.Sleep(100 * time.Millisecond)
-			_ = c.StopContainer(ctx, containerID, 5*time.Second)
-		}
-	}()
-
-	// Use cat directly - Docker exec passes arguments safely, so special characters in paths are handled
-	// This works on both GNU coreutils and BusyBox
-	cmd := []string{"cat", filePath}
-	output, err := c.ContainerExecRun(ctx, containerID, cmd)
-	if err != nil {
-		log.Printf("[ContainerReadFile] cat command failed: %v", err)
-		errStr := err.Error()
-
-		// Check if file doesn't exist
-		if strings.Contains(errStr, "No such file") || strings.Contains(errStr, "not found") {
-			return nil, fmt.Errorf("file not found: %q", filePath)
-		}
-
-		// Check if it's a permission issue
-		if strings.Contains(errStr, "Permission denied") || strings.Contains(errStr, "EACCES") {
-			return nil, fmt.Errorf("permission denied reading file %q", filePath)
-		}
-
-		// Check if it's a directory
-		if strings.Contains(errStr, "Is a directory") || strings.Contains(errStr, "EISDIR") {
-			return nil, fmt.Errorf("path is a directory, not a file: %q", filePath)
-		}
-
-		// Return error with full context - the stderr should already be included in the error message
-		return nil, fmt.Errorf("failed to read file %q: %w", filePath, err)
-	}
-
-	// Empty files are valid - return empty byte slice
-	return []byte(output), nil
+	return c.listContainerArchive(ctx, containerID, directory)
 }
 
 // ContainerInspect checks if a container is running
@@ -1026,40 +894,6 @@ func (c *Client) ContainerWriteFile(ctx context.Context, containerID, filePath s
 	return nil
 }
 
-func (c *Client) ContainerStat(ctx context.Context, containerID, path string) (*FileInfo, error) {
-	if c == nil || c.api == nil {
-		return nil, ErrUninitialized
-	}
-	base := filepath.Dir(path)
-	if base == "" {
-		base = "/"
-	}
-
-	// Try GNU ls format first (--time-style=long-iso), fall back to BusyBox format (--full-time)
-	cmd := []string{"ls", "-ld", "--time-style=long-iso", path}
-	output, err := c.ContainerExecRun(ctx, containerID, cmd)
-	if err != nil {
-		// Check if error is due to unsupported option (BusyBox)
-		errStr := err.Error()
-		if strings.Contains(errStr, "unrecognized option") || strings.Contains(errStr, "time-style") {
-			// Fall back to BusyBox-compatible format
-			cmd = []string{"ls", "-ld", "--full-time", path}
-			output, err = c.ContainerExecRun(ctx, containerID, cmd)
-			if err != nil {
-				return nil, fmt.Errorf("failed to stat file %q: %w", path, err)
-			}
-		} else {
-			return nil, fmt.Errorf("failed to stat file %q: %w", path, err)
-		}
-	}
-
-	infos := parseLsOutput(output, base)
-	if len(infos) == 0 {
-		return nil, fmt.Errorf("no metadata for path %s", path)
-	}
-	return &infos[0], nil
-}
-
 // FileInfo represents a file or directory
 type FileInfo struct {
 	Name          string
@@ -1119,7 +953,8 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		}
 
 		perms := parts[0]
-		if len(perms) == 0 {
+		perms = strings.TrimRight(perms, "+.")
+		if len(perms) != 10 || !strings.ContainsRune("-dlcbps", rune(perms[0])) || strings.Trim(perms[1:], "rwxstST-") != "" {
 			continue
 		}
 
@@ -1273,151 +1108,32 @@ func permissionsToMode(perms string) uint32 {
 	return mode
 }
 
-// GetContainerVolumes returns information about persistent volumes mounted in the container
+// GetContainerVolumes reports Docker's mounts independently of whether their
+// host paths happen to be mounted into this API process.
 func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([]VolumeMount, error) {
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+	inspect, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
-
-	var volumes []VolumeMount
-	log.Printf("[GetContainerVolumes] Inspecting container %s, found %d mounts", containerID, len(containerInfo.Container.Mounts))
-
-	for i, mount := range containerInfo.Container.Mounts {
-		log.Printf("[GetContainerVolumes] Mount %d: Type=%s, Name=%s, Source=%s, Destination=%s", i, mount.Type, mount.Name, mount.Source, mount.Destination)
-
-		// Include Docker volumes (Type="volume") and Obiente Cloud bind mounts
-		// Obiente Cloud volumes are stored as bind mounts in /var/lib/obiente/volumes
-		isObienteVolume := mount.Type == "bind" && strings.HasPrefix(mount.Source, "/var/lib/obiente/volumes")
-		isDockerVolume := mount.Type == "volume"
-
-		if isDockerVolume || isObienteVolume {
-			volumePath := mount.Source
-			log.Printf("[GetContainerVolumes] Processing volume mount: Name=%s, Source=%s", mount.Name, volumePath)
-
-			// For Obiente Cloud volumes (bind mounts), use the source path directly
-			if isObienteVolume {
-				// Extract volume name from path
-				// Structure can be:
-				// - /var/lib/obiente/volumes/{deploymentID}/{volumeName} (for deployments)
-				// - /var/lib/obiente/volumes/{volumeName} (for game servers)
-				parts := strings.Split(strings.TrimPrefix(volumePath, "/var/lib/obiente/volumes/"), "/")
-				volumeName := ""
-				if len(parts) >= 2 {
-					// For deployments: second part after deploymentID
-					volumeName = parts[1]
-				} else if len(parts) == 1 {
-					// For game servers: use the volume name directly
-					volumeName = parts[0]
-				}
-				if volumeName == "" {
-					// Fallback: use the last component of the path
-					volumeName = filepath.Base(volumePath)
-				}
-
-				// Use mount destination as the display name if volume name is still empty
-				if volumeName == "" {
-					volumeName = filepath.Base(mount.Destination)
-				}
-
-				if _, err := os.Stat(volumePath); err == nil {
-					volumeMount := VolumeMount{
-						Name:       volumeName,
-						MountPoint: mount.Destination,
-						Source:     volumePath,
-						IsNamed:    true, // Obiente volumes are always "named" (persistent)
-					}
-					log.Printf("[GetContainerVolumes] Adding Obiente volume: Name=%s, MountPoint=%s, Source=%s", volumeMount.Name, volumeMount.MountPoint, volumeMount.Source)
-					volumes = append(volumes, volumeMount)
-				} else {
-					log.Printf("[GetContainerVolumes] Skipping Obiente volume - path does not exist: %s (error: %v)", volumePath, err)
-				}
-				continue // Skip Docker volume processing for Obiente volumes
-			}
-
-			// For Docker volumes, try to resolve the correct volume path
-			// Docker volumes are typically at /var/lib/docker/volumes/<name>/_data
-			// but mount.Source might point to the volume directory or the _data subdirectory
-			// For anonymous volumes, mount.Source is the direct path to the volume data
-
-			isNamedVolume := mount.Name != ""
-			if isNamedVolume {
-				// Check if the path exists as-is
-				if _, err := os.Stat(volumePath); os.IsNotExist(err) {
-					// Path doesn't exist, try common variations
-					// Try removing _data if it's in the path
-					if strings.HasSuffix(volumePath, "_data") {
-						volumePath = strings.TrimSuffix(volumePath, "_data")
-						volumePath = strings.TrimSuffix(volumePath, "/")
-					}
-
-					// Try appending _data
-					withData := filepath.Join(volumePath, "_data")
-					if _, err := os.Stat(withData); err == nil {
-						volumePath = withData
-					} else if _, err := os.Stat(volumePath); os.IsNotExist(err) {
-						// If still doesn't exist, construct from volume name
-						// This is a fallback if mount.Source is completely wrong
-						potentialPath := filepath.Join("/var/lib/docker/volumes", mount.Name, "_data")
-						if _, err := os.Stat(potentialPath); err == nil {
-							volumePath = potentialPath
-						}
-					}
-				} else {
-					// Path exists, but check if it's a directory (might be the volume root)
-					// If it's not the _data directory, try appending _data
-					info, err := os.Stat(volumePath)
-					if err == nil && info.IsDir() {
-						// Check if _data subdirectory exists
-						withData := filepath.Join(volumePath, "_data")
-						if _, err := os.Stat(withData); err == nil {
-							// Prefer _data subdirectory as that's where actual files are
-							volumePath = withData
-						}
-					}
-				}
-			}
-			// For anonymous volumes, use mount.Source directly as it's already the correct path
-
-			// Only include volumes with valid, accessible paths
-			// Skip if the path still doesn't exist after all attempts
-			if _, err := os.Stat(volumePath); err == nil {
-				// Generate a display name for volumes
-				displayName := mount.Name
-				if displayName == "" {
-					// For anonymous volumes, create a name based on mount point
-					// e.g., "/config" -> "config" or "/data" -> "data"
-					if mount.Destination != "" {
-						// Extract the last part of the mount point path
-						mountPointName := strings.Trim(mount.Destination, "/")
-						if mountPointName == "" {
-							mountPointName = "root"
-						}
-						// Use the mount point name as the display name for anonymous volumes
-						displayName = fmt.Sprintf("anonymous-%s", mountPointName)
-					} else {
-						displayName = "anonymous-volume"
-					}
-				}
-
-				volumeMount := VolumeMount{
-					Name:       displayName,
-					MountPoint: mount.Destination,
-					Source:     volumePath, // Host path where volume is stored
-					IsNamed:    isNamedVolume,
-				}
-				log.Printf("[GetContainerVolumes] Adding volume: Name=%s, MountPoint=%s, Source=%s, IsNamed=%v", volumeMount.Name, volumeMount.MountPoint, volumeMount.Source, volumeMount.IsNamed)
-				volumes = append(volumes, volumeMount)
-			} else {
-				log.Printf("[GetContainerVolumes] Skipping volume - path does not exist: %s (error: %v)", volumePath, err)
-			}
-			// If volume path doesn't exist, skip it (might be deleted or inaccessible)
-		} else {
-			log.Printf("[GetContainerVolumes] Skipping mount - not a volume type: Type=%s", mount.Type)
+	volumes := make([]VolumeMount, 0)
+	for _, mount := range inspect.Container.Mounts {
+		managed := mount.Type == "bind" && strings.HasPrefix(path.Clean(mount.Source), "/var/lib/obiente/volumes/")
+		if mount.Type != "volume" && !managed {
+			continue
 		}
+		name := mount.Name
+		if managed {
+			name = path.Base(mount.Source)
+		}
+		named := name != ""
+		if name == "" {
+			name = "anonymous-" + strings.Trim(mount.Destination, "/")
+		}
+		volumes = append(volumes, VolumeMount{Name: name, MountPoint: mount.Destination, Source: mount.Source, IsNamed: named})
 	}
-
-	log.Printf("[GetContainerVolumes] Returning %d volumes", len(volumes))
 	return volumes, nil
 }
 

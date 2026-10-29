@@ -29,11 +29,13 @@
       </OuiFlex>
 
       <!-- File Browser Search -->
-      <FileBrowserSearch
-        :file-browser-client="fileBrowserClient"
-        :source="source"
-        @result-click="handleSearchResultClick"
-      />
+      <div class="relative h-10 w-full sm:w-80 shrink-0">
+        <FileBrowserSearch
+          :file-browser-client="fileBrowserClient"
+          :source="source"
+          @result-click="handleSearchResultClick"
+        />
+      </div>
 
       <OuiFlex
         gap="sm"
@@ -44,10 +46,10 @@
         <OuiFlex
           gap="sm"
           align="center"
-          v-if="source.type === 'container' && containers.length > 0"
+          v-if="containers.length > 0"
           class="w-full sm:w-auto"
         >
-          <OuiText size="xs" color="tertiary" class="hidden sm:inline"
+          <OuiText size="xs" color="tertiary" class="hidden sm:inline whitespace-nowrap shrink-0"
             >Container:</OuiText
           >
           <OuiSelect
@@ -90,7 +92,8 @@
           variant="ghost"
           size="sm"
           :loading="isLoadingTree"
-          @click="refreshRoot"
+          @click="refreshFiles"
+          aria-label="Refresh files"
           class="flex-1 sm:flex-initial"
         >
           <ArrowPathIcon
@@ -122,7 +125,7 @@
         :root="root"
         :selectedPath="selectedPath"
         :treeCollection="treeCollection"
-        :errorMessage="errorMessage"
+        :errorMessage="errorMessage || volumeError"
         :isLoadingTree="isLoadingTree"
         :containerRunning="containerRunning"
         :showMobileToggle="true"
@@ -142,7 +145,7 @@
         @root-drop="handleRootDropFiles"
         @source-drop="handleSourceDropFiles"
         @toggle-mobile="showSidebarOnMobile = !showSidebarOnMobile"
-        @clear-error="errorMessage = null"
+        @clear-error="errorMessage = null; volumeError = null"
       />
 
       <section
@@ -301,7 +304,7 @@
               "
               variant="solid"
               size="sm"
-              :disabled="isSaving"
+              :disabled="isSaving || isLoadingFile || !loadedFileTarget"
               @click="handleSaveFile"
               class="flex-1 sm:flex-initial shrink-0 min-w-fit"
             >
@@ -564,7 +567,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+  import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import {
     ArrowPathIcon,
@@ -631,6 +634,13 @@
   const originalFileContent = ref(""); // Track original content to detect changes
   const fileLanguage = ref("plaintext");
   const currentFilePath = ref<string | null>(null);
+  // Keep edits bound to the exact resource whose content was loaded.
+  const loadedFileTarget = shallowRef<{
+    path: string;
+    volumeName?: string;
+    containerId?: string;
+    serviceName?: string;
+  } | null>(null);
   const fileError = ref<string | null>(null);
   const fileMetadata = ref<{
     mimeType?: string;
@@ -787,6 +797,7 @@
     selectedPath,
     breadcrumbs,
     errorMessage,
+    volumeError,
     isLoadingTree,
     containers,
     selectedContainerId,
@@ -912,7 +923,16 @@
     return findNode(currentDirectory.value);
   });
 
+  function invalidateFileLoad() {
+    currentFileLoadController?.abort();
+    currentFileLoadController = null;
+    loadedFileTarget.value = null;
+    isLoadingFile.value = false;
+    originalFileContent.value = "";
+  }
+
   function handleSwitchSource(type: "container" | "volume", name?: string) {
+    invalidateFileLoad();
     if (type === "container") {
       switchToContainer();
     } else if (name) {
@@ -1090,11 +1110,11 @@
       modeOctal: type === "directory" ? 0o755 : 0o644,
       volumeName: source.type === "volume" ? source.volumeName : undefined,
       containerId:
-        source.type === "container" && selectedContainerId.value
+        selectedContainerId.value
           ? selectedContainerId.value
           : undefined,
       serviceName:
-        source.type === "container" && selectedServiceName.value
+        selectedServiceName.value
           ? selectedServiceName.value
           : undefined,
     };
@@ -1380,11 +1400,6 @@
       currentFileLoadController = null;
     }
 
-    // Prevent concurrent loads of the same file
-    if (isLoadingFile.value && currentFilePath.value === node.path) {
-      return;
-    }
-
     // Clean up previous blob URL when switching files
     if (fileBlobUrl.value) {
       URL.revokeObjectURL(fileBlobUrl.value);
@@ -1433,28 +1448,29 @@
     const abortController = new AbortController();
     currentFileLoadController = abortController;
     isLoadingFile.value = true;
+    loadedFileTarget.value = null;
 
     try {
-      // Store the request path to verify it's still the current file after load
-      const requestPath = node.path;
-
-      const res = await fileBrowserClient.getFile({
+      // Capture the source before the request can yield to another selection.
+      const requestTarget = {
         path: node.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
-      });
+      };
+      const res = await fileBrowserClient.getFile(requestTarget);
 
       // Verify this request is still valid (file hasn't changed during load)
-      if (currentFilePath.value !== requestPath) {
+      if (abortController.signal.aborted || currentFileLoadController !== abortController) {
         return;
       }
+      loadedFileTarget.value = requestTarget;
 
       // Store metadata
       fileMetadata.value = {
@@ -1534,6 +1550,7 @@
       fileError.value = null; // Clear error on success
     } catch (err: unknown) {
       // Don't show error if request was aborted (cancelled)
+      if (abortController.signal.aborted || currentFileLoadController !== abortController) return;
       if ((err as any)?.name === "AbortError" || (err as Error | undefined)?.message?.includes("aborted")) {
         return;
       }
@@ -1550,8 +1567,8 @@
       }
     } finally {
       // Reset loading state and clear abort controller
-      isLoadingFile.value = false;
       if (currentFileLoadController === abortController) {
+        isLoadingFile.value = false;
         currentFileLoadController = null;
       }
     }
@@ -1565,7 +1582,8 @@
   }
 
   async function handleSaveFile() {
-    if (!currentFilePath.value) {
+    const target = loadedFileTarget.value;
+    if (!target || isLoadingFile.value || fileError.value || filePreviewType.value !== "text" || target.path !== currentFilePath.value) {
       return;
     }
     if (isSaving.value) {
@@ -1575,20 +1593,21 @@
     isSaving.value = true;
     saveStatus.value = "saving";
     saveErrorMessage.value = null;
+    const content = fileContent.value;
 
     // Force Vue to update by using nextTick
     await nextTick();
 
     try {
       await writeFile({
-        path: currentFilePath.value,
-        content: fileContent.value,
-        volumeName: source.type === "volume" ? source.volumeName : undefined,
+        ...target,
+        content,
       });
 
+      if (loadedFileTarget.value !== target) return;
       saveStatus.value = "success";
       // Update original content to match saved content
-      originalFileContent.value = fileContent.value;
+      originalFileContent.value = content;
 
       // Reset status after 3 seconds (status indicator shows "Saved")
       setTimeout(() => {
@@ -1598,6 +1617,7 @@
       }, 3000);
     } catch (err: unknown) {
       console.error("save file error:", err);
+      if (loadedFileTarget.value !== target) return;
       saveStatus.value = "error";
 
       const errorMsg = (err as Error | undefined)?.message || "Failed to save file. Please try again.";
@@ -1937,27 +1957,29 @@
   }
 
   async function handleDownload() {
-    if (!currentNode.value || currentNode.value.type !== "file") return;
+    const node = currentNode.value;
+    if (!node || node.type !== "file") return;
 
     try {
       // Fetch file content
       const res = await fileBrowserClient.getFile({
-        path: currentNode.value.path,
+        path: node.path,
+        download: true,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
 
       // Get file name from path
       const fileName =
-        currentNode.value.name ||
-        currentNode.value.path.split("/").pop() ||
+        node.name ||
+        node.path.split("/").pop() ||
         "download";
 
       // Create blob from content
@@ -2192,11 +2214,11 @@
         includeParentFolder: includeParent,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2275,11 +2297,11 @@
         destinationPath: destinationPath,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2547,11 +2569,11 @@
         })),
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2631,7 +2653,13 @@
     return "Unknown";
   });
 
-  function handleContainerChange(value: string) {
+  async function refreshFiles() {
+    await fetchVolumes();
+    await refreshRoot();
+  }
+
+  async function handleContainerChange(value: string) {
+    invalidateFileLoad();
     if (!value) {
       setContainer(undefined, undefined);
     } else {
@@ -2649,7 +2677,8 @@
     fileContent.value = "";
     fileLanguage.value = "plaintext";
     updateFileQueryParam(null); // Clear file query param
-    refreshRoot();
+    await fetchVolumes();
+    await refreshRoot();
   }
 
   // Helper function to update file query parameter

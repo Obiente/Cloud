@@ -15,6 +15,7 @@ export function useGameServerFileBrowserClient(gameServerId: string): FileBrowse
       const res = await client.getGameServerFile({
         gameServerId,
         path: params.path,
+        download: params.download,
         volumeName: params.volumeName,
       });
       return {

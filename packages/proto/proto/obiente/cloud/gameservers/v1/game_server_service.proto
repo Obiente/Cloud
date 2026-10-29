@@ -545,6 +545,7 @@ message GetGameServerFileRequest {
   string game_server_id = 1;
   string path = 2; // File path
   optional string volume_name = 3; // If specified, read file from this volume instead of container filesystem
+  bool download = 4; // Return the complete file instead of applying the preview size limit.
 }
 
 message GetGameServerFileResponse {

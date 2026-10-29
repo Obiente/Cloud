@@ -393,6 +393,9 @@ http
       case "CheckPermission":
         result = { allowed: true };
         break;
+      case "GetDeployment":
+        result = { deployment: { id: body.deploymentId || "dep-example", name: "Example deployment", organizationId: org.id, status: "RUNNING", type: "DOCKER", environment: "PRODUCTION", createdAt: timestamp } };
+        break;
       case "ListDeployments":
         result = {
           deployments: [
