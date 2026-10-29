@@ -30,6 +30,7 @@ test("deployment files show volumes, preserve container selection and recover fr
   await page.route("**/GetContainerFile", route => route.fulfill({ json: {
     content: "saved data", encoding: "text", size: "10", metadata: { name: "record.txt", path: "/record.txt", size: "10" },
   } }));
+  await page.route("**/WriteContainerFile", route => route.fulfill({ json: { success: true } }));
   await page.goto("/deployments/dep-example?tab=files");
   const tree = page.getByLabel("File tree", { exact: true });
   await expect(tree.getByText("app.txt", { exact: true })).toBeVisible({ timeout: testInfo.timeout });
@@ -54,5 +55,12 @@ test("deployment files show volumes, preserve container selection and recover fr
   expect(requests.some(r => r.listVolumes && r.containerId === "container-example-b")).toBe(true);
   expect(requests.some(r => r.volumeName === "example-data" && r.containerId === "container-example-b")).toBe(true);
   await expect(page.locator(".monaco-editor .view-lines").first()).toContainText(/saved\s+data/, { timeout: testInfo.timeout });
+  const editor = page.locator(".monaco-editor textarea").first();
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" updated");
+  const save = page.waitForRequest(r => r.url().endsWith("/WriteContainerFile"));
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await save).postDataJSON()).toMatchObject({ path: "/record.txt", containerId: "container-example-b", serviceName: "worker", volumeName: "example-data", content: "saved data updated" });
   await page.screenshot({ path: testInfo.outputPath("volume-files.png"), fullPage: true });
 });

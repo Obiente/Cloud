@@ -489,6 +489,8 @@ export function useFileExplorer(options: ExplorerOptions) {
     
     if (isDeployment) {
       const request = create(WriteContainerFileRequestSchema, {
+        containerId: selectedContainerId.value,
+        serviceName: selectedServiceName.value,
         ...(payload as Partial<Omit<WriteContainerFileRequest, "$typeName" | "$unknown" | "organizationId" | "deploymentId">>),
         organizationId: getOrgId(),
         deploymentId: (options as DeploymentExplorerOptions).deploymentId,

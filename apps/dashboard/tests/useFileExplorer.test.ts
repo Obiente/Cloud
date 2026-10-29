@@ -1,11 +1,22 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { useFileExplorer } from "../app/composables/useFileExplorer";
 
-const { listContainerFiles } = vi.hoisted(() => ({ listContainerFiles: vi.fn() }));
-vi.mock("~/lib/connect-client", () => ({ useConnectClient: () => ({ listContainerFiles }) }));
+const { listContainerFiles, writeContainerFile } = vi.hoisted(() => ({ listContainerFiles: vi.fn(), writeContainerFile: vi.fn() }));
+vi.mock("~/lib/connect-client", () => ({ useConnectClient: () => ({ listContainerFiles, writeContainerFile }) }));
 const explorer = () => useFileExplorer({ type: "deployment", organizationId: "org-example", deploymentId: "dep-example" });
 const file = (name: string) => ({ name, path: `/${name}`, size: 4n });
-beforeEach(() => listContainerFiles.mockReset());
+beforeEach(() => { listContainerFiles.mockReset(); writeContainerFile.mockReset(); });
+
+it("saves to the selected container and preserves a captured file target", async () => {
+  const e = explorer();
+  e.setContainer("container-b", "worker");
+  e.switchToVolume("data");
+  await e.writeFile({ path: "/record.txt", volumeName: "data", content: "edited" });
+  expect(writeContainerFile).toHaveBeenLastCalledWith(expect.objectContaining({ containerId: "container-b", serviceName: "worker", volumeName: "data" }));
+  e.setContainer("container-a", "api");
+  await e.writeFile({ path: "/record.txt", volumeName: "data", content: "edited", containerId: "container-b", serviceName: "worker" });
+  expect(writeContainerFile).toHaveBeenLastCalledWith(expect.objectContaining({ containerId: "container-b", serviceName: "worker", volumeName: "data" }));
+});
 
 it("uses the selected container for volume discovery and files", async () => {
   const e = explorer();
