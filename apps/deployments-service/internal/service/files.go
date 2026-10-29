@@ -73,10 +73,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		// instead of ValidateAndRefreshLocations which only returns running containers
 		allLocations, locationsErr := database.GetAllDeploymentLocations(deploymentID)
 		if locationsErr != nil {
-			return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
-				Volumes:          []*deploymentsv1.VolumeInfo{},
-				ContainerRunning: false,
-			}), nil
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("load deployment containers: %w", locationsErr))
 		}
 
 		// Try each container until we find one that works for listing volumes
@@ -85,23 +82,33 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		var isRunning bool
 		foundVolumes := false
 		for _, testLoc := range allLocations {
+			if selected := req.Msg.GetContainerId(); selected != "" && !strings.HasPrefix(testLoc.ContainerID, selected) {
+				continue
+			}
 			containerInfo, inspectErr := dcli.ContainerInspect(ctx, testLoc.ContainerID)
 			if inspectErr != nil {
 				continue
 			}
+			if service := req.Msg.GetServiceName(); service != "" {
+				if containerInfo.Config == nil || (containerInfo.Config.Labels["cloud.obiente.service_name"] != service && containerInfo.Config.Labels["com.docker.compose.service"] != service) {
+					continue
+				}
+			}
 			if !foundVolumes {
-				isRunning = containerInfo.State.Running
+				isRunning = containerInfo.State != nil && containerInfo.State.Running
 			}
 			testVolumes, volErr := dcli.GetContainerVolumes(ctx, testLoc.ContainerID)
 			if volErr == nil {
 				volumes = testVolumes
 				foundVolumes = true
-				isRunning = containerInfo.State.Running
-				break
+				isRunning = containerInfo.State != nil && containerInfo.State.Running
+				if isRunning {
+					break
+				}
 			}
 		}
 		if !foundVolumes {
-			volumes = []docker.VolumeMount{}
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no accessible container found for deployment volumes"))
 		}
 
 		volumeInfos := make([]*deploymentsv1.VolumeInfo, len(volumes))
@@ -135,16 +142,11 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		// Try to find the same container again, or use first available
-		for _, refLoc := range refreshedLocations {
-			if refLoc.ContainerID == loc.ContainerID {
-				*loc = refLoc
-				break
-			}
+		loc, err = s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
-		if loc.ContainerID != refreshedLocations[0].ContainerID {
-			*loc = refreshedLocations[0]
-		}
+
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -216,7 +218,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
 		}
 
-		fileInfos, err := dcli.ListVolumeFiles(targetVolume.Source, path)
+		fileInfos, err := dcli.ListMountedVolumeFiles(ctx, loc.ContainerID, *targetVolume, path)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list volume files: %w", err))
 		}
@@ -240,26 +242,9 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		return connect.NewResponse(resp), nil
 	}
 
-	// Try to list files - ContainerListFiles will handle stopped containers by temporarily starting them
-	// If the container can't be started automatically, it will return an error
+	// Docker archive reads also support stopped and shell-less containers.
 	fileInfos, err := dcli.ContainerListFiles(ctx, loc.ContainerID, path)
 	if err != nil {
-		// Check if error mentions container being stopped or can't be started
-		errStr := err.Error()
-		if strings.Contains(errStr, "container is stopped") ||
-			strings.Contains(errStr, "cannot be started automatically") ||
-			strings.Contains(errStr, "failed to start stopped container") {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and cannot be started automatically for file listing. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or manually start the container"))
-		}
-
-		// Check if the error is from ContainerExecRun (command failed with exit code)
-		if strings.Contains(errStr, "failed with exit code") || strings.Contains(errStr, "command") {
-			if !isRunning {
-				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and the file listing command failed. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or start the container"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
-		}
-
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 	}
 
@@ -364,27 +349,23 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
 		}
 
-		// Resolve host path and ensure it is within the volume boundary
-		if _, err := resolveVolumePath(targetVolume, path); err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-
-		content, err := dcli.ReadVolumeFile(targetVolume.Source, path)
+		content, fileInfo, err := dcli.ReadMountedVolumeFile(ctx, loc.ContainerID, *targetVolume, path)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read volume file: %w", err))
 		}
 
-		fileInfo, err := dcli.StatVolumeFile(targetVolume.Source, path)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stat volume file: %w", err))
+		metadata := fileInfoToProto(*fileInfo, volumeName)
+		size := int64(len(content))
+		encoding := "text"
+		if !utf8.Valid(content) {
+			encoding = "base64"
+			content = []byte(base64.StdEncoding.EncodeToString(content))
 		}
-
-		metadata := fileInfoToProto(fileInfo, volumeName)
 
 		resp := &deploymentsv1.GetContainerFileResponse{
 			Content:   string(content),
-			Encoding:  "text",
-			Size:      int64(len(content)),
+			Encoding:  encoding,
+			Size:      size,
 			Metadata:  metadata,
 			Truncated: proto.Bool(false),
 		}
@@ -395,7 +376,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	// Otherwise, read file from container filesystem
 	// Note: We inspect the container to verify it exists, but we don't strictly require it to be "running"
 	// since Docker might report stale state. We'll attempt the read and let Docker API handle the actual state check.
-	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+	_, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
 		// Container might have been deleted - try to refresh and find again
 		refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
@@ -403,19 +384,14 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
 		loc = refreshedLoc
-		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
+		_, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
 		}
 	}
 
-	// Read file using Docker exec (attempt even if state shows not running, as state might be stale)
 	content, err := dcli.ContainerReadFile(ctx, loc.ContainerID, path)
 	if err != nil {
-		// If the read fails and container is not running, provide a more helpful error message
-		if !containerInfo.State.Running {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running (status: %s). Use volume_name parameter to read files from persistent volumes", containerInfo.State.Status))
-		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
 	}
 
@@ -427,6 +403,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	}
 
 	// Check if content is valid UTF-8
+	size := int64(len(content))
 	encoding := "text"
 	if !utf8.Valid(content) {
 		// Invalid UTF-8 - encode as base64
@@ -438,7 +415,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	resp := &deploymentsv1.GetContainerFileResponse{
 		Content:   string(content),
 		Encoding:  encoding,
-		Size:      int64(len(content)),
+		Size:      size,
 		Truncated: proto.Bool(false),
 	}
 	if statInfo != nil {

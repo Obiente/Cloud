@@ -53,3 +53,13 @@ jobs:
         run: pnpm exec nx run shared:test --skip-nx-cache --command="go test -mod=readonly -race -count=1 ./..."
       - name: PostgreSQL DNS, billing, organization and email regressions
         run: pnpm exec nx run-many --target=test --projects=dns-service,billing-service,organizations-service,notifications-service --excludeTaskDependencies --parallel=2 --skip-nx-cache --command="go test -mod=readonly -race -count=1 ./..."
+      - name: Deployment and game server regressions
+        run: pnpm exec nx run-many --target=test --projects=deployments-service,gameservers-service --excludeTaskDependencies --parallel=2 --skip-nx-cache --command="go test -mod=readonly -race -count=1 ./..."
+      - name: Shell-less container and mounted volume file browsing
+        env:
+          OBIENTE_TEST_POSTGRES_DSN: ''
+          OBIENTE_DOCKER_TESTS: '1'
+          DOCKER_HOST: unix:///var/run/docker.sock
+        run: |
+          docker pull busybox:1.37.0
+          pnpm exec nx run shared:test --skip-nx-cache --command="go test -mod=readonly -race -count=1 ./pkg/docker -run '^TestShelllessContainerFileBrowser$'"
