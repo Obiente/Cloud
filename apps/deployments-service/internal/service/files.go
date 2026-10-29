@@ -354,23 +354,7 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read volume file: %w", err))
 		}
 
-		metadata := fileInfoToProto(*fileInfo, volumeName)
-		size := int64(len(content))
-		encoding := "text"
-		if !utf8.Valid(content) {
-			encoding = "base64"
-			content = []byte(base64.StdEncoding.EncodeToString(content))
-		}
-
-		resp := &deploymentsv1.GetContainerFileResponse{
-			Content:   string(content),
-			Encoding:  encoding,
-			Size:      size,
-			Metadata:  metadata,
-			Truncated: proto.Bool(false),
-		}
-
-		return connect.NewResponse(resp), nil
+		return connect.NewResponse(containerFileResponse(content, fileInfoToProto(*fileInfo, volumeName))), nil
 	}
 
 	// Otherwise, read file from container filesystem
@@ -402,27 +386,24 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		statInfo = nil
 	}
 
-	// Check if content is valid UTF-8
+	var metadata *deploymentsv1.ContainerFile
+	if statInfo != nil {
+		metadata = fileInfoToProto(*statInfo, "")
+	}
+	return connect.NewResponse(containerFileResponse(content, metadata)), nil
+}
+
+func containerFileResponse(content []byte, metadata *deploymentsv1.ContainerFile) *deploymentsv1.GetContainerFileResponse {
 	size := int64(len(content))
 	encoding := "text"
 	if !utf8.Valid(content) {
-		// Invalid UTF-8 - encode as base64
 		encoding = "base64"
 		content = []byte(base64.StdEncoding.EncodeToString(content))
-		log.Printf("[GetContainerFile] Content contains invalid UTF-8, encoding as base64")
 	}
-
-	resp := &deploymentsv1.GetContainerFileResponse{
-		Content:   string(content),
-		Encoding:  encoding,
-		Size:      size,
-		Truncated: proto.Bool(false),
+	return &deploymentsv1.GetContainerFileResponse{
+		Content: string(content), Encoding: encoding, Size: size,
+		Metadata: metadata, Truncated: proto.Bool(false),
 	}
-	if statInfo != nil {
-		resp.Metadata = fileInfoToProto(*statInfo, "")
-	}
-
-	return connect.NewResponse(resp), nil
 }
 
 // UploadContainerFiles uploads files to a deployment container
