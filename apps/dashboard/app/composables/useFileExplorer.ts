@@ -97,6 +97,11 @@ export function useFileExplorer(options: ExplorerOptions) {
   const selectedPath = ref<string | null>(null);
   const isLoadingTree = ref(false);
   const errorMessage = ref<string | null>(null);
+  const volumeError = ref<string | null>(null);
+  let selectionVersion = 0;
+  let requestVersion = 0;
+  let volumeRequestVersion = 0;
+  const nodeRequests = new WeakMap<ExplorerNode, number>();
   
   // Container selection (only for deployments)
   const selectedContainerId = ref<string>("");
@@ -105,6 +110,7 @@ export function useFileExplorer(options: ExplorerOptions) {
 
   function setOrganizationId(id: string) {
     if (isDeployment) {
+      if (currentOrgId.value !== (id ?? "")) selectionVersion++;
       currentOrgId.value = id ?? "";
     }
   }
@@ -114,6 +120,11 @@ export function useFileExplorer(options: ExplorerOptions) {
   }
 
   async function fetchVolumes() {
+    volumeError.value = null;
+    const request = ++volumeRequestVersion;
+    const version = selectionVersion;
+    const selection = `${getOrgId()}:${selectedContainerId.value}:${selectedServiceName.value}`;
+    const selectionIsCurrent = () => request === volumeRequestVersion && version === selectionVersion && selection === `${getOrgId()}:${selectedContainerId.value}:${selectedServiceName.value}`;
     try {
       if (isDeployment) {
         const orgId = getOrgId();
@@ -129,11 +140,15 @@ export function useFileExplorer(options: ExplorerOptions) {
           deploymentId: (options as DeploymentExplorerOptions).deploymentId,
           path: "/",
           listVolumes: true,
+          containerId: selectedContainerId.value || undefined,
+          serviceName: selectedServiceName.value || undefined,
         });
+        if (!selectionIsCurrent()) return;
         
         volumes.value = (res.volumes ?? []) as VolumeType[];
         containerRunning.value = !!res.containerRunning;
         
+        if (source.type === "volume" && volumes.value.some(volume => volume.name === source.volumeName)) return;
         const firstVolume = volumes.value[0] as VolumeInfo | undefined;
         if (!containerRunning.value && firstVolume) {
           switchToVolume(firstVolume.name ?? "");
@@ -170,18 +185,21 @@ export function useFileExplorer(options: ExplorerOptions) {
         }
       }
     } catch (err) {
+      if (!selectionIsCurrent()) return;
       console.error("fetchVolumes error:", err);
       volumes.value = [];
-      containerRunning.value = false;
+      volumeError.value = "Unable to load storage volumes. Try refreshing.";
     }
   }
 
   function switchToVolume(name: string) {
+    if (source.type !== "volume" || source.volumeName !== name) selectionVersion++;
     source.type = "volume";
     source.volumeName = name;
   }
 
   function switchToContainer() {
+    if (source.type !== "container") selectionVersion++;
     source.type = "container";
     delete source.volumeName;
   }
@@ -230,6 +248,10 @@ export function useFileExplorer(options: ExplorerOptions) {
   }
 
   async function loadChildren(node: ExplorerNode, cursor?: string) {
+    const selection = selectionVersion;
+    const request = ++requestVersion;
+    nodeRequests.set(node, request);
+    const isCurrent = () => selection === selectionVersion && nodeRequests.get(node) === request;
     node.isLoading = true;
     errorMessage.value = null;
     try {
@@ -249,9 +271,10 @@ export function useFileExplorer(options: ExplorerOptions) {
           cursor,
           pageSize: 200,
           volumeName: source.type === "volume" ? source.volumeName : undefined,
-          containerId: source.type === "container" && selectedContainerId.value ? selectedContainerId.value : undefined,
-          serviceName: source.type === "container" && selectedServiceName.value ? selectedServiceName.value : undefined,
+          containerId: selectedContainerId.value || undefined,
+          serviceName: selectedServiceName.value || undefined,
         });
+        if (!isCurrent()) return;
         containerRunning.value = !!res.containerRunning;
         const children = (res.files ?? []).map(convertFile);
         if (!cursor) {
@@ -271,6 +294,7 @@ export function useFileExplorer(options: ExplorerOptions) {
           pageSize: 200,
           volumeName: source.type === "volume" ? source.volumeName : undefined,
         });
+        if (!isCurrent()) return;
         containerRunning.value = !!res.containerRunning;
         const children = (res.files ?? []).map(convertFile);
         if (!cursor) {
@@ -284,9 +308,14 @@ export function useFileExplorer(options: ExplorerOptions) {
         node.hasLoaded = true;
       }
     } catch (err: unknown) {
+      if (!isCurrent()) return;
+      if (!cursor) node.children = [];
+      node.hasLoaded = false;
+      node.hasMore = false;
+      node.nextCursor = null;
       errorMessage.value = (err as Error | undefined)?.message ?? "Failed to load files";
     } finally {
-      node.isLoading = false;
+      if (isCurrent()) node.isLoading = false;
     }
   }
 
@@ -519,6 +548,15 @@ export function useFileExplorer(options: ExplorerOptions) {
 
   function setContainer(containerId?: string, serviceName?: string) {
     if (!isDeployment) return;
+    if (selectedContainerId.value !== (containerId || "") || selectedServiceName.value !== (serviceName || "")) {
+      selectionVersion++;
+      volumeError.value = null;
+      volumes.value = [];
+      switchToContainer();
+      root.children = [];
+      root.hasLoaded = false;
+      selectedPath.value = null;
+    }
     selectedContainerId.value = containerId || "";
     selectedServiceName.value = serviceName || "";
   }
@@ -531,6 +569,7 @@ export function useFileExplorer(options: ExplorerOptions) {
     selectedPath,
     breadcrumbs,
     errorMessage,
+    volumeError,
     isLoadingTree,
     // Container selection (only populated for deployments)
     containers: isDeployment ? computed(() => containers.value) : computed(() => []),

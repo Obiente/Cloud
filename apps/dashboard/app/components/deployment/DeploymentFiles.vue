@@ -29,11 +29,13 @@
       </OuiFlex>
 
       <!-- File Browser Search -->
-      <FileBrowserSearch
-        :file-browser-client="fileBrowserClient"
-        :source="source"
-        @result-click="handleSearchResultClick"
-      />
+      <div class="relative h-10 w-full sm:w-80 shrink-0">
+        <FileBrowserSearch
+          :file-browser-client="fileBrowserClient"
+          :source="source"
+          @result-click="handleSearchResultClick"
+        />
+      </div>
 
       <OuiFlex
         gap="sm"
@@ -44,10 +46,10 @@
         <OuiFlex
           gap="sm"
           align="center"
-          v-if="source.type === 'container' && containers.length > 0"
+          v-if="containers.length > 0"
           class="w-full sm:w-auto"
         >
-          <OuiText size="xs" color="tertiary" class="hidden sm:inline"
+          <OuiText size="xs" color="tertiary" class="hidden sm:inline whitespace-nowrap shrink-0"
             >Container:</OuiText
           >
           <OuiSelect
@@ -90,7 +92,8 @@
           variant="ghost"
           size="sm"
           :loading="isLoadingTree"
-          @click="refreshRoot"
+          @click="refreshFiles"
+          aria-label="Refresh files"
           class="flex-1 sm:flex-initial"
         >
           <ArrowPathIcon
@@ -122,7 +125,7 @@
         :root="root"
         :selectedPath="selectedPath"
         :treeCollection="treeCollection"
-        :errorMessage="errorMessage"
+        :errorMessage="errorMessage || volumeError"
         :isLoadingTree="isLoadingTree"
         :containerRunning="containerRunning"
         :showMobileToggle="true"
@@ -142,7 +145,7 @@
         @root-drop="handleRootDropFiles"
         @source-drop="handleSourceDropFiles"
         @toggle-mobile="showSidebarOnMobile = !showSidebarOnMobile"
-        @clear-error="errorMessage = null"
+        @clear-error="errorMessage = null; volumeError = null"
       />
 
       <section
@@ -787,6 +790,7 @@
     selectedPath,
     breadcrumbs,
     errorMessage,
+    volumeError,
     isLoadingTree,
     containers,
     selectedContainerId,
@@ -1090,11 +1094,11 @@
       modeOctal: type === "directory" ? 0o755 : 0o644,
       volumeName: source.type === "volume" ? source.volumeName : undefined,
       containerId:
-        source.type === "container" && selectedContainerId.value
+        selectedContainerId.value
           ? selectedContainerId.value
           : undefined,
       serviceName:
-        source.type === "container" && selectedServiceName.value
+        selectedServiceName.value
           ? selectedServiceName.value
           : undefined,
     };
@@ -1442,11 +1446,11 @@
         path: node.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -1945,11 +1949,11 @@
         path: currentNode.value.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2192,11 +2196,11 @@
         includeParentFolder: includeParent,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2275,11 +2279,11 @@
         destinationPath: destinationPath,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2547,11 +2551,11 @@
         })),
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
-          source.type === "container" && selectedContainerId.value
+          selectedContainerId.value
             ? selectedContainerId.value
             : undefined,
         serviceName:
-          source.type === "container" && selectedServiceName.value
+          selectedServiceName.value
             ? selectedServiceName.value
             : undefined,
       });
@@ -2631,7 +2635,12 @@
     return "Unknown";
   });
 
-  function handleContainerChange(value: string) {
+  async function refreshFiles() {
+    await fetchVolumes();
+    await refreshRoot();
+  }
+
+  async function handleContainerChange(value: string) {
     if (!value) {
       setContainer(undefined, undefined);
     } else {
@@ -2649,7 +2658,8 @@
     fileContent.value = "";
     fileLanguage.value = "plaintext";
     updateFileQueryParam(null); // Clear file query param
-    refreshRoot();
+    await fetchVolumes();
+    await refreshRoot();
   }
 
   // Helper function to update file query parameter
