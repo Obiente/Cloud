@@ -16,9 +16,14 @@ import (
 // This function is idempotent and safe to call multiple times.
 // It's exported so other packages (like quota) can use it.
 func EnsurePlanAssigned(orgID string) error {
+	return EnsurePlanAssignedTx(database.DB, orgID)
+}
+
+// EnsurePlanAssignedTx includes the initial quota in organization creation.
+func EnsurePlanAssignedTx(tx *gorm.DB, orgID string) error {
 	// Check if organization exists
 	var org database.Organization
-	if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+	if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("organization not found")
 		}
@@ -27,7 +32,7 @@ func EnsurePlanAssigned(orgID string) error {
 
 	// Check if organization already has a plan assigned
 	var quota database.OrgQuota
-	if err := database.DB.First(&quota, "organization_id = ?", orgID).Error; err != nil {
+	if err := tx.First(&quota, "organization_id = ?", orgID).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("get quota: %w", err)
 		}
@@ -45,11 +50,11 @@ func EnsurePlanAssigned(orgID string) error {
 
 	// Find the default "Starter" plan (plan-starter)
 	var defaultPlan database.OrganizationPlan
-	if err := database.DB.First(&defaultPlan, "id = ?", "plan-starter").Error; err != nil {
+	if err := tx.First(&defaultPlan, "id = ?", "plan-starter").Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("[EnsurePlanAssigned] plan-starter not found, searching for free tier plan")
 			// If plan-starter doesn't exist, try to find any plan with minimum_payment_cents = 0 (free tier)
-			if err := database.DB.Where("minimum_payment_cents = ?", 0).Order("id ASC").First(&defaultPlan).Error; err != nil {
+			if err := tx.Where("minimum_payment_cents = ?", 0).Order("id ASC").First(&defaultPlan).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					// No plans exist at all, this shouldn't happen if seeding works
 					return fmt.Errorf("no default organization plan is available")
@@ -71,14 +76,14 @@ func EnsurePlanAssigned(orgID string) error {
 			OrganizationID: orgID,
 			PlanID:         defaultPlan.ID,
 		}
-		if err := database.DB.Clauses(clause.OnConflict{DoNothing: true}).Create(&quota).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&quota).Error; err != nil {
 			return fmt.Errorf("create quota: %w", err)
 		}
 		log.Printf("[EnsurePlanAssigned] Assigned plan %s (%s) to organization %s", defaultPlan.Name, defaultPlan.ID, orgID)
 	} else {
 		// Update existing quota
 		quota.PlanID = defaultPlan.ID
-		if err := database.DB.Model(&database.OrgQuota{}).Where("organization_id = ? AND plan_id = ?", orgID, "").Update("plan_id", defaultPlan.ID).Error; err != nil {
+		if err := tx.Model(&database.OrgQuota{}).Where("organization_id = ? AND plan_id = ?", orgID, "").Update("plan_id", defaultPlan.ID).Error; err != nil {
 			return fmt.Errorf("update quota: %w", err)
 		}
 		log.Printf("[EnsurePlanAssigned] Assigned plan %s (%s) to organization %s", defaultPlan.Name, defaultPlan.ID, orgID)

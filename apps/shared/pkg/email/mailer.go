@@ -121,6 +121,20 @@ func (m *SMTPMailer) Send(ctx context.Context, msg *Message) error {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 	defer conn.Close()
+	// Bound the complete SMTP exchange, including a server that accepts TCP but
+	// never sends its greeting. DialContext alone only limits the connection.
+	deadline := time.Now().Add(m.cfg.Timeout)
+	if m.cfg.Timeout <= 0 {
+		deadline = time.Now().Add(30 * time.Second)
+	}
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		deadline = contextDeadline
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("smtp deadline: %w", err)
+	}
+	stopCancellation := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopCancellation()
 
 	client, err := smtp.NewClient(conn, m.cfg.Host)
 	if err != nil {

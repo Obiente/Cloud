@@ -32,6 +32,8 @@ const (
 	previewACMECNAMETTL       = 60
 	httpReadHeaderTimeout     = 10 * time.Second
 	serviceShutdownTimeout    = 30 * time.Second
+	maxDNSPushBodyBytes       = 1 << 20
+	maxDNSPushRecords         = 1000
 )
 
 type DNSServer struct {
@@ -884,7 +886,7 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 		TTL        int64    `json:"ttl"`         // TTL in seconds (default: 300)
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDNSPushBodyBytes)).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -900,18 +902,8 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Records) == 0 {
-		http.Error(w, "At least one record is required", http.StatusBadRequest)
-		return
-	}
-
-	// Validate domain format - allow my.obiente.cloud domains or verified custom domains
-	domainLower := strings.ToLower(domain)
-	isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
-	isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
-
-	if !isMyObienteCloud && !isVerifiedCustomDomain {
-		http.Error(w, "Domain must be a *.my.obiente.cloud domain or a verified custom domain", http.StatusBadRequest)
+	if len(req.Records) == 0 || len(req.Records) > maxDNSPushRecords {
+		http.Error(w, "Between 1 and 1000 records are required", http.StatusBadRequest)
 		return
 	}
 
@@ -953,7 +945,17 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 	// Upsert the delegated DNS record with API key tracking
 	if err := database.UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, string(recordsJSON), sourceAPI, apiKeyInfo.ID, apiKeyInfo.OrganizationID, ttl); err != nil {
 		metrics.RecordDNSDelegationPushError(apiKeyInfo.OrganizationID, apiKeyInfo.ID, "upsert_failed")
-		http.Error(w, fmt.Sprintf("Failed to store DNS record: %v", err), http.StatusInternalServerError)
+		code := http.StatusInternalServerError
+		message := "Failed to store DNS record"
+		if errors.Is(err, database.ErrDNSDelegationForbidden) {
+			code = http.StatusForbidden
+			message = err.Error()
+		}
+		if errors.Is(err, database.ErrInvalidDelegatedDNSRecord) {
+			code = http.StatusBadRequest
+			message = err.Error()
+		}
+		http.Error(w, message, code)
 		return
 	}
 
@@ -1014,13 +1016,13 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 		} `json:"records"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDNSPushBodyBytes)).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	if len(req.Records) == 0 {
-		http.Error(w, "At least one record is required", http.StatusBadRequest)
+	if len(req.Records) == 0 || len(req.Records) > maxDNSPushRecords {
+		http.Error(w, "Between 1 and 1000 records are required", http.StatusBadRequest)
 		return
 	}
 
@@ -1052,16 +1054,6 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 
 		if domain == "" || len(recordReq.Records) == 0 {
 			errors = append(errors, fmt.Sprintf("Invalid record: domain=%s, records=%d", domain, len(recordReq.Records)))
-			continue
-		}
-
-		// Validate domain format - allow my.obiente.cloud domains or verified custom domains
-		domainLower := strings.ToLower(domain)
-		isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
-		isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
-
-		if !isMyObienteCloud && !isVerifiedCustomDomain {
-			errors = append(errors, fmt.Sprintf("Invalid domain format: %s (must be *.my.obiente.cloud or a verified custom domain)", domain))
 			continue
 		}
 
@@ -1108,40 +1100,6 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 func extractDomainFromCustomDomainEntry(entry string) string {
 	parts := strings.Split(entry, ":")
 	return parts[0]
-}
-
-// isVerifiedCustomDomain checks if a domain is a verified custom domain in any deployment
-func isVerifiedCustomDomain(domain string) bool {
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
-
-	// Query all deployments to check for verified custom domains
-	var deployments []database.Deployment
-	if err := database.DB.Find(&deployments).Error; err != nil {
-		log.Printf("[DNS] Failed to query deployments for custom domain check: %v", err)
-		return false
-	}
-
-	for _, dep := range deployments {
-		if dep.CustomDomains != "" && dep.CustomDomains != "[]" {
-			var customDomains []string
-			if err := json.Unmarshal([]byte(dep.CustomDomains), &customDomains); err == nil {
-				for _, customDomainEntry := range customDomains {
-					// Extract domain name from entry
-					entryDomain := extractDomainFromCustomDomainEntry(customDomainEntry)
-
-					// Check if this is the domain we're looking for and if it's verified
-					if strings.ToLower(strings.TrimSuffix(entryDomain, ".")) == domain {
-						// Check if domain is verified
-						if strings.Contains(customDomainEntry, ":verified") {
-							return true
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return false
 }
 
 // startDNSPusher starts a goroutine that periodically pushes DNS records to the production API
@@ -1362,6 +1320,54 @@ func pushDNSRecords(ctx context.Context, client *http.Client, pushURL, apiKey, s
 		return
 	}
 
+	pushDNSRecordBatches(ctx, client, pushURL, apiKey, sourceAPI, ttl, records)
+}
+
+func pushDNSRecordBatches(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, records []map[string]interface{}) {
+	batches, err := splitDNSPushBatches(records)
+	if err != nil {
+		log.Printf("[DNS Pusher] Failed to prepare batches: %v", err)
+		return
+	}
+	for _, batch := range batches {
+		if ctx.Err() != nil {
+			return
+		}
+		pushDNSRecordBatch(ctx, client, pushURL, apiKey, sourceAPI, ttl, batch)
+	}
+}
+
+// Count the actual JSON bytes, including envelope and separators. A batch can
+// reach the byte limit before the record limit when records contain many IPs.
+func splitDNSPushBatches(records []map[string]interface{}) ([][]map[string]interface{}, error) {
+	const envelopeBytes = len(`{"records":[]}`)
+	var batches [][]map[string]interface{}
+	start, size := 0, envelopeBytes
+	for i, record := range records {
+		encoded, err := json.Marshal(record)
+		if err != nil {
+			return nil, fmt.Errorf("encode record %d: %w", i, err)
+		}
+		if len(encoded)+envelopeBytes > maxDNSPushBodyBytes {
+			return nil, fmt.Errorf("DNS record %d exceeds the request size limit", i)
+		}
+		separator := 0
+		if i > start {
+			separator = 1
+		}
+		if i-start == maxDNSPushRecords || size+separator+len(encoded) > maxDNSPushBodyBytes {
+			batches = append(batches, records[start:i])
+			start, size, separator = i, envelopeBytes, 0
+		}
+		size += separator + len(encoded)
+	}
+	if start < len(records) {
+		batches = append(batches, records[start:])
+	}
+	return batches, nil
+}
+
+func pushDNSRecordBatch(ctx context.Context, client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, records []map[string]interface{}) {
 	// Prepare request body
 	requestBody := map[string]interface{}{
 		"records": records,

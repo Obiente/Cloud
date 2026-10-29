@@ -371,15 +371,16 @@ func (OrganizationMember) TableName() string { return "organization_members" }
 
 // CreditTransaction tracks all credit additions and removals for audit and history
 type CreditTransaction struct {
-	ID             string    `gorm:"primaryKey" json:"id"`
-	OrganizationID string    `gorm:"index;not null" json:"organization_id"`
-	AmountCents    int64     `json:"amount_cents"`            // Positive for additions, negative for removals
-	BalanceAfter   int64     `json:"balance_after"`           // Credit balance after this transaction
-	Type           string    `json:"type"`                    // "payment", "admin_add", "admin_remove", "usage", "refund", etc.
-	Source         string    `json:"source"`                  // "stripe", "admin", "system", etc.
-	Note           *string   `json:"note"`                    // Optional note/reason
-	CreatedBy      *string   `gorm:"index" json:"created_by"` // User ID who initiated (nullable for system/automatic)
-	CreatedAt      time.Time `json:"created_at"`
+	ExternalReference *string   `gorm:"uniqueIndex:idx_credit_transaction_external_reference" json:"external_reference,omitempty"`
+	ID                string    `gorm:"primaryKey" json:"id"`
+	OrganizationID    string    `gorm:"index;not null" json:"organization_id"`
+	AmountCents       int64     `json:"amount_cents"`            // Positive for additions, negative for removals
+	BalanceAfter      int64     `json:"balance_after"`           // Credit balance after this transaction
+	Type              string    `json:"type"`                    // "payment", "admin_add", "admin_remove", "usage", "refund", etc.
+	Source            string    `json:"source"`                  // "stripe", "admin", "system", etc.
+	Note              *string   `json:"note"`                    // Optional note/reason
+	CreatedBy         *string   `gorm:"index" json:"created_by"` // User ID who initiated (nullable for system/automatic)
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 func (CreditTransaction) TableName() string { return "credit_transactions" }

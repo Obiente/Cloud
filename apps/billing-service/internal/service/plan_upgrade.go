@@ -8,6 +8,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // checkAndUpgradePlan checks if the organization should be upgraded to a higher plan
@@ -16,7 +17,7 @@ import (
 func checkAndUpgradePlan(orgID string, tx *gorm.DB) error {
 	// Get organization
 	var org database.Organization
-	if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 		return fmt.Errorf("organization not found: %w", err)
 	}
 
@@ -88,14 +89,14 @@ func checkAndUpgradePlan(orgID string, tx *gorm.DB) error {
 func updateTotalPaidAndUpgrade(orgID string, amountCents int64, tx *gorm.DB) error {
 	// Get organization
 	var org database.Organization
-	if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 		return fmt.Errorf("organization not found: %w", err)
 	}
 
 	// Update total paid
 	oldTotalPaid := org.TotalPaidCents
 	org.TotalPaidCents += amountCents
-	if err := tx.Save(&org).Error; err != nil {
+	if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 		return fmt.Errorf("update total paid: %w", err)
 	}
 

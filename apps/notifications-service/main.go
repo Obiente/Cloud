@@ -50,6 +50,7 @@ func main() {
 		&database.Organization{},
 		&database.OrganizationMember{},
 		&database.NotificationPreference{},
+		&notificationsservice.EmailDelivery{},
 	)
 
 	// Initialize database

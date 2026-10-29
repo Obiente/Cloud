@@ -30,6 +30,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const defaultOwnerFallbackRole = auth.SystemRoleIDAdmin
@@ -81,7 +82,9 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 
 	// If onlyMine is true, or user is not a superadmin, filter to user's memberships
 	if onlyMine || !isSuperAdmin {
-		ensurePersonalOrg(user.Id)
+		if err := ensurePersonalOrg(user.Id); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("initialize personal organization: %w", err))
+		}
 		if err := database.DB.Raw(`
 			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.total_paid_cents, o.created_at
 			FROM organizations o
@@ -159,14 +162,11 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 	}
 	now := time.Now()
 	org := &database.Organization{ID: generateID("org"), Name: name, Slug: slug, Plan: plan, Status: "active", Credits: 0, CreatedAt: now}
-	if err := database.DB.Create(org).Error; err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create org: %w", err))
+	if err := database.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return createOrganizationWithOwner(tx, org, user.Id)
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create organization: %w", err))
 	}
-	// add creator as owner
-	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
-	_ = database.DB.Create(m).Error
-	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = sharedorganizations.EnsurePlanAssigned(org.ID)
 	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: organizationToProto(org)}), nil
 }
 
@@ -217,7 +217,7 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[o
 			org.Domain = &d
 		}
 	}
-	if err := database.DB.Save(&org).Error; err != nil {
+	if err := database.DB.Model(&org).Select("name", "domain").Updates(&org).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update org: %w", err))
 	}
 	return connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: organizationToProto(&org)}), nil
@@ -1457,23 +1457,36 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	return connect.NewResponse(response), nil
 }
 
-func ensurePersonalOrg(userID string) {
-	// Check membership
-	var count int64
-	database.DB.Model(&database.OrganizationMember{}).Where("user_id = ?", userID).Count(&count)
-	if count > 0 {
-		return
+func createOrganizationWithOwner(tx *gorm.DB, org *database.Organization, userID string) error {
+	if err := tx.Create(org).Error; err != nil {
+		return err
 	}
-	// Create personal org
-	now := time.Now()
-	org := &database.Organization{ID: generateID("org"), Name: "Personal", Slug: "personal-" + userID, Plan: "personal", Status: "active", CreatedAt: now}
-	if err := database.DB.Create(org).Error; err != nil {
-		return
+	member := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: org.CreatedAt}
+	if err := tx.Create(member).Error; err != nil {
+		return err
 	}
-	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: auth.SystemRoleIDOwner, Status: "active", JoinedAt: now}
-	_ = database.DB.Create(m).Error
-	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = sharedorganizations.EnsurePlanAssigned(org.ID)
+	return sharedorganizations.EnsurePlanAssignedTx(tx, org.ID)
+}
+
+func ensurePersonalOrg(userID string) error {
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// Concurrent initial requests must observe the membership created by the
+		// first request before deciding whether another personal org is needed.
+		if tx.Dialector.Name() == "postgres" {
+			if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", "personal-org:"+userID).Error; err != nil {
+				return err
+			}
+		}
+		var count int64
+		if err := tx.Model(&database.OrganizationMember{}).Where("user_id = ?", userID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return nil
+		}
+		org := &database.Organization{ID: generateID("org"), Name: "Personal", Slug: "personal-" + userID, Plan: "personal", Status: "active", CreatedAt: time.Now()}
+		return createOrganizationWithOwner(tx, org, userID)
+	})
 }
 
 func generateID(prefix string) string { return fmt.Sprintf("%s-%s", prefix, uuid.NewString()) }
@@ -1790,14 +1803,14 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 	userID := user.Id
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 			return err
 		}
 		org.Credits += amountCents
 		if org.Credits < 0 {
 			org.Credits = 0 // Prevent negative balances
 		}
-		if err := tx.Save(&org).Error; err != nil {
+		if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 			return err
 		}
 		// Record transaction in credit log
@@ -1863,7 +1876,7 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 	var actualRemoved int64
 
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&org, "id = ?", orgID).Error; err != nil {
 			return err
 		}
 		oldBalance = org.Credits
@@ -1872,7 +1885,7 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 			org.Credits = 0 // Prevent negative balances
 		}
 		actualRemoved = oldBalance - org.Credits
-		if err := tx.Save(&org).Error; err != nil {
+		if err := tx.Model(&org).Select("credits", "total_paid_cents").Updates(&org).Error; err != nil {
 			return err
 		}
 		// Record transaction in credit log (negative amount for removal)
