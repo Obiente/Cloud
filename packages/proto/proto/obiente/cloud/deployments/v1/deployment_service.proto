@@ -803,6 +803,7 @@ message GetContainerFileRequest {
   optional string volume_name = 4; // If specified, read file from this volume instead of container filesystem
   optional string container_id = 5; // Optional: use a specific container. If not specified, uses first container.
   optional string service_name = 6; // Optional: use a specific service. If container_id is specified, this is ignored.
+  bool download = 7; // Return the complete file instead of applying the preview size limit.
 }
 
 message GetContainerFileResponse {
@@ -868,6 +869,8 @@ message DeleteContainerEntriesRequest {
   optional string volume_name = 4;
   bool recursive = 5;
   bool force = 6;
+  optional string container_id = 7;
+  optional string service_name = 8;
 }
 
 message DeleteContainerEntriesError {

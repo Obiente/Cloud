@@ -5618,6 +5618,7 @@ type GetContainerFileRequest struct {
 	VolumeName     *string                `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`    // If specified, read file from this volume instead of container filesystem
 	ContainerId    *string                `protobuf:"bytes,5,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"` // Optional: use a specific container. If not specified, uses first container.
 	ServiceName    *string                `protobuf:"bytes,6,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Optional: use a specific service. If container_id is specified, this is ignored.
+	Download       bool                   `protobuf:"varint,7,opt,name=download,proto3" json:"download,omitempty"`                               // Return the complete file instead of applying the preview size limit.
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -5692,6 +5693,13 @@ func (x *GetContainerFileRequest) GetServiceName() string {
 		return *x.ServiceName
 	}
 	return ""
+}
+
+func (x *GetContainerFileRequest) GetDownload() bool {
+	if x != nil {
+		return x.Download
+	}
+	return false
 }
 
 type GetContainerFileResponse struct {
@@ -6171,6 +6179,8 @@ type DeleteContainerEntriesRequest struct {
 	VolumeName     *string                `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`
 	Recursive      bool                   `protobuf:"varint,5,opt,name=recursive,proto3" json:"recursive,omitempty"`
 	Force          bool                   `protobuf:"varint,6,opt,name=force,proto3" json:"force,omitempty"`
+	ContainerId    *string                `protobuf:"bytes,7,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
+	ServiceName    *string                `protobuf:"bytes,8,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -6245,6 +6255,20 @@ func (x *DeleteContainerEntriesRequest) GetForce() bool {
 		return x.Force
 	}
 	return false
+}
+
+func (x *DeleteContainerEntriesRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *DeleteContainerEntriesRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
 }
 
 type DeleteContainerEntriesError struct {
@@ -10953,7 +10977,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\bhas_more\x18\x06 \x01(\bR\ahasMore\x12$\n" +
 	"\vnext_cursor\x18\a \x01(\tH\x00R\n" +
 	"nextCursor\x88\x01\x01B\x0e\n" +
-	"\f_next_cursor\"\xa3\x02\n" +
+	"\f_next_cursor\"\xbf\x02\n" +
 	"\x17GetContainerFileRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x12\n" +
@@ -10961,7 +10985,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\vvolume_name\x18\x04 \x01(\tH\x00R\n" +
 	"volumeName\x88\x01\x01\x12&\n" +
 	"\fcontainer_id\x18\x05 \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
-	"\fservice_name\x18\x06 \x01(\tH\x02R\vserviceName\x88\x01\x01B\x0e\n" +
+	"\fservice_name\x18\x06 \x01(\tH\x02R\vserviceName\x88\x01\x01\x12\x1a\n" +
+	"\bdownload\x18\a \x01(\bR\bdownloadB\x0e\n" +
 	"\f_volume_nameB\x0f\n" +
 	"\r_container_idB\x0f\n" +
 	"\r_service_name\"\xf0\x01\n" +
@@ -11008,7 +11033,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\r_container_idB\x0f\n" +
 	"\r_service_name\"r\n" +
 	"!ChunkUploadContainerFilesResponse\x12M\n" +
-	"\x06result\x18\x01 \x01(\v25.obiente.cloud.common.v1.ChunkedUploadResponsePayloadR\x06result\"\xed\x01\n" +
+	"\x06result\x18\x01 \x01(\v25.obiente.cloud.common.v1.ChunkedUploadResponsePayloadR\x06result\"\xdf\x02\n" +
 	"\x1dDeleteContainerEntriesRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x14\n" +
@@ -11016,8 +11041,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\vvolume_name\x18\x04 \x01(\tH\x00R\n" +
 	"volumeName\x88\x01\x01\x12\x1c\n" +
 	"\trecursive\x18\x05 \x01(\bR\trecursive\x12\x14\n" +
-	"\x05force\x18\x06 \x01(\bR\x05forceB\x0e\n" +
-	"\f_volume_name\"K\n" +
+	"\x05force\x18\x06 \x01(\bR\x05force\x12&\n" +
+	"\fcontainer_id\x18\a \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\b \x01(\tH\x02R\vserviceName\x88\x01\x01B\x0e\n" +
+	"\f_volume_nameB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"K\n" +
 	"\x1bDeleteContainerEntriesError\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\xb2\x01\n" +

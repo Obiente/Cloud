@@ -19,6 +19,7 @@ export function useDeploymentFileBrowserClient(
         organizationId: organizationId(),
         deploymentId,
         path: params.path,
+        download: params.download,
         volumeName: params.volumeName,
         containerId: params.containerId,
         serviceName: params.serviceName,

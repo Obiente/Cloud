@@ -469,7 +469,11 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 	}
 
 	// Read file using Docker exec (container must be running)
-	content, err := dcli.ContainerReadFilePreview(ctx, containerID, path)
+	readFile := dcli.ContainerReadFilePreview
+	if req.Msg.GetDownload() {
+		readFile = dcli.ContainerReadFile
+	}
+	content, err := readFile(ctx, containerID, path)
 	if err != nil {
 		if restartErr := handleContainerError(err, true); restartErr != nil && restartErr != err {
 			return nil, connect.NewError(connect.CodeFailedPrecondition, restartErr)

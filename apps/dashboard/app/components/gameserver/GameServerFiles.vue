@@ -1868,19 +1868,21 @@
   }
 
   async function handleDownload() {
-    if (!currentNode.value || currentNode.value.type !== "file") return;
+    const node = currentNode.value;
+    if (!node || node.type !== "file") return;
 
     try {
       // Fetch file content
       const res = await fileBrowserClient.getFile({
-        path: currentNode.value.path,
+        path: node.path,
+        download: true,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
 
       // Get file name from path
       const fileName =
-        currentNode.value.name ||
-        currentNode.value.path.split("/").pop() ||
+        node.name ||
+        node.path.split("/").pop() ||
         "download";
 
       // Create blob from content

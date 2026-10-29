@@ -147,3 +147,61 @@ func TestVolumeDiscoveryMatchesDefaultFileContainer(t *testing.T) {
 		})
 	}
 }
+
+func TestVolumeDeleteAndCreateUseSelectedContainer(t *testing.T) {
+	for _, selector := range []string{"container", "service"} {
+		t.Run(selector, func(t *testing.T) {
+			s, ctx, backing := fileSelectionFixture(t, "stopped", "stopped")
+			remove := &deploymentsv1.DeleteContainerEntriesRequest{OrganizationId: "org-a", DeploymentId: "dep-org-a-owner", VolumeName: proto.String("data"), Paths: []string{"/record.txt"}}
+			create := &deploymentsv1.CreateContainerEntryRequest{OrganizationId: "org-a", DeploymentId: "dep-org-a-owner", VolumeName: proto.String("data"), ParentPath: "/", Name: "created.txt", Type: deploymentsv1.ContainerEntryType_CONTAINER_ENTRY_TYPE_FILE}
+			if selector == "container" {
+				remove.ContainerId, create.ContainerId = proto.String("b-container"), proto.String("b-container")
+			} else {
+				remove.ServiceName, create.ServiceName = proto.String("b-container"), proto.String("b-container")
+			}
+			if got, err := s.DeleteContainerEntries(ctx, connect.NewRequest(remove)); err != nil || !got.Msg.Success {
+				t.Fatalf("selected delete: %v %v", got, err)
+			}
+			if _, err := os.Stat(filepath.Join(backing["b-container"], "record.txt")); !os.IsNotExist(err) {
+				t.Fatalf("selected file was not deleted: %v", err)
+			}
+			if data, err := os.ReadFile(filepath.Join(backing["a-container"], "record.txt")); err != nil || string(data) != "a-container" {
+				t.Fatalf("default file was changed: %q %v", data, err)
+			}
+			if _, err := s.CreateContainerEntry(ctx, connect.NewRequest(create)); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(backing["b-container"], "created.txt")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(backing["a-container"], "created.txt")); !os.IsNotExist(err) {
+				t.Fatalf("file created in default container: %v", err)
+			}
+		})
+	}
+}
+
+func TestLargeFileDownloadRetainsPreviewLimit(t *testing.T) {
+	s, ctx, backing := fileSelectionFixture(t, "stopped", "stopped")
+	const size = 64<<20 + 1
+	if err := os.Truncate(filepath.Join(backing["b-container"], "record.txt"), size); err != nil {
+		t.Fatal(err)
+	}
+	for _, volume := range []string{"", "data"} {
+		req := &deploymentsv1.GetContainerFileRequest{OrganizationId: "org-a", DeploymentId: "dep-org-a-owner", ContainerId: proto.String("b-container"), VolumeName: proto.String(volume), Path: "/data/record.txt"}
+		if volume != "" {
+			req.Path = "/record.txt"
+		}
+		if got, err := s.GetContainerFile(ctx, connect.NewRequest(req)); err == nil || got != nil {
+			t.Fatal("oversized preview succeeded")
+		}
+		req.Download = true
+		got, err := s.GetContainerFile(ctx, connect.NewRequest(req))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Msg.Size != size || len(got.Msg.Content) != size || !strings.HasPrefix(got.Msg.Content, "b-container") {
+			t.Fatalf("download did not preserve the entire selected file: size=%d", got.Msg.Size)
+		}
+	}
+}

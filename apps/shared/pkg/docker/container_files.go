@@ -194,11 +194,21 @@ func (c *Client) ListMountedVolumeFiles(ctx context.Context, id string, volume V
 }
 
 func (c *Client) ReadMountedVolumeFile(ctx context.Context, id string, volume VolumeMount, requested string) ([]byte, *FileInfo, error) {
+	return c.readMountedVolumeFile(ctx, id, volume, requested, 0)
+}
+
+func (c *Client) ReadMountedVolumeFilePreview(ctx context.Context, id string, volume VolumeMount, requested string) ([]byte, *FileInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return c.readMountedVolumeFile(ctx, id, volume, requested, maxFilePreviewBytes)
+}
+
+func (c *Client) readMountedVolumeFile(ctx context.Context, id string, volume VolumeMount, requested string, maxBytes int64) ([]byte, *FileInfo, error) {
 	target, err := mountedVolumePath(volume, requested)
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := c.ContainerReadFilePreview(ctx, id, target)
+	data, err := c.readContainerFile(ctx, id, target, maxBytes)
 	if err != nil {
 		return nil, nil, err
 	}

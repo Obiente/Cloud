@@ -337,6 +337,7 @@ export function useFileExplorer(options: ExplorerOptions) {
 
   async function deleteEntries(paths: string[]) {
     if (isDeployment && !getOrgId()) return;
+    const version = selectionVersion;
     
     // Optimistically remove files from tree immediately for better UX
     const deletedNodes: Array<{ node: ExplorerNode | null; parent: ExplorerNode | null }> = [];
@@ -355,6 +356,8 @@ export function useFileExplorer(options: ExplorerOptions) {
     try {
       if (isDeployment) {
         const payload = create(DeleteContainerEntriesRequestSchema, {
+          containerId: selectedContainerId.value,
+          serviceName: selectedServiceName.value,
           organizationId: getOrgId(),
           deploymentId: (options as DeploymentExplorerOptions).deploymentId,
           paths,
@@ -364,6 +367,7 @@ export function useFileExplorer(options: ExplorerOptions) {
         });
         const res = await deploymentClient!.deleteContainerEntries(payload);
         if (!res.success && res.errors?.length) {
+          if (version !== selectionVersion) throw new Error(res.errors.map(e => e.message || "Unknown error").join("\n"));
           // Revert optimistic update on error
           for (const { node, parent } of deletedNodes) {
             if (node && parent && parent.children) {
@@ -383,6 +387,7 @@ export function useFileExplorer(options: ExplorerOptions) {
         });
         const res = await gameServerClient!.deleteGameServerEntries(payload);
         if (!res.success && res.errors?.length) {
+          if (version !== selectionVersion) throw new Error(res.errors.map(e => e.message || "Unknown error").join("\n"));
           // Revert optimistic update on error
           for (const { node, parent } of deletedNodes) {
             if (node && parent && parent.children) {
@@ -395,6 +400,7 @@ export function useFileExplorer(options: ExplorerOptions) {
       }
 
       // Refresh parent directories to ensure consistency
+      if (version !== selectionVersion) return;
       const refreshedParents = new Set<string>();
       for (const { parent } of deletedNodes) {
         if (parent && !refreshedParents.has(parent.path)) {
@@ -403,6 +409,7 @@ export function useFileExplorer(options: ExplorerOptions) {
         }
       }
     } catch (error) {
+      if (version !== selectionVersion) throw error;
       // If error and optimistic update was reverted, refresh all affected parents
       const refreshedParents = new Set<string>();
       for (const { parent } of deletedNodes) {
@@ -460,6 +467,8 @@ export function useFileExplorer(options: ExplorerOptions) {
     
     if (isDeployment) {
       const request = create(CreateContainerEntryRequestSchema, {
+        containerId: selectedContainerId.value,
+        serviceName: selectedServiceName.value,
         ...(payload as Partial<Omit<CreateContainerEntryRequest, "$typeName" | "$unknown" | "organizationId" | "deploymentId">>),
         organizationId: getOrgId(),
         deploymentId: (options as DeploymentExplorerOptions).deploymentId,

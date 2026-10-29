@@ -1,11 +1,39 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { useFileExplorer } from "../app/composables/useFileExplorer";
 
-const { listContainerFiles, writeContainerFile } = vi.hoisted(() => ({ listContainerFiles: vi.fn(), writeContainerFile: vi.fn() }));
-vi.mock("~/lib/connect-client", () => ({ useConnectClient: () => ({ listContainerFiles, writeContainerFile }) }));
+const { listContainerFiles, writeContainerFile, deleteContainerEntries, createContainerEntry } = vi.hoisted(() => ({ listContainerFiles: vi.fn(), writeContainerFile: vi.fn(), deleteContainerEntries: vi.fn(), createContainerEntry: vi.fn() }));
+vi.mock("~/lib/connect-client", () => ({ useConnectClient: () => ({ listContainerFiles, writeContainerFile, deleteContainerEntries, createContainerEntry }) }));
 const explorer = () => useFileExplorer({ type: "deployment", organizationId: "org-example", deploymentId: "dep-example" });
 const file = (name: string) => ({ name, path: `/${name}`, size: 4n });
-beforeEach(() => { listContainerFiles.mockReset(); writeContainerFile.mockReset(); });
+beforeEach(() => { listContainerFiles.mockReset(); writeContainerFile.mockReset(); deleteContainerEntries.mockReset(); createContainerEntry.mockReset(); });
+
+it("scopes deletion and creation to the selected volume's container", async () => {
+  const e = explorer();
+  e.setContainer("container-b", "worker");
+  e.switchToVolume("data");
+  deleteContainerEntries.mockResolvedValue({ success: true });
+  listContainerFiles.mockResolvedValue({ files: [] });
+  await e.deleteEntries(["/record.txt"]);
+  expect(deleteContainerEntries).toHaveBeenLastCalledWith(expect.objectContaining({ paths: ["/record.txt"], containerId: "container-b", serviceName: "worker", volumeName: "data" }));
+  await e.createEntry({ parentPath: "/", name: "record.txt", volumeName: "data" });
+  expect(createContainerEntry).toHaveBeenLastCalledWith(expect.objectContaining({ containerId: "container-b", serviceName: "worker", volumeName: "data" }));
+});
+
+it("does not restore deleted nodes into another container after a delayed failure", async () => {
+  const e = explorer();
+  e.setContainer("old");
+  listContainerFiles.mockResolvedValueOnce({ files: [file("old-file")] });
+  await e.refreshRoot();
+  let finish!: (value: unknown) => void;
+  deleteContainerEntries.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const deletion = e.deleteEntries(["/old-file"]);
+  e.setContainer("new");
+  listContainerFiles.mockResolvedValueOnce({ files: [file("current-file")] });
+  await e.refreshRoot();
+  finish({ success: false, errors: [{ message: "read only" }] });
+  await expect(deletion).rejects.toThrow("read only");
+  expect(e.root.children?.map(f => f.name)).toEqual(["current-file"]);
+});
 
 it("saves to the selected container and preserves a captured file target", async () => {
   const e = explorer();

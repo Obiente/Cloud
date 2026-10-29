@@ -347,7 +347,11 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
 		}
 
-		content, fileInfo, err := dcli.ReadMountedVolumeFile(ctx, loc.ContainerID, *targetVolume, path)
+		readFile := dcli.ReadMountedVolumeFilePreview
+		if req.Msg.GetDownload() {
+			readFile = dcli.ReadMountedVolumeFile
+		}
+		content, fileInfo, err := readFile(ctx, loc.ContainerID, *targetVolume, path)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read volume file: %w", err))
 		}
@@ -372,7 +376,11 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		}
 	}
 
-	content, err := dcli.ContainerReadFilePreview(ctx, loc.ContainerID, path)
+	readFile := dcli.ContainerReadFilePreview
+	if req.Msg.GetDownload() {
+		readFile = dcli.ContainerReadFile
+	}
+	content, err := readFile(ctx, loc.ContainerID, path)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
 	}
@@ -862,9 +870,8 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 	defer dcli.Close()
 
 	// Find container by container_id or service_name, or use first if neither specified
-	// Note: DeleteContainerEntriesRequest doesn't have container_id/service_name yet, so we use "" for now
-	containerID := "" // TODO: Add container_id and service_name to DeleteContainerEntriesRequest
-	serviceName := ""
+	containerID := req.Msg.GetContainerId()
+	serviceName := req.Msg.GetServiceName()
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -933,15 +940,9 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		// Try to find the same container again, or use first available
-		for _, refLoc := range refreshedLocations {
-			if refLoc.ContainerID == loc.ContainerID {
-				*loc = refLoc
-				break
-			}
-		}
-		if loc.ContainerID != refreshedLocations[0].ContainerID {
-			*loc = refreshedLocations[0]
+		loc, err = s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
@@ -1007,9 +1008,8 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 	defer dcli.Close()
 
 	// Find container by container_id or service_name, or use first if neither specified
-	// Note: CreateContainerEntryRequest doesn't have container_id/service_name yet, so we use "" for now
-	containerID := "" // TODO: Add container_id and service_name to CreateContainerEntryRequest
-	serviceName := ""
+	containerID := req.Msg.GetContainerId()
+	serviceName := req.Msg.GetServiceName()
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -1096,15 +1096,9 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		// Try to find the same container again, or use first available
-		for _, refLoc := range refreshedLocations {
-			if refLoc.ContainerID == loc.ContainerID {
-				*loc = refLoc
-				break
-			}
-		}
-		if loc.ContainerID != refreshedLocations[0].ContainerID {
-			*loc = refreshedLocations[0]
+		loc, err = s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
